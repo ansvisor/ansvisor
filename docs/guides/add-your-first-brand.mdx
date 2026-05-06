@@ -1,74 +1,144 @@
 ---
-title: "Add your first brand"
-description: "Step-by-step walkthrough of brand onboarding."
+title: 'Add your first brand'
+description: 'Step-by-step walkthrough of brand onboarding.'
 ---
 
 ## Prerequisites
 
 - A logged-in Ansvisor account ([cloud](https://ansvisor.com/sign-up) or [self-hosted](/self-host/docker-compose))
 - 5–10 minutes
-- The primary domain you want to track
+- The website URL of the brand you want to track
 
-## Walkthrough
+## Onboarding flow
+
+The onboarding wizard has **5 steps for self-hosted** instances and **6 steps for the cloud** (the extra step is plan checkout). Each step auto-saves so you can resume later if you drop off.
 
 <Steps>
-  <Step title="Open the Add Brand flow">
-    From the dashboard, click **Brands** in the sidebar, then **+ Add Brand** (or visit `/dashboard/brands/new` directly).
+  <Step title="1. Brand basics">
+    Three fields:
+
+    - **Brand name** — exactly how the brand is named in the wild (e.g. *Mercedes-Benz*, not *MBZ*). Casing matters — suggestions copy your spelling, mention detection is case-insensitive.
+    - **Website** — your main domain without `https://` prefix (e.g. `mbusa.com`, `linear.app`). Used for citation classification, AI traffic attribution, and competitor research.
+    - **Describe your brand** *(optional but recommended)* — 1–3 sentences covering what you do and who your audience is. Fed into AI to generate better topics, prompts, and competitor suggestions.
+
+    The industry isn't asked as a separate field — Ansvisor infers it from your description.
+
   </Step>
-  <Step title="Enter brand basics">
-    - **Brand name** — exactly how the brand is named in the wild (e.g. *Mercedes-Benz*, not *MBZ*). Casing matters because mention detection matches case-insensitively but suggestions copy your spelling.
-    - **Primary domain** — your main website (`mbusa.com`, `linear.app`). Used for citation classification and AI traffic attribution.
-    - **Industry** — a free-text or selected category. Drives default prompt suggestions.
-    - **Region** — primary market (US, EU, TR, etc.). Affects prompt language and AI engine region routing.
-    - **Description** — 1–3 sentences about what the brand does. Fed into prompt generation.
+  <Step title="2. Region & language">
+    Pick the primary market and language for tracking. This drives:
+
+    - Which language AI engines respond in (English prompts return English answers, etc.)
+    - Region weighting on search engines that have it (Google AI Overview / Mode geo-localize)
+    - DataForSEO query routing for prompt volume estimation
+
+    18 regions and 13 languages supported. You can change these later per-prompt if you have multi-region needs.
+
   </Step>
-  <Step title="Review auto-generated prompts">
-    Ansvisor generates 10 starter prompts based on your industry and description. They're shown as a checklist — review them, edit text inline, and uncheck any that don't fit. You can always add more later.
+  <Step title="3. Topic selection">
+    Ansvisor uses your brand description and an AI model to suggest 6–10 **topics** — themes your customers care about (e.g. *EV Range*, *Reliability*, *Pricing*).
+
+    Review the list and check the topics that fit your brand. Uncheck any that don't apply. You can also type a custom topic name and add it manually.
 
     <Tip>
-    A good starter set covers: 2–3 *industry best-of* prompts, 2–3 *how-to* prompts, 2–3 *comparison/alternative* prompts, 1–2 *recommendation* prompts. Avoid brand-name-containing prompts — they don't measure organic AI mention rate.
+    Aim for 4–7 topics. Too few = narrow tracking surface. Too many = noisy and hard to interpret.
     </Tip>
+
   </Step>
-  <Step title="Pick AI engines">
-    Select which engines run each prompt. Default is **ChatGPT + Gemini + Perplexity + Claude**. Add Copilot, Grok, or Meta AI if relevant to your audience.
+  <Step title="4. Prompt review">
+    For each selected topic, Ansvisor generates **5 starter prompts** (real questions a potential customer would ask an AI engine). Review the full list:
+
+    - Edit prompt text inline if a phrasing feels off
+    - Delete prompts that don't fit
+    - Add custom prompts at the bottom
 
     <Note>
-    More engines = more API/scraper calls = higher monthly cost in cloud mode. Self-hosted is unlimited.
+    These prompts will run on every AI platform allowed by your plan. Self-hosted unlocks all 8 (ChatGPT, Google AI Overview, Google AI Mode, Google Gemini, Perplexity, Microsoft Copilot, Grok, Claude). Starter plan runs ChatGPT + Perplexity by default; Growth and Enterprise unlock the rest.
     </Note>
+
+    <Tip>
+    Avoid prompts that include your brand name (e.g. *"What is Acme?"*). They almost always score 100 because the AI obviously talks about you when asked — but they don't measure organic AEO performance. Keep your tracked prompts brand-agnostic.
+    </Tip>
+
   </Step>
-  <Step title="Add competitors (optional but recommended)">
-    Enter 2–5 competitor names. The competitor tracking module needs at least one to work. Names should be exactly as you'd see them in an AI response (e.g. *Salesforce*, *HubSpot*).
+  <Step title="5. Competitors">
+    Ansvisor analyzes your brand and suggests 3–8 competitor names. Review the list:
+
+    - Check the ones that are actual rivals
+    - Uncheck ones that aren't really comparable
+    - Add custom competitors at the bottom (use the name as it appears in AI responses, e.g. *Salesforce*, not *salesforce.com*)
+
+    Competitor tracking is unlocked on Growth and Enterprise plans on the cloud, and always available on self-hosted.
+
   </Step>
-  <Step title="Configure tracking pixel (optional)">
-    If you want **AI Traffic Analytics** (visits arriving from AI answer engines), grab the snippet from the Traffic page and paste it before `</head>` on your site. Tracking starts immediately.
-  </Step>
-  <Step title="Save and trigger first run">
-    Click **Save brand**. The first round of AI engine queries kicks off automatically — usually completes in 5–15 minutes. You'll get an email when results are ready, but the dashboard updates live as data comes in.
+  <Step title="6. Plan & checkout (cloud only)">
+    On the cloud, the final step picks your subscription plan (Starter, Growth, or Enterprise) and runs Stripe Checkout. All paid plans include a **7-day free trial** — you enter card details but no charge happens until day 8. Self-hosted instances skip this step entirely.
   </Step>
 </Steps>
 
-## What to do while you wait
+## What happens after you finish
 
-The first tracking run takes a few minutes. Useful things to do during that time:
+The first round of AI engine queries kicks off automatically and finishes in 5–15 minutes (depending on prompt count and plan). The dashboard updates live as platforms report back. While you wait:
 
-- **Insights tab** will populate first — even before all platforms finish, you can already see the first prompts coming in
-- Browse the **Citations** page to see which third-party URLs are showing up
-- Skim the **Suggestions** card on the Insights tab — it'll have AI-generated prompt ideas based on your initial run
+- **Insights** — first KPI cards appear within 1–2 minutes of the run starting
+- **Citations** — populates as AI responses come back with source URLs
+- **Prompts → Insights tab** — Suggestions card refreshes after the run, surfacing new prompts to add
+
+## Adding the tracking pixel (optional, post-onboarding)
+
+The onboarding flow doesn't include the tracking pixel — it's an opt-in step you do separately for **AI Traffic Analytics** (real visits arriving from AI answer engines). To set it up:
+
+<Steps>
+  <Step title="Open the Traffic page">
+    Navigate to `/dashboard/traffic` after onboarding. The snippet is shown at
+    the top of the page.
+  </Step>
+  <Step title="Copy the snippet">
+    Looks something like:
+
+    `<script src="https://api.ansvisor.com/t.js" data-t="YOUR_TRACKING_CODE" defer></script>`
+  </Step>
+  <Step title="Paste it into your site head">
+    Drop the snippet just before the closing `</head>` tag. Next.js: add it inside `app/layout.tsx`. WordPress: use a header injection plugin. Static sites: edit your template.
+  </Step>
+</Steps>
+
+Visits start logging immediately; the dashboard updates near-realtime.
 
 ## Common pitfalls
 
 <AccordionGroup>
   <Accordion title="My visibility score is 0 — is something broken?">
-    Probably not. New, niche, or B2B brands often start at 0 across most prompts. AI engines need (1) significant training data mentioning your brand, or (2) live citations from authoritative sources. The score only stays at 0 when both are missing — fixing that is exactly what AEO is for.
+    Probably not. New, niche, or B2B brands often start at 0 across most
+    prompts. AI engines need either (1) significant training data mentioning
+    your brand, or (2) live citations from authoritative sources. The score only
+    stays at 0 when both are missing — which is exactly what AEO is for.
   </Accordion>
   <Accordion title="Prompts include my brand name — should I remove?">
-    Yes. *"What is Linear?"* style prompts almost always score 100 (the AI obviously talks about you when asked) but they're not measuring organic discovery. Remove brand-name prompts from your tracked set; they distort averages.
+    Yes. *"What is Linear?"* style prompts almost always score 100 (the AI
+    obviously talks about you when asked) but they're not measuring organic
+    discovery. Remove brand-name prompts; they distort averages.
   </Accordion>
-  <Accordion title="I see weird competitors I never heard of in my results">
-    That's gold. Those are AI-suggested alternatives users see when you're not cited. Add the most-mentioned ones to your competitors list to track them properly.
+  <Accordion title="I see weird competitors I never heard of in AI responses">
+    That's gold. Those are AI-suggested alternatives users see when you're not
+    cited. Add the most-mentioned ones to your competitors list to track them
+    properly.
+  </Accordion>
+  <Accordion title="Why is Google AI Overview missing from my plan?">
+    Starter plan runs only ChatGPT and Perplexity. Google AI Overview, Google AI
+    Mode, Gemini, Copilot, Grok, and Claude unlock on Growth and Enterprise
+    plans (cloud), or are all available immediately on self-hosted.
+  </Accordion>
+  <Accordion title="Can I add more topics later?">
+    Yes. From the **Topics** page or the **Suggestions** card in **Prompts →
+    Insights**, you can add new topics and prompts at any time. Tracking
+    immediately picks them up on the next scheduled run.
   </Accordion>
 </AccordionGroup>
 
-<Card title="Continue: Reading Answer Engine Insights" icon="arrow-right" href="/guides/answer-engine-insights">
+<Card
+  title="Continue: Reading Answer Engine Insights"
+  icon="arrow-right"
+  href="/guides/answer-engine-insights"
+>
   Now that data is flowing, learn to read the dashboard.
 </Card>

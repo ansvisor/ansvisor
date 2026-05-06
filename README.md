@@ -23,7 +23,7 @@ Track how your brand appears in answers from ChatGPT, Gemini, Perplexity, Claude
 
 ## Features
 
-- **Answer Engine Insights** — Real-time visibility scores across ChatGPT, Gemini, Perplexity, Claude, Copilot and Grok with weekly trend analysis
+- **Answer Engine Insights** — Real-time visibility scores across ChatGPT, Google AI Overview, Google AI Mode, Google Gemini, Perplexity, Microsoft Copilot, Grok, and Claude with weekly trend analysis
 - **Topics** — Cluster prompts by intent and topic so you can see exactly which themes your brand wins or loses
 - **Prompts** — Track unlimited natural-language queries, get AI-generated prompt suggestions based on competitor citations, and analyze monthly search volume per prompt
 - **Citations** — See every URL AI engines cite alongside your brand, classified by source type (news, review, owned, social, forum)
