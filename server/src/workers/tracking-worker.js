@@ -190,17 +190,42 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
         }
       }
 
-      // Mark these as "completed" for progress purposes (job is done submitting).
-      completedTasks += submitted.length;
-      if (job && submitted.length > 0) {
-        job.progress({
-          current: completedTasks,
-          total: totalTasks,
-          promptText: 'All platform tasks queued — results streaming via webhook',
-          model: null,
-          platform: 'cloro',
-        });
+      // Wait for the webhook handler to drain cloro_pending_tasks for this brand.
+      // The worker stays alive (cheap DB poll) so the job's `active` status drives
+      // the UI loading banner until results actually arrive. Hard cap at 60 minutes
+      // so a stuck Cloro queue doesn't keep workers running indefinitely.
+      const drainDeadline = Date.now() + 60 * 60 * 1000;
+      const drainPollMs = 15_000;
+      const expectedSubmitted = submitted.length;
+
+      while (Date.now() < drainDeadline) {
+        const { count: remaining } = await supabaseAdmin
+          .from('cloro_pending_tasks')
+          .select('*', { count: 'exact', head: true })
+          .eq('brand_id', brandId);
+
+        const pending = remaining ?? 0;
+        const processed = expectedSubmitted - pending;
+
+        if (job) {
+          job.progress({
+            current: completedTasks + processed,
+            total: totalTasks,
+            promptText:
+              pending > 0
+                ? `Receiving platform results — ${pending} task(s) still in Cloro queue...`
+                : 'All platform results received',
+            model: null,
+            platform: 'cloro',
+          });
+        }
+
+        if (pending === 0) break;
+
+        await new Promise((r) => setTimeout(r, drainPollMs));
       }
+
+      completedTasks += expectedSubmitted;
     } else {
       console.log(`[tracking] ${submitted.length}/${scraperTasks.length} tasks submitted, polling for results...`);
 
