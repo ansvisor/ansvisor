@@ -213,7 +213,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
             total: totalTasks,
             promptText:
               pending > 0
-                ? `Receiving platform results — ${pending} task(s) still in Cloro queue...`
+                ? `Receiving platform results — ${pending} task(s) still processing...`
                 : 'All platform results received',
             model: null,
             platform: 'cloro',
