@@ -47,8 +47,12 @@ export default function BrandDetailLayout({
         </Link>
         {brand && (
           <div className="flex items-center gap-3">
-            <Avatar className="h-9 w-9 rounded-lg">
-              <AvatarImage src={brand.logoUrl} alt={brand.name} />
+            <Avatar className="h-9 w-9 rounded-lg bg-zinc-50 dark:bg-zinc-100">
+              <AvatarImage
+                src={brand.logoUrl}
+                alt={brand.name}
+                className="object-contain p-1"
+              />
               <AvatarFallback className="rounded-lg bg-primary/10 text-primary text-sm font-semibold">
                 {initials}
               </AvatarFallback>

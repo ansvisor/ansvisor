@@ -178,8 +178,12 @@ export function BrandCard({ brand, summary }: BrandCardProps) {
       >
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.15),_transparent_60%)]" />
         <div className="relative flex items-start justify-between gap-3">
-          <Avatar className="h-14 w-14 rounded-xl ring-4 ring-background shadow-md">
-            <AvatarImage src={brand.logoUrl} alt={brand.name} />
+          <Avatar className="h-14 w-14 rounded-xl ring-4 ring-background shadow-md bg-zinc-50 dark:bg-zinc-100">
+            <AvatarImage
+              src={brand.logoUrl}
+              alt={brand.name}
+              className="object-contain p-1.5"
+            />
             <AvatarFallback className="rounded-xl bg-background text-foreground text-base font-bold">
               {initials}
             </AvatarFallback>

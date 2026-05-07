@@ -62,8 +62,12 @@ export function BrandSwitcher({ collapsed = false }: BrandSwitcherProps) {
         )}
         aria-label={t("switchBrand")}
       >
-        <Avatar className="h-6 w-6 shrink-0 rounded-md">
-          <AvatarImage src={activeBrand?.logoUrl} alt={activeBrand?.name} />
+        <Avatar className="h-6 w-6 shrink-0 rounded-md bg-zinc-50 dark:bg-zinc-100">
+          <AvatarImage
+            src={activeBrand?.logoUrl}
+            alt={activeBrand?.name}
+            className="object-contain p-0.5"
+          />
           <AvatarFallback className="rounded-md bg-primary text-primary-foreground text-xs font-semibold">
             {activeBrand ? initials(activeBrand.name) : "?"}
           </AvatarFallback>
@@ -102,8 +106,12 @@ export function BrandSwitcher({ collapsed = false }: BrandSwitcherProps) {
               onClick={() => setActiveBrand(brand.id)}
               className="flex items-center gap-2"
             >
-              <Avatar className="h-5 w-5 shrink-0 rounded-md">
-                <AvatarImage src={brand.logoUrl} alt={brand.name} />
+              <Avatar className="h-5 w-5 shrink-0 rounded-md bg-zinc-50 dark:bg-zinc-100">
+                <AvatarImage
+                  src={brand.logoUrl}
+                  alt={brand.name}
+                  className="object-contain p-0.5"
+                />
                 <AvatarFallback className="rounded-md bg-primary/10 text-primary text-xs font-semibold">
                   {initials(brand.name)}
                 </AvatarFallback>

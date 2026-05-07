@@ -135,8 +135,12 @@ function BrandSelector({
             onClick={() => onSelect(brand.id)}
           >
             <CardContent className="flex items-center gap-3 p-4">
-              <Avatar className="h-9 w-9 rounded-md">
-                <AvatarImage src={brand.logoUrl} alt={brand.name} />
+              <Avatar className="h-9 w-9 rounded-md bg-zinc-50 dark:bg-zinc-100">
+                <AvatarImage
+                  src={brand.logoUrl}
+                  alt={brand.name}
+                  className="object-contain p-1"
+                />
                 <AvatarFallback className="rounded-md bg-primary text-primary-foreground text-sm font-semibold">
                   {initials(brand.name)}
                 </AvatarFallback>
