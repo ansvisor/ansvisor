@@ -30,6 +30,16 @@ export const metadata: Metadata = {
   },
   description:
     "Monitor, analyze, and optimize your brand's visibility in AI-powered search engines.",
+  // The product app at app.ansvisor.com should not appear in search results;
+  // ansvisor.com (the Webflow marketing site) is the indexable surface.
+  robots: {
+    index: false,
+    follow: false,
+    googleBot: {
+      index: false,
+      follow: false,
+    },
+  },
 };
 
 export default function RootLayout({
