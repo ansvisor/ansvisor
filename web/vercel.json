@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/daily-tracking",
-      "schedule": "45 15 * * *"
+      "schedule": "0 6 * * *"
     }
   ],
   "headers": [
