@@ -3,7 +3,7 @@
 [![Ansvisor Banner](https://cdn.prod.website-files.com/69e606308fb6f96fb911b251/69f0a8f250aa69dd7f6d9a30_s12.svg)](https://ansvisor.com)
 
 [![🚀 Try the Cloud — ansvisor.com](https://img.shields.io/badge/🚀_Try_the_Cloud-ansvisor.com-6366f1?style=for-the-badge&logoColor=white&logo=vercel)](https://ansvisor.com)
-[![📚 Docs](https://img.shields.io/badge/📚_Docs-ansvisor.com%2Fdocs-10b981?style=for-the-badge&logoColor=white&logo=readthedocs)](https://ansvisor.com/docs)
+[![📚 Docs](https://img.shields.io/badge/📚_Docs-docs.ansvisor.com-10b981?style=for-the-badge&logoColor=white&logo=readthedocs)](https://docs.ansvisor.com)
 
 [![Star on GitHub](https://img.shields.io/github/stars/aeohub/ansvisor?style=for-the-badge&logo=github&color=gold)](https://github.com/aeohub/ansvisor)
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](https://opensource.org/licenses/MIT)
@@ -133,6 +133,21 @@ ansvisor/
 **Frontend** — Next.js 16, React 19, TypeScript, Tailwind CSS 4, Supabase Auth, Stripe, Zustand, Recharts, next-intl
 
 **Backend** — Express, Vercel AI SDK, multi-provider AI (OpenAI, Anthropic, Google, Perplexity, Grok), Supabase, Socket.IO, Zod
+
+## What's next
+
+What we're planning to build next. React with 👍 on the linked issue (or open a new one) to push something up the list. PRs welcome on any of these.
+
+- [ ] **Ansvisor MCP server** — expose insights through a Model Context Protocol server so Claude Desktop, Cursor, Zed, and any other MCP client can query your brand visibility directly
+- [ ] **Claude Code skills** — bundled Claude Code skills so you can talk to your Ansvisor data from your terminal during a normal coding session
+- [ ] **In-product conversational AI assistant** — chat with your dashboard about visibility trends, competitor moves, and content gaps without leaving the page
+- [ ] **ScrapeLLM integration** — add ScrapeLLM as an alternative scraping backend alongside Cloro for users who prefer it or need a fallback
+- [ ] **PostHog integration** — pipe AI-referred sessions and tracking events into PostHog for users already running it as their product analytics layer
+- [ ] **Anomaly alerts** — get an email / Slack ping when a brand's visibility drops sharply, a competitor surges, or a high-volume prompt suddenly stops citing you
+- [ ] **BYO LLM keys** — bring your own OpenAI / Anthropic / Gemini API key for tracking and content generation, so you control cost and data handling
+- [ ] **Webhook recipe library** — one-click Notion / Linear / Asana / Slack templates so a Content Brief can land in your editorial workflow with zero glue code
+
+See an idea missing? Check the [Ideas discussions](https://github.com/aeohub/ansvisor/discussions/categories/ideas) — upvote an existing one or open a new thread.
 
 ## Contributing
 
