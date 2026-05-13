@@ -769,7 +769,17 @@ function FilterBar({
           onValueChange={(v) => set({ model: !v || v === '__all__' ? '' : v })}
         >
           <SelectTrigger className="h-8 w-44 text-xs">
-            <SelectValue placeholder="All Platforms" />
+            <SelectValue placeholder="All Platforms">
+              {(value) => {
+                if (!value || value === '__all__') return 'All Platforms';
+                const firstSlug = String(value).split(',')[0];
+                return (
+                  MODEL_DISPLAY_NAME[firstSlug] ??
+                  PLATFORM_LABELS[firstSlug] ??
+                  getAIProviderDisplayName(resolveAIProvider(firstSlug))
+                );
+              }}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">All Platforms</SelectItem>
