@@ -9,6 +9,28 @@ import type {
   CompetitorMention,
 } from '@/types';
 
+/**
+ * Apply the `model` filter to a Supabase query against `prompt_results.model_used`.
+ *
+ * Accepts either a single slug ("gpt-5-5") or a comma-separated list
+ * ("gpt-5-5,gpt-5-3-mini,chatgpt-web") so callers can filter by a provider
+ * family without the UI having to enumerate every per-model row in the
+ * filter dropdown.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyModelFilter<T extends { eq: any; in: any }>(
+  query: T,
+  model: string | undefined,
+): T {
+  if (!model) return query;
+  const list = model
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (list.length <= 1) return query.eq('model_used', list[0] ?? model);
+  return query.in('model_used', list);
+}
+
 function mapResultRow(row: Record<string, unknown>): PromptResult {
   return {
     id: row.id as string,
@@ -97,7 +119,7 @@ async function buildResultsQuery(
     .eq('brand_id', brandId);
 
   if (opts?.platform) query = query.eq('platform', opts.platform);
-  if (opts?.model) query = query.eq('model_used', opts.model);
+  query = applyModelFilter(query, opts?.model);
   if (opts?.region) query = query.eq('region', opts.region);
   if (opts?.dateFrom) query = query.gte('created_at', opts.dateFrom);
   if (opts?.dateTo) query = query.lte('created_at', opts.dateTo);
@@ -1309,7 +1331,7 @@ export async function getVisibilityTrend(
     .eq('brand_id', brandId)
     .order('created_at', { ascending: true });
 
-  if (opts?.model) query = query.eq('model_used', opts.model);
+  query = applyModelFilter(query, opts?.model);
   if (opts?.region) query = query.eq('region', opts.region);
   if (opts?.dateFrom) query = query.gte('created_at', opts.dateFrom);
   if (opts?.dateTo) query = query.lte('created_at', opts.dateTo);
