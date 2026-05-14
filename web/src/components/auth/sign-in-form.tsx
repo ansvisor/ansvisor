@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
 import { Separator } from "@/components/ui/separator";
+import { identify, track } from "@/lib/analytics";
 
 export function SignInForm() {
   const t = useTranslations("auth");
@@ -28,7 +29,7 @@ export function SignInForm() {
 
     const supabase = createClient();
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -45,6 +46,11 @@ export function SignInForm() {
       setIsLoading(false);
       return;
     }
+
+    if (data.user) {
+      identify(data.user.id, { email: data.user.email });
+    }
+    track("signin_completed", { source: "email" });
 
     router.push(nextPath && nextPath.startsWith("/") ? nextPath : "/dashboard");
     router.refresh();

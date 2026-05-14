@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LogOut, Settings } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
+import { reset as resetAnalytics } from "@/lib/analytics";
 
 interface HeaderProps {
   user: SupabaseUser | null;
@@ -27,6 +28,7 @@ export function Header({ user }: HeaderProps) {
   async function handleSignOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
+    resetAnalytics();
     router.push("/sign-in");
     router.refresh();
   }

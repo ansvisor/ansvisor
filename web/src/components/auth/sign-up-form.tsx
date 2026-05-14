@@ -13,6 +13,7 @@ import { Loader2 } from "lucide-react";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
 import { Separator } from "@/components/ui/separator";
 import { siteConfig } from "@/config/site";
+import { track } from "@/lib/analytics";
 
 export function SignUpForm() {
   const t = useTranslations("auth");
@@ -51,6 +52,8 @@ export function SignUpForm() {
       setIsLoading(false);
       return;
     }
+
+    track("signup_completed", { source: "email" });
 
     toast.success(t("verificationEmailSent"));
     const nextQuery = nextPath ? `&next=${encodeURIComponent(nextPath)}` : "";

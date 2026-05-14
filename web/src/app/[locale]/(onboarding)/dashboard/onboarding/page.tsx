@@ -13,6 +13,7 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { REGIONS, LANGUAGES } from '@/config/prompt-options';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
 import { isCloud, PLANS, SUBSCRIBABLE_PLANS, getPlan, type PlanId } from '@/config/plans';
+import { track } from '@/lib/analytics';
 import type { Brand } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -539,6 +540,7 @@ export default function OnboardingPage() {
         setCreatedBrand(brand);
         addBrand(brand);
         setActiveBrand(brand.id);
+        track('onboarding_brand_created', { region: brand.region });
       }
 
       setStep(3);
@@ -700,6 +702,7 @@ export default function OnboardingPage() {
         name: 'Onboarding Prompts',
         prompts: allPrompts,
       });
+      track('onboarding_prompts_saved', { count: allPrompts.length });
 
       setStep(5);
       fetchCompetitorSuggestions();
