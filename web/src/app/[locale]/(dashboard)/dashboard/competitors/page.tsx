@@ -254,7 +254,7 @@ function NoBrandSelected() {
       </div>
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted mb-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white mb-4">
             <AlertCircle className="h-7 w-7 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-semibold">{t("noBrandTitle")}</h3>
@@ -274,7 +274,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
     <Card>
       <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted mb-4">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white mb-4">
           <Users className="h-7 w-7 text-muted-foreground" />
         </div>
         <h3 className="text-lg font-semibold">{t("emptyTitle")}</h3>
