@@ -76,8 +76,7 @@ Run the migration SQL to create all tables, indexes, RLS policies, and triggers:
 
 **Option A — Supabase Dashboard:**
 1. Go to your project's **SQL Editor**
-2. Paste the contents of `supabase/migrations/00001_initial_schema.sql`
-3. Click **Run**
+2. For each file in `supabase/migrations/` (in alphabetical order — `00001_…` first, then `00002_…`, etc.), paste its contents and click **Run**
 
 **Option B — Supabase CLI:**
 
@@ -138,8 +137,8 @@ ansvisor/
 
 What we're planning to build next. React with 👍 on the linked issue (or open a new one) to push something up the list. PRs welcome on any of these.
 
-- [ ] **Ansvisor MCP server** — expose insights through a Model Context Protocol server so Claude Desktop, Cursor, Zed, and any other MCP client can query your brand visibility directly
-- [ ] **Claude Code skills** — bundled Claude Code skills so you can talk to your Ansvisor data from your terminal during a normal coding session
+- [x] **Ansvisor MCP server** — expose insights through a Model Context Protocol server so Claude Desktop, Claude Code, Cursor, Zed, and any other MCP client can query your brand visibility directly. Remote (Streamable HTTP) endpoint at `/api/mcp` — zero install, paste a URL + API key into your client and you're done. Ships with `list_brands` and `get_visibility_summary` today; more tools landing as we go.
+- [ ] **Claude Code skills** — opinionated workflows on top of the MCP server (page-audit, rewrite-for-aeo, check-mentions) plus a freeform `/ansvisor:ask` for conversational queries
 - [ ] **In-product conversational AI assistant** — chat with your dashboard about visibility trends, competitor moves, and content gaps without leaving the page
 - [ ] **ScrapeLLM integration** — add ScrapeLLM as an alternative scraping backend alongside Cloro for users who prefer it or need a fallback
 - [ ] **PostHog integration** — pipe AI-referred sessions and tracking events into PostHog for users already running it as their product analytics layer

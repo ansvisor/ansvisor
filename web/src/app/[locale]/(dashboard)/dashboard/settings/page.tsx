@@ -16,8 +16,9 @@ import { cn } from "@/lib/utils";
 import { usePlanContext } from "@/components/providers/plan-provider";
 import { BillingSection } from "@/components/settings/billing-section";
 import { TeamSection } from "@/components/settings/team-section";
+import { ApiKeysSection } from "@/components/settings/api-keys-section";
 
-type Section = "account" | "theme" | "project" | "team" | "billing";
+type Section = "account" | "theme" | "project" | "team" | "api-keys" | "billing";
 
 export default function SettingsPage() {
   const t = useTranslations("settings");
@@ -52,6 +53,7 @@ export default function SettingsPage() {
     { id: "theme", label: t("theme") },
     { id: "project", label: t("project") },
     { id: "team", label: t("team") },
+    { id: "api-keys", label: "API Keys" },
     ...(isCloud ? [{ id: "billing" as Section, label: t("billing") }] : []),
   ];
 
@@ -173,6 +175,9 @@ export default function SettingsPage() {
 
           {/* Team */}
           {active === "team" && <TeamSection />}
+
+          {/* API Keys */}
+          {active === "api-keys" && <ApiKeysSection />}
 
           {/* Billing */}
           {active === "billing" && isCloud && <BillingSection />}

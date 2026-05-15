@@ -1,0 +1,83 @@
+---
+title: "MCP server"
+description: "Connect Claude Desktop, Claude Code, Cursor, Zed, and any MCP-aware client to your Ansvisor data — zero install."
+---
+
+Ansvisor ships a [Model Context Protocol](https://modelcontextprotocol.io)
+server at `https://app.ansvisor.com/api/mcp` (or your own host if you
+self-host) so AI assistants can query your brand visibility data through
+natural-language conversation. No npm package, no local process — just a URL
+and an API key.
+
+## Generate an API key
+
+1. Open your Ansvisor dashboard → **Settings** → **API Keys**
+2. Click **New key**, give it a memorable name (e.g. _Claude — laptop_)
+3. Copy the token. It's shown **once** — store it in your password manager
+
+## Connect Claude Desktop
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
+(macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "ansvisor": {
+      "url": "https://app.ansvisor.com/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ans_..."
+      }
+    }
+  }
+}
+```
+
+Restart Claude Desktop. Type _"List my Ansvisor brands"_ — Claude should
+call the `list_brands` tool and show your brands inline.
+
+## Connect Claude Code
+
+```bash
+claude mcp add ansvisor --transport http https://app.ansvisor.com/api/mcp \
+  --header "Authorization: Bearer ans_..."
+```
+
+## Self-host? Point at your own instance
+
+The MCP endpoint lives at `/api/mcp` on whatever host runs the Ansvisor web
+app. If you self-host at `ansvisor.mycompany.internal`, use that base URL
+instead.
+
+## Available tools
+
+| Tool | What it does |
+| --- | --- |
+| `list_brands` | List brands the authenticated user can access. |
+| `get_visibility_summary` | Aggregate visibility score, mentions, citations, top competitors for a brand over an optional date range / model / region. |
+
+More tools land regularly — check the [project roadmap](https://github.com/aeohub/ansvisor#whats-next).
+
+## Try it
+
+Ask your client things like:
+
+- _"List my Ansvisor brands."_
+- _"What's my visibility score on ChatGPT for the last 7 days?"_
+- _"Who are my top 5 competitors by mention count this month?"_
+
+The model picks the right tool, fills in the brand id and filters, and
+answers in plain English using the returned data.
+
+## Revoking access
+
+If a key leaks or you stop using a client, open **Settings → API Keys** and
+click the trash icon. Clients using that key lose access immediately.
+
+## Transport
+
+The server speaks the
+[MCP Streamable HTTP](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http)
+transport in stateless mode — every request is self-contained, no session
+state is kept between calls. This makes it work cleanly behind any HTTP
+load balancer and on serverless runtimes.

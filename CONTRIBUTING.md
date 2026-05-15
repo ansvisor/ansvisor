@@ -60,8 +60,7 @@ Run the migration SQL to create all tables, indexes, RLS policies, and triggers 
 
 1. Open your Supabase project dashboard
 2. Go to **SQL Editor**
-3. Paste the contents of `supabase/migrations/00001_initial_schema.sql`
-4. Click **Run**
+3. For each file in `supabase/migrations/` (in alphabetical order — `00001_…` first, then `00002_…`, etc.), paste its contents and click **Run**
 
 **Option B — Supabase CLI:**
 
