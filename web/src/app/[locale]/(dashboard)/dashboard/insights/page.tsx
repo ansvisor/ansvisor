@@ -1471,9 +1471,16 @@ export default function InsightsPage() {
           ),
         );
       } catch (err) {
-        toast.error(
-          err instanceof Error ? err.message : 'Failed to load insights',
-        );
+        // Silent refreshes fire every ~10s while a tracking job runs; a transient
+        // 5xx or network blip there shouldn't pop a red toast — the next poll
+        // will retry and the user sees nothing.
+        if (!silent) {
+          toast.error(
+            err instanceof Error ? err.message : 'Failed to load insights',
+          );
+        } else {
+          console.warn('[insights] silent refresh failed', err);
+        }
       } finally {
         setIsLoading(false);
       }
