@@ -5,7 +5,16 @@ export function MarketingFooter() {
     <footer className="border-t py-8">
       <div className="container flex flex-col items-center justify-between gap-4 md:flex-row">
         <p className="text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} {siteConfig.name}. Open source under MIT license.
+          &copy; {new Date().getFullYear()} {siteConfig.name}. Open source under{" "}
+          <a
+            href="https://github.com/aeohub/ansvisor/blob/main/LICENSE"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-foreground transition-colors"
+          >
+            MIT license
+          </a>
+          .
         </p>
         <div className="flex items-center gap-4 text-sm text-muted-foreground">
           <a
