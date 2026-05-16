@@ -284,8 +284,6 @@
     "accountDescription": "Your profile and sign-in details.",
     "theme": "Theme",
     "themeDescription": "Choose light or dark mode for the dashboard.",
-    "font": "Font",
-    "fontDescription": "Choose a font family for the dashboard.",
     "general": "General",
     "project": "Project",
     "apiKeys": "API Keys",

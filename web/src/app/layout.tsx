@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter, Plus_Jakarta_Sans } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
-import { FontProvider } from "@/components/providers/font-provider";
 import { PostHogProvider } from "@/components/providers/posthog-provider";
 import "./globals.css";
 
@@ -72,7 +71,6 @@ export default function RootLayout({
         suppressHydrationWarning
         className="font-sans antialiased"
       >
-        <FontProvider />
         <PostHogProvider />
         {children}
         <Analytics />

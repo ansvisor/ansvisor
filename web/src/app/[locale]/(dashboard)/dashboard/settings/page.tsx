@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ThemeSwitch } from "@/components/settings/theme-switch";
-import { FontSwitch } from "@/components/settings/font-switch";
 import { cn } from "@/lib/utils";
 import { usePlanContext } from "@/components/providers/plan-provider";
 import { BillingSection } from "@/components/settings/billing-section";
@@ -138,15 +137,6 @@ export default function SettingsPage() {
                 </CardHeader>
                 <CardContent>
                   <ThemeSwitch />
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t("font")}</CardTitle>
-                  <CardDescription>{t("fontDescription")}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <FontSwitch />
                 </CardContent>
               </Card>
             </div>
