@@ -13,7 +13,16 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { REGIONS, LANGUAGES } from '@/config/prompt-options';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
 import { isCloud, PLANS, SUBSCRIBABLE_PLANS, getPlan, type PlanId } from '@/config/plans';
-import { track } from '@/lib/analytics';
+import { setPersonProperties, track } from '@/lib/analytics';
+
+const ONBOARDING_STEP_NAMES: Record<number, string> = {
+  1: 'brand_setup',
+  2: 'brand_details',
+  3: 'topics',
+  4: 'prompts',
+  5: 'competitors',
+  6: 'plan',
+};
 import type { Brand } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -460,6 +469,16 @@ export default function OnboardingPage() {
     checkResume();
   }, [router, addBrand, setActiveBrand]);
 
+  // Fire `onboarding_step_viewed` whenever the wizard advances (or resumes).
+  // This is the funnel surface — PostHog will compute drop-off between any
+  // two adjacent step_viewed events without us needing per-step columns.
+  useEffect(() => {
+    const stepName = ONBOARDING_STEP_NAMES[step];
+    if (stepName) {
+      track('onboarding_step_viewed', { step, step_name: stepName });
+    }
+  }, [step]);
+
   const domain = website
     .replace(/^https?:\/\//, '')
     .replace(/\/.*$/, '')
@@ -541,6 +560,16 @@ export default function OnboardingPage() {
         addBrand(brand);
         setActiveBrand(brand.id);
         track('onboarding_brand_created', { region: brand.region });
+        track('onboarding_step_completed', {
+          step: 2,
+          step_name: 'brand_details',
+          region: brand.region,
+          language: brand.language,
+        });
+        setPersonProperties({
+          region: brand.region,
+          language: brand.language,
+        });
       }
 
       setStep(3);
@@ -666,6 +695,11 @@ export default function OnboardingPage() {
           }),
         ),
       );
+      track('onboarding_step_completed', {
+        step: 3,
+        step_name: 'topics',
+        topic_count: selectedTopics.size,
+      });
       setStep(4);
     } catch (err) {
       console.error('Prompt generation error:', err);
@@ -703,6 +737,12 @@ export default function OnboardingPage() {
         prompts: allPrompts,
       });
       track('onboarding_prompts_saved', { count: allPrompts.length });
+      track('onboarding_step_completed', {
+        step: 4,
+        step_name: 'prompts',
+        prompt_count: allPrompts.length,
+        topic_count: topicPrompts.length,
+      });
 
       setStep(5);
       fetchCompetitorSuggestions();
@@ -810,6 +850,16 @@ export default function OnboardingPage() {
           .eq('id', user.id);
       }
 
+      const competitorCount = selected.length;
+      track('onboarding_step_completed', {
+        step: 5,
+        step_name: 'competitors',
+        competitor_count: competitorCount,
+      });
+      setPersonProperties({
+        onboarding_completed: true,
+      });
+
       // Cloud mode → proceed to subscription step (tracking triggered after payment)
       if (isCloud()) {
         toast.success('Almost done! Choose a plan to start your free trial.');
@@ -817,6 +867,8 @@ export default function OnboardingPage() {
         setStep(6);
         return;
       }
+
+      track('onboarding_finished', { paid: false });
 
       // Self-hosted: trigger tracking immediately
       try {
@@ -851,6 +903,15 @@ export default function OnboardingPage() {
   const handleCheckout = async (planId: PlanId) => {
     if (!organizationId) return;
     setCheckoutLoading(planId);
+    track('onboarding_step_completed', {
+      step: 6,
+      step_name: 'plan',
+      plan_id: planId,
+    });
+    track('onboarding_plan_selected', { plan_id: planId });
+    setPersonProperties({
+      intended_plan: planId,
+    });
     try {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
@@ -975,7 +1036,19 @@ export default function OnboardingPage() {
             <Button
               className="w-full"
               disabled={!brandName.trim() || !website.trim()}
-              onClick={() => setStep(2)}
+              onClick={() => {
+                track('onboarding_step_completed', {
+                  step: 1,
+                  step_name: 'brand_setup',
+                  brand_name: brandName.trim(),
+                  brand_domain: domain,
+                  has_description: description.trim().length > 0,
+                });
+                setPersonProperties({
+                  company_url: domain,
+                });
+                setStep(2);
+              }}
             >
               Continue
             </Button>

@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
 import { Separator } from "@/components/ui/separator";
-import { identify, track } from "@/lib/analytics";
+import { track } from "@/lib/analytics";
 
 export function SignInForm() {
   const t = useTranslations("auth");
@@ -47,9 +47,8 @@ export function SignInForm() {
       return;
     }
 
-    if (data.user) {
-      identify(data.user.id, { email: data.user.email });
-    }
+    // identify() runs centrally in AuthProvider on the SIGNED_IN auth event,
+    // so the form just needs to capture the funnel event.
     track("signin_completed", { source: "email" });
 
     router.push(nextPath && nextPath.startsWith("/") ? nextPath : "/dashboard");
