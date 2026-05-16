@@ -1,0 +1,44 @@
+name: First-time contributor welcome
+
+# Posts a one-time welcome comment when someone opens their FIRST issue or
+# pull request in this repo. Subsequent issues/PRs from the same person do
+# not trigger this — the action checks contribution history per user.
+#
+# Triggers `pull_request_target` (not `pull_request`) so the workflow runs
+# in the base repo's context and has the write permission needed to comment.
+# We never check out or execute the PR's code here, so this is safe to use
+# with PRs from forks.
+
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  welcome:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: |
+            Welcome to Ansvisor, and thanks for opening your first issue!
+
+            A maintainer will take a look soon. A few things that help us move fast:
+            - **Bug reports** — exact steps to reproduce, what you expected vs. what happened, browser / Node version where relevant.
+            - **Feature requests** — the use case behind the ask, so we can think about it well rather than guessing.
+
+            If you'd like to follow Ansvisor's evolution, a ⭐ on the repo helps others discover it (and Watch sends you a ping when related issues land).
+          pr-message: |
+            Welcome to Ansvisor, and thank you for your first PR! A maintainer will be by soon to review.
+
+            In the meantime, two things that make review faster:
+            - A short description of *why* the change matters, not just *what* it does — most of our PRs link a `Fixes #...` to the issue that explains the *why*.
+            - A quick local test note if there's anything worth eyeballing in the browser.
+
+            If you'd like to keep an eye on where Ansvisor goes next, a ⭐ on the repo helps others discover it (and Watch sends you a ping when related issues land). Either way — looking forward to your next one.
