@@ -138,7 +138,7 @@ ansvisor/
 What we're planning to build next. React with 👍 on the linked issue (or open a new one) to push something up the list. PRs welcome on any of these.
 
 - [x] **Ansvisor MCP server** — expose insights through a Model Context Protocol server so Claude Desktop, Claude Code, Cursor, Zed, and any other MCP client can query your brand visibility directly. Remote (Streamable HTTP) endpoint at `/api/mcp` — zero install, paste a URL + API key into your client and you're done. Ships with `list_brands` and `get_visibility_summary` today; more tools landing as we go.
-- [ ] **Claude Code skills** — opinionated workflows on top of the MCP server (page-audit, rewrite-for-aeo, check-mentions) plus a freeform `/ansvisor:ask` for conversational queries
+- [x] **Anthropic Skills** — opinionated AEO knowledge that turns Claude into an analyst on your account. Ships in two flavours: an MCP-tool flavour for Claude Desktop / Claude Code / Cursor / Zed, and a standalone REST flavour for claude.ai web (no MCP required). First skill (`ansvisor-aeo-coach`) is live — see [`skills/`](./skills). More (page-audit, rewrite-for-aeo, content-brief) on the way.
 - [ ] **In-product conversational AI assistant** — chat with your dashboard about visibility trends, competitor moves, and content gaps without leaving the page
 - [ ] **ScrapeLLM integration** — add ScrapeLLM as an alternative scraping backend alongside Cloro for users who prefer it or need a fallback
 - [ ] **PostHog integration** — pipe AI-referred sessions and tracking events into PostHog for users already running it as their product analytics layer
