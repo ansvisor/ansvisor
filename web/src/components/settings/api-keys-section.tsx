@@ -34,6 +34,15 @@ interface ApiKey {
   created_at: string;
 }
 
+const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+
+function getMcpEndpoint(): string {
+  const appUrl =
+    configuredAppUrl ||
+    (typeof window !== "undefined" ? window.location.origin : "");
+  return `${appUrl}/api/mcp`;
+}
+
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString(undefined, {
@@ -50,6 +59,7 @@ export function ApiKeysSection() {
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const [revealedToken, setRevealedToken] = useState<string | null>(null);
+  const mcpEndpoint = getMcpEndpoint();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -141,16 +151,13 @@ export function ApiKeysSection() {
           <p className="font-medium text-foreground">MCP endpoint</p>
           <div className="flex items-center gap-2">
             <code className="flex-1 truncate font-mono">
-              {typeof window !== "undefined" ? window.location.origin : ""}
-              /api/mcp
+              {mcpEndpoint}
             </code>
             <Button
               size="sm"
               variant="ghost"
               className="h-6 px-2"
-              onClick={() =>
-                copy(`${window.location.origin}/api/mcp`)
-              }
+              onClick={() => copy(mcpEndpoint)}
             >
               <Copy className="h-3 w-3" />
             </Button>
