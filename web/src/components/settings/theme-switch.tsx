@@ -32,18 +32,24 @@ export function ThemeSwitch() {
   return (
     <div className="flex rounded-lg border bg-muted p-1">
       <Button
-        variant={theme === "light" ? "secondary" : "ghost"}
+        variant="ghost"
         size="sm"
-        className={cn("flex-1 gap-2", theme === "light" && "shadow-sm")}
+        className={cn(
+          "flex-1 gap-2 transition-colors",
+          theme === "light" && "bg-background text-foreground shadow-sm dark:border-input dark:bg-input/30"
+        )}
         onClick={() => setTheme("light")}
       >
         <Sun className="h-4 w-4" />
         Light
       </Button>
       <Button
-        variant={theme === "dark" ? "secondary" : "ghost"}
+        variant="ghost"
         size="sm"
-        className={cn("flex-1 gap-2", theme === "dark" && "shadow-sm")}
+        className={cn(
+          "flex-1 gap-2 transition-colors",
+          theme === "dark" && "bg-background text-foreground shadow-sm dark:border-input dark:bg-input/30"
+        )}
         onClick={() => setTheme("dark")}
       >
         <Moon className="h-4 w-4" />
