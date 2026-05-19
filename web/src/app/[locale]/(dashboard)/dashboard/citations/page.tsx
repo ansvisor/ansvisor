@@ -32,6 +32,18 @@ import {
   type CitationsDatePreset,
 } from '@/lib/actions/citations';
 import { getTopics } from '@/lib/actions/topic';
+import { getBrandPrompts } from '@/lib/actions/tracking';
+import {
+  Combobox,
+  ComboboxCollection,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+  ComboboxValue,
+} from '@/components/ui/combobox';
 import type { Topic } from '@/types';
 import {
   SOURCE_CATEGORY_LABELS,
@@ -185,8 +197,21 @@ interface UIFilters {
   platform: string;
   region: string;
   topic: string;
+  prompt: string;
   excludeOwnDomain: boolean;
   competitorOnly: boolean;
+}
+
+interface PromptOption {
+  id: string;
+  text: string;
+}
+
+// base-ui's Combobox auto-uses `label` for display and `value` for selection
+// when items are `{ value, label }` shaped — no extra helpers needed.
+interface PromptComboboxItem {
+  value: string;
+  label: string;
 }
 
 interface PlatformOption {
@@ -201,6 +226,7 @@ const DEFAULT_FILTERS: UIFilters = {
   platform: '',
   region: '',
   topic: '',
+  prompt: '',
   excludeOwnDomain: false,
   competitorOnly: false,
 };
@@ -433,15 +459,29 @@ function FilterBar({
   filters,
   onChange,
   topics,
+  prompts,
   platforms,
   regions,
 }: {
   filters: UIFilters;
   onChange: (patch: Partial<UIFilters>) => void;
   topics: Topic[];
+  prompts: PromptOption[];
   platforms: PlatformOption[];
   regions: string[];
 }) {
+  // base-ui Combobox needs `{ value, label }` shaped items so it can use the
+  // built-in filter and display logic without custom item-to-string helpers.
+  // Truncate long prompt text so the dropdown stays a sensible width.
+  const promptComboboxItems = useMemo<PromptComboboxItem[]>(
+    () =>
+      prompts.map((p) => ({
+        value: p.id,
+        label: p.text.length > 80 ? `${p.text.slice(0, 80)}…` : p.text,
+      })),
+    [prompts],
+  );
+
   return (
     <div className="flex flex-wrap items-end gap-3">
       <div>
@@ -523,6 +563,46 @@ function FilterBar({
               ))}
             </SelectContent>
           </Select>
+        </div>
+      )}
+
+      {prompts.length > 0 && (
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+            Prompt
+          </label>
+          <Combobox
+            items={promptComboboxItems}
+            value={
+              filters.prompt
+                ? (promptComboboxItems.find(
+                    (item) => item.value === filters.prompt,
+                  ) ?? null)
+                : null
+            }
+            onValueChange={(item: PromptComboboxItem | null) =>
+              onChange({
+                prompt: !item || item.value === '__all__' ? '' : item.value,
+              })
+            }
+          >
+            <ComboboxTrigger className="h-8 w-56 text-xs">
+              <ComboboxValue placeholder="All Prompts" />
+            </ComboboxTrigger>
+            <ComboboxContent>
+              <ComboboxInput placeholder="Search prompts…" />
+              <ComboboxList>
+                <ComboboxEmpty>No prompts match.</ComboboxEmpty>
+                <ComboboxCollection>
+                  {(item: PromptComboboxItem) => (
+                    <ComboboxItem key={item.value} value={item}>
+                      {item.label}
+                    </ComboboxItem>
+                  )}
+                </ComboboxCollection>
+              </ComboboxList>
+            </ComboboxContent>
+          </Combobox>
         </div>
       )}
 
@@ -806,6 +886,7 @@ export default function CitationsPage() {
   const [data, setData] = useState<CitationsOverview | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [prompts, setPrompts] = useState<PromptOption[]>([]);
   const [availablePlatforms, setAvailablePlatforms] = useState<PlatformOption[]>(
     [],
   );
@@ -816,6 +897,9 @@ export default function CitationsPage() {
   useEffect(() => {
     if (!activeBrandId) return;
     getTopics(activeBrandId).then(setTopics).catch(() => {});
+    getBrandPrompts(activeBrandId)
+      .then((rows) => setPrompts(rows.map((r) => ({ id: r.id, text: r.text }))))
+      .catch(() => {});
   }, [activeBrandId]);
 
   const loadData = useCallback(async () => {
@@ -836,6 +920,7 @@ export default function CitationsPage() {
         platforms: filters.platform ? [filters.platform] : undefined,
         regions: filters.region ? [filters.region] : undefined,
         topicIds: filters.topic ? [filters.topic] : undefined,
+        promptIds: filters.prompt ? [filters.prompt] : undefined,
         excludeOwnDomain: filters.excludeOwnDomain,
         competitorOnly: filters.competitorOnly,
       };
@@ -878,6 +963,7 @@ export default function CitationsPage() {
     filters.platform,
     filters.region,
     filters.topic,
+    filters.prompt,
     filters.excludeOwnDomain,
     filters.competitorOnly,
   ]);
@@ -942,6 +1028,7 @@ export default function CitationsPage() {
         filters={filters}
         onChange={(patch) => setFilters((f) => ({ ...f, ...patch }))}
         topics={topics}
+        prompts={prompts}
         platforms={availablePlatforms}
         regions={availableRegions}
       />

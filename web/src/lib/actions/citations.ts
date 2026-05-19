@@ -27,6 +27,7 @@ export interface CitationsFilters {
   dateTo?: string;
   platforms?: string[];
   topicIds?: string[];
+  promptIds?: string[];
   regions?: string[];
   excludeOwnDomain?: boolean;
   competitorOnly?: boolean;
@@ -182,6 +183,9 @@ export async function getCitationsOverview(
   }
   if (filters.regions && filters.regions.length > 0) {
     query = query.in('region', filters.regions);
+  }
+  if (filters.promptIds && filters.promptIds.length > 0) {
+    query = query.in('prompt_id', filters.promptIds);
   }
 
   if (filters.topicIds && filters.topicIds.length > 0) {
