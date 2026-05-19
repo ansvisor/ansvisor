@@ -23,9 +23,10 @@ import {
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { buttonVariants } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
   ArrowRight,
+  Download,
   Flame,
   Layers,
   Minus,
@@ -36,6 +37,7 @@ import {
   Trophy,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toCsv } from '@/lib/csv';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -65,6 +67,21 @@ function visibilityTextColor(score: number) {
   if (score >= 25) return 'text-orange-600 dark:text-orange-400';
   return 'text-rose-600 dark:text-rose-400';
 }
+
+const TOPIC_EXPORT_HEADERS = [
+  'topic',
+  'prompt_count',
+  'avg_visibility_score',
+  'visibility_change',
+  'total_mentions',
+  'total_citations',
+  'share_of_voice',
+  'top_competitor',
+  'top_competitor_sov',
+  'last_run_at',
+];
+
+const TOPIC_EXPORT_HINT = 'No topics yet - add topics or run a tracking job first.';
 
 // ─── Sparkline ───────────────────────────────────────────────────────────
 
@@ -148,6 +165,9 @@ function KpiCard({
 
 export default function TopicsPage() {
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
+  const activeBrand = useBrandStore(
+    (s) => s.brands.find((brand) => brand.id === s.activeBrandId) ?? null,
+  );
   const [topics, setTopics] = useState<TopicOverviewRow[]>([]);
   const [unassignedPromptCount, setUnassignedPromptCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -212,6 +232,38 @@ export default function TopicsPage() {
     };
   }, [topics]);
 
+  const canExport = !loading && topics.length > 0;
+
+  const handleExportCsv = useCallback(() => {
+    if (!canExport) return;
+
+    const rows = topics.map((t) => ({
+      topic: t.name,
+      prompt_count: t.promptCount,
+      avg_visibility_score: t.avgVisibilityScore,
+      visibility_change: t.visibilityChange ?? '',
+      total_mentions: t.totalMentions,
+      total_citations: t.totalCitations,
+      share_of_voice: t.shareOfVoice,
+      top_competitor: t.topCompetitor?.name ?? '',
+      top_competitor_sov: t.topCompetitor?.sov ?? '',
+      last_run_at: t.lastRunAt ?? '',
+    }));
+
+    const csv = toCsv(rows, TOPIC_EXPORT_HEADERS);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const date = new Date().toISOString().slice(0, 10);
+    const slug = activeBrand?.slug ?? 'brand';
+
+    link.href = url;
+    link.download = `ansvisor_${slug}_topics_${date}.csv`;
+    link.click();
+
+    URL.revokeObjectURL(url);
+  }, [activeBrand?.slug, canExport, topics]);
+
   if (!activeBrandId) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
@@ -238,13 +290,28 @@ export default function TopicsPage() {
             Topic-level analytics across all tracked prompts (last 30 days)
           </p>
         </div>
-        <Link
-          href={`/dashboard/brands/${activeBrandId}/topics`}
-          className={buttonVariants({ variant: 'outline', size: 'sm' })}
-        >
-          <Settings2 className="h-4 w-4" />
-          Manage topics
-        </Link>
+        <div className="flex items-center gap-2">
+          <span title={!canExport ? TOPIC_EXPORT_HINT : undefined}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={handleExportCsv}
+              disabled={!canExport}
+            >
+              <Download className="h-4 w-4" />
+              Export CSV
+            </Button>
+          </span>
+          <Link
+            href={`/dashboard/brands/${activeBrandId}/topics`}
+            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+          >
+            <Settings2 className="h-4 w-4" />
+            Manage topics
+          </Link>
+        </div>
       </div>
 
       {/* KPIs */}
