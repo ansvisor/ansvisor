@@ -112,6 +112,19 @@ export function isCloud() {
   return process.env.IS_CLOUD === 'true';
 }
 
+/**
+ * Whether an organization's Stripe subscription is in a state that grants
+ * access to billed features. `trialing` counts — it's a paid plan in its
+ * free-trial period. Everything else (incomplete, canceled, past_due,
+ * unpaid) does NOT grant access.
+ *
+ * Self-hosted instances always return true since billing doesn't apply.
+ */
+export function isSubscriptionActive(status) {
+  if (!isCloud()) return true;
+  return status === 'active' || status === 'trialing';
+}
+
 export function getPlan(planId) {
   if (!isCloud()) return PLANS.self_hosted;
   return PLANS[planId] || PLANS.starter;

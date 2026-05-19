@@ -4,6 +4,7 @@ import {
   hasFeature,
   isWithinLimit,
   isCloud,
+  isSubscriptionActive,
 } from '../config/plans.js';
 
 export class PlanLimitError extends Error {
@@ -37,8 +38,15 @@ async function resolveOrgPlan(userId) {
     .eq('id', profile.organization_id)
     .single();
 
-  if (!org || org.subscription_status !== 'active') {
-    return getPlan('starter');
+  // Block feature access for orgs without an active or trialing Stripe
+  // subscription. Previously this fell back to starter, which silently
+  // granted billed features (volume fetch, content generation, etc.) to
+  // unsubscribed signups.
+  if (!isSubscriptionActive(org?.subscription_status)) {
+    throw new PlanLimitError(
+      'An active subscription or free trial is required. Please choose a plan to continue.',
+      402,
+    );
   }
 
   return getPlan(org.plan);

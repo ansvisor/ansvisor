@@ -16,7 +16,12 @@ import { runTrackingJob } from './lib/job-runner.js';
 import { parseScraperResponse } from './lib/cloro-scraper.js';
 import { handleScraperResult } from './lib/cloro-result-handler.js';
 import supabaseAdmin from './config/supabase.js';
-import { getPlan, hasFeature, isCloud } from './config/plans.js';
+import {
+  getPlan,
+  hasFeature,
+  isCloud,
+  isSubscriptionActive,
+} from './config/plans.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -107,14 +112,20 @@ async function runDailyTracking() {
           .select('plan, subscription_status')
           .eq('id', brand.organization_id)
           .single();
-        orgPlanCache[brand.organization_id] =
-          !org || org.subscription_status !== 'active'
-            ? getPlan('starter')
-            : getPlan(org.plan);
+        // Skip orgs without an active or trialing Stripe subscription.
+        // Previously this fell back to starter limits, which silently kept
+        // running daily monitoring (and Cloro / AI provider spend) for
+        // unsubscribed signups.
+        if (!isSubscriptionActive(org?.subscription_status)) {
+          orgPlanCache[brand.organization_id] = null;
+        } else {
+          orgPlanCache[brand.organization_id] = getPlan(org.plan);
+        }
       }
     }
 
     const plan = orgPlanCache[brand.organization_id];
+    if (!plan) continue; // unsubscribed → skip silently
     if (!hasFeature(plan, 'daily_monitoring')) continue;
 
     const { count } = await supabaseAdmin

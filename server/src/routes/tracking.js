@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { createJob, getJob, cancelJob } from '../lib/job-manager.js';
 import { runTrackingJob } from '../lib/job-runner.js';
 import supabaseAdmin from '../config/supabase.js';
-import { isCloud, getPlan } from '../config/plans.js';
+import { isCloud, getPlan, isSubscriptionActive } from '../config/plans.js';
 
 const router = Router();
 
@@ -154,7 +154,7 @@ router.post('/analyze-new', async (req, res) => {
       return res.json({ success: true, newCount: 0, message: 'All prompts already analyzed' });
     }
 
-    // --- Cloud-mode rate limiting ---
+    // --- Cloud-mode subscription gate + rate limiting ---
     if (isCloud()) {
       const { data: org } = await supabaseAdmin
         .from('organizations')
@@ -162,9 +162,17 @@ router.post('/analyze-new', async (req, res) => {
         .eq('id', brand.organization_id)
         .single();
 
-      const plan = !org || org.subscription_status !== 'active'
-        ? getPlan('starter')
-        : getPlan(org.plan);
+      // Block tracking outright when the org's Stripe subscription isn't
+      // active or trialing. Previously this fell back to starter limits,
+      // which let unsubscribed signups run jobs silently.
+      if (!isSubscriptionActive(org?.subscription_status)) {
+        return res.status(402).json({
+          message:
+            'An active subscription or free trial is required to run tracking. Please choose a plan to continue.',
+        });
+      }
+
+      const plan = getPlan(org.plan);
 
       const { maxDailyOnDemand, onDemandCooldownMinutes } = plan.limits;
 
