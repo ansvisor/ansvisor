@@ -1,22 +1,23 @@
 name: First-time contributor welcome
 
-# Posts a one-time welcome comment when someone opens their FIRST issue or
-# pull request in this repo. Subsequent issues/PRs from the same person do
-# not trigger this — the action checks contribution history per user.
+# Posts a one-time welcome comment when someone opens their FIRST pull
+# request in this repo. Subsequent PRs from the same person do not
+# trigger this — the action checks contribution history per user.
 #
-# Triggers `pull_request_target` (not `pull_request`) so the workflow runs
-# in the base repo's context and has the write permission needed to comment.
-# We never check out or execute the PR's code here, so this is safe to use
-# with PRs from forks.
+# Issues are deliberately NOT triggered: most issues here are bug
+# reports / feature requests rather than first-time contributions, and
+# auto-replying on every new issue created noise without adding value.
+#
+# Triggers `pull_request_target` (not `pull_request`) so the workflow
+# runs in the base repo's context and has the write permission needed
+# to comment. We never check out or execute the PR's code here, so this
+# is safe to use with PRs from forks.
 
 on:
-  issues:
-    types: [opened]
   pull_request_target:
     types: [opened]
 
 permissions:
-  issues: write
   pull-requests: write
 
 jobs:
@@ -26,14 +27,6 @@ jobs:
       - uses: actions/first-interaction@v1
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          issue-message: |
-            Welcome to Ansvisor, and thanks for opening your first issue!
-
-            A maintainer will take a look soon. A few things that help us move fast:
-            - **Bug reports** — exact steps to reproduce, what you expected vs. what happened, browser / Node version where relevant.
-            - **Feature requests** — the use case behind the ask, so we can think about it well rather than guessing.
-
-            If you'd like to follow Ansvisor's evolution, a ⭐ on the repo helps others discover it (and Watch sends you a ping when related issues land).
           pr-message: |
             Welcome to Ansvisor, and thank you for your first PR! A maintainer will be by soon to review.
 
