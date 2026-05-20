@@ -140,15 +140,30 @@ Generate actionable content opportunities.`;
     prompt: userPrompt,
   });
 
-  await supabaseAdmin
+  const { data: existing } = await supabaseAdmin
     .from('content_opportunities')
-    .delete()
+    .select('prompt_id, title')
     .eq('brand_id', brandId)
-    .in('status', ['new']);
+    .eq('status', 'new');
 
-  const rows = object.opportunities.map((opp) => {
-    const rel = scored[opp.relatedPromptIndex] || scored[0];
-    return {
+  const seen = new Set(
+    (existing || []).map((opportunity) => (
+      `${opportunity.prompt_id}::${(opportunity.title || '').toLowerCase().trim()}`
+    )),
+  );
+
+  const rows = object.opportunities
+    .map((opp) => {
+      const rel = scored[opp.relatedPromptIndex] || scored[0];
+      return { rel, opp };
+    })
+    .filter(({ rel, opp }) => {
+      const key = `${rel.promptId}::${opp.title.toLowerCase().trim()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map(({ rel, opp }) => ({
       brand_id: brandId,
       prompt_id: rel.promptId,
       title: opp.title,
@@ -162,9 +177,10 @@ Generate actionable content opportunities.`;
         visibilityScore: rel.avgVisibility, competitorGap: rel.competitorGap,
         intent: rel.intent, keywords: rel.keywords, competitorsCited: rel.competitorsCited,
       },
-    };
-  });
+    }));
 
-  await supabaseAdmin.from('content_opportunities').insert(rows);
-  console.log(`[opportunities] Generated ${rows.length} opportunities for brand ${brandId}`);
+  if (rows.length > 0) await supabaseAdmin.from('content_opportunities').insert(rows);
+  console.log(
+    `[opportunities] Generated ${rows.length} new opportunities for brand ${brandId} (${(existing || []).length} already pending)`,
+  );
 }
