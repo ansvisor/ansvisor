@@ -1,6 +1,7 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { AuthProvider } from "@/components/providers/auth-provider";
+import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
+import { AuthProvider } from '@/components/providers/auth-provider';
+import { OnboardingSignOutButton } from '@/components/auth/onboarding-sign-out-button';
 
 export default async function OnboardingLayout({
   children,
@@ -13,12 +14,13 @@ export default async function OnboardingLayout({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/sign-in");
+    redirect('/sign-in');
   }
 
   return (
     <>
       <AuthProvider user={user} />
+      <OnboardingSignOutButton />
       {children}
     </>
   );
