@@ -11,7 +11,8 @@
     "og:description": "Open-source Answer Engine Optimization platform — track ChatGPT, Gemini, Perplexity, Claude, Copilot brand mentions.",
     "og:image": "https://app.ansvisor.com/opengraph-image",
     "twitter:card": "summary_large_image",
-    "twitter:image": "https://app.ansvisor.com/opengraph-image"
+    "twitter:image": "https://app.ansvisor.com/opengraph-image",
+    "google-site-verification": "mQlyZ6XbIBAH31OrIjuNhO7_0N-CJGobmf"
   },
   "colors": {
     "primary": "#6366f1",
