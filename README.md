@@ -141,7 +141,7 @@ What we're planning to build next. React with 👍 on the linked issue (or open 
 - [x] **Anthropic Skills** — opinionated AEO knowledge that turns Claude into an analyst on your account. Ships in two flavours: an MCP-tool flavour for Claude Desktop / Claude Code / Cursor / Zed, and a standalone REST flavour for claude.ai web (no MCP required). First skill (`ansvisor-aeo-coach`) is live — see [`skills/`](./skills). More (page-audit, rewrite-for-aeo, content-brief) on the way.
 - [ ] **In-product conversational AI assistant** — chat with your dashboard about visibility trends, competitor moves, and content gaps without leaving the page
 - [ ] **ScrapeLLM integration** — add ScrapeLLM as an alternative scraping backend alongside Cloro for users who prefer it or need a fallback
-- [ ] **PostHog integration** — pipe AI-referred sessions and tracking events into PostHog for users already running it as their product analytics layer
+- [x] **PostHog integration** — pipe AI-referred sessions and tracking events into PostHog for users already running it as their product analytics layer
 - [ ] **Anomaly alerts** — get an email / Slack ping when a brand's visibility drops sharply, a competitor surges, or a high-volume prompt suddenly stops citing you
 - [ ] **BYO LLM keys** — bring your own OpenAI / Anthropic / Gemini API key for tracking and content generation, so you control cost and data handling
 - [ ] **Webhook recipe library** — one-click Notion / Linear / Asana / Slack templates so a Content Brief can land in your editorial workflow with zero glue code
