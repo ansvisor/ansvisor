@@ -21,7 +21,18 @@ INSERT INTO auth.users (
   raw_app_meta_data,
   raw_user_meta_data,
   created_at,
-  updated_at
+  updated_at,
+  -- GoTrue scans these token columns into Go strings; NULL aborts every
+  -- login with "converting NULL to string is unsupported". Manual inserts
+  -- must seed them as empty strings.
+  confirmation_token,
+  recovery_token,
+  email_change_token_new,
+  email_change,
+  email_change_token_current,
+  phone_change,
+  phone_change_token,
+  reauthentication_token
 )
 VALUES (
   '00000000-0000-0000-0000-000000000000',
@@ -34,7 +45,8 @@ VALUES (
   '{"provider": "email", "providers": ["email"]}'::jsonb,
   '{"full_name": "Demo User"}'::jsonb,
   now() - interval '30 days',
-  now()
+  now(),
+  '', '', '', '', '', '', '', ''
 )
 ON CONFLICT (id) DO NOTHING;
 
