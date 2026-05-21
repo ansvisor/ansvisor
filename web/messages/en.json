@@ -58,7 +58,8 @@
       "passwordRequired": "Password is required.",
       "passwordTooShort": "Password must be at least 8 characters.",
       "generic": "An error occurred. Please try again.",
-      "emailNotConfirmed": "Please verify your email address first. Check your inbox for the confirmation link."
+      "emailNotConfirmed": "Please verify your email address first. Check your inbox for the confirmation link.",
+      "signOutError": "Failed to sign out. Please try again."
     }
   },
   "dashboard": {
