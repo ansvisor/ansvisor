@@ -1,0 +1,280 @@
+-- Demo data fixture for local development.
+--
+-- Runs automatically on `supabase db reset` (Supabase only sources seed.sql
+-- through the local CLI — it never executes against a hosted project).
+--
+-- Every row uses a fixed UUID and `ON CONFLICT DO NOTHING`, so re-running
+-- the reset is idempotent.
+--
+-- Sign-in: demo@ansvisor.local / demo123
+
+-- ─── Auth user + identity ────────────────────────────────────────────────────
+
+INSERT INTO auth.users (
+  instance_id,
+  id,
+  aud,
+  role,
+  email,
+  encrypted_password,
+  email_confirmed_at,
+  raw_app_meta_data,
+  raw_user_meta_data,
+  created_at,
+  updated_at
+)
+VALUES (
+  '00000000-0000-0000-0000-000000000000',
+  '11111111-1111-1111-1111-111111111111',
+  'authenticated',
+  'authenticated',
+  'demo@ansvisor.local',
+  extensions.crypt('demo123', extensions.gen_salt('bf')),
+  now(),
+  '{"provider": "email", "providers": ["email"]}'::jsonb,
+  '{"full_name": "Demo User"}'::jsonb,
+  now() - interval '30 days',
+  now()
+)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO auth.identities (
+  id,
+  user_id,
+  provider_id,
+  identity_data,
+  provider,
+  email,
+  created_at,
+  updated_at,
+  last_sign_in_at
+)
+VALUES (
+  '11111111-1111-1111-1111-111111111111',
+  '11111111-1111-1111-1111-111111111111',
+  '11111111-1111-1111-1111-111111111111',
+  '{"sub": "11111111-1111-1111-1111-111111111111", "email": "demo@ansvisor.local", "email_verified": true}'::jsonb,
+  'email',
+  'demo@ansvisor.local',
+  now() - interval '30 days',
+  now(),
+  now()
+)
+ON CONFLICT (provider, provider_id) DO NOTHING;
+
+-- ─── Organization + profile wiring ───────────────────────────────────────────
+
+INSERT INTO public.organizations (id, name, slug, plan, subscription_status, created_at)
+VALUES (
+  '22222222-2222-2222-2222-222222222222',
+  'Demo Org',
+  'demo-org',
+  'self_hosted',
+  'active',
+  now() - interval '30 days'
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- The on_auth_user_created trigger already inserted a row in public.profiles
+-- when the auth user landed; attach it to the org and mark onboarding done.
+UPDATE public.profiles
+SET
+  organization_id = '22222222-2222-2222-2222-222222222222',
+  role = 'admin',
+  full_name = 'Demo User',
+  onboarding_completed = true
+WHERE id = '11111111-1111-1111-1111-111111111111';
+
+-- ─── Brand + domain + platforms ──────────────────────────────────────────────
+
+INSERT INTO public.brands (
+  id, organization_id, name, slug, industry, description, region, language, created_at
+)
+VALUES (
+  '33333333-3333-3333-3333-333333333333',
+  '22222222-2222-2222-2222-222222222222',
+  'Acme Coffee',
+  'acme-coffee',
+  'Food & Beverage',
+  'Fictional specialty coffee subscription service. Demo fixture only.',
+  'US',
+  'en',
+  now() - interval '30 days'
+)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.brand_domains (id, brand_id, domain, country, is_primary)
+VALUES (
+  '44444444-4444-4444-4444-444444444401',
+  '33333333-3333-3333-3333-333333333333',
+  'acme-coffee.example.com',
+  'US',
+  true
+)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.brand_platforms (id, brand_id, platform, is_enabled, check_frequency, api_model) VALUES
+  ('55555555-5555-5555-5555-555555555501', '33333333-3333-3333-3333-333333333333', 'chatgpt-web',    true, 'daily', NULL),
+  ('55555555-5555-5555-5555-555555555502', '33333333-3333-3333-3333-333333333333', 'claude',         true, 'daily', 'claude-sonnet-4-6'),
+  ('55555555-5555-5555-5555-555555555503', '33333333-3333-3333-3333-333333333333', 'copilot-web',    true, 'daily', NULL),
+  ('55555555-5555-5555-5555-555555555504', '33333333-3333-3333-3333-333333333333', 'gemini-web',     true, 'daily', NULL),
+  ('55555555-5555-5555-5555-555555555505', '33333333-3333-3333-3333-333333333333', 'google-aimode',  true, 'daily', NULL),
+  ('55555555-5555-5555-5555-555555555506', '33333333-3333-3333-3333-333333333333', 'google-aio',     true, 'daily', NULL),
+  ('55555555-5555-5555-5555-555555555507', '33333333-3333-3333-3333-333333333333', 'grok-web',       true, 'daily', NULL),
+  ('55555555-5555-5555-5555-555555555508', '33333333-3333-3333-3333-333333333333', 'perplexity-web', true, 'daily', NULL)
+ON CONFLICT (id) DO NOTHING;
+
+-- ─── Prompt set + topics + prompts ───────────────────────────────────────────
+
+INSERT INTO public.prompt_sets (id, brand_id, name) VALUES
+  ('66666666-6666-6666-6666-666666666601', '33333333-3333-3333-3333-333333333333', 'Default')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.topics (id, brand_id, name, is_active) VALUES
+  ('77777777-7777-7777-7777-777777777701', '33333333-3333-3333-3333-333333333333', 'Coffee subscription services', true),
+  ('77777777-7777-7777-7777-777777777702', '33333333-3333-3333-3333-333333333333', 'Espresso machines under $500', true)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.prompts (
+  id, prompt_set_id, topic_id, text, platforms, regions, models, is_active
+) VALUES
+  ('88888888-8888-8888-8888-888888888801', '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777701',
+   'What are the best coffee subscription services in 2026?',
+   ARRAY['chatgpt-web','claude','copilot-web','gemini-web','google-aimode','google-aio','grok-web','perplexity-web'],
+   ARRAY['US','GB','DE','TR'],
+   ARRAY['claude-sonnet-4-6'], true),
+  ('88888888-8888-8888-8888-888888888802', '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777701',
+   'Which specialty coffee subscriptions ship internationally?',
+   ARRAY['chatgpt-web','claude','perplexity-web','gemini-web'],
+   ARRAY['US','GB','DE'],
+   ARRAY['claude-sonnet-4-6'], true),
+  ('88888888-8888-8888-8888-888888888803', '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777701',
+   'Best monthly coffee bean subscription for offices',
+   ARRAY['chatgpt-web','claude','copilot-web'],
+   ARRAY['US','TR'],
+   ARRAY['claude-sonnet-4-6'], true),
+  ('88888888-8888-8888-8888-888888888804', '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777702',
+   'Best espresso machines under $500?',
+   ARRAY['chatgpt-web','claude','copilot-web','gemini-web','google-aimode','grok-web','perplexity-web'],
+   ARRAY['US','GB','DE','FR','TR'],
+   ARRAY['claude-sonnet-4-6'], true),
+  ('88888888-8888-8888-8888-888888888805', '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777702',
+   'Compare home espresso machines for beginners',
+   ARRAY['chatgpt-web','claude','perplexity-web','google-aio'],
+   ARRAY['US','GB'],
+   ARRAY['claude-sonnet-4-6'], true),
+  ('88888888-8888-8888-8888-888888888806', '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777702',
+   'Manual vs automatic espresso machine for home use',
+   ARRAY['chatgpt-web','claude','copilot-web','gemini-web','grok-web'],
+   ARRAY['US','TR','DE'],
+   ARRAY['claude-sonnet-4-6'], true)
+ON CONFLICT (id) DO NOTHING;
+
+-- ─── Competitors ─────────────────────────────────────────────────────────────
+
+INSERT INTO public.competitors (id, brand_id, name, domain) VALUES
+  ('99999999-9999-9999-9999-999999999901', '33333333-3333-3333-3333-333333333333', 'Demo Coffee Co',     'demo-coffee.example.com'),
+  ('99999999-9999-9999-9999-999999999902', '33333333-3333-3333-3333-333333333333', 'Fixture Roasters',   'fixture-roasters.example.com'),
+  ('99999999-9999-9999-9999-999999999903', '33333333-3333-3333-3333-333333333333', 'Sample Beans',       'sample-beans.example.com'),
+  ('99999999-9999-9999-9999-999999999904', '33333333-3333-3333-3333-333333333333', 'Mock Coffee Club',   'mock-coffee.example.com')
+ON CONFLICT (id) DO NOTHING;
+
+-- ─── Prompt results ──────────────────────────────────────────────────────────
+-- Cross-join prompts × platform/model pairs × regions, filtered against each
+-- prompt's `platforms` and `regions` arrays so we only emit rows that match
+-- how the tracker would actually have run them. UUIDs are deterministic
+-- (md5 of the row's identity), so re-running the seed is a no-op.
+
+INSERT INTO public.prompt_results (
+  id, prompt_id, brand_id, platform, model_used, region, response,
+  citations, competitor_mentions,
+  mention_count, citation_count, visibility_score, sentiment, created_at
+)
+WITH platform_models AS (
+  SELECT * FROM (VALUES
+    ('chatgpt-web'::text,    'gpt-5-5'::text),
+    ('chatgpt-web',          'gpt-5-3-mini'),
+    ('claude',               'claude-sonnet-4-6'),
+    ('copilot-web',          'copilot-web'),
+    ('gemini-web',           'gemini-web'),
+    ('google-aimode',        'google-aimode'),
+    ('google-aio',           'google-aio'),
+    ('grok-web',             'grok-3'),
+    ('perplexity-web',       'perplexity-web')
+  ) AS t(platform, model_used)
+),
+regions_list AS (
+  SELECT unnest(ARRAY['US','GB','DE','FR','TR']) AS region
+),
+combos AS (
+  SELECT
+    p.id            AS prompt_id,
+    pm.platform     AS platform,
+    pm.model_used   AS model_used,
+    r.region        AS region,
+    row_number() OVER (ORDER BY p.id, pm.platform, pm.model_used, r.region) AS n
+  FROM public.prompts p
+  CROSS JOIN platform_models pm
+  CROSS JOIN regions_list r
+  WHERE p.prompt_set_id = '66666666-6666-6666-6666-666666666601'
+    AND pm.platform = ANY(p.platforms)
+    AND r.region    = ANY(p.regions)
+)
+SELECT
+  md5(format('pr|%s|%s|%s|%s', prompt_id, platform, model_used, region))::uuid AS id,
+  prompt_id,
+  '33333333-3333-3333-3333-333333333333'::uuid AS brand_id,
+  platform,
+  model_used,
+  region,
+  format(
+    'Acme Coffee is consistently highlighted in independent reviews for fresh roast quality and flexible subscription tiers. (Demo response, %s on %s)',
+    platform, region
+  ) AS response,
+  jsonb_build_array(
+    jsonb_build_object('url', 'https://example.com/best-coffee-subscriptions-2026', 'title', 'Best Coffee Subscriptions of 2026 — Example Reviews', 'startIndex', 10, 'endIndex', 60),
+    jsonb_build_object('url', 'https://en.wikipedia.org/wiki/Coffee', 'title', 'Coffee — Wikipedia', 'startIndex', 70, 'endIndex', 120),
+    jsonb_build_object('url', 'https://www.reddit.com/r/Coffee/comments/example/best_subscriptions/', 'title', 'r/Coffee — Best subscriptions thread', 'startIndex', 130, 'endIndex', 200)
+  ) AS citations,
+  jsonb_build_array(
+    jsonb_build_object('name', 'Demo Coffee Co',   'domain', 'demo-coffee.example.com',     'competitor_id', '99999999-9999-9999-9999-999999999901', 'mention_count', (n % 4),     'citation_count', (n % 3),     'visibility_score', round(((n % 70))::numeric, 2)),
+    jsonb_build_object('name', 'Fixture Roasters', 'domain', 'fixture-roasters.example.com','competitor_id', '99999999-9999-9999-9999-999999999902', 'mention_count', (n % 3),     'citation_count', (n % 2),     'visibility_score', round(((n % 55))::numeric, 2)),
+    jsonb_build_object('name', 'Sample Beans',     'domain', 'sample-beans.example.com',    'competitor_id', '99999999-9999-9999-9999-999999999903', 'mention_count', ((n + 1) % 3), 'citation_count', ((n + 1) % 2), 'visibility_score', round((((n + 5) % 60))::numeric, 2))
+  ) AS competitor_mentions,
+  (1 + (n % 5))                                        AS mention_count,
+  (n % 4)                                              AS citation_count,
+  round((30 + ((n * 7) % 60))::numeric, 2)             AS visibility_score,
+  (ARRAY['positive','neutral','positive','neutral','negative'])[1 + (n % 5)::int] AS sentiment,
+  now() - (n * interval '6 hours')                     AS created_at
+FROM combos
+ON CONFLICT (id) DO NOTHING;
+
+-- ─── Content opportunities ───────────────────────────────────────────────────
+
+INSERT INTO public.content_opportunities (
+  id, brand_id, prompt_id, title, description, type, impact, opportunity_score, status, source_data
+) VALUES
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa01', '33333333-3333-3333-3333-333333333333', '88888888-8888-8888-8888-888888888801',
+   'Comparison guide: top 5 specialty coffee subscriptions for 2026',
+   'AI engines repeatedly cite comparison-style content for this prompt. Publishing a structured comparison page tagged with FAQ schema could pull Acme into more responses.',
+   'owned', 'high',  78.50, 'new',     '{"source":"demo-fixture"}'::jsonb),
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa02', '33333333-3333-3333-3333-333333333333', '88888888-8888-8888-8888-888888888804',
+   'Beginner-friendly buying guide: home espresso machines under $500',
+   'Engines lean on Reddit threads and YouTube transcripts here. A first-party buying guide with side-by-side specs would compete for citations.',
+   'owned', 'medium', 62.10, 'reviewing','{"source":"demo-fixture"}'::jsonb),
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa03', '33333333-3333-3333-3333-333333333333', '88888888-8888-8888-8888-888888888803',
+   'Office coffee program FAQ',
+   'B2B-style queries trigger generic answers across engines. A dedicated FAQ page targeting office buyers could improve mention rate for procurement-style prompts.',
+   'gap',   'medium', 54.75, 'new',     '{"source":"demo-fixture"}'::jsonb)
+ON CONFLICT (id) DO NOTHING;
+
+-- ─── AI traffic logs ─────────────────────────────────────────────────────────
+
+INSERT INTO public.ai_traffic_logs (id, brand_id, url, referrer, source_platform, user_agent, country, language, screen, created_at) VALUES
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb01', '33333333-3333-3333-3333-333333333333', 'https://acme-coffee.example.com/subscriptions', 'https://chatgpt.com/',   'chatgpt',    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', 'US', 'en', '1440x900',  now() - interval '2 days'),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb02', '33333333-3333-3333-3333-333333333333', 'https://acme-coffee.example.com/blog/beans',      'https://www.perplexity.ai/', 'perplexity', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',         'GB', 'en', '1920x1080', now() - interval '5 days'),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb03', '33333333-3333-3333-3333-333333333333', 'https://acme-coffee.example.com/about',           'https://gemini.google.com/', 'gemini',     'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36',                    'DE', 'de', '412x915',   now() - interval '9 days'),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb04', '33333333-3333-3333-3333-333333333333', 'https://acme-coffee.example.com/subscriptions/12mo','https://claude.ai/',     'claude',     'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/605.1.15',  'US', 'en', '1680x1050', now() - interval '12 days'),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb05', '33333333-3333-3333-3333-333333333333', 'https://acme-coffee.example.com/faq',             'https://copilot.microsoft.com/', 'copilot','Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edge/127.0',                'TR', 'tr', '1920x1080', now() - interval '17 days'),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb06', '33333333-3333-3333-3333-333333333333', 'https://acme-coffee.example.com/blog/espresso-vs-pour-over', 'https://www.bing.com/search?q=', 'bing-ai', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X)',         'FR', 'fr', '390x844',   now() - interval '22 days')
+ON CONFLICT (id) DO NOTHING;

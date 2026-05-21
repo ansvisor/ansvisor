@@ -85,6 +85,16 @@ npx supabase link --project-ref <YOUR_PROJECT_REF>
 npx supabase db push
 ```
 
+##### Demo data (local only)
+
+For local development, `supabase/seed.sql` ships a small fixture (one demo org, brand, prompts, ~120 prompt results across all tracked engines, competitors, content opportunities, AI traffic logs). It runs automatically the next time you do:
+
+```bash
+npx supabase db reset
+```
+
+Sign in with **`demo@ansvisor.local` / `demo123`** and you'll land on a populated dashboard — no provider API keys needed to iterate on UI. The seed only runs against a local Supabase via the CLI; hosted projects are unaffected.
+
 #### 3. Install dependencies
 
 ```bash

@@ -41,6 +41,16 @@ The repo ships SQL migrations under `supabase/migrations/`. Apply them in order:
 - The `user_role` enum (`admin`, `manager`, `analyst`, `agency_partner`)
 - Index optimization for analytics-heavy queries (per-brand, per-day windows)
 
+## Demo data (local only)
+
+For local development, the repo ships `supabase/seed.sql` — a small idempotent fixture (one demo organization, brand, prompts, ~120 prompt results across all tracked engines, competitors, content opportunities, AI traffic logs). The Supabase CLI runs it automatically the next time you do:
+
+```bash
+npx supabase db reset
+```
+
+Sign in with **`demo@ansvisor.local` / `demo123`** to land on a populated dashboard. The seed only runs against a local Supabase via the CLI; hosted projects are never touched by it.
+
 ## Auth configuration
 
 In Supabase dashboard → **Authentication → URL Configuration**:
