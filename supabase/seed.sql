@@ -44,7 +44,6 @@ INSERT INTO auth.identities (
   provider_id,
   identity_data,
   provider,
-  email,
   created_at,
   updated_at,
   last_sign_in_at
@@ -55,7 +54,6 @@ VALUES (
   '11111111-1111-1111-1111-111111111111',
   '{"sub": "11111111-1111-1111-1111-111111111111", "email": "demo@ansvisor.local", "email_verified": true}'::jsonb,
   'email',
-  'demo@ansvisor.local',
   now() - interval '30 days',
   now(),
   now()
