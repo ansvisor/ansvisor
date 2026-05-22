@@ -4,12 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from '@/i18n/navigation';
 import { useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
-import {
-  CompetitorChart,
-  CompetitorLeaderboard,
-  ShareOfVoicePlatformChart,
-  ShareOfVoiceTrendChart,
-} from './_charts';
+import { CompetitorChart, CompetitorLeaderboard, ShareOfVoicePlatformChart, ShareOfVoiceTrendChart } from './_charts';
 import { MetricBreakdownSheet } from './_metric-breakdown-sheet';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
@@ -39,7 +34,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableRow, 
+} from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   BarChart3,
@@ -315,9 +315,7 @@ interface PromptGroup {
   totalCitations: number;
 }
 
-function groupResultsByPlatform(
-  items: PromptResultWithText[],
-): PlatformGroup[] {
+function groupResultsByPlatform( items: PromptResultWithText[]): PlatformGroup[] {
   const map = new Map<string, PromptResultWithText[]>();
   for (const r of items) {
     const key = `${r.platform}|${r.modelUsed ?? ''}`;
@@ -329,8 +327,7 @@ function groupResultsByPlatform(
   return Array.from(map.entries())
     .map(([key, arr]) => {
       const sorted = [...arr].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
       const latest = sorted[0];
       return {
@@ -343,9 +340,7 @@ function groupResultsByPlatform(
         latestScore: latest.visibilityScore,
         avgScore:
           Math.round(
-            (sorted.reduce((s, r) => s + r.visibilityScore, 0) /
-              sorted.length) *
-              10,
+            (sorted.reduce((s, r) => s + r.visibilityScore, 0) / sorted.length) * 10,
           ) / 10,
         totalMentions: sorted.reduce((s, r) => s + r.mentionCount, 0),
         totalCitations: sorted.reduce((s, r) => s + r.citationCount, 0),
@@ -354,10 +349,7 @@ function groupResultsByPlatform(
     .sort((a, b) => b.latestScore - a.latestScore);
 }
 
-function computePromptGroup(
-  promptId: string,
-  items: PromptResultWithText[],
-): PromptGroup {
+function computePromptGroup(promptId: string, items: PromptResultWithText[]): PromptGroup {
   const sorted = [...items].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
@@ -419,8 +411,7 @@ function groupResultsByTopic(results: PromptResultWithText[]): TopicGroup[] {
       );
       return {
         topicId: items[0].topicId ?? `__cat_${topicName}`,
-        topicName:
-          topicName === '__uncategorized__' ? 'Uncategorized' : topicName,
+        topicName: topicName === '__uncategorized__' ? 'Uncategorized' : topicName,
         prompts,
         avgScore: Math.round(
           items.reduce((s, r) => s + r.visibilityScore, 0) / items.length,
@@ -747,8 +738,7 @@ function FilterBar({
               <SelectValue placeholder="All Topics">
                 {(value) =>
                   value && value !== '__all__'
-                    ? (availableTopics.find((t) => t.id === value)?.name ??
-                      'All Topics')
+                    ? (availableTopics.find((t) => t.id === value)?.name ?? 'All Topics')
                     : 'All Topics'
                 }
               </SelectValue>
@@ -933,11 +923,7 @@ function NoDataForPeriod({
 
 // ─── Tracking Progress ────────────────────────────────────────────────────────
 
-import {
-  saveTrackingJob,
-  loadTrackingJob,
-  clearTrackingJob,
-} from '@/lib/tracking-job-store';
+import { saveTrackingJob, loadTrackingJob, clearTrackingJob } from '@/lib/tracking-job-store';
 import { toCsv } from '@/lib/csv';
 
 function TrackingProgressBanner({
@@ -1051,28 +1037,18 @@ function PlatformSubGroup({
         tabIndex={0}
         onClick={onToggle}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onToggle();
-          }
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); }
         }}
         className="flex w-full items-center gap-3 px-3 py-2 hover:bg-muted/40 transition-colors cursor-pointer select-none"
       >
-        <ChevronDown
-          className={cn(
-            'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
-            !expanded && '-rotate-90',
-          )}
-        />
+        <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform', !expanded && '-rotate-90')} />
         <div className="flex-1 min-w-0 flex items-center gap-2">
           <ModelBadge
             model={latest.modelUsed ?? latest.platform}
             platform={latest.platform}
           />
           {latest.region && (
-            <Badge variant="outline" className="text-[10px]">
-              {latest.region}
-            </Badge>
+            <Badge variant="outline" className="text-[10px]">{latest.region}</Badge>
           )}
           <span className="text-[10px] text-muted-foreground tabular-nums ml-1">
             {group.results.length} run{group.results.length !== 1 ? 's' : ''}
@@ -1081,15 +1057,11 @@ function PlatformSubGroup({
         <div className="flex items-center gap-4 shrink-0">
           <div className="hidden sm:block text-right">
             <p className="text-[10px] text-muted-foreground">Mentions</p>
-            <p className="text-xs font-semibold tabular-nums">
-              {latest.mentionCount}
-            </p>
+            <p className="text-xs font-semibold tabular-nums">{latest.mentionCount}</p>
           </div>
           <div className="hidden sm:block text-right">
             <p className="text-[10px] text-muted-foreground">Citations</p>
-            <p className="text-xs font-semibold tabular-nums">
-              {latest.citationCount}
-            </p>
+            <p className="text-xs font-semibold tabular-nums">{latest.citationCount}</p>
           </div>
           <SentimentBadge sentiment={latest.sentiment} />
           <div className="w-[100px] sm:w-[140px]">
@@ -1109,10 +1081,7 @@ function PlatformSubGroup({
                 variant="ghost"
                 size="sm"
                 className="h-6 gap-1.5 text-[11px]"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onViewResult(latest);
-                }}
+                onClick={(e) => { e.stopPropagation(); onViewResult(latest); }}
               >
                 <Eye className="h-3 w-3" />
                 Full detail
@@ -1137,21 +1106,15 @@ function PlatformSubGroup({
                           {formatTimestamp(r.createdAt)}
                         </TableCell>
                         <TableCell className="text-center py-1.5 text-xs tabular-nums w-[110px]">
-                          <span className="font-semibold">
-                            {r.mentionCount}
-                          </span>
+                          <span className="font-semibold">{r.mentionCount}</span>
                           <span className="text-muted-foreground">
-                            {' '}
-                            mention{r.mentionCount !== 1 ? 's' : ''}
+                            {' '}mention{r.mentionCount !== 1 ? 's' : ''}
                           </span>
                         </TableCell>
                         <TableCell className="text-center py-1.5 text-xs tabular-nums w-[110px]">
-                          <span className="font-semibold">
-                            {r.citationCount}
-                          </span>
+                          <span className="font-semibold">{r.citationCount}</span>
                           <span className="text-muted-foreground">
-                            {' '}
-                            citation{r.citationCount !== 1 ? 's' : ''}
+                            {' '}citation{r.citationCount !== 1 ? 's' : ''}
                           </span>
                         </TableCell>
                         <TableCell className="text-center py-1.5 w-[100px]">
@@ -1166,10 +1129,7 @@ function PlatformSubGroup({
                             size="icon"
                             className="h-6 w-6"
                             title="View detail"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onViewResult(r);
-                            }}
+                            onClick={(e) => { e.stopPropagation();onViewResult(r); }}
                           >
                             <Eye className="h-3 w-3" />
                           </Button>
@@ -1181,8 +1141,7 @@ function PlatformSubGroup({
               </div>
               {hasMoreHistory && (
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  Showing latest {HISTORY_LIMIT} of {group.results.length - 1}{' '}
-                  previous runs.
+                  Showing latest {HISTORY_LIMIT} of {group.results.length - 1}{' '} previous runs.
                 </p>
               )}
             </div>
@@ -1219,24 +1178,15 @@ function PromptSubGroup({
         tabIndex={0}
         onClick={onToggle}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onToggle();
-          }
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); }
         }}
         className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/50 transition-colors cursor-pointer select-none"
       >
-        <ChevronDown
-          className={cn(
-            'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
-            !expanded && '-rotate-90',
-          )}
-        />
+        <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform', !expanded && '-rotate-90')}/>
         <div className="flex-1 min-w-0">
           <p className="text-sm line-clamp-1">{group.promptText}</p>
           <span className="text-[11px] text-muted-foreground">
-            {group.platformGroups.length} platform
-            {group.platformGroups.length !== 1 ? 's' : ''}
+            {group.platformGroups.length} platform{group.platformGroups.length !== 1 ? 's' : ''}
             {' · '}
             {group.results.length} result{group.results.length !== 1 ? 's' : ''}
           </span>
@@ -1244,21 +1194,15 @@ function PromptSubGroup({
         <div className="flex items-center gap-4 shrink-0">
           <div className="text-right">
             <p className="text-[10px] text-muted-foreground">Score</p>
-            <p className="text-xs font-semibold tabular-nums">
-              {group.avgScore}
-            </p>
+            <p className="text-xs font-semibold tabular-nums">{group.avgScore}</p>
           </div>
           <div className="text-right">
             <p className="text-[10px] text-muted-foreground">Mentions</p>
-            <p className="text-xs font-semibold tabular-nums">
-              {group.totalMentions}
-            </p>
+            <p className="text-xs font-semibold tabular-nums">{group.totalMentions}</p>
           </div>
           <div className="text-right">
             <p className="text-[10px] text-muted-foreground">Citations</p>
-            <p className="text-xs font-semibold tabular-nums">
-              {group.totalCitations}
-            </p>
+            <p className="text-xs font-semibold tabular-nums">{group.totalCitations}</p>
           </div>
           <Button
             variant="ghost"
@@ -1266,10 +1210,7 @@ function PromptSubGroup({
             className="h-6 w-6"
             title="Refresh results"
             disabled={refreshingId !== null}
-            onClick={(e) => {
-              e.stopPropagation();
-              onRefresh(group.promptId);
-            }}
+            onClick={(e) => { e.stopPropagation(); onRefresh(group.promptId); }}
           >
             {refreshingId === group.promptId ? (
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -1315,45 +1256,34 @@ function PromptResultsGrouped({
 }) {
   const topicGroups = groupResultsByTopic(results);
   const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
-  const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(
-    new Set(),
-  );
-  const [expandedPlatforms, setExpandedPlatforms] = useState<Set<string>>(
-    new Set(),
-  );
+  const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(new Set());
+  const [expandedPlatforms, setExpandedPlatforms] = useState<Set<string>>(new Set());
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
 
   const toggleTopic = (id: string) =>
     setExpandedTopics((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
 
   const togglePrompt = (id: string) =>
     setExpandedPrompts((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
 
   const togglePlatform = (id: string) =>
     setExpandedPlatforms((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
 
   const handleRefresh = async (promptId: string) => {
     setRefreshingId(promptId);
-    try {
-      await onRefreshPrompt(promptId);
-    } finally {
-      setRefreshingId(null);
-    }
+    try { await onRefreshPrompt(promptId); } finally { setRefreshingId(null); }
   };
 
   const truncated = totalRowCount > loadedRowCount && loadedRowCount > 0;
@@ -1362,9 +1292,7 @@ function PromptResultsGrouped({
     <Card>
       <CardHeader className="pb-2">
         <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-          <CardTitle className="text-sm font-medium">
-            Prompt Results by Topic
-          </CardTitle>
+          <CardTitle className="text-sm font-medium">Prompt Results by Topic</CardTitle>
           {truncated && (
             <p className="text-xs text-muted-foreground font-normal">
               Showing {loadedRowCount} of {totalRowCount} rows (newest first).
@@ -1384,56 +1312,36 @@ function PromptResultsGrouped({
           {topicGroups.map((topic) => {
             const isTopicOpen = expandedTopics.has(topic.topicId);
             return (
-              <div
-                key={topic.topicId + topic.topicName}
-                className="rounded-lg border overflow-hidden"
-              >
+              <div key={topic.topicId + topic.topicName} className="rounded-lg border overflow-hidden">
                 <div
                   role="button"
                   tabIndex={0}
                   onClick={() => toggleTopic(topic.topicId)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      toggleTopic(topic.topicId);
-                    }
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleTopic(topic.topicId); }
                   }}
                   className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors cursor-pointer select-none"
                 >
-                  <ChevronDown
-                    className={cn(
-                      'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
-                      !isTopicOpen && '-rotate-90',
-                    )}
-                  />
+                  <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform', !isTopicOpen && '-rotate-90')} />
                   <Tag className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{topic.topicName}</p>
                     <span className="text-[11px] text-muted-foreground">
-                      {topic.prompts.length} prompt
-                      {topic.prompts.length !== 1 ? 's' : ''} ·{' '}
-                      {topic.totalResults} result
-                      {topic.totalResults !== 1 ? 's' : ''}
+                      {topic.prompts.length} prompt{topic.prompts.length !== 1 ? 's' : ''} · {topic.totalResults} result{topic.totalResults !== 1 ? 's' : ''}
                     </span>
                   </div>
                   <div className="flex items-center gap-4 shrink-0">
                     <div className="text-right">
                       <p className="text-xs text-muted-foreground">Avg Score</p>
-                      <p className="text-sm font-semibold tabular-nums">
-                        {topic.avgScore}
-                      </p>
+                      <p className="text-sm font-semibold tabular-nums">{topic.avgScore}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-muted-foreground">Mentions</p>
-                      <p className="text-sm font-semibold tabular-nums">
-                        {topic.totalMentions}
-                      </p>
+                      <p className="text-sm font-semibold tabular-nums">{topic.totalMentions}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-muted-foreground">Citations</p>
-                      <p className="text-sm font-semibold tabular-nums">
-                        {topic.totalCitations}
-                      </p>
+                      <p className="text-sm font-semibold tabular-nums">{topic.totalCitations}</p>
                     </div>
                   </div>
                 </div>
@@ -1486,8 +1394,7 @@ export default function InsightsPage() {
   const [competitorData, setCompetitorData] =
     useState<CompetitorComparisonData | null>(null);
   const [sovData, setSovData] = useState<ShareOfVoiceData | null>(null);
-  const [breakdownMetric, setBreakdownMetric] =
-    useState<BreakdownMetric | null>(null);
+  const [breakdownMetric, setBreakdownMetric] = useState<BreakdownMetric | null>(null);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
@@ -1509,8 +1416,7 @@ export default function InsightsPage() {
           dateTo,
         };
 
-        const hasFilters =
-          f.datePreset !== 'all' || f.model || f.region || f.topic;
+        const hasFilters = f.datePreset !== 'all' || f.model || f.region || f.topic;
 
         const promises: [
           Promise<InsightsSummary>,
@@ -1527,14 +1433,11 @@ export default function InsightsPage() {
           getCompetitorComparison(brand.id, filterOpts),
           getShareOfVoiceData(brand.id, filterOpts),
           hasFilters
-            ? getPromptResults(brand.id, { limit: 1 }).then(({ total }) => ({
-                total,
-              }))
+            ? getPromptResults(brand.id, { limit: 1 }).then(({ total }) => ({ total }))
             : Promise.resolve(null),
         ];
 
-        const [summaryData, resultsData, compData, sovResult, unfilteredCheck] =
-          await Promise.all(promises);
+        const [summaryData, resultsData, compData, sovResult, unfilteredCheck] = await Promise.all(promises);
         setSummary(summaryData);
         setResults(resultsData.results);
         setTotalResults(resultsData.total);
@@ -1583,7 +1486,8 @@ export default function InsightsPage() {
           ),
         );
         setAvailableModels((prev) =>
-          [...new Set([...prev, ...models])].sort((a, b) => a.localeCompare(b)),
+          [...new Set([...prev, ...models])].sort((a, b) => 
+            a.localeCompare(b)),
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : '';
@@ -1618,9 +1522,7 @@ export default function InsightsPage() {
     const next = { ...filtersRef.current, region: '', model: '', topic: '' };
     filtersRef.current = next;
     setFilters(next);
-    getTopics(brand.id)
-      .then(setAvailableTopics)
-      .catch(() => {});
+    getTopics(brand.id).then(setAvailableTopics).catch(() => {});
   }, [brand?.id]);
 
   useEffect(() => {
@@ -1634,11 +1536,7 @@ export default function InsightsPage() {
 
     const urlJobId = searchParams.get('jobId');
     if (urlJobId) {
-      saveTrackingJob({
-        jobId: urlJobId,
-        brandId: brand.id,
-        startedAt: Date.now(),
-      });
+      saveTrackingJob({ jobId: urlJobId, brandId: brand.id, startedAt: Date.now() });
       setActiveJobId(urlJobId);
       setIsRunning(true);
       window.history.replaceState({}, '', window.location.pathname);
@@ -1781,9 +1679,7 @@ export default function InsightsPage() {
       });
       toast.success('Results refreshed');
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : 'Failed to refresh results',
-      );
+      toast.error(err instanceof Error ? err.message : 'Failed to refresh results');
     }
   };
 
@@ -1838,11 +1734,7 @@ export default function InsightsPage() {
           jobStatus={jobStatus}
           onStop={handleStopTracking}
         />
-        <EmptyState
-          onRunPrompts={handleRunPrompts}
-          isRunning={isRunning}
-          isCloud={isCloud}
-        />
+        <EmptyState onRunPrompts={handleRunPrompts} isRunning={isRunning} isCloud={isCloud} />
         {!isCloud && (
           <div className="flex justify-center">
             <Button
@@ -1954,12 +1846,9 @@ export default function InsightsPage() {
               tooltip="A composite score (0–100) reflecting how prominently your brand appears across AI engine responses. Combines mentions, citations, and sentiment."
               icon={BarChart3}
               value={summary!.avgVisibilityScore}
-              sub={
-                <DeltaBadge delta={summary!.visibilityChange} suffix=" pts" />
-              }
+              sub={<DeltaBadge delta={summary!.visibilityChange} suffix=" pts" />}
               subVariant={
-                summary!.visibilityChange !== null &&
-                summary!.visibilityChange > 0
+                summary!.visibilityChange !== null && summary!.visibilityChange > 0
                   ? 'positive'
                   : 'muted'
               }
@@ -1985,8 +1874,7 @@ export default function InsightsPage() {
               value={summary!.totalCitations}
               sub={<DeltaBadge delta={summary!.citationsChange} />}
               subVariant={
-                summary!.citationsChange !== null &&
-                summary!.citationsChange > 0
+                summary!.citationsChange !== null && summary!.citationsChange > 0
                   ? 'positive'
                   : 'muted'
               }
@@ -1997,12 +1885,9 @@ export default function InsightsPage() {
               tooltip="Percentage of AI responses that described your brand in a positive context."
               icon={AlertCircle}
               value={`${summary!.positiveSentimentPct}%`}
-              sub={
-                <DeltaBadge delta={summary!.sentimentChange} suffix=" pts" />
-              }
+              sub={<DeltaBadge delta={summary!.sentimentChange} suffix=" pts" />}
               subVariant={
-                summary!.sentimentChange !== null &&
-                summary!.sentimentChange > 0
+                summary!.sentimentChange !== null && summary!.sentimentChange > 0
                   ? 'positive'
                   : 'muted'
               }
@@ -2029,9 +1914,7 @@ export default function InsightsPage() {
 
               <Card className="lg:col-span-2">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Leaderboard
-                  </CardTitle>
+                  <CardTitle className="text-sm font-medium">Leaderboard</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <CompetitorLeaderboard data={competitorData.brands} />
@@ -2049,8 +1932,7 @@ export default function InsightsPage() {
                     <PieChart className="h-4 w-4" />
                     Share of Voice by Platform
                   </CardTitle>
-                  {sovData.overallSovChange !== null &&
-                    sovData.overallSovChange !== 0 && (
+                  {sovData.overallSovChange !== null && sovData.overallSovChange !== 0 && (
                       <DeltaBadge
                         delta={sovData.overallSovChange}
                         suffix=" pts"
