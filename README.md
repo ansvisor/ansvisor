@@ -17,6 +17,16 @@
 
 Track how your brand appears in answers from ChatGPT, Gemini, Perplexity, Claude, and Copilot. Ansvisor turns AI search into a measurable channel — visibility scores, competitor benchmarks, content optimization briefs, and AI-referral analytics in one self-hostable platform.
 
+<div align="center">
+
+_Star us to follow along as we ship 👇_
+
+<a href="https://github.com/aeohub/ansvisor">
+  <img src="https://img.shields.io/github/stars/aeohub/ansvisor?style=social&label=Star" alt="Star Ansvisor on GitHub">
+</a>
+
+</div>
+
 ### Why Ansvisor?
 
 > AI search is replacing the traditional click. When ChatGPT recommends a product, no Google ranking saves you. Ansvisor measures what classical SEO can't see — how often AI engines name your brand, which competitors get cited instead, and which prompts move the needle. Self-host it for free, or use the managed cloud at [ansvisor.com](https://ansvisor.com).
