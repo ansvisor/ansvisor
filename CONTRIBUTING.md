@@ -69,6 +69,18 @@ npx supabase link --project-ref <YOUR_PROJECT_REF>
 npx supabase db push
 ```
 
+### Demo data (optional)
+
+For a pre-populated local dashboard, the repo ships `supabase/seed.sql` — an idempotent fixture (one demo organization, brand, topics, prompts, ~120 prompt results across all tracked engines, prompt search volumes, competitors, content opportunities with source data, and AI traffic logs). The Supabase CLI loads it on:
+
+```bash
+npx supabase db reset
+```
+
+Sign in with **`demo@ansvisor.local` / `demo123`** to land on a populated dashboard.
+
+> **Heads-up:** the **Prompts** and **Content** pages fetch through the backend API (`server/`), not Supabase directly. Start *both* dev servers (step 5) — otherwise those two pages show a "Failed to load" toast even though the data is seeded. The seed runs only against a local Supabase via the CLI; hosted/production projects are never touched by it.
+
 ### 4. Install dependencies
 
 The web app uses **yarn**, the server uses **npm**:
