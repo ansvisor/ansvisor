@@ -321,3 +321,166 @@ export async function listPromptsFor(
     };
   });
 }
+
+// ── Content Opportunities ───────────────────────────────────────────────────
+
+export interface ContentOpportunityRow {
+  id: string;
+  title: string;
+  description: string | null;
+  type: string;
+  impact: string;
+  opportunity_score: number;
+  status: string;
+  prompt_id: string | null;
+  prompt_text: string | null;
+  has_brief: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListContentOpportunitiesParams {
+  brandId: string;
+  status?: 'new' | 'sent' | 'in_progress' | 'done' | 'dismissed';
+  impact?: 'high' | 'medium' | 'low';
+  type?: 'owned' | 'earned';
+  limit?: number;
+}
+
+export async function listContentOpportunitiesFor(
+  auth: McpAuthContext,
+  params: ListContentOpportunitiesParams,
+): Promise<ContentOpportunityRow[] | null> {
+  if (!auth.organizationId) return null;
+
+  // Ownership check
+  const { data: brand } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('id', params.brandId)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  if (!brand) return null;
+
+  const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
+
+  let query = supabaseAdmin
+    .from('content_opportunities')
+    .select(
+      'id, title, description, type, impact, opportunity_score, status, prompt_id, created_at, updated_at, brief, prompts(text)',
+    )
+    .eq('brand_id', params.brandId)
+    .order('opportunity_score', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (params.status) query = query.eq('status', params.status);
+  if (params.impact) query = query.eq('impact', params.impact);
+  if (params.type) query = query.eq('type', params.type);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  const rows =
+    (data as unknown as Array<{
+      id: string;
+      title: string;
+      description: string | null;
+      type: string;
+      impact: string;
+      opportunity_score: number | null;
+      status: string;
+      prompt_id: string | null;
+      created_at: string | null;
+      updated_at: string | null;
+      brief: any | null;
+      prompts: Array<{ text: string }> | { text: string } | null;
+    }> | null) ?? [];
+
+  return rows.map((r) => {
+    const prompt = Array.isArray(r.prompts) ? r.prompts[0] ?? null : r.prompts;
+    return {
+      id: r.id,
+      title: r.title,
+      description: r.description,
+      type: r.type,
+      impact: r.impact,
+      opportunity_score: Number(r.opportunity_score ?? 0),
+      status: r.status,
+      prompt_id: r.prompt_id,
+      prompt_text: prompt?.text ?? null,
+      has_brief: r.brief !== null,
+      created_at: r.created_at ?? '',
+      updated_at: r.updated_at ?? '',
+    };
+  });
+}
+
+export interface ContentOpportunityDetail {
+  id: string;
+  title: string;
+  description: string | null;
+  type: string;
+  impact: string;
+  opportunity_score: number;
+  status: string;
+  prompt_id: string | null;
+  prompt_text: string | null;
+  source_data: Record<string, any> | null;
+  brief: Record<string, any> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getContentOpportunityFor(
+  auth: McpAuthContext,
+  opportunityId: string,
+): Promise<ContentOpportunityDetail | null> {
+  if (!auth.organizationId) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from('content_opportunities')
+    .select(
+      'id, title, description, type, impact, opportunity_score, status, prompt_id, created_at, updated_at, source_data, brief, prompts(text), brands!inner(organization_id)',
+    )
+    .eq('id', opportunityId)
+    .eq('brands.organization_id', auth.organizationId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+
+  const r = data as unknown as {
+    id: string;
+    title: string;
+    description: string | null;
+    type: string;
+    impact: string;
+    opportunity_score: number | null;
+    status: string;
+    prompt_id: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+    source_data: any | null;
+    brief: any | null;
+    prompts: Array<{ text: string }> | { text: string } | null;
+  };
+
+  const prompt = Array.isArray(r.prompts) ? r.prompts[0] ?? null : r.prompts;
+
+  return {
+    id: r.id,
+    title: r.title,
+    description: r.description,
+    type: r.type,
+    impact: r.impact,
+    opportunity_score: Number(r.opportunity_score ?? 0),
+    status: r.status,
+    prompt_id: r.prompt_id,
+    prompt_text: prompt?.text ?? null,
+    source_data: r.source_data ?? null,
+    brief: r.brief ?? null,
+    created_at: r.created_at ?? '',
+    updated_at: r.updated_at ?? '',
+  };
+}

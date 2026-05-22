@@ -3,8 +3,10 @@ import { z } from 'zod';
 
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import {
+  getContentOpportunityFor,
   getVisibilitySummaryFor,
   listBrandsFor,
+  listContentOpportunitiesFor,
   listPromptsFor,
   listTopicsFor,
 } from './data';
@@ -171,6 +173,89 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       return {
         content: [
           { type: 'text', text: JSON.stringify(prompts, null, 2) },
+        ],
+      };
+    },
+  );
+
+  server.registerTool(
+    'list_content_opportunities',
+    {
+      description:
+        'List content opportunities / gaps for a brand, showing which prompts represent the highest-impact areas where the brand is currently losing visibility. Sorts by opportunity score descending by default. Use this to audit open gaps, see what content needs to be written, or list open strategy priorities.',
+      inputSchema: {
+        brand_id: z
+          .string()
+          .uuid()
+          .describe('Brand UUID, from list_brands.'),
+        status: z
+          .enum(['new', 'sent', 'in_progress', 'done', 'dismissed'])
+          .optional()
+          .describe('Filter by progress status of the opportunity.'),
+        impact: z
+          .enum(['high', 'medium', 'low'])
+          .optional()
+          .describe('Filter by estimated AEO visibility impact level.'),
+        type: z
+          .enum(['owned', 'earned'])
+          .optional()
+          .describe(
+            'Filter by channel type: owned (e.g. self-published blogs/pages) vs earned (e.g. PR/affiliate sites).',
+          ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe('Row cap limit (default 50, max 200).'),
+      },
+    },
+    async (args) => {
+      const opportunities = await listContentOpportunitiesFor(auth, {
+        brandId: args.brand_id,
+        status: args.status,
+        impact: args.impact,
+        type: args.type,
+        limit: args.limit,
+      });
+      if (opportunities === null) {
+        return {
+          content: [{ type: 'text', text: 'Brand not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [
+          { type: 'text', text: JSON.stringify(opportunities, null, 2) },
+        ],
+      };
+    },
+  );
+
+  server.registerTool(
+    'get_content_opportunity',
+    {
+      description:
+        'Get full details of a specific content opportunity, including raw AI visibility gap metrics, intent, competitor references, and the generated content brief if one already exists. Use this when the user picks a specific opportunity from the list and wants to inspect it further or start writing.',
+      inputSchema: {
+        opportunity_id: z
+          .string()
+          .uuid()
+          .describe('Content opportunity UUID, from list_content_opportunities.'),
+      },
+    },
+    async (args) => {
+      const opportunity = await getContentOpportunityFor(auth, args.opportunity_id);
+      if (!opportunity) {
+        return {
+          content: [{ type: 'text', text: 'Content opportunity not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [
+          { type: 'text', text: JSON.stringify(opportunity, null, 2) },
         ],
       };
     },
