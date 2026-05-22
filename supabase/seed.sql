@@ -180,6 +180,44 @@ INSERT INTO public.prompts (
    ARRAY['claude-sonnet-4-6'], true)
 ON CONFLICT (id) DO NOTHING;
 
+-- ─── Prompt volumes ──────────────────────────────────────────────────────────
+-- Keyword search-volume estimates per prompt. Normally produced by the backend's
+-- volume analysis (DataForSEO + AI), which needs paid API keys a contributor
+-- won't have — so we seed them here. Without these rows the Prompts page volume
+-- view stays empty even with the backend running. Served read-only by
+-- GET /api/volumes/brand/:id (no provider keys required to read).
+
+INSERT INTO public.prompt_volumes (
+  prompt_id, intent, keywords, google_volumes,
+  total_google_volume, ai_volume_multiplier, est_ai_volume,
+  location_code, language_code, fetched_at
+) VALUES
+  ('88888888-8888-8888-8888-888888888801', 'best-top',
+   '["best coffee subscription","coffee subscription","coffee subscription services","best coffee subscription 2026"]'::jsonb,
+   '{"best coffee subscription":8100,"coffee subscription":22200,"coffee subscription services":5400,"best coffee subscription 2026":1300}'::jsonb,
+   37000, 0.150, 5550, 2840, 'en', now() - interval '2 days'),
+  ('88888888-8888-8888-8888-888888888802', 'recommendation',
+   '["international coffee subscription","specialty coffee subscription","coffee subscription worldwide shipping"]'::jsonb,
+   '{"international coffee subscription":2400,"specialty coffee subscription":4400,"coffee subscription worldwide shipping":880}'::jsonb,
+   7680, 0.150, 1152, 2840, 'en', now() - interval '2 days'),
+  ('88888888-8888-8888-8888-888888888803', 'best-top',
+   '["office coffee subscription","monthly coffee bean subscription","coffee subscription for business"]'::jsonb,
+   '{"office coffee subscription":3600,"monthly coffee bean subscription":1900,"coffee subscription for business":1600}'::jsonb,
+   7100, 0.150, 1065, 2840, 'en', now() - interval '2 days'),
+  ('88888888-8888-8888-8888-888888888804', 'best-top',
+   '["best espresso machine","home espresso machine","best espresso machine under 500","espresso machine under $500"]'::jsonb,
+   '{"best espresso machine":18100,"home espresso machine":9900,"best espresso machine under 500":6600,"espresso machine under $500":4400}'::jsonb,
+   39000, 0.150, 5850, 2840, 'en', now() - interval '2 days'),
+  ('88888888-8888-8888-8888-888888888805', 'comparison',
+   '["best espresso machine for beginners","beginner espresso machine","home espresso machine comparison"]'::jsonb,
+   '{"best espresso machine for beginners":5400,"beginner espresso machine":2400,"home espresso machine comparison":720}'::jsonb,
+   8520, 0.150, 1278, 2840, 'en', now() - interval '2 days'),
+  ('88888888-8888-8888-8888-888888888806', 'vs-review',
+   '["manual vs automatic espresso machine","manual espresso machine","automatic espresso machine"]'::jsonb,
+   '{"manual vs automatic espresso machine":1900,"manual espresso machine":3600,"automatic espresso machine":4400}'::jsonb,
+   9900, 0.150, 1485, 2840, 'en', now() - interval '2 days')
+ON CONFLICT (prompt_id) DO NOTHING;
+
 -- ─── Competitors ─────────────────────────────────────────────────────────────
 
 INSERT INTO public.competitors (id, brand_id, name, domain) VALUES
@@ -267,15 +305,15 @@ INSERT INTO public.content_opportunities (
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa01', '33333333-3333-3333-3333-333333333333', '88888888-8888-8888-8888-888888888801',
    'Comparison guide: top 5 specialty coffee subscriptions for 2026',
    'AI engines repeatedly cite comparison-style content for this prompt. Publishing a structured comparison page tagged with FAQ schema could pull Acme into more responses.',
-   'owned', 'high',  78.50, 'new',     '{"source":"demo-fixture"}'::jsonb),
+   'owned', 'high',  78.50, 'new',     '{"source":"demo-fixture","promptText":"What are the best coffee subscription services in 2026?","estAiVolume":5550,"visibilityScore":34,"competitorGap":-28,"intent":"best-top","keywords":["best coffee subscription","coffee subscription services","coffee subscription 2026"],"competitorsCited":["Demo Coffee Co","Fixture Roasters","Sample Beans"]}'::jsonb),
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa02', '33333333-3333-3333-3333-333333333333', '88888888-8888-8888-8888-888888888804',
    'Beginner-friendly buying guide: home espresso machines under $500',
    'Engines lean on Reddit threads and YouTube transcripts here. A first-party buying guide with side-by-side specs would compete for citations.',
-   'owned', 'medium', 62.10, 'reviewing','{"source":"demo-fixture"}'::jsonb),
+   'owned', 'medium', 62.10, 'in_progress','{"source":"demo-fixture","promptText":"Best espresso machines under $500?","estAiVolume":5850,"visibilityScore":21,"competitorGap":-35,"intent":"best-top","keywords":["best espresso machine under 500","home espresso machine","affordable espresso machine"],"competitorsCited":["Mock Coffee Club","Fixture Roasters"]}'::jsonb),
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa03', '33333333-3333-3333-3333-333333333333', '88888888-8888-8888-8888-888888888803',
    'Office coffee program FAQ',
    'B2B-style queries trigger generic answers across engines. A dedicated FAQ page targeting office buyers could improve mention rate for procurement-style prompts.',
-   'gap',   'medium', 54.75, 'new',     '{"source":"demo-fixture"}'::jsonb)
+   'owned', 'medium', 54.75, 'new',     '{"source":"demo-fixture","promptText":"Best monthly coffee bean subscription for offices","estAiVolume":1065,"visibilityScore":12,"competitorGap":-19,"intent":"best-top","keywords":["office coffee subscription","monthly coffee bean subscription","coffee subscription for business"],"competitorsCited":["Demo Coffee Co","Sample Beans"]}'::jsonb)
 ON CONFLICT (id) DO NOTHING;
 
 -- ─── AI traffic logs ─────────────────────────────────────────────────────────
