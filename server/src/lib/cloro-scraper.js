@@ -109,7 +109,11 @@ export function parseScraperResponse(result, scraperId) {
     text,
     citations,
     model,
-    shopping_cards: result.shopping_cards ?? [],
+    // Perplexity returns snake_case `shopping_cards`; Copilot returns
+    // camelCase `shoppingCards`. Both write into the same prompt_results
+    // .shopping_cards column raw, in their own provider shape — downstream
+    // branches on `platform` to interpret. Other providers have neither key.
+    shopping_cards: result.shopping_cards ?? result.shoppingCards ?? [],
   };
 }
 
