@@ -15,7 +15,15 @@
 
 </div>
 
-Track how your brand appears in answers from ChatGPT, Gemini, Perplexity, Claude, and Copilot. Ansvisor turns AI search into a measurable channel — visibility scores, competitor benchmarks, content optimization briefs, and AI-referral analytics in one self-hostable platform.
+The search landscape is transforming fast. Buyers are moving from traditional search engines to AI platforms like ChatGPT, Claude, Gemini, Google AI Mode, etc.
+
+At Ansvisor, we are building the open future of AI Visibility and AI Search Optimization (AEO/GEO) to help brands claim their spot in AI-generated answers.
+
+What excites us most about Ansvisor is our commitment to a build-in-public and transparent approach.
+
+We believe the future of AI visibility shouldn't be a black box. This field really needs an open platform.
+
+We're incredibly excited to shape what's next alongside our amazing community.
 
 <div align="center">
 
