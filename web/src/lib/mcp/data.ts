@@ -554,3 +554,64 @@ export async function getContentOpportunityFor(
     updated_at: r.updated_at ?? '',
   };
 }
+
+export const CONTENT_OPPORTUNITY_STATUSES = [
+  'new',
+  'sent',
+  'in_progress',
+  'done',
+  'dismissed',
+] as const;
+
+export type ContentOpportunityStatus = (typeof CONTENT_OPPORTUNITY_STATUSES)[number];
+
+export interface UpdatedOpportunityStatus {
+  id: string;
+  status: ContentOpportunityStatus;
+  updated_at: string;
+}
+
+/**
+ * Move a content opportunity between workflow states (`new` → `sent` →
+ * `in_progress` → `done`, or `dismissed`). Closes the loop for MCP-driven
+ * content workflows — without this, the user analyses an opportunity in
+ * Claude and still has to click through the dashboard to mark progress.
+ *
+ * Ownership-check-first: the update only runs after we've verified the
+ * opportunity's brand belongs to the caller's org. Wrong-org or missing
+ * id returns null (→ 404) with no DB write.
+ */
+export async function updateOpportunityStatusFor(
+  auth: McpAuthContext,
+  opportunityId: string,
+  status: ContentOpportunityStatus,
+): Promise<UpdatedOpportunityStatus | null> {
+  if (!auth.organizationId) return null;
+
+  // Ownership check via the same brands!inner join used by the read tools.
+  // A wrong-org id misses here and we return null *before* any update.
+  const { data: ownership } = await supabaseAdmin
+    .from('content_opportunities')
+    .select('id, brands!inner(organization_id)')
+    .eq('id', opportunityId)
+    .eq('brands.organization_id', auth.organizationId)
+    .maybeSingle();
+  if (!ownership) return null;
+
+  const updatedAt = new Date().toISOString();
+
+  const { data, error } = await supabaseAdmin
+    .from('content_opportunities')
+    .update({ status, updated_at: updatedAt })
+    .eq('id', opportunityId)
+    .select('id, status, updated_at')
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  return {
+    id: data.id,
+    status: data.status as ContentOpportunityStatus,
+    updated_at: data.updated_at ?? updatedAt,
+  };
+}

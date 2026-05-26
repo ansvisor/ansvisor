@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import {
+  CONTENT_OPPORTUNITY_STATUSES,
   generateBriefFor,
   getContentOpportunityFor,
   getVisibilitySummaryFor,
@@ -10,6 +11,7 @@ import {
   listContentOpportunitiesFor,
   listPromptsFor,
   listTopicsFor,
+  updateOpportunityStatusFor,
 } from './data';
 
 /**
@@ -246,6 +248,35 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       }
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'update_opportunity_status',
+    {
+      description:
+        'Move a content opportunity between workflow states. Valid statuses are: "new" (just generated), "sent" (delivered to a CMS / writer via webhook), "in_progress" (someone is actively writing), "done" (published), "dismissed" (intentionally skipped). Use this to close the loop on the content backlog from inside an MCP conversation — e.g. "mark that opportunity as in_progress" once the user starts writing, or "dismiss this one, we already cover it." This is a write — only fire on explicit user intent for a specific opportunity, never as part of an exploratory query.',
+      inputSchema: {
+        opportunity_id: z
+          .string()
+          .uuid()
+          .describe('Content opportunity UUID, from list_content_opportunities.'),
+        status: z
+          .enum(CONTENT_OPPORTUNITY_STATUSES)
+          .describe('New workflow state. One of: new, sent, in_progress, done, dismissed.'),
+      },
+    },
+    async (args) => {
+      const updated = await updateOpportunityStatusFor(auth, args.opportunity_id, args.status);
+      if (!updated) {
+        return {
+          content: [{ type: 'text', text: 'Content opportunity not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(updated, null, 2) }],
       };
     },
   );
