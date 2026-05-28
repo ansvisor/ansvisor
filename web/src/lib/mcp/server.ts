@@ -5,6 +5,7 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
 import {
   CONTENT_OPPORTUNITY_STATUSES,
   generateBriefFor,
+  getCompetitorComparisonFor,
   getContentOpportunityFor,
   getVisibilitySummaryFor,
   listBrandsFor,
@@ -277,6 +278,53 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       }
       return {
         content: [{ type: 'text', text: JSON.stringify(updated, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'get_competitor_comparison',
+    {
+      description:
+        'Get a brand\'s competitor benchmark and share of voice for a window. Returns the brand and every tracked competitor with avg visibility score (0-100), total mentions, total citations, and how many tracked prompt results each appeared in. Also returns overall share-of-voice as a percentage (brand mentions / (brand + competitor mentions)) and the same split per (model_used, platform). Use this for "how do I compare to my competitors?" or "who is gaining share of voice?" style questions. This is a snapshot for the given window — call again with an earlier window to compute a delta.',
+      inputSchema: {
+        brand_id: z.string().uuid().describe('Brand UUID, from list_brands.'),
+        date_from: z
+          .string()
+          .optional()
+          .describe('ISO timestamp (inclusive) lower bound, e.g. 2026-05-01T00:00:00Z.'),
+        date_to: z.string().optional().describe('ISO timestamp (inclusive) upper bound.'),
+        model: z
+          .string()
+          .optional()
+          .describe(
+            'Optional model slug filter, or comma-separated list of slugs to filter a provider family.',
+          ),
+        region: z.string().optional().describe('Optional region code filter (e.g. "US", "TR").'),
+        topic_id: z
+          .string()
+          .uuid()
+          .optional()
+          .describe('Optional topic UUID (from list_topics) to restrict to one topic.'),
+      },
+    },
+    async (args) => {
+      const result = await getCompetitorComparisonFor(auth, {
+        brandId: args.brand_id,
+        dateFrom: args.date_from,
+        dateTo: args.date_to,
+        model: args.model,
+        region: args.region,
+        topicId: args.topic_id,
+      });
+      if (!result) {
+        return {
+          content: [{ type: 'text', text: 'Brand not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
     },
   );

@@ -615,3 +615,176 @@ export async function updateOpportunityStatusFor(
     updated_at: data.updated_at ?? updatedAt,
   };
 }
+
+// ── Competitor comparison + share of voice ───────────────────────────────────
+
+export interface CompetitorComparisonParams {
+  brandId: string;
+  model?: string;
+  region?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  topicId?: string;
+}
+
+export interface CompetitorComparisonOutput {
+  brand: {
+    id: string;
+    name: string;
+    avg_visibility_score: number;
+    total_mentions: number;
+    total_citations: number;
+    appearance_count: number;
+  };
+  competitors: Array<{
+    competitor_id: string;
+    name: string;
+    avg_visibility_score: number;
+    total_mentions: number;
+    total_citations: number;
+    appearance_count: number;
+  }>;
+  share_of_voice: {
+    overall_sov_pct: number;
+    total_brand_mentions: number;
+    total_competitor_mentions: number;
+    by_platform: Array<{
+      model_used: string | null;
+      platform: string | null;
+      brand_mentions: number;
+      competitor_mentions: number;
+      sov_pct: number;
+    }>;
+  };
+}
+
+interface CompetitorAggRpc {
+  brand_row_count: number;
+  brand_sum_visibility: number;
+  brand_total_mentions: number;
+  brand_total_citations: number;
+  by_competitor: Array<{
+    competitor_id: string;
+    name: string | null;
+    sum_visibility: number;
+    row_count: number;
+    total_mentions: number;
+    total_citations: number;
+  }>;
+}
+
+interface SoVAggRpc {
+  total_brand_mentions: number;
+  total_competitor_mentions: number;
+  by_platform: Array<{
+    model_used: string | null;
+    platform: string | null;
+    brand_mentions: number;
+    competitor_mentions: number;
+  }>;
+}
+
+/**
+ * Return a brand's competitor benchmark + share of voice for a window. Combines
+ * two existing RPCs (`competitor_aggregates`, `share_of_voice_aggregates`) so the
+ * MCP tool and REST surface answer "how do I compare?" / "who's gaining share of
+ * voice?" in one round trip.
+ *
+ * Ownership-check first — wrong-org or missing brand returns null (→ 404
+ * upstream) before either RPC fires. Deltas vs a previous window are out of
+ * scope for V1 (matches the snapshot-shaped existing MCP tools); a caller that
+ * wants a delta can issue a second tool call for the prior period.
+ */
+export async function getCompetitorComparisonFor(
+  auth: McpAuthContext,
+  params: CompetitorComparisonParams,
+): Promise<CompetitorComparisonOutput | null> {
+  if (!auth.organizationId) return null;
+
+  // Ownership check + grab brand name in one query.
+  const { data: brand } = await supabaseAdmin
+    .from('brands')
+    .select('id, name')
+    .eq('id', params.brandId)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  if (!brand) return null;
+
+  const p_models = params.model
+    ? params.model
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : null;
+
+  const rpcArgs = {
+    p_brand_id: params.brandId,
+    p_platform: null as string | null,
+    p_models: p_models && p_models.length > 0 ? p_models : null,
+    p_region: params.region ?? null,
+    p_date_from: params.dateFrom ?? null,
+    p_date_to: params.dateTo ?? null,
+    p_prompt_id: null as string | null,
+    p_topic_id: params.topicId ?? null,
+  };
+
+  // Both RPCs are SECURITY DEFINER per the existing pattern — they trust the
+  // caller's brand_id, which we've just verified above.
+  const [compRes, sovRes] = await Promise.all([
+    supabaseAdmin.rpc('competitor_aggregates', rpcArgs),
+    supabaseAdmin.rpc('share_of_voice_aggregates', rpcArgs),
+  ]);
+  if (compRes.error) throw new Error(compRes.error.message);
+  if (sovRes.error) throw new Error(sovRes.error.message);
+
+  const comp = compRes.data as unknown as CompetitorAggRpc;
+  const sov = sovRes.data as unknown as SoVAggRpc;
+
+  const brandAvg =
+    comp.brand_row_count > 0 ? Math.round(comp.brand_sum_visibility / comp.brand_row_count) : 0;
+
+  const competitors = comp.by_competitor.map((c) => ({
+    competitor_id: c.competitor_id,
+    name: c.name && c.name.trim() !== '' ? c.name : c.competitor_id,
+    avg_visibility_score: c.row_count > 0 ? Math.round(Number(c.sum_visibility) / c.row_count) : 0,
+    total_mentions: Number(c.total_mentions),
+    total_citations: Number(c.total_citations),
+    appearance_count: c.row_count,
+  }));
+
+  const totalBrandMentions = Number(sov.total_brand_mentions);
+  const totalCompMentions = Number(sov.total_competitor_mentions);
+  const totalAll = totalBrandMentions + totalCompMentions;
+  const overallSovPct = totalAll > 0 ? Math.round((totalBrandMentions / totalAll) * 1000) / 10 : 0;
+
+  const byPlatform = sov.by_platform.map((bp) => {
+    const brandM = Number(bp.brand_mentions);
+    const compM = Number(bp.competitor_mentions);
+    const total = brandM + compM;
+    return {
+      model_used: bp.model_used,
+      platform: bp.platform,
+      brand_mentions: brandM,
+      competitor_mentions: compM,
+      sov_pct: total > 0 ? Math.round((brandM / total) * 1000) / 10 : 0,
+    };
+  });
+
+  return {
+    brand: {
+      id: brand.id,
+      name: brand.name,
+      avg_visibility_score: brandAvg,
+      total_mentions: Number(comp.brand_total_mentions),
+      total_citations: Number(comp.brand_total_citations),
+      appearance_count: comp.brand_row_count,
+    },
+    competitors,
+    share_of_voice: {
+      overall_sov_pct: overallSovPct,
+      total_brand_mentions: totalBrandMentions,
+      total_competitor_mentions: totalCompMentions,
+      by_platform: byPlatform,
+    },
+  };
+}
