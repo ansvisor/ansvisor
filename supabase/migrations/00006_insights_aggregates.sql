@@ -97,11 +97,16 @@ AS $$
     'total_citations',   t.total_citations,
     'positive_count',    t.positive_count,
     'last_checked_at',   t.last_checked_at,
+    -- ORDER BY inside jsonb_agg keeps the response stable across calls so the
+    -- platform list / chart doesn't jitter. jsonb_agg is otherwise free to
+    -- return rows in any order. Same rationale for the other jsonb_aggs
+    -- below.
     'by_model', COALESCE(
       (SELECT jsonb_agg(jsonb_build_object(
                 'model_used',     bm.model_used,
                 'sum_visibility', bm.sum_visibility,
-                'result_count',   bm.result_count))
+                'result_count',   bm.result_count)
+              ORDER BY bm.result_count DESC, bm.model_used)
        FROM by_model bm),
       '[]'::jsonb)
   )
@@ -214,7 +219,8 @@ AS $$
                 'sum_visibility',   bc.sum_visibility,
                 'row_count',        bc.row_count,
                 'total_mentions',   bc.total_mentions,
-                'total_citations',  bc.total_citations))
+                'total_citations',  bc.total_citations)
+              ORDER BY bc.row_count DESC, bc.competitor_id)
        FROM by_competitor bc),
       '[]'::jsonb),
     'by_brand_provider', COALESCE(
@@ -222,7 +228,8 @@ AS $$
                 'model_used',      bbp.model_used,
                 'platform',        bbp.platform,
                 'sum_visibility',  bbp.sum_visibility,
-                'row_count',       bbp.row_count))
+                'row_count',       bbp.row_count)
+              ORDER BY bbp.platform NULLS LAST, bbp.model_used NULLS LAST)
        FROM by_brand_provider bbp),
       '[]'::jsonb),
     'by_competitor_provider', COALESCE(
@@ -232,7 +239,8 @@ AS $$
                 'competitor_id',    bcp.competitor_id,
                 'competitor_name',  bcp.competitor_name,
                 'sum_visibility',   bcp.sum_visibility,
-                'row_count',        bcp.row_count))
+                'row_count',        bcp.row_count)
+              ORDER BY bcp.platform NULLS LAST, bcp.model_used NULLS LAST, bcp.competitor_id)
        FROM by_competitor_provider bcp),
       '[]'::jsonb)
   )
@@ -320,7 +328,8 @@ AS $$
                 'model_used',          bp.model_used,
                 'platform',            bp.platform,
                 'brand_mentions',      bp.brand_mentions,
-                'competitor_mentions', bp.competitor_mentions))
+                'competitor_mentions', bp.competitor_mentions)
+              ORDER BY bp.platform NULLS LAST, bp.model_used NULLS LAST)
        FROM by_platform bp),
       '[]'::jsonb),
     'by_day', COALESCE(

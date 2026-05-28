@@ -504,7 +504,7 @@ export async function getInsightsSummary(
     // call above is unbounded — for the delta math we need the same
     // explicit "last 7 days" window the JS code used so the comparison
     // stays anchored to recent momentum.
-    const [{ data: curWinData }, { data: prevWinData }] = await Promise.all([
+    const [curRes, prevRes] = await Promise.all([
       supabase.rpc('insights_aggregates', {
         ...baseArgs,
         p_date_from: opts?.dateFrom ?? currentFrom.toISOString(),
@@ -516,9 +516,13 @@ export async function getInsightsSummary(
         p_date_to: currentFrom.toISOString(),
       }),
     ]);
+    // Surface RPC failures rather than silently emit null deltas — masking
+    // server-side errors here would hide real outages behind "no change."
+    if (curRes.error) throw new Error(curRes.error.message);
+    if (prevRes.error) throw new Error(prevRes.error.message);
 
-    const curWin = curWinData as unknown as InsightsAggregates | null;
-    const prevWin = prevWinData as unknown as InsightsAggregates | null;
+    const curWin = curRes.data as unknown as InsightsAggregates | null;
+    const prevWin = prevRes.data as unknown as InsightsAggregates | null;
 
     if (curWin && prevWin && curWin.total_results > 0 && prevWin.total_results > 0) {
       const curAvgVis = Math.round(curWin.sum_visibility / curWin.total_results);
@@ -909,7 +913,7 @@ export async function getCompetitorComparison(
   const duration = currentTo.getTime() - currentFrom.getTime();
   const prevFrom = new Date(currentFrom.getTime() - duration);
 
-  const [{ data: curWinData }, { data: prevWinData }] = await Promise.all([
+  const [curRes, prevRes] = await Promise.all([
     supabase.rpc('competitor_aggregates', {
       ...baseArgs,
       p_date_from: opts?.dateFrom ?? currentFrom.toISOString(),
@@ -921,9 +925,11 @@ export async function getCompetitorComparison(
       p_date_to: currentFrom.toISOString(),
     }),
   ]);
+  if (curRes.error) throw new Error(curRes.error.message);
+  if (prevRes.error) throw new Error(prevRes.error.message);
 
-  const curWin = curWinData as unknown as CompetitorAggregatesRow | null;
-  const prevWin = prevWinData as unknown as CompetitorAggregatesRow | null;
+  const curWin = curRes.data as unknown as CompetitorAggregatesRow | null;
+  const prevWin = prevRes.data as unknown as CompetitorAggregatesRow | null;
 
   const curBrandAvg =
     curWin && curWin.brand_row_count > 0
@@ -954,6 +960,13 @@ export async function getCompetitorComparison(
     return Math.round(((cur - prev) / prev) * 1000) / 10;
   };
 
+  // Falls back to the competitor id when the name is null/empty so two
+  // unnamed competitors don't collide under the same empty-string key in
+  // compByProvider below. Applied consistently to the entries[] name field
+  // so the providerRows column header matches the table row label.
+  const competitorDisplayName = (name: string | null | undefined, id: string): string =>
+    name && name.trim() !== '' ? name : id;
+
   const entries: CompetitorComparisonEntry[] = [
     {
       name: brandName,
@@ -969,7 +982,7 @@ export async function getCompetitorComparison(
   for (const c of agg.by_competitor) {
     const avg = c.row_count > 0 ? Math.round(c.sum_visibility / c.row_count) : 0;
     entries.push({
-      name: c.name ?? '',
+      name: competitorDisplayName(c.name, c.competitor_id),
       avgVisibilityScore: avg,
       change: pctChange(
         curCompAvg.get(c.competitor_id) ?? null,
@@ -998,13 +1011,13 @@ export async function getCompetitorComparison(
     brandByProvider.set(provider, ex);
   }
 
-  // compName -> provider -> agg (JS key by display name to match the old
-  // shape exactly, since the provider row columns are keyed by competitor
-  // name).
+  // compName -> provider -> agg. Keyed by the same display name used in
+  // entries[] above so the providerRows column headers line up with the
+  // table rows (empty/null names fall back to competitor_id).
   const compByProvider = new Map<string, Map<string, Agg>>();
   for (const cp of agg.by_competitor_provider) {
     const provider = resolveProvider(cp.model_used, cp.platform);
-    const name = cp.competitor_name ?? '';
+    const name = competitorDisplayName(cp.competitor_name, cp.competitor_id);
     if (!compByProvider.has(name)) compByProvider.set(name, new Map());
     const pm = compByProvider.get(name)!;
     const ex = pm.get(provider) ?? { totalScore: 0, count: 0 };
@@ -1094,7 +1107,7 @@ export async function getShareOfVoiceData(
   const duration = currentTo.getTime() - currentFrom.getTime();
   const prevFrom = new Date(currentFrom.getTime() - duration);
 
-  const [{ data: curData, error: curErr }, { data: prevData }] = await Promise.all([
+  const [{ data: curData, error: curErr }, { data: prevData, error: prevErr }] = await Promise.all([
     supabase.rpc('share_of_voice_aggregates', {
       ...baseArgs,
       p_date_from: opts?.dateFrom ?? null,
@@ -1107,6 +1120,7 @@ export async function getShareOfVoiceData(
     }),
   ]);
   if (curErr) throw new Error(curErr.message);
+  if (prevErr) throw new Error(prevErr.message);
 
   const cur = curData as unknown as ShareOfVoiceAggregatesRow;
   const prev = prevData as unknown as ShareOfVoiceAggregatesRow | null;
