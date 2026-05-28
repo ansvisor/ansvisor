@@ -8,6 +8,7 @@ import {
   getCompetitorComparisonFor,
   getContentOpportunityFor,
   getVisibilitySummaryFor,
+  getVisibilityTrendFor,
   listBrandsFor,
   listCitationsFor,
   listContentOpportunitiesFor,
@@ -372,6 +373,58 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         region: args.region,
         topicId: args.topic_id,
         limit: args.limit,
+      });
+      if (!result) {
+        return {
+          content: [{ type: 'text', text: 'Brand not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'get_visibility_trend',
+    {
+      description:
+        'Get a brand\'s visibility over time for a date range, bucketed by day or week. Returns one bucket per period with result_count, avg_visibility_score (0-100), total_mentions, total_citations, and avg_competitor_score (mean of competitor visibility scores from the same period, or null if no competitors were mentioned). Use this for "how has my visibility changed?" trend questions and to render brand-vs-competitor line charts. Complements get_visibility_summary, which is a single-window snapshot.',
+      inputSchema: {
+        brand_id: z.string().uuid().describe('Brand UUID, from list_brands.'),
+        date_from: z
+          .string()
+          .optional()
+          .describe('ISO timestamp (inclusive) lower bound, e.g. 2026-05-01T00:00:00Z.'),
+        date_to: z.string().optional().describe('ISO timestamp (inclusive) upper bound.'),
+        granularity: z
+          .enum(['day', 'week'])
+          .optional()
+          .describe('Bucket size — "day" (default) or "week" (ISO Monday-start weeks).'),
+        model: z
+          .string()
+          .optional()
+          .describe(
+            'Optional model slug filter, or comma-separated list of slugs to filter a provider family.',
+          ),
+        region: z.string().optional().describe('Optional region code filter (e.g. "US", "TR").'),
+        topic_id: z
+          .string()
+          .uuid()
+          .optional()
+          .describe('Optional topic UUID (from list_topics) to restrict to one topic.'),
+      },
+    },
+    async (args) => {
+      const result = await getVisibilityTrendFor(auth, {
+        brandId: args.brand_id,
+        dateFrom: args.date_from,
+        dateTo: args.date_to,
+        model: args.model,
+        region: args.region,
+        topicId: args.topic_id,
+        granularity: args.granularity,
       });
       if (!result) {
         return {

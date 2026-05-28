@@ -1084,3 +1084,105 @@ export async function listCitationsFor(
     top_urls: topUrls,
   };
 }
+
+// ── Visibility trend ────────────────────────────────────────────────────────
+
+export type VisibilityTrendGranularity = 'day' | 'week';
+
+export interface VisibilityTrendParams {
+  brandId: string;
+  dateFrom?: string;
+  dateTo?: string;
+  /** Comma-separated model_used slugs (e.g. `gpt-4o,claude-sonnet-4-6`). */
+  model?: string;
+  region?: string;
+  topicId?: string;
+  granularity?: VisibilityTrendGranularity;
+}
+
+export interface VisibilityTrendOutput {
+  granularity: VisibilityTrendGranularity;
+  buckets: Array<{
+    /** UTC bucket key in `YYYY-MM-DD` (week bucket = the ISO Monday). */
+    date: string;
+    result_count: number;
+    avg_visibility_score: number;
+    total_mentions: number;
+    total_citations: number;
+    /** Average competitor visibility unwrapped from `competitor_mentions`. */
+    avg_competitor_score: number | null;
+  }>;
+}
+
+interface VisibilityTrendBucketRpc {
+  bucket_date: string;
+  row_count: number;
+  sum_visibility: number;
+  sum_mentions: number;
+  sum_citations: number;
+  comp_sum_visibility: number;
+  comp_count: number;
+}
+
+/**
+ * Visibility / mentions / citations over time for a brand, with the
+ * competitor average pulled out of `competitor_mentions` per row so a chart
+ * can plot brand vs. competitor lines side by side.
+ *
+ * Aggregates server-side via the `visibility_trend_aggregates` RPC introduced
+ * in 00008 — same pattern as the insights / competitor / SoV surfaces from
+ * #114. The JS layer only divides and rounds; the row scan stays in
+ * Postgres. Designed for the chart-rendering surfaces in the planned
+ * in-product assistant (#94), which can fire a lot of these.
+ *
+ * Ownership-check first; wrong-org or missing brand returns null (→ 404)
+ * before the RPC fires.
+ */
+export async function getVisibilityTrendFor(
+  auth: McpAuthContext,
+  params: VisibilityTrendParams,
+): Promise<VisibilityTrendOutput | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: brand } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('id', params.brandId)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  if (!brand) return null;
+
+  const p_models = params.model
+    ? params.model
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : null;
+
+  const granularity: VisibilityTrendGranularity = params.granularity ?? 'day';
+
+  const { data, error } = await supabaseAdmin.rpc('visibility_trend_aggregates', {
+    p_brand_id: params.brandId,
+    p_models: p_models && p_models.length > 0 ? p_models : null,
+    p_region: params.region ?? null,
+    p_date_from: params.dateFrom ?? null,
+    p_date_to: params.dateTo ?? null,
+    p_topic_id: params.topicId ?? null,
+    p_granularity: granularity,
+  });
+  if (error) throw new Error(error.message);
+
+  const raw = (data as unknown as VisibilityTrendBucketRpc[]) ?? [];
+  const buckets = raw.map((b) => ({
+    date: b.bucket_date,
+    result_count: Number(b.row_count),
+    avg_visibility_score:
+      b.row_count > 0 ? Math.round(Number(b.sum_visibility) / Number(b.row_count)) : 0,
+    total_mentions: Number(b.sum_mentions),
+    total_citations: Number(b.sum_citations),
+    avg_competitor_score:
+      b.comp_count > 0 ? Math.round(Number(b.comp_sum_visibility) / Number(b.comp_count)) : null,
+  }));
+
+  return { granularity, buckets };
+}

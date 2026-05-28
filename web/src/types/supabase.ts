@@ -899,6 +899,18 @@ export type Database = {
         };
         Returns: Json;
       };
+      visibility_trend_aggregates: {
+        Args: {
+          p_brand_id: string;
+          p_models?: string[] | null;
+          p_region?: string | null;
+          p_date_from?: string | null;
+          p_date_to?: string | null;
+          p_topic_id?: string | null;
+          p_granularity?: string | null;
+        };
+        Returns: Json;
+      };
       share_of_voice_aggregates: {
         Args: {
           p_brand_id: string;
