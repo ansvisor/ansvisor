@@ -466,13 +466,6 @@
         "title": "Prompt Volumes",
         "description": "Understand query volume trends across platforms and identify opportunities."
       }
-    },
-    "pricing": {
-      "title": "Simple, transparent pricing",
-      "subtitle": "Start for free, scale as you grow. Self-host with all features unlocked, or let us handle the infrastructure.",
-      "compareTitle": "Compare all plans",
-      "ossTitle": "100% Open Source",
-      "ossDescription": "Self-host the entire platform for free with all features unlocked. No artificial limits, no license keys. Use our cloud when you want us to handle the infrastructure."
     }
   }
 }
