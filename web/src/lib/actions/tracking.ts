@@ -88,6 +88,82 @@ export interface InsightsSummary {
 }
 
 /**
+ * Convert the comma-separated `model` filter string the UI passes around
+ * into the `text[]` shape the aggregate RPCs accept. Matches the parsing
+ * applyModelFilter does for the buildResultsQuery path so the two callers
+ * stay equivalent.
+ */
+function modelFilterArray(model: string | undefined): string[] | null {
+  if (!model) return null;
+  const list = model
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return list.length > 0 ? list : null;
+}
+
+// ── RPC return shapes (mirror supabase/migrations/00006_insights_aggregates.sql) ─
+
+interface InsightsAggregates {
+  total_results: number;
+  sum_visibility: number;
+  total_mentions: number;
+  total_citations: number;
+  positive_count: number;
+  last_checked_at: string | null;
+  by_model: Array<{
+    model_used: string;
+    sum_visibility: number;
+    result_count: number;
+  }>;
+}
+
+interface CompetitorAggregatesRow {
+  brand_row_count: number;
+  brand_sum_visibility: number;
+  brand_total_mentions: number;
+  brand_total_citations: number;
+  by_competitor: Array<{
+    competitor_id: string;
+    name: string | null;
+    sum_visibility: number;
+    row_count: number;
+    total_mentions: number;
+    total_citations: number;
+  }>;
+  by_brand_provider: Array<{
+    model_used: string | null;
+    platform: string | null;
+    sum_visibility: number;
+    row_count: number;
+  }>;
+  by_competitor_provider: Array<{
+    model_used: string | null;
+    platform: string | null;
+    competitor_id: string;
+    competitor_name: string | null;
+    sum_visibility: number;
+    row_count: number;
+  }>;
+}
+
+interface ShareOfVoiceAggregatesRow {
+  total_brand_mentions: number;
+  total_competitor_mentions: number;
+  by_platform: Array<{
+    model_used: string | null;
+    platform: string | null;
+    brand_mentions: number;
+    competitor_mentions: number;
+  }>;
+  by_day: Array<{
+    day: string;
+    brand_mentions: number;
+    competitor_mentions: number;
+  }>;
+}
+
+/**
  * Build a filtered query on prompt_results for a brand.
  */
 async function buildResultsQuery(
@@ -349,14 +425,31 @@ export async function getInsightsSummary(
     topicId?: string;
   },
 ): Promise<InsightsSummary> {
-  const { query } = await buildResultsQuery(brandId, opts);
+  const supabase = await createClient();
+  const p_models = modelFilterArray(opts?.model);
 
-  const { data: results, error } = await query;
+  // Sums + counts come from Postgres in one round trip; we still do the
+  // final divide + round in JS so the displayed numbers track the old
+  // reducer math exactly (verified by the parity test in 00006).
+  const baseArgs = {
+    p_brand_id: brandId,
+    p_platform: null as string | null,
+    p_models,
+    p_region: opts?.region ?? null,
+    p_prompt_id: null as string | null,
+    p_topic_id: opts?.topicId ?? null,
+  };
+
+  const { data: curData, error } = await supabase.rpc('insights_aggregates', {
+    ...baseArgs,
+    p_date_from: opts?.dateFrom ?? null,
+    p_date_to: opts?.dateTo ?? null,
+  });
   if (error) throw new Error(error.message);
 
-  const rows = (results ?? []) as Record<string, unknown>[];
+  const cur = curData as unknown as InsightsAggregates;
 
-  if (rows.length === 0) {
+  if (cur.total_results === 0) {
     return {
       avgVisibilityScore: 0,
       totalMentions: 0,
@@ -372,34 +465,17 @@ export async function getInsightsSummary(
     };
   }
 
-  const totalResults = rows.length;
-  const avgVisibilityScore = Math.round(
-    rows.reduce((s, r) => s + (r.visibility_score as number), 0) / totalResults,
-  );
-  const totalMentions = rows.reduce((s, r) => s + (r.mention_count as number), 0);
-  const totalCitations = rows.reduce((s, r) => s + (r.citation_count as number), 0);
-  const positiveCount = rows.filter((r) => r.sentiment === 'positive').length;
-  const positiveSentimentPct = Math.round((positiveCount / totalResults) * 100);
+  const totalResults = cur.total_results;
+  const avgVisibilityScore = Math.round(cur.sum_visibility / totalResults);
+  const totalMentions = cur.total_mentions;
+  const totalCitations = cur.total_citations;
+  const positiveSentimentPct = Math.round((cur.positive_count / totalResults) * 100);
+  const lastCheckedAt = cur.last_checked_at;
 
-  const lastCheckedAt =
-    rows
-      .map((r) => r.created_at as string)
-      .sort()
-      .pop() ?? null;
-
-  const modelMap = new Map<string, { totalScore: number; count: number }>();
-  for (const r of rows) {
-    const m = (r.model_used as string) || 'unknown';
-    const existing = modelMap.get(m) ?? { totalScore: 0, count: 0 };
-    existing.totalScore += r.visibility_score as number;
-    existing.count += 1;
-    modelMap.set(m, existing);
-  }
-
-  const platformBreakdown = Array.from(modelMap.entries()).map(([model, data]) => ({
-    platform: model,
-    avgScore: Math.round(data.totalScore / data.count),
-    resultCount: data.count,
+  const platformBreakdown = cur.by_model.map((m) => ({
+    platform: m.model_used,
+    avgScore: m.result_count > 0 ? Math.round(m.sum_visibility / m.result_count) : 0,
+    resultCount: m.result_count,
   }));
 
   // --- Previous period comparison ---
@@ -424,41 +500,36 @@ export async function getInsightsSummary(
     const duration = currentTo.getTime() - currentFrom.getTime();
     const prevFrom = new Date(currentFrom.getTime() - duration);
 
-    const currentFilterOpts = opts?.dateFrom
-      ? opts
-      : { ...opts, dateFrom: currentFrom.toISOString() };
+    // Current-window aggregate: when no dateFrom was passed, the top-level
+    // call above is unbounded — for the delta math we need the same
+    // explicit "last 7 days" window the JS code used so the comparison
+    // stays anchored to recent momentum.
+    const [{ data: curWinData }, { data: prevWinData }] = await Promise.all([
+      supabase.rpc('insights_aggregates', {
+        ...baseArgs,
+        p_date_from: opts?.dateFrom ?? currentFrom.toISOString(),
+        p_date_to: opts?.dateTo ?? null,
+      }),
+      supabase.rpc('insights_aggregates', {
+        ...baseArgs,
+        p_date_from: prevFrom.toISOString(),
+        p_date_to: currentFrom.toISOString(),
+      }),
+    ]);
 
-    const { query: curQuery } = await buildResultsQuery(brandId, currentFilterOpts);
-    const { data: curResults } = await curQuery;
-    const curRows = (curResults ?? []) as Record<string, unknown>[];
+    const curWin = curWinData as unknown as InsightsAggregates | null;
+    const prevWin = prevWinData as unknown as InsightsAggregates | null;
 
-    const { query: prevQuery } = await buildResultsQuery(brandId, {
-      ...opts,
-      dateFrom: prevFrom.toISOString(),
-      dateTo: currentFrom.toISOString(),
-    });
+    if (curWin && prevWin && curWin.total_results > 0 && prevWin.total_results > 0) {
+      const curAvgVis = Math.round(curWin.sum_visibility / curWin.total_results);
+      const curMentions = curWin.total_mentions;
+      const curCitations = curWin.total_citations;
+      const curSentimentPct = Math.round((curWin.positive_count / curWin.total_results) * 100);
 
-    const { data: prevResults } = await prevQuery;
-    const prevRows = (prevResults ?? []) as Record<string, unknown>[];
-
-    if (curRows.length > 0 && prevRows.length > 0) {
-      const curTotal = curRows.length;
-      const curAvgVis = Math.round(
-        curRows.reduce((s, r) => s + (r.visibility_score as number), 0) / curTotal,
-      );
-      const curMentions = curRows.reduce((s, r) => s + (r.mention_count as number), 0);
-      const curCitations = curRows.reduce((s, r) => s + (r.citation_count as number), 0);
-      const curPositive = curRows.filter((r) => r.sentiment === 'positive').length;
-      const curSentimentPct = Math.round((curPositive / curTotal) * 100);
-
-      const prevTotal = prevRows.length;
-      const prevAvgVis = Math.round(
-        prevRows.reduce((s, r) => s + (r.visibility_score as number), 0) / prevTotal,
-      );
-      const prevMentions = prevRows.reduce((s, r) => s + (r.mention_count as number), 0);
-      const prevCitations = prevRows.reduce((s, r) => s + (r.citation_count as number), 0);
-      const prevPositive = prevRows.filter((r) => r.sentiment === 'positive').length;
-      const prevSentimentPct = Math.round((prevPositive / prevTotal) * 100);
+      const prevAvgVis = Math.round(prevWin.sum_visibility / prevWin.total_results);
+      const prevMentions = prevWin.total_mentions;
+      const prevCitations = prevWin.total_citations;
+      const prevSentimentPct = Math.round((prevWin.positive_count / prevWin.total_results) * 100);
 
       visibilityChange = curAvgVis - prevAvgVis;
       mentionsChange =
@@ -776,6 +847,10 @@ function resolveProvider(modelUsed: string | null | undefined, platform?: string
 /**
  * Aggregate competitor comparison data from prompt results.
  * Returns both flat brand scores and per-provider breakdown.
+ *
+ * Server-side aggregation lives in the competitor_aggregates RPC
+ * (supabase/migrations/00006). This function only does the resolveProvider
+ * fold + final divide/round — the heavy `select(*) + reduce` loop is gone.
  */
 export async function getCompetitorComparison(
   brandId: string,
@@ -788,116 +863,88 @@ export async function getCompetitorComparison(
   },
 ): Promise<CompetitorComparisonData> {
   const supabase = await createClient();
+  const p_models = modelFilterArray(opts?.model);
 
-  const { data: brand } = await supabase.from('brands').select('name').eq('id', brandId).single();
+  const baseArgs = {
+    p_brand_id: brandId,
+    p_platform: null as string | null,
+    p_models,
+    p_region: opts?.region ?? null,
+    p_prompt_id: null as string | null,
+    p_topic_id: opts?.topicId ?? null,
+  };
 
-  const { query } = await buildResultsQuery(brandId, opts);
-  const { data: results, error } = await query;
-  if (error) throw new Error(error.message);
+  // Brand name + the displayed-period aggregate fire in parallel — both
+  // are needed before we can shape the response.
+  const [{ data: brand }, { data: aggDisplay, error: aggErr }] = await Promise.all([
+    supabase.from('brands').select('name').eq('id', brandId).single(),
+    supabase.rpc('competitor_aggregates', {
+      ...baseArgs,
+      p_date_from: opts?.dateFrom ?? null,
+      p_date_to: opts?.dateTo ?? null,
+    }),
+  ]);
+  if (aggErr) throw new Error(aggErr.message);
 
-  const rows = (results ?? []) as Record<string, unknown>[];
-  if (rows.length === 0) return { brands: [], providerRows: [] };
+  const agg = aggDisplay as unknown as CompetitorAggregatesRow;
+  if (agg.brand_row_count === 0) return { brands: [], providerRows: [] };
 
   // --- Current vs previous period for change calculation ---
-  // The displayed avg/totals come from `rows` (respects the selected preset),
+  // The displayed avg/totals come from `agg` (respects the selected preset),
   // but the ↑/↓ delta always compares a fixed "current" window to the window
   // immediately before it so the arrow reflects recent momentum (mirrors
   // getInsightsSummary's KPI change logic).
-  let curBrandAvg: number | null = null;
-  let prevBrandAvg: number | null = null;
+  let currentFrom: Date;
+  let currentTo: Date;
+
+  if (opts?.dateFrom) {
+    currentFrom = new Date(opts.dateFrom);
+    currentTo = opts.dateTo ? new Date(opts.dateTo) : new Date();
+  } else {
+    currentTo = new Date();
+    currentFrom = new Date();
+    currentFrom.setDate(currentFrom.getDate() - 7);
+  }
+
+  const duration = currentTo.getTime() - currentFrom.getTime();
+  const prevFrom = new Date(currentFrom.getTime() - duration);
+
+  const [{ data: curWinData }, { data: prevWinData }] = await Promise.all([
+    supabase.rpc('competitor_aggregates', {
+      ...baseArgs,
+      p_date_from: opts?.dateFrom ?? currentFrom.toISOString(),
+      p_date_to: opts?.dateTo ?? null,
+    }),
+    supabase.rpc('competitor_aggregates', {
+      ...baseArgs,
+      p_date_from: prevFrom.toISOString(),
+      p_date_to: currentFrom.toISOString(),
+    }),
+  ]);
+
+  const curWin = curWinData as unknown as CompetitorAggregatesRow | null;
+  const prevWin = prevWinData as unknown as CompetitorAggregatesRow | null;
+
+  const curBrandAvg =
+    curWin && curWin.brand_row_count > 0
+      ? curWin.brand_sum_visibility / curWin.brand_row_count
+      : null;
+  const prevBrandAvg =
+    prevWin && prevWin.brand_row_count > 0
+      ? prevWin.brand_sum_visibility / prevWin.brand_row_count
+      : null;
+
   const curCompAvg = new Map<string, number>();
+  for (const c of curWin?.by_competitor ?? []) {
+    if (c.row_count > 0) curCompAvg.set(c.competitor_id, c.sum_visibility / c.row_count);
+  }
   const prevCompAvg = new Map<string, number>();
-
-  {
-    let currentFrom: Date;
-    let currentTo: Date;
-
-    if (opts?.dateFrom) {
-      currentFrom = new Date(opts.dateFrom);
-      currentTo = opts.dateTo ? new Date(opts.dateTo) : new Date();
-    } else {
-      currentTo = new Date();
-      currentFrom = new Date();
-      currentFrom.setDate(currentFrom.getDate() - 7);
-    }
-
-    const duration = currentTo.getTime() - currentFrom.getTime();
-    const prevFrom = new Date(currentFrom.getTime() - duration);
-
-    const currentFilterOpts = opts?.dateFrom
-      ? opts
-      : { ...opts, dateFrom: currentFrom.toISOString() };
-
-    const [curRes, prevRes] = await Promise.all([
-      (async () => {
-        const { query: curQuery } = await buildResultsQuery(brandId, currentFilterOpts);
-        return curQuery;
-      })(),
-      (async () => {
-        const { query: prevQuery } = await buildResultsQuery(brandId, {
-          ...opts,
-          dateFrom: prevFrom.toISOString(),
-          dateTo: currentFrom.toISOString(),
-        });
-        return prevQuery;
-      })(),
-    ]);
-
-    const curRows = (curRes.data ?? []) as Record<string, unknown>[];
-    const prevRows = (prevRes.data ?? []) as Record<string, unknown>[];
-
-    if (curRows.length > 0) {
-      const curTotal = curRows.reduce((s, r) => s + (r.visibility_score as number), 0);
-      curBrandAvg = curTotal / curRows.length;
-
-      const curCompMap = new Map<string, { totalScore: number; count: number }>();
-      for (const row of curRows) {
-        const mentions = (row.competitor_mentions as CompetitorMention[] | null) ?? [];
-        for (const cm of mentions) {
-          const ex = curCompMap.get(cm.competitor_id) ?? {
-            totalScore: 0,
-            count: 0,
-          };
-          ex.totalScore += cm.visibility_score;
-          ex.count += 1;
-          curCompMap.set(cm.competitor_id, ex);
-        }
-      }
-      for (const [id, d] of curCompMap) {
-        curCompAvg.set(id, d.totalScore / d.count);
-      }
-    }
-
-    if (prevRows.length > 0) {
-      const prevTotal = prevRows.reduce((s, r) => s + (r.visibility_score as number), 0);
-      prevBrandAvg = prevTotal / prevRows.length;
-
-      const prevCompMap = new Map<string, { totalScore: number; count: number }>();
-      for (const row of prevRows) {
-        const mentions = (row.competitor_mentions as CompetitorMention[] | null) ?? [];
-        for (const cm of mentions) {
-          const ex = prevCompMap.get(cm.competitor_id) ?? {
-            totalScore: 0,
-            count: 0,
-          };
-          ex.totalScore += cm.visibility_score;
-          ex.count += 1;
-          prevCompMap.set(cm.competitor_id, ex);
-        }
-      }
-      for (const [id, d] of prevCompMap) {
-        prevCompAvg.set(id, d.totalScore / d.count);
-      }
-    }
+  for (const c of prevWin?.by_competitor ?? []) {
+    if (c.row_count > 0) prevCompAvg.set(c.competitor_id, c.sum_visibility / c.row_count);
   }
 
   const brandName = (brand?.name as string) ?? 'Your Brand';
-
-  // --- Flat brand-level aggregates ---
-  const brandTotalScore = rows.reduce((s, r) => s + (r.visibility_score as number), 0);
-  const brandTotalMentions = rows.reduce((s, r) => s + (r.mention_count as number), 0);
-  const brandTotalCitations = rows.reduce((s, r) => s + (r.citation_count as number), 0);
-  const brandAvg = Math.round(brandTotalScore / rows.length);
+  const brandAvg = Math.round(agg.brand_sum_visibility / agg.brand_row_count);
 
   // Percentage change relative to the previous-period value.
   // Null when no comparable previous value exists (or growth from 0 → x is undefined).
@@ -912,55 +959,25 @@ export async function getCompetitorComparison(
       name: brandName,
       avgVisibilityScore: brandAvg,
       change: pctChange(curBrandAvg, prevBrandAvg),
-      totalMentions: brandTotalMentions,
-      totalCitations: brandTotalCitations,
-      resultCount: rows.length,
+      totalMentions: agg.brand_total_mentions,
+      totalCitations: agg.brand_total_citations,
+      resultCount: agg.brand_row_count,
       isOwnBrand: true,
     },
   ];
 
-  const compMap = new Map<
-    string,
-    {
-      id: string;
-      name: string;
-      totalScore: number;
-      totalMentions: number;
-      totalCitations: number;
-      count: number;
-    }
-  >();
-
-  for (const row of rows) {
-    const mentions = (row.competitor_mentions as CompetitorMention[] | null) ?? [];
-    for (const cm of mentions) {
-      const existing = compMap.get(cm.competitor_id) ?? {
-        id: cm.competitor_id,
-        name: cm.name,
-        totalScore: 0,
-        totalMentions: 0,
-        totalCitations: 0,
-        count: 0,
-      };
-      existing.totalScore += cm.visibility_score;
-      existing.totalMentions += cm.mention_count;
-      existing.totalCitations += cm.citation_count;
-      existing.count += 1;
-      compMap.set(cm.competitor_id, existing);
-    }
-  }
-
-  for (const [, data] of compMap) {
-    const avg = Math.round(data.totalScore / data.count);
-    const cur = curCompAvg.get(data.id);
-    const prev = prevCompAvg.get(data.id);
+  for (const c of agg.by_competitor) {
+    const avg = c.row_count > 0 ? Math.round(c.sum_visibility / c.row_count) : 0;
     entries.push({
-      name: data.name,
+      name: c.name ?? '',
       avgVisibilityScore: avg,
-      change: pctChange(cur ?? null, prev ?? null),
-      totalMentions: data.totalMentions,
-      totalCitations: data.totalCitations,
-      resultCount: data.count,
+      change: pctChange(
+        curCompAvg.get(c.competitor_id) ?? null,
+        prevCompAvg.get(c.competitor_id) ?? null,
+      ),
+      totalMentions: c.total_mentions,
+      totalCitations: c.total_citations,
+      resultCount: c.row_count,
       isOwnBrand: false,
     });
   }
@@ -968,32 +985,32 @@ export async function getCompetitorComparison(
   entries.sort((a, b) => b.avgVisibilityScore - a.avgVisibilityScore);
 
   // --- Per-provider breakdown ---
-  // brand: { provider -> { totalScore, count } }
+  // resolveProvider stays in JS so we don't keep a SQL copy of the mapping
+  // table in sync — fold the (model_used, platform) groups into provider
+  // buckets here.
   type Agg = { totalScore: number; count: number };
   const brandByProvider = new Map<string, Agg>();
-  const compByProvider = new Map<string, Map<string, Agg>>(); // compName -> provider -> agg
+  for (const bp of agg.by_brand_provider) {
+    const provider = resolveProvider(bp.model_used, bp.platform);
+    const ex = brandByProvider.get(provider) ?? { totalScore: 0, count: 0 };
+    ex.totalScore += Number(bp.sum_visibility);
+    ex.count += bp.row_count;
+    brandByProvider.set(provider, ex);
+  }
 
-  for (const row of rows) {
-    const provider = resolveProvider(
-      row.model_used as string | null,
-      row.platform as string | null,
-    );
-    const score = row.visibility_score as number;
-
-    const bp = brandByProvider.get(provider) ?? { totalScore: 0, count: 0 };
-    bp.totalScore += score;
-    bp.count += 1;
-    brandByProvider.set(provider, bp);
-
-    const mentions = (row.competitor_mentions as CompetitorMention[] | null) ?? [];
-    for (const cm of mentions) {
-      if (!compByProvider.has(cm.name)) compByProvider.set(cm.name, new Map());
-      const pm = compByProvider.get(cm.name)!;
-      const cp = pm.get(provider) ?? { totalScore: 0, count: 0 };
-      cp.totalScore += cm.visibility_score;
-      cp.count += 1;
-      pm.set(provider, cp);
-    }
+  // compName -> provider -> agg (JS key by display name to match the old
+  // shape exactly, since the provider row columns are keyed by competitor
+  // name).
+  const compByProvider = new Map<string, Map<string, Agg>>();
+  for (const cp of agg.by_competitor_provider) {
+    const provider = resolveProvider(cp.model_used, cp.platform);
+    const name = cp.competitor_name ?? '';
+    if (!compByProvider.has(name)) compByProvider.set(name, new Map());
+    const pm = compByProvider.get(name)!;
+    const ex = pm.get(provider) ?? { totalScore: 0, count: 0 };
+    ex.totalScore += Number(cp.sum_visibility);
+    ex.count += cp.row_count;
+    pm.set(provider, ex);
   }
 
   const allProviders = new Set<string>();
@@ -1004,15 +1021,12 @@ export async function getCompetitorComparison(
 
   const providerRows: ProviderComparisonRow[] = [...allProviders].sort().map((provider) => {
     const row: ProviderComparisonRow = { provider };
-
     const bp = brandByProvider.get(provider);
-    row[brandName] = bp ? Math.round(bp.totalScore / bp.count) : 0;
-
+    row[brandName] = bp && bp.count > 0 ? Math.round(bp.totalScore / bp.count) : 0;
     for (const [compName, pm] of compByProvider) {
       const cp = pm.get(provider);
-      row[compName] = cp ? Math.round(cp.totalScore / cp.count) : 0;
+      row[compName] = cp && cp.count > 0 ? Math.round(cp.totalScore / cp.count) : 0;
     }
-
     return row;
   });
 
@@ -1051,61 +1065,75 @@ export async function getShareOfVoiceData(
     topicId?: string;
   },
 ): Promise<ShareOfVoiceData> {
-  const { query } = await buildResultsQuery(brandId, opts);
-  const { data: results, error } = await query;
-  if (error) throw new Error(error.message);
+  const supabase = await createClient();
+  const p_models = modelFilterArray(opts?.model);
 
-  const rows = (results ?? []) as Record<string, unknown>[];
+  const baseArgs = {
+    p_brand_id: brandId,
+    p_platform: null as string | null,
+    p_models,
+    p_region: opts?.region ?? null,
+    p_prompt_id: null as string | null,
+    p_topic_id: opts?.topicId ?? null,
+  };
 
-  if (rows.length === 0) {
-    return { overallSov: 0, overallSovChange: null, byPlatform: [], trend: [] };
+  // Current-period aggregate + previous-period aggregate run in parallel —
+  // both server-side, no row transfer or JS reduce. The previous-period
+  // window always anchors to "last 7 days" when the caller hasn't picked an
+  // explicit dateFrom (matches the original delta logic for SoV).
+  let currentFrom: Date;
+  let currentTo: Date;
+  if (opts?.dateFrom) {
+    currentFrom = new Date(opts.dateFrom);
+    currentTo = opts.dateTo ? new Date(opts.dateTo) : new Date();
+  } else {
+    currentTo = new Date();
+    currentFrom = new Date();
+    currentFrom.setDate(currentFrom.getDate() - 7);
   }
+  const duration = currentTo.getTime() - currentFrom.getTime();
+  const prevFrom = new Date(currentFrom.getTime() - duration);
 
-  // --- Overall + by-platform aggregation ---
-  let totalBrandMentions = 0;
-  let totalCompMentions = 0;
+  const [{ data: curData, error: curErr }, { data: prevData }] = await Promise.all([
+    supabase.rpc('share_of_voice_aggregates', {
+      ...baseArgs,
+      p_date_from: opts?.dateFrom ?? null,
+      p_date_to: opts?.dateTo ?? null,
+    }),
+    supabase.rpc('share_of_voice_aggregates', {
+      ...baseArgs,
+      p_date_from: prevFrom.toISOString(),
+      p_date_to: currentFrom.toISOString(),
+    }),
+  ]);
+  if (curErr) throw new Error(curErr.message);
 
-  type ProviderAgg = { brandMentions: number; competitorMentions: number };
-  const providerMap = new Map<string, ProviderAgg>();
+  const cur = curData as unknown as ShareOfVoiceAggregatesRow;
+  const prev = prevData as unknown as ShareOfVoiceAggregatesRow | null;
 
-  type DayAgg = { brandMentions: number; competitorMentions: number };
-  const dayMap = new Map<string, DayAgg>();
+  const totalBrandMentions = Number(cur.total_brand_mentions);
+  const totalCompMentions = Number(cur.total_competitor_mentions);
 
-  for (const row of rows) {
-    const provider = resolveProvider(
-      row.model_used as string | null,
-      row.platform as string | null,
-    );
-    const brandM = row.mention_count as number;
-    totalBrandMentions += brandM;
-
-    const pa = providerMap.get(provider) ?? {
-      brandMentions: 0,
-      competitorMentions: 0,
-    };
-    pa.brandMentions += brandM;
-
-    const mentions = (row.competitor_mentions as CompetitorMention[] | null) ?? [];
-    let rowCompMentions = 0;
-    for (const cm of mentions) {
-      rowCompMentions += cm.mention_count;
-    }
-    totalCompMentions += rowCompMentions;
-    pa.competitorMentions += rowCompMentions;
-    providerMap.set(provider, pa);
-
-    // Daily aggregation
-    const day = (row.created_at as string).slice(0, 10);
-    const da = dayMap.get(day) ?? { brandMentions: 0, competitorMentions: 0 };
-    da.brandMentions += brandM;
-    da.competitorMentions += rowCompMentions;
-    dayMap.set(day, da);
+  if (totalBrandMentions === 0 && totalCompMentions === 0) {
+    return { overallSov: 0, overallSovChange: null, byPlatform: [], trend: [] };
   }
 
   const totalAll = totalBrandMentions + totalCompMentions;
   const overallSov = totalAll > 0 ? Math.round((totalBrandMentions / totalAll) * 1000) / 10 : 0;
 
-  // --- By platform ---
+  // --- By provider ---
+  // resolveProvider stays in JS so the SQL doesn't carry a duplicate of the
+  // model/platform → provider mapping table.
+  type ProviderAgg = { brandMentions: number; competitorMentions: number };
+  const providerMap = new Map<string, ProviderAgg>();
+  for (const bp of cur.by_platform) {
+    const provider = resolveProvider(bp.model_used, bp.platform);
+    const ex = providerMap.get(provider) ?? { brandMentions: 0, competitorMentions: 0 };
+    ex.brandMentions += Number(bp.brand_mentions);
+    ex.competitorMentions += Number(bp.competitor_mentions);
+    providerMap.set(provider, ex);
+  }
+
   const byPlatform: SoVByPlatform[] = [...providerMap.entries()]
     .map(([provider, agg]) => {
       const total = agg.brandMentions + agg.competitorMentions;
@@ -1119,56 +1147,29 @@ export async function getShareOfVoiceData(
     .sort((a, b) => b.sov - a.sov);
 
   // --- Trend ---
-  const sortedDays = [...dayMap.keys()].sort();
-  const trend: SoVTrendPoint[] = sortedDays.map((day) => {
-    const d = dayMap.get(day)!;
-    const total = d.brandMentions + d.competitorMentions;
-    const brandSov = total > 0 ? Math.round((d.brandMentions / total) * 1000) / 10 : 0;
-    const competitorSov = total > 0 ? Math.round((d.competitorMentions / total) * 1000) / 10 : 0;
-    const dateObj = new Date(day + 'T00:00:00');
-    const label = dateObj.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
+  // RPC already returns by_day ordered by date ascending, but be defensive.
+  const trend: SoVTrendPoint[] = [...cur.by_day]
+    .sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0))
+    .map((d) => {
+      const brand = Number(d.brand_mentions);
+      const comp = Number(d.competitor_mentions);
+      const total = brand + comp;
+      const brandSov = total > 0 ? Math.round((brand / total) * 1000) / 10 : 0;
+      const competitorSov = total > 0 ? Math.round((comp / total) * 1000) / 10 : 0;
+      const dateObj = new Date(d.day + 'T00:00:00');
+      const label = dateObj.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      });
+      return { date: label, brandSov, competitorSov };
     });
-    return { date: label, brandSov, competitorSov };
-  });
 
-  // --- Previous period delta ---
+  // --- Previous period delta (overall SoV only) ---
   let overallSovChange: number | null = null;
-
-  {
-    let currentFrom: Date;
-    let currentTo: Date;
-
-    if (opts?.dateFrom) {
-      currentFrom = new Date(opts.dateFrom);
-      currentTo = opts.dateTo ? new Date(opts.dateTo) : new Date();
-    } else {
-      currentTo = new Date();
-      currentFrom = new Date();
-      currentFrom.setDate(currentFrom.getDate() - 7);
-    }
-
-    const duration = currentTo.getTime() - currentFrom.getTime();
-    const prevFrom = new Date(currentFrom.getTime() - duration);
-
-    const { query: prevQuery } = await buildResultsQuery(brandId, {
-      ...opts,
-      dateFrom: prevFrom.toISOString(),
-      dateTo: currentFrom.toISOString(),
-    });
-
-    const { data: prevResults } = await prevQuery;
-    const prevRows = (prevResults ?? []) as Record<string, unknown>[];
-
-    if (prevRows.length > 0) {
-      let prevBrandM = 0;
-      let prevCompM = 0;
-      for (const row of prevRows) {
-        prevBrandM += row.mention_count as number;
-        const cms = (row.competitor_mentions as CompetitorMention[] | null) ?? [];
-        for (const cm of cms) prevCompM += cm.mention_count;
-      }
+  if (prev) {
+    const prevBrandM = Number(prev.total_brand_mentions);
+    const prevCompM = Number(prev.total_competitor_mentions);
+    if (prevBrandM + prevCompM > 0) {
       const prevTotal = prevBrandM + prevCompM;
       const prevSov = prevTotal > 0 ? Math.round((prevBrandM / prevTotal) * 1000) / 10 : 0;
       overallSovChange = Math.round((overallSov - prevSov) * 10) / 10;

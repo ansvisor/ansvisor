@@ -873,6 +873,45 @@ export type Database = {
               isSetofReturn: true;
             };
           };
+      insights_aggregates: {
+        Args: {
+          p_brand_id: string;
+          p_platform?: string | null;
+          p_models?: string[] | null;
+          p_region?: string | null;
+          p_date_from?: string | null;
+          p_date_to?: string | null;
+          p_prompt_id?: string | null;
+          p_topic_id?: string | null;
+        };
+        Returns: Json;
+      };
+      competitor_aggregates: {
+        Args: {
+          p_brand_id: string;
+          p_platform?: string | null;
+          p_models?: string[] | null;
+          p_region?: string | null;
+          p_date_from?: string | null;
+          p_date_to?: string | null;
+          p_prompt_id?: string | null;
+          p_topic_id?: string | null;
+        };
+        Returns: Json;
+      };
+      share_of_voice_aggregates: {
+        Args: {
+          p_brand_id: string;
+          p_platform?: string | null;
+          p_models?: string[] | null;
+          p_region?: string | null;
+          p_date_from?: string | null;
+          p_date_to?: string | null;
+          p_prompt_id?: string | null;
+          p_topic_id?: string | null;
+        };
+        Returns: Json;
+      };
     };
     Enums: {
       invitation_status: 'pending' | 'accepted' | 'expired' | 'revoked';
