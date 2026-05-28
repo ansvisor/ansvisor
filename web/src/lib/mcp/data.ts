@@ -1,5 +1,14 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { McpAuthContext } from '@/lib/mcp-auth';
+import type { Citation } from '@/types';
+import {
+  classifyDomain,
+  extractHostname,
+  normalizeDomain,
+  SOURCE_CATEGORIES,
+  type SourceCategory,
+} from '@/lib/citations/classify';
+import { classifyArticleType } from '@/lib/citations/article-type';
 
 /**
  * Pure data-fetch functions shared by the MCP route and the parallel REST
@@ -786,5 +795,292 @@ export async function getCompetitorComparisonFor(
       total_competitor_mentions: totalCompMentions,
       by_platform: byPlatform,
     },
+  };
+}
+
+// ── Citations ────────────────────────────────────────────────────────────────
+
+export interface ListCitationsParams {
+  brandId: string;
+  dateFrom?: string;
+  dateTo?: string;
+  /** Comma-separated model_used slugs (e.g. `gpt-4o,claude-sonnet-4-6`). */
+  model?: string;
+  region?: string;
+  topicId?: string;
+  /** Cap on the top_domains / top_urls arrays. Default 50, max 200. */
+  limit?: number;
+}
+
+export interface CitationsOverviewOutput {
+  totals: {
+    domains: number;
+    urls: number;
+    citations: number;
+    results_with_citations: number;
+    avg_citations_per_result: number;
+  };
+  source_type_breakdown: Array<{
+    category: SourceCategory;
+    count: number;
+    pct: number;
+  }>;
+  top_domains: Array<{
+    domain: string;
+    category: SourceCategory;
+    total_citations: number;
+    results_citing: number;
+    usage_pct: number;
+    models: string[];
+    article_types: Array<{ type: string; count: number }>;
+  }>;
+  top_urls: Array<{
+    url: string;
+    domain: string;
+    category: SourceCategory;
+    title: string;
+    total_citations: number;
+    results_citing: number;
+    usage_pct: number;
+    article_type: string | null;
+  }>;
+}
+
+const CITATIONS_DEFAULT_LIMIT = 50;
+const CITATIONS_MAX_LIMIT = 200;
+
+/**
+ * Return the URLs and domains AI engines cite alongside a brand, classified by
+ * source type (news / review / owned / social / forum). Ports the JS-side
+ * aggregation from `getCitationsOverview` in `actions/citations.ts` — citations
+ * are stored as JSONB inside `prompt_results.citations` and each URL needs the
+ * `classifyDomain` / `classifyArticleType` helpers, so this can't be folded
+ * into a Postgres aggregate the way the competitor / SoV surfaces were in #114.
+ *
+ * Ownership-check first; the prompt_results scan only runs after the brand
+ * belongs to the caller's org.
+ */
+export async function listCitationsFor(
+  auth: McpAuthContext,
+  params: ListCitationsParams,
+): Promise<CitationsOverviewOutput | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: brand } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('id', params.brandId)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  if (!brand) return null;
+
+  // Brand + competitor domains feed `classifyDomain` so a URL hosted on the
+  // user's own domain comes back as `'you'`, competitor URLs as `'competitor'`.
+  const [{ data: brandDomainRows }, { data: competitorRows }] = await Promise.all([
+    supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', params.brandId),
+    supabaseAdmin.from('competitors').select('domain').eq('brand_id', params.brandId),
+  ]);
+
+  const brandDomains = (brandDomainRows ?? [])
+    .map((r) => normalizeDomain((r as { domain: string }).domain))
+    .filter(Boolean);
+  const competitorDomains = (competitorRows ?? [])
+    .map((r) => normalizeDomain((r as { domain: string }).domain))
+    .filter(Boolean);
+  const classifyCtx = { brandDomains, competitorDomains };
+
+  let query = supabaseAdmin
+    .from('prompt_results')
+    .select('id, prompt_id, platform, model_used, region, created_at, citations, citation_count')
+    .eq('brand_id', params.brandId);
+
+  if (params.dateFrom) query = query.gte('created_at', params.dateFrom);
+  if (params.dateTo) query = query.lte('created_at', params.dateTo);
+  if (params.region) query = query.eq('region', params.region);
+  if (params.model) {
+    const list = params.model
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    query =
+      list.length > 1
+        ? query.in('model_used', list)
+        : query.eq('model_used', list[0] ?? params.model);
+  }
+  if (params.topicId) {
+    const { data: topicPrompts } = await supabaseAdmin
+      .from('prompts')
+      .select('id')
+      .eq('topic_id', params.topicId);
+    const topicPromptIds = ((topicPrompts ?? []) as { id: string }[]).map((p) => p.id);
+    query = query.in(
+      'prompt_id',
+      topicPromptIds.length > 0 ? topicPromptIds : ['00000000-0000-0000-0000-000000000000'],
+    );
+  }
+
+  const { data: rows, error } = await query;
+  if (error) throw new Error(error.message);
+
+  const results = (rows ?? []) as Array<{
+    id: string;
+    platform: string | null;
+    model_used: string | null;
+    citations: Citation[] | null;
+  }>;
+
+  interface DomainAgg {
+    domain: string;
+    category: SourceCategory;
+    totalCitations: number;
+    resultsCiting: Set<string>;
+    models: Set<string>;
+    articleTypeCounts: Map<string, number>;
+  }
+  interface UrlAgg {
+    url: string;
+    domain: string;
+    category: SourceCategory;
+    title: string;
+    totalCitations: number;
+    resultsCiting: Set<string>;
+    models: Set<string>;
+    articleType: string | null;
+  }
+
+  const domainMap = new Map<string, DomainAgg>();
+  const urlMap = new Map<string, UrlAgg>();
+  let totalCitations = 0;
+  let resultsWithCitations = 0;
+
+  for (const result of results) {
+    const citations = Array.isArray(result.citations) ? result.citations : [];
+    if (citations.length === 0) continue;
+    resultsWithCitations += 1;
+    const modelKey = result.model_used || result.platform || '';
+
+    for (const cite of citations) {
+      const host = extractHostname(cite.url);
+      if (!host) continue;
+
+      const category = classifyDomain(host, classifyCtx);
+      totalCitations += 1;
+
+      const existingDomain = domainMap.get(host) ?? {
+        domain: host,
+        category,
+        totalCitations: 0,
+        resultsCiting: new Set<string>(),
+        models: new Set<string>(),
+        articleTypeCounts: new Map<string, number>(),
+      };
+      existingDomain.totalCitations += 1;
+      existingDomain.resultsCiting.add(result.id);
+      if (modelKey) existingDomain.models.add(modelKey);
+      const articleType = classifyArticleType(cite.url, cite.title);
+      if (articleType) {
+        existingDomain.articleTypeCounts.set(
+          articleType,
+          (existingDomain.articleTypeCounts.get(articleType) ?? 0) + 1,
+        );
+      }
+      domainMap.set(host, existingDomain);
+
+      // De-dupe URLs by stripping query/fragment + trailing slash so the same
+      // article cited with different tracking params still aggregates.
+      let normalizedUrl = cite.url;
+      try {
+        const parsed = new URL(cite.url);
+        parsed.search = '';
+        parsed.hash = '';
+        normalizedUrl = parsed.toString().replace(/\/$/, '');
+      } catch {
+        // leave as-is
+      }
+      const existingUrl = urlMap.get(normalizedUrl) ?? {
+        url: normalizedUrl,
+        domain: host,
+        category,
+        title: cite.title || '',
+        totalCitations: 0,
+        resultsCiting: new Set<string>(),
+        models: new Set<string>(),
+        articleType,
+      };
+      existingUrl.totalCitations += 1;
+      existingUrl.resultsCiting.add(result.id);
+      if (modelKey) existingUrl.models.add(modelKey);
+      if (!existingUrl.title && cite.title) existingUrl.title = cite.title;
+      urlMap.set(normalizedUrl, existingUrl);
+    }
+  }
+
+  const totalResults = results.length;
+  const limit = Math.min(Math.max(params.limit ?? CITATIONS_DEFAULT_LIMIT, 1), CITATIONS_MAX_LIMIT);
+
+  const allDomains = Array.from(domainMap.values()).sort(
+    (a, b) => b.totalCitations - a.totalCitations,
+  );
+  const topDomains = allDomains.slice(0, limit).map((agg) => {
+    const resultsCiting = agg.resultsCiting.size;
+    const articleTypes = Array.from(agg.articleTypeCounts.entries())
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3);
+    return {
+      domain: agg.domain,
+      category: agg.category,
+      total_citations: agg.totalCitations,
+      results_citing: resultsCiting,
+      usage_pct: totalResults > 0 ? Math.round((resultsCiting / totalResults) * 1000) / 10 : 0,
+      models: Array.from(agg.models).sort(),
+      article_types: articleTypes,
+    };
+  });
+
+  const allUrls = Array.from(urlMap.values()).sort((a, b) => b.totalCitations - a.totalCitations);
+  const topUrls = allUrls.slice(0, limit).map((agg) => {
+    const resultsCiting = agg.resultsCiting.size;
+    return {
+      url: agg.url,
+      domain: agg.domain,
+      category: agg.category,
+      title: agg.title,
+      total_citations: agg.totalCitations,
+      results_citing: resultsCiting,
+      usage_pct: totalResults > 0 ? Math.round((resultsCiting / totalResults) * 1000) / 10 : 0,
+      article_type: agg.articleType,
+    };
+  });
+
+  // Source breakdown counts each *domain* once (matches the existing UI),
+  // not each citation, so news/review/owned/social/forum percentages reflect
+  // the diversity of cited sources rather than raw URL volume.
+  const categoryCounts = new Map<SourceCategory, number>();
+  for (const d of allDomains) {
+    categoryCounts.set(d.category, (categoryCounts.get(d.category) ?? 0) + 1);
+  }
+  const totalDomains = allDomains.length;
+  const sourceTypeBreakdown = SOURCE_CATEGORIES.map((category) => {
+    const count = categoryCounts.get(category) ?? 0;
+    return {
+      category,
+      count,
+      pct: totalDomains > 0 ? Math.round((count / totalDomains) * 1000) / 10 : 0,
+    };
+  }).filter((b) => b.count > 0);
+
+  return {
+    totals: {
+      domains: totalDomains,
+      urls: allUrls.length,
+      citations: totalCitations,
+      results_with_citations: resultsWithCitations,
+      avg_citations_per_result:
+        totalResults > 0 ? Math.round((totalCitations / totalResults) * 10) / 10 : 0,
+    },
+    source_type_breakdown: sourceTypeBreakdown,
+    top_domains: topDomains,
+    top_urls: topUrls,
   };
 }

@@ -9,6 +9,7 @@ import {
   getContentOpportunityFor,
   getVisibilitySummaryFor,
   listBrandsFor,
+  listCitationsFor,
   listContentOpportunitiesFor,
   listPromptsFor,
   listTopicsFor,
@@ -316,6 +317,61 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         model: args.model,
         region: args.region,
         topicId: args.topic_id,
+      });
+      if (!result) {
+        return {
+          content: [{ type: 'text', text: 'Brand not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'list_citations',
+    {
+      description:
+        'List the URLs and domains AI engines cite alongside a brand, classified by source type (news / review / owned / social / forum / competitor / you). Returns totals, a source-type breakdown, and the top cited domains + URLs (each with citation count, results citing, usage %, and article-type guess where available). Use this for "which sources cite me?", "which competitor sites get pulled?", or "what kinds of pages does AI cite?" questions. Snapshot for the given window — call again with an earlier window to compute a delta.',
+      inputSchema: {
+        brand_id: z.string().uuid().describe('Brand UUID, from list_brands.'),
+        date_from: z
+          .string()
+          .optional()
+          .describe('ISO timestamp (inclusive) lower bound, e.g. 2026-05-01T00:00:00Z.'),
+        date_to: z.string().optional().describe('ISO timestamp (inclusive) upper bound.'),
+        model: z
+          .string()
+          .optional()
+          .describe(
+            'Optional model slug filter, or comma-separated list of slugs to filter a provider family.',
+          ),
+        region: z.string().optional().describe('Optional region code filter (e.g. "US", "TR").'),
+        topic_id: z
+          .string()
+          .uuid()
+          .optional()
+          .describe('Optional topic UUID (from list_topics) to restrict to one topic.'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe('Row cap on top_domains / top_urls (default 50, max 200).'),
+      },
+    },
+    async (args) => {
+      const result = await listCitationsFor(auth, {
+        brandId: args.brand_id,
+        dateFrom: args.date_from,
+        dateTo: args.date_to,
+        model: args.model,
+        region: args.region,
+        topicId: args.topic_id,
+        limit: args.limit,
       });
       if (!result) {
         return {
