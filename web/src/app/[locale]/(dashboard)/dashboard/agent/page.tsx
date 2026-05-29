@@ -237,7 +237,7 @@ function AgentChat(props: {
   }
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] -m-6">
+    <div className="flex h-[calc(100vh-4rem)] md:h-screen -m-6">
       <aside className="w-72 border-r bg-card flex flex-col">
         <div className="p-3 border-b">
           <Button onClick={newChat} variant="outline" className="w-full justify-start gap-2">
@@ -428,7 +428,7 @@ function EmptyState() {
 
 function PlanGate({ requiredPlan }: { requiredPlan: string }) {
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center -m-6 p-6">
+    <div className="flex h-[calc(100vh-4rem)] md:h-screen items-center justify-center -m-6 p-6">
       <div className="text-center max-w-md">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30 mb-4">
           <Crown className="h-7 w-7 text-amber-600 dark:text-amber-400" />
