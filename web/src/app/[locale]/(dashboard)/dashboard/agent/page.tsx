@@ -5,6 +5,7 @@ import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, type UIMessage } from 'ai';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { Button } from '@/components/ui/button';
+import { Markdown } from '@/components/ui/markdown';
 import { cn } from '@/lib/utils';
 import { Plus, Send, Sparkles, Trash2, Loader2, Crown, Wrench } from 'lucide-react';
 
@@ -360,10 +361,25 @@ function MessageBubble({ message }: { message: UIMessage }) {
       >
         {(message.parts ?? []).map((part, i) => {
           if (part.type === 'text') {
+            // User messages stay plain — they're typed text, not authored
+            // markdown, and the chat bubble background contrasts more
+            // cleanly without prose styling. Assistant output is intended
+            // to be markdown (lists, **bold**, headings, links), so render
+            // it through the same component the rest of the dashboard uses.
+            if (isUser) {
+              return (
+                <p key={i} className="whitespace-pre-wrap leading-relaxed">
+                  {part.text}
+                </p>
+              );
+            }
             return (
-              <p key={i} className="whitespace-pre-wrap leading-relaxed">
+              <Markdown
+                key={i}
+                className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+              >
                 {part.text}
-              </p>
+              </Markdown>
             );
           }
           if (part.type.startsWith('tool-')) {
