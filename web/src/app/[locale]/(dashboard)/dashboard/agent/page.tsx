@@ -226,11 +226,24 @@ function AgentChat(props: {
             <p className="text-xs text-muted-foreground text-center py-8">No conversations yet.</p>
           )}
           {conversations.map((c) => (
-            <button
+            // Outer wrapper is a div with role="button" rather than a real
+            // <button> because we render the delete control as a nested
+            // <button> inside it — HTML doesn't allow button-in-button
+            // (hydration error in Next.js). Keyboard support via tabIndex +
+            // onKeyDown preserves the same affordance.
+            <div
               key={c.id}
+              role="button"
+              tabIndex={0}
               onClick={() => loadConversation(c.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  loadConversation(c.id);
+                }
+              }}
               className={cn(
-                'w-full text-left text-sm rounded-md px-3 py-2 flex items-start gap-2 group hover:bg-accent transition-colors',
+                'w-full text-left text-sm rounded-md px-3 py-2 flex items-start gap-2 group hover:bg-accent transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 activeId === c.id && 'bg-accent',
               )}
             >
@@ -246,7 +259,7 @@ function AgentChat(props: {
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
-            </button>
+            </div>
           ))}
         </div>
       </aside>
