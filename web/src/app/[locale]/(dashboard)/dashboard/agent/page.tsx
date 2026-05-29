@@ -7,7 +7,16 @@ import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { Button } from '@/components/ui/button';
 import { Markdown } from '@/components/ui/markdown';
 import { cn } from '@/lib/utils';
-import { Plus, Send, Sparkles, Trash2, Loader2, Crown, Wrench } from 'lucide-react';
+import {
+  Plus,
+  Send,
+  Sparkles,
+  Trash2,
+  Loader2,
+  Crown,
+  Wrench,
+  ChevronDown,
+} from 'lucide-react';
 
 interface ConversationRow {
   id: string;
@@ -383,30 +392,120 @@ function MessageBubble({ message }: { message: UIMessage }) {
             );
           }
           if (part.type.startsWith('tool-')) {
-            const toolPart = part as unknown as {
-              type: string;
-              toolName?: string;
-              state?: string;
-            };
-            const name = toolPart.toolName ?? part.type.replace('tool-', '');
-            return (
-              <div
-                key={i}
-                className="my-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground bg-muted rounded-md px-2 py-1"
-              >
-                <Wrench className="h-3 w-3" />
-                <span className="font-mono">{name}</span>
-                {toolPart.state && (
-                  <span className="text-muted-foreground/60">· {toolPart.state}</span>
-                )}
-              </div>
-            );
+            return <ToolCallDisclosure key={i} part={part} />;
           }
           return null;
         })}
       </div>
     </div>
   );
+}
+
+/**
+ * Disclosure-style renderer for a `tool-<name>` UIMessage part.
+ *
+ * AI SDK v6 tool parts carry an internal `state` machine
+ * (`input-streaming` → `input-available` → `output-available` | `output-error`).
+ * Surfacing the raw state string ("output-available") to end users is noise —
+ * what they actually want is "what did the agent ask and what came back?".
+ *
+ * So the collapsed view is a clean chip: tool name + chevron, with a spinner
+ * while the call is still resolving. Clicking expands an inline console-style
+ * panel that shows the input args and output payload as pretty-printed JSON,
+ * the same affordance most agent UIs (Claude, ChatGPT, Cursor) ship.
+ */
+function ToolCallDisclosure({ part }: { part: UIMessage['parts'][number] }) {
+  const [open, setOpen] = useState(false);
+  // Tool parts in AI SDK v6 carry these fields at the part level; we narrow
+  // here rather than importing the union type because each tool gets a
+  // distinct generated discriminant.
+  const toolPart = part as unknown as {
+    type: string;
+    toolName?: string;
+    state?: 'input-streaming' | 'input-available' | 'output-available' | 'output-error';
+    input?: unknown;
+    output?: unknown;
+    errorText?: string;
+  };
+  const name = toolPart.toolName ?? part.type.replace('tool-', '');
+  const isRunning =
+    toolPart.state === 'input-streaming' || toolPart.state === 'input-available';
+  const hasError = toolPart.state === 'output-error';
+  const hasInput = toolPart.input !== undefined && toolPart.input !== null;
+  const hasOutput = toolPart.output !== undefined && toolPart.output !== null;
+  const hasDetails = hasInput || hasOutput || !!toolPart.errorText;
+
+  return (
+    <div className="my-2">
+      <button
+        type="button"
+        onClick={() => hasDetails && setOpen((o) => !o)}
+        disabled={!hasDetails}
+        className={cn(
+          'inline-flex items-center gap-1.5 text-xs rounded-md px-2 py-1 transition-colors',
+          hasError
+            ? 'bg-destructive/10 text-destructive hover:bg-destructive/15'
+            : 'bg-muted text-muted-foreground hover:bg-muted/70',
+          !hasDetails && 'cursor-default opacity-80',
+        )}
+        aria-expanded={open}
+      >
+        {isRunning ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <Wrench className="h-3 w-3" />
+        )}
+        <span className="font-mono">{name}</span>
+        {hasDetails && (
+          <ChevronDown
+            className={cn('h-3 w-3 transition-transform', open && 'rotate-180')}
+          />
+        )}
+      </button>
+      {open && hasDetails && (
+        <div className="mt-2 rounded-md border bg-muted/40 p-3 text-xs space-y-3 max-w-full">
+          {hasInput && (
+            <div>
+              <p className="text-muted-foreground font-medium mb-1 uppercase tracking-wider text-[10px]">
+                Input
+              </p>
+              <pre className="font-mono text-[11px] whitespace-pre-wrap break-words leading-relaxed text-foreground/90">
+                {safeStringify(toolPart.input)}
+              </pre>
+            </div>
+          )}
+          {hasOutput && (
+            <div>
+              <p className="text-muted-foreground font-medium mb-1 uppercase tracking-wider text-[10px]">
+                Output
+              </p>
+              <pre className="font-mono text-[11px] whitespace-pre-wrap break-words leading-relaxed text-foreground/90 max-h-80 overflow-y-auto">
+                {safeStringify(toolPart.output)}
+              </pre>
+            </div>
+          )}
+          {toolPart.errorText && (
+            <div>
+              <p className="text-destructive font-medium mb-1 uppercase tracking-wider text-[10px]">
+                Error
+              </p>
+              <pre className="font-mono text-[11px] whitespace-pre-wrap break-words leading-relaxed text-destructive">
+                {toolPart.errorText}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function safeStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
 }
 
 function EmptyState() {
