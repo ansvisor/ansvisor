@@ -24,20 +24,14 @@ export function useFeatureGate() {
     },
 
     withinLimit(
-      key: keyof Omit<
-        PlanLimits,
-        'features' | 'allowedScrapers' | 'allowedModels' | 'aiAgentTokenQuota'
-      >,
+      key: keyof Omit<PlanLimits, 'features' | 'allowedScrapers' | 'allowedModels'>,
       currentCount: number,
     ): boolean {
       return isWithinLimit(plan, key, currentCount);
     },
 
     getLimit(
-      key: keyof Omit<
-        PlanLimits,
-        'features' | 'allowedScrapers' | 'allowedModels' | 'aiAgentTokenQuota'
-      >,
+      key: keyof Omit<PlanLimits, 'features' | 'allowedScrapers' | 'allowedModels'>,
     ): number {
       return plan.limits[key];
     },

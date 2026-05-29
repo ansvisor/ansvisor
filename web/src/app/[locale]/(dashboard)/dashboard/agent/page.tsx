@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, type UIMessage } from 'ai';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
-import { Button } from '@/components/ui/button';
+import { Link } from '@/i18n/navigation';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Markdown } from '@/components/ui/markdown';
 import { cn } from '@/lib/utils';
 import {
@@ -16,6 +17,7 @@ import {
   Crown,
   Wrench,
   ChevronDown,
+  KeyRound,
 } from 'lucide-react';
 
 interface ConversationRow {
@@ -35,7 +37,7 @@ interface AgentMessageRow {
 }
 
 export default function AgentPage() {
-  const { canUse, requiredPlanFor } = useFeatureGate();
+  const { canUse, requiredPlanFor, isCloud } = useFeatureGate();
   const allowed = canUse('ai_agent');
 
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
@@ -45,10 +47,33 @@ export default function AgentPage() {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Plan gate — Growth+ on cloud, unrestricted on self-host (the feature
-  // flag handles both via the existing useFeatureGate hook).
+  // Plan gate — `ai_agent` is in every cloud plan post-BYOK, so this only
+  // bites if the org's plan was somehow stripped of the feature. Kept as
+  // a defensive check.
   if (!allowed) {
     return <PlanGate requiredPlan={requiredPlanFor('ai_agent')} />;
+  }
+
+  // BYOK gate — on cloud the real gate is "has the org saved an Anthropic
+  // key?". We probe the same endpoint Settings → Agent uses; if it's not
+  // configured, send the user to Settings instead of letting them type a
+  // message that would 403 on submit. Self-host bypasses (key is in env).
+  if (isCloud) {
+    return (
+      <KeyGatedAgentChat
+        conversations={conversations}
+        setConversations={setConversations}
+        activeId={activeId}
+        setActiveId={setActiveId}
+        initialMessages={initialMessages}
+        setInitialMessages={setInitialMessages}
+        hydrating={hydrating}
+        setHydrating={setHydrating}
+        input={input}
+        setInput={setInput}
+        messagesEndRef={messagesEndRef}
+      />
+    );
   }
 
   return (
@@ -428,8 +453,7 @@ function ToolCallDisclosure({ part }: { part: UIMessage['parts'][number] }) {
     errorText?: string;
   };
   const name = toolPart.toolName ?? part.type.replace('tool-', '');
-  const isRunning =
-    toolPart.state === 'input-streaming' || toolPart.state === 'input-available';
+  const isRunning = toolPart.state === 'input-streaming' || toolPart.state === 'input-available';
   const hasError = toolPart.state === 'output-error';
   const hasInput = toolPart.input !== undefined && toolPart.input !== null;
   const hasOutput = toolPart.output !== undefined && toolPart.output !== null;
@@ -450,16 +474,10 @@ function ToolCallDisclosure({ part }: { part: UIMessage['parts'][number] }) {
         )}
         aria-expanded={open}
       >
-        {isRunning ? (
-          <Loader2 className="h-3 w-3 animate-spin" />
-        ) : (
-          <Wrench className="h-3 w-3" />
-        )}
+        {isRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wrench className="h-3 w-3" />}
         <span className="font-mono">{name}</span>
         {hasDetails && (
-          <ChevronDown
-            className={cn('h-3 w-3 transition-transform', open && 'rotate-180')}
-          />
+          <ChevronDown className={cn('h-3 w-3 transition-transform', open && 'rotate-180')} />
         )}
       </button>
       {open && hasDetails && (
@@ -520,6 +538,71 @@ function EmptyState() {
           Grounded in your tracked data. Try <em>&ldquo;how is my brand doing?&rdquo;</em> or{' '}
           <em>&ldquo;who&apos;s gaining share of voice this month?&rdquo;</em>
         </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Cloud wrapper: probes /api/settings/anthropic-key once on mount and
+ * either renders the chat (key configured) or a Settings CTA (no key).
+ * Self-host renders AgentChat directly — its key check is environmental.
+ */
+function KeyGatedAgentChat(props: React.ComponentProps<typeof AgentChat>) {
+  const [status, setStatus] = useState<'loading' | 'configured' | 'missing'>('loading');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/settings/anthropic-key');
+        if (!res.ok) {
+          if (!cancelled) setStatus('missing');
+          return;
+        }
+        const body = (await res.json()) as { configured?: boolean };
+        if (!cancelled) setStatus(body.configured ? 'configured' : 'missing');
+      } catch {
+        if (!cancelled) setStatus('missing');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (status === 'loading') {
+    return (
+      <div className="flex h-[calc(100vh-4rem)] md:h-screen items-center justify-center -m-6 p-6">
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+  if (status === 'missing') {
+    return <KeyMissingState />;
+  }
+  return <AgentChat {...props} />;
+}
+
+function KeyMissingState() {
+  return (
+    <div className="flex h-[calc(100vh-4rem)] md:h-screen items-center justify-center -m-6 p-6">
+      <div className="text-center max-w-md">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary mb-4">
+          <KeyRound className="h-7 w-7" />
+        </div>
+        <h2 className="text-lg font-semibold">Add your Anthropic API key</h2>
+        <p className="text-sm text-muted-foreground mt-2">
+          The agent uses your own Anthropic key to call Claude directly — usage is billed to your
+          Anthropic account, not to Ansvisor. Paste a key in Settings to unlock the chat.
+        </p>
+        <Link
+          href="/dashboard/settings?tab=agent"
+          className={cn(buttonVariants({ variant: 'default' }), 'mt-5 gap-2')}
+        >
+          <KeyRound className="h-4 w-4" />
+          Go to Settings
+        </Link>
       </div>
     </div>
   );

@@ -35,12 +35,6 @@ export interface PlanLimits {
   allowedScrapers?: readonly string[];
   /** If set, only these model IDs are available. Undefined = all, [] = none. */
   allowedModels?: readonly string[];
-  /**
-   * Cap on combined prompt + completion tokens for the in-product AI agent
-   * per user, per calendar month. `undefined` = unlimited (self-host,
-   * enterprise). Has no effect when `ai_agent` is not in `features`.
-   */
-  aiAgentTokenQuota?: number;
 }
 
 export interface PlanPricing {
@@ -113,6 +107,11 @@ export const PLANS: Record<PlanId, Plan> = {
         'content_optimization',
         'custom_reports',
         'api_access',
+        // Cloud is BYOK across the board: the customer pastes their own
+        // Anthropic key in Settings → Agent and we just use it. Plan no
+        // longer gates the feature — only "did you paste a key?" does.
+        // Self-host gets the feature unconditionally via env.
+        'ai_agent',
       ],
     },
   },
@@ -143,11 +142,6 @@ export const PLANS: Record<PlanId, Plan> = {
         'api_access',
         'ai_agent',
       ],
-      // ~50k combined prompt + completion tokens per user per month.
-      // Claude Sonnet 4.6 averages ~750 tokens/turn for typical
-      // dashboard questions including tool I/O, so this is ~65 turns
-      // per user before they hit the quota wall.
-      aiAgentTokenQuota: 50000,
     },
   },
   enterprise: {
@@ -206,10 +200,7 @@ export function hasFeature(plan: Plan, feature: Feature): boolean {
 
 export function isWithinLimit(
   plan: Plan,
-  key: keyof Omit<
-    PlanLimits,
-    'features' | 'allowedScrapers' | 'allowedModels' | 'aiAgentTokenQuota'
-  >,
+  key: keyof Omit<PlanLimits, 'features' | 'allowedScrapers' | 'allowedModels'>,
   currentCount: number,
 ): boolean {
   const limit = plan.limits[key];

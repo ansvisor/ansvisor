@@ -16,8 +16,9 @@ import { usePlanContext } from '@/components/providers/plan-provider';
 import { BillingSection } from '@/components/settings/billing-section';
 import { TeamSection } from '@/components/settings/team-section';
 import { ApiKeysSection } from '@/components/settings/api-keys-section';
+import { AgentSection } from '@/components/settings/agent-section';
 
-type Section = 'account' | 'theme' | 'project' | 'team' | 'api-keys' | 'billing';
+type Section = 'account' | 'theme' | 'project' | 'team' | 'api-keys' | 'agent' | 'billing';
 
 export default function SettingsPage() {
   const t = useTranslations('settings');
@@ -26,9 +27,11 @@ export default function SettingsPage() {
   const { isCloud } = usePlanContext();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const [active, setActive] = useState<Section>(
-    tabParam === 'billing' && isCloud ? 'billing' : 'account',
-  );
+  const [active, setActive] = useState<Section>(() => {
+    if (tabParam === 'billing' && isCloud) return 'billing';
+    if (tabParam === 'agent' && isCloud) return 'agent';
+    return 'account';
+  });
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
 
@@ -53,6 +56,9 @@ export default function SettingsPage() {
     { id: 'project', label: t('project') },
     { id: 'team', label: t('team') },
     { id: 'api-keys', label: 'API Keys' },
+    // Agent BYOK is a cloud-only concern — self-host operators configure
+    // ANTHROPIC_API_KEY in their own env, no UI needed.
+    ...(isCloud ? [{ id: 'agent' as Section, label: 'Agent' }] : []),
     ...(isCloud ? [{ id: 'billing' as Section, label: t('billing') }] : []),
   ];
 
@@ -168,6 +174,9 @@ export default function SettingsPage() {
 
           {/* API Keys */}
           {active === 'api-keys' && <ApiKeysSection />}
+
+          {/* Agent (cloud BYOK) */}
+          {active === 'agent' && isCloud && <AgentSection />}
 
           {/* Billing */}
           {active === 'billing' && isCloud && <BillingSection />}

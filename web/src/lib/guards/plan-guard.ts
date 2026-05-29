@@ -56,10 +56,7 @@ export async function enforceFeature(organizationId: string, feature: Feature): 
 
 export async function enforceLimit(
   organizationId: string,
-  key: keyof Omit<
-    PlanLimits,
-    'features' | 'allowedScrapers' | 'allowedModels' | 'aiAgentTokenQuota'
-  >,
+  key: keyof Omit<PlanLimits, 'features' | 'allowedScrapers' | 'allowedModels'>,
   currentCount: number,
 ): Promise<void> {
   const plan = await getOrgPlan(organizationId);

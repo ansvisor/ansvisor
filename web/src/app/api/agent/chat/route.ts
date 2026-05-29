@@ -4,8 +4,9 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { resolveAgentAuth } from '@/lib/agent/auth';
 import { buildAgentTools } from '@/lib/agent/tools';
 import { AGENT_SYSTEM_PROMPT } from '@/lib/agent/system-prompt';
-import { AGENT_MODEL } from '@/lib/agent/model';
-import { checkAgentQuota, recordAgentTokenUsage } from '@/lib/agent/token-quota';
+import { buildAgentModel } from '@/lib/agent/model';
+import { resolveAnthropicKey } from '@/lib/agent/key';
+import { recordAgentTokenUsage } from '@/lib/agent/token-quota';
 import { getPlan, hasFeature, type PlanId } from '@/config/plans';
 
 // Streaming responses up to 5 min — agent loops can run multiple tool
@@ -63,7 +64,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
   }
 
-  // Plan + quota.
+  // Plan gate. On cloud the gate is intentionally loose — `ai_agent` is in
+  // every paid plan's feature list; the *real* gate is whether the org has
+  // pasted an Anthropic key in Settings → Agent (BYOK). Self-host bypasses
+  // both checks because the operator's env supplies everything.
   const { data: org } = await supabaseAdmin
     .from('organizations')
     .select('plan')
@@ -73,20 +77,24 @@ export async function POST(req: Request) {
   if (!hasFeature(plan, 'ai_agent')) {
     return NextResponse.json({ error: 'ai_agent is not enabled for this plan' }, { status: 403 });
   }
-  const quota = await checkAgentQuota(auth.userId, organizationId, org?.plan);
-  if (!quota.allowed) {
+
+  // BYOK gate. Cloud customers paste their Anthropic key in
+  // Settings → Agent and the agent uses *that* key — Ansvisor never pays
+  // for the customer's tokens. Missing key = 403 with a code the UI can
+  // intercept to render the "add your key" CTA instead of a generic error.
+  const anthropicKey = await resolveAnthropicKey(organizationId);
+  if (!anthropicKey) {
     return NextResponse.json(
       {
-        error: 'Monthly token quota reached',
-        usedTokens: quota.usedTokens,
-        quotaTokens: quota.quotaTokens,
+        error: 'Anthropic API key required',
+        code: 'missing_anthropic_key',
       },
-      { status: 429 },
+      { status: 403 },
     );
   }
 
   const result = streamText({
-    model: AGENT_MODEL,
+    model: buildAgentModel(anthropicKey),
     system: AGENT_SYSTEM_PROMPT,
     messages: await convertToModelMessages(messages),
     tools: buildAgentTools(auth),
