@@ -85,13 +85,29 @@ function AgentChat(props: {
     messagesEndRef,
   } = props;
 
+  // Ref mirrors activeId for prepareSendMessagesRequest. Reading the
+  // state directly from the transport closure gives us a stale snapshot —
+  // setActiveId is async, so a "+ new chat then immediately send" flow
+  // would post conversationId: null and the server replies 400. The ref
+  // updates synchronously when we change the active conversation.
+  const activeIdRef = useRef<string | null>(activeId);
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
+
   const { messages, sendMessage, status, setMessages, stop } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/agent/chat',
       // Always forward the active conversation id alongside the messages
-      // array — the server saves messages keyed off it.
+      // array — the server saves messages keyed off it. Caller can also
+      // pass body via sendMessage(message, { body }) to override the id
+      // synchronously (first-message-of-new-chat path uses this).
       prepareSendMessagesRequest: ({ messages, body }) => ({
-        body: { ...(body ?? {}), conversationId: activeId, messages },
+        body: {
+          conversationId: activeIdRef.current,
+          ...(body ?? {}),
+          messages,
+        },
       }),
     }),
   });
@@ -196,8 +212,13 @@ function AgentChat(props: {
     e.preventDefault();
     const text = input.trim();
     if (!text || status !== 'ready') return;
-    // No active conversation yet — spin one up before the first send.
-    if (!activeId) {
+
+    // Resolve the conversation id we'll send with this message. If no chat
+    // is selected, spin one up. Captured into a local so the sendMessage
+    // call below uses today's value (the ref + state update happen, but
+    // sendMessage's body argument is what the server actually reads).
+    let convId = activeId;
+    if (!convId) {
       const res = await fetch('/api/agent/conversations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -207,8 +228,10 @@ function AgentChat(props: {
       const { conversation } = (await res.json()) as { conversation: ConversationRow };
       setConversations((prev) => [conversation, ...prev]);
       setActiveId(conversation.id);
+      activeIdRef.current = conversation.id;
+      convId = conversation.id;
     }
-    sendMessage({ text });
+    sendMessage({ text }, { body: { conversationId: convId } });
     setInput('');
   }
 
