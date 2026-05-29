@@ -17,6 +17,7 @@
   },
   "nav": {
     "overview": "Overview",
+    "agent": "Agent",
     "insights": "Answer Engine Insights",
     "traffic": "AI Traffic Analytics",
     "prompts": "Prompts",

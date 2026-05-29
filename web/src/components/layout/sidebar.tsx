@@ -33,6 +33,7 @@ export function Sidebar() {
   const navKeyMap: Record<string, () => string> = {
     Overview: () => t('overview'),
     Brands: () => tBrands('title'),
+    Agent: () => t('agent'),
     'Answer Engine Insights': () => t('insights'),
     'AI Traffic Analytics': () => t('traffic'),
     Prompts: () => t('prompts'),

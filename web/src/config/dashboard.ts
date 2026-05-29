@@ -6,6 +6,7 @@ import {
   LineChart,
   Quote,
   Settings,
+  Sparkles,
   Tag,
   Users,
 } from 'lucide-react';
@@ -32,6 +33,12 @@ export const dashboardNav: NavGroup[] = [
         title: 'Brands',
         href: '/dashboard/brands',
         icon: Building2,
+      },
+      {
+        title: 'Agent',
+        href: '/dashboard/agent',
+        icon: Sparkles,
+        requiredFeature: 'ai_agent',
       },
     ],
   },
