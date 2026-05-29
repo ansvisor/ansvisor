@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { convertToModelMessages, streamText, type UIMessage } from 'ai';
+import { convertToModelMessages, stepCountIs, streamText, type UIMessage } from 'ai';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { resolveAgentAuth } from '@/lib/agent/auth';
 import { buildAgentTools } from '@/lib/agent/tools';
@@ -90,6 +90,15 @@ export async function POST(req: Request) {
     system: AGENT_SYSTEM_PROMPT,
     messages: await convertToModelMessages(messages),
     tools: buildAgentTools(auth),
+    // streamText is single-step by default in v6 — without an explicit
+    // stop condition the model fires a tool call and ends the turn before
+    // ever seeing the result. stepCountIs(N) re-runs the generation after
+    // each tool call so the agent can interpret what came back and either
+    // answer or call another tool. 20 is the same default ToolLoopAgent
+    // ships with — plenty of headroom for the typical "list_brands →
+    // get_visibility_summary → answer" chain without burning tokens
+    // forever on a pathological loop.
+    stopWhen: stepCountIs(20),
     onFinish: async ({ usage }) => {
       // Bill the turn. inputTokens / outputTokens are the counts from the
       // provider; default to 0 if a step finished without billable usage.
