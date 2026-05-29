@@ -11,6 +11,7 @@ const CLORO_API = 'https://api.cloro.dev';
 
 const SCRAPER_TASK_TYPES = {
   'chatgpt-web': 'CHATGPT',
+  'chatgpt-shopping': 'CHATGPT',
   'google-aio': 'GOOGLE',
   'google-aimode': 'AIMODE',
   'copilot-web': 'COPILOT',
@@ -53,6 +54,20 @@ function buildRequestBody(promptText, scraperId, region) {
     };
   }
 
+  if (scraperId === 'chatgpt-shopping') {
+    return {
+      prompt: promptText,
+      country,
+      include: {
+        html: false,
+        markdown: true,
+        rawResponse: false,
+        searchQueries: false,
+        shopping: true,
+      },
+    };
+  }
+
   return {
     prompt: promptText,
     country,
@@ -80,7 +95,7 @@ export function parseScraperResponse(result, scraperId) {
       endIndex: idx * 100 + 50,
     }));
 
-    return { text, citations, model: 'google-aio', shopping_cards: [] };
+    return { text, citations, model: 'google-aio', shopping_cards: [], inline_products: [] };
   }
 
   if (scraperId === 'google-aimode') {
@@ -93,15 +108,31 @@ export function parseScraperResponse(result, scraperId) {
       endIndex: idx * 100 + 50,
     }));
 
-    // AI Mode returns its product cards under camelCase `shoppingCards`
-    // (like Copilot — verified against the live response; not snake_case).
-    // Unwrap into the snake_case parsed key shared by all providers. Its
-    // separate `inlineProducts` array is a different surface, out of scope.
     return {
       text,
       citations,
       model: 'google-aimode',
       shopping_cards: aiMode.shoppingCards ?? [],
+      inline_products: [],
+    };
+  }
+
+  if (scraperId === 'chatgpt-shopping') {
+    const text = result.markdown || result.text || '';
+    const model = result.model || scraperId;
+    const citations = (result.sources || []).map((src, idx) => ({
+      url: src.url || '',
+      title: src.label || '',
+      startIndex: idx * 100,
+      endIndex: idx * 100 + 50,
+    }));
+
+    return {
+      text,
+      citations,
+      model,
+      shopping_cards: result.shoppingCards ?? [],
+      inline_products: result.inlineProducts ?? [],
     };
   }
 
@@ -118,21 +149,13 @@ export function parseScraperResponse(result, scraperId) {
     text,
     citations,
     model,
-    // Perplexity returns snake_case `shopping_cards`; Copilot returns
-    // camelCase `shoppingCards`. Both write into the same prompt_results
-    // .shopping_cards column raw, in their own provider shape — downstream
-    // branches on `platform` to interpret. Other providers have neither key.
     shopping_cards: result.shopping_cards ?? result.shoppingCards ?? [],
+    inline_products: [],
   };
 }
 
 /**
  * Submit a scraper task to the Cloro async queue.
- * @param {string} promptText
- * @param {string} scraperId
- * @param {string} [region]
- * @param {{ webhookUrl?: string }} [opts]
- * @returns {Promise<{ taskId: string, scraperId: string }>}
  */
 export async function submitScraperTask(promptText, scraperId, region, opts = {}) {
   const taskType = SCRAPER_TASK_TYPES[scraperId];
@@ -188,10 +211,6 @@ export async function submitScraperTask(promptText, scraperId, region, opts = {}
 
 /**
  * Poll a Cloro async task until it completes or fails.
- * @param {string} taskId
- * @param {string} scraperId - needed to parse the response correctly
- * @param {{ maxWaitMs?: number, pollIntervalMs?: number }} [opts]
- * @returns {Promise<{ text: string, citations: Array, model: string, shopping_cards: Array }>}
  */
 export async function pollScraperResult(taskId, scraperId, opts = {}) {
   const maxWait = opts.maxWaitMs ?? DEFAULT_MAX_WAIT_MS;
@@ -262,11 +281,6 @@ export async function pollScraperResult(taskId, scraperId, opts = {}) {
 
 /**
  * Run a prompt through a Cloro scraper (async submit + poll).
- * Drop-in replacement for the old sync runScraperPrompt.
- * @param {string} promptText
- * @param {string} scraperId
- * @param {string} [region]
- * @returns {Promise<{ text: string, citations: Array<{ url: string, title: string, startIndex: number, endIndex: number }>, model: string, shopping_cards: Array }>}
  */
 export async function runScraperPrompt(promptText, scraperId, region) {
   const { taskId } = await submitScraperTask(promptText, scraperId, region);
