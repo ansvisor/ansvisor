@@ -1,15 +1,5 @@
 /**
  * Centralized handler for a Cloro scraper result.
- *
- * Used by both:
- *  - The polling fallback path in tracking-worker.js
- *  - The /cloro/callback webhook endpoint
- *
- * Given a parsed Cloro AI response and the prompt/brand context, this:
- *   1. Counts brand mentions in the response text
- *   2. Runs sentiment analysis (only if brand was mentioned)
- *   3. Computes visibility metrics + competitor mentions via parseResponse
- *   4. Inserts a `prompt_results` row
  */
 
 import supabaseAdmin from '../config/supabase.js';
@@ -18,9 +8,8 @@ import { parseResponse, countBrandMentions } from './response-parser.js';
 
 /**
  * @param {object} args
- * @param {{ text: string, citations: Array, model: string, shopping_cards: Array }} args.aiResponse
- *   Already parsed via parseScraperResponse (cloro-scraper.js)
- * @param {string} args.scraperId           Cloro scraper id (e.g. 'chatgpt-web')
+ * @param {{ text: string, citations: Array, model: string, shopping_cards: Array, inline_products: Array }} args.aiResponse
+ * @param {string} args.scraperId
  * @param {string} args.promptId
  * @param {string} args.brandId
  * @param {string|null} args.region
@@ -64,6 +53,7 @@ export async function handleScraperResult({
     region: region ?? null,
     competitor_mentions: metrics.competitorMentions,
     shopping_cards: aiResponse.shopping_cards ?? [],
+    inline_products: aiResponse.inline_products ?? [],
   });
 
   if (error) {
