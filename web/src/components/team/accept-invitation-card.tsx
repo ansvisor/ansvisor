@@ -5,6 +5,8 @@ import { useRouter } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { acceptInvitation, type TeamRole } from '@/lib/actions/team';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Loader2, Users } from 'lucide-react';
 
@@ -39,12 +41,41 @@ export function AcceptInvitationCard({
   emailMatches,
 }: Props) {
   const router = useRouter();
+  const [fullName, setFullName] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isAccepting, setIsAccepting] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
 
-  async function handleAccept() {
+  async function handleAccept(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+
+    if (password.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
+    if (password !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+
     setIsAccepting(true);
     try {
+      const supabase = createClient();
+
+      // Order matters: set the password + name first so the moment the
+      // invitation row flips to "accepted" the credentials are already
+      // good. If updateUser fails we abort before mutating the invite —
+      // otherwise the user lands in the same broken state we just fixed
+      // (joined the org but can't sign back in).
+      const { error: updateErr } = await supabase.auth.updateUser({
+        password,
+        data: fullName.trim() ? { full_name: fullName.trim() } : undefined,
+      });
+      if (updateErr) {
+        throw new Error(updateErr.message);
+      }
+
       await acceptInvitation(token);
       toast.success(`Welcome to ${organizationName}!`);
       router.push('/dashboard');
@@ -109,16 +140,64 @@ export function AcceptInvitationCard({
           </Button>
         </div>
       ) : (
-        <Button onClick={handleAccept} disabled={isAccepting} className="mt-6 w-full">
-          {isAccepting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Joining...
-            </>
-          ) : (
-            `Accept and join ${organizationName}`
-          )}
-        </Button>
+        <form onSubmit={handleAccept} className="mt-6 space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="invite-fullname">Full name</Label>
+            <Input
+              id="invite-fullname"
+              type="text"
+              placeholder="Your name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              autoComplete="name"
+              disabled={isAccepting}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="invite-password">Set a password</Label>
+            <Input
+              id="invite-password"
+              type="password"
+              placeholder="At least 8 characters"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
+              required
+              minLength={8}
+              disabled={isAccepting}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="invite-confirm-password">Confirm password</Label>
+            <Input
+              id="invite-confirm-password"
+              type="password"
+              placeholder="Repeat the password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+              required
+              minLength={8}
+              disabled={isAccepting}
+            />
+          </div>
+
+          <Button type="submit" disabled={isAccepting} className="w-full">
+            {isAccepting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Joining...
+              </>
+            ) : (
+              `Accept and join ${organizationName}`
+            )}
+          </Button>
+          <p className="text-xs text-muted-foreground text-center">
+            You&apos;ll use this password the next time you sign in.
+          </p>
+        </form>
       )}
     </div>
   );

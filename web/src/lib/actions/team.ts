@@ -202,7 +202,15 @@ export async function inviteMember(email: string, role: TeamRole) {
 
   const token = randomBytes(32).toString('hex');
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const inviteLink = `${appUrl}/invite/${token}`;
+  // Route the invite mail through /auth/callback first so Supabase's
+  // ?code= ends up at a route that calls exchangeCodeForSession() before
+  // the user lands on /invite/<token>. Without this hop the invite page
+  // server-renders without a session, falls into its `if (!user)` branch,
+  // and ejects the user to /sign-up — where signUp() trips on the
+  // existing auth.users row, no password is actually set, and the user
+  // gets bounced to /sign-in with credentials that don't work.
+  const inviteAcceptPath = `/invite/${token}`;
+  const inviteLink = `${appUrl}/auth/callback?next=${encodeURIComponent(inviteAcceptPath)}`;
 
   const { data: invitation, error: insertError } = await supabaseAdmin
     .from('invitations')
