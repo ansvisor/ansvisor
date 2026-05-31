@@ -25,7 +25,13 @@ export function MobileNav() {
   const { activeBrandId } = useBrandStore();
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  // Hydration guard — see sidebar.tsx for the rationale; the two
+  // components mirror each other and can't share a hook without breaking
+  // their independent layout contexts.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   const logoSrc = mounted && resolvedTheme === 'dark' ? '/logo_dark.svg' : '/logo_light.svg';
 

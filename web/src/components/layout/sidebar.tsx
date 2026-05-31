@@ -26,7 +26,14 @@ export function Sidebar() {
   const { canUse, requiredPlanFor, isCloud } = useFeatureGate();
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  // Hydration guard: SSR can't know the resolved theme, so we render the
+  // light logo first and swap after mount. This is the canonical Next.js
+  // pattern for "render client-only content after hydration" — there's no
+  // useEffect-free version that avoids the hydration mismatch.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   const logoSrc = mounted && resolvedTheme === 'dark' ? '/logo_dark.svg' : '/logo_light.svg';
 
