@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-05-31
+
+### Added
+- In-product AI agent: chat panel grounded in the MCP read tools, available on every cloud plan via BYOK — paste your own Anthropic API key in Settings → Agent. Self-host uses `ANTHROPIC_API_KEY` from env (#120, #121)
+- Settings → Agent: org-level Anthropic API key management for cloud customers; AES-256-GCM encrypted at rest, only `last4` + saver metadata visible to org members, save/clear is admin-only (#121)
+- MCP: `generate_content_brief` tool that triggers the brief endpoint (#109)
+- MCP: `update_opportunity_status` tool for workflow transitions (#110)
+- MCP: `get_competitor_comparison` tool with share-of-voice (#116)
+- MCP: `list_citations` tool + REST endpoint (#117)
+- MCP: `get_visibility_trend` tool (visibility time-series) + REST endpoint (#118)
+
+### Changed
+- Insights: aggregate insights data in Postgres instead of pulling rows into Node — meaningful drops in p95 for orgs with large prompt-result tables (#114)
+- Repo: renamed from `aeohub/ansvisor` to `ansvisor/ansvisor`; all internal links + docs updated (#102)
+- Marketing: removed the in-app `/pricing` page; canonical pricing lives on `ansvisor.com/pricing`, and `/pricing` on the app redirects there (#119)
+
+### Fixed
+- Invite flow: clicks on invite emails now route through a new `/auth/confirm` route handler that does server-side `verifyOtp` and writes the session cookie before the user lands on the accept page. The previous flow ejected invitees to `/sign-up`, where Supabase's silent duplicate-signup obfuscation left them with no password set; the accept card now also asks for a password + full name before joining so the user can sign back in (#127, #129, #130)
+- Onboarding: align prompts to the selected plan's engine set on Stripe checkout success — Starter customers no longer see Growth-only platforms after upgrading via the onboarding flow (#111)
+- Billing: same alignment runs on every plan-change path (PATCH subscription, webhook, downgrade) so prompts stay consistent with the active plan regardless of which surface fired the change (#112)
+
 ## [0.1.1] - 2026-05-26
 
 ### Added
