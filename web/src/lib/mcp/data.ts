@@ -398,7 +398,7 @@ export async function listContentOpportunitiesFor(
       prompt_id: string | null;
       created_at: string | null;
       updated_at: string | null;
-      brief: any | null;
+      brief: Record<string, unknown> | null;
       prompts: Array<{ text: string }> | { text: string } | null;
     }> | null) ?? [];
 
@@ -431,8 +431,8 @@ export interface ContentOpportunityDetail {
   status: string;
   prompt_id: string | null;
   prompt_text: string | null;
-  source_data: Record<string, any> | null;
-  brief: Record<string, any> | null;
+  source_data: Record<string, unknown> | null;
+  brief: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
@@ -540,8 +540,8 @@ export async function getContentOpportunityFor(
     prompt_id: string | null;
     created_at: string | null;
     updated_at: string | null;
-    source_data: any | null;
-    brief: any | null;
+    source_data: Record<string, unknown> | null;
+    brief: Record<string, unknown> | null;
     prompts: Array<{ text: string }> | { text: string } | null;
   };
 

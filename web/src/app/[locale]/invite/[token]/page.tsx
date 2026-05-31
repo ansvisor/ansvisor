@@ -21,6 +21,7 @@ export default async function InviteAcceptPage({
     return <InvalidInvitation reason={invitation.status} />;
   }
 
+  // eslint-disable-next-line react-hooks/purity -- server component renders fresh per request; Date.now() is the correct expiration check, the purity rule targets client-side memoization which doesn't apply on the server.
   if (new Date(invitation.expiresAt).getTime() < Date.now()) {
     return <InvalidInvitation reason="expired" />;
   }
