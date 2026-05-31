@@ -33,14 +33,28 @@ Both `web/` and `server/` are independent packages with their own `package.json`
 
 ## Development Setup
 
-### 1. Clone the repository
+### 1. Fork the repository
+
+Click the **Fork** button on [github.com/ansvisor/ansvisor](https://github.com/ansvisor/ansvisor) to create your own copy.
+
+### 2. Clone your fork
+
+Replace `YOUR_USERNAME` with your GitHub username:
 
 ```bash
-git clone https://github.com/ansvisor/ansvisor.git
+git clone https://github.com/YOUR_USERNAME/ansvisor.git
 cd ansvisor
 ```
 
-### 2. Configure environment variables
+### 3. Add upstream remote (recommended)
+
+This allows you to sync with the main repo:
+
+```bash
+git remote add upstream https://github.com/ansvisor/ansvisor.git
+```
+
+### 4. Configure environment variables
 
 ```bash
 cp web/.env.example web/.env.local
@@ -52,7 +66,7 @@ Fill in at minimum:
 - **Supabase** URL and anon key (both `web/.env.local` and `server/.env`)
 - **At least one AI API key** in `server/.env` (e.g. `OPENAI_API_KEY`)
 
-### 3. Set up the database
+### 5. Set up the database
 
 Run the migration SQL to create all tables, indexes, RLS policies, and triggers in your Supabase project:
 
@@ -79,9 +93,9 @@ npx supabase db reset
 
 Sign in with **`demo@ansvisor.local` / `demo123`** to land on a populated dashboard.
 
-> **Heads-up:** the **Prompts** and **Content** pages fetch through the backend API (`server/`), not Supabase directly. Start *both* dev servers (step 5) — otherwise those two pages show a "Failed to load" toast even though the data is seeded. The seed runs only against a local Supabase via the CLI; hosted/production projects are never touched by it.
+> **Heads-up:** the **Prompts** and **Content** pages fetch through the backend API (`server/`), not Supabase directly. Start *both* dev servers (step 7) — otherwise those two pages show a "Failed to load" toast even though the data is seeded. The seed runs only against a local Supabase via the CLI; hosted/production projects are never touched by it.
 
-### 4. Install dependencies
+### 6. Install dependencies
 
 The web app uses **yarn**, the server uses **npm**:
 
@@ -90,7 +104,7 @@ cd web && yarn install
 cd ../server && npm install
 ```
 
-### 5. Start dev servers
+### 7. Start dev servers
 
 In separate terminals:
 
