@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, type UIMessage } from 'ai';
+import { AgentChart, type AgentChartSpec } from '@/components/agent/agent-chart';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { Link } from '@/i18n/navigation';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -416,6 +417,9 @@ function MessageBubble({ message }: { message: UIMessage }) {
               </Markdown>
             );
           }
+          if (part.type === 'tool-render_chart') {
+            return <ChartToolPart key={i} part={part} />;
+          }
           if (part.type.startsWith('tool-')) {
             return <ToolCallDisclosure key={i} part={part} />;
           }
@@ -524,6 +528,46 @@ function safeStringify(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+/**
+ * Renderer for the `tool-render_chart` part. Once the tool reaches the
+ * `output-available` state, the input args (which the tool echoes back as
+ * its output) describe a chart spec we can hand to {@link AgentChart}.
+ *
+ * While the call is in flight we show a tiny spinner stub — same shape as
+ * the generic tool disclosure, just without the JSON expansion since
+ * there's no payload to inspect on a chart call.
+ */
+function ChartToolPart({ part }: { part: UIMessage['parts'][number] }) {
+  const toolPart = part as unknown as {
+    type: string;
+    state?: 'input-streaming' | 'input-available' | 'output-available' | 'output-error';
+    input?: AgentChartSpec;
+    output?: AgentChartSpec;
+    errorText?: string;
+  };
+
+  if (toolPart.state === 'output-error') {
+    return (
+      <div className="my-2 rounded-md border bg-destructive/10 text-destructive px-2 py-1 text-xs">
+        <span className="font-mono">render_chart</span>
+        {toolPart.errorText && <span className="ml-2">{toolPart.errorText}</span>}
+      </div>
+    );
+  }
+
+  const spec = toolPart.output ?? toolPart.input;
+  if (!spec || !Array.isArray(spec.data) || spec.data.length === 0) {
+    return (
+      <div className="my-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground bg-muted rounded-md px-2 py-1">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        <span className="font-mono">render_chart</span>
+      </div>
+    );
+  }
+
+  return <AgentChart spec={spec} />;
 }
 
 function EmptyState() {

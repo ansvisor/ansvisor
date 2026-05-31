@@ -168,5 +168,51 @@ export function buildAgentTools(auth: McpAuthContext) {
           limit: args.limit,
         }),
     }),
+
+    render_chart: tool({
+      description:
+        'Render a chart inline in the chat. Call this AFTER you have the data from another tool (e.g. get_visibility_trend, get_competitor_comparison, list_citations) and you want to visualize it. Pick the chart type: "line" for time series (trends over dates), "bar" for cross-entity comparisons (brand vs competitors, source-type breakdown), "pie" for share-of-X distributions. Pass the data array straight from the previous tool result — never invent or reformat numbers. The tool just echoes the spec back; the UI renders the chart.',
+      inputSchema: z.object({
+        type: z
+          .enum(['line', 'bar', 'pie'])
+          .describe('line = time series, bar = cross-entity comparison, pie = share distribution'),
+        title: z
+          .string()
+          .max(120)
+          .optional()
+          .describe('Optional short title shown above the chart'),
+        data: z
+          .array(z.record(z.string(), z.union([z.string(), z.number()])))
+          .min(1)
+          .max(200)
+          .describe('Array of objects. Each row is one point/bar/slice. Max 200 rows.'),
+        xKey: z
+          .string()
+          .optional()
+          .describe(
+            'For line / bar: the key on each row that holds the x-axis label (e.g. "date" or "competitor").',
+          ),
+        series: z
+          .array(
+            z.object({
+              key: z.string().describe('Key on each row that holds this series value.'),
+              label: z.string().describe('Human-readable name shown in legend / tooltip.'),
+              color: z.string().optional().describe('Optional hex / CSS color override.'),
+            }),
+          )
+          .max(5)
+          .optional()
+          .describe('For line / bar: one entry per measured series. Up to 5.'),
+        valueKey: z
+          .string()
+          .optional()
+          .describe('For pie: the key on each row that holds the numeric slice value.'),
+        labelKey: z
+          .string()
+          .optional()
+          .describe('For pie: the key on each row that holds the slice label.'),
+      }),
+      execute: async (args) => args,
+    }),
   };
 }
