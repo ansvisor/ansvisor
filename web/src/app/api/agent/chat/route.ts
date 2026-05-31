@@ -3,7 +3,7 @@ import { convertToModelMessages, stepCountIs, streamText, type UIMessage } from 
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { resolveAgentAuth } from '@/lib/agent/auth';
 import { buildAgentTools } from '@/lib/agent/tools';
-import { AGENT_SYSTEM_PROMPT } from '@/lib/agent/system-prompt';
+import { buildAgentSystemPrompt } from '@/lib/agent/system-prompt';
 import { buildAgentModel } from '@/lib/agent/model';
 import { resolveAnthropicKey } from '@/lib/agent/key';
 import { recordAgentTokenUsage } from '@/lib/agent/token-quota';
@@ -95,7 +95,7 @@ export async function POST(req: Request) {
 
   const result = streamText({
     model: buildAgentModel(anthropicKey),
-    system: AGENT_SYSTEM_PROMPT,
+    system: buildAgentSystemPrompt(new Date()),
     messages: await convertToModelMessages(messages),
     tools: buildAgentTools(auth),
     // streamText is single-step by default in v6 — without an explicit
