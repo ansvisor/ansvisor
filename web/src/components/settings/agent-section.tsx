@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2, Sparkles, Trash2, CheckCircle2 } from 'lucide-react';
+import { Loader2, Lock, Sparkles, Trash2, CheckCircle2 } from 'lucide-react';
+import { useUserRole } from '@/hooks/use-user-role';
 
 interface KeyState {
   configured: boolean;
@@ -43,6 +44,7 @@ export function AgentSection() {
   const [input, setInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const { canAdmin } = useUserRole();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -152,55 +154,76 @@ export function AgentSection() {
           </p>
         )}
 
-        <div className="space-y-2">
-          <Label htmlFor="anthropic-key">{configured ? 'Replace key' : 'Anthropic API key'}</Label>
-          <div className="flex gap-2">
-            <Input
-              id="anthropic-key"
-              type="password"
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="sk-ant-…"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              disabled={saving}
-              className="font-mono"
-            />
-            <Button onClick={handleSave} disabled={saving || !input.trim()}>
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isReplacing ? 'Replace' : 'Save'}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Get a key from{' '}
-            <a
-              href="https://console.anthropic.com/settings/keys"
-              target="_blank"
-              rel="noreferrer"
-              className="underline"
-            >
-              console.anthropic.com
-            </a>
-            . The key is encrypted at rest; Ansvisor support cannot read it.
-          </p>
-        </div>
+        {canAdmin ? (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="anthropic-key">
+                {configured ? 'Replace key' : 'Anthropic API key'}
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="anthropic-key"
+                  type="password"
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="sk-ant-…"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  disabled={saving}
+                  className="font-mono"
+                />
+                <Button onClick={handleSave} disabled={saving || !input.trim()}>
+                  {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isReplacing ? 'Replace' : 'Save'}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Get a key from{' '}
+                <a
+                  href="https://console.anthropic.com/settings/keys"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline"
+                >
+                  console.anthropic.com
+                </a>
+                . The key is encrypted at rest; Ansvisor support cannot read it.
+              </p>
+            </div>
 
-        {configured && (
-          <div className="pt-2 border-t">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleClear}
-              disabled={clearing}
-              className="text-destructive hover:text-destructive"
-            >
-              {clearing ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="mr-2 h-4 w-4" />
-              )}
-              Remove key
-            </Button>
+            {configured && (
+              <div className="pt-2 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClear}
+                  disabled={clearing}
+                  className="text-destructive hover:text-destructive"
+                >
+                  {clearing ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-2 h-4 w-4" />
+                  )}
+                  Remove key
+                </Button>
+              </div>
+            )}
+          </>
+        ) : (
+          // Server-side, `/api/settings/anthropic-key` PUT/DELETE already
+          // refuses non-admin role with a 403. The form here used to render
+          // anyway and any click ended in an unhelpful toast — replace it
+          // with an explicit read-only message so non-admins know why.
+          <div className="flex items-start gap-3 rounded-md border bg-muted/40 p-3 text-sm">
+            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <div>
+              <p className="font-medium">Admin-only setting</p>
+              <p className="mt-1 text-muted-foreground">
+                Only org admins can add, replace, or remove the Anthropic API key. Ask an admin if
+                you need it changed.
+              </p>
+            </div>
           </div>
         )}
       </CardContent>
