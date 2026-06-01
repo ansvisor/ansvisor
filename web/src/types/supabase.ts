@@ -562,6 +562,87 @@ export type Database = {
           },
         ];
       };
+      prompt_result_shopping_cards: {
+        Row: {
+          brand_id: string;
+          created_at: string;
+          id: string;
+          image_url: string | null;
+          matched_brand_id: string | null;
+          matched_brand_role: string;
+          merchant_domain: string | null;
+          merchant_url: string | null;
+          platform: string;
+          position: number;
+          price_amount: number | null;
+          price_currency: string | null;
+          product_brand: string | null;
+          product_title: string | null;
+          prompt_result_id: string;
+          rating: number | null;
+          raw: Json;
+          region: string | null;
+          review_count: number | null;
+        };
+        Insert: {
+          brand_id: string;
+          created_at?: string;
+          id?: string;
+          image_url?: string | null;
+          matched_brand_id?: string | null;
+          matched_brand_role?: string;
+          merchant_domain?: string | null;
+          merchant_url?: string | null;
+          platform: string;
+          position: number;
+          price_amount?: number | null;
+          price_currency?: string | null;
+          product_brand?: string | null;
+          product_title?: string | null;
+          prompt_result_id: string;
+          rating?: number | null;
+          raw: Json;
+          region?: string | null;
+          review_count?: number | null;
+        };
+        Update: {
+          brand_id?: string;
+          created_at?: string;
+          id?: string;
+          image_url?: string | null;
+          matched_brand_id?: string | null;
+          matched_brand_role?: string;
+          merchant_domain?: string | null;
+          merchant_url?: string | null;
+          platform?: string;
+          position?: number;
+          price_amount?: number | null;
+          price_currency?: string | null;
+          product_brand?: string | null;
+          product_title?: string | null;
+          prompt_result_id?: string;
+          rating?: number | null;
+          raw?: Json;
+          region?: string | null;
+          review_count?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'prompt_result_shopping_cards_brand_id_fkey';
+            columns: ['brand_id'];
+            isOneToOne: false;
+            referencedRelation: 'brands';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'prompt_result_shopping_cards_prompt_result_id_fkey';
+            columns: ['prompt_result_id'];
+            isOneToOne: false;
+            referencedRelation: 'prompt_results';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       prompt_results: {
         Row: {
           brand_id: string;

@@ -6,6 +6,7 @@ import {
   LineChart,
   Quote,
   Settings,
+  ShoppingBag,
   Sparkles,
   Tag,
   Users,
@@ -65,6 +66,12 @@ export const dashboardNav: NavGroup[] = [
         title: 'Citations',
         href: '/dashboard/citations',
         icon: Quote,
+      },
+      {
+        title: 'Shopping',
+        href: '/dashboard/shopping',
+        icon: ShoppingBag,
+        requiredFeature: 'shopping_analytics',
       },
       {
         title: 'AI Traffic Analytics',

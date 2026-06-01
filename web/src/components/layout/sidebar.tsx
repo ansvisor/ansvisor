@@ -48,6 +48,7 @@ export function Sidebar() {
     'Content Optimization': () => t('content'),
     Competitors: () => t('competitors'),
     Citations: () => t('citations'),
+    Shopping: () => t('shopping'),
     Reports: () => t('reports'),
     Settings: () => t('settings'),
   };

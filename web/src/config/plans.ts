@@ -15,6 +15,11 @@ export const FEATURES = [
   // cloud by plan; self-host gets it unconditionally because the
   // underlying tool calls run against the user's own infrastructure.
   'ai_agent',
+  // Shopping analytics — the Shopping dashboard page (cards from
+  // Perplexity / AI Mode / Copilot, your products vs competitors,
+  // merchant breakdown). Free / Starter get the headline KPI only;
+  // Growth+ and self-host get the full set of tabs.
+  'shopping_analytics',
 ] as const;
 
 export type Feature = (typeof FEATURES)[number];
@@ -76,6 +81,7 @@ export const PLANS: Record<PlanId, Plan> = {
         'custom_reports',
         'api_access',
         'ai_agent',
+        'shopping_analytics',
       ],
       // Self-host runs against the operator's own infrastructure / API
       // keys — no platform quota to enforce.
@@ -141,6 +147,7 @@ export const PLANS: Record<PlanId, Plan> = {
         'custom_reports',
         'api_access',
         'ai_agent',
+        'shopping_analytics',
       ],
     },
   },
@@ -171,6 +178,7 @@ export const PLANS: Record<PlanId, Plan> = {
         'white_label',
         'sso_saml',
         'ai_agent',
+        'shopping_analytics',
       ],
       // Enterprise — no platform quota; usage governed by contract.
     },

@@ -25,6 +25,7 @@
     "content": "Content Optimization",
     "competitors": "Competitors",
     "citations": "Citations",
+    "shopping": "Shopping",
     "reports": "Reports",
     "settings": "Settings"
   },
@@ -270,6 +271,29 @@
     "competitorsOnly": "Competitors only",
     "noBrandTitle": "No brand selected",
     "noBrandDescription": "Select or create a brand to see the citations AI platforms use when answering about it."
+  },
+  "shopping": {
+    "title": "Shopping",
+    "description": "Product cards AI engines surface — your products versus the competitive set.",
+    "kpiCardRate": "Shopping card rate",
+    "kpiCardRateSub": "Tracked prompts that returned ≥1 card",
+    "kpiOwnProducts": "Your products surfaced",
+    "kpiOwnProductsSub": "Cards matched to your brand",
+    "kpiSov": "Shopping share of voice",
+    "kpiSovSub": "Your cards ÷ all cards in card-bearing prompts",
+    "kpiTopMerchant": "Top merchant for your products",
+    "kpiTopMerchantSub": "Most frequent merchant domain",
+    "platformBreakdownTitle": "Card rate by platform",
+    "trendTitle": "Your shopping presence — last 30 days",
+    "filterRegion": "Region",
+    "filterPlatform": "Platform",
+    "filterDateRange": "Date range",
+    "noBrandTitle": "No brand selected",
+    "noBrandDescription": "Select or create a brand to see shopping card analytics for it.",
+    "emptyTitle": "No shopping cards yet",
+    "emptyDescription": "Perplexity, Google AI Mode, and Microsoft Copilot return shopping cards on commercial-intent prompts (\"best running shoes for marathon training\"). Once tracking runs against a card-eligible prompt, results show up here.",
+    "lockedTitle": "Upgrade for full shopping analytics",
+    "lockedDescription": "Free and Starter plans see the shopping card rate. Growth unlocks the My Products tab, competitor breakdown, card-eligible prompts, and merchant analytics."
   },
   "reports": {
     "title": "Reports",
