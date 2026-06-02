@@ -275,7 +275,13 @@ function MemberRow({
           disabled={pendingRole !== null}
         >
           <SelectTrigger size="sm" className="w-36">
-            {pendingRole ? <Loader2 className="h-3 w-3 animate-spin" /> : <SelectValue />}
+            {pendingRole ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <SelectValue>
+                {(value) => (value ? roleLabel(value as TeamRole) : 'Select role')}
+              </SelectValue>
+            )}
           </SelectTrigger>
           <SelectContent>
             {ROLE_OPTIONS.map((opt) => (
@@ -504,7 +510,9 @@ function InviteDialog({ canInvite, onInvited }: { canInvite: boolean; onInvited:
                 disabled={submitting}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue>
+                    {(value) => (value ? roleLabel(value as TeamRole) : 'Select role')}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {ROLE_OPTIONS.map((opt) => (
