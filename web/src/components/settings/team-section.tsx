@@ -270,6 +270,7 @@ function MemberRow({
 
       {canEdit ? (
         <Select
+          items={ROLE_OPTIONS}
           value={member.role}
           onValueChange={(v) => handleRoleChange(v as TeamRole)}
           disabled={pendingRole !== null}
@@ -499,6 +500,7 @@ function InviteDialog({ canInvite, onInvited }: { canInvite: boolean; onInvited:
             <div className="space-y-2">
               <Label htmlFor="invite-role">Role</Label>
               <Select
+                items={ROLE_OPTIONS}
                 value={role}
                 onValueChange={(v) => setRole(v as TeamRole)}
                 disabled={submitting}
