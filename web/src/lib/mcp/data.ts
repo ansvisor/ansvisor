@@ -1189,3 +1189,102 @@ export async function getVisibilityTrendFor(
 
   return { granularity, buckets };
 }
+
+export interface AiTrafficParams {
+  brandId: string;
+  from?: string;
+  to?: string;
+}
+
+export interface AiTrafficOutput {
+  total_visits: number;
+  platform_breakdown: Array<{
+    platform: string;
+    visits: number;
+  }>;
+  top_pages: Array<{
+    url: string;
+    visits: number;
+  }>;
+  country_breakdown: Array<{
+    country: string;
+    visits: number;
+  }>;
+}
+
+/**
+ * Returns AI-referral breakdown (platform / pages / country) for the brand/range.
+ * Enforces organization ownership.
+ */
+export async function getAiTrafficFor(
+  auth: McpAuthContext,
+  params: AiTrafficParams,
+): Promise<AiTrafficOutput | null> {
+  if (!auth.organizationId) return null;
+
+  // Ownership check
+  const { data: brand } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('id', params.brandId)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  if (!brand) return null;
+
+  let query = supabaseAdmin
+    .from('ai_traffic_logs')
+    .select('source_platform, url, country')
+    .eq('brand_id', params.brandId);
+
+  if (params.from) query = query.gte('created_at', params.from);
+  const expandedDateTo = expandDateToEndOfDay(params.to);
+  if (expandedDateTo) query = query.lte('created_at', expandedDateTo);
+
+  const { data: rows, error } = await query;
+  if (error) throw new Error(error.message);
+
+  const rawRows = (rows as Array<{ source_platform: string | null; url: string; country: string | null }> | null) ?? [];
+
+  // Platform breakdown
+  const platformMap = new Map<string, number>();
+  for (const r of rawRows) {
+    const p = r.source_platform || 'unknown';
+    platformMap.set(p, (platformMap.get(p) ?? 0) + 1);
+  }
+  const platform_breakdown = Array.from(platformMap.entries())
+    .map(([platform, visits]) => ({ platform, visits }))
+    .sort((a, b) => b.visits - a.visits);
+
+  // Top pages
+  const pageMap = new Map<string, number>();
+  for (const r of rawRows) {
+    const url = r.url;
+    try {
+      const path = new URL(url).pathname;
+      pageMap.set(path, (pageMap.get(path) ?? 0) + 1);
+    } catch {
+      pageMap.set(url, (pageMap.get(url) ?? 0) + 1);
+    }
+  }
+  const top_pages = Array.from(pageMap.entries())
+    .map(([url, visits]) => ({ url, visits }))
+    .sort((a, b) => b.visits - a.visits)
+    .slice(0, 10);
+
+  // Country breakdown
+  const countryMap = new Map<string, number>();
+  for (const r of rawRows) {
+    const c = r.country || 'unknown';
+    countryMap.set(c, (countryMap.get(c) ?? 0) + 1);
+  }
+  const country_breakdown = Array.from(countryMap.entries())
+    .map(([country, visits]) => ({ country, visits }))
+    .sort((a, b) => b.visits - a.visits);
+
+  return {
+    total_visits: rawRows.length,
+    platform_breakdown,
+    top_pages,
+    country_breakdown,
+  };
+}

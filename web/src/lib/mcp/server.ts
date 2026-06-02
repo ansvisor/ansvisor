@@ -15,6 +15,7 @@ import {
   listPromptsFor,
   listTopicsFor,
   updateOpportunityStatusFor,
+  getAiTrafficFor,
 } from './data';
 
 /**
@@ -24,6 +25,8 @@ import {
  * `auth` context. The Streamable HTTP route uses this in stateless mode, so
  * connect/run/discard per request — no shared state.
  */
+const relaxedUuid = z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/, 'Invalid UUID format');
+
 export function createMcpServer(auth: McpAuthContext): McpServer {
   const server = new McpServer({
     name: 'ansvisor',
@@ -51,7 +54,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         'Get aggregate visibility metrics for a brand over an optional date range and filter. Returns result count, average visibility score (0-100), total mentions, total citations, and the top 5 competitors by mention count. Use this for "how is my brand doing" / "what changed" style questions.',
       inputSchema: {
-        brand_id: z.string().uuid().describe('Brand UUID, from list_brands.'),
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         date_from: z
           .string()
           .optional()
@@ -92,7 +95,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         'List topics for a brand, each with the number of prompts attached to it. Use this to audit prompt coverage ("are any topics empty / under-represented?") or before drilling into prompts for a specific theme. Topic-less prompts are not counted here — call list_prompts without a topic filter to see them.',
       inputSchema: {
-        brand_id: z.string().uuid().describe('Brand UUID, from list_brands.'),
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
       },
     },
     async (args) => {
@@ -115,10 +118,8 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         'List the prompts tracked for a brand, optionally filtered by topic or active status. Returns each prompt with its text, topic, platforms, models, regions, and active flag. Use this when the user asks what is being tracked, wants to drill into a specific topic, or wants to spot inactive / mis-targeted prompts.',
       inputSchema: {
-        brand_id: z.string().uuid().describe('Brand UUID, from list_brands.'),
-        topic_id: z
-          .string()
-          .uuid()
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        topic_id: relaxedUuid
           .optional()
           .describe('Optional topic UUID (from list_topics) to filter to one topic.'),
         is_active: z
@@ -159,7 +160,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         'List content opportunities / gaps for a brand, showing which prompts represent the highest-impact areas where the brand is currently losing visibility. Sorts by opportunity score descending by default. Use this to audit open gaps, see what content needs to be written, or list open strategy priorities.',
       inputSchema: {
-        brand_id: z.string().uuid().describe('Brand UUID, from list_brands.'),
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         status: z
           .enum(['new', 'sent', 'in_progress', 'done', 'dismissed'])
           .optional()
@@ -209,9 +210,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         'Get full details of a specific content opportunity, including raw AI visibility gap metrics, intent, competitor references, and the generated content brief if one already exists. Use this when the user picks a specific opportunity from the list and wants to inspect it further or start writing.',
       inputSchema: {
-        opportunity_id: z
-          .string()
-          .uuid()
+        opportunity_id: relaxedUuid
           .describe('Content opportunity UUID, from list_content_opportunities.'),
       },
     },
@@ -235,9 +234,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         'Generate a fresh AI-powered content brief for a specific content opportunity. WARNING: this triggers an LLM call (cost + latency) and ALWAYS re-generates, overwriting any existing brief on the opportunity. Use only after list_content_opportunities + get_content_opportunity and only when the user has explicitly asked to generate or refresh a brief for a specific opportunity — never as part of exploratory queries. To read an existing brief without an LLM call, use get_content_opportunity instead.',
       inputSchema: {
-        opportunity_id: z
-          .string()
-          .uuid()
+        opportunity_id: relaxedUuid
           .describe('Content opportunity UUID, from list_content_opportunities.'),
       },
     },
@@ -261,9 +258,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         'Move a content opportunity between workflow states. Valid statuses are: "new" (just generated), "sent" (delivered to a CMS / writer via webhook), "in_progress" (someone is actively writing), "done" (published), "dismissed" (intentionally skipped). Use this to close the loop on the content backlog from inside an MCP conversation — e.g. "mark that opportunity as in_progress" once the user starts writing, or "dismiss this one, we already cover it." This is a write — only fire on explicit user intent for a specific opportunity, never as part of an exploratory query.',
       inputSchema: {
-        opportunity_id: z
-          .string()
-          .uuid()
+        opportunity_id: relaxedUuid
           .describe('Content opportunity UUID, from list_content_opportunities.'),
         status: z
           .enum(CONTENT_OPPORTUNITY_STATUSES)
@@ -290,7 +285,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         'Get a brand\'s competitor benchmark and share of voice for a window. Returns the brand and every tracked competitor with avg visibility score (0-100), total mentions, total citations, and how many tracked prompt results each appeared in. Also returns overall share-of-voice as a percentage (brand mentions / (brand + competitor mentions)) and the same split per (model_used, platform). Use this for "how do I compare to my competitors?" or "who is gaining share of voice?" style questions. This is a snapshot for the given window — call again with an earlier window to compute a delta.',
       inputSchema: {
-        brand_id: z.string().uuid().describe('Brand UUID, from list_brands.'),
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         date_from: z
           .string()
           .optional()
@@ -303,9 +298,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
             'Optional model slug filter, or comma-separated list of slugs to filter a provider family.',
           ),
         region: z.string().optional().describe('Optional region code filter (e.g. "US", "TR").'),
-        topic_id: z
-          .string()
-          .uuid()
+        topic_id: relaxedUuid
           .optional()
           .describe('Optional topic UUID (from list_topics) to restrict to one topic.'),
       },
@@ -337,7 +330,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         'List the URLs and domains AI engines cite alongside a brand, classified by source type (news / review / owned / social / forum / competitor / you). Returns totals, a source-type breakdown, and the top cited domains + URLs (each with citation count, results citing, usage %, and article-type guess where available). Use this for "which sources cite me?", "which competitor sites get pulled?", or "what kinds of pages does AI cite?" questions. Snapshot for the given window — call again with an earlier window to compute a delta.',
       inputSchema: {
-        brand_id: z.string().uuid().describe('Brand UUID, from list_brands.'),
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         date_from: z
           .string()
           .optional()
@@ -350,9 +343,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
             'Optional model slug filter, or comma-separated list of slugs to filter a provider family.',
           ),
         region: z.string().optional().describe('Optional region code filter (e.g. "US", "TR").'),
-        topic_id: z
-          .string()
-          .uuid()
+        topic_id: relaxedUuid
           .optional()
           .describe('Optional topic UUID (from list_topics) to restrict to one topic.'),
         limit: z
@@ -392,7 +383,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         'Get a brand\'s visibility over time for a date range, bucketed by day or week. Returns one bucket per period with result_count, avg_visibility_score (0-100), total_mentions, total_citations, and avg_competitor_score (mean of competitor visibility scores from the same period, or null if no competitors were mentioned). Use this for "how has my visibility changed?" trend questions and to render brand-vs-competitor line charts. Complements get_visibility_summary, which is a single-window snapshot.',
       inputSchema: {
-        brand_id: z.string().uuid().describe('Brand UUID, from list_brands.'),
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         date_from: z
           .string()
           .optional()
@@ -409,9 +400,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
             'Optional model slug filter, or comma-separated list of slugs to filter a provider family.',
           ),
         region: z.string().optional().describe('Optional region code filter (e.g. "US", "TR").'),
-        topic_id: z
-          .string()
-          .uuid()
+        topic_id: relaxedUuid
           .optional()
           .describe('Optional topic UUID (from list_topics) to restrict to one topic.'),
       },
@@ -425,6 +414,38 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         region: args.region,
         topicId: args.topic_id,
         granularity: args.granularity,
+      });
+      if (!result) {
+        return {
+          content: [{ type: 'text', text: 'Brand not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'get_ai_traffic',
+    {
+      description:
+        'Get AI-referral traffic analytics for a brand over an optional date range. Returns total visits, platform breakdown (visits per AI engine), top landing pages, and country segmentation. Use this to answer questions about traffic referred by ChatGPT, Claude, Perplexity, Gemini, Copilot, etc.',
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        date_from: z
+          .string()
+          .optional()
+          .describe('Optional ISO timestamp (inclusive) lower bound, e.g. 2026-05-01T00:00:00Z.'),
+        date_to: z.string().optional().describe('Optional ISO timestamp (inclusive) upper bound.'),
+      },
+    },
+    async (args) => {
+      const result = await getAiTrafficFor(auth, {
+        brandId: args.brand_id,
+        from: args.date_from,
+        to: args.date_to,
       });
       if (!result) {
         return {
