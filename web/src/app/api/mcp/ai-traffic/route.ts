@@ -15,8 +15,8 @@ export async function GET(req: Request) {
   try {
     const traffic = await getAiTrafficFor(auth, {
       brandId,
-      from: url.searchParams.get('date_from') ?? undefined,
-      to: url.searchParams.get('date_to') ?? undefined,
+      dateFrom: url.searchParams.get('date_from') ?? undefined,
+      dateTo: url.searchParams.get('date_to') ?? undefined,
     });
 
     if (!traffic) {

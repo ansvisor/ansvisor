@@ -723,9 +723,9 @@ export async function getCompetitorComparisonFor(
 
   const p_models = params.model
     ? params.model
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
     : null;
 
   const rpcArgs = {
@@ -1157,9 +1157,9 @@ export async function getVisibilityTrendFor(
 
   const p_models = params.model
     ? params.model
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
     : null;
 
   const granularity: VisibilityTrendGranularity = params.granularity ?? 'day';
@@ -1192,8 +1192,8 @@ export async function getVisibilityTrendFor(
 
 export interface AiTrafficParams {
   brandId: string;
-  from?: string;
-  to?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export interface AiTrafficOutput {
@@ -1236,14 +1236,19 @@ export async function getAiTrafficFor(
     .select('source_platform, url, country')
     .eq('brand_id', params.brandId);
 
-  if (params.from) query = query.gte('created_at', params.from);
-  const expandedDateTo = expandDateToEndOfDay(params.to);
+  if (params.dateFrom) query = query.gte('created_at', params.dateFrom);
+  const expandedDateTo = expandDateToEndOfDay(params.dateTo);
   if (expandedDateTo) query = query.lte('created_at', expandedDateTo);
 
   const { data: rows, error } = await query;
   if (error) throw new Error(error.message);
 
-  const rawRows = (rows as Array<{ source_platform: string | null; url: string; country: string | null }> | null) ?? [];
+  const rawRows =
+    (rows as Array<{
+      source_platform: string | null;
+      url: string;
+      country: string | null;
+    }> | null) ?? [];
 
   // Platform breakdown
   const platformMap = new Map<string, number>();

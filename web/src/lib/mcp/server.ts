@@ -25,7 +25,12 @@ import {
  * `auth` context. The Streamable HTTP route uses this in stateless mode, so
  * connect/run/discard per request — no shared state.
  */
-const relaxedUuid = z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/, 'Invalid UUID format');
+const relaxedUuid = z
+  .string()
+  .regex(
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+    'Invalid UUID format',
+  );
 
 export function createMcpServer(auth: McpAuthContext): McpServer {
   const server = new McpServer({
@@ -210,8 +215,9 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         'Get full details of a specific content opportunity, including raw AI visibility gap metrics, intent, competitor references, and the generated content brief if one already exists. Use this when the user picks a specific opportunity from the list and wants to inspect it further or start writing.',
       inputSchema: {
-        opportunity_id: relaxedUuid
-          .describe('Content opportunity UUID, from list_content_opportunities.'),
+        opportunity_id: relaxedUuid.describe(
+          'Content opportunity UUID, from list_content_opportunities.',
+        ),
       },
     },
     async (args) => {
@@ -234,8 +240,9 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         'Generate a fresh AI-powered content brief for a specific content opportunity. WARNING: this triggers an LLM call (cost + latency) and ALWAYS re-generates, overwriting any existing brief on the opportunity. Use only after list_content_opportunities + get_content_opportunity and only when the user has explicitly asked to generate or refresh a brief for a specific opportunity — never as part of exploratory queries. To read an existing brief without an LLM call, use get_content_opportunity instead.',
       inputSchema: {
-        opportunity_id: relaxedUuid
-          .describe('Content opportunity UUID, from list_content_opportunities.'),
+        opportunity_id: relaxedUuid.describe(
+          'Content opportunity UUID, from list_content_opportunities.',
+        ),
       },
     },
     async (args) => {
@@ -258,8 +265,9 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         'Move a content opportunity between workflow states. Valid statuses are: "new" (just generated), "sent" (delivered to a CMS / writer via webhook), "in_progress" (someone is actively writing), "done" (published), "dismissed" (intentionally skipped). Use this to close the loop on the content backlog from inside an MCP conversation — e.g. "mark that opportunity as in_progress" once the user starts writing, or "dismiss this one, we already cover it." This is a write — only fire on explicit user intent for a specific opportunity, never as part of an exploratory query.',
       inputSchema: {
-        opportunity_id: relaxedUuid
-          .describe('Content opportunity UUID, from list_content_opportunities.'),
+        opportunity_id: relaxedUuid.describe(
+          'Content opportunity UUID, from list_content_opportunities.',
+        ),
         status: z
           .enum(CONTENT_OPPORTUNITY_STATUSES)
           .describe('New workflow state. One of: new, sent, in_progress, done, dismissed.'),
@@ -444,8 +452,8 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     async (args) => {
       const result = await getAiTrafficFor(auth, {
         brandId: args.brand_id,
-        from: args.date_from,
-        to: args.date_to,
+        dateFrom: args.date_from,
+        dateTo: args.date_to,
       });
       if (!result) {
         return {
