@@ -7,15 +7,13 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { BrandCard } from '@/components/dashboard/brand-card';
 import { Button } from '@/components/ui/button';
 import type { Brand } from '@/types';
-import type { BrandCardSummary } from '@/lib/actions/brand';
 import { Building2, Plus } from 'lucide-react';
 
 interface BrandsClientProps {
   brands: Brand[];
-  summaries: Record<string, BrandCardSummary>;
 }
 
-export function BrandsClient({ brands, summaries }: BrandsClientProps) {
+export function BrandsClient({ brands }: BrandsClientProps) {
   const { setBrands } = useBrandStore();
 
   useEffect(() => {
@@ -29,7 +27,7 @@ export function BrandsClient({ brands, summaries }: BrandsClientProps) {
   return (
     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {brands.map((brand) => (
-        <BrandCard key={brand.id} brand={brand} summary={summaries[brand.id]} />
+        <BrandCard key={brand.id} brand={brand} />
       ))}
     </div>
   );

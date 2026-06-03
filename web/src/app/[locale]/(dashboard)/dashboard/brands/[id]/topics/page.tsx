@@ -247,7 +247,7 @@ export default function BrandTopicsPage({ params }: PageProps) {
               <>
                 <Separator />
 
-                <div className="space-y-2">
+                <div id="add-topic" className="space-y-2 scroll-mt-24">
                   <Label className="text-sm font-medium">Add Topic</Label>
                   <div className="flex gap-2">
                     <Input

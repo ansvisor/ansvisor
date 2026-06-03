@@ -431,7 +431,9 @@
       "citations": "Citations",
       "domainsTracked": "Domains Tracked",
       "manage": "Manage",
-      "viewInsights": "View Insights"
+      "viewInsights": "View Insights",
+      "addTopic": "Add Topics",
+      "addPrompt": "Add Prompts"
     }
   },
   "plans": {

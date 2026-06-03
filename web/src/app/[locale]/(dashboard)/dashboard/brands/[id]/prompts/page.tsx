@@ -502,7 +502,7 @@ export default function PromptsPage() {
       {canManage && (
         <div className="grid gap-4 md:grid-cols-2">
           {/* Manual Add */}
-          <Card>
+          <Card id="add-prompt" className="scroll-mt-24">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Plus className="h-4 w-4" />

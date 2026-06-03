@@ -1,7 +1,7 @@
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { getBrands, getBrandsCardSummary } from '@/lib/actions/brand';
+import { getBrands } from '@/lib/actions/brand';
 import { getPlan, isCloud as checkIsCloud } from '@/config/plans';
 import { BrandsClient } from './_brands-client';
 import { Button } from '@/components/ui/button';
@@ -64,12 +64,10 @@ export default async function BrandsPage() {
   const canAddBrand = maxBrands === -1 || brands.length < maxBrands;
   const needsUpgrade = !canAddBrand && checkIsCloud();
 
-  const summaries = await getBrandsCardSummary(brands.map((b) => b.id));
-
   return (
     <div className="space-y-6">
       <BrandsHeader canAddBrand={canAddBrand} needsUpgrade={needsUpgrade} />
-      <BrandsClient brands={brands} summaries={summaries} />
+      <BrandsClient brands={brands} />
     </div>
   );
 }
