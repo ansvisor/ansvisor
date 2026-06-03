@@ -1300,3 +1300,109 @@ export async function getAiTrafficFor(
     country_breakdown,
   };
 }
+
+// ── Prompt volumes ──────────────────────────────────────────────────────────
+
+export interface PromptVolumesParams {
+  brandId: string;
+  /** Row cap on the returned prompts. Default 100, max 500. */
+  limit?: number;
+}
+
+export interface PromptVolumeRow {
+  prompt_id: string;
+  prompt_text: string | null;
+  intent: string;
+  keywords: string[];
+  /** `{ keyword: monthly_google_volume }` map. */
+  google_volumes: Record<string, number>;
+  total_google_volume: number;
+  est_ai_volume: number;
+  ai_volume_multiplier: number;
+  /** Volume-weighted competition index 0-100, or null if unknown. */
+  competition_index: number | null;
+  /** Bucketed competition label ("LOW" | "MEDIUM" | "HIGH"), or null. */
+  competition: string | null;
+  fetched_at: string | null;
+}
+
+const PROMPT_VOLUMES_DEFAULT_LIMIT = 100;
+const PROMPT_VOLUMES_MAX_LIMIT = 500;
+
+/**
+ * Return per-prompt search-volume + competition rows for a brand, scoped
+ * `brand → prompt_sets → prompts → prompt_volumes`. Surfaces the demand
+ * (`total_google_volume` / `est_ai_volume`) and competition meter
+ * (`competition_index` / `competition`, see #44) so callers can answer
+ * "which prompts have the most demand / the least competition?".
+ *
+ * Ownership-check first; wrong-org or missing brand returns null (→ 404
+ * upstream) before any volume rows are read. Triggering a fresh volume
+ * analysis (the paid DataForSEO call) lives on the aeo-server and is out of
+ * scope here — this is a read of already-computed rows.
+ */
+export async function getPromptVolumesFor(
+  auth: McpAuthContext,
+  params: PromptVolumesParams,
+): Promise<PromptVolumeRow[] | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: brand } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('id', params.brandId)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  if (!brand) return null;
+
+  const limit = Math.min(
+    Math.max(params.limit ?? PROMPT_VOLUMES_DEFAULT_LIMIT, 1),
+    PROMPT_VOLUMES_MAX_LIMIT,
+  );
+
+  // prompt_volumes → prompts (1:1) → prompt_sets, filtered to this brand via
+  // the nested inner joins. Sorted by AI demand so the highest-opportunity
+  // prompts come first.
+  const { data, error } = await supabaseAdmin
+    .from('prompt_volumes')
+    .select(
+      'prompt_id, intent, keywords, google_volumes, total_google_volume, est_ai_volume, ai_volume_multiplier, competition_index, competition, fetched_at, prompts!inner(text, prompt_sets!inner(brand_id))',
+    )
+    .eq('prompts.prompt_sets.brand_id', params.brandId)
+    .order('est_ai_volume', { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(error.message);
+
+  const rows =
+    (data as unknown as Array<{
+      prompt_id: string;
+      intent: string;
+      keywords: string[] | null;
+      google_volumes: Record<string, number> | null;
+      total_google_volume: number | null;
+      est_ai_volume: number | null;
+      ai_volume_multiplier: number | string | null;
+      competition_index: number | null;
+      competition: string | null;
+      fetched_at: string | null;
+      prompts: { text: string } | Array<{ text: string }> | null;
+    }> | null) ?? [];
+
+  return rows.map((r) => {
+    const prompt = Array.isArray(r.prompts) ? (r.prompts[0] ?? null) : r.prompts;
+    return {
+      prompt_id: r.prompt_id,
+      prompt_text: prompt?.text ?? null,
+      intent: r.intent,
+      keywords: r.keywords ?? [],
+      google_volumes: r.google_volumes ?? {},
+      total_google_volume: Number(r.total_google_volume ?? 0),
+      est_ai_volume: Number(r.est_ai_volume ?? 0),
+      ai_volume_multiplier: Number(r.ai_volume_multiplier ?? 0),
+      competition_index: r.competition_index,
+      competition: r.competition,
+      fetched_at: r.fetched_at,
+    };
+  });
+}

@@ -16,6 +16,7 @@ import {
   listTopicsFor,
   updateOpportunityStatusFor,
   getAiTrafficFor,
+  getPromptVolumesFor,
 } from './data';
 
 /**
@@ -463,6 +464,39 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       }
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'get_prompt_volumes',
+    {
+      description:
+        'Get per-prompt search demand and competition for a brand. Returns one row per analyzed prompt with its keywords, Google search volumes, total_google_volume, est_ai_volume (estimated AI search demand), competition_index (0-100), and competition label (LOW / MEDIUM / HIGH). Sorted by est_ai_volume descending. Use this for "which prompts have the most demand?" or "which prompts have the least competition?" prioritization questions. Only returns prompts that already have volume analysis — triggering a new analysis is not available here.',
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(500)
+          .optional()
+          .describe('Optional row cap (default 100, max 500). Highest AI demand comes first.'),
+      },
+    },
+    async (args) => {
+      const volumes = await getPromptVolumesFor(auth, {
+        brandId: args.brand_id,
+        limit: args.limit,
+      });
+      if (volumes === null) {
+        return {
+          content: [{ type: 'text', text: 'Brand not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(volumes, null, 2) }],
       };
     },
   );
