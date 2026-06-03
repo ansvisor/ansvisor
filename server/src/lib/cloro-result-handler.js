@@ -63,6 +63,7 @@ export async function handleScraperResult({
       region: region ?? null,
       competitor_mentions: metrics.competitorMentions,
       shopping_cards: aiResponse.shopping_cards ?? [],
+      inline_products: aiResponse.inline_products ?? [],
     })
     .select('id')
     .single();

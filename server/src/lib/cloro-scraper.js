@@ -11,6 +11,7 @@ const CLORO_API = 'https://api.cloro.dev';
 
 const SCRAPER_TASK_TYPES = {
   'chatgpt-web': 'CHATGPT',
+  'chatgpt-shopping': 'CHATGPT',
   'google-aio': 'GOOGLE',
   'google-aimode': 'AIMODE',
   'copilot-web': 'COPILOT',
@@ -30,6 +31,21 @@ function getApiKey() {
 
 function buildRequestBody(promptText, scraperId, region) {
   const country = region || 'US';
+
+  if (scraperId === 'chatgpt-shopping') {
+    // ChatGPT Shopping uses the same CHATGPT task but flips include.shopping.
+    // Cloro's response then includes `shoppingCards` and `inlineProducts`
+    // surfaced in the live ChatGPT shopping experience.
+    return {
+      prompt: promptText,
+      country,
+      include: {
+        html: false,
+        markdown: true,
+        shopping: true,
+      },
+    };
+  }
 
   if (scraperId === 'google-aio') {
     return {
@@ -66,6 +82,29 @@ function buildRequestBody(promptText, scraperId, region) {
 }
 
 export function parseScraperResponse(result, scraperId) {
+  if (scraperId === 'chatgpt-shopping') {
+    // ChatGPT Shopping returns a normal ChatGPT response shape *plus*
+    // camelCase `shoppingCards` and `inlineProducts` payloads. Both arrays
+    // go on the prompt_results row raw — the Shopping page consumes them.
+    // Model is forced to the shopping-specific id so Insights aggregates
+    // (which exclude `platform = 'chatgpt-shopping'`) never mix this row
+    // into brand-level visibility numbers.
+    const text = result.markdown || result.text || '';
+    const citations = (result.sources || []).map((src, idx) => ({
+      url: src.url || '',
+      title: src.label || '',
+      startIndex: idx * 100,
+      endIndex: idx * 100 + 50,
+    }));
+    return {
+      text,
+      citations,
+      model: result.model || 'gpt-5-3-mini',
+      shopping_cards: result.shoppingCards ?? result.shopping_cards ?? [],
+      inline_products: result.inlineProducts ?? result.inline_products ?? [],
+    };
+  }
+
   if (scraperId === 'google-aio') {
     const aio = result.aioverview;
     if (!aio) {

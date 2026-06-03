@@ -8,6 +8,7 @@ import { usePathname, Link } from '@/i18n/navigation';
 import { dashboardNav } from '@/config/dashboard';
 import { useSidebarStore } from '@/stores/use-sidebar-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
+import { usePlanContext } from '@/components/providers/plan-provider';
 import { siteConfig } from '@/config/site';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,11 @@ export function Sidebar() {
   const t = useTranslations('nav');
   const tBrands = useTranslations('brands');
   const { canUse, requiredPlanFor, isCloud } = useFeatureGate();
+  const { shoppingModeEnabled } = usePlanContext();
+  // Map from a NavItem.requiresOrgPref key to its current value. Sidebar
+  // hides the item entirely when this returns false — see #155 for why
+  // Shopping uses this on top of the existing plan-feature gate.
+  const orgPrefs = { shoppingModeEnabled };
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   // Hydration guard: SSR can't know the resolved theme, so we render the
@@ -94,6 +100,13 @@ export function Sidebar() {
             {group.title && isCollapsed && i > 0 && <Separator className="my-2" />}
             <nav className="space-y-0.5">
               {group.items.map((item) => {
+                // Hide entirely if a required org preference is off — the
+                // user shouldn't see "Shopping (upgrade)" when they're
+                // simply not in e-commerce.
+                if (item.requiresOrgPref && !orgPrefs[item.requiresOrgPref]) {
+                  return null;
+                }
+
                 const isActive =
                   item.href === '/dashboard'
                     ? pathname === '/dashboard'

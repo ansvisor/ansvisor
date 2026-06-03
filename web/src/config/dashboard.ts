@@ -13,6 +13,16 @@ import {
 } from 'lucide-react';
 import type { Feature } from '@/config/plans';
 
+/**
+ * An org-level preference that, when present on a NavItem, must be `true`
+ * for the item to render at all. Distinct from plan-level `requiredFeature`
+ * which downgrades the item to a locked/disabled state when the plan
+ * doesn't include it — `requiresOrgPref` hides the item entirely so it
+ * doesn't appear as a "you could have this if you paid more" hint when the
+ * relevant org isn't supposed to see Shopping in the first place.
+ */
+export type OrgPrefKey = 'shoppingModeEnabled';
+
 export interface NavItem {
   title: string;
   href: string;
@@ -20,6 +30,7 @@ export interface NavItem {
   badge?: string;
   disabled?: boolean;
   requiredFeature?: Feature;
+  requiresOrgPref?: OrgPrefKey;
 }
 
 export interface NavGroup {
@@ -72,6 +83,7 @@ export const dashboardNav: NavGroup[] = [
         href: '/dashboard/shopping',
         icon: ShoppingBag,
         requiredFeature: 'shopping_analytics',
+        requiresOrgPref: 'shoppingModeEnabled',
       },
       {
         title: 'AI Traffic Analytics',

@@ -37,6 +37,7 @@ function mapBrandRow(brand: Record<string, unknown>, domains: Record<string, unk
     region: (brand.region as string | null) ?? undefined,
     language: (brand.language as string | null) ?? undefined,
     trackingCode: (brand.tracking_code as string | null) ?? undefined,
+    shoppingModeEnabled: !!brand.shopping_mode_enabled,
     domains: domains.map(mapDomainRow),
     createdAt: brand.created_at as string,
     updatedAt: brand.updated_at as string,
@@ -181,6 +182,85 @@ export async function deleteBrand(id: string): Promise<void> {
 
   if (error) throw new Error(error.message);
   revalidatePath('/dashboard/brands');
+}
+
+/**
+ * Toggle a brand's Shopping mode (#155).
+ *
+ * On `true`:
+ *   - Set `brands.shopping_mode_enabled = true`
+ *   - Add `chatgpt-shopping` to every prompt's `platforms` array (deduped)
+ *   - Insert the `chatgpt-shopping` row into `brand_platforms` (idempotent)
+ *     so the next tracking cycle picks it up alongside the prompt change.
+ *
+ * On `false`:
+ *   - Set `brands.shopping_mode_enabled = false`
+ *   - Leave existing prompt platforms and `brand_platforms` rows in place
+ *     — historical opt-ins stay queryable, and any further per-prompt
+ *     surgery is the operator's call.
+ */
+export async function setBrandShoppingMode(
+  brandId: string,
+  enabled: boolean,
+): Promise<{ promptsUpdated: number }> {
+  const supabase = await createClient();
+
+  // RLS gates this — the calling user must already have write access to
+  // the brand via their org membership.
+  const { error: updateErr } = await supabase
+    .from('brands')
+    .update({ shopping_mode_enabled: enabled })
+    .eq('id', brandId);
+  if (updateErr) throw new Error(updateErr.message);
+
+  let promptsUpdated = 0;
+
+  if (enabled) {
+    // Pull every prompt under this brand. Prompts hang off prompt_sets
+    // which hang off brands — one join via the !inner foreign key.
+    const { data: rows, error: readErr } = await supabase
+      .from('prompts')
+      .select('id, platforms, prompt_sets!inner(brand_id)')
+      .eq('prompt_sets.brand_id', brandId);
+    if (readErr) throw new Error(readErr.message);
+
+    const needsUpdate = (rows ?? []).filter((r) => {
+      const platforms = ((r as { platforms: string[] | null }).platforms ?? []) as string[];
+      return !platforms.includes('chatgpt-shopping');
+    });
+
+    for (const row of needsUpdate) {
+      const existing = ((row as { platforms: string[] | null }).platforms ?? []) as string[];
+      const next = [...existing, 'chatgpt-shopping'];
+      const { error: writeErr } = await supabase
+        .from('prompts')
+        .update({ platforms: next })
+        .eq('id', (row as { id: string }).id);
+      if (writeErr) {
+        // Best-effort: log and continue. If a few prompts fail to update
+        // (RLS oddity, race), the operator can toggle off+on or hit the
+        // per-prompt platforms picker. Don't half-roll-back the brand flag.
+        console.error('[shopping-mode] prompt update failed:', writeErr.message);
+        continue;
+      }
+      promptsUpdated += 1;
+    }
+
+    // Also surface chatgpt-shopping at the brand-platforms layer so the
+    // tracking worker actually fires the scraper. Idempotent.
+    const { error: bpErr } = await supabase
+      .from('brand_platforms')
+      .upsert(
+        { brand_id: brandId, platform: 'chatgpt-shopping', is_enabled: true },
+        { onConflict: 'brand_id,platform', ignoreDuplicates: true },
+      );
+    if (bpErr) {
+      console.error('[shopping-mode] brand_platforms upsert failed:', bpErr.message);
+    }
+  }
+
+  revalidatePath('/dashboard/brands');
+  return { promptsUpdated };
 }
 
 export interface BrandCardSummary {

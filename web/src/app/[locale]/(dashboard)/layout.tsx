@@ -51,12 +51,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   const planId = (org?.plan ?? 'starter') as PlanId;
+  // Sidebar reveals the Shopping entry when at least one brand has Shopping
+  // mode on (#155). Org-wide signal, derived from the brand list we already
+  // fetch here.
+  const shoppingModeEnabled = brands.some((b) => b.shoppingModeEnabled);
 
   return (
     <>
       <AuthProvider user={user} />
       <BrandLoader brands={brands} />
-      <PlanProvider planId={planId}>
+      <PlanProvider planId={planId} shoppingModeEnabled={shoppingModeEnabled}>
         <RoleProvider role={role}>
           <div className="flex h-screen overflow-hidden">
             {/* Desktop sidebar */}

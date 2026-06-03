@@ -4,7 +4,7 @@ import { use, useState, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter, Link } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { updateBrand, deleteBrand } from '@/lib/actions/brand';
+import { updateBrand, deleteBrand, setBrandShoppingMode } from '@/lib/actions/brand';
 import { syncDomains } from '@/lib/actions/brand-domain';
 import { getCompetitors, addCompetitor, deleteCompetitor } from '@/lib/actions/competitor';
 import { getFaviconUrl } from '@/lib/favicon';
@@ -26,7 +26,21 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Check, Code, Copy, Globe, Loader2, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
+import {
+  Check,
+  Code,
+  Copy,
+  Globe,
+  Loader2,
+  Pencil,
+  Plus,
+  Save,
+  ShoppingBag,
+  Trash2,
+  X,
+} from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useUserRole } from '@/hooks/use-user-role';
 import {
   Dialog,
   DialogContent,
@@ -78,8 +92,12 @@ export default function BrandSettingsPage({ params }: PageProps) {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general">
+        <TabsContent value="general" className="space-y-6">
           <GeneralTab brand={brand} onUpdate={(updated) => updateBrandStore(brand.id, updated)} />
+          <ShoppingModeCard
+            brand={brand}
+            onUpdate={(updated) => updateBrandStore(brand.id, updated)}
+          />
         </TabsContent>
 
         <TabsContent value="domains">
@@ -196,6 +214,81 @@ function GeneralTab({
           {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           {t('settings.saveChanges')}
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Shopping mode (#155) ────────────────────────────────────────────────────
+
+function ShoppingModeCard({
+  brand,
+  onUpdate,
+}: {
+  brand: Brand;
+  onUpdate: (updates: Partial<Brand>) => void;
+}) {
+  const { canAdmin } = useUserRole();
+  const [enabled, setEnabled] = useState(brand.shoppingModeEnabled);
+  const [saving, setSaving] = useState(false);
+
+  async function handleToggle(next: boolean) {
+    if (!canAdmin) return;
+    const previous = enabled;
+    setEnabled(next);
+    setSaving(true);
+    try {
+      const { promptsUpdated } = await setBrandShoppingMode(brand.id, next);
+      onUpdate({ shoppingModeEnabled: next });
+      if (next && promptsUpdated > 0) {
+        toast.success(`Shopping mode on — ${promptsUpdated} prompt(s) updated`);
+      } else {
+        toast.success(next ? 'Shopping mode on' : 'Shopping mode off');
+      }
+    } catch (err) {
+      setEnabled(previous);
+      toast.error(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <ShoppingBag className="h-4 w-4" />
+          Shopping mode
+        </CardTitle>
+        <CardDescription>
+          Turn this on if this brand is in e-commerce. We&rsquo;ll add ChatGPT Shopping to every
+          prompt under this brand and reveal the Shopping dashboard.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-start gap-3">
+          <Checkbox
+            id="shopping-mode"
+            checked={enabled}
+            disabled={saving || !canAdmin}
+            onCheckedChange={(v) => handleToggle(v === true)}
+          />
+          <div className="space-y-1">
+            <Label htmlFor="shopping-mode" className="font-medium">
+              This brand is in e-commerce / shopping
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Adds{' '}
+              <code className="rounded bg-muted px-1 py-0.5 text-[11px]">chatgpt-shopping</code> to
+              every existing prompt&apos;s platform list and enables the Shopping platform on this
+              brand.
+            </p>
+            {!canAdmin && (
+              <p className="text-xs text-muted-foreground">Only admins can change this setting.</p>
+            )}
+          </div>
+          {saving && <Loader2 className="ml-auto h-4 w-4 animate-spin text-muted-foreground" />}
+        </div>
       </CardContent>
     </Card>
   );

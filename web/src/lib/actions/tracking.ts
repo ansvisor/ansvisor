@@ -180,7 +180,15 @@ async function buildResultsQuery(
   },
 ) {
   const supabase = await createClient();
-  let query = supabase.from('prompt_results').select('*').eq('brand_id', brandId);
+  // #155 — Insights aggregates exclude `chatgpt-shopping`. That model's
+  // visibility numbers aren't comparable to a normal ChatGPT answer and
+  // would skew brand-level visibility/mentions/citations. Shopping data
+  // is consumed by /dashboard/shopping only.
+  let query = supabase
+    .from('prompt_results')
+    .select('*')
+    .eq('brand_id', brandId)
+    .neq('platform', 'chatgpt-shopping');
 
   if (opts?.platform) query = query.eq('platform', opts.platform);
   query = applyModelFilter(query, opts?.model);
@@ -288,10 +296,14 @@ export async function getPromptResults(
 export async function getPromptResultById(resultId: string): Promise<PromptResultWithText | null> {
   const supabase = await createClient();
 
+  // #155 — Insights detail view; chatgpt-shopping is excluded here for the
+  // same reason the aggregates exclude it. Shopping rows are shown by the
+  // Shopping dashboard, not Insights.
   const { data, error } = await supabase
     .from('prompt_results')
     .select('*')
     .eq('id', resultId)
+    .neq('platform', 'chatgpt-shopping')
     .single();
 
   if (error || !data) return null;
@@ -368,10 +380,12 @@ export async function getPromptDetail(
     topicName = prompt.category as string;
   }
 
+  // #155 — same isolation rule as the other aggregating queries here.
   const { data: resultRows, error: resultError } = await supabase
     .from('prompt_results')
     .select('*')
     .eq('prompt_id', promptId)
+    .neq('platform', 'chatgpt-shopping')
     .order('created_at', { ascending: false })
     .limit(opts?.limit ?? 500);
 
@@ -710,10 +724,13 @@ export async function getPromptVisibilitySummaries(
   const days = opts?.days ?? 30;
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
+  // #155 — visibility summary per prompt; exclude chatgpt-shopping to
+  // match the aggregate-RPC filters one level up.
   const { data, error } = await supabase
     .from('prompt_results')
     .select('prompt_id, visibility_score, mention_count, created_at')
     .eq('brand_id', brandId)
+    .neq('platform', 'chatgpt-shopping')
     .gte('created_at', since);
 
   if (error) throw new Error(error.message);
@@ -1217,10 +1234,14 @@ export async function getVisibilityTrend(
 ): Promise<VisibilityTrendPoint[]> {
   const supabase = await createClient();
 
+  // #155 — visibility trend; exclude chatgpt-shopping to match the
+  // aggregate RPCs. (The RPC variant in 00012_shopping_mode.sql is what
+  // most callers hit; this JS path is used by the older codepath.)
   let query = supabase
     .from('prompt_results')
     .select('created_at, visibility_score, competitor_mentions')
     .eq('brand_id', brandId)
+    .neq('platform', 'chatgpt-shopping')
     .order('created_at', { ascending: true });
 
   query = applyModelFilter(query, opts?.model);
@@ -1345,10 +1366,13 @@ export async function getHeadToHeadComparison(
 ): Promise<HeadToHeadData> {
   const supabase = await createClient();
 
+  // #155 — head-to-head comparisons are a Competitors-tab feature, which
+  // also lives under Insights — same isolation rule applies here.
   const { data: results, error } = await supabase
     .from('prompt_results')
     .select('*')
     .eq('brand_id', brandId)
+    .neq('platform', 'chatgpt-shopping')
     .order('created_at', { ascending: false });
 
   if (error) throw new Error(error.message);

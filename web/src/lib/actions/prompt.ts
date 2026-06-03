@@ -318,6 +318,19 @@ export async function addPromptToSet(input: AddPromptInput): Promise<Prompt> {
 
   const topicId = await resolveTopicId(supabase, ps.brand_id as string, input.category);
 
+  // #155 — if the brand has Shopping mode on, every new prompt gets the
+  // chatgpt-shopping platform appended automatically so the user doesn't
+  // have to remember to flip it for each prompt. The caller's filtered
+  // platforms still take precedence; we just ensure inclusion.
+  const { data: brandRow } = await supabase
+    .from('brands')
+    .select('shopping_mode_enabled')
+    .eq('id', ps.brand_id as string)
+    .single();
+  const platforms = brandRow?.shopping_mode_enabled
+    ? Array.from(new Set([...filtered.platforms, 'chatgpt-shopping']))
+    : filtered.platforms;
+
   const { data, error } = await supabase
     .from('prompts')
     .insert({
@@ -325,7 +338,7 @@ export async function addPromptToSet(input: AddPromptInput): Promise<Prompt> {
       text: input.text,
       category: input.category || null,
       topic_id: topicId,
-      platforms: filtered.platforms,
+      platforms,
       regions: [brandRegion],
       models: filtered.models,
       is_active: true,

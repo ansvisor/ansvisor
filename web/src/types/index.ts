@@ -22,6 +22,7 @@ export interface Brand {
   region?: string;
   language?: string;
   trackingCode?: string;
+  shoppingModeEnabled: boolean;
   domains: BrandDomain[];
   createdAt: string;
   updatedAt: string;

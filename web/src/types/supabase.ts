@@ -292,6 +292,7 @@ export type Database = {
           name: string;
           organization_id: string;
           region: string | null;
+          shopping_mode_enabled: boolean;
           slug: string;
           tracking_code: string;
           updated_at: string;
@@ -306,6 +307,7 @@ export type Database = {
           name: string;
           organization_id: string;
           region?: string | null;
+          shopping_mode_enabled?: boolean;
           slug: string;
           tracking_code?: string;
           updated_at?: string;
@@ -320,6 +322,7 @@ export type Database = {
           name?: string;
           organization_id?: string;
           region?: string | null;
+          shopping_mode_enabled?: boolean;
           slug?: string;
           tracking_code?: string;
           updated_at?: string;
@@ -651,6 +654,7 @@ export type Database = {
           competitor_mentions: Json;
           created_at: string;
           id: string;
+          inline_products: Json;
           mention_count: number;
           model_used: string | null;
           platform: string;
@@ -668,6 +672,7 @@ export type Database = {
           competitor_mentions?: Json;
           created_at?: string;
           id?: string;
+          inline_products?: Json;
           mention_count?: number;
           model_used?: string | null;
           platform: string;
@@ -685,6 +690,7 @@ export type Database = {
           competitor_mentions?: Json;
           created_at?: string;
           id?: string;
+          inline_products?: Json;
           mention_count?: number;
           model_used?: string | null;
           platform?: string;

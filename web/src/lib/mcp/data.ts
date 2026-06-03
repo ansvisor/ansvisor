@@ -83,12 +83,16 @@ export async function getVisibilitySummaryFor(
     .maybeSingle();
   if (!brand) return null;
 
+  // #155 — getVisibilitySummaryFor mirrors the insights_aggregates RPC and
+  // excludes chatgpt-shopping for the same reason: its model isn't
+  // comparable to a normal ChatGPT answer and would skew brand visibility.
   let query = supabaseAdmin
     .from('prompt_results')
     .select(
       'visibility_score, mention_count, citation_count, sentiment, model_used, competitor_mentions',
     )
-    .eq('brand_id', params.brandId);
+    .eq('brand_id', params.brandId)
+    .neq('platform', 'chatgpt-shopping');
 
   if (params.dateFrom) query = query.gte('created_at', params.dateFrom);
   const expandedDateTo = expandDateToEndOfDay(params.dateTo);
@@ -891,10 +895,13 @@ export async function listCitationsFor(
     .filter(Boolean);
   const classifyCtx = { brandDomains, competitorDomains };
 
+  // #155 — Citations summary is part of the Insights surface; chatgpt-shopping
+  // rows are isolated from these aggregations.
   let query = supabaseAdmin
     .from('prompt_results')
     .select('id, prompt_id, platform, model_used, region, created_at, citations, citation_count')
-    .eq('brand_id', params.brandId);
+    .eq('brand_id', params.brandId)
+    .neq('platform', 'chatgpt-shopping');
 
   if (params.dateFrom) query = query.gte('created_at', params.dateFrom);
   const expandedDateTo = expandDateToEndOfDay(params.dateTo);
