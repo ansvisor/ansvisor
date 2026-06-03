@@ -160,7 +160,8 @@ export function AIProviderAvatar({
       title={meta.label}
       aria-label={meta.label}
       className={cn(
-        'relative flex h-5 w-5 shrink-0 overflow-hidden rounded-full border bg-background',
+        'relative flex h-5 w-5 shrink-0 overflow-hidden rounded-full border',
+        provider === 'openai' ? 'bg-black dark:bg-background' : 'bg-background',
         className,
       )}
     >
