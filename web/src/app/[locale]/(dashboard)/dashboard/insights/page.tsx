@@ -988,11 +988,11 @@ function PlatformSubGroup({
         <div className="flex items-center gap-4 shrink-0">
           <div className="hidden sm:block text-right">
             <p className="text-[10px] text-muted-foreground">Mentions</p>
-            <p className="text-xs font-semibold tabular-nums">{latest.mentionCount}</p>
+            <p className="text-xs font-semibold tabular-nums">{group.totalMentions}</p>
           </div>
           <div className="hidden sm:block text-right">
             <p className="text-[10px] text-muted-foreground">Citations</p>
-            <p className="text-xs font-semibold tabular-nums">{latest.citationCount}</p>
+            <p className="text-xs font-semibold tabular-nums">{group.totalCitations}</p>
           </div>
           <SentimentBadge sentiment={latest.sentiment} />
           <div className="w-[100px] sm:w-[140px]">
