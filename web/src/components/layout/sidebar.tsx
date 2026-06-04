@@ -17,7 +17,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { BrandSwitcher } from '@/components/layout/brand-switcher';
 import { UserProfileNavItem } from '@/components/layout/user-profile-nav-item';
-import { Crown, Lock, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, Crown, Lock } from 'lucide-react';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -174,18 +174,25 @@ export function Sidebar() {
         ))}
       </ScrollArea>
 
-      <div className="border-t p-2">
-        <UserProfileNavItem collapsed={isCollapsed} />
+      <div className="p-2">
+        <Button
+          variant="ghost"
+          onClick={toggleCollapse}
+          className={cn(
+            'flex h-9 w-full items-center gap-2 px-2',
+            isCollapsed ? 'justify-center' : 'justify-start',
+          )}
+        >
+          {isCollapsed ? (
+            <ChevronsRight className="h-4 w-4" />
+          ) : (
+            <ChevronsLeft className="h-4 w-4" />
+          )}
+        </Button>
       </div>
 
       <div className="border-t p-2">
-        <Button variant="ghost" size="icon" className="mt-1 w-full" onClick={toggleCollapse}>
-          {isCollapsed ? (
-            <PanelLeftOpen className="h-4 w-4" />
-          ) : (
-            <PanelLeftClose className="h-4 w-4" />
-          )}
-        </Button>
+        <UserProfileNavItem collapsed={isCollapsed} />
       </div>
     </aside>
   );
