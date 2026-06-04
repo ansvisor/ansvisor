@@ -13,17 +13,35 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ShoppingBag, Store, ArrowUpRight, Crown, Lock } from 'lucide-react';
+import {
+  ShoppingBag,
+  Store,
+  ArrowUpRight,
+  Crown,
+  Lock,
+  Download,
+  ExternalLink,
+  Layers,
+  Eye,
+  Loader2,
+  Globe,
+} from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import {
   getShoppingChartData,
   getShoppingFilterOptions,
   getShoppingKpis,
+  getOwnProducts,
+  getCompetitorProducts,
+  getCompetitorSummary,
   type ShoppingChartData,
   type ShoppingDatePreset,
   type ShoppingFilters,
   type ShoppingKpis,
+  type ShoppingProduct,
+  type ShoppingProductAppearance,
+  type CompetitorShoppingSummary,
 } from '@/lib/actions/shopping';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -36,7 +54,26 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Link } from '@/i18n/navigation';
-import { buttonVariants } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
+import { CodeBlock, CodeBlockCode } from '@/components/ui/code-block';
+import { toCsv } from '@/lib/csv';
+
 
 const DATE_PRESETS: ShoppingDatePreset[] = ['7d', '30d', '90d', 'all'];
 
@@ -69,6 +106,13 @@ export default function ShoppingPage() {
   const [kpis, setKpis] = useState<ShoppingKpis | null>(null);
   const [charts, setCharts] = useState<ShoppingChartData | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const [ownProducts, setOwnProducts] = useState<ShoppingProduct[]>([]);
+  const [competitorProducts, setCompetitorProducts] = useState<ShoppingProduct[]>([]);
+  const [competitorSummary, setCompetitorSummary] = useState<CompetitorShoppingSummary[]>([]);
+  const [tableLoading, setTableLoading] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<ShoppingProduct | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('overview');
 
   const filters = useMemo<ShoppingFilters>(
     () => ({
@@ -103,19 +147,41 @@ export default function ShoppingPage() {
     if (!activeBrandId) return;
     const reqId = ++reqIdRef.current;
     setLoading(true);
+    if (hasFullAccess) {
+      setTableLoading(true);
+    }
     try {
-      const [k, c] = await Promise.all([
+      const promises: [Promise<ShoppingKpis>, Promise<ShoppingChartData>, ...Promise<any>[]] = [
         getShoppingKpis(activeBrandId, filters),
         getShoppingChartData(activeBrandId, filters),
-      ]);
+      ];
+
+      if (hasFullAccess) {
+        promises.push(
+          getOwnProducts(activeBrandId, filters),
+          getCompetitorProducts(activeBrandId, filters),
+          getCompetitorSummary(activeBrandId, filters),
+        );
+      }
+
+      const results = await Promise.all(promises);
+
       if (reqId === reqIdRef.current) {
-        setKpis(k);
-        setCharts(c);
+        setKpis(results[0]);
+        setCharts(results[1]);
+        if (hasFullAccess && results.length >= 5) {
+          setOwnProducts(results[2] as ShoppingProduct[]);
+          setCompetitorProducts(results[3] as ShoppingProduct[]);
+          setCompetitorSummary(results[4] as CompetitorShoppingSummary[]);
+        }
       }
     } finally {
-      if (reqId === reqIdRef.current) setLoading(false);
+      if (reqId === reqIdRef.current) {
+        setLoading(false);
+        setTableLoading(false);
+      }
     }
-  }, [activeBrandId, filters]);
+  }, [activeBrandId, filters, hasFullAccess]);
 
   useEffect(() => {
     void loadData();
@@ -160,18 +226,143 @@ export default function ShoppingPage() {
           <KpiGrid t={t} kpis={kpis} loading={loading} hasFullAccess={hasFullAccess} />
 
           {hasFullAccess ? (
-            <div className="grid gap-4 lg:grid-cols-2">
-              <PlatformCardRateChart
+            <>
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+                <TabsList>
+                  <TabsTrigger value="overview">{t('tabOverview')}</TabsTrigger>
+                  <TabsTrigger value="own_products">{t('tabMyProducts')}</TabsTrigger>
+                  <TabsTrigger value="competitors">{t('tabCompetitors')}</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="overview" className="space-y-6">
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <PlatformCardRateChart
+                      t={t}
+                      data={charts?.platformCardRate ?? []}
+                      loading={loading}
+                    />
+                    <OwnPresenceTrendChart
+                      t={t}
+                      data={charts?.ownPresenceTrend ?? []}
+                      loading={loading}
+                    />
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="own_products" className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold">{t('tabMyProducts')}</h2>
+                    <Button variant="outline" size="sm" onClick={() => {
+                      const headers = [
+                        'product_title',
+                        'product_brand',
+                        'impressions',
+                        'platforms',
+                        'regions',
+                        'last_price',
+                        'price_currency',
+                        'top_merchant',
+                        'last_seen',
+                      ];
+                      const rows = ownProducts.map((p) => ({
+                        product_title: p.product_title,
+                        product_brand: p.product_brand || '',
+                        impressions: p.impressions,
+                        platforms: p.platforms.join('; '),
+                        regions: p.regions.join('; '),
+                        last_price: p.last_price !== null ? p.last_price : '',
+                        price_currency: p.price_currency || '',
+                        top_merchant: p.top_merchant || '',
+                        last_seen: p.last_seen,
+                      }));
+                      const csv = toCsv(rows, headers);
+                      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.href = url;
+                      const date = new Date().toISOString().slice(0, 10);
+                      link.download = `my_products_${date}.csv`;
+                      link.click();
+                      URL.revokeObjectURL(url);
+                    }}>
+                      <Download className="mr-2 h-4 w-4" />
+                      {t('exportCsv')}
+                    </Button>
+                  </div>
+                  <ProductTable
+                    t={t}
+                    products={ownProducts}
+                    loading={tableLoading}
+                    onRowClick={setSelectedProduct}
+                  />
+                </TabsContent>
+
+                <TabsContent value="competitors" className="space-y-6">
+                  <CompetitorSummaryList
+                    t={t}
+                    summaries={competitorSummary}
+                    loading={tableLoading}
+                  />
+
+                  <div className="flex items-center justify-between pt-4">
+                    <h2 className="text-lg font-semibold">{t('tabCompetitors')}</h2>
+                    <Button variant="outline" size="sm" onClick={() => {
+                      const headers = [
+                        'competitor_name',
+                        'product_title',
+                        'product_brand',
+                        'impressions',
+                        'platforms',
+                        'regions',
+                        'last_price',
+                        'price_currency',
+                        'top_merchant',
+                        'last_seen',
+                      ];
+                      const rows = competitorProducts.map((p) => ({
+                        competitor_name: p.competitor_name || '',
+                        product_title: p.product_title,
+                        product_brand: p.product_brand || '',
+                        impressions: p.impressions,
+                        platforms: p.platforms.join('; '),
+                        regions: p.regions.join('; '),
+                        last_price: p.last_price !== null ? p.last_price : '',
+                        price_currency: p.price_currency || '',
+                        top_merchant: p.top_merchant || '',
+                        last_seen: p.last_seen,
+                      }));
+                      const csv = toCsv(rows, headers);
+                      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.href = url;
+                      const date = new Date().toISOString().slice(0, 10);
+                      link.download = `competitor_products_${date}.csv`;
+                      link.click();
+                      URL.revokeObjectURL(url);
+                    }}>
+                      <Download className="mr-2 h-4 w-4" />
+                      {t('exportCsv')}
+                    </Button>
+                  </div>
+                  <ProductTable
+                    t={t}
+                    products={competitorProducts}
+                    loading={tableLoading}
+                    onRowClick={setSelectedProduct}
+                    showCompetitorName
+                  />
+                </TabsContent>
+              </Tabs>
+
+              <ProductAppearancesDrawer
                 t={t}
-                data={charts?.platformCardRate ?? []}
-                loading={loading}
+                product={selectedProduct}
+                onOpenChange={(open) => {
+                  if (!open) setSelectedProduct(null);
+                }}
               />
-              <OwnPresenceTrendChart
-                t={t}
-                data={charts?.ownPresenceTrend ?? []}
-                loading={loading}
-              />
-            </div>
+            </>
           ) : (
             <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
           )}
@@ -569,3 +760,338 @@ function formatPercent(value: number): string {
   if (value < 0.01) return '<1%';
   return `${Math.round(value * 100)}%`;
 }
+
+// ── Product table component ────────────────────────────────────────────────────
+
+interface ProductTableProps {
+  t: ReturnType<typeof useTranslations<'shopping'>>;
+  products: ShoppingProduct[];
+  loading: boolean;
+  onRowClick: (p: ShoppingProduct) => void;
+  showCompetitorName?: boolean;
+}
+
+function ProductTable({
+  t,
+  products,
+  loading,
+  onRowClick,
+  showCompetitorName = false,
+}: ProductTableProps) {
+  if (loading) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-16 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  if (products.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed py-8 text-center bg-card">
+        <Layers className="mx-auto h-8 w-8 text-muted-foreground/30" />
+        <p className="mt-2 text-sm text-muted-foreground">No products found matching filters.</p>
+      </div>
+    );
+  }
+
+  // Ensure default sorting: impressions descending
+  const sortedProducts = [...products].sort((a, b) => b.impressions - a.impressions);
+
+  return (
+    <div className="overflow-x-auto rounded-lg border bg-card">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[60px]"></TableHead>
+            <TableHead>{t('colProductTitle')}</TableHead>
+            {showCompetitorName && <TableHead>{t('competitorName')}</TableHead>}
+            <TableHead>{t('colPlatforms')}</TableHead>
+            <TableHead>{t('colRegions')}</TableHead>
+            <TableHead className="text-right">{t('colImpressions')}</TableHead>
+            <TableHead className="text-right">{t('colLastPrice')}</TableHead>
+            <TableHead>{t('colTopMerchant')}</TableHead>
+            <TableHead className="text-right">{t('colLastSeen')}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {sortedProducts.map((p, idx) => {
+            const lastPriceStr =
+              p.last_price !== null
+                ? `${p.last_price} ${p.price_currency || ''}`
+                : '—';
+            const formattedDate = p.last_seen
+              ? new Date(p.last_seen).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+              })
+              : '—';
+
+            return (
+              <TableRow
+                key={idx}
+                className="cursor-pointer hover:bg-muted/40 transition-colors"
+                onClick={() => onRowClick(p)}
+              >
+                <TableCell>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-md border bg-muted overflow-hidden">
+                    {p.image_url ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={p.image_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <ShoppingBag className="h-5 w-5 text-muted-foreground/40" />
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell className="font-medium max-w-[240px] truncate">
+                  <div>
+                    <span className="block truncate text-sm" title={p.product_title}>
+                      {p.product_title}
+                    </span>
+                    {p.product_brand && (
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {p.product_brand}
+                      </span>
+                    )}
+                  </div>
+                </TableCell>
+                {showCompetitorName && (
+                  <TableCell className="max-w-[120px] truncate">
+                    <span className="font-medium text-xs">
+                      {p.competitor_name || '—'}
+                    </span>
+                  </TableCell>
+                )}
+                <TableCell>
+                  <div className="flex flex-wrap gap-1 max-w-[180px]">
+                    {p.platforms.map((plat) => (
+                      <Badge key={plat} variant="secondary" className="text-[10px] py-0 px-1.5">
+                        {plat}
+                      </Badge>
+                    ))}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1 max-w-[120px]">
+                    {p.regions.map((reg) => (
+                      <Badge key={reg} variant="outline" className="text-[10px] py-0 px-1.5">
+                        {reg}
+                      </Badge>
+                    ))}
+                  </div>
+                </TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">
+                  {p.impressions.toLocaleString()}
+                </TableCell>
+                <TableCell className="text-right font-medium tabular-nums">
+                  {lastPriceStr}
+                </TableCell>
+                <TableCell className="max-w-[140px] truncate text-xs text-muted-foreground">
+                  {p.top_merchant || '—'}
+                </TableCell>
+                <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
+                  {formattedDate}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+// ── Competitor summary list component ──────────────────────────────────────────
+
+interface CompetitorSummaryListProps {
+  t: ReturnType<typeof useTranslations<'shopping'>>;
+  summaries: CompetitorShoppingSummary[];
+  loading: boolean;
+}
+
+function CompetitorSummaryList({ t, summaries, loading }: CompetitorSummaryListProps) {
+  if (loading) {
+    return (
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-24 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  if (summaries.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2">
+      <h3 className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">
+        {t('compSummaryTitle')}
+      </h3>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {summaries.map((s) => (
+          <Card key={s.competitor_id} className="relative overflow-hidden bg-card">
+            <CardContent className="p-4 space-y-2">
+              <div className="flex items-center justify-between min-w-0">
+                <span className="font-semibold text-sm truncate block" title={s.name}>
+                  {s.name}
+                </span>
+                <span className="text-[10px] text-muted-foreground truncate ml-1 max-w-[100px]">
+                  {s.domain}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-muted-foreground text-[10px] block">
+                    {t('compDistinctProducts')}
+                  </span>
+                  <span className="font-bold text-sm tabular-nums">
+                    {s.distinct_products_count}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-muted-foreground text-[10px] block">
+                    {t('compSov')}
+                  </span>
+                  <span className="font-bold text-sm tabular-nums">
+                    {formatPercent(s.sov)}
+                  </span>
+                </div>
+              </div>
+              {/* Shopping SOV progress bar */}
+              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-orange-400 transition-all rounded-full"
+                  style={{ width: `${Math.round(s.sov * 100)}%` }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Product appearances side drawer ─────────────────────────────────────────────
+
+interface ProductAppearancesDrawerProps {
+  t: ReturnType<typeof useTranslations<'shopping'>>;
+  product: ShoppingProduct | null;
+  onOpenChange: (open: boolean) => void;
+}
+
+function ProductAppearancesDrawer({ t, product, onOpenChange }: ProductAppearancesDrawerProps) {
+  const isOpen = product !== null;
+
+  return (
+    <Sheet open={isOpen} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full sm:max-w-xl flex flex-col gap-0 p-0 h-full">
+        <SheetHeader className="border-b px-5 py-4 shrink-0">
+          <SheetTitle className="text-base truncate" title={product?.product_title}>
+            {product?.product_title}
+          </SheetTitle>
+          <SheetDescription className="text-xs">
+            {product?.product_brand
+              ? `${product.product_brand} • ${product.impressions} appearances`
+              : `${product?.impressions || 0} appearances`}
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {product?.appearances.map((app) => {
+            const dateStr = new Date(app.created_at).toLocaleDateString(undefined, {
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+
+            return (
+              <Card key={app.id} className="border hover:shadow-xs transition-shadow">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
+                        {app.platform}
+                      </Badge>
+                      {app.region && (
+                        <Badge variant="outline" className="text-[10px] py-0 px-1.5">
+                          {app.region}
+                        </Badge>
+                      )}
+                      <span className="text-[10px] text-muted-foreground tabular-nums">
+                        {dateStr}
+                      </span>
+                    </div>
+
+                    {app.merchant_url && (
+                      <a
+                        href={app.merchant_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-[10px] font-medium text-primary hover:underline"
+                      >
+                        {t('appearanceMerchant')}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                      {t('appearancePrompt')}
+                    </span>
+                    <div>
+                      {app.prompt_id ? (
+                        <Link
+                          href={`/dashboard/prompts/${app.prompt_id}`}
+                          className="text-sm text-foreground font-medium hover:text-primary hover:underline line-clamp-3 block leading-relaxed"
+                          title="View Prompt Details"
+                          onClick={() => onOpenChange(false)}
+                        >
+                          &quot;{app.prompt_text}&quot;
+                        </Link>
+                      ) : (
+                        <p className="text-sm font-medium text-foreground italic leading-relaxed">
+                          &quot;{app.prompt_text}&quot;
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <details className="text-xs border rounded-md group">
+                    <summary className="cursor-pointer font-medium p-2 text-muted-foreground hover:text-foreground select-none flex items-center justify-between">
+                      <span>{t('appearanceRaw')}</span>
+                      <span className="transition-transform group-open:rotate-180">↓</span>
+                    </summary>
+                    <div className="border-t p-2 bg-muted/20 overflow-x-auto max-h-[220px]">
+                      <CodeBlock>
+                        <CodeBlockCode
+                          code={JSON.stringify(app.raw, null, 2)}
+                          language="json"
+                          theme="github-light"
+                        />
+                      </CodeBlock>
+                    </div>
+                  </details>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+

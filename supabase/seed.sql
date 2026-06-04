@@ -326,3 +326,177 @@ INSERT INTO public.ai_traffic_logs (id, brand_id, url, referrer, source_platform
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb05', '33333333-3333-3333-3333-333333333333', 'https://acme-coffee.example.com/faq',             'https://copilot.microsoft.com/', 'copilot','Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edge/127.0',                'TR', 'tr', '1920x1080', now() - interval '17 days'),
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb06', '33333333-3333-3333-3333-333333333333', 'https://acme-coffee.example.com/blog/espresso-vs-pour-over', 'https://www.bing.com/search?q=', 'bing-ai', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X)',         'FR', 'fr', '390x844',   now() - interval '22 days')
 ON CONFLICT (id) DO NOTHING;
+
+-- ─── Shopping Cards (feat(shopping) #105) ────────────────────────────────────
+
+DELETE FROM public.prompt_result_shopping_cards WHERE brand_id = '33333333-3333-3333-3333-333333333333';
+
+-- 1. Seed own products
+INSERT INTO public.prompt_result_shopping_cards (
+  id, prompt_result_id, brand_id, position, product_title, product_brand,
+  price_amount, price_currency, image_url, merchant_url, merchant_domain,
+  rating, review_count, raw, matched_brand_id, matched_brand_role, platform, region, created_at
+) VALUES
+-- Perplexity - US
+(
+  'e0000000-0000-0000-0000-000000000001',
+  md5('pr|88888888-8888-8888-8888-888888888801|perplexity-web|perplexity-web|US')::uuid,
+  '33333333-3333-3333-3333-333333333333',
+  0,
+  'Acme Organic Coffee Subscription',
+  'Acme Coffee',
+  18.99,
+  'USD',
+  'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=150',
+  'https://acme-coffee.example.com/subscriptions/organic',
+  'acme-coffee.example.com',
+  4.8,
+  124,
+  '{"title": "Acme Organic Coffee Subscription", "price": "$18.99", "rating": 4.8, "reviews": 124}'::jsonb,
+  '33333333-3333-3333-3333-333333333333',
+  'own',
+  'perplexity-web',
+  'US',
+  now() - interval '2 days'
+),
+-- Perplexity - GB
+(
+  'e0000000-0000-0000-0000-000000000002',
+  md5('pr|88888888-8888-8888-8888-888888888801|perplexity-web|perplexity-web|GB')::uuid,
+  '33333333-3333-3333-3333-333333333333',
+  0,
+  'Acme Organic Coffee Subscription',
+  'Acme Coffee',
+  18.99,
+  'USD',
+  'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=150',
+  'https://acme-coffee.example.com/subscriptions/organic',
+  'acme-coffee.example.com',
+  4.8,
+  124,
+  '{"title": "Acme Organic Coffee Subscription", "price": "$18.99", "rating": 4.8, "reviews": 124}'::jsonb,
+  '33333333-3333-3333-3333-333333333333',
+  'own',
+  'perplexity-web',
+  'GB',
+  now() - interval '3 days'
+),
+-- Google AI Mode - US
+(
+  'e0000000-0000-0000-0000-000000000003',
+  md5('pr|88888888-8888-8888-8888-888888888801|google-aimode|google-aimode|US')::uuid,
+  '33333333-3333-3333-3333-333333333333',
+  0,
+  'Acme Dark Roast Coffee Blend',
+  'Acme Coffee',
+  14.50,
+  'USD',
+  'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=150',
+  'https://acme-coffee.example.com/products/dark-roast',
+  'acme-coffee.example.com',
+  4.5,
+  89,
+  '{"title": "Acme Dark Roast Coffee Blend", "price": "$14.50", "rating": 4.5, "reviews": 89}'::jsonb,
+  '33333333-3333-3333-3333-333333333333',
+  'own',
+  'google-aimode',
+  'US',
+  now() - interval '1 day'
+),
+-- Copilot - US
+(
+  'e0000000-0000-0000-0000-000000000004',
+  md5('pr|88888888-8888-8888-8888-888888888801|copilot-web|copilot-web|US')::uuid,
+  '33333333-3333-3333-3333-333333333333',
+  0,
+  'Acme Espresso Roast Whole Beans',
+  'Acme Coffee',
+  22.00,
+  'USD',
+  'https://images.unsplash.com/photo-1511920170033-f8396924c348?w=150',
+  'https://acme-coffee.example.com/products/espresso-beans',
+  'acme-coffee.example.com',
+  4.9,
+  210,
+  '{"title": "Acme Espresso Roast Whole Beans", "price": "$22.00", "rating": 4.9, "reviews": 210}'::jsonb,
+  '33333333-3333-3333-3333-333333333333',
+  'own',
+  'copilot-web',
+  'US',
+  now() - interval '5 hours'
+);
+
+-- 2. Seed competitor products
+INSERT INTO public.prompt_result_shopping_cards (
+  id, prompt_result_id, brand_id, position, product_title, product_brand,
+  price_amount, price_currency, image_url, merchant_url, merchant_domain,
+  rating, review_count, raw, matched_brand_id, matched_brand_role, platform, region, created_at
+) VALUES
+-- Demo Coffee Co (Competitor 1) - Perplexity US
+(
+  'e0000000-0000-0000-0000-000000000005',
+  md5('pr|88888888-8888-8888-8888-888888888801|perplexity-web|perplexity-web|US')::uuid,
+  '33333333-3333-3333-3333-333333333333',
+  1,
+  'Demo Signature Subscription Blend',
+  'Demo Coffee Co',
+  24.99,
+  'USD',
+  'https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=150',
+  'https://demo-coffee.example.com/subscribe',
+  'demo-coffee.example.com',
+  4.6,
+  152,
+  '{"title": "Demo Signature Subscription Blend", "price": "$24.99", "rating": 4.6, "reviews": 152}'::jsonb,
+  '99999999-9999-9999-9999-999999999901',
+  'competitor',
+  'perplexity-web',
+  'US',
+  now() - interval '2 days'
+),
+-- Fixture Roasters (Competitor 2) - Perplexity US
+(
+  'e0000000-0000-0000-0000-000000000006',
+  md5('pr|88888888-8888-8888-8888-888888888801|perplexity-web|perplexity-web|US')::uuid,
+  '33333333-3333-3333-3333-333333333333',
+  2,
+  'Fixture Light Roast Brew Kit',
+  'Fixture Roasters',
+  19.50,
+  'USD',
+  'https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=150',
+  'https://fixture-roasters.example.com/brew-kit',
+  'fixture-roasters.example.com',
+  4.3,
+  45,
+  '{"title": "Fixture Light Roast Brew Kit", "price": "$19.50", "rating": 4.3, "reviews": 45}'::jsonb,
+  '99999999-9999-9999-9999-999999999902',
+  'competitor',
+  'perplexity-web',
+  'US',
+  now() - interval '2 days'
+),
+-- Sample Beans (Competitor 3) - Perplexity GB
+(
+  'e0000000-0000-0000-0000-000000000007',
+  md5('pr|88888888-8888-8888-8888-888888888801|perplexity-web|perplexity-web|GB')::uuid,
+  '33333333-3333-3333-3333-333333333333',
+  1,
+  'Sample House Single Origin',
+  'Sample Beans',
+  16.00,
+  'USD',
+  'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=150',
+  'https://sample-beans.example.com/house-blend',
+  'sample-beans.example.com',
+  4.7,
+  320,
+  '{"title": "Sample House Single Origin", "price": "$16.00", "rating": 4.7, "reviews": 320}'::jsonb,
+  '99999999-9999-9999-9999-999999999903',
+  'competitor',
+  'perplexity-web',
+  'GB',
+  now() - interval '3 days'
+)
+ON CONFLICT (id) DO NOTHING;
+

@@ -295,3 +295,341 @@ export async function getShoppingFilterOptions(brandId: string): Promise<{
     regions: [...regions].sort(),
   };
 }
+
+// ── My Products / Competitors tab actions ──────────────────────────────────────
+
+export interface ShoppingProductAppearance {
+  id: string;
+  prompt_id: string;
+  prompt_text: string;
+  created_at: string;
+  region: string | null;
+  platform: string;
+  raw: any;
+  merchant_url: string | null;
+  merchant_domain: string | null;
+}
+
+export interface ShoppingProduct {
+  product_title: string;
+  product_brand: string | null;
+  impressions: number;
+  platforms: string[];
+  regions: string[];
+  last_seen: string;
+  last_price: number | null;
+  price_currency: string | null;
+  top_merchant: string | null;
+  image_url: string | null;
+  appearances: ShoppingProductAppearance[];
+  competitor_name?: string;
+}
+
+export interface CompetitorShoppingSummary {
+  competitor_id: string;
+  name: string;
+  domain: string;
+  distinct_products_count: number;
+  card_count: number;
+  sov: number;
+}
+
+function getProductKey(brand: string | null, title: string | null): string {
+  const cleanBrand = (brand ?? '').trim().toLowerCase();
+  const cleanTitle = (title ?? '').trim().toLowerCase();
+  return `${cleanBrand}::${cleanTitle}`;
+}
+
+function aggregateProducts(
+  cards: any[],
+  competitorMap?: Map<string, { id: string; name: string; domain: string }>,
+): ShoppingProduct[] {
+  const groups = new Map<
+    string,
+    {
+      product_title: string;
+      product_brand: string | null;
+      matched_brand_id: string | null;
+      appearances: any[];
+      merchantDomains: Map<string, number>;
+    }
+  >();
+
+  for (const card of cards) {
+    const title = card.product_title || 'Unknown Product';
+    const brandName = card.product_brand || null;
+    const key = getProductKey(brandName, title);
+
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        product_title: title,
+        product_brand: brandName,
+        matched_brand_id: card.matched_brand_id,
+        appearances: [],
+        merchantDomains: new Map(),
+      };
+      groups.set(key, group);
+    }
+
+    group.appearances.push(card);
+    if (card.merchant_domain) {
+      group.merchantDomains.set(
+        card.merchant_domain,
+        (group.merchantDomains.get(card.merchant_domain) ?? 0) + 1,
+      );
+    }
+  }
+
+  const result: ShoppingProduct[] = [];
+
+  for (const group of groups.values()) {
+    const sortedApps = [...group.appearances].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+
+    const latest = sortedApps[0];
+
+    let top_merchant: string | null = null;
+    let maxCount = 0;
+    for (const [domain, count] of group.merchantDomains.entries()) {
+      if (count > maxCount) {
+        maxCount = count;
+        top_merchant = domain;
+      }
+    }
+
+    const platforms = [...new Set(group.appearances.map((a) => a.platform).filter(Boolean))];
+    const regions = [...new Set(group.appearances.map((a) => a.region).filter(Boolean))];
+    const heroImage = group.appearances.find((a) => a.image_url)?.image_url || null;
+
+    const competitor_name =
+      group.matched_brand_id && competitorMap
+        ? competitorMap.get(group.matched_brand_id)?.name
+        : undefined;
+
+    const mappedApps: ShoppingProductAppearance[] = sortedApps.map((a) => {
+      let promptText = 'Unknown Prompt';
+      let promptId = '';
+      if (a.prompt_results?.prompt) {
+        promptText = a.prompt_results.prompt.text;
+        promptId = a.prompt_results.prompt.id;
+      }
+      return {
+        id: a.id,
+        prompt_id: promptId,
+        prompt_text: promptText,
+        created_at: a.created_at,
+        region: a.region,
+        platform: a.platform,
+        raw: a.raw,
+        merchant_url: a.merchant_url,
+        merchant_domain: a.merchant_domain,
+      };
+    });
+
+    result.push({
+      product_title: group.product_title,
+      product_brand: group.product_brand,
+      impressions: group.appearances.length,
+      platforms,
+      regions,
+      last_seen: latest.created_at,
+      last_price: latest.price_amount ? Number(latest.price_amount) : null,
+      price_currency: latest.price_currency || null,
+      top_merchant,
+      image_url: heroImage,
+      appearances: mappedApps,
+      competitor_name,
+    });
+  }
+
+  return result;
+}
+
+export async function getOwnProducts(
+  brandId: string,
+  filters: ShoppingFilters,
+): Promise<ShoppingProduct[]> {
+  const supabase = await createClient();
+  const { from, to } = resolveDateRange(filters);
+  const expandedTo = expandDateToEndOfDay(to);
+
+  let query = supabase
+    .from('prompt_result_shopping_cards')
+    .select(`
+      id,
+      created_at,
+      platform,
+      region,
+      product_title,
+      product_brand,
+      price_amount,
+      price_currency,
+      image_url,
+      merchant_url,
+      merchant_domain,
+      raw,
+      matched_brand_id,
+      prompt_results:prompt_result_id (
+        prompt:prompt_id (
+          id,
+          text
+        )
+      )
+    `)
+    .eq('brand_id', brandId)
+    .eq('matched_brand_role', 'own');
+
+  if (from) query = query.gte('created_at', from);
+  if (expandedTo) query = query.lte('created_at', expandedTo);
+  if (filters.platforms?.length) query = query.in('platform', filters.platforms);
+  if (filters.regions?.length) query = query.in('region', filters.regions);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  return aggregateProducts(data || []);
+}
+
+export async function getCompetitorProducts(
+  brandId: string,
+  filters: ShoppingFilters,
+): Promise<ShoppingProduct[]> {
+  const supabase = await createClient();
+  const { from, to } = resolveDateRange(filters);
+  const expandedTo = expandDateToEndOfDay(to);
+
+  const { data: competitorsData, error: compError } = await supabase
+    .from('competitors')
+    .select('id, name, domain')
+    .eq('brand_id', brandId);
+
+  if (compError) throw new Error(compError.message);
+  const competitorMap = new Map((competitorsData ?? []).map((c) => [c.id, c]));
+
+  let query = supabase
+    .from('prompt_result_shopping_cards')
+    .select(`
+      id,
+      created_at,
+      platform,
+      region,
+      product_title,
+      product_brand,
+      price_amount,
+      price_currency,
+      image_url,
+      merchant_url,
+      merchant_domain,
+      raw,
+      matched_brand_id,
+      prompt_results:prompt_result_id (
+        prompt:prompt_id (
+          id,
+          text
+        )
+      )
+    `)
+    .eq('brand_id', brandId)
+    .eq('matched_brand_role', 'competitor');
+
+  if (from) query = query.gte('created_at', from);
+  if (expandedTo) query = query.lte('created_at', expandedTo);
+  if (filters.platforms?.length) query = query.in('platform', filters.platforms);
+  if (filters.regions?.length) query = query.in('region', filters.regions);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  return aggregateProducts(data || [], competitorMap);
+}
+
+export async function getCompetitorSummary(
+  brandId: string,
+  filters: ShoppingFilters,
+): Promise<CompetitorShoppingSummary[]> {
+  const supabase = await createClient();
+  const { from, to } = resolveDateRange(filters);
+  const expandedTo = expandDateToEndOfDay(to);
+
+  let totalCardsQuery = supabase
+    .from('prompt_result_shopping_cards')
+    .select('id', { count: 'exact', head: true })
+    .eq('brand_id', brandId);
+
+  if (from) totalCardsQuery = totalCardsQuery.gte('created_at', from);
+  if (expandedTo) totalCardsQuery = totalCardsQuery.lte('created_at', expandedTo);
+  if (filters.platforms?.length) totalCardsQuery = totalCardsQuery.in('platform', filters.platforms);
+  if (filters.regions?.length) totalCardsQuery = totalCardsQuery.in('region', filters.regions);
+
+  let competitorCardsQuery = supabase
+    .from('prompt_result_shopping_cards')
+    .select('matched_brand_id, product_title, product_brand')
+    .eq('brand_id', brandId)
+    .eq('matched_brand_role', 'competitor');
+
+  if (from) competitorCardsQuery = competitorCardsQuery.gte('created_at', from);
+  if (expandedTo) competitorCardsQuery = competitorCardsQuery.lte('created_at', expandedTo);
+  if (filters.platforms?.length)
+    competitorCardsQuery = competitorCardsQuery.in('platform', filters.platforms);
+  if (filters.regions?.length) competitorCardsQuery = competitorCardsQuery.in('region', filters.regions);
+
+  const competitorsQuery = supabase
+    .from('competitors')
+    .select('id, name, domain')
+    .eq('brand_id', brandId);
+
+  const [
+    { count: totalCount },
+    { data: competitorCards, error: cardsError },
+    { data: competitors, error: compError },
+  ] = await Promise.all([totalCardsQuery, competitorCardsQuery, competitorsQuery]);
+
+  if (cardsError) throw new Error(cardsError.message);
+  if (compError) throw new Error(compError.message);
+
+  const total = totalCount || 0;
+  const compCards = competitorCards || [];
+  const compList = competitors || [];
+
+  const competitorStats = new Map<
+    string,
+    {
+      card_count: number;
+      distinctProducts: Set<string>;
+    }
+  >();
+
+  for (const c of compList) {
+    competitorStats.set(c.id, { card_count: 0, distinctProducts: new Set() });
+  }
+
+  for (const card of compCards) {
+    if (!card.matched_brand_id) continue;
+    let stats = competitorStats.get(card.matched_brand_id);
+    if (!stats) {
+      stats = { card_count: 0, distinctProducts: new Set() };
+      competitorStats.set(card.matched_brand_id, stats);
+    }
+    stats.card_count += 1;
+    const title = card.product_title || 'Unknown Product';
+    const brandName = card.product_brand || '';
+    stats.distinctProducts.add(getProductKey(brandName, title));
+  }
+
+  return compList
+    .map((c) => {
+      const stats = competitorStats.get(c.id) || { card_count: 0, distinctProducts: new Set() };
+      return {
+        competitor_id: c.id,
+        name: c.name,
+        domain: c.domain,
+        distinct_products_count: stats.distinctProducts.size,
+        card_count: stats.card_count,
+        sov: total > 0 ? stats.card_count / total : 0,
+      };
+    })
+    .sort((a, b) => b.card_count - a.card_count);
+}
+
