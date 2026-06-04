@@ -280,20 +280,16 @@ export async function getShoppingFilterOptions(brandId: string): Promise<{
     .from('prompt_results')
     .select('platform, region')
     .eq('brand_id', brandId)
-    .not('shopping_cards', 'is', null)
     .limit(2000);
-  if (error) throw new Error(error.message);
 
-  const platforms = new Set<string>();
-  const regions = new Set<string>();
-  for (const row of (data ?? []) as Array<{ platform: string | null; region: string | null }>) {
-    if (row.platform) platforms.add(row.platform);
-    if (row.region) regions.add(row.region);
+  if (error || !data) {
+    return { platforms: [], regions: [] };
   }
-  return {
-    platforms: [...platforms].sort(),
-    regions: [...regions].sort(),
-  };
+
+  const platforms = Array.from(new Set(data.map((d) => d.platform).filter(Boolean))) as string[];
+  const regions = Array.from(new Set(data.map((d) => d.region).filter(Boolean))) as string[];
+
+  return { platforms, regions };
 }
 
 // ── My Products / Competitors tab actions ──────────────────────────────────────
@@ -661,4 +657,248 @@ export async function getCompetitorSummary(
       };
     })
     .sort((a, b) => b.card_count - a.card_count);
+}
+
+export interface ShoppingCardAppearance {
+  id: string;
+  title: string;
+  price: string;
+  imageUrl: string;
+  merchantUrl: string;
+}
+
+export interface ShoppingPromptAppearance {
+  promptResultId: string;
+  timestamp: string;
+  platform: string;
+  region: string;
+  cards: ShoppingCardAppearance[];
+}
+
+export interface CardEligiblePromptRow {
+  promptId: string;
+  promptText: string;
+  topic: string;
+  platforms: string[];
+  totalCards: number;
+  ownCardsCount: number;
+  competitorCardsCount: number;
+  otherCardsCount: number;
+  lastTriggered: string; // ISO string
+  appearances: ShoppingPromptAppearance[];
+}
+
+export interface CardEligiblePromptsResponse {
+  prompts: CardEligiblePromptRow[];
+  triggerRate: number;
+  totalTrackedPrompts: number;
+}
+
+function formatPrice(amount: number | null, currency: string | null): string {
+  if (amount == null) return '—';
+  const symbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency || '';
+  const isSymbolWord = symbol.length > 1;
+  return isSymbolWord ? `${amount} ${symbol}` : `${symbol}${amount}`;
+}
+
+export async function getCardEligiblePrompts(
+  brandId: string,
+  filters: ShoppingFilters,
+): Promise<CardEligiblePromptsResponse> {
+  const supabase = await createClient();
+  const { from, to } = resolveDateRange(filters);
+  const expandedTo = expandDateToEndOfDay(to);
+
+  // 1. Get total number of tracked prompts for the brand
+  const { count: totalTrackedPrompts, error: countError } = await supabase
+    .from('prompts')
+    .select('id, prompt_sets!inner(brand_id)', { count: 'exact', head: true })
+    .eq('prompt_sets.brand_id', brandId);
+
+  if (countError) throw new Error(countError.message);
+
+  // 2. Fetch all normalized shopping cards matching the brand and filters
+  let query = supabase
+    .from('prompt_result_shopping_cards')
+    .select(`
+      id,
+      matched_brand_role,
+      platform,
+      region,
+      created_at,
+      product_title,
+      price_amount,
+      price_currency,
+      image_url,
+      merchant_url,
+      prompt_result_id,
+      prompt_results!inner (
+        id,
+        prompt_id,
+        prompts!inner (
+          id,
+          text,
+          category,
+          topic_id,
+          topics (
+            name
+          )
+        )
+      )
+    `)
+    .eq('brand_id', brandId);
+
+  if (from) query = query.gte('created_at', from);
+  if (expandedTo) query = query.lte('created_at', expandedTo);
+  if (filters.platforms?.length) query = query.in('platform', filters.platforms);
+  if (filters.regions?.length) query = query.in('region', filters.regions);
+
+  const { data: cards, error: cardsError } = await query;
+  if (cardsError) throw new Error(cardsError.message);
+
+  const promptMap = new Map<
+    string,
+    {
+      promptId: string;
+      promptText: string;
+      topic: string;
+      platforms: Set<string>;
+      totalCards: number;
+      ownCardsCount: number;
+      competitorCardsCount: number;
+      otherCardsCount: number;
+      lastTriggered: Date;
+      appearancesMap: Map<
+        string,
+        {
+          promptResultId: string;
+          timestamp: string;
+          platform: string;
+          region: string;
+          cards: ShoppingCardAppearance[];
+        }
+      >;
+    }
+  >();
+
+  const rows = (cards ?? []) as unknown as Array<{
+    id: string;
+    matched_brand_role: string;
+    platform: string;
+    region: string | null;
+    created_at: string;
+    product_title: string | null;
+    price_amount: number | null;
+    price_currency: string | null;
+    image_url: string | null;
+    merchant_url: string | null;
+    prompt_result_id: string;
+    prompt_results: {
+      id: string;
+      prompt_id: string;
+      prompts: {
+        id: string;
+        text: string;
+        category: string | null;
+        topic_id: string | null;
+        topics: {
+          name: string;
+        } | null;
+      };
+    };
+  }>;
+
+  for (const row of rows) {
+    const promptResult = row.prompt_results;
+    if (!promptResult) continue;
+    const prompt = promptResult.prompts;
+    if (!prompt) continue;
+
+    const promptId = prompt.id;
+    if (!promptMap.has(promptId)) {
+      promptMap.set(promptId, {
+        promptId,
+        promptText: prompt.text,
+        topic: prompt.topics?.name || prompt.category || 'General',
+        platforms: new Set<string>(),
+        totalCards: 0,
+        ownCardsCount: 0,
+        competitorCardsCount: 0,
+        otherCardsCount: 0,
+        lastTriggered: new Date(0),
+        appearancesMap: new Map(),
+      });
+    }
+
+    const entry = promptMap.get(promptId)!;
+    entry.platforms.add(row.platform);
+    entry.totalCards += 1;
+    if (row.matched_brand_role === 'own') {
+      entry.ownCardsCount += 1;
+    } else if (row.matched_brand_role === 'competitor') {
+      entry.competitorCardsCount += 1;
+    } else {
+      entry.otherCardsCount += 1;
+    }
+
+    const cardDate = new Date(row.created_at);
+    if (cardDate > entry.lastTriggered) {
+      entry.lastTriggered = cardDate;
+    }
+
+    const prId = row.prompt_result_id;
+    if (!entry.appearancesMap.has(prId)) {
+      entry.appearancesMap.set(prId, {
+        promptResultId: prId,
+        timestamp: row.created_at,
+        platform: row.platform,
+        region: row.region || '',
+        cards: [],
+      });
+    }
+    const appEntry = entry.appearancesMap.get(prId)!;
+    appEntry.cards.push({
+      id: row.id,
+      title: row.product_title || 'Unknown Product',
+      price: formatPrice(row.price_amount, row.price_currency),
+      imageUrl: row.image_url || '',
+      merchantUrl: row.merchant_url || '',
+    });
+  }
+
+  // Convert map to list and format timestamps
+  const promptsList: CardEligiblePromptRow[] = Array.from(promptMap.values()).map((p) => {
+    const appearances = Array.from(p.appearancesMap.values())
+      .map((app) => ({
+        ...app,
+        // Sort cards in appearance: own first, or just keep original order
+      }))
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    return {
+      promptId: p.promptId,
+      promptText: p.promptText,
+      topic: p.topic,
+      platforms: Array.from(p.platforms),
+      totalCards: p.totalCards,
+      ownCardsCount: p.ownCardsCount,
+      competitorCardsCount: p.competitorCardsCount,
+      otherCardsCount: p.otherCardsCount,
+      lastTriggered: p.lastTriggered.getTime() > 0 ? p.lastTriggered.toISOString() : '',
+      appearances,
+    };
+  });
+
+  // Sort by total cards desc
+  promptsList.sort((a, b) => b.totalCards - a.totalCards);
+
+  const trackedWithCards = promptMap.size;
+  const totalTracked = totalTrackedPrompts ?? 0;
+  const triggerRate = totalTracked > 0 ? trackedWithCards / totalTracked : 0;
+
+  return {
+    prompts: promptsList,
+    triggerRate,
+    totalTrackedPrompts: totalTracked,
+  };
 }
