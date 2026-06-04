@@ -422,7 +422,9 @@ function aggregateProducts(
     }
 
     const platforms = [...new Set(group.appearances.map((a) => a.platform).filter(Boolean))];
-    const regions = [...new Set(group.appearances.map((a) => a.region).filter((r): r is string => !!r))];
+    const regions = [
+      ...new Set(group.appearances.map((a) => a.region).filter((r): r is string => !!r)),
+    ];
     const heroImage = group.appearances.find((a) => a.image_url)?.image_url || null;
 
     const competitor_name =
