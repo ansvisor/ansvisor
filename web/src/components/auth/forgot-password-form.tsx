@@ -39,7 +39,10 @@ export function ForgotPasswordForm() {
           <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
           <p className="text-sm text-blue-800 dark:text-blue-300">{t('resetLinkSent')}</p>
         </div>
-        <Link href="/sign-in" className={buttonVariants({ variant: 'outline', className: 'w-full' })}>
+        <Link
+          href="/sign-in"
+          className={buttonVariants({ variant: 'outline', className: 'w-full' })}
+        >
           {t('backToSignIn')}
         </Link>
       </div>
