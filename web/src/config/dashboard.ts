@@ -5,7 +5,6 @@ import {
   Globe,
   LineChart,
   Quote,
-  Settings,
   ShoppingBag,
   Sparkles,
   Tag,
@@ -107,16 +106,6 @@ export const dashboardNav: NavGroup[] = [
         href: '/dashboard/content',
         icon: FileText,
         requiredFeature: 'content_optimization',
-      },
-    ],
-  },
-  {
-    title: 'System',
-    items: [
-      {
-        title: 'Settings',
-        href: '/dashboard/settings',
-        icon: Settings,
       },
     ],
   },
