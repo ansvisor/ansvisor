@@ -727,9 +727,9 @@ export async function getCompetitorComparisonFor(
 
   const p_models = params.model
     ? params.model
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
     : null;
 
   const rpcArgs = {
@@ -1164,9 +1164,9 @@ export async function getVisibilityTrendFor(
 
   const p_models = params.model
     ? params.model
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
     : null;
 
   const granularity: VisibilityTrendGranularity = params.granularity ?? 'day';
@@ -1432,7 +1432,7 @@ export interface ShoppingCardRow {
   merchant_domain: string | null;
   rating: number | null;
   review_count: number | null;
-  raw: any;
+  raw: Record<string, unknown>;
   matched_brand_id: string | null;
   matched_brand_role: string;
   platform: string;
@@ -1466,7 +1466,7 @@ export async function listShoppingCards(
   if (params.cursor) {
     try {
       cursorData = JSON.parse(Buffer.from(params.cursor, 'base64').toString('utf8'));
-    } catch (e) {
+    } catch {
       // Ignore invalid cursor
     }
   }
@@ -1490,7 +1490,9 @@ export async function listShoppingCards(
   }
 
   if (cursorData) {
-    query = query.or(`created_at.lt.${cursorData.created_at},and(created_at.eq.${cursorData.created_at},id.lt.${cursorData.id})`);
+    query = query.or(
+      `created_at.lt.${cursorData.created_at},and(created_at.eq.${cursorData.created_at},id.lt.${cursorData.id})`,
+    );
   }
 
   const { data: rows, error } = await query;
@@ -1543,7 +1545,9 @@ export async function getProductVisibility(
 
   const { data: cards, error } = await supabaseAdmin
     .from('prompt_result_shopping_cards')
-    .select('platform, region, created_at, price_amount, price_currency, rating, review_count, merchant_domain')
+    .select(
+      'platform, region, created_at, price_amount, price_currency, rating, review_count, merchant_domain',
+    )
     .eq('brand_id', params.brandId)
     .eq('product_title', params.productTitle)
     .order('created_at', { ascending: false });
