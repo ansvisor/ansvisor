@@ -22,9 +22,6 @@ import {
   Download,
   ExternalLink,
   Layers,
-  Eye,
-  Loader2,
-  Globe,
 } from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
@@ -40,7 +37,6 @@ import {
   type ShoppingFilters,
   type ShoppingKpis,
   type ShoppingProduct,
-  type ShoppingProductAppearance,
   type CompetitorShoppingSummary,
 } from '@/lib/actions/shopping';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -150,7 +146,7 @@ export default function ShoppingPage() {
       setTableLoading(true);
     }
     try {
-      const promises: [Promise<ShoppingKpis>, Promise<ShoppingChartData>, ...Promise<any>[]] = [
+      const promises: [Promise<ShoppingKpis>, Promise<ShoppingChartData>, ...Promise<unknown>[]] = [
         getShoppingKpis(activeBrandId, filters),
         getShoppingChartData(activeBrandId, filters),
       ];

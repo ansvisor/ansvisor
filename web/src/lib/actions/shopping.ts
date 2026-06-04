@@ -305,7 +305,7 @@ export interface ShoppingProductAppearance {
   created_at: string;
   region: string | null;
   platform: string;
-  raw: any;
+  raw: unknown;
   merchant_url: string | null;
   merchant_domain: string | null;
 }
@@ -334,6 +334,28 @@ export interface CompetitorShoppingSummary {
   sov: number;
 }
 
+interface CardRow {
+  id: string;
+  created_at: string;
+  platform: string;
+  region: string | null;
+  product_title: string | null;
+  product_brand: string | null;
+  price_amount: number | string | null;
+  price_currency: string | null;
+  image_url: string | null;
+  merchant_url: string | null;
+  merchant_domain: string | null;
+  raw: unknown;
+  matched_brand_id: string | null;
+  prompt_results: {
+    prompt: {
+      id: string;
+      text: string;
+    } | null;
+  } | null;
+}
+
 function getProductKey(brand: string | null, title: string | null): string {
   const cleanBrand = (brand ?? '').trim().toLowerCase();
   const cleanTitle = (title ?? '').trim().toLowerCase();
@@ -341,7 +363,7 @@ function getProductKey(brand: string | null, title: string | null): string {
 }
 
 function aggregateProducts(
-  cards: any[],
+  cards: CardRow[],
   competitorMap?: Map<string, { id: string; name: string; domain: string }>,
 ): ShoppingProduct[] {
   const groups = new Map<
@@ -350,7 +372,7 @@ function aggregateProducts(
       product_title: string;
       product_brand: string | null;
       matched_brand_id: string | null;
-      appearances: any[];
+      appearances: CardRow[];
       merchantDomains: Map<string, number>;
     }
   >();
