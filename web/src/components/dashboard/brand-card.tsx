@@ -47,7 +47,7 @@ export function BrandCard({ brand }: BrandCardProps) {
         </Avatar>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="truncate font-semibold leading-tight">{brand.name}</h3>
+            <h3 className="truncate text-sm font-semibold leading-tight">{brand.name}</h3>
             {isActive && (
               <Badge
                 variant="secondary"
@@ -59,7 +59,7 @@ export function BrandCard({ brand }: BrandCardProps) {
             )}
           </div>
           {primaryDomain && (
-            <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
+            <p className="mt-0.5 flex items-center gap-1 truncate text-sm text-muted-foreground">
               <Globe className="h-3 w-3 shrink-0" />
               {primaryDomain.domain}
             </p>
