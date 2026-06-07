@@ -12,6 +12,7 @@ const PACKAGE_PATHS = [
   resolve(root, 'web/package.json'),
   resolve(root, 'server/package.json'),
 ];
+const COMPOSE_PATH = resolve(root, 'docker-compose.yml');
 
 function parseVersion(version) {
   const match = version.match(/^(\d+)\.(\d+)\.(\d+)$/);
@@ -48,4 +49,20 @@ for (const pkgPath of PACKAGE_PATHS) {
   writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
 }
 
-console.log(`${oldVersion} → ${newVersion}`);
+const compose = readFileSync(COMPOSE_PATH, 'utf8');
+let updatedImageCount = 0;
+const updatedCompose = compose.replace(
+  /(image:\s*ghcr\.io\/ansvisor\/ansvisor\/(?:web|server):)\d+\.\d+\.\d+/g,
+  (_, prefix) => {
+    updatedImageCount += 1;
+    return `${prefix}${newVersion}`;
+  },
+);
+
+if (updatedImageCount === 0) {
+  throw new Error('No docker-compose image tags found to update');
+}
+
+writeFileSync(COMPOSE_PATH, updatedCompose);
+
+console.log(`${oldVersion} -> ${newVersion}`);
