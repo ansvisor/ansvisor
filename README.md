@@ -4,6 +4,7 @@
 
 [![🚀 Try the Cloud — ansvisor.com](https://img.shields.io/badge/🚀_Try_the_Cloud-ansvisor.com-6366f1?style=for-the-badge&logoColor=white&logo=vercel)](https://ansvisor.com)
 [![📚 Docs](https://img.shields.io/badge/📚_Docs-docs.ansvisor.com-10b981?style=for-the-badge&logoColor=white&logo=readthedocs)](https://docs.ansvisor.com)
+[![🎬 Product Tour](https://img.shields.io/badge/🎬_Product_Tour-Watch_the_demo-f59e0b?style=for-the-badge&logoColor=white)](https://app.supademo.com/demo/cmq2b1p5k0rk9qm6ugicrn655)
 
 [![Star on GitHub](https://img.shields.io/github/stars/ansvisor/ansvisor?style=for-the-badge&logo=github&color=gold)](https://github.com/ansvisor/ansvisor)
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](https://opensource.org/licenses/MIT)
