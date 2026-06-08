@@ -12,9 +12,7 @@ const topicSchema = z.object({
       z.object({
         name: z
           .string()
-          .describe(
-            'A concise topic name (3-8 words) relevant to the brand for AEO tracking',
-          ),
+          .describe('A concise topic name (3-8 words) relevant to the brand for AEO tracking'),
       }),
     )
     .min(6)

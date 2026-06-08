@@ -33,58 +33,54 @@ function mapOpportunityRow(row) {
  * POST /api/content/generate
  * Enqueues a content opportunity generation job. Returns { jobId } immediately.
  */
-router.post(
-  '/generate',
-  requireFeature('content_optimization'),
-  async (req, res) => {
-    try {
-      const { brandId, model } = req.body;
+router.post('/generate', requireFeature('content_optimization'), async (req, res) => {
+  try {
+    const { brandId, model } = req.body;
 
-      if (!brandId) {
-        return res.status(400).json({ error: 'brandId is required' });
-      }
-
-      const { data: brand } = await supabaseAdmin
-        .from('brands')
-        .select('id, organization_id')
-        .eq('id', brandId)
-        .single();
-
-      if (!brand) {
-        return res.status(404).json({ error: 'Brand not found' });
-      }
-
-      const { data: profile } = await supabaseAdmin
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', req.user.id)
-        .single();
-
-      if (!profile || profile.organization_id !== brand.organization_id) {
-        return res.status(403).json({ error: 'Unauthorized' });
-      }
-
-      const job = await createJob({
-        type: 'content',
-        brandId,
-        data: { brandId, model: model || null },
-        maxAttempts: 2,
-      });
-
-      const io = req.app.get('io');
-      runContentJob(job.id, io);
-
-      return res.json({
-        success: true,
-        jobId: job.id,
-        message: 'Content generation job enqueued',
-      });
-    } catch (error) {
-      console.error('[content] Enqueue error:', error.message);
-      return res.status(500).json({ error: error.message });
+    if (!brandId) {
+      return res.status(400).json({ error: 'brandId is required' });
     }
-  },
-);
+
+    const { data: brand } = await supabaseAdmin
+      .from('brands')
+      .select('id, organization_id')
+      .eq('id', brandId)
+      .single();
+
+    if (!brand) {
+      return res.status(404).json({ error: 'Brand not found' });
+    }
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', req.user.id)
+      .single();
+
+    if (!profile || profile.organization_id !== brand.organization_id) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const job = await createJob({
+      type: 'content',
+      brandId,
+      data: { brandId, model: model || null },
+      maxAttempts: 2,
+    });
+
+    const io = req.app.get('io');
+    runContentJob(job.id, io);
+
+    return res.json({
+      success: true,
+      jobId: job.id,
+      message: 'Content generation job enqueued',
+    });
+  } catch (error) {
+    console.error('[content] Enqueue error:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
 
 /**
  * GET /api/content/job/:jobId
@@ -243,7 +239,8 @@ router.post('/bulk/send-webhook', async (req, res) => {
       .eq('is_primary', true)
       .limit(1);
 
-    const serverUrl = process.env.PUBLIC_SERVER_URL || `http://localhost:${process.env.PORT || 3001}`;
+    const serverUrl =
+      process.env.PUBLIC_SERVER_URL || `http://localhost:${process.env.PORT || 3001}`;
     const headers = { 'Content-Type': 'application/json' };
     if (webhookConfig.webhook_secret) {
       headers['X-Webhook-Secret'] = webhookConfig.webhook_secret;
@@ -274,9 +271,7 @@ router.post('/bulk/send-webhook', async (req, res) => {
             impact: opportunity.impact,
             opportunity_score: parseFloat(opportunity.opportunity_score),
           },
-          prompt: prompt
-            ? { text: prompt.text, category: prompt.category }
-            : null,
+          prompt: prompt ? { text: prompt.text, category: prompt.category } : null,
           data: opportunity.source_data || {},
           brief: opportunity.brief || null,
           brand: {
@@ -416,7 +411,8 @@ router.post('/:id/send-webhook', async (req, res) => {
       prompt = p;
     }
 
-    const serverUrl = process.env.PUBLIC_SERVER_URL || `http://localhost:${process.env.PORT || 3001}`;
+    const serverUrl =
+      process.env.PUBLIC_SERVER_URL || `http://localhost:${process.env.PORT || 3001}`;
 
     const payload = {
       event: 'opportunity.sent',
@@ -428,9 +424,7 @@ router.post('/:id/send-webhook', async (req, res) => {
         impact: opportunity.impact,
         opportunity_score: parseFloat(opportunity.opportunity_score),
       },
-      prompt: prompt
-        ? { text: prompt.text, category: prompt.category }
-        : null,
+      prompt: prompt ? { text: prompt.text, category: prompt.category } : null,
       data: opportunity.source_data || {},
       brief: opportunity.brief || null,
       brand: {
@@ -622,7 +616,9 @@ export async function generateBriefForOpportunity(opportunityId, { force = false
 
     const { data: results } = await supabaseAdmin
       .from('prompt_results')
-      .select('platform, visibility_score, mention_count, citation_count, sentiment, response, competitor_mentions')
+      .select(
+        'platform, visibility_score, mention_count, citation_count, sentiment, response, competitor_mentions',
+      )
       .eq('prompt_id', opportunity.prompt_id)
       .order('created_at', { ascending: false })
       .limit(10);

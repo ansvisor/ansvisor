@@ -33,8 +33,14 @@ Rules:
 
 function computeScore(volume, visibility, competitorGap, intent) {
   const weights = {
-    comparison: 1.0, 'best-top': 0.95, 'vs-review': 0.9, recommendation: 0.85,
-    'how-to': 0.75, 'problem-solving': 0.7, 'what-is': 0.6, other: 0.5,
+    comparison: 1.0,
+    'best-top': 0.95,
+    'vs-review': 0.9,
+    recommendation: 0.85,
+    'how-to': 0.75,
+    'problem-solving': 0.7,
+    'what-is': 0.6,
+    other: 0.5,
   };
   const nv = Math.min(volume / 50000, 1);
   const vg = (100 - (visibility || 0)) / 100;
@@ -100,20 +106,34 @@ export async function generateContentOpportunities(brandId) {
     .map((p) => {
       const vol = volMap[p.id];
       const res = resMap[p.id] || [];
-      const avgVis = res.length ? Math.round(res.reduce((s, r) => s + r.visibility_score, 0) / res.length) : 0;
+      const avgVis = res.length
+        ? Math.round(res.reduce((s, r) => s + r.visibility_score, 0) / res.length)
+        : 0;
       const compMentions = {};
       for (const r of res) {
-        const cms = typeof r.competitor_mentions === 'string' ? JSON.parse(r.competitor_mentions) : r.competitor_mentions;
-        for (const cm of cms || []) compMentions[cm.name] = (compMentions[cm.name] || 0) + (cm.visibility_score || 0);
+        const cms =
+          typeof r.competitor_mentions === 'string'
+            ? JSON.parse(r.competitor_mentions)
+            : r.competitor_mentions;
+        for (const cm of cms || [])
+          compMentions[cm.name] = (compMentions[cm.name] || 0) + (cm.visibility_score || 0);
       }
       const cg = Object.values(compMentions).length
-        ? Math.round(Object.values(compMentions).reduce((a, b) => a + b, 0) / Object.values(compMentions).length) - avgVis
+        ? Math.round(
+            Object.values(compMentions).reduce((a, b) => a + b, 0) /
+              Object.values(compMentions).length,
+          ) - avgVis
         : 0;
 
       return {
-        promptId: p.id, text: p.text, category: p.category || 'unknown',
-        estAiVolume: vol?.est_ai_volume || 0, intent: vol?.intent || 'other',
-        keywords: vol?.keywords || [], avgVisibility: avgVis, competitorGap: cg,
+        promptId: p.id,
+        text: p.text,
+        category: p.category || 'unknown',
+        estAiVolume: vol?.est_ai_volume || 0,
+        intent: vol?.intent || 'other',
+        keywords: vol?.keywords || [],
+        avgVisibility: avgVis,
+        competitorGap: cg,
         competitorsCited: Object.keys(compMentions),
         score: computeScore(vol?.est_ai_volume || 0, avgVis, cg, vol?.intent || 'other'),
       };
@@ -147,9 +167,10 @@ Generate actionable content opportunities.`;
     .eq('status', 'new');
 
   const seen = new Set(
-    (existing || []).map((opportunity) => (
-      `${opportunity.prompt_id}::${(opportunity.title || '').toLowerCase().trim()}`
-    )),
+    (existing || []).map(
+      (opportunity) =>
+        `${opportunity.prompt_id}::${(opportunity.title || '').toLowerCase().trim()}`,
+    ),
   );
 
   const rows = object.opportunities
@@ -173,9 +194,13 @@ Generate actionable content opportunities.`;
       opportunity_score: rel.score,
       status: 'new',
       source_data: {
-        promptText: rel.text, estAiVolume: rel.estAiVolume,
-        visibilityScore: rel.avgVisibility, competitorGap: rel.competitorGap,
-        intent: rel.intent, keywords: rel.keywords, competitorsCited: rel.competitorsCited,
+        promptText: rel.text,
+        estAiVolume: rel.estAiVolume,
+        visibilityScore: rel.avgVisibility,
+        competitorGap: rel.competitorGap,
+        intent: rel.intent,
+        keywords: rel.keywords,
+        competitorsCited: rel.competitorsCited,
       },
     }));
 

@@ -4,14 +4,17 @@ import { z } from 'zod';
 import { resolveModel } from '../lib/ai-provider.js';
 import { getSearchVolumes } from '../lib/dataforseo.js';
 import { regionToLocationCode, languageToCode } from '../lib/dataforseo-codes.js';
-import { requireFeature, enforceVolumeQuota, getVolumeQuotaStatus, PlanLimitError } from '../lib/plan-guard.js';
+import {
+  requireFeature,
+  enforceVolumeQuota,
+  getVolumeQuotaStatus,
+  PlanLimitError,
+} from '../lib/plan-guard.js';
 import supabaseAdmin from '../config/supabase.js';
 
 const router = Router();
 
-const AI_VOLUME_MULTIPLIER = parseFloat(
-  process.env.AI_VOLUME_MULTIPLIER || '0.15',
-);
+const AI_VOLUME_MULTIPLIER = parseFloat(process.env.AI_VOLUME_MULTIPLIER || '0.15');
 
 const intentKeywordSchema = z.object({
   intent: z
@@ -82,13 +85,7 @@ function mapVolumeRow(saved) {
   };
 }
 
-async function fetchAndSaveVolumes(
-  promptId,
-  keywords,
-  intent,
-  locationCode,
-  languageCode,
-) {
+async function fetchAndSaveVolumes(promptId, keywords, intent, locationCode, languageCode) {
   const volumes = await getSearchVolumes(keywords, {
     locationCode: locationCode || undefined,
     languageCode: languageCode || undefined,
@@ -110,9 +107,7 @@ async function fetchAndSaveVolumes(
   }
 
   const competitionIndex =
-    competitionWeight > 0
-      ? Math.round(competitionWeightedSum / competitionWeight)
-      : null;
+    competitionWeight > 0 ? Math.round(competitionWeightedSum / competitionWeight) : null;
   const competition =
     competitionIndex === null
       ? null
@@ -160,13 +155,10 @@ router.post('/analyze', requireFeature('prompt_volumes'), async (req, res) => {
   try {
     const { remaining, orgId } = await enforceVolumeQuota(req.user.id);
 
-    const { promptId, promptText, locationCode, languageCode, model, force } =
-      req.body;
+    const { promptId, promptText, locationCode, languageCode, model, force } = req.body;
 
     if (!promptId || !promptText) {
-      return res
-        .status(400)
-        .json({ error: 'promptId and promptText are required' });
+      return res.status(400).json({ error: 'promptId and promptText are required' });
     }
 
     let resolvedLocationCode = locationCode;
@@ -255,131 +247,125 @@ router.post('/analyze', requireFeature('prompt_volumes'), async (req, res) => {
  * Batch analysis. Uses saved keywords when available, calls LLM only for new prompts.
  * Pass force=true to re-generate all keywords via LLM.
  */
-router.post(
-  '/analyze-batch',
-  requireFeature('prompt_volumes'),
-  async (req, res) => {
-    try {
-      const { remaining, orgId } = await enforceVolumeQuota(req.user.id);
+router.post('/analyze-batch', requireFeature('prompt_volumes'), async (req, res) => {
+  try {
+    const { remaining, orgId } = await enforceVolumeQuota(req.user.id);
 
-      const { prompts, locationCode, languageCode, model, force } = req.body;
+    const { prompts, locationCode, languageCode, model, force } = req.body;
 
-      if (!Array.isArray(prompts) || prompts.length === 0) {
-        return res
-          .status(400)
-          .json({ error: 'prompts array is required and must not be empty' });
+    if (!Array.isArray(prompts) || prompts.length === 0) {
+      return res.status(400).json({ error: 'prompts array is required and must not be empty' });
+    }
+
+    if (prompts.length > 50) {
+      return res.status(400).json({ error: 'Maximum 50 prompts per batch' });
+    }
+
+    const promptIds = prompts.map((p) => p.promptId);
+
+    // Resolve DataForSEO location/language from the brand the prompts belong to,
+    // unless the caller explicitly passed an override in the request body.
+    let resolvedLocationCode = locationCode;
+    let resolvedLanguageCode = languageCode;
+    if (resolvedLocationCode == null || resolvedLanguageCode == null) {
+      const { data: brandRow } = await supabaseAdmin
+        .from('prompts')
+        .select('prompt_sets!inner(brands!inner(region, language))')
+        .in('id', promptIds)
+        .limit(1)
+        .maybeSingle();
+      const brand = brandRow?.prompt_sets?.brands;
+      if (brand) {
+        if (resolvedLocationCode == null) {
+          resolvedLocationCode = regionToLocationCode(brand.region);
+        }
+        if (resolvedLanguageCode == null) {
+          resolvedLanguageCode = languageToCode(brand.language);
+        }
       }
+    }
 
-      if (prompts.length > 50) {
-        return res.status(400).json({ error: 'Maximum 50 prompts per batch' });
-      }
+    let existingMap = {};
 
-      const promptIds = prompts.map((p) => p.promptId);
+    if (!force) {
+      const { data: existingRows } = await supabaseAdmin
+        .from('prompt_volumes')
+        .select('prompt_id, intent, keywords')
+        .in('prompt_id', promptIds);
 
-      // Resolve DataForSEO location/language from the brand the prompts belong to,
-      // unless the caller explicitly passed an override in the request body.
-      let resolvedLocationCode = locationCode;
-      let resolvedLanguageCode = languageCode;
-      if (resolvedLocationCode == null || resolvedLanguageCode == null) {
-        const { data: brandRow } = await supabaseAdmin
-          .from('prompts')
-          .select('prompt_sets!inner(brands!inner(region, language))')
-          .in('id', promptIds)
-          .limit(1)
-          .maybeSingle();
-        const brand = brandRow?.prompt_sets?.brands;
-        if (brand) {
-          if (resolvedLocationCode == null) {
-            resolvedLocationCode = regionToLocationCode(brand.region);
-          }
-          if (resolvedLanguageCode == null) {
-            resolvedLanguageCode = languageToCode(brand.language);
+      if (existingRows) {
+        for (const row of existingRows) {
+          if (row.keywords?.length) {
+            existingMap[row.prompt_id] = {
+              intent: row.intent,
+              keywords: row.keywords,
+            };
           }
         }
       }
+    }
 
-      let existingMap = {};
+    const aiModel = resolveModel(model);
+    const results = [];
 
-      if (!force) {
-        const { data: existingRows } = await supabaseAdmin
-          .from('prompt_volumes')
-          .select('prompt_id, intent, keywords')
-          .in('prompt_id', promptIds);
+    for (const { promptId, promptText } of prompts) {
+      try {
+        let intent;
+        let keywords;
 
-        if (existingRows) {
-          for (const row of existingRows) {
-            if (row.keywords?.length) {
-              existingMap[row.prompt_id] = {
-                intent: row.intent,
-                keywords: row.keywords,
-              };
-            }
-          }
+        const cached = existingMap[promptId];
+        if (cached) {
+          intent = cached.intent;
+          keywords = cached.keywords;
+        } else {
+          const { object: intentResult } = await generateObject({
+            model: aiModel,
+            schema: intentKeywordSchema,
+            system: INTENT_SYSTEM_PROMPT,
+            prompt: `Analyze this AI search prompt and extract intent + 5 Google keywords:\n\n"${promptText}"`,
+          });
+          intent = intentResult.intent;
+          keywords = intentResult.keywords;
         }
+
+        const saved = await fetchAndSaveVolumes(
+          promptId,
+          keywords,
+          intent,
+          resolvedLocationCode,
+          resolvedLanguageCode,
+        );
+        results.push(mapVolumeRow(saved));
+      } catch (err) {
+        results.push({ promptId, error: err.message });
       }
+    }
 
-      const aiModel = resolveModel(model);
-      const results = [];
-
-      for (const { promptId, promptText } of prompts) {
-        try {
-          let intent;
-          let keywords;
-
-          const cached = existingMap[promptId];
-          if (cached) {
-            intent = cached.intent;
-            keywords = cached.keywords;
-          } else {
-            const { object: intentResult } = await generateObject({
-              model: aiModel,
-              schema: intentKeywordSchema,
-              system: INTENT_SYSTEM_PROMPT,
-              prompt: `Analyze this AI search prompt and extract intent + 5 Google keywords:\n\n"${promptText}"`,
-            });
-            intent = intentResult.intent;
-            keywords = intentResult.keywords;
-          }
-
-          const saved = await fetchAndSaveVolumes(
-            promptId,
-            keywords,
-            intent,
-            resolvedLocationCode,
-            resolvedLanguageCode,
-          );
-          results.push(mapVolumeRow(saved));
-        } catch (err) {
-          results.push({ promptId, error: err.message });
-        }
-      }
-
-      const successCount = results.filter((r) => !r.error).length;
-      if (successCount > 0 && orgId) {
-        await supabaseAdmin.from('volume_usage').insert({
-          organization_id: orgId,
-          action: 'analyze-batch',
-          prompt_count: successCount,
-        });
-      }
-
-      return res.json({ results, remaining: remaining === -1 ? -1 : remaining - 1 });
-    } catch (error) {
-      if (error instanceof PlanLimitError) {
-        return res.status(error.statusCode).json({
-          success: false,
-          error: 'quota_exceeded',
-          message: error.message,
-        });
-      }
-      console.error('Batch volume analysis error:', error);
-      return res.status(500).json({
-        error: 'Failed to analyze prompt volumes',
-        details: error.message,
+    const successCount = results.filter((r) => !r.error).length;
+    if (successCount > 0 && orgId) {
+      await supabaseAdmin.from('volume_usage').insert({
+        organization_id: orgId,
+        action: 'analyze-batch',
+        prompt_count: successCount,
       });
     }
-  },
-);
+
+    return res.json({ results, remaining: remaining === -1 ? -1 : remaining - 1 });
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        error: 'quota_exceeded',
+        message: error.message,
+      });
+    }
+    console.error('Batch volume analysis error:', error);
+    return res.status(500).json({
+      error: 'Failed to analyze prompt volumes',
+      details: error.message,
+    });
+  }
+});
 
 /**
  * POST /api/volumes/refresh
@@ -526,9 +512,7 @@ router.get('/brand/:brandId', async (req, res) => {
       .in('prompt_set_id', setIds);
 
     if (pError) {
-      return res
-        .status(500)
-        .json({ error: 'Failed to fetch prompts', details: pError.message });
+      return res.status(500).json({ error: 'Failed to fetch prompts', details: pError.message });
     }
 
     if (!prompts || prompts.length === 0) {
@@ -544,9 +528,7 @@ router.get('/brand/:brandId', async (req, res) => {
       .order('est_ai_volume', { ascending: false });
 
     if (vError) {
-      return res
-        .status(500)
-        .json({ error: 'Failed to fetch volumes', details: vError.message });
+      return res.status(500).json({ error: 'Failed to fetch volumes', details: vError.message });
     }
 
     const promptMap = {};

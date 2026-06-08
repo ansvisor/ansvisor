@@ -17,12 +17,7 @@ import { parseScraperResponse } from './lib/cloro-scraper.js';
 import { handleScraperResult } from './lib/cloro-result-handler.js';
 import { generateBriefForOpportunity } from './routes/content.js';
 import supabaseAdmin from './config/supabase.js';
-import {
-  getPlan,
-  hasFeature,
-  isCloud,
-  isSubscriptionActive,
-} from './config/plans.js';
+import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/plans.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -52,13 +47,15 @@ app.use(
   cors({
     origin: allowedOrigins,
     credentials: true,
-  })
+  }),
 );
 
 // --- Security ---
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: 'cross-origin' },
-}));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  }),
+);
 
 // --- Rate limiting ---
 app.use('/api', apiLimiter);
@@ -72,9 +69,7 @@ const io = new SocketIOServer(server, {
   },
 });
 
-io.use((socket, next) =>
-  Middleware.checkRequestIsComingFromDomainForSocket(socket, next)
-);
+io.use((socket, next) => Middleware.checkRequestIsComingFromDomainForSocket(socket, next));
 io.use((socket, next) => Middleware.decodeTokenForSocket(socket, next));
 
 io.on('connection', (socket) => {
@@ -92,9 +87,7 @@ app.set('io', io);
 async function runDailyTracking() {
   const isCloudMode = isCloud();
 
-  const { data: brands, error } = await supabaseAdmin
-    .from('brands')
-    .select('id, organization_id');
+  const { data: brands, error } = await supabaseAdmin.from('brands').select('id, organization_id');
 
   if (error || !brands || brands.length === 0) {
     return { triggered: 0, total: 0 };
@@ -258,10 +251,7 @@ app.post('/cloro/callback', async (req, res) => {
 
     if (status === 'FAILED') {
       console.error(`[cloro/callback] Task ${taskId} (${pending.scraper_id}) FAILED`);
-      await supabaseAdmin
-        .from('cloro_pending_tasks')
-        .delete()
-        .eq('task_id', taskId);
+      await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
       return;
     }
 
@@ -272,40 +262,22 @@ app.post('/cloro/callback', async (req, res) => {
 
     if (!response) {
       console.error(`[cloro/callback] Task ${taskId} COMPLETED but missing response`);
-      await supabaseAdmin
-        .from('cloro_pending_tasks')
-        .delete()
-        .eq('task_id', taskId);
+      await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
       return;
     }
 
     // Fetch context for result handler
-    const [
-      { data: brand },
-      { data: domains },
-      { data: competitorRows },
-    ] = await Promise.all([
-      supabaseAdmin
-        .from('brands')
-        .select('id, name')
-        .eq('id', pending.brand_id)
-        .single(),
-      supabaseAdmin
-        .from('brand_domains')
-        .select('domain')
-        .eq('brand_id', pending.brand_id),
-      supabaseAdmin
-        .from('competitors')
-        .select('id, name, domain')
-        .eq('brand_id', pending.brand_id),
+    const [{ data: brand }, { data: domains }, { data: competitorRows }] = await Promise.all([
+      supabaseAdmin.from('brands').select('id, name').eq('id', pending.brand_id).single(),
+      supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', pending.brand_id),
+      supabaseAdmin.from('competitors').select('id, name, domain').eq('brand_id', pending.brand_id),
     ]);
 
     if (!brand) {
-      console.error(`[cloro/callback] Brand ${pending.brand_id} for task ${taskId} not found — dropping`);
-      await supabaseAdmin
-        .from('cloro_pending_tasks')
-        .delete()
-        .eq('task_id', taskId);
+      console.error(
+        `[cloro/callback] Brand ${pending.brand_id} for task ${taskId} not found — dropping`,
+      );
+      await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
       return;
     }
 
@@ -331,10 +303,7 @@ app.post('/cloro/callback', async (req, res) => {
       competitors,
     });
 
-    await supabaseAdmin
-      .from('cloro_pending_tasks')
-      .delete()
-      .eq('task_id', taskId);
+    await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
 
     console.log(`[cloro/callback] Task ${taskId} (${pending.scraper_id}) processed and inserted`);
   } catch (err) {
@@ -360,10 +329,7 @@ app.use((err, req, res, _next) => {
   console.error('Unhandled error:', err.message);
   res.status(err.status || 500).json({
     success: false,
-    message:
-      process.env.NODE_ENV === 'development'
-        ? err.message
-        : 'Internal Server Error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Internal Server Error',
   });
 });
 

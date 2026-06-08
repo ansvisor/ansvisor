@@ -39,16 +39,10 @@ async function loadSuggestionContext(brandId) {
     { data: existingTopics },
     { data: recentResults },
   ] = await Promise.all([
-    supabaseAdmin
-      .from('brands')
-      .select('name, description, language')
-      .eq('id', brandId)
-      .single(),
+    supabaseAdmin.from('brands').select('name, description, language').eq('id', brandId).single(),
     supabaseAdmin
       .from('prompts')
-      .select(
-        'id, text, prompt_sets!inner(brand_id), prompt_volumes(est_ai_volume, intent)',
-      )
+      .select('id, text, prompt_sets!inner(brand_id), prompt_volumes(est_ai_volume, intent)')
       .eq('prompt_sets.brand_id', brandId)
       .eq('is_active', true)
       .limit(80),
@@ -131,9 +125,7 @@ const newSuggestionSchema = z.object({
           .string()
           .min(20)
           .max(120)
-          .describe(
-            'A short, generic search query without any brand names',
-          ),
+          .describe('A short, generic search query without any brand names'),
         topic: z
           .string()
           .min(3)
@@ -208,8 +200,7 @@ ${volumeBlock}
 
 Suggest the next 8 prompts this brand should start tracking, with topic, reason and a calibrated monthly AI search volume (estVolume).`;
 
-  const promptModel =
-    process.env.PROMPT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
+  const promptModel = process.env.PROMPT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
   const aiModel = resolveModel(promptModel);
 
   const { object } = await generateObject({
@@ -255,9 +246,7 @@ router.post(
         .eq('brand_id', req.params.brandId)
         .eq('status', 'new');
 
-      const expiresAt = new Date(
-        Date.now() + SUGGESTION_TTL_HOURS * 60 * 60 * 1000,
-      ).toISOString();
+      const expiresAt = new Date(Date.now() + SUGGESTION_TTL_HOURS * 60 * 60 * 1000).toISOString();
 
       const rows = [];
       for (const s of suggestions) {
@@ -285,9 +274,7 @@ router.post(
     } catch (error) {
       const status = error.status || 500;
       console.error('[prompt-suggestions] refresh error:', error.message);
-      return res
-        .status(status)
-        .json({ error: error.message || 'Failed to generate suggestions' });
+      return res.status(status).json({ error: error.message || 'Failed to generate suggestions' });
     }
   },
 );
@@ -303,9 +290,7 @@ router.get('/suggestions/:brandId', async (req, res) => {
       .order('generated_at', { ascending: false });
     if (error) throw error;
 
-    const stale = (data || []).every(
-      (r) => new Date(r.expires_at).getTime() < Date.now(),
-    );
+    const stale = (data || []).every((r) => new Date(r.expires_at).getTime() < Date.now());
     return res.json({
       suggestions: data || [],
       stale: data?.length === 0 || stale,
@@ -313,9 +298,7 @@ router.get('/suggestions/:brandId', async (req, res) => {
   } catch (error) {
     const status = error.status || 500;
     console.error('[prompt-suggestions] list error:', error.message);
-    return res
-      .status(status)
-      .json({ error: error.message || 'Failed to load suggestions' });
+    return res.status(status).json({ error: error.message || 'Failed to load suggestions' });
   }
 });
 
@@ -338,9 +321,7 @@ router.post('/suggestions/:id/dismiss', async (req, res) => {
   } catch (error) {
     const status = error.status || 500;
     console.error('[prompt-suggestions] dismiss error:', error.message);
-    return res
-      .status(status)
-      .json({ error: error.message || 'Failed to dismiss' });
+    return res.status(status).json({ error: error.message || 'Failed to dismiss' });
   }
 });
 
@@ -371,9 +352,7 @@ router.post('/suggestions/:id/accept', async (req, res) => {
   } catch (error) {
     const status = error.status || 500;
     console.error('[prompt-suggestions] accept error:', error.message);
-    return res
-      .status(status)
-      .json({ error: error.message || 'Failed to accept' });
+    return res.status(status).json({ error: error.message || 'Failed to accept' });
   }
 });
 
@@ -383,9 +362,7 @@ const promptSuggestionSchema = z.object({
       z.object({
         text: z
           .string()
-          .describe(
-            'A short, generic search query (30-100 characters) WITHOUT any brand names',
-          ),
+          .describe('A short, generic search query (30-100 characters) WITHOUT any brand names'),
         category: z
           .enum([
             'industry',
@@ -445,45 +422,41 @@ IMPORTANT: All prompts MUST be written in ${langName}.`;
  * Body: { brandName, industry, description?, model? }
  * Returns: { prompts: [{ text, category }] }
  */
-router.post(
-  '/suggest',
-  requireFeature('prompt_suggestions'),
-  async (req, res) => {
-    try {
-      const { brandName, industry, description, model, language } = req.body;
-      const langName = getLanguageName(language);
+router.post('/suggest', requireFeature('prompt_suggestions'), async (req, res) => {
+  try {
+    const { brandName, industry, description, model, language } = req.body;
+    const langName = getLanguageName(language);
 
-      if (!brandName) {
-        return res.status(400).json({ error: 'brandName is required' });
-      }
+    if (!brandName) {
+      return res.status(400).json({ error: 'brandName is required' });
+    }
 
-      const userPrompt = `Brand context (DO NOT use the brand name "${brandName}" in any prompt):
+    const userPrompt = `Brand context (DO NOT use the brand name "${brandName}" in any prompt):
 Industry: ${industry || 'Not specified'}
 Description: ${description || 'Not specified'}
 Language: ${langName} — write ALL prompts in this language.
 
 Based on this brand's industry and context, generate 10 short, generic search prompts (each 30-100 characters, aim for 40-80) that potential customers would type into AI search engines. These prompts should be queries where this brand COULD naturally appear in AI responses — but the prompts themselves must NOT contain any brand names.`;
 
-      const promptModel = process.env.PROMPT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
-      const aiModel = resolveModel(model || promptModel);
+    const promptModel = process.env.PROMPT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
+    const aiModel = resolveModel(model || promptModel);
 
-      const { object } = await generateObject({
-        model: aiModel,
-        schema: promptSuggestionSchema,
-        system: getSystemPrompt(langName),
-        prompt: userPrompt,
-      });
+    const { object } = await generateObject({
+      model: aiModel,
+      schema: promptSuggestionSchema,
+      system: getSystemPrompt(langName),
+      prompt: userPrompt,
+    });
 
-      return res.json({ prompts: object.prompts });
-    } catch (error) {
-      console.error('Prompt suggestion error:', error);
-      return res.status(500).json({
-        error: 'Failed to generate prompt suggestions',
-        details: error.message,
-      });
-    }
-  },
-);
+    return res.json({ prompts: object.prompts });
+  } catch (error) {
+    console.error('Prompt suggestion error:', error);
+    return res.status(500).json({
+      error: 'Failed to generate prompt suggestions',
+      details: error.message,
+    });
+  }
+});
 
 const topicPromptSchema = z.object({
   topicPrompts: z.array(
@@ -505,9 +478,7 @@ router.post('/from-topics', async (req, res) => {
     const langName = getLanguageName(language);
 
     if (!brandName || !topics?.length) {
-      return res
-        .status(400)
-        .json({ error: 'brandName and topics are required' });
+      return res.status(400).json({ error: 'brandName and topics are required' });
     }
 
     const promptModel = process.env.PROMPT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';

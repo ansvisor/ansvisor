@@ -40,24 +40,18 @@ export async function getSearchVolumes(keywords, options = {}) {
   });
 
   if (!response.ok) {
-    throw new Error(
-      `DataForSEO API error (${response.status}): ${response.statusText}`,
-    );
+    throw new Error(`DataForSEO API error (${response.status}): ${response.statusText}`);
   }
 
   const data = await response.json();
 
   if (data.status_code !== 20000) {
-    throw new Error(
-      `DataForSEO error: ${data.status_message || 'Unknown error'}`,
-    );
+    throw new Error(`DataForSEO error: ${data.status_message || 'Unknown error'}`);
   }
 
   const task = data.tasks?.[0];
   if (!task || task.status_code !== 20000) {
-    throw new Error(
-      `DataForSEO task error: ${task?.status_message || 'No task returned'}`,
-    );
+    throw new Error(`DataForSEO task error: ${task?.status_message || 'No task returned'}`);
   }
 
   const volumes = {};

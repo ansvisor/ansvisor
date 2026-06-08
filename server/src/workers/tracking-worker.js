@@ -108,12 +108,8 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
   // 6. Phase 1: Collect & run all scraper (platform) tasks first
   const scraperTasks = [];
   for (const prompt of prompts) {
-    const scrapersToRun = prompt.platforms && prompt.platforms.length > 0
-      ? prompt.platforms
-      : [];
-    const regionsToRun = prompt.regions && prompt.regions.length > 0
-      ? prompt.regions
-      : [null];
+    const scrapersToRun = prompt.platforms && prompt.platforms.length > 0 ? prompt.platforms : [];
+    const regionsToRun = prompt.regions && prompt.regions.length > 0 ? prompt.regions : [null];
 
     for (const scraperId of scrapersToRun) {
       for (const region of regionsToRun) {
@@ -142,15 +138,19 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
     // Submit all tasks concurrently
     const submissions = await Promise.allSettled(
       scraperTasks.map((t) =>
-        submitScraperTask(t.prompt.text, t.scraperId, t.region, { webhookUrl })
-          .then((res) => ({ ...res, meta: t }))
+        submitScraperTask(t.prompt.text, t.scraperId, t.region, { webhookUrl }).then((res) => ({
+          ...res,
+          meta: t,
+        })),
       ),
     );
 
     const submitted = [];
     for (const sub of submissions) {
       if (sub.status === 'fulfilled') {
-        console.log(`[tracking] Submitted ${sub.value.scraperId} task=${sub.value.taskId} prompt="${sub.value.meta.prompt.text.slice(0, 50)}..."`);
+        console.log(
+          `[tracking] Submitted ${sub.value.scraperId} task=${sub.value.taskId} prompt="${sub.value.meta.prompt.text.slice(0, 50)}..."`,
+        );
         submitted.push(sub.value);
       } else {
         const failedTask = scraperTasks[submissions.indexOf(sub)];
@@ -227,7 +227,9 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
 
       completedTasks += expectedSubmitted;
     } else {
-      console.log(`[tracking] ${submitted.length}/${scraperTasks.length} tasks submitted, polling for results...`);
+      console.log(
+        `[tracking] ${submitted.length}/${scraperTasks.length} tasks submitted, polling for results...`,
+      );
 
       // Polling fallback: wait for each task inline (legacy behavior)
       await Promise.allSettled(
@@ -235,13 +237,21 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
           try {
             console.log(`[tracking] Polling task=${taskId} scraper=${scraperId}...`);
             const aiResponse = await pollScraperResult(taskId, scraperId);
-            console.log(`[tracking] Task=${taskId} scraper=${scraperId} completed, inserting result...`);
+            console.log(
+              `[tracking] Task=${taskId} scraper=${scraperId} completed, inserting result...`,
+            );
 
             const mentionCount = countBrandMentions(aiResponse.text, brandInfo);
-            const sentimentResult = mentionCount > 0
-              ? await analyzeSentimentAI(aiResponse.text, brandInfo.brandName)
-              : { sentiment: 'neutral', confidence: 0, reason: 'Brand not mentioned' };
-            const metrics = parseResponse(aiResponse, brandInfo, sentimentResult.sentiment, competitors);
+            const sentimentResult =
+              mentionCount > 0
+                ? await analyzeSentimentAI(aiResponse.text, brandInfo.brandName)
+                : { sentiment: 'neutral', confidence: 0, reason: 'Brand not mentioned' };
+            const metrics = parseResponse(
+              aiResponse,
+              brandInfo,
+              sentimentResult.sentiment,
+              competitors,
+            );
 
             await insertResult({
               prompt_id: meta.prompt.id,
@@ -260,9 +270,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
 
             console.log(`[tracking] Task=${taskId} scraper=${scraperId} result saved.`);
           } catch (err) {
-            console.error(
-              `[tracking] Task=${taskId} scraper=${scraperId} failed: ${err.message}`,
-            );
+            console.error(`[tracking] Task=${taskId} scraper=${scraperId} failed: ${err.message}`);
           }
 
           completedTasks++;
@@ -283,12 +291,8 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
   // 7. Phase 2: Run AI model tasks concurrently
   const modelTasks = [];
   for (const prompt of prompts) {
-    const modelsToRun = prompt.models && prompt.models.length > 0
-      ? prompt.models
-      : [];
-    const regionsToRun = prompt.regions && prompt.regions.length > 0
-      ? prompt.regions
-      : [null];
+    const modelsToRun = prompt.models && prompt.models.length > 0 ? prompt.models : [];
+    const regionsToRun = prompt.regions && prompt.regions.length > 0 ? prompt.regions : [null];
 
     for (const modelName of modelsToRun) {
       for (const region of regionsToRun) {
@@ -317,10 +321,16 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
           const aiResponse = await runPrompt(prompt.text, modelName, region);
 
           const mentionCount = countBrandMentions(aiResponse.text, brandInfo);
-          const sentimentResult = mentionCount > 0
-            ? await analyzeSentimentAI(aiResponse.text, brandInfo.brandName)
-            : { sentiment: 'neutral', confidence: 0, reason: 'Brand not mentioned' };
-          const metrics = parseResponse(aiResponse, brandInfo, sentimentResult.sentiment, competitors);
+          const sentimentResult =
+            mentionCount > 0
+              ? await analyzeSentimentAI(aiResponse.text, brandInfo.brandName)
+              : { sentiment: 'neutral', confidence: 0, reason: 'Brand not mentioned' };
+          const metrics = parseResponse(
+            aiResponse,
+            brandInfo,
+            sentimentResult.sentiment,
+            competitors,
+          );
 
           await insertResult({
             prompt_id: prompt.id,
@@ -377,7 +387,10 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
       const plan = getPlan(org?.plan);
       if (hasFeature(plan, 'content_optimization')) {
         generateContentOpportunities(brandId).catch((err) => {
-          console.error(`[tracking] Auto opportunity generation failed for brand ${brandId}:`, err.message);
+          console.error(
+            `[tracking] Auto opportunity generation failed for brand ${brandId}:`,
+            err.message,
+          );
         });
       }
     }

@@ -79,7 +79,9 @@ export async function runTrackingJob(jobId, io) {
     const latest = await getJob(jobId);
     if (latest && latest.attempts < latest.max_attempts) {
       const delay = latest.attempts * 30_000; // exponential-ish backoff
-      console.log(`[job-runner] Retrying tracking job ${jobId} in ${delay / 1000}s (attempt ${latest.attempts}/${latest.max_attempts})`);
+      console.log(
+        `[job-runner] Retrying tracking job ${jobId} in ${delay / 1000}s (attempt ${latest.attempts}/${latest.max_attempts})`,
+      );
 
       await failJob(jobId, err.message);
       // Reset to waiting for retry
@@ -142,7 +144,9 @@ export async function runContentJob(jobId, io) {
     const latest = await getJob(jobId);
     if (latest && latest.attempts < latest.max_attempts) {
       const delay = latest.attempts * 15_000;
-      console.log(`[job-runner] Retrying content job ${jobId} in ${delay / 1000}s (attempt ${latest.attempts}/${latest.max_attempts})`);
+      console.log(
+        `[job-runner] Retrying content job ${jobId} in ${delay / 1000}s (attempt ${latest.attempts}/${latest.max_attempts})`,
+      );
 
       await failJob(jobId, err.message);
       const supabaseAdmin = (await import('../config/supabase.js')).default;

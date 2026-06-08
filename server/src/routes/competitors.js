@@ -7,12 +7,15 @@ import { getLanguageName } from '../lib/languages.js';
 const router = Router();
 
 const competitorSchema = z.object({
-  competitors: z.array(
-    z.object({
-      name: z.string().describe('Company/brand display name'),
-      domain: z.string().describe('Root domain without protocol, e.g. "asana.com"'),
-    })
-  ).min(3).max(10),
+  competitors: z
+    .array(
+      z.object({
+        name: z.string().describe('Company/brand display name'),
+        domain: z.string().describe('Root domain without protocol, e.g. "asana.com"'),
+      }),
+    )
+    .min(3)
+    .max(10),
 });
 
 /**
@@ -32,7 +35,8 @@ router.post('/suggest', async (req, res) => {
       return res.status(400).json({ error: 'brandName is required' });
     }
 
-    const competitorModel = process.env.COMPETITOR_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
+    const competitorModel =
+      process.env.COMPETITOR_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
 
     // Phase 1: web search to find real competitors
     const researchPrompt = `Search the web and find 5-10 direct competitors of "${brandName}".

@@ -14,9 +14,7 @@ const opportunitySchema = z.object({
       z.object({
         title: z
           .string()
-          .describe(
-            'A specific, actionable content recommendation backed by the data provided',
-          ),
+          .describe('A specific, actionable content recommendation backed by the data provided'),
         description: z
           .string()
           .describe(
@@ -69,10 +67,7 @@ function computeOpportunityScore(volume, visibility, competitorGap, intent) {
   const intentWeight = intentWeights[intent] || 0.5;
 
   const score =
-    normalizedVolume * 40 +
-    visibilityGap * 30 +
-    normalizedCompGap * 20 +
-    intentWeight * 10;
+    normalizedVolume * 40 + visibilityGap * 30 + normalizedCompGap * 20 + intentWeight * 10;
 
   return Math.round(Math.min(score, 100) * 100) / 100;
 }
@@ -121,19 +116,15 @@ export async function processContentJob({ brandId, model, job }) {
   const promptIds = prompts.map((p) => p.id);
 
   const [volumeResult, resultResult, competitorResult] = await Promise.all([
-    supabaseAdmin
-      .from('prompt_volumes')
-      .select('*')
-      .in('prompt_id', promptIds),
+    supabaseAdmin.from('prompt_volumes').select('*').in('prompt_id', promptIds),
     supabaseAdmin
       .from('prompt_results')
-      .select('prompt_id, visibility_score, mention_count, citation_count, sentiment, competitor_mentions')
+      .select(
+        'prompt_id, visibility_score, mention_count, citation_count, sentiment, competitor_mentions',
+      )
       .in('prompt_id', promptIds)
       .order('created_at', { ascending: false }),
-    supabaseAdmin
-      .from('competitors')
-      .select('id, name, domain')
-      .eq('brand_id', brandId),
+    supabaseAdmin.from('competitors').select('id, name, domain').eq('brand_id', brandId),
   ]);
 
   const volumes = volumeResult.data || [];
@@ -159,16 +150,15 @@ export async function processContentJob({ brandId, model, job }) {
     const res = resultMap[p.id] || [];
 
     const avgVisibility =
-      res.length > 0
-        ? Math.round(res.reduce((s, r) => s + r.visibility_score, 0) / res.length)
-        : 0;
+      res.length > 0 ? Math.round(res.reduce((s, r) => s + r.visibility_score, 0) / res.length) : 0;
 
     const competitorMentions = {};
     for (const r of res) {
       if (r.competitor_mentions) {
-        const mentions = typeof r.competitor_mentions === 'string'
-          ? JSON.parse(r.competitor_mentions)
-          : r.competitor_mentions;
+        const mentions =
+          typeof r.competitor_mentions === 'string'
+            ? JSON.parse(r.competitor_mentions)
+            : r.competitor_mentions;
         for (const cm of mentions || []) {
           competitorMentions[cm.name] =
             (competitorMentions[cm.name] || 0) + (cm.visibility_score || 0);
@@ -200,12 +190,7 @@ export async function processContentJob({ brandId, model, job }) {
   const scoredPrompts = promptDataForLLM
     .map((p) => ({
       ...p,
-      score: computeOpportunityScore(
-        p.estAiVolume,
-        p.avgVisibility,
-        p.competitorGap,
-        p.intent,
-      ),
+      score: computeOpportunityScore(p.estAiVolume, p.avgVisibility, p.competitorGap, p.intent),
     }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 25);
@@ -278,9 +263,7 @@ Generate actionable content opportunities based on this data. Reference specific
     };
   });
 
-  const { error: insertErr } = await supabaseAdmin
-    .from('content_opportunities')
-    .insert(rows);
+  const { error: insertErr } = await supabaseAdmin.from('content_opportunities').insert(rows);
 
   if (insertErr) {
     throw new Error(insertErr.message);

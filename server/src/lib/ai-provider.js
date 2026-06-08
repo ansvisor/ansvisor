@@ -40,8 +40,7 @@ if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
  * @returns AI SDK model instance
  */
 export function resolveModel(modelString, options) {
-  const defaultModel =
-    process.env.DEFAULT_SUGGESTION_MODEL || 'openai/gpt-5-mini';
+  const defaultModel = process.env.DEFAULT_SUGGESTION_MODEL || 'openai/gpt-5-mini';
   const target = modelString || defaultModel;
 
   const [providerName, ...modelParts] = target.split('/');

@@ -200,7 +200,9 @@ router.post('/analyze-new', async (req, res) => {
 
       // Check cooldown
       if (onDemandCooldownMinutes > 0) {
-        const cooldownCutoff = new Date(Date.now() - onDemandCooldownMinutes * 60 * 1000).toISOString();
+        const cooldownCutoff = new Date(
+          Date.now() - onDemandCooldownMinutes * 60 * 1000,
+        ).toISOString();
 
         const { data: recentJobs } = await supabaseAdmin
           .from('jobs')
@@ -212,7 +214,9 @@ router.post('/analyze-new', async (req, res) => {
           .limit(1);
 
         if (recentJobs && recentJobs.length > 0) {
-          const nextAvailable = new Date(new Date(recentJobs[0].created_at).getTime() + onDemandCooldownMinutes * 60 * 1000);
+          const nextAvailable = new Date(
+            new Date(recentJobs[0].created_at).getTime() + onDemandCooldownMinutes * 60 * 1000,
+          );
           const minutesLeft = Math.ceil((nextAvailable.getTime() - Date.now()) / 60_000);
           return res.status(429).json({
             success: false,

@@ -96,22 +96,15 @@ export async function analyzeSentimentAI(responseText, brandName) {
     const raw = (response.output_text || '').trim();
     const json = JSON.parse(raw);
 
-    const sentiment = ['positive', 'neutral', 'negative'].includes(
-      json.sentiment,
-    )
+    const sentiment = ['positive', 'neutral', 'negative'].includes(json.sentiment)
       ? json.sentiment
       : 'neutral';
     const confidence =
-      typeof json.confidence === 'number'
-        ? Math.max(0, Math.min(1, json.confidence))
-        : 0.5;
+      typeof json.confidence === 'number' ? Math.max(0, Math.min(1, json.confidence)) : 0.5;
 
     return { sentiment, confidence, reason: json.reason || '' };
   } catch (err) {
-    console.error(
-      '[sentiment-ai] Failed, falling back to neutral:',
-      err.message,
-    );
+    console.error('[sentiment-ai] Failed, falling back to neutral:', err.message);
     return { sentiment: 'neutral', confidence: 0, reason: 'Analysis failed' };
   }
 }

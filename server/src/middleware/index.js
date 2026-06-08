@@ -46,7 +46,7 @@ class Middleware {
 
       req.user = user;
       return next();
-    } catch (e) {
+    } catch {
       return res.status(500).json({ message: 'Internal Error' });
     }
   }
@@ -97,9 +97,7 @@ class Middleware {
         .map((o) => o.trim())
         .filter(Boolean);
 
-      const domain =
-        socket?.handshake?.headers?.referer ||
-        socket?.handshake?.headers?.origin;
+      const domain = socket?.handshake?.headers?.referer || socket?.handshake?.headers?.origin;
 
       if (!domain) {
         return next(new Error('Forbidden Socket'));

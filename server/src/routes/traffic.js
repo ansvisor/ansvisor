@@ -34,7 +34,7 @@ router.get('/t.js', (req, res) => {
   res.set({
     'Content-Type': 'application/javascript; charset=utf-8',
     'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
-    'ETag': etag,
+    ETag: etag,
     'Access-Control-Allow-Origin': '*',
     'X-Content-Type-Options': 'nosniff',
   });
@@ -82,10 +82,11 @@ router.post('/track/:trackingCode', trafficLimiter, async (req, res) => {
       return res.status(400).json({ ok: false });
     }
 
-    const ip = req.headers['cf-connecting-ip']
-      || req.headers['x-forwarded-for']?.split(',')[0]?.trim()
-      || req.headers['x-real-ip']
-      || req.ip;
+    const ip =
+      req.headers['cf-connecting-ip'] ||
+      req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+      req.headers['x-real-ip'] ||
+      req.ip;
 
     const country = req.headers['cf-ipcountry'] || null;
 

@@ -202,9 +202,7 @@ export async function submitScraperTask(promptText, scraperId, region, opts = {}
     console.error(
       `[cloro] Submit failed ${res.status} for ${scraperId}: ${errorBody.slice(0, 300)}`,
     );
-    throw new Error(
-      `Cloro async submit error ${res.status}: ${errorBody.slice(0, 300)}`,
-    );
+    throw new Error(`Cloro async submit error ${res.status}: ${errorBody.slice(0, 300)}`);
   }
 
   const data = await res.json();
@@ -214,14 +212,10 @@ export async function submitScraperTask(promptText, scraperId, region, opts = {}
       `[cloro] Submit returned no task ID for ${scraperId}:`,
       JSON.stringify(data).slice(0, 300),
     );
-    throw new Error(
-      `Cloro async submit failed: ${data.error || 'No task ID returned'}`,
-    );
+    throw new Error(`Cloro async submit failed: ${data.error || 'No task ID returned'}`);
   }
 
-  console.log(
-    `[cloro] Task submitted: id=${data.task.id} type=${taskType} scraper=${scraperId}`,
-  );
+  console.log(`[cloro] Task submitted: id=${data.task.id} type=${taskType} scraper=${scraperId}`);
   return { taskId: data.task.id, scraperId };
 }
 
@@ -246,56 +240,38 @@ export async function pollScraperResult(taskId, scraperId, opts = {}) {
 
     if (!res.ok) {
       if (res.status === 404) {
-        console.error(
-          `[cloro] Poll #${pollCount} task=${taskId}: 404 not found`,
-        );
+        console.error(`[cloro] Poll #${pollCount} task=${taskId}: 404 not found`);
         throw new Error(`Cloro task ${taskId} not found`);
       }
       const errorBody = await res.text().catch(() => '');
-      console.error(
-        `[cloro] Poll #${pollCount} task=${taskId}: HTTP ${res.status}`,
-      );
-      throw new Error(
-        `Cloro poll error ${res.status}: ${errorBody.slice(0, 300)}`,
-      );
+      console.error(`[cloro] Poll #${pollCount} task=${taskId}: HTTP ${res.status}`);
+      throw new Error(`Cloro poll error ${res.status}: ${errorBody.slice(0, 300)}`);
     }
 
     const data = await res.json();
     const status = data.task?.status;
 
     if (status === 'COMPLETED') {
-      console.log(
-        `[cloro] Task ${taskId} COMPLETED after ${pollCount} polls (${scraperId})`,
-      );
+      console.log(`[cloro] Task ${taskId} COMPLETED after ${pollCount} polls (${scraperId})`);
       const result = data.response;
-      if (!result)
-        throw new Error(
-          `Cloro task ${taskId} completed but returned no response`,
-        );
+      if (!result) throw new Error(`Cloro task ${taskId} completed but returned no response`);
       return parseScraperResponse(result, scraperId);
     }
 
     if (status === 'FAILED') {
-      const errMsg =
-        data.response?.error || data.task?.failedReason || 'Unknown failure';
-      console.error(
-        `[cloro] Task ${taskId} FAILED after ${pollCount} polls: ${errMsg}`,
-      );
+      const errMsg = data.response?.error || data.task?.failedReason || 'Unknown failure';
+      console.error(`[cloro] Task ${taskId} FAILED after ${pollCount} polls: ${errMsg}`);
       throw new Error(`Cloro task ${taskId} failed: ${errMsg}`);
     }
 
     if (pollCount === 1 || pollCount % 5 === 0) {
-      console.log(
-        `[cloro] Task ${taskId} status=${status} poll #${pollCount} (${scraperId})`,
-      );
+      console.log(`[cloro] Task ${taskId} status=${status} poll #${pollCount} (${scraperId})`);
     }
 
     await new Promise((r) => setTimeout(r, interval));
   }
 
-  console.error(
-    `[cloro] Task ${taskId} TIMED OUT after ${pollCount} polls / ${maxWait / 1000}s`,
-  );
+  console.error(`[cloro] Task ${taskId} TIMED OUT after ${pollCount} polls / ${maxWait / 1000}s`);
   throw new Error(`Cloro task ${taskId} timed out after ${maxWait / 1000}s`);
 }
 

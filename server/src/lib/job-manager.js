@@ -175,10 +175,7 @@ export async function cleanupStaleJobs() {
  */
 export async function cleanupOldJobs() {
   const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const { error } = await supabaseAdmin
-    .from('jobs')
-    .delete()
-    .lt('created_at', cutoff);
+  const { error } = await supabaseAdmin.from('jobs').delete().lt('created_at', cutoff);
 
   if (error) {
     console.error('[job-manager] Failed to cleanup old jobs:', error.message);

@@ -12,7 +12,10 @@
   "homepage": "https://github.com/ansvisor/ansvisor",
   "scripts": {
     "dev": "NODE_ENV=development nodemon src/server.js",
-    "start": "NODE_ENV=production pm2 start src/server.js --max-restarts 10000"
+    "start": "NODE_ENV=production pm2 start src/server.js --max-restarts 10000",
+    "lint": "eslint src/**/*.js",
+    "format": "prettier --write \"src/**/*.js\"",
+    "format:check": "prettier --check \"src/**/*.js\""
   },
   "keywords": [],
   "author": "Empler AI Inc.",
@@ -38,6 +41,10 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "@eslint/js": "^9.27.0",
+    "eslint": "^9.27.0",
+    "eslint-config-prettier": "^10.1.8",
+    "nodemon": "^3.0.2",
+    "prettier": "^3.8.3"
   }
 }

@@ -8,8 +8,13 @@ const AI_VOLUME_MULTIPLIER = parseFloat(process.env.AI_VOLUME_MULTIPLIER || '0.1
 
 const intentKeywordSchema = z.object({
   intent: z.enum([
-    'comparison', 'how-to', 'what-is', 'best-top',
-    'vs-review', 'recommendation', 'problem-solving',
+    'comparison',
+    'how-to',
+    'what-is',
+    'best-top',
+    'vs-review',
+    'recommendation',
+    'problem-solving',
   ]),
   keywords: z.array(z.string()).length(5),
 });
@@ -28,10 +33,10 @@ async function testDataForSEO() {
   console.log('=== Test 1: DataForSEO Connection ===\n');
 
   try {
-    const volumes = await getSearchVolumes(
-      ['best crm software', 'crm tools comparison'],
-      { locationCode: 2840, languageCode: 'en' }
-    );
+    const volumes = await getSearchVolumes(['best crm software', 'crm tools comparison'], {
+      locationCode: 2840,
+      languageCode: 'en',
+    });
     console.log('DataForSEO volumes:', volumes);
     console.log('OK - DataForSEO connection works!\n');
     return true;
@@ -96,14 +101,13 @@ async function testFullPipeline() {
       );
     }
 
-    const totalGoogleVolume = Object.values(volumes).reduce(
-      (sum, v) => sum + v.volume,
-      0,
-    );
+    const totalGoogleVolume = Object.values(volumes).reduce((sum, v) => sum + v.volume, 0);
     const estAiVolume = Math.round(totalGoogleVolume * AI_VOLUME_MULTIPLIER);
 
     console.log(`\nTotal Google Volume: ${totalGoogleVolume.toLocaleString()}/mo`);
-    console.log(`AI Multiplier: ${AI_VOLUME_MULTIPLIER} (${(AI_VOLUME_MULTIPLIER * 100).toFixed(0)}%)`);
+    console.log(
+      `AI Multiplier: ${AI_VOLUME_MULTIPLIER} (${(AI_VOLUME_MULTIPLIER * 100).toFixed(0)}%)`,
+    );
     console.log(`Est. AI Volume: ${estAiVolume.toLocaleString()}/mo`);
     console.log('\nOK - Full pipeline works!');
   } catch (err) {

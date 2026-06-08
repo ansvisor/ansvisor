@@ -10,8 +10,7 @@ import 'dotenv/config';
 import { runPrompt } from './lib/openai-tracker.js';
 import { parseResponse } from './lib/response-parser.js';
 
-const TEST_PROMPT =
-  'Best AI automation platforms for sales and marketing teams';
+const TEST_PROMPT = 'Best AI automation platforms for sales and marketing teams';
 const TEST_BRAND = {
   brandName: 'Empler AI',
   domains: ['empler.ai'],
@@ -33,8 +32,7 @@ async function main() {
 
     console.log(`--- Response (${elapsed}s) ---`);
     console.log(response.text.slice(0, 500));
-    if (response.text.length > 500)
-      console.log(`... (${response.text.length} chars total)`);
+    if (response.text.length > 500) console.log(`... (${response.text.length} chars total)`);
     console.log();
 
     console.log(`--- Citations (${response.citations.length}) ---`);
