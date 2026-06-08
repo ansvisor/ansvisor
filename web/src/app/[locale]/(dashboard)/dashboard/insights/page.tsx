@@ -1,3 +1,4 @@
+import { PLATFORM_LABELS } from "@/config/platform-labels";
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -210,24 +211,6 @@ function VisibilityBar({ score, max = 100 }: { score: number; max?: number }) {
   );
 }
 
-const PLATFORM_LABELS: Record<string, string> = {
-  chatgpt: 'ChatGPT',
-  gemini: 'Gemini',
-  perplexity: 'Perplexity',
-  claude: 'Claude',
-  grok: 'Grok',
-  copilot: 'Copilot',
-  'meta-ai': 'Meta AI',
-  'google-ai-overviews': 'Google AI',
-  'google-ai-mode': 'Google AI Mode',
-  'chatgpt-web': 'ChatGPT',
-  'google-aio': 'Google AI Overview',
-  'google-aimode': 'Google AI Mode',
-  'copilot-web': 'Microsoft Copilot',
-  'grok-web': 'Grok',
-  'perplexity-web': 'Perplexity',
-  'gemini-web': 'Google Gemini',
-};
 
 const MODEL_DISPLAY_NAME: Record<string, string> = {
   'gpt-4o': 'GPT-4o',

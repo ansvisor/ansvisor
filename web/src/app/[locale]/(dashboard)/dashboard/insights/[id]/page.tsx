@@ -1,3 +1,4 @@
+import { PLATFORM_LABELS } from "@/config/platform-labels";
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -12,24 +13,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, ExternalLink, MessageSquareText, Quote, Eye, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const PLATFORM_LABELS: Record<string, string> = {
-  chatgpt: 'ChatGPT',
-  gemini: 'Gemini',
-  perplexity: 'Perplexity',
-  claude: 'Claude',
-  grok: 'Grok',
-  copilot: 'Copilot',
-  'meta-ai': 'Meta AI',
-  'google-ai-overviews': 'Google AI Overview',
-  'google-ai-mode': 'Google AI Mode',
-  'chatgpt-web': 'ChatGPT',
-  'google-aio': 'Google AI Overview',
-  'google-aimode': 'Google AI Mode',
-  'perplexity-web': 'Perplexity',
-  'copilot-web': 'Microsoft Copilot',
-  'grok-web': 'Grok',
-  'gemini-web': 'Gemini',
-};
 
 function SentimentBadge({ sentiment }: { sentiment: 'positive' | 'neutral' | 'negative' }) {
   return (

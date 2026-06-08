@@ -1,3 +1,4 @@
+import { PLATFORM_LABELS } from "@/config/platform-labels";
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/server';

@@ -1,3 +1,4 @@
+import { PLATFORM_LABELS } from "@/config/platform-labels";
 'use client';
 
 import { useEffect, useMemo, useState, type ComponentType } from 'react';
@@ -16,24 +17,6 @@ import { ArrowLeft, ChevronDown, Clock, Eye, MessageSquareText, Quote } from 'lu
 import { cn } from '@/lib/utils';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 
-const PLATFORM_LABELS: Record<string, string> = {
-  chatgpt: 'ChatGPT',
-  gemini: 'Gemini',
-  perplexity: 'Perplexity',
-  claude: 'Claude',
-  grok: 'Grok',
-  copilot: 'Copilot',
-  'meta-ai': 'Meta AI',
-  'google-ai-overviews': 'Google AI',
-  'google-ai-mode': 'Google AI Mode',
-  'chatgpt-web': 'ChatGPT',
-  'google-aio': 'Google AI Overview',
-  'google-aimode': 'Google AI Mode',
-  'perplexity-web': 'Perplexity',
-  'copilot-web': 'Microsoft Copilot',
-  'grok-web': 'Grok',
-  'gemini-web': 'Gemini',
-};
 
 const MODEL_DISPLAY_NAME: Record<string, string> = {
   'gpt-4o': 'GPT-4o',

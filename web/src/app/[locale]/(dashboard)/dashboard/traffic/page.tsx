@@ -1,3 +1,4 @@
+import { PLATFORM_LABELS } from "@/config/platform-labels";
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
