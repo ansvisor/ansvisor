@@ -51,6 +51,11 @@ const FORUM_DOMAINS = [
   'bimmerpost.com',
   'rennlist.com',
   'teslamotorsclub.com',
+  'macrumors.com',
+  'xda-developers.com',
+  'thestudentroom.co.uk',
+  'city-data.com',
+  'hardwarezone.com.sg',
 ];
 
 const SOCIAL_DOMAINS = [
@@ -66,6 +71,10 @@ const SOCIAL_DOMAINS = [
   'threads.net',
   'medium.com',
   'substack.com',
+  'tumblr.com',
+  'snapchat.com',
+  'twitch.tv',
+  'vimeo.com',
 ];
 
 const REVIEW_DOMAINS = [
@@ -77,6 +86,10 @@ const REVIEW_DOMAINS = [
   'yelp.com',
   'sitejabber.com',
   'bbb.org',
+  'glassdoor.com',
+  'trustradius.com',
+  'producthunt.com',
+  'influenster.com',
 ];
 
 const INSTITUTIONAL_DOMAINS = [
@@ -142,7 +155,6 @@ const EDITORIAL_DOMAINS = [
   'top10.com',
   'thedrive.com',
   'hemmings.com',
-  'engadget.com',
   'digitaltrends.com',
   'tomsguide.com',
   'pcmag.com',
