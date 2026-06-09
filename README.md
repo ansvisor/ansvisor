@@ -32,6 +32,12 @@ We're incredibly excited to shape what's next alongside our amazing community.
 
 > AI search is replacing the traditional click. When ChatGPT recommends a product, no Google ranking saves you. Ansvisor measures what classical SEO can't see — how often AI engines name your brand, which competitors get cited instead, and which prompts move the needle. Self-host it for free, or use the managed cloud at [ansvisor.com](https://www.ansvisor.com).
 
+## Resources
+
+- 📚 [Explore Documentation](https://docs.ansvisor.com/)
+- 🎯 [Take an Interactive Product Tour](https://app.supademo.com/demo/cmq2b1p5k0rk9qm6ugicrn655?utm_source=link)
+- 🔍 [Compare Ansvisor vs Alternatives](https://www.ansvisor.com/compare)
+
 ## Features
 
 - **Answer Engine Insights** — Real-time visibility scores across ChatGPT, Google AI Overview, Google AI Mode, Google Gemini, Perplexity, Microsoft Copilot, Grok, and Claude with weekly trend analysis
