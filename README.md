@@ -10,9 +10,7 @@
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![Claude Code](https://img.shields.io/badge/Built%20with-Claude%20Code-green?style=for-the-badge&logo=anthropic)](https://claude.com/claude-code)
 
-# Ansvisor
-
-**Open-source AI Visibility & AI Search Optimization Platform**
+# Ansvisor - Open-source AI Visibility Platform for AI Search
 
 </div>
 
