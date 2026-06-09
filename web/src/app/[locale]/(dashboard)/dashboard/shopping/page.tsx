@@ -82,6 +82,7 @@ import {
   getAIProviderDisplayName,
 } from '@/components/ai-provider-avatar';
 import { toCsv } from '@/lib/csv';
+import { getPlatformDisplayName } from '@/config/platform-labels';
 
 const DATE_PRESETS: ShoppingDatePreset[] = ['7d', '30d', '90d', 'all'];
 
@@ -312,7 +313,7 @@ export default function ShoppingPage() {
                           product_title: p.product_title,
                           product_brand: p.product_brand || '',
                           impressions: p.impressions,
-                          platforms: p.platforms.join('; '),
+                          platforms: p.platforms.map(getPlatformDisplayName).join('; '),
                           regions: p.regions.join('; '),
                           last_price: p.last_price !== null ? p.last_price : '',
                           price_currency: p.price_currency || '',
@@ -378,7 +379,7 @@ export default function ShoppingPage() {
                           product_title: p.product_title,
                           product_brand: p.product_brand || '',
                           impressions: p.impressions,
-                          platforms: p.platforms.join('; '),
+                          platforms: p.platforms.map(getPlatformDisplayName).join('; '),
                           regions: p.regions.join('; '),
                           last_price: p.last_price !== null ? p.last_price : '',
                           price_currency: p.price_currency || '',
@@ -460,7 +461,7 @@ function PromptsTabContent({
     const exportRows = promptsData.prompts.map((p) => ({
       prompt: p.promptText,
       topic: p.topic,
-      platforms: p.platforms.join('; '),
+      platforms: p.platforms.map(getPlatformDisplayName).join('; '),
       total_cards: p.totalCards,
       own_cards: p.ownCardsCount,
       competitor_cards: p.competitorCardsCount,

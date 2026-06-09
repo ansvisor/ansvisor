@@ -48,6 +48,7 @@ import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import type { PromptVolume, Prompt } from '@/types';
 import { toast } from 'sonner';
 import { toCsv } from '@/lib/csv';
+import { getPlatformDisplayName } from '@/config/platform-labels';
 
 // ─── Info Tooltip ─────────────────────────────────────────────────────────────
 
@@ -426,7 +427,7 @@ export default function PromptsPage() {
       text: p.text,
       topic_id: p.topicId ?? '',
       category: p.category ?? '',
-      platforms: p.platforms.join(', '),
+      platforms: p.platforms.map(getPlatformDisplayName).join(', '),
       models: p.models.join(', '),
       regions: p.regions.join(', '),
       is_active: p.isActive,

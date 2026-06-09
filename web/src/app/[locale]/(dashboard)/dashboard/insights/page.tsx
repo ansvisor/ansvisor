@@ -30,6 +30,7 @@ import {
 } from '@/lib/actions/tracking';
 import { getTopics } from '@/lib/actions/topic';
 import type { Topic } from '@/types';
+import { getPlatformDisplayName } from '@/config/platform-labels';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -1646,7 +1647,7 @@ export default function InsightsPage() {
       created_at: r.createdAt,
       prompt: r.promptText,
       topic: r.topicName ?? '',
-      platform: r.platform,
+      platform: getPlatformDisplayName(r.platform),
       model: r.modelUsed ?? '',
       region: r.region ?? '',
       mention_count: r.mentionCount,
