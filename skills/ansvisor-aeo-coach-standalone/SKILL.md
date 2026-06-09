@@ -39,7 +39,7 @@ You need two things from the user, in this order:
 1. **API key** — a token starting with `ans_`. Tell them to grab one
    from their Ansvisor dashboard: **Settings → API Keys → New key**. The
    token is shown once at creation. If they don't have an Ansvisor
-   account yet, point them at <https://ansvisor.com>.
+   account yet, point them at <https://www.ansvisor.com>.
 2. **Base URL** — defaults to `https://app.ansvisor.com`. Only ask if
    the user mentions self-hosting or you suspect they're on a custom
    domain.
