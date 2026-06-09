@@ -637,7 +637,7 @@ function CompetitorsTab({ brandId }: { brandId: string }) {
 function TrackingTab({ brand }: { brand: Brand }) {
   const [copied, setCopied] = useState<'code' | 'snippet' | null>(null);
   const isCloud = process.env.NEXT_PUBLIC_IS_CLOUD === 'true';
-  const apiUrl = isCloud ? 'https://api.ansops.ai' : process.env.NEXT_PUBLIC_API_URL;
+  const apiUrl = isCloud ? 'https://api.ansvisor.com' : process.env.NEXT_PUBLIC_API_URL;
   const snippet = apiUrl
     ? `<script src="${apiUrl}/t.js" data-t="${brand.trackingCode || ''}" defer></script>`
     : '';
