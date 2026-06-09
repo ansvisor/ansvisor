@@ -7,6 +7,7 @@ import { useRouter, Link } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
@@ -93,9 +94,8 @@ export function SignInForm() {
               {t('forgotPassword')}
             </Link>
           </div>
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             placeholder={t('passwordPlaceholder')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}

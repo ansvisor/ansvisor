@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
@@ -51,9 +51,8 @@ export function ResetPasswordForm() {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="password">{t('newPassword')}</Label>
-        <Input
+        <PasswordInput
           id="password"
-          type="password"
           placeholder={t('passwordPlaceholder')}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -65,9 +64,8 @@ export function ResetPasswordForm() {
 
       <div className="space-y-2">
         <Label htmlFor="confirmPassword">{t('confirmPassword')}</Label>
-        <Input
+        <PasswordInput
           id="confirmPassword"
-          type="password"
           placeholder={t('passwordPlaceholder')}
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}

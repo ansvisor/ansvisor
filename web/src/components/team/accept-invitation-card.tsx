@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { acceptInvitation, type TeamRole } from '@/lib/actions/team';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Loader2, Users } from 'lucide-react';
@@ -156,9 +157,8 @@ export function AcceptInvitationCard({
 
           <div className="space-y-2">
             <Label htmlFor="invite-password">Set a password</Label>
-            <Input
+            <PasswordInput
               id="invite-password"
-              type="password"
               placeholder="At least 8 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -171,9 +171,8 @@ export function AcceptInvitationCard({
 
           <div className="space-y-2">
             <Label htmlFor="invite-confirm-password">Confirm password</Label>
-            <Input
+            <PasswordInput
               id="invite-confirm-password"
-              type="password"
               placeholder="Repeat the password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
