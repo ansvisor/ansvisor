@@ -26,15 +26,7 @@ We believe the future of AI visibility shouldn't be a black box. This field real
 
 We're incredibly excited to shape what's next alongside our amazing community.
 
-<div align="center">
-
-_Star us to follow along as we ship 👇_
-
-<a href="https://github.com/ansvisor/ansvisor">
-  <img src="https://img.shields.io/github/stars/ansvisor/ansvisor?style=social&label=Star" alt="Star Ansvisor on GitHub">
-</a>
-
-</div>
+> ⭐ **If you believe AI Visibility should be open and community-driven, [star the repo](https://github.com/ansvisor/ansvisor/stargazers) — it's how the next team discovers Ansvisor.**
 
 ### Why Ansvisor?
 
