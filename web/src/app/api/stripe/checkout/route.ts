@@ -60,10 +60,9 @@ export async function POST(req: NextRequest) {
         .eq('id', organizationId);
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-
-    const session = await stripe.checkout.sessions.create({
+const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
