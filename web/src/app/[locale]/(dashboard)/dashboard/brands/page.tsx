@@ -4,8 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 import { getBrands } from '@/lib/actions/brand';
 import { getPlan, isCloud as checkIsCloud } from '@/config/plans';
 import { BrandsClient } from './_brands-client';
-import { Button } from '@/components/ui/button';
-import { Crown, Plus , Compass , ExternalLink } from 'lucide-react';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Crown, Plus, Compass, ExternalLink } from 'lucide-react';
 
 function BrandsHeader({
   canAddBrand,
@@ -22,31 +22,31 @@ function BrandsHeader({
         <p className="text-muted-foreground text-sm">{t('description')}</p>
       </div>
       <div className="flex items-center gap-2">
-      <a
-        href="https://app.supademo.com/demo/cmq2b1p5k0rk9qm6ugicrn655?utm_source=link"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="group/button inline-flex shrink-0 cursor-pointer items-center justify-center rounded-lg border border-input bg-background text-foreground bg-clip-padding text-sm font-medium whitespace-nowrap transition-all h-8 px-2.5 gap-2 hover:bg-accent hover:text-accent-foreground"
-      >
-        <Compass className="h-4 w-4 shrink-0" />
-        <span>Product Tour</span>
-        <ExternalLink className="h-4 w-4 shrink-0 opacity-50" />
-      </a>
-      {canAddBrand ? (
-        <Link href="/dashboard/brands/new">
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            {t('addBrand')}
-          </Button>
-        </Link>
-      ) : needsUpgrade ? (
-        <Link href="/dashboard/settings?tab=billing">
-          <Button variant="outline" className="gap-2">
-            <Crown className="h-4 w-4" />
-            {t('addBrand')}
-          </Button>
-        </Link>
-      ) : null}
+        <a
+          href="https://app.supademo.com/demo/cmq2b1p5k0rk9qm6ugicrn655?utm_source=link"
+          target="_blank"
+          rel="noopener noreferrer"
+          className={buttonVariants({ variant: 'outline', size: 'sm' })}
+        >
+          <Compass className="h-4 w-4 shrink-0" />
+          <span>Product Tour</span>
+          <ExternalLink className="h-4 w-4 shrink-0 opacity-50" />
+        </a>
+        {canAddBrand ? (
+          <Link href="/dashboard/brands/new">
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" />
+              {t('addBrand')}
+            </Button>
+          </Link>
+        ) : needsUpgrade ? (
+          <Link href="/dashboard/settings?tab=billing">
+            <Button variant="outline" className="gap-2">
+              <Crown className="h-4 w-4" />
+              {t('addBrand')}
+            </Button>
+          </Link>
+        ) : null}
       </div>
     </div>
   );
