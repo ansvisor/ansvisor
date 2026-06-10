@@ -16,26 +16,27 @@ export class PlanLimitError extends Error {
 }
 
 /**
- * Resolve the user's organization plan from the database.
+ * Enterprise orgs can have per-customer limit overrides stored in
+ * organizations.plan_overrides (jsonb) — mirrors web getOrgPlan().
+ */
+function applyPlanOverrides(plan, org) {
+  if (org?.plan === 'enterprise' && org.plan_overrides && typeof org.plan_overrides === 'object') {
+    return { ...plan, limits: { ...plan.limits, ...org.plan_overrides } };
+  }
+  return plan;
+}
+
+/**
+ * Resolve an organization's plan directly by org id.
  * Self-hosted → returns self_hosted plan (unlimited).
  */
-async function resolveOrgPlan(userId) {
+async function resolveOrgPlanByOrgId(orgId) {
   if (!isCloud()) return getPlan('self_hosted');
-
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('organization_id')
-    .eq('id', userId)
-    .single();
-
-  if (!profile?.organization_id) {
-    throw new PlanLimitError('No organization found for user.', 400);
-  }
 
   const { data: org } = await supabaseAdmin
     .from('organizations')
-    .select('plan, subscription_status')
-    .eq('id', profile.organization_id)
+    .select('plan, subscription_status, plan_overrides')
+    .eq('id', orgId)
     .single();
 
   // Block feature access for orgs without an active or trialing Stripe
@@ -49,7 +50,34 @@ async function resolveOrgPlan(userId) {
     );
   }
 
-  return getPlan(org.plan);
+  return applyPlanOverrides(getPlan(org.plan), org);
+}
+
+/**
+ * Resolve the user's organization id, or null if none.
+ */
+export async function getOrgIdForUser(userId) {
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', userId)
+    .single();
+  return profile?.organization_id || null;
+}
+
+/**
+ * Resolve the user's organization plan from the database.
+ * Self-hosted → returns self_hosted plan (unlimited).
+ */
+async function resolveOrgPlan(userId) {
+  if (!isCloud()) return getPlan('self_hosted');
+
+  const orgId = await getOrgIdForUser(userId);
+  if (!orgId) {
+    throw new PlanLimitError('No organization found for user.', 400);
+  }
+
+  return resolveOrgPlanByOrgId(orgId);
 }
 
 /**
@@ -156,6 +184,56 @@ export async function getVolumeQuotaStatus(userId) {
 
   const used = count || 0;
   return { used, limit: maxAnalyses, remaining: maxAnalyses - used };
+}
+
+function startOfCurrentMonth() {
+  const start = new Date();
+  start.setUTCDate(1);
+  start.setUTCHours(0, 0, 0, 0);
+  return start;
+}
+
+async function countBriefUsageThisMonth(orgId) {
+  const { count } = await supabaseAdmin
+    .from('brief_usage')
+    .select('*', { count: 'exact', head: true })
+    .eq('organization_id', orgId)
+    .gte('used_at', startOfCurrentMonth().toISOString());
+  return count || 0;
+}
+
+/**
+ * Enforce the monthly content-brief generation quota for an organization.
+ * Org-based (not user-based) so both the dashboard route and the internal
+ * MCP route charge the same pool. Returns { plan, remaining } on success,
+ * throws PlanLimitError when the quota is exhausted.
+ */
+export async function enforceBriefQuota(orgId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const max = plan.limits.maxBriefGenerations;
+  if (max === -1) return { plan, remaining: -1 };
+
+  const used = await countBriefUsageThisMonth(orgId);
+  if (used >= max) {
+    throw new PlanLimitError(
+      `Monthly content brief limit reached (${used}/${max}) on the ${plan.name} plan. Resets on the 1st of next month — upgrade for more.`,
+    );
+  }
+
+  return { plan, remaining: max - used };
+}
+
+/**
+ * Get current brief quota status without enforcing.
+ * Returns { used, limit, remaining }.
+ */
+export async function getBriefQuotaStatus(orgId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const max = plan.limits.maxBriefGenerations;
+  if (max === -1) return { used: 0, limit: -1, remaining: -1 };
+
+  const used = await countBriefUsageThisMonth(orgId);
+  return { used, limit: max, remaining: Math.max(0, max - used) };
 }
 
 /**

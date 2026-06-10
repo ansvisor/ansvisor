@@ -21,6 +21,7 @@ import {
   FileText,
   Target,
   ListOrdered,
+  Crown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Link } from '@/i18n/navigation';
@@ -29,6 +30,8 @@ import {
   updateOpportunityStatus,
   sendToWebhook,
   generateBrief,
+  getBriefQuota,
+  type BriefQuota,
 } from '@/lib/actions/content';
 import type { ContentBrief, ContentOpportunity } from '@/types';
 import { toast } from 'sonner';
@@ -90,6 +93,7 @@ export default function ContentDetailPage() {
   const [sending, setSending] = useState(false);
   const [generatingBrief, setGeneratingBrief] = useState(false);
   const [brief, setBrief] = useState<ContentBrief | null>(null);
+  const [quota, setQuota] = useState<BriefQuota | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -103,6 +107,11 @@ export default function ContentDetailPage() {
         toast.error('Failed to load opportunity');
       })
       .finally(() => setLoading(false));
+
+    // Quota is informational — don't block the page if it fails.
+    getBriefQuota()
+      .then(setQuota)
+      .catch(() => setQuota(null));
   }, [id]);
 
   const handleSend = async () => {
@@ -135,11 +144,16 @@ export default function ContentDetailPage() {
     setGeneratingBrief(true);
     try {
       const result = await generateBrief(id);
-      setBrief(result);
+      setBrief(result.brief);
+      if (result.quota) setQuota(result.quota);
       toast.success('Content brief generated!');
     } catch (err) {
       console.error('Brief generation failed:', err);
       toast.error(err instanceof Error ? err.message : 'Failed to generate brief');
+      // Refresh the counter — the failure may have been a quota rejection.
+      getBriefQuota()
+        .then(setQuota)
+        .catch(() => {});
     } finally {
       setGeneratingBrief(false);
     }
@@ -162,6 +176,8 @@ export default function ContentDetailPage() {
   }
 
   const sd = opportunity.sourceData;
+  const quotaLimited = quota !== null && quota.limit !== -1;
+  const quotaExhausted = quotaLimited && quota.remaining <= 0;
 
   return (
     <div className="space-y-6">
@@ -348,20 +364,48 @@ export default function ContentDetailPage() {
         ) : (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-10 text-center">
-              <Sparkles className="h-10 w-10 text-muted-foreground/40 mb-3" />
-              <h3 className="text-sm font-medium mb-1">No Content Brief Yet</h3>
-              <p className="text-xs text-muted-foreground mb-4 max-w-sm">
-                Generate an AI-powered content brief with a suggested title, outline, target
-                keywords, and competitor insights.
-              </p>
-              <Button onClick={handleGenerateBrief} disabled={generatingBrief} className="gap-2">
-                {generatingBrief ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4" />
-                )}
-                {generatingBrief ? 'Generating...' : 'Generate Content Brief'}
-              </Button>
+              {quotaExhausted ? (
+                <>
+                  <Crown className="h-10 w-10 text-amber-500/60 mb-3" />
+                  <h3 className="text-sm font-medium mb-1">Monthly Brief Limit Reached</h3>
+                  <p className="text-xs text-muted-foreground mb-4 max-w-sm">
+                    You&apos;ve used all {quota.limit} content briefs included in your plan this
+                    month. Upgrade for a higher limit, or wait until the 1st when your quota resets.
+                  </p>
+                  <Link href="/dashboard/settings?tab=billing">
+                    <Button className="gap-2">
+                      <Crown className="h-4 w-4" />
+                      Upgrade Plan
+                    </Button>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                  <h3 className="text-sm font-medium mb-1">No Content Brief Yet</h3>
+                  <p className="text-xs text-muted-foreground mb-4 max-w-sm">
+                    Generate an AI-powered content brief with a suggested title, outline, target
+                    keywords, and competitor insights.
+                  </p>
+                  <Button
+                    onClick={handleGenerateBrief}
+                    disabled={generatingBrief}
+                    className="gap-2"
+                  >
+                    {generatingBrief ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                    {generatingBrief ? 'Generating...' : 'Generate Content Brief'}
+                  </Button>
+                  {quotaLimited && (
+                    <p className="text-xs text-muted-foreground mt-3 tabular-nums">
+                      {quota.remaining}/{quota.limit} briefs remaining this month
+                    </p>
+                  )}
+                </>
+              )}
             </CardContent>
           </Card>
         )}

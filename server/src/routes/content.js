@@ -1,7 +1,13 @@
 import { Router } from 'express';
 import { generateObject } from 'ai';
 import { z } from 'zod';
-import { requireFeature } from '../lib/plan-guard.js';
+import {
+  requireFeature,
+  enforceBriefQuota,
+  getBriefQuotaStatus,
+  getOrgIdForUser,
+  PlanLimitError,
+} from '../lib/plan-guard.js';
 import { createJob, getJob } from '../lib/job-manager.js';
 import { runContentJob } from '../lib/job-runner.js';
 import { resolveModel } from '../lib/ai-provider.js';
@@ -566,9 +572,10 @@ Rules:
  * Behavior:
  *   - opportunity not found → throws Error with `.status = 404`
  *   - opportunity has a brief AND `force` is false → returns the cached
- *     brief with `regenerated: false` (no LLM call)
- *   - otherwise runs the LLM, writes the result back, returns
- *     `{ brief, generated_at, regenerated: true }`
+ *     brief with `regenerated: false` (no LLM call, no quota charge)
+ *   - quota exhausted → throws PlanLimitError (statusCode 403/402)
+ *   - otherwise runs the LLM, records usage, writes the result back,
+ *     returns `{ brief, generated_at, regenerated: true }`
  */
 export async function generateBriefForOpportunity(opportunityId, { force = false, model } = {}) {
   const { data: opportunity, error: oppErr } = await supabaseAdmin
@@ -593,9 +600,17 @@ export async function generateBriefForOpportunity(opportunityId, { force = false
 
   const { data: brand } = await supabaseAdmin
     .from('brands')
-    .select('name, industry, description')
+    .select('name, industry, description, organization_id')
     .eq('id', opportunity.brand_id)
     .single();
+
+  // Quota is charged to the opportunity's org, and enforced here in the
+  // shared core so the dashboard route and the internal MCP route draw
+  // from the same monthly pool. Cached reads above never hit this.
+  const orgId = brand?.organization_id || null;
+  if (orgId) {
+    await enforceBriefQuota(orgId);
+  }
 
   const { data: domains } = await supabaseAdmin
     .from('brand_domains')
@@ -675,8 +690,42 @@ Generate a detailed content brief for this opportunity.`;
     .update({ brief, updated_at: generatedAt })
     .eq('id', opportunityId);
 
+  if (orgId) {
+    await supabaseAdmin.from('brief_usage').insert({
+      organization_id: orgId,
+      opportunity_id: opportunityId,
+    });
+  }
+
   return { brief, generated_at: generatedAt, regenerated: true };
 }
+
+/**
+ * GET /api/content/briefs/quota
+ * Current monthly brief-generation quota for the user's org.
+ * Returns { used, limit, remaining } — limit -1 means unlimited.
+ */
+router.get('/briefs/quota', async (req, res) => {
+  try {
+    const orgId = await getOrgIdForUser(req.user.id);
+    if (!orgId) {
+      // Self-hosted single-user setups may have no org row; no quota applies.
+      return res.json({ used: 0, limit: -1, remaining: -1 });
+    }
+    const quota = await getBriefQuotaStatus(orgId);
+    return res.json(quota);
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        error: 'plan_limit',
+        message: error.message,
+      });
+    }
+    console.error('[content] Brief quota status error:', error);
+    return res.status(500).json({ error: 'Failed to get brief quota', details: error.message });
+  }
+});
 
 /**
  * POST /api/content/:id/brief
@@ -685,14 +734,49 @@ Generate a detailed content brief for this opportunity.`;
  * Dashboard-facing route. Preserves the existing cache-on-existing-brief
  * behavior — to force a re-generate, the MCP route in server.js calls
  * `generateBriefForOpportunity` with `{ force: true }` directly.
+ *
+ * Enforces the monthly brief quota (via the shared core) and returns the
+ * updated quota alongside the brief so the UI can refresh its counter.
  */
 router.post('/:id/brief', async (req, res) => {
   try {
     const { id } = req.params;
     const { model } = req.body;
+
+    // Ownership check — the quota is charged to the opportunity's org, so
+    // only members of that org may trigger generation.
+    const { data: opp } = await supabaseAdmin
+      .from('content_opportunities')
+      .select('brand_id')
+      .eq('id', id)
+      .single();
+
+    if (!opp) {
+      return res.status(404).json({ error: 'Opportunity not found' });
+    }
+
+    const { data: brand } = await supabaseAdmin
+      .from('brands')
+      .select('organization_id')
+      .eq('id', opp.brand_id)
+      .single();
+
+    const userOrgId = await getOrgIdForUser(req.user.id);
+    if (!brand || !userOrgId || userOrgId !== brand.organization_id) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
     const result = await generateBriefForOpportunity(id, { model });
-    return res.json({ brief: result.brief });
+    const quota = await getBriefQuotaStatus(userOrgId);
+    return res.json({ brief: result.brief, quota, regenerated: result.regenerated });
   } catch (error) {
+    if (error instanceof PlanLimitError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        error: 'quota_exceeded',
+        message: error.message,
+      });
+    }
     if (error.status === 404) {
       return res.status(404).json({ error: error.message });
     }

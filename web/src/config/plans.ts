@@ -33,6 +33,12 @@ export interface PlanLimits {
   maxTeamMembers: number;
   maxDomainsPerBrand: number;
   maxVolumeAnalyses: number;
+  /**
+   * Monthly content brief generations (AI brief per opportunity).
+   * -1 = unlimited. Enterprise is -1 by default and set per customer via
+   * organizations.plan_overrides.maxBriefGenerations in the DB.
+   */
+  maxBriefGenerations: number;
   maxDailyOnDemand: number;
   onDemandCooldownMinutes: number;
   features: readonly Feature[];
@@ -68,6 +74,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxTeamMembers: -1,
       maxDomainsPerBrand: -1,
       maxVolumeAnalyses: -1,
+      maxBriefGenerations: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
       features: [
@@ -99,6 +106,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxTeamMembers: 1,
       maxDomainsPerBrand: 3,
       maxVolumeAnalyses: 4,
+      maxBriefGenerations: 10,
       maxDailyOnDemand: 3,
       onDemandCooldownMinutes: 15,
       allowedScrapers: ['chatgpt-web', 'perplexity-web'],
@@ -134,6 +142,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxTeamMembers: 3,
       maxDomainsPerBrand: 10,
       maxVolumeAnalyses: 10,
+      maxBriefGenerations: 50,
       maxDailyOnDemand: 10,
       onDemandCooldownMinutes: 5,
       features: [
@@ -163,6 +172,8 @@ export const PLANS: Record<PlanId, Plan> = {
       maxTeamMembers: -1,
       maxDomainsPerBrand: -1,
       maxVolumeAnalyses: -1,
+      // Per-customer: override via organizations.plan_overrides in the DB.
+      maxBriefGenerations: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
       features: [

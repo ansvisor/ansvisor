@@ -190,6 +190,13 @@ app.post('/api/internal/content/:id/brief', async (req, res) => {
     if (err.status === 404) {
       return res.status(404).json({ success: false, message: err.message });
     }
+    // PlanLimitError (brief quota exhausted / inactive subscription) carries
+    // a statusCode — surface it so the MCP layer can relay a clear message.
+    if (err.statusCode) {
+      return res
+        .status(err.statusCode)
+        .json({ success: false, error: 'quota_exceeded', message: err.message });
+    }
     console.error('[internal] content brief error:', err.message);
     return res.status(500).json({ success: false, message: err.message });
   }

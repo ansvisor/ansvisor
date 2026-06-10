@@ -128,7 +128,31 @@ export async function getOpportunity(id: string): Promise<ContentOpportunity> {
   return res.json();
 }
 
-export async function generateBrief(opportunityId: string): Promise<ContentBrief> {
+export interface BriefQuota {
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
+export async function getBriefQuota(): Promise<BriefQuota> {
+  const session = await getSession();
+
+  const res = await fetch(`${AEO_SERVER_URL}/api/content/briefs/quota`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || body.error || `Server error: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function generateBrief(
+  opportunityId: string,
+): Promise<{ brief: ContentBrief; quota: BriefQuota | null }> {
   const session = await getSession();
 
   const res = await fetch(`${AEO_SERVER_URL}/api/content/${opportunityId}/brief`, {
@@ -142,11 +166,11 @@ export async function generateBrief(opportunityId: string): Promise<ContentBrief
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Server error: ${res.status}`);
+    throw new Error(body.message || body.error || `Server error: ${res.status}`);
   }
 
   const data = await res.json();
-  return data.brief;
+  return { brief: data.brief, quota: data.quota ?? null };
 }
 
 export async function updateOpportunityStatus(
