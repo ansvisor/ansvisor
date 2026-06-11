@@ -235,7 +235,7 @@ ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.prompt_results (
   id, prompt_id, brand_id, platform, model_used, region, response,
-  citations, competitor_mentions,
+  citations, competitor_mentions, shopping_cards,
   mention_count, citation_count, visibility_score, sentiment, created_at
 )
 WITH platform_models AS (
@@ -289,6 +289,34 @@ SELECT
     jsonb_build_object('name', 'Fixture Roasters', 'domain', 'fixture-roasters.example.com','competitor_id', '99999999-9999-9999-9999-999999999902', 'mention_count', (n % 3),     'citation_count', (n % 2),     'visibility_score', round(((n % 55))::numeric, 2)),
     jsonb_build_object('name', 'Sample Beans',     'domain', 'sample-beans.example.com',    'competitor_id', '99999999-9999-9999-9999-999999999903', 'mention_count', ((n + 1) % 3), 'citation_count', ((n + 1) % 2), 'visibility_score', round((((n + 5) % 60))::numeric, 2))
   ) AS competitor_mentions,
+  -- Raw provider-shape shopping cards. Only three platforms surface cards in
+  -- the wild (Perplexity = snake_case, Google AI Mode / Copilot = camelCase),
+  -- and only on prompt 801 — mirroring the normalized
+  -- prompt_result_shopping_cards rows seeded below so the two layers agree.
+  -- shopping.ts only checks these for non-emptiness (card-rate KPI + the
+  -- per-platform bar chart); the analytics read the normalized table.
+  CASE
+    WHEN prompt_id = '88888888-8888-8888-8888-888888888801'::uuid
+         AND platform = 'perplexity-web' AND region = 'US' THEN jsonb_build_array(
+      jsonb_build_object('product_title', 'Acme Organic Coffee Subscription', 'brand', 'Acme Coffee', 'price', '$18.99', 'currency', 'USD', 'image_url', 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=150', 'merchant_url', 'https://acme-coffee.example.com/subscriptions/organic', 'rating', 4.8, 'review_count', 124),
+      jsonb_build_object('product_title', 'Demo Signature Subscription Blend', 'brand', 'Demo Coffee Co', 'price', '$24.99', 'currency', 'USD', 'image_url', 'https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=150', 'merchant_url', 'https://demo-coffee.example.com/subscribe', 'rating', 4.6, 'review_count', 152),
+      jsonb_build_object('product_title', 'Fixture Light Roast Brew Kit', 'brand', 'Fixture Roasters', 'price', '$19.50', 'currency', 'USD', 'image_url', 'https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=150', 'merchant_url', 'https://fixture-roasters.example.com/brew-kit', 'rating', 4.3, 'review_count', 45)
+    )
+    WHEN prompt_id = '88888888-8888-8888-8888-888888888801'::uuid
+         AND platform = 'perplexity-web' AND region = 'GB' THEN jsonb_build_array(
+      jsonb_build_object('product_title', 'Acme Organic Coffee Subscription', 'brand', 'Acme Coffee', 'price', '$18.99', 'currency', 'USD', 'image_url', 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=150', 'merchant_url', 'https://acme-coffee.example.com/subscriptions/organic', 'rating', 4.8, 'review_count', 124),
+      jsonb_build_object('product_title', 'Sample House Single Origin', 'brand', 'Sample Beans', 'price', '$16.00', 'currency', 'USD', 'image_url', 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=150', 'merchant_url', 'https://sample-beans.example.com/house-blend', 'rating', 4.7, 'review_count', 320)
+    )
+    WHEN prompt_id = '88888888-8888-8888-8888-888888888801'::uuid
+         AND platform = 'google-aimode' AND region = 'US' THEN jsonb_build_array(
+      jsonb_build_object('productTitle', 'Acme Dark Roast Coffee Blend', 'brand', 'Acme Coffee', 'price', '$14.50', 'currency', 'USD', 'imageUrl', 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=150', 'merchantUrl', 'https://acme-coffee.example.com/products/dark-roast', 'rating', 4.5, 'reviewCount', 89)
+    )
+    WHEN prompt_id = '88888888-8888-8888-8888-888888888801'::uuid
+         AND platform = 'copilot-web' AND region = 'US' THEN jsonb_build_array(
+      jsonb_build_object('productTitle', 'Acme Espresso Roast Whole Beans', 'brand', 'Acme Coffee', 'price', '$22.00', 'currency', 'USD', 'imageUrl', 'https://images.unsplash.com/photo-1511920170033-f8396924c348?w=150', 'merchantUrl', 'https://acme-coffee.example.com/products/espresso-beans', 'rating', 4.9, 'reviewCount', 210)
+    )
+    ELSE '[]'::jsonb
+  END                                                  AS shopping_cards,
   (1 + (n % 5))                                        AS mention_count,
   (n % 4)                                              AS citation_count,
   round((30 + ((n * 7) % 60))::numeric, 2)             AS visibility_score,
