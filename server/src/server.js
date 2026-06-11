@@ -15,6 +15,7 @@ import { createJob, cleanupStaleJobs, cleanupOldJobs } from './lib/job-manager.j
 import { runTrackingJob } from './lib/job-runner.js';
 import { parseScraperResponse } from './lib/cloro-scraper.js';
 import { handleScraperResult } from './lib/cloro-result-handler.js';
+import { verifyCloroWebhook } from './lib/cloro-webhook-verify.js';
 import { generateBriefForOpportunity } from './routes/content.js';
 import supabaseAdmin from './config/supabase.js';
 import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/plans.js';
@@ -24,6 +25,10 @@ app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // --- Body parsing (before all routes) ---
+// /cloro/callback gets the raw body bytes: HMAC signature verification needs the
+// payload exactly as sent, and express.json()'s parse/re-serialize would break it.
+// Mounted first so the global JSON parser skips this path (body already consumed).
+app.use('/cloro/callback', express.raw({ type: 'application/json', limit: '50mb' }));
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
@@ -230,13 +235,42 @@ app.post('/api/internal/trigger-tracking', async (req, res) => {
   }
 });
 
-// --- Cloro webhook callback (public, no auth — security via task_id entropy + DB lookup) ---
+// --- Cloro webhook callback ---
+// Signature verification (HMAC-SHA256, see lib/cloro-webhook-verify.js) runs when
+// CLORO_WEBHOOK_SECRET is set. When it's unset (self-hosted installs, or signing not
+// yet enabled in the Cloro dashboard) we fall back to the original defence:
+// task_id entropy + cloro_pending_tasks lookup.
 app.post('/cloro/callback', async (req, res) => {
+  const webhookSecret = process.env.CLORO_WEBHOOK_SECRET;
+  if (webhookSecret) {
+    const verdict = verifyCloroWebhook({
+      rawBody: Buffer.isBuffer(req.body) ? req.body : Buffer.from(''),
+      signatureHeader: req.headers['x-cloro-signature'],
+      timestampHeader: req.headers['x-cloro-timestamp'],
+      secret: webhookSecret,
+    });
+    if (!verdict.ok) {
+      console.warn(
+        `[cloro/callback] Rejected delivery: ${verdict.reason} | webhook_id: ${req.headers['x-cloro-webhook-id'] || 'n/a'} | ip: ${req.ip}`,
+      );
+      return res.status(verdict.status).json({ error: verdict.reason });
+    }
+  }
+
+  // Parse only after the signature check has passed (raw body arrives as a Buffer).
+  let payload;
+  try {
+    payload = Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString('utf8') || '{}') : req.body;
+  } catch {
+    console.warn(`[cloro/callback] Rejected delivery: malformed JSON body | ip: ${req.ip}`);
+    return res.status(400).json({ error: 'malformed JSON body' });
+  }
+
   // Always ack quickly so Cloro doesn't retry on slow processing
   res.status(200).send();
 
   try {
-    const { task, response } = req.body || {};
+    const { task, response } = payload || {};
     const taskId = task?.id;
     const status = task?.status;
 
