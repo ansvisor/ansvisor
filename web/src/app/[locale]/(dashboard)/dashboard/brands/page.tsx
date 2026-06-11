@@ -4,7 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 import { getBrands } from '@/lib/actions/brand';
 import { getPlan, isCloud as checkIsCloud } from '@/config/plans';
 import { BrandsClient } from './_brands-client';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { Crown, Plus, Compass, ExternalLink } from 'lucide-react';
 
 function BrandsHeader({
