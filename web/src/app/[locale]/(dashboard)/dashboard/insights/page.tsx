@@ -29,6 +29,7 @@ import {
   type BreakdownMetric,
 } from '@/lib/actions/tracking';
 import { getTopics } from '@/lib/actions/topic';
+import { PLATFORM_LABELS } from '@/config/platform-labels';
 import type { Topic } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -209,25 +210,6 @@ function VisibilityBar({ score, max = 100 }: { score: number; max?: number }) {
     </div>
   );
 }
-
-const PLATFORM_LABELS: Record<string, string> = {
-  chatgpt: 'ChatGPT',
-  gemini: 'Gemini',
-  perplexity: 'Perplexity',
-  claude: 'Claude',
-  grok: 'Grok',
-  copilot: 'Copilot',
-  'meta-ai': 'Meta AI',
-  'google-ai-overviews': 'Google AI',
-  'google-ai-mode': 'Google AI Mode',
-  'chatgpt-web': 'ChatGPT',
-  'google-aio': 'Google AI Overview',
-  'google-aimode': 'Google AI Mode',
-  'copilot-web': 'Microsoft Copilot',
-  'grok-web': 'Grok',
-  'perplexity-web': 'Perplexity',
-  'gemini-web': 'Google Gemini',
-};
 
 const MODEL_DISPLAY_NAME: Record<string, string> = {
   'gpt-4o': 'GPT-4o',
@@ -1646,7 +1628,7 @@ export default function InsightsPage() {
       created_at: r.createdAt,
       prompt: r.promptText,
       topic: r.topicName ?? '',
-      platform: r.platform,
+      platform: PLATFORM_LABELS[r.platform] ?? r.platform,
       model: r.modelUsed ?? '',
       region: r.region ?? '',
       mention_count: r.mentionCount,

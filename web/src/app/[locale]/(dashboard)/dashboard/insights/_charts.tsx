@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
+import { PLATFORM_LABELS } from '@/config/platform-labels';
 import {
   AreaChart,
   Area,
@@ -101,25 +102,6 @@ const PLATFORM_COLORS: Record<string, string> = {
   'claude-opus-4-6': '#ea580c',
   'gemini-2.5-pro': '#22c55e',
   'gemini-2.5-flash': '#4ade80',
-};
-
-const PLATFORM_LABELS: Record<string, string> = {
-  chatgpt: 'ChatGPT',
-  gemini: 'Gemini',
-  perplexity: 'Perplexity',
-  claude: 'Claude',
-  grok: 'Grok',
-  copilot: 'Copilot',
-  'meta-ai': 'Meta AI',
-  'google-ai-overviews': 'Google AI',
-  'google-ai-mode': 'Google AI Mode',
-  'google-aimode': 'Google AI Mode',
-  'gpt-5-chat-latest': 'GPT-5',
-  'gpt-5-mini': 'GPT-5 Mini',
-  'claude-sonnet-4-6': 'Claude Sonnet 4.6',
-  'claude-opus-4-6': 'Claude Opus 4.6',
-  'gemini-2.5-pro': 'Gemini 2.5 Pro',
-  'gemini-2.5-flash': 'Gemini 2.5 Flash',
 };
 
 // ─── Custom Tooltips ──────────────────────────────────────────────────────────
