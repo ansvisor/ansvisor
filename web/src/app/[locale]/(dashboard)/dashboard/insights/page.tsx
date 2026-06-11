@@ -11,6 +11,7 @@ import {
   ShareOfVoiceTrendChart,
 } from './_charts';
 import { MetricBreakdownSheet } from './_metric-breakdown-sheet';
+import { groupResultsByTopic, type PlatformGroup, type PromptGroup } from './grouping';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
   getPromptResults,
@@ -253,131 +254,6 @@ function ModelBadge({ model, platform }: { model: string; platform?: string }) {
       <span className="text-xs">{getModelDisplayName(model, platform)}</span>
     </span>
   );
-}
-
-interface PlatformGroup {
-  key: string;
-  platform: string;
-  modelUsed?: string;
-  region?: string;
-  results: PromptResultWithText[];
-  latest: PromptResultWithText;
-  latestScore: number;
-  avgScore: number;
-  totalMentions: number;
-  totalCitations: number;
-}
-
-interface PromptGroup {
-  promptId: string;
-  promptText: string;
-  promptCategory?: string;
-  results: PromptResultWithText[];
-  platformGroups: PlatformGroup[];
-  avgScore: number;
-  totalMentions: number;
-  totalCitations: number;
-}
-
-function groupResultsByPlatform(items: PromptResultWithText[]): PlatformGroup[] {
-  const map = new Map<string, PromptResultWithText[]>();
-  for (const r of items) {
-    const key = `${r.platform}|${r.modelUsed ?? ''}`;
-    const arr = map.get(key) || [];
-    arr.push(r);
-    map.set(key, arr);
-  }
-
-  return Array.from(map.entries())
-    .map(([key, arr]) => {
-      const sorted = [...arr].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-      const latest = sorted[0];
-      return {
-        key,
-        platform: latest.platform,
-        modelUsed: latest.modelUsed,
-        region: latest.region,
-        results: sorted,
-        latest,
-        latestScore: latest.visibilityScore,
-        avgScore:
-          Math.round((sorted.reduce((s, r) => s + r.visibilityScore, 0) / sorted.length) * 10) / 10,
-        totalMentions: sorted.reduce((s, r) => s + r.mentionCount, 0),
-        totalCitations: sorted.reduce((s, r) => s + r.citationCount, 0),
-      } satisfies PlatformGroup;
-    })
-    .sort((a, b) => b.latestScore - a.latestScore);
-}
-
-function computePromptGroup(promptId: string, items: PromptResultWithText[]): PromptGroup {
-  const sorted = [...items].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
-  return {
-    promptId,
-    promptText: sorted[0].promptText,
-    promptCategory: sorted[0].promptCategory,
-    results: sorted,
-    platformGroups: groupResultsByPlatform(sorted),
-    avgScore: Math.round(sorted.reduce((s, r) => s + r.visibilityScore, 0) / sorted.length),
-    totalMentions: sorted.reduce((s, r) => s + r.mentionCount, 0),
-    totalCitations: sorted.reduce((s, r) => s + r.citationCount, 0),
-  };
-}
-
-function groupResultsByPrompt(results: PromptResultWithText[]): PromptGroup[] {
-  const map = new Map<string, PromptResultWithText[]>();
-  for (const r of results) {
-    const arr = map.get(r.promptId) || [];
-    arr.push(r);
-    map.set(r.promptId, arr);
-  }
-  return Array.from(map.entries()).map(([promptId, items]) => computePromptGroup(promptId, items));
-}
-
-interface TopicGroup {
-  topicId: string;
-  topicName: string;
-  prompts: PromptGroup[];
-  avgScore: number;
-  totalMentions: number;
-  totalCitations: number;
-  totalResults: number;
-}
-
-function groupResultsByTopic(results: PromptResultWithText[]): TopicGroup[] {
-  const topicMap = new Map<string, PromptResultWithText[]>();
-  for (const r of results) {
-    const key = r.topicName ?? '__uncategorized__';
-    const arr = topicMap.get(key) || [];
-    arr.push(r);
-    topicMap.set(key, arr);
-  }
-
-  return Array.from(topicMap.entries())
-    .map(([topicName, items]) => {
-      const promptMap = new Map<string, PromptResultWithText[]>();
-      for (const r of items) {
-        const arr = promptMap.get(r.promptId) || [];
-        arr.push(r);
-        promptMap.set(r.promptId, arr);
-      }
-      const prompts = Array.from(promptMap.entries()).map(([pid, pItems]) =>
-        computePromptGroup(pid, pItems),
-      );
-      return {
-        topicId: items[0].topicId ?? `__cat_${topicName}`,
-        topicName: topicName === '__uncategorized__' ? 'Uncategorized' : topicName,
-        prompts,
-        avgScore: Math.round(items.reduce((s, r) => s + r.visibilityScore, 0) / items.length),
-        totalMentions: items.reduce((s, r) => s + r.mentionCount, 0),
-        totalCitations: items.reduce((s, r) => s + r.citationCount, 0),
-        totalResults: items.length,
-      };
-    })
-    .sort((a, b) => b.avgScore - a.avgScore);
 }
 
 // ─── Delta Badge ──────────────────────────────────────────────────────────────
