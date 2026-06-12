@@ -3,6 +3,7 @@ import { createJob, getJob, cancelJob } from '../lib/job-manager.js';
 import { runTrackingJob } from '../lib/job-runner.js';
 import supabaseAdmin from '../config/supabase.js';
 import { isCloud, getPlan, isSubscriptionActive } from '../config/plans.js';
+import { assertBrandAccess } from '../lib/access.js';
 
 const router = Router();
 
@@ -256,6 +257,7 @@ router.post('/analyze-new', async (req, res) => {
 router.get('/unanalyzed/:brandId', async (req, res) => {
   try {
     const { brandId } = req.params;
+    await assertBrandAccess(brandId, req.user.id);
 
     const { data: promptSets } = await supabaseAdmin
       .from('prompt_sets')
@@ -291,7 +293,7 @@ router.get('/unanalyzed/:brandId', async (req, res) => {
     return res.json({ success: true, count: unanalyzed.length, prompts: unanalyzed });
   } catch (error) {
     console.error('[tracking] unanalyzed error:', error.message);
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.status || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -354,6 +356,7 @@ router.get('/results/:brandId', async (req, res) => {
 router.get('/status/:brandId', async (req, res) => {
   try {
     const { brandId } = req.params;
+    await assertBrandAccess(brandId, req.user.id);
 
     const { data: platforms, error } = await supabaseAdmin
       .from('brand_platforms')
@@ -366,7 +369,7 @@ router.get('/status/:brandId', async (req, res) => {
     return res.json({ success: true, platforms: platforms || [] });
   } catch (error) {
     console.error('[tracking] Status error:', error.message);
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.status || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -381,6 +384,8 @@ router.get('/job/:jobId', async (req, res) => {
       return res.json({ success: true, status: 'not_found' });
     }
 
+    await assertBrandAccess(job.brand_id, req.user.id);
+
     return res.json({
       success: true,
       status: job.status,
@@ -390,7 +395,7 @@ router.get('/job/:jobId', async (req, res) => {
     });
   } catch (error) {
     console.error('[tracking] Job status error:', error.message);
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.status || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -400,11 +405,15 @@ router.get('/job/:jobId', async (req, res) => {
  */
 router.delete('/job/:jobId', async (req, res) => {
   try {
+    const job = await getJob(req.params.jobId);
+    if (job) {
+      await assertBrandAccess(job.brand_id, req.user.id);
+    }
     await cancelJob(req.params.jobId);
     return res.json({ success: true, message: 'Job cancelled' });
   } catch (error) {
     console.error('[tracking] Job cancel error:', error.message);
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.status || 500).json({ success: false, message: error.message });
   }
 });
 

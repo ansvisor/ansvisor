@@ -11,6 +11,7 @@ import {
   PlanLimitError,
 } from '../lib/plan-guard.js';
 import supabaseAdmin from '../config/supabase.js';
+import { assertBrandAccess, assertPromptAccess } from '../lib/access.js';
 
 const router = Router();
 
@@ -161,6 +162,8 @@ router.post('/analyze', requireFeature('prompt_volumes'), async (req, res) => {
       return res.status(400).json({ error: 'promptId and promptText are required' });
     }
 
+    await assertPromptAccess(promptId, req.user.id);
+
     let resolvedLocationCode = locationCode;
     let resolvedLanguageCode = languageCode;
     if (resolvedLocationCode == null || resolvedLanguageCode == null) {
@@ -235,7 +238,7 @@ router.post('/analyze', requireFeature('prompt_volumes'), async (req, res) => {
       });
     }
     console.error('Volume analysis error:', error);
-    return res.status(500).json({
+    return res.status(error.status || 500).json({
       error: 'Failed to analyze prompt volume',
       details: error.message,
     });
@@ -262,6 +265,8 @@ router.post('/analyze-batch', requireFeature('prompt_volumes'), async (req, res)
     }
 
     const promptIds = prompts.map((p) => p.promptId);
+
+    await assertPromptAccess(promptIds, req.user.id);
 
     // Resolve DataForSEO location/language from the brand the prompts belong to,
     // unless the caller explicitly passed an override in the request body.
@@ -360,7 +365,7 @@ router.post('/analyze-batch', requireFeature('prompt_volumes'), async (req, res)
       });
     }
     console.error('Batch volume analysis error:', error);
-    return res.status(500).json({
+    return res.status(error.status || 500).json({
       error: 'Failed to analyze prompt volumes',
       details: error.message,
     });
@@ -382,6 +387,8 @@ router.post('/refresh', requireFeature('prompt_volumes'), async (req, res) => {
     if (!brandId) {
       return res.status(400).json({ error: 'brandId is required' });
     }
+
+    await assertBrandAccess(brandId, req.user.id);
 
     let resolvedLocationCode = locationCode;
     let resolvedLanguageCode = languageCode;
@@ -474,7 +481,7 @@ router.post('/refresh', requireFeature('prompt_volumes'), async (req, res) => {
       });
     }
     console.error('Volume refresh error:', error);
-    return res.status(500).json({
+    return res.status(error.status || 500).json({
       error: 'Failed to refresh volumes',
       details: error.message,
     });
@@ -487,6 +494,7 @@ router.post('/refresh', requireFeature('prompt_volumes'), async (req, res) => {
 router.get('/brand/:brandId', async (req, res) => {
   try {
     const { brandId } = req.params;
+    await assertBrandAccess(brandId, req.user.id);
 
     const { data: promptSets, error: psError } = await supabaseAdmin
       .from('prompt_sets')
@@ -547,7 +555,7 @@ router.get('/brand/:brandId', async (req, res) => {
     return res.json({ volumes: enriched, quota });
   } catch (error) {
     console.error('Fetch volumes error:', error);
-    return res.status(500).json({
+    return res.status(error.status || 500).json({
       error: 'Failed to fetch volume data',
       details: error.message,
     });

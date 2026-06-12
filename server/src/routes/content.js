@@ -12,6 +12,11 @@ import { createJob, getJob } from '../lib/job-manager.js';
 import { runContentJob } from '../lib/job-runner.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import supabaseAdmin from '../config/supabase.js';
+import {
+  assertBrandAccess,
+  assertOpportunitiesAccess,
+  assertOpportunityAccess,
+} from '../lib/access.js';
 
 const router = Router();
 
@@ -99,6 +104,8 @@ router.get('/job/:jobId', async (req, res) => {
       return res.json({ success: true, status: 'not_found' });
     }
 
+    await assertBrandAccess(job.brand_id, req.user.id);
+
     const progress = job.progress || {};
 
     return res.json({
@@ -110,7 +117,7 @@ router.get('/job/:jobId', async (req, res) => {
     });
   } catch (error) {
     console.error('[content] Job status error:', error.message);
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.status || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -176,6 +183,8 @@ router.post('/bulk/status', async (req, res) => {
         .json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
     }
 
+    await assertOpportunitiesAccess(ids, req.user.id);
+
     const { data, error } = await supabaseAdmin
       .from('content_opportunities')
       .update({ status, updated_at: new Date().toISOString() })
@@ -187,7 +196,7 @@ router.post('/bulk/status', async (req, res) => {
     return res.json({ updated: data?.length || 0 });
   } catch (error) {
     console.error('Bulk status update error:', error);
-    return res.status(500).json({
+    return res.status(error.status || 500).json({
       error: 'Failed to bulk update status',
       details: error.message,
     });
@@ -205,6 +214,8 @@ router.post('/bulk/send-webhook', async (req, res) => {
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'ids must be a non-empty array' });
     }
+
+    await assertOpportunitiesAccess(ids, req.user.id);
 
     const { data: opportunities, error: oppErr } = await supabaseAdmin
       .from('content_opportunities')
@@ -342,6 +353,8 @@ router.patch('/:id/status', async (req, res) => {
         .json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
     }
 
+    await assertOpportunityAccess(id, req.user.id);
+
     const { data, error } = await supabaseAdmin
       .from('content_opportunities')
       .update({ status, updated_at: new Date().toISOString() })
@@ -355,7 +368,7 @@ router.patch('/:id/status', async (req, res) => {
     return res.json(mapOpportunityRow(data));
   } catch (error) {
     console.error('Update opportunity status error:', error);
-    return res.status(500).json({
+    return res.status(error.status || 500).json({
       error: 'Failed to update status',
       details: error.message,
     });
@@ -370,15 +383,7 @@ router.post('/:id/send-webhook', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { data: opportunity, error: oppErr } = await supabaseAdmin
-      .from('content_opportunities')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (oppErr || !opportunity) {
-      return res.status(404).json({ error: 'Opportunity not found' });
-    }
+    const opportunity = await assertOpportunityAccess(id, req.user.id);
 
     const { data: webhookConfig } = await supabaseAdmin
       .from('webhook_configs')
@@ -475,7 +480,7 @@ router.post('/:id/send-webhook', async (req, res) => {
     });
   } catch (error) {
     console.error('Send webhook error:', error);
-    return res.status(500).json({
+    return res.status(error.status || 500).json({
       error: 'Failed to send webhook',
       details: error.message,
     });
@@ -796,20 +801,12 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { data, error } = await supabaseAdmin
-      .from('content_opportunities')
-      .select('*')
-      .eq('id', id)
-      .single();
+    const opp = await assertOpportunityAccess(id, req.user.id);
 
-    if (error || !data) {
-      return res.status(404).json({ error: 'Opportunity not found' });
-    }
-
-    return res.json(mapOpportunityRow(data));
+    return res.json(mapOpportunityRow(opp));
   } catch (error) {
     console.error('Get opportunity error:', error);
-    return res.status(500).json({
+    return res.status(error.status || 500).json({
       error: 'Failed to get opportunity',
       details: error.message,
     });
