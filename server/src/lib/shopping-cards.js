@@ -70,12 +70,17 @@ function parsePrice(value) {
         : typeof value.value === 'number'
           ? value.value
           : Number.parseFloat(value.amount ?? value.value ?? '');
-    const currency =
+    let currency =
       typeof value.currency === 'string'
         ? value.currency.toUpperCase()
         : typeof value.currencyCode === 'string'
           ? value.currencyCode.toUpperCase()
           : null;
+    // Providers (e.g. Copilot) often leave `currency` null but ship a
+    // `currencySymbol` like "₺" / "$". Map the symbol to an ISO code.
+    if (!currency && typeof value.currencySymbol === 'string') {
+      currency = CURRENCY_SYMBOLS[value.currencySymbol.trim()] ?? null;
+    }
     return {
       amount: Number.isFinite(amount) ? amount : null,
       currency: currency && CURRENCY_CODES.has(currency) ? currency : currency || null,
@@ -221,26 +226,49 @@ export function parseAiModeCard(card, position) {
 }
 
 /**
- * Microsoft Copilot card normalizer. CamelCase, slightly different field
- * names from AI Mode (`productName`, `productBrand`, `merchantName`).
+ * Microsoft Copilot product normalizer. Per the Cloro docs, Copilot ships
+ * shopping data as wrapper objects `{ type, layout, products: [ … ] }`;
+ * `normalizeShoppingCards` flattens those, so this receives an individual
+ * product:
+ *
+ *   { product, position, offerId, url, name, description, images,
+ *     specifications, tags, price, discountPrice, seller, sellerLogoUrl,
+ *     brandName, rating: { value, count }, canTrackPrice }
+ *
+ * Older fallbacks (`productName`, `imageUrl`, numeric `rating`) are kept so a
+ * shape change doesn't silently null the columns.
  *
  * @param {object} card
  * @param {number} position
  */
 export function parseCopilotCard(card, position) {
-  const price = parsePrice(card.price);
+  const price = parsePrice(card.price ?? card.discountPrice);
   const merchantUrl = toStringOrNull(card.url ?? card.link ?? card.productUrl);
+  // Images ship as `[{ title, url }]`; older shapes used a flat `imageUrl`.
+  const imageUrl =
+    toStringOrNull(card.imageUrl ?? card.image) ??
+    (Array.isArray(card.images) ? toStringOrNull(card.images[0]?.url) : null);
+  // Rating is an object `{ value, count }` in the documented shape, but
+  // tolerate a bare number from older/other shapes.
+  const ratingObj = card.rating && typeof card.rating === 'object' ? card.rating : null;
   return {
-    position,
-    product_title: toStringOrNull(card.productName ?? card.title ?? card.name),
-    product_brand: toStringOrNull(card.productBrand ?? card.brand ?? card.merchantName),
+    // The provider's own `position` is a flat 1-indexed rank across every
+    // card in the response — unique per result, so prefer it over the array
+    // index (which resets once we flatten the `products[]` wrappers).
+    position: toInteger(card.position) ?? position,
+    product_title: toStringOrNull(card.name ?? card.productName ?? card.title),
+    product_brand: toStringOrNull(
+      card.brandName ?? card.productBrand ?? card.brand ?? card.seller ?? card.merchantName,
+    ),
     price_amount: price.amount,
     price_currency: price.currency,
-    image_url: toStringOrNull(card.imageUrl ?? card.image),
+    image_url: imageUrl,
     merchant_url: merchantUrl,
     merchant_domain: extractHostname(merchantUrl),
-    rating: toNumber(card.rating),
-    review_count: toInteger(card.reviewCount ?? card.reviewsCount ?? card.reviews),
+    rating: ratingObj ? toNumber(ratingObj.value) : toNumber(card.rating),
+    review_count: ratingObj
+      ? toInteger(ratingObj.count)
+      : toInteger(card.reviewCount ?? card.reviewsCount ?? card.reviews ?? card.review),
     raw: card,
   };
 }
@@ -260,6 +288,31 @@ function pickParser(platform) {
 }
 
 /**
+ * Some providers (Microsoft Copilot) return shopping data as wrapper
+ * objects — `{ type: 'shoppingProducts', layout, products: [ … ] }` — rather
+ * than a flat array of product cards. Flatten any such wrapper into its
+ * `products` so each product becomes its own normalized card. Elements that
+ * are already flat product objects pass through untouched.
+ *
+ * @param {unknown[]} cards
+ * @returns {object[]}
+ */
+function flattenProductWrappers(cards) {
+  const out = [];
+  for (const card of cards) {
+    if (!card || typeof card !== 'object') continue;
+    if (Array.isArray(card.products)) {
+      for (const product of card.products) {
+        if (product && typeof product === 'object') out.push(product);
+      }
+    } else {
+      out.push(card);
+    }
+  }
+  return out;
+}
+
+/**
  * Normalize the raw `shopping_cards` array off a prompt_results row into
  * an array of analytical-column-shaped objects ready for insert.
  *
@@ -273,9 +326,8 @@ export function normalizeShoppingCards(platform, cards) {
   if (!Array.isArray(cards) || cards.length === 0) return [];
   const parser = pickParser(platform);
   if (!parser) return [];
-  return cards
+  return flattenProductWrappers(cards)
     .map((card, i) => {
-      if (!card || typeof card !== 'object') return null;
       try {
         return parser(card, i);
       } catch (err) {
