@@ -52,9 +52,7 @@ describe('cloro-scraper – parseScraperResponse', () => {
       const result = {
         aioverview: {
           markdown: 'AI overview text',
-          sources: [
-            { url: 'https://x.com', label: 'X' },
-          ],
+          sources: [{ url: 'https://x.com', label: 'X' }],
         },
       };
 
@@ -157,26 +155,17 @@ describe('cloro-scraper – parseScraperResponse', () => {
     });
 
     it('should fall back to scraperId as model when model is missing', () => {
-      const parsed = parseScraperResponse(
-        { markdown: 'no model', sources: [] },
-        'grok-web',
-      );
+      const parsed = parseScraperResponse({ markdown: 'no model', sources: [] }, 'grok-web');
       expect(parsed.model).toBe('grok-web');
     });
 
     it('should normalize missing sources to empty citations', () => {
-      const parsed = parseScraperResponse(
-        { markdown: 'no sources', model: 'x' },
-        'gemini-web',
-      );
+      const parsed = parseScraperResponse({ markdown: 'no sources', model: 'x' }, 'gemini-web');
       expect(parsed.citations).toEqual([]);
     });
 
     it('should default shopping_cards to empty array when neither key is present', () => {
-      const parsed = parseScraperResponse(
-        { markdown: 'no cards', sources: [] },
-        'gemini-web',
-      );
+      const parsed = parseScraperResponse({ markdown: 'no cards', sources: [] }, 'gemini-web');
       expect(parsed.shopping_cards).toEqual([]);
     });
   });

@@ -138,7 +138,7 @@ describe('shopping-cards – parseAiModeCard', () => {
     const result = parseAiModeCard(card, 1);
     expect(result.product_title).toBe('Gadget');
     expect(result.product_brand).toBe('Acme');
-    expect(result.price_amount).toBeCloseTo(29.90);
+    expect(result.price_amount).toBeCloseTo(29.9);
     expect(result.price_currency).toBe('EUR');
     expect(result.rating).toBeCloseTo(4.0);
     expect(result.review_count).toBe(80);
@@ -191,9 +191,7 @@ describe('shopping-cards – normalizeShoppingCards', () => {
 
 describe('shopping-cards – matchCardBrand', () => {
   const brand = { brandId: 'brand-1', brandName: 'Acme', domains: ['acme.com'] };
-  const competitors = [
-    { id: 'comp-1', name: 'Globex', domain: 'globex.com' },
-  ];
+  const competitors = [{ id: 'comp-1', name: 'Globex', domain: 'globex.com' }];
 
   it('should match brand by product_title', () => {
     const card = { product_title: 'Acme Widget', merchant_domain: null };
