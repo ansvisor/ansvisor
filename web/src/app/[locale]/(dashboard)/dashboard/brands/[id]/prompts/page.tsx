@@ -127,13 +127,14 @@ export default function PromptsPage() {
     } catch {}
   }, [brandId]);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (isCancelled?: () => boolean) => {
     try {
       const [brandData, sets, topicsData] = await Promise.all([
         getBrandById(brandId),
         getPromptSets(brandId),
         getTopics(brandId),
       ]);
+      if (isCancelled?.()) return;
       setBrand(brandData);
       setTopics(topicsData);
       if (topicsData.length > 0 && !manualCategory) {
@@ -142,15 +143,18 @@ export default function PromptsPage() {
       setGenerateTopics((prev) => (prev === null ? topicsData.map((t) => t.name) : prev));
       setPromptSets(sets);
     } catch {
+      if (isCancelled?.()) return;
       toast.error('Failed to load data');
     } finally {
-      setIsLoading(false);
+      if (!isCancelled?.()) setIsLoading(false);
     }
     fetchUnanalyzed();
   }, [brandId, manualCategory, fetchUnanalyzed]);
 
   useEffect(() => {
-    loadData();
+    let cancelled = false;
+    loadData(() => cancelled);
+    return () => { cancelled = true; };
   }, [loadData]);
 
   const handleGenerate = async () => {

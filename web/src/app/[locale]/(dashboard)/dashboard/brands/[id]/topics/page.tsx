@@ -44,10 +44,11 @@ export default function BrandTopicsPage({ params }: PageProps) {
   const [editName, setEditName] = useState('');
   const { canManage } = useUserRole();
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isCancelled?: () => boolean) => {
     setIsLoading(true);
     try {
       const data = await getTopics(brandId);
+      if (isCancelled?.()) return;
       setTopics(data);
       const counts: Record<string, number> = {};
       await Promise.all(
@@ -55,16 +56,20 @@ export default function BrandTopicsPage({ params }: PageProps) {
           counts[t.id] = await getPromptCountByTopic(brandId, t.name);
         }),
       );
+      if (isCancelled?.()) return;
       setPromptCounts(counts);
     } catch {
+      if (isCancelled?.()) return;
       toast.error('Failed to load topics');
     } finally {
-      setIsLoading(false);
+      if (!isCancelled?.()) setIsLoading(false);
     }
   }, [brandId]);
 
   useEffect(() => {
-    load();
+    let cancelled = false;
+    load(() => cancelled);
+    return () => { cancelled = true; };
   }, [load]);
 
   const handleAdd = async () => {
