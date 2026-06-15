@@ -291,6 +291,112 @@ export async function getPromptResults(
 }
 
 /**
+ * Fetch all prompt results for export, bypassing the default 1000 limit by paginating.
+ * Applies a hard ceiling to prevent OOM errors on massive datasets.
+ */
+export async function exportPromptResults(
+  brandId: string,
+  opts?: {
+    platform?: string;
+    model?: string;
+    region?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    promptId?: string;
+    topicId?: string;
+  },
+): Promise<{ results: PromptResultWithText[]; isCapped: boolean }> {
+  const allRows: Record<string, unknown>[] = [];
+  const pageSize = 1000;
+  const hardCeiling = 50000;
+  let isCapped = false;
+  let offset = 0;
+
+  while (true) {
+    const { query } = await buildResultsQuery(brandId, opts);
+    const { data, error } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as Record<string, unknown>[];
+    allRows.push(...rows);
+
+    if (rows.length < pageSize) {
+      break; // Reached the end
+    }
+
+    offset += pageSize;
+    if (offset >= hardCeiling) {
+      isCapped = true;
+      break;
+    }
+  }
+
+  const { supabase } = await buildResultsQuery(brandId, opts);
+
+  const promptIds = [...new Set(allRows.map((r) => r.prompt_id as string))];
+  const promptRowsRaw: Record<string, unknown>[] = [];
+  const chunkSize = 500;
+
+  for (let i = 0; i < promptIds.length; i += chunkSize) {
+    const chunk = promptIds.slice(i, i + chunkSize);
+    if (chunk.length > 0) {
+      const { data: pRows } = await supabase
+        .from('prompts')
+        .select('id, text, category, topic_id')
+        .in('id', chunk);
+      if (pRows) {
+        promptRowsRaw.push(...(pRows as unknown as Record<string, unknown>[]));
+      }
+    }
+  }
+
+  const topicIds = [
+    ...new Set(promptRowsRaw.map((p) => p.topic_id as string | null).filter(Boolean) as string[]),
+  ];
+  const topicRowsRaw: Record<string, unknown>[] = [];
+
+  for (let i = 0; i < topicIds.length; i += chunkSize) {
+    const chunk = topicIds.slice(i, i + chunkSize);
+    if (chunk.length > 0) {
+      const { data: tRows } = await supabase.from('topics').select('id, name').in('id', chunk);
+      if (tRows) {
+        topicRowsRaw.push(...(tRows as Record<string, unknown>[]));
+      }
+    }
+  }
+
+  const topicMap = new Map(topicRowsRaw.map((t) => [t.id as string, t.name as string]));
+
+  const promptMap = new Map(
+    promptRowsRaw.map((p) => [
+      p.id as string,
+      {
+        text: p.text as string,
+        category: p.category as string | null,
+        topicId: p.topic_id as string | null,
+      },
+    ]),
+  );
+
+  const results = allRows.map((r) => {
+    const pm = promptMap.get(r.prompt_id as string);
+    return {
+      ...mapResultRow(r),
+      promptText: (pm?.text as string) ?? '',
+      promptCategory: (pm?.category as string | null) ?? undefined,
+      topicId: (pm?.topicId as string | null) ?? undefined,
+      topicName: pm?.topicId
+        ? (topicMap.get(pm.topicId) ?? (pm?.category as string | null) ?? undefined)
+        : ((pm?.category as string | null) ?? undefined),
+    };
+  });
+
+  return { results, isCapped };
+}
+
+/**
  * Fetch a single prompt result by its ID, joining prompt text.
  */
 export async function getPromptResultById(resultId: string): Promise<PromptResultWithText | null> {

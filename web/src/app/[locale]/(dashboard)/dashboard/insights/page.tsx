@@ -22,6 +22,7 @@ import {
   getJobStatus,
   cancelTrackingJob,
   getBrandPrompts,
+  exportPromptResults,
   type PromptResultWithText,
   type InsightsSummary,
   type CompetitorComparisonData,
@@ -1227,6 +1228,7 @@ export default function InsightsPage() {
   const [competitorData, setCompetitorData] = useState<CompetitorComparisonData | null>(null);
   const [sovData, setSovData] = useState<ShareOfVoiceData | null>(null);
   const [breakdownMetric, setBreakdownMetric] = useState<BreakdownMetric | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
@@ -1505,36 +1507,77 @@ export default function InsightsPage() {
     }
   };
 
-  const handleExportCsv = useCallback(() => {
-    const rows = results.map((r) => ({
-      created_at: r.createdAt,
-      prompt: r.promptText,
-      topic: r.topicName ?? '',
-      platform: PLATFORM_LABELS[r.platform] ?? r.platform,
-      model: r.modelUsed ?? '',
-      region: r.region ?? '',
-      mention_count: r.mentionCount,
-      citation_count: r.citationCount,
-      visibility_score: r.visibilityScore,
-      sentiment: r.sentiment,
-      citation_urls: r.citations.map((c) => c.url).join(', '),
-      competitor_mentions:
-        r.competitorMentions?.map((c) => `${c.name}:${c.mention_count}`).join(', ') ?? '',
-    }));
+  const handleExportCsv = useCallback(async () => {
+    if (!brand) return;
+    setIsExporting(true);
+    try {
+      const f = filtersRef.current;
+      const { dateFrom, dateTo } = getDateRange(f.datePreset, {
+        from: f.dateFrom,
+        to: f.dateTo,
+      });
+      const filterOpts = {
+        model: f.model || undefined,
+        region: f.region || undefined,
+        topicId: f.topic || undefined,
+        dateFrom,
+        dateTo,
+      };
 
-    const csv = toCsv(rows, INSIGHT_EXPORT_HEADERS);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const date = new Date().toISOString().slice(0, 10);
-    const slug = brand?.slug ?? 'brand';
+      const { results: allResults, isCapped } = await exportPromptResults(brand.id, filterOpts);
 
-    link.href = url;
-    link.download = `ansvisor_${slug}_insights_${date}.csv`;
-    link.click();
+      const rows: Record<string, string | number>[] = allResults.map((r) => ({
+        created_at: r.createdAt,
+        prompt: r.promptText,
+        topic: r.topicName ?? '',
+        platform: PLATFORM_LABELS[r.platform] ?? r.platform,
+        model: r.modelUsed ?? '',
+        region: r.region ?? '',
+        mention_count: r.mentionCount,
+        citation_count: r.citationCount,
+        visibility_score: r.visibilityScore,
+        sentiment: r.sentiment,
+        citation_urls: r.citations.map((c) => c.url).join(', '),
+        competitor_mentions:
+          r.competitorMentions?.map((c) => `${c.name}:${c.mention_count}`).join(', ') ?? '',
+      }));
 
-    URL.revokeObjectURL(url);
-  }, [brand?.slug, results]);
+      if (isCapped) {
+        rows.push({
+          created_at: 'WARNING',
+          prompt: 'Export capped at 50,000 rows',
+          topic: '',
+          platform: '',
+          model: '',
+          region: '',
+          mention_count: 0,
+          citation_count: 0,
+          visibility_score: 0,
+          sentiment: '',
+          citation_urls: '',
+          competitor_mentions: '',
+        });
+        toast.warning('Export capped at 50,000 rows to prevent memory issues');
+      }
+
+      const csv = toCsv(rows, INSIGHT_EXPORT_HEADERS);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const date = new Date().toISOString().slice(0, 10);
+      const slug = brand.slug ?? 'brand';
+
+      link.href = url;
+      link.download = `ansvisor_${slug}_insights_${date}.csv`;
+      link.click();
+
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to export CSV');
+    } finally {
+      setIsExporting(false);
+    }
+  }, [brand]);
 
   if (!brand || (isLoading && !summary)) return <InsightsSkeleton />;
 
@@ -1592,9 +1635,18 @@ export default function InsightsPage() {
 
         <div className="flex items-center gap-2 shrink-0">
           {/* Always visible */}
-          <Button variant="outline" className="gap-2" onClick={handleExportCsv}>
-            <Download className="h-4 w-4" />
-            Export CSV
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={handleExportCsv}
+            disabled={isExporting}
+          >
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            {isExporting ? 'Exporting...' : 'Export CSV'}
           </Button>
 
           {/* Self-host only */}

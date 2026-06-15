@@ -127,34 +127,39 @@ export default function PromptsPage() {
     } catch {}
   }, [brandId]);
 
-  const loadData = useCallback(async (isCancelled?: () => boolean) => {
-    try {
-      const [brandData, sets, topicsData] = await Promise.all([
-        getBrandById(brandId),
-        getPromptSets(brandId),
-        getTopics(brandId),
-      ]);
-      if (isCancelled?.()) return;
-      setBrand(brandData);
-      setTopics(topicsData);
-      if (topicsData.length > 0 && !manualCategory) {
-        setManualCategory(topicsData[0].name);
+  const loadData = useCallback(
+    async (isCancelled?: () => boolean) => {
+      try {
+        const [brandData, sets, topicsData] = await Promise.all([
+          getBrandById(brandId),
+          getPromptSets(brandId),
+          getTopics(brandId),
+        ]);
+        if (isCancelled?.()) return;
+        setBrand(brandData);
+        setTopics(topicsData);
+        if (topicsData.length > 0 && !manualCategory) {
+          setManualCategory(topicsData[0].name);
+        }
+        setGenerateTopics((prev) => (prev === null ? topicsData.map((t) => t.name) : prev));
+        setPromptSets(sets);
+      } catch {
+        if (isCancelled?.()) return;
+        toast.error('Failed to load data');
+      } finally {
+        if (!isCancelled?.()) setIsLoading(false);
       }
-      setGenerateTopics((prev) => (prev === null ? topicsData.map((t) => t.name) : prev));
-      setPromptSets(sets);
-    } catch {
-      if (isCancelled?.()) return;
-      toast.error('Failed to load data');
-    } finally {
-      if (!isCancelled?.()) setIsLoading(false);
-    }
-    fetchUnanalyzed();
-  }, [brandId, manualCategory, fetchUnanalyzed]);
+      fetchUnanalyzed();
+    },
+    [brandId, manualCategory, fetchUnanalyzed],
+  );
 
   useEffect(() => {
     let cancelled = false;
     loadData(() => cancelled);
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [loadData]);
 
   const handleGenerate = async () => {

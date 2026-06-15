@@ -44,32 +44,37 @@ export default function BrandTopicsPage({ params }: PageProps) {
   const [editName, setEditName] = useState('');
   const { canManage } = useUserRole();
 
-  const load = useCallback(async (isCancelled?: () => boolean) => {
-    setIsLoading(true);
-    try {
-      const data = await getTopics(brandId);
-      if (isCancelled?.()) return;
-      setTopics(data);
-      const counts: Record<string, number> = {};
-      await Promise.all(
-        data.map(async (t) => {
-          counts[t.id] = await getPromptCountByTopic(brandId, t.name);
-        }),
-      );
-      if (isCancelled?.()) return;
-      setPromptCounts(counts);
-    } catch {
-      if (isCancelled?.()) return;
-      toast.error('Failed to load topics');
-    } finally {
-      if (!isCancelled?.()) setIsLoading(false);
-    }
-  }, [brandId]);
+  const load = useCallback(
+    async (isCancelled?: () => boolean) => {
+      setIsLoading(true);
+      try {
+        const data = await getTopics(brandId);
+        if (isCancelled?.()) return;
+        setTopics(data);
+        const counts: Record<string, number> = {};
+        await Promise.all(
+          data.map(async (t) => {
+            counts[t.id] = await getPromptCountByTopic(brandId, t.name);
+          }),
+        );
+        if (isCancelled?.()) return;
+        setPromptCounts(counts);
+      } catch {
+        if (isCancelled?.()) return;
+        toast.error('Failed to load topics');
+      } finally {
+        if (!isCancelled?.()) setIsLoading(false);
+      }
+    },
+    [brandId],
+  );
 
   useEffect(() => {
     let cancelled = false;
     load(() => cancelled);
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [load]);
 
   const handleAdd = async () => {
