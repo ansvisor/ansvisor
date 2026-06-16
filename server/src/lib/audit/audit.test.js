@@ -5,6 +5,7 @@ import { fleschReadingEase, classifyLinks, jsonLd, countPhrases } from './signal
 import { jsonLdPresence, h1Quality } from './signals/structure.js';
 import { https, metaDescription } from './signals/trust.js';
 import { length } from './signals/content.js';
+import { withRetry } from './retry.js';
 
 /** Build a minimal audit context from an HTML string (no network). */
 function ctxFromHtml(html, extra = {}) {
@@ -85,6 +86,49 @@ describe('helpers', () => {
 
   it('countPhrases counts case-insensitive occurrences', () => {
     expect(countPhrases('We tested it. Then WE TESTED again.', ['we tested'])).toBe(2);
+  });
+});
+
+describe('withRetry', () => {
+  it('returns the value on first success without retrying', async () => {
+    let calls = 0;
+    const out = await withRetry(
+      async () => {
+        calls += 1;
+        return 'ok';
+      },
+      { attempts: 3, baseDelayMs: 0 },
+    );
+    expect(out).toBe('ok');
+    expect(calls).toBe(1);
+  });
+
+  it('retries transient failures then succeeds', async () => {
+    let calls = 0;
+    const out = await withRetry(
+      async () => {
+        calls += 1;
+        if (calls < 3) throw new Error('transient');
+        return 'recovered';
+      },
+      { attempts: 3, baseDelayMs: 0 },
+    );
+    expect(out).toBe('recovered');
+    expect(calls).toBe(3);
+  });
+
+  it('throws the last error after exhausting attempts', async () => {
+    let calls = 0;
+    await expect(
+      withRetry(
+        async () => {
+          calls += 1;
+          throw new Error('always');
+        },
+        { attempts: 2, baseDelayMs: 0 },
+      ),
+    ).rejects.toThrow('always');
+    expect(calls).toBe(2);
   });
 });
 

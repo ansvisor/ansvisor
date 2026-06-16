@@ -14,6 +14,7 @@ import { generateObject } from 'ai';
 import { z } from 'zod';
 import { resolveModel } from '../ai-provider.js';
 import { signalsByKey } from './rubric.js';
+import { withRetry } from './retry.js';
 
 const DEFAULT_MODEL = 'google/gemini-3-flash-preview';
 
@@ -101,11 +102,13 @@ export async function generateRecommendations(ctx, { results } = {}) {
   const pageText = ctx.text.slice(0, 6000);
 
   try {
-    const { object } = await generateObject({
-      model: resolveModel(modelString),
-      schema: recommendationsSchema,
-      system: SYSTEM_PROMPT,
-      prompt: `PAGE URL: ${ctx.url}
+    const { object } = await withRetry(
+      () =>
+        generateObject({
+          model: resolveModel(modelString),
+          schema: recommendationsSchema,
+          system: SYSTEM_PROMPT,
+          prompt: `PAGE URL: ${ctx.url}
 
 Improve THIS page for its own topic/intent (infer it from the content below). Never introduce subject matter the page isn't already about.
 
@@ -118,7 +121,9 @@ ${pageText}
 """
 
 Return prioritized, page-specific recommendations.`,
-    });
+        }),
+      { label: 'recommendations' },
+    );
 
     return (object.recommendations || [])
       .filter((r) => RECOMMENDABLE_SIGNALS.has(r.signalKey))

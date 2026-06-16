@@ -14,6 +14,7 @@ import { generateObject } from 'ai';
 import { z } from 'zod';
 import { resolveModel } from '../ai-provider.js';
 import { signalsByKey } from './rubric.js';
+import { withRetry } from './retry.js';
 
 const DEFAULT_MODEL = 'google/gemini-3-flash-preview';
 
@@ -86,12 +87,16 @@ export async function evaluateLlmSignals(ctx) {
   const modelString = process.env.AUDIT_LLM_MODEL || DEFAULT_MODEL;
 
   try {
-    const { object } = await generateObject({
-      model: resolveModel(modelString),
-      schema: responseSchema,
-      system: SYSTEM_PROMPT,
-      prompt: buildPrompt(ctx),
-    });
+    const { object } = await withRetry(
+      () =>
+        generateObject({
+          model: resolveModel(modelString),
+          schema: responseSchema,
+          system: SYSTEM_PROMPT,
+          prompt: buildPrompt(ctx),
+        }),
+      { label: 'llm-signals' },
+    );
 
     return LLM_SIGNAL_KEYS.map((key) => {
       const v = object[key];
