@@ -9,7 +9,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { runAudit, getAudits, deleteAudit, type AuditSummary } from '@/lib/actions/audits';
+import {
+  runAudit,
+  getAudits,
+  getAuditQuota,
+  deleteAudit,
+  type AuditSummary,
+  type AuditQuota,
+} from '@/lib/actions/audits';
 import { pct, scoreColor } from '@/components/audit/audit-report';
 import { cn } from '@/lib/utils';
 
@@ -27,15 +34,19 @@ export default function SiteAuditPage() {
   });
   const [running, setRunning] = useState(false);
   const [history, setHistory] = useState<AuditSummary[]>([]);
+  const [quota, setQuota] = useState<AuditQuota | null>(null);
 
-  // Load recent audits for the active brand.
+  // Load recent audits + the monthly quota for the active brand.
   useEffect(() => {
     if (!activeBrandId) return;
     let cancelled = false;
     (async () => {
       try {
-        const data = await getAudits(activeBrandId);
-        if (!cancelled) setHistory(data);
+        const [data, q] = await Promise.all([getAudits(activeBrandId), getAuditQuota()]);
+        if (!cancelled) {
+          setHistory(data);
+          setQuota(q);
+        }
       } catch (err) {
         console.error('Failed to load audit history:', err);
       }
@@ -44,6 +55,8 @@ export default function SiteAuditPage() {
       cancelled = true;
     };
   }, [activeBrandId]);
+
+  const quotaExhausted = quota !== null && quota.limit !== -1 && quota.remaining <= 0;
 
   const handleRun = async () => {
     if (!activeBrandId) {
@@ -93,11 +106,21 @@ export default function SiteAuditPage() {
             placeholder="https://example.com/page"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !running && handleRun()}
+            onKeyDown={(e) => e.key === 'Enter' && !running && !quotaExhausted && handleRun()}
             disabled={running}
             className="flex-1"
           />
-          <Button onClick={handleRun} disabled={running} className="shrink-0">
+          {quota && quota.limit !== -1 && (
+            <span
+              className={cn(
+                'shrink-0 text-xs tabular-nums',
+                quotaExhausted ? 'text-destructive' : 'text-muted-foreground',
+              )}
+            >
+              {quota.remaining}/{quota.limit} {t('auditsLeft')}
+            </span>
+          )}
+          <Button onClick={handleRun} disabled={running || quotaExhausted} className="shrink-0">
             {running ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -14,7 +14,13 @@
 import { Router } from 'express';
 import supabaseAdmin from '../config/supabase.js';
 import { assertBrandAccess } from '../lib/access.js';
-import { requireFeature, enforceSiteAuditQuota, PlanLimitError } from '../lib/plan-guard.js';
+import {
+  requireFeature,
+  enforceSiteAuditQuota,
+  getSiteAuditQuotaStatus,
+  getOrgIdForUser,
+  PlanLimitError,
+} from '../lib/plan-guard.js';
 import { buildAuditContext } from '../lib/audit/context.js';
 import { runSignals } from '../lib/audit/engine.js';
 import { evaluateLlmSignals } from '../lib/audit/llm-signals.js';
@@ -183,6 +189,24 @@ router.post('/', requireFeature('content_optimization'), async (req, res) => {
       return res.status(err.status).json({ success: false, message: err.message });
     }
     console.error('[audit] start failed:', err.message);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/audits/quota — the org's monthly audit allowance (used/limit/remaining).
+// Registered before /:id so "quota" isn't matched as an audit id.
+router.get('/quota', async (req, res) => {
+  try {
+    const orgId = await getOrgIdForUser(req.user?.id);
+    const quota = await getSiteAuditQuotaStatus(orgId);
+    return res.json({ success: true, quota });
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      return res
+        .status(err.statusCode)
+        .json({ success: false, error: 'quota_exceeded', message: err.message });
+    }
+    console.error('[audit] quota failed:', err.message);
     return res.status(500).json({ success: false, message: err.message });
   }
 });

@@ -52,6 +52,12 @@ export interface AuditResult {
   recommendations: AuditRecommendation[];
 }
 
+export interface AuditQuota {
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
 export interface AuditSummary {
   id: string;
   url: string;
@@ -123,6 +129,23 @@ export async function deleteAudit(auditId: string): Promise<void> {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.message || `Server error: ${res.status}`);
   }
+}
+
+/** The org's monthly Site Audit allowance (used / limit / remaining; limit -1 = unlimited). */
+export async function getAuditQuota(): Promise<AuditQuota> {
+  const session = await getSession();
+
+  const res = await fetch(`${AEO_SERVER_URL}/api/audits/quota`, {
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || `Server error: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data.quota;
 }
 
 /** List recent audits for a brand (summaries, no signal detail). */

@@ -37,6 +37,7 @@
     "running": "Auditing…",
     "recent": "Recent Audits",
     "deleteAudit": "Delete audit",
+    "auditsLeft": "audits left this month",
     "noBrand": "Select a brand first.",
     "urlRequired": "Enter a URL to audit.",
     "failed": "Audit failed. Please try again.",
