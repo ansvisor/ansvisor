@@ -36,17 +36,6 @@ export interface BrandDomain {
   isPrimary: boolean;
 }
 
-/** @deprecated Use Brand + BrandDomain instead */
-export interface Project {
-  id: string;
-  organizationId: string;
-  brandId?: string;
-  name: string;
-  domain: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface PromptSet {
   id: string;
   brandId: string;
