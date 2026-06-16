@@ -54,23 +54,31 @@ export default function SiteAuditPage() {
   const [nowMs] = useState(() => Date.now());
 
   // Load recent audits + the monthly quota + the primary-domain trend.
+  // Each is fetched independently: recent audits are the core of the page, so a
+  // failing quota/trend call (e.g. during a deploy window where the web is live
+  // but the server doesn't yet have the /quota & /trend routes) must NOT blank
+  // the list — it just hides that one enhancement.
   useEffect(() => {
     if (!activeBrandId) return;
     let cancelled = false;
     (async () => {
       try {
-        const [data, q, tr] = await Promise.all([
-          getAudits(activeBrandId),
-          getAuditQuota(),
-          getAuditTrend(activeBrandId),
-        ]);
-        if (!cancelled) {
-          setHistory(data);
-          setQuota(q);
-          setTrend(tr);
-        }
+        const data = await getAudits(activeBrandId);
+        if (!cancelled) setHistory(data);
       } catch (err) {
-        console.error('Failed to load audit hub data:', err);
+        console.error('Failed to load audit history:', err);
+      }
+      try {
+        const q = await getAuditQuota();
+        if (!cancelled) setQuota(q);
+      } catch (err) {
+        console.error('Failed to load audit quota:', err);
+      }
+      try {
+        const tr = await getAuditTrend(activeBrandId);
+        if (!cancelled) setTrend(tr);
+      } catch (err) {
+        console.error('Failed to load audit trend:', err);
       }
     })();
     return () => {
