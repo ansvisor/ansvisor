@@ -55,6 +55,7 @@ export function Sidebar() {
     Prompts: () => t('prompts'),
     Topics: () => t('topics'),
     'Content Optimization': () => t('content'),
+    'Site Audit': () => t('audit'),
     Competitors: () => t('competitors'),
     Citations: () => t('citations'),
     Shopping: () => t('shopping'),

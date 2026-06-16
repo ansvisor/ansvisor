@@ -15,6 +15,7 @@ export const PLANS = {
       maxDomainsPerBrand: -1,
       maxVolumeAnalyses: -1,
       maxBriefGenerations: -1,
+      maxSiteAudits: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
       features: [
@@ -43,6 +44,7 @@ export const PLANS = {
       maxDomainsPerBrand: 3,
       maxVolumeAnalyses: 4,
       maxBriefGenerations: 10,
+      maxSiteAudits: 100,
       maxDailyOnDemand: 3,
       onDemandCooldownMinutes: 15,
       allowedScrapers: ['chatgpt-web', 'perplexity-web'],
@@ -72,6 +74,7 @@ export const PLANS = {
       maxDomainsPerBrand: 10,
       maxVolumeAnalyses: 10,
       maxBriefGenerations: 50,
+      maxSiteAudits: 500,
       maxDailyOnDemand: 10,
       onDemandCooldownMinutes: 5,
       features: [
@@ -101,6 +104,7 @@ export const PLANS = {
       maxVolumeAnalyses: -1,
       // Per-customer: override via organizations.plan_overrides in the DB.
       maxBriefGenerations: -1,
+      maxSiteAudits: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
       features: [

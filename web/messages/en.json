@@ -23,11 +23,43 @@
     "prompts": "Prompts",
     "topics": "Topics",
     "content": "Content Optimization",
+    "audit": "Site Audit",
     "competitors": "Competitors",
     "citations": "Citations",
     "shopping": "Shopping",
     "reports": "Reports",
     "settings": "Settings"
+  },
+  "audit": {
+    "title": "Site Audit",
+    "description": "Score any page against the 47-signal AEO/GEO",
+    "runAudit": "Run Audit",
+    "running": "Auditing…",
+    "recent": "Recent Audits",
+    "deleteAudit": "Delete audit",
+    "noBrand": "Select a brand first.",
+    "urlRequired": "Enter a URL to audit.",
+    "failed": "Audit failed. Please try again.",
+    "grade": {
+      "good": "Good",
+      "needsWork": "Needs work",
+      "poor": "Poor"
+    },
+    "summary": {
+      "passed": "passed",
+      "warnings": "warnings",
+      "failed": "failed"
+    },
+    "onlyIssues": "Issues only",
+    "allSignals": "All signals",
+    "noIssues": "No issues found — every evaluated signal passed.",
+    "stages": {
+      "fetch": "Fetching the page…",
+      "analyze": "Analyzing 47 signals…",
+      "recommend": "Generating AI recommendations…"
+    },
+    "emptyTitle": "Audit any page for AI search readiness",
+    "emptyBody": "Enter a URL above to score it against 47 AEO/GEO signals and get AI-written fixes."
   },
   "auth": {
     "signIn": "Sign in",

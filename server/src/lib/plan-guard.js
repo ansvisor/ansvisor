@@ -236,6 +236,50 @@ export async function getBriefQuotaStatus(orgId) {
   return { used, limit: max, remaining: Math.max(0, max - used) };
 }
 
+async function countSiteAuditUsageThisMonth(orgId) {
+  const { count } = await supabaseAdmin
+    .from('site_audit_usage')
+    .select('*', { count: 'exact', head: true })
+    .eq('organization_id', orgId)
+    .gte('used_at', startOfCurrentMonth().toISOString());
+  return count || 0;
+}
+
+/**
+ * Enforce the monthly Site Audit quota for an organization. Counts completed
+ * audits this calendar month against plan.limits.maxSiteAudits (Starter 100,
+ * Growth 500, Enterprise/Self-hosted unlimited). Throws PlanLimitError (429)
+ * when exhausted; returns { plan, remaining } otherwise.
+ */
+export async function enforceSiteAuditQuota(orgId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const max = plan.limits.maxSiteAudits;
+  if (max === -1) return { plan, remaining: -1 };
+
+  const used = await countSiteAuditUsageThisMonth(orgId);
+  if (used >= max) {
+    throw new PlanLimitError(
+      `Monthly Site Audit limit reached (${used}/${max}) on the ${plan.name} plan. Resets on the 1st of next month — upgrade for more.`,
+      429,
+    );
+  }
+
+  return { plan, remaining: max - used };
+}
+
+/**
+ * Get current Site Audit quota status without enforcing.
+ * Returns { used, limit, remaining }.
+ */
+export async function getSiteAuditQuotaStatus(orgId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const max = plan.limits.maxSiteAudits;
+  if (max === -1) return { used: 0, limit: -1, remaining: -1 };
+
+  const used = await countSiteAuditUsageThisMonth(orgId);
+  return { used, limit: max, remaining: Math.max(0, max - used) };
+}
+
 /**
  * Express middleware that attaches req.plan from the authenticated user.
  * Must run after auth middleware (req.user must exist).

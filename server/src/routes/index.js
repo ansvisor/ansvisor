@@ -5,6 +5,7 @@ import volumeRoutes from './volumes.js';
 import contentRoutes from './content.js';
 import competitorRoutes from './competitors.js';
 import topicRoutes from './topics.js';
+import auditRoutes from './audits.js';
 
 const router = Router();
 
@@ -14,6 +15,7 @@ router.use('/volumes', volumeRoutes);
 router.use('/content', contentRoutes);
 router.use('/competitors', competitorRoutes);
 router.use('/topics', topicRoutes);
+router.use('/audits', auditRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', user: req.user?.id });
