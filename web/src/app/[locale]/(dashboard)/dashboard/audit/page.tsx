@@ -89,18 +89,29 @@ export default function SiteAuditPage() {
     return points.filter((p) => new Date(p.createdAt).getTime() >= cutoff);
   }, [trend, range, nowMs]);
 
-  const chartData = rangePoints
+  // Collapse to one point per calendar day (the latest audit that day) so the
+  // x-axis doesn't repeat identical date labels when a page is audited several
+  // times in a day. rangePoints is ascending, so the last write per day wins.
+  const dailyPoints = useMemo(() => {
+    const byDay = new Map<string, (typeof rangePoints)[number]>();
+    for (const p of rangePoints) {
+      byDay.set(new Date(p.createdAt).toISOString().slice(0, 10), p);
+    }
+    return [...byDay.values()];
+  }, [rangePoints]);
+
+  const chartData = dailyPoints
     .filter((p) => p.totalScore !== null)
     .map((p) => ({
       date: new Date(p.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
       score: pct(p.totalScore) ?? 0,
     }));
 
-  const latestPoint = rangePoints[rangePoints.length - 1] ?? null;
+  const latestPoint = dailyPoints[dailyPoints.length - 1] ?? null;
   const delta =
-    rangePoints.length >= 2
-      ? (pct(rangePoints[rangePoints.length - 1].totalScore) ?? 0) -
-        (pct(rangePoints[0].totalScore) ?? 0)
+    dailyPoints.length >= 2
+      ? (pct(dailyPoints[dailyPoints.length - 1].totalScore) ?? 0) -
+        (pct(dailyPoints[0].totalScore) ?? 0)
       : null;
 
   const handleRun = async () => {
