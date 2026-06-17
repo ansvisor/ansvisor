@@ -40,7 +40,10 @@ app.use('/', trafficRoutes);
 // --- Request logger (before everything to catch all requests) ---
 app.use(requestIdMiddleware);
 app.use((req, res, next) => {
-  req.log.debug({ method: req.method, path: req.path, origin: req.headers.origin, ip: req.ip }, 'incoming request');
+  req.log.debug(
+    { method: req.method, path: req.path, origin: req.headers.origin, ip: req.ip },
+    'incoming request',
+  );
   next();
 });
 
