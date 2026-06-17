@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import logger from '../../lib/logger.js';
+import logger from '../lib/logger.js';
 
 export default function requestIdMiddleware(req, res, next) {
   const id = randomUUID();
