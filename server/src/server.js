@@ -7,8 +7,10 @@ import bodyParser from 'body-parser';
 import { Server as SocketIOServer } from 'socket.io';
 import cron from 'node-cron';
 
+import logger from './lib/logger.js';
 import Middleware from './middleware/index.js';
 import { apiLimiter } from './middleware/rate-limiter.js';
+import requestIdMiddleware from './middleware/request-id.js';
 import routes from './routes/index.js';
 import trafficRoutes from './routes/traffic.js';
 import { createJob, cleanupStaleJobs, cleanupOldJobs } from './lib/job-manager.js';
@@ -36,8 +38,9 @@ app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 app.use('/', trafficRoutes);
 
 // --- Request logger (before everything to catch all requests) ---
+app.use(requestIdMiddleware);
 app.use((req, res, next) => {
-  console.log(`[req] ${req.method} ${req.path} | origin: ${req.headers.origin} | ip: ${req.ip}`);
+  req.log.debug({ method: req.method, path: req.path, origin: req.headers.origin, ip: req.ip }, 'incoming request');
   next();
 });
 
@@ -46,7 +49,7 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
   .split(',')
   .map((o) => o.trim());
 
-console.log('[cors] Allowed origins:', allowedOrigins);
+logger.info({ allowedOrigins }, 'CORS configured');
 
 app.use(
   cors({
@@ -78,10 +81,10 @@ io.use((socket, next) => Middleware.checkRequestIsComingFromDomainForSocket(sock
 io.use((socket, next) => Middleware.decodeTokenForSocket(socket, next));
 
 io.on('connection', (socket) => {
-  console.log(`Socket connected: ${socket.id} (user: ${socket.user?.id})`);
+  logger.debug({ socketId: socket.id, userId: socket.user?.id }, 'socket connected');
 
   socket.on('disconnect', () => {
-    console.log(`Socket disconnected: ${socket.id}`);
+    logger.debug({ socketId: socket.id }, 'socket disconnected');
   });
 });
 
