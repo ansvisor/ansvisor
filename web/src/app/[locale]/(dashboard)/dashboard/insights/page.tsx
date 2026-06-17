@@ -92,7 +92,7 @@ interface InsightsFilters {
 }
 
 const DEFAULT_FILTERS: InsightsFilters = {
-  datePreset: 'all',
+  datePreset: '24h',
   dateFrom: '',
   dateTo: '',
   region: '',
