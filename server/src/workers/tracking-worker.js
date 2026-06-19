@@ -218,10 +218,19 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
         while (Date.now() < drainDeadline) {
           // Brand-scoped read (a handful of rows at most), intersected in memory
           // with our own task_ids — avoids a giant `.in(...)` URL.
-          const { data: rows } = await supabaseAdmin
+          const { data: rows, error: drainErr } = await supabaseAdmin
             .from('cloro_pending_tasks')
             .select('task_id')
             .eq('brand_id', brandId);
+
+          // A transient read failure must NOT be read as "0 pending" — that would
+          // break the loop early and report the run as finished while tasks are
+          // still in flight. Skip this tick and retry on the next poll.
+          if (drainErr) {
+            console.warn(`[tracking] Pending-task poll failed, retrying: ${drainErr.message}`);
+            await new Promise((r) => setTimeout(r, drainPollMs));
+            continue;
+          }
 
           const pending = (rows || []).filter((r) => submittedTaskIds.has(r.task_id)).length;
           const processed = expectedSubmitted - pending;

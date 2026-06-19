@@ -191,15 +191,14 @@ export async function cleanupOldJobs() {
  */
 export async function cleanupStalePendingTasks() {
   const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabaseAdmin
+  const { count, error } = await supabaseAdmin
     .from('cloro_pending_tasks')
-    .delete()
-    .lt('submitted_at', cutoff)
-    .select('task_id');
+    .delete({ count: 'exact' })
+    .lt('submitted_at', cutoff);
 
   if (error) {
     console.error('[job-manager] Failed to cleanup stale pending tasks:', error.message);
-  } else if (data && data.length > 0) {
-    console.log(`[job-manager] Cleaned up ${data.length} orphaned Cloro pending tasks`);
+  } else if (count && count > 0) {
+    console.log(`[job-manager] Cleaned up ${count} orphaned Cloro pending tasks`);
   }
 }
