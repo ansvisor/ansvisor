@@ -102,20 +102,23 @@ router.post('/analyze-new', async (req, res) => {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
-    let newPromptIds;
+    // Build the candidate set: either the specific IDs the client picked
+    // (validated against this brand) or every active prompt for the brand.
+    let candidateIds;
+
+    const { data: promptSets } = await supabaseAdmin
+      .from('prompt_sets')
+      .select('id')
+      .eq('brand_id', brandId);
+
+    if (!promptSets || promptSets.length === 0) {
+      return res.json({ success: true, newCount: 0, message: 'No prompt sets found' });
+    }
+
+    const setIds = promptSets.map((s) => s.id);
 
     if (Array.isArray(clientPromptIds) && clientPromptIds.length > 0) {
-      // Client sent specific prompt IDs — validate they belong to this brand
-      const { data: promptSets } = await supabaseAdmin
-        .from('prompt_sets')
-        .select('id')
-        .eq('brand_id', brandId);
-
-      if (!promptSets || promptSets.length === 0) {
-        return res.json({ success: true, newCount: 0, message: 'No prompt sets found' });
-      }
-
-      const setIds = promptSets.map((s) => s.id);
+      // Client sent specific prompt IDs — validate they belong to this brand.
       const { data: validPrompts } = await supabaseAdmin
         .from('prompts')
         .select('id')
@@ -123,19 +126,9 @@ router.post('/analyze-new', async (req, res) => {
         .in('id', clientPromptIds)
         .eq('is_active', true);
 
-      newPromptIds = (validPrompts || []).map((p) => p.id);
+      candidateIds = (validPrompts || []).map((p) => p.id);
     } else {
-      // Auto-detect unanalyzed prompts
-      const { data: promptSets } = await supabaseAdmin
-        .from('prompt_sets')
-        .select('id')
-        .eq('brand_id', brandId);
-
-      if (!promptSets || promptSets.length === 0) {
-        return res.json({ success: true, newCount: 0, message: 'No prompt sets found' });
-      }
-
-      const setIds = promptSets.map((s) => s.id);
+      // Auto-detect: start from every active prompt for the brand.
       const { data: allPrompts } = await supabaseAdmin
         .from('prompts')
         .select('id')
@@ -146,16 +139,25 @@ router.post('/analyze-new', async (req, res) => {
         return res.json({ success: true, newCount: 0, message: 'No active prompts' });
       }
 
-      const allPromptIds = allPrompts.map((p) => p.id);
+      candidateIds = allPrompts.map((p) => p.id);
+    }
 
+    // Never (re)analyze a prompt that already has results for this brand — this
+    // endpoint is "analyze NEW prompts" only (full re-runs go through /check and
+    // the daily scheduled job). Applying the filter to BOTH branches is what
+    // stops the client from re-submitting IDs read from a stale "unanalyzed"
+    // dialog while an earlier on-demand run's async webhook results are still
+    // landing, which previously caused duplicate Cloro/LLM spend.
+    let newPromptIds = candidateIds;
+    if (candidateIds.length > 0) {
       const { data: existingResults } = await supabaseAdmin
         .from('prompt_results')
         .select('prompt_id')
         .eq('brand_id', brandId)
-        .in('prompt_id', allPromptIds);
+        .in('prompt_id', candidateIds);
 
       const analyzedIds = new Set((existingResults || []).map((r) => r.prompt_id));
-      newPromptIds = allPromptIds.filter((id) => !analyzedIds.has(id));
+      newPromptIds = candidateIds.filter((id) => !analyzedIds.has(id));
     }
 
     if (newPromptIds.length === 0) {
