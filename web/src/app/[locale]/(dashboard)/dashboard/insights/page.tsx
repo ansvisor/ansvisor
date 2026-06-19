@@ -736,7 +736,7 @@ function TrackingProgressBanner({
           <Loader2 className="h-4 w-4 animate-spin text-primary" />
           <span className="text-sm font-medium">
             {jobStatus.status === 'waiting'
-              ? 'Queued — waiting to start...'
+              ? 'Queued — starting automatically'
               : 'Analyzing prompts...'}
           </span>
           {progress && (
@@ -755,6 +755,13 @@ function TrackingProgressBanner({
           Stop
         </Button>
       </div>
+
+      {jobStatus.status === 'waiting' && (
+        <p className="text-xs text-muted-foreground">
+          Another analysis is running right now. Yours will begin the moment a slot opens up — no
+          need to wait here, it&apos;ll keep going in the background.
+        </p>
+      )}
 
       {progress && progress.total > 0 && (
         <>
