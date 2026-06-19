@@ -190,39 +190,69 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
         }
       }
 
-      // Wait for the webhook handler to drain cloro_pending_tasks for this brand.
-      // The worker stays alive (cheap DB poll) so the job's `active` status drives
-      // the UI loading banner until results actually arrive. Hard cap at 60 minutes
-      // so a stuck Cloro queue doesn't keep workers running indefinitely.
-      const drainDeadline = Date.now() + 60 * 60 * 1000;
-      const drainPollMs = 15_000;
-      const expectedSubmitted = submitted.length;
+      // Wait for the webhook handler to drain THIS job's pending tasks. The
+      // worker stays alive (cheap DB poll) so the job's `active` status drives
+      // the UI loading banner until results actually arrive.
+      //
+      // We count only the task_ids THIS run submitted — not every pending row
+      // for the brand. A brand-wide count is poisoned by orphan rows from tasks
+      // Cloro never delivered a webhook for (and by concurrent runs), so it
+      // never reaches zero: the drain loop runs to the deadline and the progress
+      // bar freezes partway even though results keep landing. Counting our own
+      // task_ids lets the loop finish as soon as this run's results are in.
+      const submittedTaskIds = new Set(submitted.map((s) => s.taskId));
+      const expectedSubmitted = submittedTaskIds.size;
 
-      while (Date.now() < drainDeadline) {
-        const { count: remaining } = await supabaseAdmin
-          .from('cloro_pending_tasks')
-          .select('*', { count: 'exact', head: true })
-          .eq('brand_id', brandId);
+      if (expectedSubmitted > 0) {
+        // Hard cap so a stuck Cloro queue can't keep a worker alive forever.
+        const drainDeadline = Date.now() + 60 * 60 * 1000;
+        const drainPollMs = 15_000;
+        // Give up early if delivery stalls — no new result for this many
+        // consecutive polls (~10 min) means the rest were almost certainly
+        // dropped, so don't hold the bar (and a concurrency slot) for an hour.
+        const stallPollLimit = 40;
 
-        const pending = remaining ?? 0;
-        const processed = expectedSubmitted - pending;
+        let lastPending = expectedSubmitted;
+        let stalledPolls = 0;
 
-        if (job) {
-          job.progress({
-            current: completedTasks + processed,
-            total: totalTasks,
-            promptText:
-              pending > 0
-                ? `Receiving platform results — ${pending} task(s) still processing...`
-                : 'All platform results received',
-            model: null,
-            platform: 'cloro',
-          });
+        while (Date.now() < drainDeadline) {
+          // Brand-scoped read (a handful of rows at most), intersected in memory
+          // with our own task_ids — avoids a giant `.in(...)` URL.
+          const { data: rows } = await supabaseAdmin
+            .from('cloro_pending_tasks')
+            .select('task_id')
+            .eq('brand_id', brandId);
+
+          const pending = (rows || []).filter((r) => submittedTaskIds.has(r.task_id)).length;
+          const processed = expectedSubmitted - pending;
+
+          if (job) {
+            job.progress({
+              current: completedTasks + processed,
+              total: totalTasks,
+              promptText:
+                pending > 0
+                  ? `Receiving platform results — ${pending} task(s) still processing...`
+                  : 'All platform results received',
+              model: null,
+              platform: 'cloro',
+            });
+          }
+
+          if (pending === 0) break;
+
+          if (pending < lastPending) {
+            lastPending = pending;
+            stalledPolls = 0;
+          } else if (++stalledPolls >= stallPollLimit) {
+            console.warn(
+              `[tracking] Cloro delivery stalled for brand ${brandId} — ${pending} of ${expectedSubmitted} task(s) never returned; continuing.`,
+            );
+            break;
+          }
+
+          await new Promise((r) => setTimeout(r, drainPollMs));
         }
-
-        if (pending === 0) break;
-
-        await new Promise((r) => setTimeout(r, drainPollMs));
       }
 
       completedTasks += expectedSubmitted;

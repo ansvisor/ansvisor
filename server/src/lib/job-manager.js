@@ -181,3 +181,25 @@ export async function cleanupOldJobs() {
     console.error('[job-manager] Failed to cleanup old jobs:', error.message);
   }
 }
+
+/**
+ * Delete orphaned Cloro pending tasks — rows for which Cloro never delivered a
+ * webhook. They sit forever otherwise; left unchecked they accumulate and (with
+ * a brand-wide count) used to poison every future run's drain loop. Two hours is
+ * well past the worker's 60-minute drain deadline and any realistic Cloro
+ * delivery window, so anything older is safe to drop.
+ */
+export async function cleanupStalePendingTasks() {
+  const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('cloro_pending_tasks')
+    .delete()
+    .lt('submitted_at', cutoff)
+    .select('task_id');
+
+  if (error) {
+    console.error('[job-manager] Failed to cleanup stale pending tasks:', error.message);
+  } else if (data && data.length > 0) {
+    console.log(`[job-manager] Cleaned up ${data.length} orphaned Cloro pending tasks`);
+  }
+}

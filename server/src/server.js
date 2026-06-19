@@ -13,7 +13,12 @@ import { apiLimiter } from './middleware/rate-limiter.js';
 import requestIdMiddleware from './middleware/request-id.js';
 import routes from './routes/index.js';
 import trafficRoutes from './routes/traffic.js';
-import { createJob, cleanupStaleJobs, cleanupOldJobs } from './lib/job-manager.js';
+import {
+  createJob,
+  cleanupStaleJobs,
+  cleanupOldJobs,
+  cleanupStalePendingTasks,
+} from './lib/job-manager.js';
 import { runTrackingJob } from './lib/job-runner.js';
 import { parseScraperResponse } from './lib/cloro-scraper.js';
 import { handleScraperResult } from './lib/cloro-result-handler.js';
@@ -97,6 +102,10 @@ app.set('io', io);
 // --- Daily tracking logic (shared by internal endpoint and self-hosted cron) ---
 async function runDailyTracking() {
   const isCloudMode = isCloud();
+
+  // Sweep orphaned Cloro pending tasks daily (runs in both cloud and
+  // self-hosted, since both paths funnel through here).
+  await cleanupStalePendingTasks();
 
   const { data: brands, error } = await supabaseAdmin.from('brands').select('id, organization_id');
 
@@ -387,6 +396,7 @@ server.listen(PORT, async () => {
   console.log(`AEO Server running on port ${PORT} [${process.env.NODE_ENV}]`);
 
   await cleanupStaleJobs();
+  await cleanupStalePendingTasks();
 
   if (!isCloud()) {
     const schedule = process.env.DAILY_CRON_SCHEDULE || '0 6 * * *';
