@@ -3,7 +3,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import Image from 'next/image';
-import { PieChart, Pie, Cell, Tooltip } from 'recharts';
+import dynamic from 'next/dynamic';
+const DynamicSourceTypeDonutChart = dynamic(
+  () =>
+    import('./citations_charts').then(
+      (m) => m.SourceTypeDonutChartView
+    ),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-[200px] w-full" />,
+  }
+);
 import { Quote, Globe, ExternalLink, Filter as FilterIcon, Layers } from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
@@ -342,43 +352,11 @@ function SourceTypeDonut({
     <div className="flex flex-col gap-4">
       <ChartContainer height={200}>
         {(width) => {
-          const size = Math.min(width, 220);
           return (
-            <PieChart width={width} height={200}>
-              <Pie
-                data={chartData}
-                cx={width / 2}
-                cy={100}
-                innerRadius={size * 0.28}
-                outerRadius={size * 0.44}
-                paddingAngle={2}
-                dataKey="count"
-                nameKey="label"
-              >
-                {chartData.map((entry) => (
-                  <Cell key={entry.category} fill={entry.fill} stroke="none" />
-                ))}
-              </Pie>
-              <Tooltip
-                isAnimationActive={false}
-                content={({ active, payload }) => {
-                  if (!active || !payload || payload.length === 0) return null;
-                  const p = payload[0].payload as {
-                    label: string;
-                    count: number;
-                    pct: number;
-                  };
-                  return (
-                    <div className="rounded-md border bg-popover px-2.5 py-1.5 text-xs shadow-sm">
-                      <div className="font-medium">{p.label}</div>
-                      <div className="text-muted-foreground">
-                        {p.count} · {p.pct.toFixed(1)}%
-                      </div>
-                    </div>
-                  );
-                }}
-              />
-            </PieChart>
+           <DynamicSourceTypeDonutChart
+              width={width}
+              chartData={chartData}
+            />
           );
         }}
       </ChartContainer>

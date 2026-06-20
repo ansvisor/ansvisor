@@ -2,17 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import dynamic from 'next/dynamic';
+const DynamicPlatformCardRateChart = dynamic(
+  () => import('./shopping_charts').then((m) => m.PlatformCardRateChartView),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-[220px] w-full" />,
+  }
+);
+
+const DynamicShoppingTrendChart = dynamic(
+  () => import('./shopping_charts').then((m) => m.ShoppingTrendChartView),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-[220px] w-full" />,
+  }
+);
 import {
   ShoppingBag,
   Store,
@@ -88,14 +93,6 @@ const DATE_PRESETS: ShoppingDatePreset[] = ['7d', '30d', '90d', 'all'];
 // Theme tokens in globals.css ship as full oklch values; reference them
 // directly with var(--…). Wrapping in hsl() yields invalid CSS, so chart
 // text turns black on dark mode (lesson learned from #138).
-const AXIS_TICK = { fill: 'var(--muted-foreground)', fontSize: 11 } as const;
-const TOOLTIP_STYLE = {
-  background: 'var(--card)',
-  border: '1px solid var(--border)',
-  borderRadius: '0.5rem',
-  fontSize: '0.75rem',
-  color: 'var(--foreground)',
-} as const;
 
 function getDomainName(url: string): string {
   try {
@@ -978,24 +975,10 @@ function ResponsiveBarChart({ data }: { data: Array<{ platform: string; rate: nu
   return (
     <div ref={ref} style={{ width: '100%', height: 220 }}>
       {width > 0 && (
-        <BarChart
-          width={width}
-          height={220}
-          data={data}
-          margin={{ top: 8, right: 8, bottom: 0, left: -8 }}
-        >
-          <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
-          <XAxis dataKey="platform" stroke="var(--border)" tick={AXIS_TICK} tickLine={false} />
-          <YAxis
-            stroke="var(--border)"
-            tick={AXIS_TICK}
-            tickLine={false}
-            axisLine={false}
-            unit="%"
-          />
-          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'var(--muted)', opacity: 0.3 }} />
-          <Bar dataKey="rate" name="Card rate" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
-        </BarChart>
+       <DynamicPlatformCardRateChart
+         width={width}
+         data={data}
+        />
       )}
     </div>
   );
@@ -1041,40 +1024,10 @@ function ResponsiveLineChart({
   return (
     <div ref={ref} style={{ width: '100%', height: 220 }}>
       {width > 0 && (
-        <LineChart
+        <DynamicShoppingTrendChart
           width={width}
-          height={220}
           data={data}
-          margin={{ top: 8, right: 8, bottom: 0, left: -8 }}
-        >
-          <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
-          <XAxis
-            dataKey="date"
-            stroke="var(--border)"
-            tick={AXIS_TICK}
-            tickLine={false}
-            tickFormatter={(v: string) => v.slice(5)}
           />
-          <YAxis stroke="var(--border)" tick={AXIS_TICK} tickLine={false} axisLine={false} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'var(--border)' }} />
-          <Legend wrapperStyle={{ fontSize: 11, color: 'var(--muted-foreground)' }} />
-          <Line
-            type="monotone"
-            dataKey="ownCards"
-            name="Your cards"
-            stroke="var(--chart-2)"
-            strokeWidth={2}
-            dot={{ r: 2 }}
-          />
-          <Line
-            type="monotone"
-            dataKey="totalCards"
-            name="All cards"
-            stroke="var(--chart-4)"
-            strokeWidth={2}
-            dot={{ r: 2 }}
-          />
-        </LineChart>
       )}
     </div>
   );

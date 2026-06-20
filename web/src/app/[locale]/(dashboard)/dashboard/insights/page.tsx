@@ -4,12 +4,39 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from '@/i18n/navigation';
 import { useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
-import {
-  CompetitorChart,
-  CompetitorLeaderboard,
-  ShareOfVoicePlatformChart,
-  ShareOfVoiceTrendChart,
-} from './_charts';
+import dynamic from 'next/dynamic';
+import { Skeleton } from '@/components/ui/skeleton';
+const CompetitorChart = dynamic(
+  () => import('./_charts').then((m) => m.CompetitorChart),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-64 w-full" />,
+  }
+);
+
+const CompetitorLeaderboard = dynamic(
+  () => import('./_charts').then((m) => m.CompetitorLeaderboard),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-64 w-full" />,
+  }
+);
+
+const ShareOfVoicePlatformChart = dynamic(
+  () => import('./_charts').then((m) => m.ShareOfVoicePlatformChart),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-64 w-full" />,
+  }
+);
+
+const ShareOfVoiceTrendChart = dynamic(
+  () => import('./_charts').then((m) => m.ShareOfVoiceTrendChart),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-64 w-full" />,
+  }
+);
 import { MetricBreakdownSheet } from './_metric-breakdown-sheet';
 import { groupResultsByTopic, type PlatformGroup, type PromptGroup } from './grouping';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -37,7 +64,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   BarChart3,
   CalendarX2,

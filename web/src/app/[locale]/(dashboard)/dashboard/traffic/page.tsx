@@ -1,7 +1,24 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ReferralTrendChart, PlatformBreakdownChart, getPlatformName } from './_charts';
+import { getPlatformName } from './_charts';
+import dynamic from 'next/dynamic';
+import { Skeleton } from '@/components/ui/skeleton';
+const ReferralTrendChart = dynamic(
+  () => import('./_charts').then((m) => m.ReferralTrendChart),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-64 w-full" />,
+  }
+);
+
+const PlatformBreakdownChart = dynamic(
+  () => import('./_charts').then((m) => m.PlatformBreakdownChart),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-64 w-full" />,
+  }
+);
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
   getTrafficSummary,
@@ -21,7 +38,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   Globe,
   TrendingUp,
