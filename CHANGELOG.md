@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-06-21
+
+### Added
+- Site Audit: AEO/GEO page scoring under Content Optimization — fetches any URL (Scrape.do proxy + JS render) and scores it across 47 weighted signals in five categories (structure, content, authority, E-E-A-T, trust) using deterministic evaluators plus a batched LLM pass, then returns prioritized, AI-written fix recommendations. Runs asynchronously with live progress, a per-audit detail page at `/dashboard/audit/[id]` (re-run + delete), a primary-domain score trend and category breakdown on the hub, and a monthly per-plan quota (#259, #261, #262, #263, #264, #265, #268)
+- Server: structured logging — a `pino`-based logger with levels (`LOG_LEVEL`), per-request correlation IDs (`x-request-id` + per-request child loggers), JSON output, and sensitive-header redaction; the per-request access log dropped to `debug` so it's off by default in production (#273, thanks @Pallavikumarimdb)
+- Citations: expanded the source-category domain lists so more citations classify into the right bucket (#276, thanks @BharadwajKanneveti)
+
+### Changed
+- Performance: dashboard charts (Recharts) are now lazy-loaded via `next/dynamic` with skeleton fallbacks, trimming the initial route JS across Insights, Shopping, Citations, Topics, Traffic, Prompts, and the Agent panel (#281, thanks @BharadwajKanneveti)
+- Insights: the date range now defaults to the last 24h instead of all-time (#274, thanks @Srija-65)
+- Insights: clearer "Queued — starting automatically" copy when an analysis is waiting behind another run (#280)
+- Web: dropped the unused `framer-motion` dependency (#266) and removed a deprecated unused `Project` type (#258) (both thanks @BharadwajKanneveti)
+
+### Fixed
+- Tracking: the "Analyze Prompts" action no longer re-analyzes prompts that already have results — closes a double-spend where the same prompts could be submitted several times during the async webhook window (#278)
+- Tracking: the analysis progress bar no longer freezes partway on webhook-mode runs — the drain loop now counts only the current run's tasks (not brand-wide orphans), gives up early if delivery stalls, and a periodic sweep clears orphaned pending-task rows (#279)
+- Shopping: Microsoft Copilot `shoppingProducts` wrappers are flattened into per-product cards instead of a single "Unknown Product" (#255)
+- Web: switching brand tabs no longer flashes a spurious "Failed to fetch" toast from the aborted in-flight request (#257, thanks @gitbasitmalik)
+
+### Tests
+- Server: closed the remaining server-side test gaps tracked in #125 (#256, thanks @Pallavikumarimdb)
+
+### Docs
+- Added `CRON_SECRET` to both `.env.example` files, with a note that it's cloud-only and must match on the web app and the server (#277, thanks @P-Maheswari)
+
+### Contributors
+Huge thanks to everyone who contributed to this release — and a special welcome to first-time contributors @gitbasitmalik, @Srija-65, and @P-Maheswari! 🎉 Thanks also to @Pallavikumarimdb and @BharadwajKanneveti. 🙌
+
 ## [0.1.3] - 2026-06-14
 
 ### Security
