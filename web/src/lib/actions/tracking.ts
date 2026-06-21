@@ -4,6 +4,11 @@ import { createClient } from '@/lib/supabase/server';
 import { expandDateToEndOfDay } from '@/lib/dates';
 import type { PromptResult, AIPlatform, Sentiment, Citation, CompetitorMention } from '@/types';
 
+/** Round to one decimal place (keeps sub-1 averages visible instead of flooring to 0). */
+function roundTo1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
 /**
  * Apply the `model` filter to a Supabase query against `prompt_results.model_used`.
  *
@@ -588,7 +593,12 @@ export async function getInsightsSummary(
   }
 
   const totalResults = cur.total_results;
-  const avgVisibilityScore = Math.round(cur.sum_visibility / totalResults);
+  // Average visibility across ALL runs (brand-mentioned or not) — the intended
+  // "absolute visibility" metric. Keep one decimal instead of rounding to a
+  // whole number: a brand that appears in a small fraction of answers can have
+  // a genuine sub-1 average (e.g. 0.4), and integer rounding collapsed that to
+  // a flat "0" that read like a broken metric next to non-zero mentions.
+  const avgVisibilityScore = roundTo1(cur.sum_visibility / totalResults);
   const totalMentions = cur.total_mentions;
   const totalCitations = cur.total_citations;
   const positiveSentimentPct = Math.round((cur.positive_count / totalResults) * 100);
@@ -647,17 +657,17 @@ export async function getInsightsSummary(
     const prevWin = prevRes.data as unknown as InsightsAggregates | null;
 
     if (curWin && prevWin && curWin.total_results > 0 && prevWin.total_results > 0) {
-      const curAvgVis = Math.round(curWin.sum_visibility / curWin.total_results);
+      const curAvgVis = roundTo1(curWin.sum_visibility / curWin.total_results);
       const curMentions = curWin.total_mentions;
       const curCitations = curWin.total_citations;
       const curSentimentPct = Math.round((curWin.positive_count / curWin.total_results) * 100);
 
-      const prevAvgVis = Math.round(prevWin.sum_visibility / prevWin.total_results);
+      const prevAvgVis = roundTo1(prevWin.sum_visibility / prevWin.total_results);
       const prevMentions = prevWin.total_mentions;
       const prevCitations = prevWin.total_citations;
       const prevSentimentPct = Math.round((prevWin.positive_count / prevWin.total_results) * 100);
 
-      visibilityChange = curAvgVis - prevAvgVis;
+      visibilityChange = roundTo1(curAvgVis - prevAvgVis);
       mentionsChange =
         curMentions > 0 && prevMentions > 0
           ? Math.round(((curMentions - prevMentions) / prevMentions) * 100)
