@@ -76,6 +76,8 @@ When the fix is content the user can paste, put the ready-to-use text in "draft"
 - readability → a simplified rewrite of one representative paragraph (shorter sentences, plainer words)
 - length → which specific sections to expand or trim (draft can be null)
 
+When suggesting sources to cite (outbound-authority-links, citation-density, statistic-density), prefer the most recent, currently-authoritative references and do not present older material as if it were current. Never invent URLs or fabricate statistics/dates — only suggest sources you are confident exist.
+
 Keep "recommendation" to 1–3 sentences. Set "draft" to null when the fix isn't a paste-able snippet. Prioritize by impact. Only return items you can make genuinely specific and useful.`;
 
 /**
@@ -101,6 +103,15 @@ export async function generateRecommendations(ctx, { results } = {}) {
 
   const pageText = ctx.text.slice(0, 6000);
 
+  // Anchor the model to the real current date — without it, the LLM defaults to
+  // its training-data sense of "now" and suggests stale (e.g. 2024) sources for
+  // outbound-authority-links / citation-density.
+  const today = new Date(ctx.now ?? Date.now()).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
   try {
     const { object } = await withRetry(
       () =>
@@ -108,7 +119,9 @@ export async function generateRecommendations(ctx, { results } = {}) {
           model: resolveModel(modelString),
           schema: recommendationsSchema,
           system: SYSTEM_PROMPT,
-          prompt: `PAGE URL: ${ctx.url}
+          prompt: `Today's date is ${today}.
+
+PAGE URL: ${ctx.url}
 
 Improve THIS page for its own topic/intent (infer it from the content below). Never introduce subject matter the page isn't already about.
 
