@@ -6,6 +6,7 @@ import {
   getPlan,
   hasFeature,
   isCloud,
+  isSubscriptionActive,
   isWithinLimit,
 } from '@/config/plans';
 
@@ -19,7 +20,10 @@ export async function getOrgPlan(organizationId: string): Promise<Plan> {
     .eq('id', organizationId)
     .single();
 
-  if (data?.subscription_status !== 'active') {
+  // `trialing` is a paid plan in its trial window — treat it as active so
+  // trial customers get their actual plan's limits (seats, brands, prompts…)
+  // instead of being silently dropped to starter.
+  if (!isSubscriptionActive(data?.subscription_status)) {
     return getPlan('starter');
   }
 

@@ -222,6 +222,16 @@ export function getPlan(planId: string | null | undefined): Plan {
   return PLANS[(planId as PlanId) ?? 'starter'] ?? PLANS.starter;
 }
 
+/**
+ * Whether a Stripe subscription_status entitles the org to its paid plan.
+ * `trialing` counts — it's a paid plan inside its free-trial window — so it must
+ * NOT be downgraded to starter limits. Mirrors the server's isSubscriptionActive
+ * (server/src/config/plans.js); keep the two in sync.
+ */
+export function isSubscriptionActive(status: string | null | undefined): boolean {
+  return status === 'active' || status === 'trialing';
+}
+
 export function hasFeature(plan: Plan, feature: Feature): boolean {
   return plan.limits.features.includes(feature);
 }
