@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -6,6 +6,14 @@ import supabaseAdmin from '../config/supabase.js';
 import { trafficLimiter } from '../middleware/rate-limiter.js';
 
 const router = Router();
+
+// Beacons are sent as text/plain so navigator.sendBeacon stays a CORS-safelisted
+// request — application/json would require a preflight, which beacons can't do,
+// so the browser silently blocks them. Read the body as text here; the handler
+// JSON-parses it. application/json is still accepted (older cached t.js, direct
+// API callers): the global json parser handles those and this middleware no-ops
+// once a body has already been parsed.
+const beaconBody = express.text({ type: ['text/plain', 'application/json'], limit: '64kb' });
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const scriptPath = join(__dirname, '..', 'public', 't.js');
@@ -58,7 +66,7 @@ router.options('/track/:trackingCode', (req, res) => {
 /**
  * POST /track/:trackingCode — receive beacon data from t.js
  */
-router.post('/track/:trackingCode', trafficLimiter, async (req, res) => {
+router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
   try {
     const { trackingCode } = req.params;
@@ -77,7 +85,16 @@ router.post('/track/:trackingCode', trafficLimiter, async (req, res) => {
       return res.status(404).json({ ok: false });
     }
 
-    const body = req.body;
+    // Body arrives as a JSON string (text/plain beacon) or an already-parsed
+    // object (application/json via the global json parser). Normalize both.
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        return res.status(400).json({ ok: false });
+      }
+    }
     if (!body || !body.u) {
       return res.status(400).json({ ok: false });
     }
