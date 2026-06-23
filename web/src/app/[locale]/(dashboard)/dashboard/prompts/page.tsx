@@ -423,6 +423,13 @@ export default function PromptsPage() {
     return m;
   }, [volumes]);
 
+  // Active prompts that have no volume row yet — their Volume/Competition cells
+  // render blank. Drives the "unanalyzed keywords" banner + one-click Analyze.
+  const unanalyzedCount = useMemo(
+    () => allPrompts.filter((p) => p.isActive && !volumeByPromptId.has(p.id)).length,
+    [allPrompts, volumeByPromptId],
+  );
+
   const canExport = !loading && allPrompts.length > 0;
 
   const handleExportCsv = useCallback(() => {
@@ -518,7 +525,43 @@ export default function PromptsPage() {
         </div>
 
         {/* ─── All Prompts tab ─────────────────────────────────────────── */}
-        <TabsContent value="all" className="mt-4">
+        <TabsContent value="all" className="mt-4 space-y-4">
+          {!loading && unanalyzedCount > 0 && (
+            <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/50 dark:bg-amber-950/30">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
+                <div className="text-sm">
+                  <p className="font-medium text-amber-900 dark:text-amber-200">
+                    {unanalyzedCount} keyword{unanalyzedCount === 1 ? '' : 's'} haven&apos;t been
+                    analyzed yet
+                  </p>
+                  <p className="text-amber-800/80 dark:text-amber-300/80">
+                    {quotaExhausted
+                      ? 'Their Volume & Competition stay empty until analyzed — but your monthly volume analysis limit is reached. Upgrade your plan to analyze more.'
+                      : 'Run volume analysis to fill in their Volume & Competition.'}
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="shrink-0"
+                onClick={handleAnalyzeNew}
+                disabled={analyzing || quotaExhausted}
+              >
+                {analyzing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    Analyze {unanalyzedCount} keyword{unanalyzedCount === 1 ? '' : 's'}
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
           <AllPromptsTab
             loading={loading}
             prompts={allPrompts}
