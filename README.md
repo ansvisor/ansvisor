@@ -69,6 +69,7 @@ We're incredibly excited to shape what's next alongside our amazing community.
 | Service | Purpose | Where to get |
 |---------|---------|--------------|
 | **DataForSEO** | Keyword volume data for prompt analysis | [dataforseo.com](https://dataforseo.com/) |
+| **Scrape.do** | Page fetching for Site Audit (proxy + JS render); required only if you use Site Audit | [scrape.do](https://scrape.do/) |
 | **Stripe** | Payments (cloud mode only, not needed for self-hosted) | [stripe.com](https://stripe.com/) |
 
 ### Setup
