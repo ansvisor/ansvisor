@@ -525,6 +525,92 @@ export interface SiteAuditRun {
   status: string;
 }
 
+export interface SiteAuditListRow {
+  id: string;
+  url: string;
+  status: string;
+  totalScore: number | null;
+  signalsEvaluated: number | null;
+  signalsTotal: number | null;
+  createdAt: string;
+}
+
+/**
+ * List a brand's recent Site Audits (newest first). Pure DB read, no quota —
+ * ownership is verified via the brand belonging to the caller's org, so a
+ * foreign or unknown brand returns `null`. Lets an agent find a past audit by
+ * url/date instead of needing its id.
+ */
+export async function listSiteAuditsFor(
+  auth: McpAuthContext,
+  brandId: string,
+): Promise<SiteAuditListRow[] | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: brand } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('id', brandId)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  if (!brand) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from('site_audits')
+    .select('id, url, status, total_score, signals_evaluated, signals_total, created_at')
+    .eq('brand_id', brandId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    id: r.id as string,
+    url: r.url as string,
+    status: r.status as string,
+    totalScore: r.total_score == null ? null : Number(r.total_score),
+    signalsEvaluated: r.signals_evaluated == null ? null : Number(r.signals_evaluated),
+    signalsTotal: r.signals_total == null ? null : Number(r.signals_total),
+    createdAt: r.created_at as string,
+  }));
+}
+
+export interface SiteAuditQuota {
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
+/**
+ * The org's monthly Site Audit allowance ({ used, limit, remaining };
+ * limit -1 = unlimited). Delegates to the server's `getSiteAuditQuotaStatus`
+ * via the CRON_SECRET internal endpoint so plan-limit + usage-counting logic
+ * stays single-sourced on the server. No quota is charged.
+ */
+export async function getSiteAuditQuotaFor(auth: McpAuthContext): Promise<SiteAuditQuota | null> {
+  if (!auth.organizationId) return null;
+
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    throw new Error('CRON_SECRET must be configured for MCP site audit quota');
+  }
+
+  const url = `${API_BASE_URL}/api/internal/site-audit-quota?orgId=${encodeURIComponent(
+    auth.organizationId,
+  )}`;
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${cronSecret}` },
+  });
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(body?.message ?? `Internal site-audit-quota endpoint returned ${res.status}`);
+  }
+
+  const body = (await res.json()) as { quota: SiteAuditQuota };
+  return body.quota;
+}
+
 /**
  * Start a Site Audit for a brand + URL via MCP.
  *

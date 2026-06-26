@@ -25,6 +25,7 @@ import { handleScraperResult } from './lib/cloro-result-handler.js';
 import { verifyCloroWebhook } from './lib/cloro-webhook-verify.js';
 import { generateBriefForOpportunity } from './routes/content.js';
 import { startSiteAuditForBrand } from './routes/audits.js';
+import { getSiteAuditQuotaStatus } from './lib/plan-guard.js';
 import supabaseAdmin from './config/supabase.js';
 import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/plans.js';
 
@@ -254,6 +255,38 @@ app.post('/api/internal/site-audits', async (req, res) => {
         .json({ success: false, error: 'quota_exceeded', message: err.message });
     }
     console.error('[internal] site audit error:', err.message);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// --- Internal site-audit quota endpoint (CRON_SECRET auth, called by web MCP layer) ---
+// Read-only: returns the org's monthly Site Audit allowance via the same
+// getSiteAuditQuotaStatus the dashboard uses, so the MCP `get_site_audit_quota`
+// tool shares one source of truth for plan limits + usage counting. The web
+// MCP layer passes its authenticated org id.
+app.get('/api/internal/site-audit-quota', async (req, res) => {
+  const secret = req.headers.authorization?.replace('Bearer ', '');
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  try {
+    // Express gives an array when a query param is repeated; take the first so
+    // a single string always reaches getSiteAuditQuotaStatus.
+    const raw = req.query.orgId;
+    const orgId = Array.isArray(raw) ? raw[0] : raw;
+    if (!orgId) {
+      return res.status(400).json({ success: false, message: 'orgId is required' });
+    }
+    const quota = await getSiteAuditQuotaStatus(orgId);
+    return res.json({ success: true, quota });
+  } catch (err) {
+    if (err.statusCode) {
+      return res
+        .status(err.statusCode)
+        .json({ success: false, error: 'quota_exceeded', message: err.message });
+    }
+    console.error('[internal] site audit quota error:', err.message);
     return res.status(500).json({ success: false, message: err.message });
   }
 });

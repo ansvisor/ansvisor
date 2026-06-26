@@ -22,6 +22,8 @@ import {
   getPromptPerformanceFor,
   runSiteAuditFor,
   getSiteAuditFor,
+  listSiteAuditsFor,
+  getSiteAuditQuotaFor,
 } from './data';
 
 /**
@@ -308,6 +310,50 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       }
       return {
         content: [{ type: 'text', text: JSON.stringify(audit, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'list_site_audits',
+    {
+      description:
+        "List a brand's recent Site Audits (newest first) — id, url, status, total score, signals evaluated, and created date. Use this to find a past audit by url or date (then read it in full with get_site_audit) without needing the audit id. This is a read — no credit is consumed.",
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+      },
+    },
+    async (args) => {
+      const audits = await listSiteAuditsFor(auth, args.brand_id);
+      if (!audits) {
+        return {
+          content: [{ type: 'text', text: 'Brand not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(audits, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'get_site_audit_quota',
+    {
+      description:
+        "Check the org's monthly Site Audit allowance — { used, limit, remaining } (limit -1 means unlimited). Use this before run_site_audit to see how many audit credits remain this month. This is a read — no credit is consumed.",
+      inputSchema: {},
+    },
+    async () => {
+      const quota = await getSiteAuditQuotaFor(auth);
+      if (!quota) {
+        return {
+          content: [{ type: 'text', text: 'No organization found for this API key' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(quota, null, 2) }],
       };
     },
   );
