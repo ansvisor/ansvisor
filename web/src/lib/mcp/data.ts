@@ -518,6 +518,156 @@ export async function generateBriefFor(
   };
 }
 
+export interface SiteAuditRun {
+  id: string;
+  brandId: string;
+  url: string;
+  status: string;
+}
+
+/**
+ * Start a Site Audit for a brand + URL via MCP.
+ *
+ * Org-ownership is verified *first* via supabaseAdmin — a wrong-org or missing
+ * brand returns `null` (→ 404 upstream) and never reaches the aeo-server, so
+ * no audit is created and no quota is charged for a tenant that doesn't own the
+ * brand. Only after ownership passes do we call the internal audit endpoint at
+ * `${API_BASE_URL}/api/internal/site-audits` with `Authorization: Bearer
+ * ${CRON_SECRET}` — same pattern as `generateBriefFor`. The `ans_` API key
+ * never leaves the web layer. The audit runs async (~30s); the caller polls
+ * `getSiteAuditFor` with the returned id.
+ */
+export async function runSiteAuditFor(
+  auth: McpAuthContext,
+  brandId: string,
+  url: string,
+): Promise<SiteAuditRun | null> {
+  if (!auth.organizationId) return null;
+
+  // Ownership check first — a wrong-org or missing brand returns null with no
+  // outbound call, so probing brand ids costs nothing and starts no audit.
+  const { data: brand } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('id', brandId)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  if (!brand) return null;
+
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    throw new Error('CRON_SECRET must be configured for MCP site audits');
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/internal/site-audits`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${cronSecret}`,
+    },
+    body: JSON.stringify({ brandId, url }),
+  });
+
+  if (res.status === 404) return null;
+
+  if (!res.ok) {
+    // Surface the server's message (e.g. the monthly-quota / inactive-subscription
+    // text) so the agent can relay it instead of a generic failure.
+    const body = (await res.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(body?.message ?? `Internal site-audit endpoint returned ${res.status}`);
+  }
+
+  const body = (await res.json()) as {
+    audit: { id: string; brandId: string; url: string; status: string };
+  };
+  return {
+    id: body.audit.id,
+    brandId: body.audit.brandId,
+    url: body.audit.url,
+    status: body.audit.status,
+  };
+}
+
+export interface SiteAuditSignal {
+  key: string;
+  category: string | null;
+  status: string;
+  score: number | null;
+  evidence: Record<string, unknown>;
+}
+
+export interface SiteAuditResult {
+  id: string;
+  brandId: string;
+  url: string;
+  finalUrl: string | null;
+  status: string;
+  totalScore: number | null;
+  categoryScores: Record<string, unknown>;
+  signalsEvaluated: number | null;
+  signalsTotal: number | null;
+  recommendations: unknown[];
+  signals: SiteAuditSignal[];
+  error: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+/**
+ * Read a Site Audit by id for the caller's org. Pure DB read (no LLM, no
+ * quota) — the org-ownership filter is applied in the query via the
+ * `brands!inner(organization_id)` join, so a foreign or unknown id returns
+ * `null`. Returns the status + scores + signals + AI recommendations.
+ */
+export async function getSiteAuditFor(
+  auth: McpAuthContext,
+  auditId: string,
+): Promise<SiteAuditResult | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: audit } = await supabaseAdmin
+    .from('site_audits')
+    .select('*, brands!inner(organization_id)')
+    .eq('id', auditId)
+    .eq('brands.organization_id', auth.organizationId)
+    .maybeSingle();
+  if (!audit) return null;
+
+  const { data: signalRows } = await supabaseAdmin
+    .from('audit_signal_results')
+    .select('signal_key, category, status, score, evidence')
+    .eq('audit_id', auditId);
+
+  const signals: SiteAuditSignal[] = ((signalRows ?? []) as Array<Record<string, unknown>>).map(
+    (r) => ({
+      key: r.signal_key as string,
+      category: (r.category as string | null) ?? null,
+      status: r.status as string,
+      score: r.score === null || r.score === undefined ? null : Number(r.score),
+      evidence: (r.evidence as Record<string, unknown>) ?? {},
+    }),
+  );
+
+  const a = audit as Record<string, unknown>;
+  const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+  return {
+    id: a.id as string,
+    brandId: a.brand_id as string,
+    url: a.url as string,
+    finalUrl: (a.final_url as string | null) ?? null,
+    status: a.status as string,
+    totalScore: num(a.total_score),
+    categoryScores: (a.category_scores as Record<string, unknown>) ?? {},
+    signalsEvaluated: a.signals_evaluated == null ? null : Number(a.signals_evaluated),
+    signalsTotal: a.signals_total == null ? null : Number(a.signals_total),
+    recommendations: (a.recommendations as unknown[]) ?? [],
+    signals,
+    error: (a.error as string | null) ?? null,
+    createdAt: a.created_at as string,
+    completedAt: (a.completed_at as string | null) ?? null,
+  };
+}
+
 export async function getContentOpportunityFor(
   auth: McpAuthContext,
   opportunityId: string,

@@ -24,6 +24,7 @@ import { parseScraperResponse } from './lib/cloro-scraper.js';
 import { handleScraperResult } from './lib/cloro-result-handler.js';
 import { verifyCloroWebhook } from './lib/cloro-webhook-verify.js';
 import { generateBriefForOpportunity } from './routes/content.js';
+import { startSiteAuditForBrand } from './routes/audits.js';
 import supabaseAdmin from './config/supabase.js';
 import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/plans.js';
 
@@ -218,6 +219,41 @@ app.post('/api/internal/content/:id/brief', async (req, res) => {
         .json({ success: false, error: 'quota_exceeded', message: err.message });
     }
     console.error('[internal] content brief error:', err.message);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// --- Internal site-audit endpoint (CRON_SECRET auth, called by web MCP layer) ---
+// The web MCP layer verifies the caller's `ans_` API key org owns `brandId`
+// before reaching here, so this endpoint just trusts the secret, resolves the
+// brand's org, enforces the monthly Site Audit quota, and starts the detached
+// audit job — returning the new `running` audit (the MCP caller then polls
+// get_site_audit for the result).
+app.post('/api/internal/site-audits', async (req, res) => {
+  const secret = req.headers.authorization?.replace('Bearer ', '');
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  try {
+    const { brandId, url } = req.body || {};
+    if (!brandId || !url) {
+      return res.status(400).json({ success: false, message: 'brandId and url are required' });
+    }
+    const audit = await startSiteAuditForBrand(brandId, url);
+    return res.status(202).json({ success: true, audit });
+  } catch (err) {
+    if (err.status === 404) {
+      return res.status(404).json({ success: false, message: err.message });
+    }
+    // PlanLimitError (audit quota exhausted / inactive subscription) carries a
+    // statusCode — surface it so the MCP layer can relay a clear message.
+    if (err.statusCode) {
+      return res
+        .status(err.statusCode)
+        .json({ success: false, error: 'quota_exceeded', message: err.message });
+    }
+    console.error('[internal] site audit error:', err.message);
     return res.status(500).json({ success: false, message: err.message });
   }
 });

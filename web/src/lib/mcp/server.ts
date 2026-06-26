@@ -20,6 +20,8 @@ import {
   listShoppingCards,
   getProductVisibility,
   getPromptPerformanceFor,
+  runSiteAuditFor,
+  getSiteAuditFor,
 } from './data';
 
 /**
@@ -259,6 +261,53 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       }
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'run_site_audit',
+    {
+      description:
+        'Run a Site Audit (AEO/GEO page score + AI fix recommendations) for a page URL under a brand. WARNING: this consumes one of the org\'s monthly Site Audit credits (the same pool as the dashboard) and runs asynchronously (~30s). It returns immediately with the new audit id and status "running" — then poll get_site_audit with that id until status is "completed" (or "failed") to read the result. Only fire on explicit user intent to audit a specific URL, never as part of exploratory queries.',
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        url: z.string().url().describe('Full URL of the page to audit, including https://.'),
+      },
+    },
+    async (args) => {
+      const result = await runSiteAuditFor(auth, args.brand_id, args.url);
+      if (!result) {
+        return {
+          content: [{ type: 'text', text: 'Brand not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'get_site_audit',
+    {
+      description:
+        'Fetch a Site Audit by id — its status, total score, per-category scores, evaluated signals, and AI fix recommendations. Use after run_site_audit to poll for the result: while status is "running" the scores are not yet populated; once it is "completed" (or "failed") the full result is available. This is a read — no credit is consumed.',
+      inputSchema: {
+        audit_id: relaxedUuid.describe('Site audit UUID, from run_site_audit.'),
+      },
+    },
+    async (args) => {
+      const audit = await getSiteAuditFor(auth, args.audit_id);
+      if (!audit) {
+        return {
+          content: [{ type: 'text', text: 'Audit not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(audit, null, 2) }],
       };
     },
   );

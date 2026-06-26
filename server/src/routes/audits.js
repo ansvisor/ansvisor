@@ -149,6 +149,52 @@ async function runAuditJob(auditId, brandId, url, orgId) {
   }
 }
 
+/**
+ * Enforce the monthly quota, create the `running` row, and kick off the
+ * detached audit job. Shared by the dashboard POST handler and the internal
+ * MCP endpoint. Returns the assembled (still-running) audit. Throws
+ * PlanLimitError when the quota is exhausted — nothing is created in that case.
+ */
+export async function createAndRunAudit(brandId, url, orgId) {
+  // Enforce the monthly Site Audit quota (Starter 100 / Growth 500;
+  // Enterprise & self-hosted unlimited). Throws PlanLimitError when exhausted.
+  await enforceSiteAuditQuota(orgId);
+
+  const { data: created, error: insErr } = await supabaseAdmin
+    .from('site_audits')
+    .insert({ brand_id: brandId, url, status: 'running', rubric_version: RUBRIC_VERSION })
+    .select('*')
+    .single();
+  if (insErr) throw insErr;
+
+  // Fire-and-forget — the work continues after the response is sent.
+  runAuditJob(created.id, brandId, url, orgId).catch((err) =>
+    console.error('[audit] background job crashed:', err.message),
+  );
+
+  return assembleAudit(created, []);
+}
+
+/**
+ * Internal/MCP entry point: start an audit addressed by brand id + url.
+ * Org-ownership is verified upstream in the web MCP layer; here we resolve the
+ * brand's org ourselves so the quota is charged authoritatively server-side.
+ * Throws a 404-status error when the brand doesn't exist.
+ */
+export async function startSiteAuditForBrand(brandId, url) {
+  const { data: brand } = await supabaseAdmin
+    .from('brands')
+    .select('organization_id')
+    .eq('id', brandId)
+    .maybeSingle();
+  if (!brand) {
+    const err = new Error('Brand not found');
+    err.status = 404;
+    throw err;
+  }
+  return createAndRunAudit(brandId, url, brand.organization_id);
+}
+
 // POST /api/audits — start an audit. Returns immediately with a `running`
 // row; the client polls GET /:id until it flips to completed/failed.
 router.post('/', requireFeature('content_optimization'), async (req, res) => {
@@ -161,24 +207,8 @@ router.post('/', requireFeature('content_optimization'), async (req, res) => {
 
   try {
     const { orgId } = await assertBrandAccess(brandId, userId);
-
-    // Enforce the monthly Site Audit quota (Starter 100 / Growth 500;
-    // Enterprise & self-hosted unlimited). Throws PlanLimitError when exhausted.
-    await enforceSiteAuditQuota(orgId);
-
-    const { data: created, error: insErr } = await supabaseAdmin
-      .from('site_audits')
-      .insert({ brand_id: brandId, url, status: 'running', rubric_version: RUBRIC_VERSION })
-      .select('*')
-      .single();
-    if (insErr) throw insErr;
-
-    // Fire-and-forget — the work continues after the response is sent.
-    runAuditJob(created.id, brandId, url, orgId).catch((err) =>
-      console.error('[audit] background job crashed:', err.message),
-    );
-
-    return res.status(202).json({ success: true, audit: assembleAudit(created, []) });
+    const audit = await createAndRunAudit(brandId, url, orgId);
+    return res.status(202).json({ success: true, audit });
   } catch (err) {
     if (err instanceof PlanLimitError) {
       return res
