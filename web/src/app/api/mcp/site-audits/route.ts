@@ -3,7 +3,7 @@ import { authenticateMcpRequest } from '@/lib/mcp-auth';
 import { runSiteAuditFor, listSiteAuditsFor } from '@/lib/mcp/data';
 
 /**
- * GET /api/mcp/site-audits?brandId=…
+ * GET /api/mcp/site-audits?brand_id=…
  *
  * Parallel REST surface for the `list_site_audits` MCP tool. Pure read; no
  * quota consumed.
@@ -12,9 +12,9 @@ export async function GET(req: Request) {
   const auth = await authenticateMcpRequest(req);
   if (auth instanceof NextResponse) return auth;
 
-  const brandId = new URL(req.url).searchParams.get('brandId');
+  const brandId = new URL(req.url).searchParams.get('brand_id');
   if (!brandId) {
-    return NextResponse.json({ error: 'brandId is required' }, { status: 400 });
+    return NextResponse.json({ error: 'brand_id is required' }, { status: 400 });
   }
 
   try {

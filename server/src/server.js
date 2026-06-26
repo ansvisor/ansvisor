@@ -271,7 +271,10 @@ app.get('/api/internal/site-audit-quota', async (req, res) => {
   }
 
   try {
-    const { orgId } = req.query;
+    // Express gives an array when a query param is repeated; take the first so
+    // a single string always reaches getSiteAuditQuotaStatus.
+    const raw = req.query.orgId;
+    const orgId = Array.isArray(raw) ? raw[0] : raw;
     if (!orgId) {
       return res.status(400).json({ success: false, message: 'orgId is required' });
     }

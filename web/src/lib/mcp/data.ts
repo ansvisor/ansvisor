@@ -555,12 +555,13 @@ export async function listSiteAuditsFor(
     .maybeSingle();
   if (!brand) return null;
 
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('site_audits')
     .select('id, url, status, total_score, signals_evaluated, signals_total, created_at')
     .eq('brand_id', brandId)
     .order('created_at', { ascending: false })
     .limit(50);
+  if (error) throw new Error(error.message);
 
   return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
     id: r.id as string,
