@@ -1043,6 +1043,36 @@ export async function getCompetitorComparisonFor(
 
 // ── Citations ────────────────────────────────────────────────────────────────
 
+/**
+ * Scope a citations query by the source category each URL is classified into
+ * (#297). `owned` = the brand's own domains (`you`), `competitor` = a tracked
+ * competitor domain, `external` = everything else (editorial / forum / social /
+ * review / institutional / other), `all` = no filter (default, current output).
+ */
+export type CitationSourceFilter = 'all' | 'owned' | 'competitor' | 'external';
+
+export const CITATION_SOURCE_FILTERS: CitationSourceFilter[] = [
+  'all',
+  'owned',
+  'competitor',
+  'external',
+];
+
+/** Does a classified category pass the requested source filter? */
+function citationCategoryMatches(category: SourceCategory, filter: CitationSourceFilter): boolean {
+  switch (filter) {
+    case 'owned':
+      return category === 'you';
+    case 'competitor':
+      return category === 'competitor';
+    case 'external':
+      return category !== 'you' && category !== 'competitor';
+    case 'all':
+    default:
+      return true;
+  }
+}
+
 export interface ListCitationsParams {
   brandId: string;
   dateFrom?: string;
@@ -1053,6 +1083,8 @@ export interface ListCitationsParams {
   topicId?: string;
   /** Cap on the top_domains / top_urls arrays. Default 50, max 200. */
   limit?: number;
+  /** Restrict to owned / competitor / external citations. Default `all`. */
+  sourceFilter?: CitationSourceFilter;
 }
 
 export interface CitationsOverviewOutput {
@@ -1199,18 +1231,26 @@ export async function listCitationsFor(
   const urlMap = new Map<string, UrlAgg>();
   let totalCitations = 0;
   let resultsWithCitations = 0;
+  const sourceFilter = params.sourceFilter ?? 'all';
+  const hasSourceFilter = sourceFilter !== 'all';
 
   for (const result of results) {
     const citations = Array.isArray(result.citations) ? result.citations : [];
     if (citations.length === 0) continue;
-    resultsWithCitations += 1;
     const modelKey = result.model_used || result.platform || '';
+    // #297 — when a source_filter is set, a result only counts toward
+    // results_with_citations if it contributes at least one matching citation.
+    // With `all` (the default) we never call the matcher, so the aggregation is
+    // byte-identical to the pre-#297 output.
+    let matchedInResult = false;
 
     for (const cite of citations) {
       const host = extractHostname(cite.url);
       if (!host) continue;
 
       const category = classifyDomain(host, classifyCtx);
+      if (hasSourceFilter && !citationCategoryMatches(category, sourceFilter)) continue;
+      matchedInResult = true;
       totalCitations += 1;
 
       const existingDomain = domainMap.get(host) ?? {
@@ -1260,6 +1300,9 @@ export async function listCitationsFor(
       if (!existingUrl.title && cite.title) existingUrl.title = cite.title;
       urlMap.set(normalizedUrl, existingUrl);
     }
+    // `all`: count every result that had citations (original behavior).
+    // Filtered: only results that contributed a matching citation.
+    if (!hasSourceFilter || matchedInResult) resultsWithCitations += 1;
   }
 
   const totalResults = results.length;

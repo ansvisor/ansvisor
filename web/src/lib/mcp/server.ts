@@ -460,6 +460,12 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           .max(200)
           .optional()
           .describe('Row cap on top_domains / top_urls (default 50, max 200).'),
+        source_filter: z
+          .enum(['all', 'owned', 'competitor', 'external'])
+          .optional()
+          .describe(
+            'Scope by source category: "owned" = the brand\'s own domains only, "competitor" = tracked competitor domains only, "external" = everything else (editorial / forum / social / review / etc.), "all" = no filter (default). Use "owned" to answer "which of OUR URLs did AI cite?".',
+          ),
       },
     },
     async (args) => {
@@ -471,6 +477,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         region: args.region,
         topicId: args.topic_id,
         limit: args.limit,
+        sourceFilter: args.source_filter,
       });
       if (!result) {
         return {

@@ -104,7 +104,7 @@ export function buildAgentTools(auth: McpAuthContext) {
 
     list_citations: tool({
       description:
-        'URLs and domains AI engines cite alongside a brand, classified by source type (news / review / owned / social / forum / competitor / you). Returns totals, source_type_breakdown, top_domains, top_urls.',
+        'URLs and domains AI engines cite alongside a brand, classified by source type (news / review / owned / social / forum / competitor / you). Returns totals, source_type_breakdown, top_domains, top_urls. Pass source_filter: "owned" to isolate the brand\'s own cited URLs (e.g. "which of OUR URLs did AI cite?"), "competitor" for competitor domains, "external" for everything else.',
       inputSchema: z.object({
         brand_id: z.string().uuid(),
         date_from: z.string().optional(),
@@ -113,6 +113,12 @@ export function buildAgentTools(auth: McpAuthContext) {
         region: z.string().optional(),
         topic_id: z.string().uuid().optional(),
         limit: z.number().int().min(1).max(200).optional(),
+        source_filter: z
+          .enum(['all', 'owned', 'competitor', 'external'])
+          .optional()
+          .describe(
+            'Scope by source: "owned" = brand\'s own domains, "competitor" = tracked competitors, "external" = neither, "all" = no filter (default).',
+          ),
       }),
       execute: async (args) =>
         listCitationsFor(auth, {
@@ -123,6 +129,7 @@ export function buildAgentTools(auth: McpAuthContext) {
           region: args.region,
           topicId: args.topic_id,
           limit: args.limit,
+          sourceFilter: args.source_filter,
         }),
     }),
 
