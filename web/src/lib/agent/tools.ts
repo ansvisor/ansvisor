@@ -12,6 +12,9 @@ import {
   listPromptsFor,
   listTopicsFor,
   getPromptPerformanceFor,
+  runSiteAuditFor,
+  getSiteAuditFor,
+  listSiteAuditsFor,
 } from '@/lib/mcp/data';
 
 /**
@@ -196,6 +199,34 @@ export function buildAgentTools(auth: McpAuthContext) {
           model: args.model,
           region: args.region,
         }),
+    }),
+
+    run_site_audit: tool({
+      description:
+        'Run a Site Audit (AEO/GEO page score + AI fix recommendations) for a page URL under a brand. WARNING: this consumes one of the org\'s monthly Site Audit credits (shared with the dashboard) and runs asynchronously (~30s). It returns the new audit id with status "running" — then call get_site_audit with that id until status is "completed" (or "failed") to read the result. Only run on explicit user intent to audit a specific URL; never audit unprompted.',
+      inputSchema: z.object({
+        brand_id: z.string().uuid(),
+        url: z.string().url(),
+      }),
+      execute: async (args) => runSiteAuditFor(auth, args.brand_id, args.url),
+    }),
+
+    get_site_audit: tool({
+      description:
+        'Fetch a Site Audit by id — status, total score, per-category scores, evaluated signals, and AI fix recommendations. Use after run_site_audit to poll for the result: while status is "running" the scores are not yet populated; once "completed" (or "failed") the full result is available. Read — no credit consumed.',
+      inputSchema: z.object({
+        audit_id: z.string().uuid(),
+      }),
+      execute: async (args) => getSiteAuditFor(auth, args.audit_id),
+    }),
+
+    list_site_audits: tool({
+      description:
+        "List a brand's recent Site Audits (newest first) — id, url, status, total score, signals, and created date. Use to find a past audit by url/date (then read it with get_site_audit) without needing the id. Read — no credit consumed.",
+      inputSchema: z.object({
+        brand_id: z.string().uuid(),
+      }),
+      execute: async (args) => listSiteAuditsFor(auth, args.brand_id),
     }),
 
     render_chart: tool({
