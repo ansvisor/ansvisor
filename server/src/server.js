@@ -109,7 +109,12 @@ async function runDailyTracking() {
   // self-hosted, since both paths funnel through here).
   await cleanupStalePendingTasks();
 
-  const { data: brands, error } = await supabaseAdmin.from('brands').select('id, organization_id');
+  // Skip paused brands (is_active = false): the user has explicitly suspended
+  // tracking for them, so they should not spend Cloro / LLM credits daily.
+  const { data: brands, error } = await supabaseAdmin
+    .from('brands')
+    .select('id, organization_id')
+    .eq('is_active', true);
 
   if (error || !brands || brands.length === 0) {
     return { triggered: 0, total: 0 };

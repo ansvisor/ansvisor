@@ -287,6 +287,7 @@ export type Database = {
           description: string | null;
           id: string;
           industry: string | null;
+          is_active: boolean;
           language: string | null;
           logo_url: string | null;
           name: string;
@@ -302,6 +303,7 @@ export type Database = {
           description?: string | null;
           id?: string;
           industry?: string | null;
+          is_active?: boolean;
           language?: string | null;
           logo_url?: string | null;
           name: string;
@@ -317,6 +319,7 @@ export type Database = {
           description?: string | null;
           id?: string;
           industry?: string | null;
+          is_active?: boolean;
           language?: string | null;
           logo_url?: string | null;
           name?: string;

@@ -23,7 +23,7 @@ router.post('/check', async (req, res) => {
     // Verify the user owns this brand
     const { data: brand, error: brandErr } = await supabaseAdmin
       .from('brands')
-      .select('id, organization_id')
+      .select('id, organization_id, is_active')
       .eq('id', brandId)
       .single();
 
@@ -39,6 +39,15 @@ router.post('/check', async (req, res) => {
 
     if (!profile || profile.organization_id !== brand.organization_id) {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    // A paused brand spends nothing — block on-demand runs too, not just the
+    // daily cron. Resume the brand to track it again.
+    if (brand.is_active === false) {
+      return res.status(409).json({
+        success: false,
+        message: 'This brand is paused. Resume it to run tracking.',
+      });
     }
 
     // Same cloud-mode cost controls as /analyze-new — this endpoint also
@@ -84,7 +93,7 @@ router.post('/analyze-new', async (req, res) => {
 
     const { data: brand, error: brandErr } = await supabaseAdmin
       .from('brands')
-      .select('id, organization_id')
+      .select('id, organization_id, is_active')
       .eq('id', brandId)
       .single();
 
@@ -100,6 +109,15 @@ router.post('/analyze-new', async (req, res) => {
 
     if (!profile || profile.organization_id !== brand.organization_id) {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    // A paused brand spends nothing — block on-demand runs too, not just the
+    // daily cron. Resume the brand to track it again.
+    if (brand.is_active === false) {
+      return res.status(409).json({
+        success: false,
+        message: 'This brand is paused. Resume it to run tracking.',
+      });
     }
 
     // Build the candidate set: either the specific IDs the client picked

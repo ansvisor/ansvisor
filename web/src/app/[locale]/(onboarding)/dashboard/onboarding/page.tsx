@@ -392,6 +392,7 @@ export default function OnboardingPage() {
               region: b.region ?? undefined,
               language: b.language ?? undefined,
               shoppingModeEnabled: !!b.shopping_mode_enabled,
+              isActive: (b as { is_active?: boolean }).is_active ?? true,
               domains: (b.brand_domains || []).map((d: Record<string, unknown>) => ({
                 id: d.id as string,
                 brandId: d.brand_id as string,

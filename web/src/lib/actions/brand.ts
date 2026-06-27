@@ -38,6 +38,7 @@ function mapBrandRow(brand: Record<string, unknown>, domains: Record<string, unk
     language: (brand.language as string | null) ?? undefined,
     trackingCode: (brand.tracking_code as string | null) ?? undefined,
     shoppingModeEnabled: !!brand.shopping_mode_enabled,
+    isActive: brand.is_active === undefined ? true : !!brand.is_active,
     domains: domains.map(mapDomainRow),
     createdAt: brand.created_at as string,
     updatedAt: brand.updated_at as string,
@@ -261,6 +262,37 @@ export async function setBrandShoppingMode(
 
   revalidatePath('/dashboard/brands');
   return { promptsUpdated };
+}
+
+/**
+ * Pause / resume a brand (#286).
+ *
+ * Sets `brands.is_active`. When `false`, the daily tracking cron skips the
+ * brand (`runDailyTracking` filters on `is_active = true`) and the on-demand
+ * tracking endpoints reject it — so a paused brand stops all Cloro / LLM spend
+ * while keeping its historical data fully viewable. Resuming flips it back and
+ * the next cron run picks tracking up again.
+ *
+ * RLS gates this — the calling user must already have write access to the
+ * brand via their org membership.
+ */
+export async function setBrandActive(brandId: string, isActive: boolean): Promise<void> {
+  const supabase = await createClient();
+
+  // Return the updated row so a no-op (invalid id, or RLS silently denying the
+  // write) surfaces as an error instead of a false success — `update().eq()`
+  // without `select()` does not error on a 0-row match.
+  const { data, error } = await supabase
+    .from('brands')
+    .update({ is_active: isActive })
+    .eq('id', brandId)
+    .select('id');
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) {
+    throw new Error('Brand not found or you do not have permission to update it.');
+  }
+
+  revalidatePath('/dashboard/brands');
 }
 
 export interface BrandCardSummary {

@@ -17,7 +17,9 @@ export function BrandCard({ brand }: BrandCardProps) {
   const tNav = useTranslations('nav');
   const tCard = useTranslations('brands.card');
   const { activeBrandId, setActiveBrand } = useBrandStore();
-  const isActive = brand.id === activeBrandId;
+  // Whether this is the currently-selected brand — distinct from brand.isActive,
+  // which is the tracking (paused/active) state.
+  const isSelected = brand.id === activeBrandId;
 
   const initials = brand.name
     .split(' ')
@@ -35,7 +37,7 @@ export function BrandCard({ brand }: BrandCardProps) {
       className={cn(
         'overflow-hidden rounded-xl border bg-card transition-all',
         'hover:border-primary/40 hover:shadow-sm',
-        isActive && 'ring-1 ring-primary/40 border-primary/40',
+        isSelected && 'ring-1 ring-primary/40 border-primary/40',
       )}
     >
       <div className="flex items-start gap-3 px-4 py-3.5">
@@ -48,13 +50,21 @@ export function BrandCard({ brand }: BrandCardProps) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="truncate text-sm font-semibold leading-tight">{brand.name}</h3>
-            {isActive && (
+            {isSelected && brand.isActive && (
               <Badge
                 variant="secondary"
                 className="gap-1 border-primary/30 bg-primary/15 text-[10px] text-primary"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-primary" />
                 Active
+              </Badge>
+            )}
+            {!brand.isActive && (
+              <Badge
+                variant="secondary"
+                className="gap-1 border-amber-500/30 bg-amber-500/15 text-[10px] text-amber-700 dark:text-amber-400"
+              >
+                Paused
               </Badge>
             )}
           </div>

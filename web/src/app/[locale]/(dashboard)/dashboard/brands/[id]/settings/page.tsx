@@ -4,7 +4,12 @@ import { use, useState, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter, Link } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { updateBrand, deleteBrand, setBrandShoppingMode } from '@/lib/actions/brand';
+import {
+  updateBrand,
+  deleteBrand,
+  setBrandShoppingMode,
+  setBrandActive,
+} from '@/lib/actions/brand';
 import { syncDomains } from '@/lib/actions/brand-domain';
 import { getCompetitors, addCompetitor, deleteCompetitor } from '@/lib/actions/competitor';
 import { getFaviconUrl } from '@/lib/favicon';
@@ -32,7 +37,9 @@ import {
   Copy,
   Globe,
   Loader2,
+  Pause,
   Pencil,
+  Play,
   Plus,
   Save,
   ShoppingBag,
@@ -96,6 +103,10 @@ export default function BrandSettingsPage({ params }: PageProps) {
         <TabsContent value="general" className="space-y-6">
           <GeneralTab brand={brand} onUpdate={(updated) => updateBrandStore(brand.id, updated)} />
           <ShoppingModeCard
+            brand={brand}
+            onUpdate={(updated) => updateBrandStore(brand.id, updated)}
+          />
+          <PauseBrandCard
             brand={brand}
             onUpdate={(updated) => updateBrandStore(brand.id, updated)}
           />
@@ -289,6 +300,84 @@ function ShoppingModeCard({
             )}
           </div>
           {saving && <Loader2 className="ml-auto h-4 w-4 animate-spin text-muted-foreground" />}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Pause / resume tracking (#286) ──────────────────────────────────────────
+
+function PauseBrandCard({
+  brand,
+  onUpdate,
+}: {
+  brand: Brand;
+  onUpdate: (updates: Partial<Brand>) => void;
+}) {
+  const { canAdmin } = useUserRole();
+  const paused = !brand.isActive;
+  const [saving, setSaving] = useState(false);
+
+  async function handleToggle(nextActive: boolean) {
+    if (!canAdmin) return;
+    setSaving(true);
+    try {
+      await setBrandActive(brand.id, nextActive);
+      onUpdate({ isActive: nextActive });
+      toast.success(nextActive ? 'Tracking resumed' : 'Tracking paused');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className={paused ? 'border-amber-500/40' : undefined}>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          {paused ? (
+            <Pause className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          ) : (
+            <Play className="h-4 w-4" />
+          )}
+          Tracking
+          {paused && (
+            <Badge
+              variant="secondary"
+              className="gap-1 border-amber-500/30 bg-amber-500/15 text-[10px] text-amber-700 dark:text-amber-400"
+            >
+              Paused
+            </Badge>
+          )}
+        </CardTitle>
+        <CardDescription>
+          {paused
+            ? 'Tracking is paused — historical data is kept and stays viewable, but daily tracking is suspended and on-demand runs are blocked. No credits are spent until you resume.'
+            : 'Pause this brand to stop daily tracking and all on-demand runs. Historical data is preserved and stays viewable; resume any time to pick tracking back up on the next run.'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center gap-3">
+          <Button
+            variant={paused ? 'default' : 'outline'}
+            disabled={saving || !canAdmin}
+            onClick={() => handleToggle(paused)}
+            className="gap-2"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : paused ? (
+              <Play className="h-4 w-4" />
+            ) : (
+              <Pause className="h-4 w-4" />
+            )}
+            {paused ? 'Resume tracking' : 'Pause tracking'}
+          </Button>
+          {!canAdmin && (
+            <p className="text-xs text-muted-foreground">Only admins can change this setting.</p>
+          )}
         </div>
       </CardContent>
     </Card>

@@ -110,7 +110,14 @@ export function BrandSwitcher({ collapsed = false }: BrandSwitcherProps) {
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 overflow-hidden">
-                <p className="truncate text-sm font-medium">{brand.name}</p>
+                <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+                  <span className="truncate">{brand.name}</span>
+                  {!brand.isActive && (
+                    <span className="shrink-0 rounded bg-amber-500/15 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                      Paused
+                    </span>
+                  )}
+                </p>
                 {primaryDomain && (
                   <p className="truncate text-xs text-muted-foreground">{primaryDomain.domain}</p>
                 )}
