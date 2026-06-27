@@ -107,11 +107,23 @@ router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res)
 
     const country = req.headers['cf-ipcountry'] || null;
 
+    // Only persist platform-attributable visits (#288). t.js already resolves a
+    // concrete platform (AI referrer host or a known utm_source) and returns
+    // early otherwise — but older cached snippets still send an empty platform
+    // for utm-detected visits, which previously stored a null "Unknown" row.
+    // Drop those defensively so the data has no unattributable rows. The body is
+    // untrusted: only accept a string, and trim so whitespace-only values can't
+    // slip past the emptiness check (a non-string can't reach .slice and crash).
+    const sourcePlatform = (typeof body.s === 'string' ? body.s : '').trim().slice(0, 255);
+    if (!sourcePlatform) {
+      return res.status(204).end();
+    }
+
     await supabaseAdmin.from('ai_traffic_logs').insert({
       brand_id: brand.id,
       url: (body.u || '').slice(0, 2048),
       referrer: (body.r || '').slice(0, 2048) || null,
-      source_platform: (body.s || '').slice(0, 255) || null,
+      source_platform: sourcePlatform,
       user_agent: (body.a || '').slice(0, 512) || null,
       ip_address: ip || null,
       country,

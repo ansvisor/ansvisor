@@ -47,6 +47,12 @@ function ChartContainer({
 }
 
 // ─── Platform colors ─────────────────────────────────────────────────────────
+//
+// Keys must stay in sync with the detection host list in the tracking snippet
+// (`server/src/public/t.js`): every platform t.js can resolve and store needs a
+// label + color here, otherwise it renders as a raw hostname. `unknown` is kept
+// only for historical rows that predate #288 (null source_platform); new visits
+// always carry a concrete platform.
 
 const PLATFORM_COLORS: Record<string, string> = {
   'chatgpt.com': '#6366f1',
@@ -60,6 +66,8 @@ const PLATFORM_COLORS: Record<string, string> = {
   'phind.com': '#a5b4fc',
   'meta.ai': '#7c3aed',
   'poe.com': '#e9d5ff',
+  'labs.google': '#b794f6',
+  'bing.com': '#67c5d6',
   unknown: '#94a3b8',
 };
 
@@ -75,6 +83,8 @@ const PLATFORM_NAMES: Record<string, string> = {
   'phind.com': 'Phind',
   'meta.ai': 'Meta AI',
   'poe.com': 'Poe',
+  'labs.google': 'Google Labs',
+  'bing.com': 'Bing',
   unknown: 'Unknown',
 };
 
