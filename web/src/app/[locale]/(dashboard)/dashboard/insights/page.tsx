@@ -56,6 +56,7 @@ import {
 } from '@/lib/actions/tracking';
 import { getTopics } from '@/lib/actions/topic';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
+import { formatRegionDisplay } from '@/lib/region';
 import type { Topic } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -593,14 +594,18 @@ function FilterBar({
           value={filters.region || null}
           onValueChange={(v) => set({ region: !v || v === '__all__' ? '' : v })}
         >
-          <SelectTrigger className="h-8 w-32 text-xs">
-            <SelectValue placeholder="All Regions" />
+          <SelectTrigger className="h-8 w-48 text-xs">
+            <SelectValue placeholder="All Regions">
+              {(value) =>
+                value && value !== '__all__' ? formatRegionDisplay(String(value)) : 'All Regions'
+              }
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">All Regions</SelectItem>
             {availableRegions.map((r) => (
               <SelectItem key={r} value={r}>
-                {r}
+                {formatRegionDisplay(r)}
               </SelectItem>
             ))}
           </SelectContent>
