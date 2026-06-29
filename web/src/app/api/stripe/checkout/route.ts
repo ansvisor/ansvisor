@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
       subscription_data: {
-        trial_period_days: 7,
+        trial_period_days: 14,
         metadata: { organization_id: organizationId, plan_id: planId },
       },
       success_url: `${appUrl}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`,

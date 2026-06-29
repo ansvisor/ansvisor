@@ -1472,7 +1472,7 @@ export default function OnboardingPage() {
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold tracking-tight">Choose your plan</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Start with a 7-day free trial. Cancel anytime.
+            Start with a 14-day free trial. Cancel anytime.
           </p>
         </div>
 
