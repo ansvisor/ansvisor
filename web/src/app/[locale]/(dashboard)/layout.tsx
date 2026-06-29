@@ -10,6 +10,8 @@ import { BrandLoader } from '@/components/providers/brand-loader';
 import { BrandGuard } from '@/components/providers/brand-guard';
 import { getBrands } from '@/lib/actions/brand';
 import { isCloud, type PlanId } from '@/config/plans';
+import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
+import { SubscriptionExpiredNotice } from '@/components/billing/subscription-expired-notice';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -42,11 +44,23 @@ export default async function DashboardLayout({ children }: { children: React.Re
     getBrands(profile.organization_id),
   ]);
 
-  // Cloud mode: require active or trialing subscription
+  // Cloud mode: gate access when the subscription isn't active/trialing.
+  // Admins (incl. the owner) are routed to the renew/payment flow; everyone
+  // else is blocked with a contact-your-owner notice — so an invited member
+  // can neither reach the payment screen nor walk back into onboarding to
+  // re-create the brand / competitors.
   if (isCloud()) {
-    const subStatus = org?.subscription_status as string | null;
-    if (subStatus !== 'active' && subStatus !== 'trialing') {
+    const access = await evaluateSubscriptionAccess(
+      supabase,
+      profile.organization_id,
+      role,
+      (org?.subscription_status as string | null) ?? null,
+    );
+    if (access.state === 'needs_payment') {
       redirect('/dashboard/onboarding');
+    }
+    if (access.state === 'blocked') {
+      return <SubscriptionExpiredNotice ownerName={access.ownerName} />;
     }
   }
 
