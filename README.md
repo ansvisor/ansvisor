@@ -34,6 +34,7 @@ We're incredibly excited to shape what's next alongside our amazing community.
 
 - 📚 [Explore Documentation](https://docs.ansvisor.com/)
 - 🎯 [Take an Interactive Product Tour](https://app.supademo.com/demo/cmq2b1p5k0rk9qm6ugicrn655?utm_source=link)
+- 📖 [AI Visibility Glossary](https://www.ansvisor.com/ai-visibility-glossary)
 - 🔍 [Compare Ansvisor vs Alternatives](https://www.ansvisor.com/compare)
 
 ## Features
