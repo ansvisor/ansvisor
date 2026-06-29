@@ -20,6 +20,7 @@ import {
   type BreakdownRow,
   type InsightsBreakdown,
 } from '@/lib/actions/tracking';
+import { sortBreakdownRowsForDisplay } from './breakdown-display';
 
 const METRIC_TITLE: Record<BreakdownMetric, string> = {
   mentions: 'Mentions',
@@ -259,7 +260,7 @@ function BreakdownTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
+          {sortBreakdownRowsForDisplay(rows).map((r) => (
             <tr key={r.id} className="border-b last:border-b-0 hover:bg-muted/30">
               <td className="px-3 py-2.5 min-w-0">
                 {kind === 'prompts' ? (
