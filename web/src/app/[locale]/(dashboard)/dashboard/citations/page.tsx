@@ -11,15 +11,26 @@ const DynamicSourceTypeDonutChart = dynamic(
     loading: () => <Skeleton className="h-[200px] w-full" />,
   },
 );
-import { Quote, Globe, ExternalLink, Filter as FilterIcon, Layers } from 'lucide-react';
+import {
+  Quote,
+  Globe,
+  ExternalLink,
+  Filter as FilterIcon,
+  Layers,
+  Loader2,
+  Info,
+} from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
   getCitationsOverview,
+  getCitationGaps,
   type CitationsFilters,
   type CitationsOverview,
   type CitationDomainRow,
   type CitationUrlRow,
   type CitationsDatePreset,
+  type CitationGaps,
+  type CitationGapDomain,
 } from '@/lib/actions/citations';
 import { getTopics } from '@/lib/actions/topic';
 import { getBrandPrompts } from '@/lib/actions/tracking';
@@ -754,6 +765,261 @@ function EmptyRows() {
   );
 }
 
+// ─── Competitor Gaps (#300) ───────────────────────────────────────────────────
+
+const GAP_METHODOLOGY =
+  'Sources that appear in answers mentioning competitors but not you, weighted by how many sources each answer had.';
+
+function StrengthBar({ value, max }: { value: number; max: number }) {
+  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+  return (
+    <div className="h-1.5 w-20 rounded-full bg-muted overflow-hidden" title={`Strength ${pct}%`}>
+      <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(6, pct)}%` }} />
+    </div>
+  );
+}
+
+function DomainCell({ domain }: { domain: string }) {
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <DomainFavicon domain={domain} />
+      <span className="truncate text-sm font-medium">{domain}</span>
+      <a
+        href={`https://${domain}`}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="inline-flex items-center text-muted-foreground hover:text-foreground"
+        aria-label={`Open ${domain} in a new tab`}
+      >
+        <ExternalLink className="h-3 w-3" />
+      </a>
+    </div>
+  );
+}
+
+function GapListTable({ rows }: { rows: CitationGapDomain[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <Layers className="h-8 w-8 text-muted-foreground/40 mb-3" />
+        <p className="text-sm font-medium">No gap domains for these filters</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Every domain citing a competitor also cites you, or there isn&apos;t enough data yet.
+        </p>
+      </div>
+    );
+  }
+  const max = rows[0]?.strength ?? 0;
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="text-xs">Domain</TableHead>
+          <TableHead className="text-xs">Source type</TableHead>
+          <TableHead className="text-right text-xs">Competitor answers</TableHead>
+          <TableHead className="text-xs">Which competitors</TableHead>
+          <TableHead className="text-xs">Strength</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((row) => (
+          <TableRow key={row.domain}>
+            <TableCell>
+              <DomainCell domain={row.domain} />
+            </TableCell>
+            <TableCell>
+              <CategoryBadge category={row.category} />
+            </TableCell>
+            <TableCell className="text-right text-xs tabular-nums">
+              {row.competitorAnswers}
+            </TableCell>
+            <TableCell>
+              <div className="flex flex-wrap gap-1">
+                {row.competitors.map((c) => (
+                  <Badge key={c} variant="outline" className="text-[10px] whitespace-nowrap">
+                    {c}
+                  </Badge>
+                ))}
+              </div>
+            </TableCell>
+            <TableCell>
+              <StrengthBar value={row.strength} max={max} />
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+function ByCompetitorView({
+  gaps,
+  competitorId,
+  onSelect,
+}: {
+  gaps: CitationGaps;
+  competitorId: string;
+  onSelect: (id: string) => void;
+}) {
+  const rows = gaps.byCompetitor[competitorId] ?? [];
+  const max = rows[0]?.strength ?? 0;
+
+  if (gaps.competitors.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <Layers className="h-8 w-8 text-muted-foreground/40 mb-3" />
+        <p className="text-sm font-medium">No competitor source data yet</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Add competitors (with domains) and let a few tracking runs complete.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">Competitor</span>
+        <Select
+          value={competitorId}
+          onValueChange={(v) => {
+            if (v) onSelect(v);
+          }}
+        >
+          <SelectTrigger className="h-8 w-56 text-xs">
+            <SelectValue placeholder="Select competitor" />
+          </SelectTrigger>
+          <SelectContent>
+            {gaps.competitors.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {rows.length === 0 ? (
+        <EmptyRows />
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs">Domain</TableHead>
+              <TableHead className="text-xs">Source type</TableHead>
+              <TableHead className="text-right text-xs">Answers feeding</TableHead>
+              <TableHead className="text-center text-xs">Also cites us?</TableHead>
+              <TableHead className="text-xs">Strength</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow key={row.domain}>
+                <TableCell>
+                  <DomainCell domain={row.domain} />
+                </TableCell>
+                <TableCell>
+                  <CategoryBadge category={row.category} />
+                </TableCell>
+                <TableCell className="text-right text-xs tabular-nums">
+                  {row.answersFeeding}
+                </TableCell>
+                <TableCell className="text-center">
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'text-[10px] whitespace-nowrap',
+                      row.alsoCitesUs
+                        ? 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                        : 'text-muted-foreground',
+                    )}
+                  >
+                    {row.alsoCitesUs ? '✓ Yes' : '✗ No'}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <StrengthBar value={row.strength} max={max} />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </div>
+  );
+}
+
+function CompetitorGapsTab({ loading, gaps }: { loading: boolean; gaps: CitationGaps | null }) {
+  const [view, setView] = useState<'list' | 'byCompetitor'>('list');
+  // The user's pick; falls back to the first competitor (derived, no effect) so
+  // it stays valid when the gaps data changes under a filter switch.
+  const [picked, setPicked] = useState('');
+  const competitorId =
+    gaps && gaps.competitors.some((c) => c.id === picked)
+      ? picked
+      : (gaps?.competitors[0]?.id ?? '');
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+  if (!gaps) return <EmptyRows />;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex rounded-md border p-0.5 text-xs">
+          <button
+            type="button"
+            onClick={() => setView('list')}
+            className={cn(
+              'rounded px-2.5 py-1 transition-colors',
+              view === 'list'
+                ? 'bg-muted font-medium text-foreground'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            Gap list
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('byCompetitor')}
+            className={cn(
+              'rounded px-2.5 py-1 transition-colors',
+              view === 'byCompetitor'
+                ? 'bg-muted font-medium text-foreground'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            By competitor
+          </button>
+        </div>
+        <span
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground cursor-help"
+          title={GAP_METHODOLOGY}
+        >
+          <Info className="h-3.5 w-3.5" /> How this works
+        </span>
+      </div>
+
+      {gaps.lowVisibility && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+          Your visibility is low in this window, so this list may be broad — focus on baseline
+          visibility first.
+        </div>
+      )}
+
+      {view === 'list' ? (
+        <GapListTable rows={gaps.gapDomains} />
+      ) : (
+        <ByCompetitorView gaps={gaps} competitorId={competitorId} onSelect={setPicked} />
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 function getDateRange(
@@ -793,6 +1059,40 @@ export default function CitationsPage() {
 
   const activeBrandId = brand?.id ?? null;
 
+  const [sourceTab, setSourceTab] = useState<'domains' | 'urls' | 'gaps'>('domains');
+  const [gaps, setGaps] = useState<CitationGaps | null>(null);
+  const [gapsLoading, setGapsLoading] = useState(false);
+
+  const apiFilters = useMemo<CitationsFilters>(() => {
+    const { dateFrom, dateTo } = getDateRange(filters.datePreset, {
+      from: filters.dateFrom,
+      to: filters.dateTo,
+    });
+    return {
+      datePreset: filters.datePreset,
+      dateFrom,
+      dateTo,
+      platforms: filters.platform ? [filters.platform] : undefined,
+      regions: filters.region ? [filters.region] : undefined,
+      topicIds: filters.topic ? [filters.topic] : undefined,
+      promptIds: filters.prompt ? [filters.prompt] : undefined,
+      excludeOwnDomain: filters.excludeOwnDomain,
+      competitorOnly: filters.competitorOnly,
+      ownOnly: filters.ownOnly,
+    };
+  }, [
+    filters.datePreset,
+    filters.dateFrom,
+    filters.dateTo,
+    filters.platform,
+    filters.region,
+    filters.topic,
+    filters.prompt,
+    filters.excludeOwnDomain,
+    filters.competitorOnly,
+    filters.ownOnly,
+  ]);
+
   useEffect(() => {
     if (!activeBrandId) return;
     getTopics(activeBrandId)
@@ -810,22 +1110,6 @@ export default function CitationsPage() {
     }
     setIsLoading(true);
     try {
-      const { dateFrom, dateTo } = getDateRange(filters.datePreset, {
-        from: filters.dateFrom,
-        to: filters.dateTo,
-      });
-      const apiFilters: CitationsFilters = {
-        datePreset: filters.datePreset,
-        dateFrom,
-        dateTo,
-        platforms: filters.platform ? [filters.platform] : undefined,
-        regions: filters.region ? [filters.region] : undefined,
-        topicIds: filters.topic ? [filters.topic] : undefined,
-        promptIds: filters.prompt ? [filters.prompt] : undefined,
-        excludeOwnDomain: filters.excludeOwnDomain,
-        competitorOnly: filters.competitorOnly,
-        ownOnly: filters.ownOnly,
-      };
       const overview = await getCitationsOverview(activeBrandId, apiFilters);
       setData(overview);
 
@@ -849,23 +1133,32 @@ export default function CitationsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [
-    activeBrandId,
-    filters.datePreset,
-    filters.dateFrom,
-    filters.dateTo,
-    filters.platform,
-    filters.region,
-    filters.topic,
-    filters.prompt,
-    filters.excludeOwnDomain,
-    filters.competitorOnly,
-    filters.ownOnly,
-  ]);
+  }, [activeBrandId, apiFilters]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Lazy-load Competitor Gaps only when its tab is active; re-fetch when the
+  // shared filters change while it's open.
+  useEffect(() => {
+    if (sourceTab !== 'gaps' || !activeBrandId) return;
+    let cancelled = false;
+    setGapsLoading(true);
+    getCitationGaps(activeBrandId, apiFilters)
+      .then((res) => {
+        if (!cancelled) setGaps(res);
+      })
+      .catch(() => {
+        if (!cancelled) setGaps(null);
+      })
+      .finally(() => {
+        if (!cancelled) setGapsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceTab, activeBrandId, apiFilters]);
 
   const totals = data?.totals;
   const kpis = useMemo(
@@ -940,7 +1233,10 @@ export default function CitationsPage() {
                 <CardTitle className="text-base">{t('sourcesTitle')}</CardTitle>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="domains">
+                <Tabs
+                  value={sourceTab}
+                  onValueChange={(v) => setSourceTab(v as 'domains' | 'urls' | 'gaps')}
+                >
                   <TabsList>
                     <TabsTrigger value="domains">
                       {t('tabDomains')} ({data?.totals.domains ?? 0})
@@ -948,12 +1244,16 @@ export default function CitationsPage() {
                     <TabsTrigger value="urls">
                       {t('tabUrls')} ({data?.totals.urls ?? 0})
                     </TabsTrigger>
+                    <TabsTrigger value="gaps">Competitor Gaps</TabsTrigger>
                   </TabsList>
                   <TabsContent value="domains" className="mt-4">
                     <DomainsTable rows={data?.rows ?? []} />
                   </TabsContent>
                   <TabsContent value="urls" className="mt-4">
                     <UrlsTable rows={data?.urlRows ?? []} />
+                  </TabsContent>
+                  <TabsContent value="gaps" className="mt-4">
+                    <CompetitorGapsTab loading={gapsLoading} gaps={gaps} />
                   </TabsContent>
                 </Tabs>
               </CardContent>

@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { expandDateToEndOfDay } from '@/lib/dates';
-import type { Citation } from '@/types';
+import type { Citation, CompetitorMention } from '@/types';
 import {
   classifyDomain,
   extractHostname,
@@ -363,4 +363,257 @@ export async function getCitationsOverview(
     },
     sourceTypeBreakdown,
   };
+}
+
+// ─── Competitor Gaps (#300) ─────────────────────────────────────────────────
+
+/** A third-party domain that cites competitors but never cites/mentions us. */
+export interface CitationGapDomain {
+  domain: string;
+  category: SourceCategory;
+  /** Distinct answers where this domain co-occurs with a competitor and we're absent. */
+  competitorAnswers: number;
+  /** Competitor display names seen alongside this domain (top few). */
+  competitors: string[];
+  /** Weighted co-occurrence score (each answer split across its distinct sources). */
+  strength: number;
+}
+
+/** A domain that feeds a specific competitor's AI visibility. */
+export interface CompetitorSourceDomain {
+  domain: string;
+  category: SourceCategory;
+  /** Distinct answers where the competitor is mentioned and this domain is cited. */
+  answersFeeding: number;
+  /** Whether this domain also appears in any answer where our brand is present. */
+  alsoCitesUs: boolean;
+  strength: number;
+}
+
+export interface CitationGapCompetitor {
+  id: string;
+  name: string;
+}
+
+export interface CitationGaps {
+  /** Outreach list: domains citing ≥1 competitor and never citing/mentioning us. */
+  gapDomains: CitationGapDomain[];
+  /** Per-competitor source map, keyed by competitor id. */
+  byCompetitor: Record<string, CompetitorSourceDomain[]>;
+  /** Competitors that have ≥1 feeding domain (for the selector). */
+  competitors: CitationGapCompetitor[];
+  /** Answers in the window where our brand was present. */
+  ourAnswerCount: number;
+  /** Total answers in the window. */
+  totalAnswers: number;
+  /** True when our presence is so low the gap list is likely too broad to act on. */
+  lowVisibility: boolean;
+}
+
+const GAP_MIN_COMPETITOR_ANSWERS = 2;
+const GAP_LOW_VISIBILITY_RATIO = 0.1;
+const GAP_MAX_ROWS = 100;
+const GAP_MAX_COMPETITOR_CHIPS = 6;
+
+/**
+ * Compute Competitor Gaps from the same `prompt_results` data the citations
+ * overview reads — no LLM/scraper calls, no new writes.
+ *
+ * For each AI answer we look at response-level co-occurrence: the set of cited
+ * domains, whether any competitor was mentioned, and whether we were present
+ * (our brand mentioned or one of our domains cited). A "gap" domain cites a
+ * competitor in an answer where we're absent and never appears in an answer
+ * where we're present. Each co-occurrence is weighted by `1 / distinct sources
+ * in the answer`, so a focused 2-source answer counts more than a 20-source one.
+ */
+export async function getCitationGaps(
+  brandId: string,
+  filters: CitationsFilters,
+): Promise<CitationGaps> {
+  const supabase = await createClient();
+
+  const { data: brandDomainRows } = await supabase
+    .from('brand_domains')
+    .select('domain')
+    .eq('brand_id', brandId);
+  const brandDomains = (brandDomainRows ?? [])
+    .map((r) => normalizeDomain((r as { domain: string }).domain))
+    .filter(Boolean);
+
+  const { data: competitorRows } = await supabase
+    .from('competitors')
+    .select('id, name, domain')
+    .eq('brand_id', brandId);
+  const competitorList = (competitorRows ?? []) as Array<{
+    id: string;
+    name: string;
+    domain: string;
+  }>;
+  const competitorDomains = competitorList.map((c) => normalizeDomain(c.domain)).filter(Boolean);
+  const competitorNameById = new Map(
+    competitorList.map((c) => [c.id, (c.name || '').trim() || 'Competitor']),
+  );
+
+  const classifyCtx = { brandDomains, competitorDomains };
+
+  let query = supabase
+    .from('prompt_results')
+    .select('id, model_used, region, created_at, citations, competitor_mentions, mention_count')
+    .eq('brand_id', brandId);
+
+  const { from, to } = resolveDateRange(filters);
+  const expandedTo = expandDateToEndOfDay(to);
+  if (from) query = query.gte('created_at', from);
+  if (expandedTo) query = query.lte('created_at', expandedTo);
+  if (filters.platforms && filters.platforms.length > 0) {
+    query = applyModelFilter(query, filters.platforms);
+  }
+  if (filters.regions && filters.regions.length > 0) {
+    query = query.in('region', filters.regions);
+  }
+  if (filters.promptIds && filters.promptIds.length > 0) {
+    query = query.in('prompt_id', filters.promptIds);
+  }
+  if (filters.topicIds && filters.topicIds.length > 0) {
+    const { data: topicPrompts } = await supabase
+      .from('prompts')
+      .select('id')
+      .in('topic_id', filters.topicIds);
+    const topicPromptIds = ((topicPrompts ?? []) as { id: string }[]).map((p) => p.id);
+    query = query.in(
+      'prompt_id',
+      topicPromptIds.length > 0 ? topicPromptIds : ['00000000-0000-0000-0000-000000000000'],
+    );
+  }
+
+  const { data: rows, error } = await query;
+  if (error) throw new Error(error.message);
+
+  const results = (rows ?? []) as Array<{
+    id: string;
+    citations: Citation[] | null;
+    competitor_mentions: CompetitorMention[] | null;
+    mention_count: number | null;
+  }>;
+
+  interface DomainAgg {
+    domain: string;
+    category: SourceCategory;
+    competitorAnswers: Set<string>;
+    appearsInOurAnswers: boolean;
+    strength: number;
+    competitorNames: Set<string>;
+  }
+  interface CompDomainAgg {
+    domain: string;
+    category: SourceCategory;
+    answersFeeding: Set<string>;
+    strength: number;
+  }
+
+  const domainMap = new Map<string, DomainAgg>();
+  const byCompMap = new Map<string, Map<string, CompDomainAgg>>();
+  let ourAnswerCount = 0;
+  const totalAnswers = results.length;
+
+  for (const r of results) {
+    const citations = Array.isArray(r.citations) ? r.citations : [];
+    const domainCat = new Map<string, SourceCategory>();
+    for (const cite of citations) {
+      const host = extractHostname(cite.url);
+      if (!host || domainCat.has(host)) continue;
+      domainCat.set(host, classifyDomain(host, classifyCtx));
+    }
+    // Weight each answer's co-occurrences by 1 / distinct sources so a focused
+    // answer counts more per domain than a sprawling multi-source one.
+    const weight = domainCat.size > 0 ? 1 / domainCat.size : 0;
+
+    const ourDomainCited = Array.from(domainCat.values()).some((cat) => cat === 'you');
+    const wePresent = (r.mention_count ?? 0) > 0 || ourDomainCited;
+    if (wePresent) ourAnswerCount += 1;
+
+    const mentions = Array.isArray(r.competitor_mentions) ? r.competitor_mentions : [];
+    const mentionedCompetitors = mentions.filter((m) => (m.mention_count ?? 0) > 0);
+    const competitorPresent = mentionedCompetitors.length > 0;
+    const competitorNamesInAnswer = mentionedCompetitors.map(
+      (m) => competitorNameById.get(m.competitor_id) ?? ((m.name || '').trim() || 'Competitor'),
+    );
+
+    for (const [domain, category] of domainCat) {
+      // Only third-party publications are actionable — skip our and competitor sites.
+      if (category === 'you' || category === 'competitor') continue;
+
+      const agg = domainMap.get(domain) ?? {
+        domain,
+        category,
+        competitorAnswers: new Set<string>(),
+        appearsInOurAnswers: false,
+        strength: 0,
+        competitorNames: new Set<string>(),
+      };
+      if (wePresent) agg.appearsInOurAnswers = true;
+      if (competitorPresent && !wePresent) {
+        agg.competitorAnswers.add(r.id);
+        agg.strength += weight;
+        for (const name of competitorNamesInAnswer) agg.competitorNames.add(name);
+      }
+      domainMap.set(domain, agg);
+
+      if (competitorPresent) {
+        for (const m of mentionedCompetitors) {
+          let perDomain = byCompMap.get(m.competitor_id);
+          if (!perDomain) {
+            perDomain = new Map<string, CompDomainAgg>();
+            byCompMap.set(m.competitor_id, perDomain);
+          }
+          const cd = perDomain.get(domain) ?? {
+            domain,
+            category,
+            answersFeeding: new Set<string>(),
+            strength: 0,
+          };
+          cd.answersFeeding.add(r.id);
+          cd.strength += weight;
+          perDomain.set(domain, cd);
+        }
+      }
+    }
+  }
+
+  const gapDomains: CitationGapDomain[] = Array.from(domainMap.values())
+    .filter((g) => !g.appearsInOurAnswers && g.competitorAnswers.size >= GAP_MIN_COMPETITOR_ANSWERS)
+    .map((g) => ({
+      domain: g.domain,
+      category: g.category,
+      competitorAnswers: g.competitorAnswers.size,
+      competitors: Array.from(g.competitorNames).sort().slice(0, GAP_MAX_COMPETITOR_CHIPS),
+      strength: Math.round(g.strength * 1000) / 1000,
+    }))
+    .sort((a, b) => b.strength - a.strength || b.competitorAnswers - a.competitorAnswers)
+    .slice(0, GAP_MAX_ROWS);
+
+  const byCompetitor: Record<string, CompetitorSourceDomain[]> = {};
+  for (const [competitorId, perDomain] of byCompMap) {
+    const list = Array.from(perDomain.values())
+      .map((cd) => ({
+        domain: cd.domain,
+        category: cd.category,
+        answersFeeding: cd.answersFeeding.size,
+        alsoCitesUs: domainMap.get(cd.domain)?.appearsInOurAnswers ?? false,
+        strength: Math.round(cd.strength * 1000) / 1000,
+      }))
+      .sort((a, b) => b.strength - a.strength || b.answersFeeding - a.answersFeeding)
+      .slice(0, GAP_MAX_ROWS);
+    if (list.length > 0) byCompetitor[competitorId] = list;
+  }
+
+  const competitors: CitationGapCompetitor[] = competitorList
+    .filter((c) => byCompetitor[c.id]?.length)
+    .map((c) => ({ id: c.id, name: competitorNameById.get(c.id) ?? c.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const lowVisibility =
+    totalAnswers > 0 && ourAnswerCount / totalAnswers < GAP_LOW_VISIBILITY_RATIO;
+
+  return { gapDomains, byCompetitor, competitors, ourAnswerCount, totalAnswers, lowVisibility };
 }
