@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
@@ -636,7 +636,7 @@ function KpiCard({
 
 // ─── Tables ───────────────────────────────────────────────────────────────────
 
-function DomainsTable({ rows }: { rows: CitationDomainRow[] }) {
+const DomainsTable = memo(function DomainsTable({ rows }: { rows: CitationDomainRow[] }) {
   if (rows.length === 0) return <EmptyRows />;
 
   return (
@@ -688,9 +688,9 @@ function DomainsTable({ rows }: { rows: CitationDomainRow[] }) {
       </TableBody>
     </Table>
   );
-}
+});
 
-function UrlsTable({ rows }: { rows: CitationUrlRow[] }) {
+const UrlsTable = memo(function UrlsTable({ rows }: { rows: CitationUrlRow[] }) {
   if (rows.length === 0) return <EmptyRows />;
 
   return (
@@ -740,7 +740,7 @@ function UrlsTable({ rows }: { rows: CitationUrlRow[] }) {
       </TableBody>
     </Table>
   );
-}
+});
 
 function EmptyRows() {
   return (
@@ -949,10 +949,12 @@ export default function CitationsPage() {
                       {t('tabUrls')} ({data?.totals.urls ?? 0})
                     </TabsTrigger>
                   </TabsList>
-                  <TabsContent value="domains" className="mt-4">
+                  {/* keepMounted: data is already in memory, so mount both panels
+                      once and make switching a pure CSS visibility toggle (#299). */}
+                  <TabsContent value="domains" keepMounted className="mt-4">
                     <DomainsTable rows={data?.rows ?? []} />
                   </TabsContent>
-                  <TabsContent value="urls" className="mt-4">
+                  <TabsContent value="urls" keepMounted className="mt-4">
                     <UrlsTable rows={data?.urlRows ?? []} />
                   </TabsContent>
                 </Tabs>
