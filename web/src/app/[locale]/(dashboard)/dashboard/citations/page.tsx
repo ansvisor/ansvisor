@@ -176,6 +176,8 @@ interface PromptOption {
 interface PromptComboboxItem {
   value: string;
   label: string;
+  /** Untruncated prompt text, shown as a native tooltip on hover (#298). */
+  fullText: string;
 }
 
 interface PlatformOption {
@@ -393,7 +395,10 @@ function FilterBar({
     () =>
       prompts.map((p) => ({
         value: p.id,
-        label: p.text.length > 80 ? `${p.text.slice(0, 80)}…` : p.text,
+        // Let the combobox's CSS `truncate` handle visual overflow; keep the
+        // full text for the hover tooltip instead of slicing it away (#298).
+        label: p.text,
+        fullText: p.text,
       })),
     [prompts],
   );
@@ -497,7 +502,7 @@ function FilterBar({
                 <ComboboxEmpty>No prompts match.</ComboboxEmpty>
                 <ComboboxCollection>
                   {(item: PromptComboboxItem) => (
-                    <ComboboxItem key={item.value} value={item}>
+                    <ComboboxItem key={item.value} value={item} title={item.fullText}>
                       {item.label}
                     </ComboboxItem>
                   )}
