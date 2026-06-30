@@ -416,13 +416,13 @@ export default function ContentPage() {
               value={highImpact}
               sub="opportunities"
             />
+            <KpiCard title={t('kpi.avgScore')} icon={BarChart3} value={avgScore} sub="out of 100" />
             <KpiCard
               title={t('kpi.sentToWorkflow')}
               icon={Send}
               value={sentCount}
               sub="sent or in progress"
             />
-            <KpiCard title={t('kpi.avgScore')} icon={BarChart3} value={avgScore} sub="out of 100" />
           </div>
 
           <Card>
