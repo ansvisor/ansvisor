@@ -39,6 +39,8 @@ import {
   Pencil,
   Settings2,
   Download,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -54,6 +56,7 @@ import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import type { PromptVolume, Prompt } from '@/types';
 import { toast } from 'sonner';
 import { toCsv } from '@/lib/csv';
+import { compareNullsLast, type SortDir } from './prompt-sort';
 
 // ─── Info Tooltip ─────────────────────────────────────────────────────────────
 
@@ -103,6 +106,68 @@ function ColHead({
     <TableHead className={className}>
       <span className="inline-flex items-center gap-1">
         {children}
+        <InfoTip content={tooltip} />
+      </span>
+    </TableHead>
+  );
+}
+
+// ─── Sortable column header (All Prompts) ─────────────────────────────────────
+
+type AllPromptsSortKey = 'visibility' | 'mentions' | 'volume' | 'lastRun';
+
+const ALL_PROMPTS_SORT_KEYS: AllPromptsSortKey[] = ['visibility', 'mentions', 'volume', 'lastRun'];
+
+function isAllPromptsSortKey(value: string | null): value is AllPromptsSortKey {
+  return value !== null && (ALL_PROMPTS_SORT_KEYS as string[]).includes(value);
+}
+
+/**
+ * Clickable header that toggles asc⇄desc for its column and marks the active
+ * sort with a chevron. The InfoTip lives outside the button so hovering /
+ * clicking the help icon doesn't trigger a sort.
+ */
+function SortableHead({
+  children,
+  tooltip,
+  className,
+  sortKey,
+  activeSort,
+  dir,
+  onSort,
+}: {
+  children: React.ReactNode;
+  tooltip: string;
+  className?: string;
+  sortKey: AllPromptsSortKey;
+  activeSort: AllPromptsSortKey | null;
+  dir: SortDir;
+  onSort: (key: AllPromptsSortKey) => void;
+}) {
+  const active = activeSort === sortKey;
+  return (
+    <TableHead
+      className={className}
+      aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      <span className="inline-flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onSort(sortKey)}
+          aria-label={`Sort by ${typeof children === 'string' ? children : sortKey}`}
+          className={cn(
+            'inline-flex items-center gap-1 transition-colors hover:text-foreground',
+            active ? 'text-foreground' : 'text-muted-foreground',
+          )}
+        >
+          {children}
+          {active &&
+            (dir === 'asc' ? (
+              <ChevronUp className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ))}
+        </button>
         <InfoTip content={tooltip} />
       </span>
     </TableHead>
@@ -953,17 +1018,59 @@ function AllPromptsTab({
   visibility: Record<string, PromptVisibilitySummary>;
 }) {
   const [search, setSearch] = useState('');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const rawSort = searchParams.get('sort');
+  const activeSort: AllPromptsSortKey | null = isAllPromptsSortKey(rawSort) ? rawSort : null;
+  const dir: SortDir = searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
+
+  // Click a header to sort: a new column starts at desc ("show me the extremes");
+  // re-clicking the active column toggles desc⇄asc. Persisted to the URL so the
+  // sort survives reloads and is shareable (matches the existing `tab` sync).
+  const handleSort = useCallback(
+    (key: AllPromptsSortKey) => {
+      const params = new URLSearchParams(Array.from(searchParams.entries()));
+      const nextDir: SortDir = activeSort === key && dir === 'desc' ? 'asc' : 'desc';
+      params.set('tab', 'all');
+      params.set('sort', key);
+      params.set('dir', nextDir);
+      router.replace(`/dashboard/prompts?${params.toString()}`, { scroll: false });
+    },
+    [searchParams, router, activeSort, dir],
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const sorted = [...prompts].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
-    if (!q) return sorted;
-    return sorted.filter(
-      (p) => p.text.toLowerCase().includes(q) || (p.category ?? '').toLowerCase().includes(q),
-    );
-  }, [prompts, search]);
+    let list = [...prompts];
+    if (q) {
+      list = list.filter(
+        (p) => p.text.toLowerCase().includes(q) || (p.category ?? '').toLowerCase().includes(q),
+      );
+    }
+
+    if (!activeSort) {
+      // Default ordering: newest first.
+      return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+
+    const valueOf = (p: Prompt): number | null => {
+      const vis = visibility[p.id];
+      const vol = volumeByPromptId.get(p.id);
+      switch (activeSort) {
+        case 'visibility':
+          return vis ? vis.avgVisibility : null;
+        case 'mentions':
+          return vis ? vis.totalMentions : null;
+        case 'volume':
+          return vol ? vol.estAiVolume : null;
+        case 'lastRun':
+          return vis?.lastRunAt ? new Date(vis.lastRunAt).getTime() : null;
+      }
+    };
+
+    return list.sort((a, b) => compareNullsLast(valueOf(a), valueOf(b), dir));
+  }, [prompts, search, activeSort, dir, visibility, volumeByPromptId]);
 
   if (loading) {
     return (
@@ -1023,33 +1130,52 @@ function AllPromptsTab({
               <TableHead className="pl-6">Prompt</TableHead>
               <TableHead>Topic</TableHead>
               <TableHead className="text-center">Status</TableHead>
-              <ColHead
+              <SortableHead
                 className="text-right"
                 tooltip="Average brand visibility score in AI answers for this prompt over the last 30 days."
+                sortKey="visibility"
+                activeSort={activeSort}
+                dir={dir}
+                onSort={handleSort}
               >
                 Visibility
-              </ColHead>
-              <ColHead
+              </SortableHead>
+              <SortableHead
                 className="text-right"
                 tooltip="Total times the brand was mentioned across AI answers for this prompt over the last 30 days."
+                sortKey="mentions"
+                activeSort={activeSort}
+                dir={dir}
+                onSort={handleSort}
               >
                 Mentions
-              </ColHead>
-              <ColHead
+              </SortableHead>
+              <SortableHead
                 className="text-right"
                 tooltip="Estimated monthly AI prompt volume, from keyword analysis. Empty until analysed."
+                sortKey="volume"
+                activeSort={activeSort}
+                dir={dir}
+                onSort={handleSort}
               >
                 Volume
-              </ColHead>
+              </SortableHead>
               <ColHead
                 className="text-center"
                 tooltip="Based on Google Ads competition for related keywords (LOW / MEDIUM / HIGH). A proxy for topic difficulty."
               >
                 Competition
               </ColHead>
-              <ColHead className="text-right" tooltip="Most recent tracking run for this prompt.">
+              <SortableHead
+                className="text-right"
+                tooltip="Most recent tracking run for this prompt."
+                sortKey="lastRun"
+                activeSort={activeSort}
+                dir={dir}
+                onSort={handleSort}
+              >
                 Last run
-              </ColHead>
+              </SortableHead>
               <TableHead className="text-right pr-6 w-[60px]">Edit</TableHead>
             </TableRow>
           </TableHeader>
