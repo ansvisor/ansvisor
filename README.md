@@ -91,9 +91,9 @@ Edit both `.env` files and fill in your credentials. See the comments in each fi
 
 Run the migration SQL to create all tables, indexes, RLS policies, and triggers:
 
-**Option A — Supabase Dashboard:**
+**Option A — Supabase Dashboard (fresh install, one paste):**
 1. Go to your project's **SQL Editor**
-2. For each file in `supabase/migrations/` (in alphabetical order — `00001_…` first, then `00002_…`, etc.), paste its contents and click **Run**
+2. Paste the contents of [`supabase/schema.sql`](supabase/schema.sql) — the full schema (every migration in one file) — and click **Run**
 
 **Option B — Supabase CLI:**
 
@@ -101,6 +101,8 @@ Run the migration SQL to create all tables, indexes, RLS policies, and triggers:
 npx supabase link --project-ref <YOUR_PROJECT_REF>
 npx supabase db push
 ```
+
+> `supabase/schema.sql` is a generated convenience for **fresh** installs. The numbered files under `supabase/migrations/` stay the source of truth and the **upgrade** path — an existing install adds only the new migration(s) (or `db push`). Regenerate the consolidated file after adding a migration with `bash supabase/build-schema.sh`.
 
 ##### Demo data (local only)
 

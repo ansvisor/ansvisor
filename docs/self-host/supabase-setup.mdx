@@ -15,7 +15,7 @@ description: "Prepare a Supabase project for Ansvisor — schema, RLS, auth trig
 
 ## Apply migrations
 
-The repo ships SQL migrations under `supabase/migrations/`. Apply them in order:
+The repo ships SQL migrations under `supabase/migrations/`, plus a generated `supabase/schema.sql` (every migration in one file) for a one-paste fresh install.
 
 <Tabs>
   <Tab title="Supabase CLI (recommended)">
@@ -28,10 +28,14 @@ The repo ships SQL migrations under `supabase/migrations/`. Apply them in order:
   </Tab>
   <Tab title="Manual via dashboard">
     1. Open Supabase dashboard → SQL Editor
-    2. For each file in `supabase/migrations/` (in alphabetical order), paste contents → Run
+    2. Paste the contents of `supabase/schema.sql` (the full schema in one file) → Run
     3. Verify all tables created under **Database → Tables**
   </Tab>
 </Tabs>
+
+<Note>
+  `supabase/schema.sql` is a generated convenience for **fresh** installs. The numbered files under `supabase/migrations/` stay the source of truth and the **upgrade** path — an existing install applies only the new migration(s) (or `supabase db push`). Regenerate the consolidated file after adding a migration with `bash supabase/build-schema.sh`.
+</Note>
 
 ## What the migrations create
 

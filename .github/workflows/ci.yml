@@ -6,6 +6,21 @@ on:
     branches: [main]
 
 jobs:
+  schema:
+    name: schema — consolidated schema.sql is up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Regenerate schema.sql from migrations
+        run: bash supabase/build-schema.sh
+      - name: Fail if schema.sql is out of date
+        run: |
+          if ! git diff --quiet -- supabase/schema.sql; then
+            echo "::error::supabase/schema.sql is out of date. Run 'bash supabase/build-schema.sh' and commit the result."
+            git --no-pager diff -- supabase/schema.sql
+            exit 1
+          fi
+
   web:
     name: web — format, lint & typecheck
     runs-on: ubuntu-latest
