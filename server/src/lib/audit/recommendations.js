@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { resolveModel } from '../ai-provider.js';
 import { signalsByKey } from './rubric.js';
 import { withRetry } from './retry.js';
+import { logger } from '../logger.js';
 
 const DEFAULT_MODEL = 'google/gemini-3-flash-preview';
 
@@ -149,7 +150,7 @@ Return prioritized, page-specific recommendations.`,
         draft: r.draft || null,
       }));
   } catch (err) {
-    console.error('[audit] recommendations failed:', err.message, { model: modelString });
+    logger.error({ err, model: modelString }, '[audit] recommendations failed');
     return [];
   }
 }

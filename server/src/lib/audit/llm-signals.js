@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { resolveModel } from '../ai-provider.js';
 import { signalsByKey } from './rubric.js';
 import { withRetry } from './retry.js';
+import { logger } from '../logger.js';
 
 const DEFAULT_MODEL = 'google/gemini-3-flash-preview';
 
@@ -111,7 +112,7 @@ export async function evaluateLlmSignals(ctx) {
       };
     });
   } catch (err) {
-    console.error('[audit] LLM signals failed:', err.message, { model: modelString });
+    logger.error({ err, model: modelString }, '[audit] LLM signals failed');
     // Degrade gracefully — deterministic signals still score the page.
     return LLM_SIGNAL_KEYS.map((key) => ({
       key,

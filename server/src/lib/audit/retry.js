@@ -11,6 +11,8 @@
  * @param {{ attempts?: number, baseDelayMs?: number, label?: string }} [opts]
  * @returns {Promise<T>}
  */
+import { logger } from '../logger.js';
+
 export async function withRetry(fn, { attempts = 3, baseDelayMs = 500, label = 'llm' } = {}) {
   let lastErr;
   for (let i = 0; i < attempts; i += 1) {
@@ -20,8 +22,9 @@ export async function withRetry(fn, { attempts = 3, baseDelayMs = 500, label = '
       lastErr = err;
       if (i < attempts - 1) {
         const delay = baseDelayMs * 2 ** i;
-        console.warn(
-          `[audit] ${label} attempt ${i + 1}/${attempts} failed: ${err.message}; retrying in ${delay}ms`,
+        logger.warn(
+          { label, attempt: i + 1, attempts, delayMs: delay, err: err.message },
+          `[audit] ${label} attempt ${i + 1}/${attempts} failed; retrying`,
         );
         await new Promise((resolve) => setTimeout(resolve, delay));
       }

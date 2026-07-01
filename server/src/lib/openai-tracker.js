@@ -4,6 +4,7 @@
  */
 
 import OpenAI from 'openai';
+import { logger } from './logger.js';
 
 const DEFAULT_MODEL = 'gpt-5-chat-latest';
 
@@ -104,7 +105,7 @@ export async function analyzeSentimentAI(responseText, brandName) {
 
     return { sentiment, confidence, reason: json.reason || '' };
   } catch (err) {
-    console.error('[sentiment-ai] Failed, falling back to neutral:', err.message);
+    logger.error({ err }, '[sentiment-ai] failed, falling back to neutral');
     return { sentiment: 'neutral', confidence: 0, reason: 'Analysis failed' };
   }
 }

@@ -17,6 +17,7 @@ import supabaseAdmin from '../config/supabase.js';
 import { analyzeSentimentAI } from './ai-tracker.js';
 import { parseResponse, countBrandMentions } from './response-parser.js';
 import { normalizeShoppingCards, matchCardBrand } from './shopping-cards.js';
+import { logger } from './logger.js';
 
 /**
  * @param {object} args
@@ -69,7 +70,7 @@ export async function handleScraperResult({
     .single();
 
   if (error) {
-    console.error('[cloro-result] Failed to insert result:', error.message);
+    logger.error({ err: error }, '[cloro-result] failed to insert result');
     throw error;
   }
 
@@ -150,11 +151,10 @@ export async function persistShoppingCards({
     .upsert(rows, { onConflict: 'prompt_result_id,position', ignoreDuplicates: true });
 
   if (error) {
-    console.error('[cloro-result] Shopping card normalization failed:', error.message, {
-      promptResultId,
-      platform,
-      cardCount: rows.length,
-    });
+    logger.error(
+      { err: error, promptResultId, platform, cardCount: rows.length },
+      '[cloro-result] shopping card normalization failed',
+    );
     return 0;
   }
 

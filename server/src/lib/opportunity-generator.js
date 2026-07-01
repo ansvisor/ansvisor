@@ -7,6 +7,7 @@ import { generateObject } from 'ai';
 import { z } from 'zod';
 import { resolveModel } from './ai-provider.js';
 import supabaseAdmin from '../config/supabase.js';
+import { logger } from './logger.js';
 
 const opportunitySchema = z.object({
   opportunities: z
@@ -50,7 +51,7 @@ function computeScore(volume, visibility, competitorGap, intent) {
 }
 
 export async function generateContentOpportunities(brandId) {
-  console.log(`[opportunities] Generating for brand ${brandId}`);
+  logger.info({ brandId }, '[opportunities] generating');
 
   const { data: brand } = await supabaseAdmin
     .from('brands')
@@ -205,7 +206,8 @@ Generate actionable content opportunities.`;
     }));
 
   if (rows.length > 0) await supabaseAdmin.from('content_opportunities').insert(rows);
-  console.log(
-    `[opportunities] Generated ${rows.length} new opportunities for brand ${brandId} (${(existing || []).length} already pending)`,
+  logger.info(
+    { brandId, generated: rows.length, alreadyPending: (existing || []).length },
+    '[opportunities] generated new opportunities',
   );
 }

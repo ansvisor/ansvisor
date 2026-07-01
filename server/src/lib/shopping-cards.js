@@ -22,6 +22,7 @@
  */
 
 import { URL } from 'node:url';
+import { logger } from './logger.js';
 
 // Loose set of currency codes Perplexity / Copilot embed in price strings
 // like "$29.99", "EUR 19,90", "₺499". Anything else falls back to null —
@@ -332,7 +333,7 @@ export function normalizeShoppingCards(platform, cards) {
         return parser(card, i);
       } catch (err) {
         // A bad card shouldn't kill the whole batch — log and drop.
-        console.error('[shopping-cards] parser failed:', err.message, { platform, position: i });
+        logger.error({ err, platform, position: i }, '[shopping-cards] parser failed');
         return null;
       }
     })

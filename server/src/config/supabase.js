@@ -1,12 +1,13 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { logger } from '../lib/logger.js';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseServiceRoleKey) {
-  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables');
+  logger.fatal('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables');
   process.exit(1);
 }
 
