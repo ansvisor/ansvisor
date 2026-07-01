@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
@@ -19,8 +19,11 @@ import {
   Layers,
   Loader2,
   Info,
+  Plus,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { addCompetitor } from '@/lib/actions/competitor';
 import {
   getCitationsOverview,
   getCitationGaps,
@@ -49,9 +52,18 @@ import type { Topic } from '@/types';
 import { SOURCE_CATEGORY_LABELS, type SourceCategory } from '@/lib/citations/classify';
 import { getFaviconUrl } from '@/lib/favicon';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -652,7 +664,113 @@ function KpiCard({
 
 // ─── Tables ───────────────────────────────────────────────────────────────────
 
-const DomainsTable = memo(function DomainsTable({ rows }: { rows: CitationDomainRow[] }) {
+/** Turn a domain into a first-guess competitor name, e.g. caranddriver.com → "Caranddriver". */
+function deriveCompetitorName(domain: string): string {
+  const first = domain
+    .replace(/^www\./, '')
+    .split('.')[0]
+    ?.trim();
+  if (!first) return domain;
+  return first.charAt(0).toUpperCase() + first.slice(1);
+}
+
+/**
+ * Inline "+" on a Domains-table row: opens a confirm dialog pre-filled with a
+ * name derived from the domain, then adds it as a tracked competitor (#301).
+ */
+function AddCompetitorButton({
+  brandId,
+  domain,
+  onAdded,
+}: {
+  brandId: string;
+  domain: string;
+  onAdded: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const nameId = useId();
+
+  function openDialog() {
+    setName(deriveCompetitorName(domain));
+    setOpen(true);
+  }
+
+  async function handleAdd() {
+    const trimmed = name.trim();
+    if (!trimmed || saving) return;
+    setSaving(true);
+    try {
+      await addCompetitor(brandId, { name: trimmed, domain });
+      toast.success(`${domain} added as competitor`);
+      setOpen(false);
+      onAdded();
+    } catch {
+      toast.error('Could not add this domain as a competitor. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!saving) setOpen(next);
+      }}
+    >
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7"
+        onClick={openDialog}
+        aria-label={`Add ${domain} as competitor`}
+        title="Add as competitor"
+      >
+        <Plus className="h-3.5 w-3.5" />
+      </Button>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add {domain} as competitor?</DialogTitle>
+          <DialogDescription>
+            Track this domain as a competitor. You can edit the name below.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor={nameId}>Name</Label>
+          <Input
+            id={nameId}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+            placeholder="Competitor name"
+            autoFocus
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>
+            Cancel
+          </Button>
+          <Button onClick={handleAdd} disabled={!name.trim() || saving} className="gap-2">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            Add
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const DomainsTable = memo(function DomainsTable({
+  rows,
+  brandId,
+  onAdded,
+}: {
+  rows: CitationDomainRow[];
+  brandId: string;
+  onAdded: () => void;
+}) {
   if (rows.length === 0) return <EmptyRows />;
 
   return (
@@ -664,6 +782,9 @@ const DomainsTable = memo(function DomainsTable({ rows }: { rows: CitationDomain
           <TableHead className="text-xs">Platforms</TableHead>
           <TableHead className="text-xs">Usage</TableHead>
           <TableHead className="text-right text-xs">Avg Citations</TableHead>
+          <TableHead className="w-[44px]">
+            <span className="sr-only">Add as competitor</span>
+          </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -698,6 +819,13 @@ const DomainsTable = memo(function DomainsTable({ rows }: { rows: CitationDomain
             </TableCell>
             <TableCell className="text-right text-xs tabular-nums">
               {row.avgCitationsPerResult.toFixed(1)}
+            </TableCell>
+            <TableCell className="text-right">
+              {/* Offer to track third-party domains as competitors; skip our own
+                  domain and ones already tracked (they show the Competitor badge). */}
+              {row.category !== 'you' && row.category !== 'competitor' && brandId ? (
+                <AddCompetitorButton brandId={brandId} domain={row.domain} onAdded={onAdded} />
+              ) : null}
             </TableCell>
           </TableRow>
         ))}
@@ -1254,7 +1382,11 @@ export default function CitationsPage() {
                   {/* keepMounted: data is already in memory, so mount both panels
                       once and make switching a pure CSS visibility toggle (#299). */}
                   <TabsContent value="domains" keepMounted className="mt-4">
-                    <DomainsTable rows={data?.rows ?? []} />
+                    <DomainsTable
+                      rows={data?.rows ?? []}
+                      brandId={activeBrandId ?? ''}
+                      onAdded={loadData}
+                    />
                   </TabsContent>
                   <TabsContent value="urls" keepMounted className="mt-4">
                     <UrlsTable rows={data?.urlRows ?? []} />
