@@ -5,6 +5,7 @@
  */
 
 import supabaseAdmin from '../config/supabase.js';
+import logger from './logger.js';
 
 /** @type {Map<string, AbortController>} */
 const activeJobs = new Map();
@@ -38,7 +39,7 @@ export async function updateJobProgress(jobId, progress) {
     .update({ progress, updated_at: new Date().toISOString() })
     .eq('id', jobId);
 
-  if (error) console.error(`[job-manager] Failed to update progress for ${jobId}:`, error.message);
+  if (error) logger.error({ err: error, jobId }, 'failed to update job progress');
 }
 
 /**
@@ -56,7 +57,7 @@ export async function completeJob(jobId, result) {
     })
     .eq('id', jobId);
 
-  if (error) console.error(`[job-manager] Failed to complete job ${jobId}:`, error.message);
+  if (error) logger.error({ err: error, jobId }, 'failed to complete job');
 }
 
 /**
@@ -72,7 +73,7 @@ export async function failJob(jobId, reason) {
     })
     .eq('id', jobId);
 
-  if (error) console.error(`[job-manager] Failed to fail job ${jobId}:`, error.message);
+  if (error) logger.error({ err: error, jobId }, 'failed to fail job');
 }
 
 /**
@@ -98,7 +99,7 @@ export async function markJobActive(jobId) {
     })
     .eq('id', jobId);
 
-  if (error) console.error(`[job-manager] Failed to mark job active ${jobId}:`, error.message);
+  if (error) logger.error({ err: error, jobId }, 'failed to mark job active');
 }
 
 /**
@@ -127,7 +128,7 @@ export async function cancelJob(jobId) {
     })
     .eq('id', jobId);
 
-  if (error) console.error(`[job-manager] Failed to cancel job ${jobId}:`, error.message);
+  if (error) logger.error({ err: error, jobId }, 'failed to cancel job');
 
   const controller = activeJobs.get(jobId);
   if (controller) controller.abort();
@@ -164,9 +165,9 @@ export async function cleanupStaleJobs() {
     .select('id');
 
   if (error) {
-    console.error('[job-manager] Failed to cleanup stale jobs:', error.message);
+    logger.error({ err: error }, 'failed to cleanup stale jobs');
   } else if (data && data.length > 0) {
-    console.log(`[job-manager] Cleaned up ${data.length} stale active jobs`);
+    logger.info({ count: data.length }, 'cleaned up stale active jobs');
   }
 }
 
@@ -178,7 +179,7 @@ export async function cleanupOldJobs() {
   const { error } = await supabaseAdmin.from('jobs').delete().lt('created_at', cutoff);
 
   if (error) {
-    console.error('[job-manager] Failed to cleanup old jobs:', error.message);
+    logger.error({ err: error }, 'failed to cleanup old jobs');
   }
 }
 
@@ -197,8 +198,8 @@ export async function cleanupStalePendingTasks() {
     .lt('submitted_at', cutoff);
 
   if (error) {
-    console.error('[job-manager] Failed to cleanup stale pending tasks:', error.message);
+    logger.error({ err: error }, 'failed to cleanup stale pending tasks');
   } else if (count && count > 0) {
-    console.log(`[job-manager] Cleaned up ${count} orphaned Cloro pending tasks`);
+    logger.info({ count }, 'cleaned up orphaned cloro pending tasks');
   }
 }

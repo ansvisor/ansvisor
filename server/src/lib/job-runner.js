@@ -15,6 +15,7 @@ import {
 } from './job-manager.js';
 import { processTrackingJob } from '../workers/tracking-worker.js';
 import { processContentJob } from '../workers/content-worker.js';
+import logger from './logger.js';
 
 // Concurrency counters (matches previous Bull concurrency of 2 per queue)
 let activeTrackingCount = 0;
@@ -69,18 +70,19 @@ export async function runTrackingJob(jobId, io) {
     }
   } catch (err) {
     if (abortController.signal.aborted) {
-      console.log(`[job-runner] Tracking job ${jobId} was cancelled`);
+      logger.info({ jobId }, 'tracking job was cancelled');
       return;
     }
 
-    console.error(`[job-runner] Tracking job ${jobId} failed:`, err.message);
+    logger.error({ err, jobId }, 'tracking job failed');
 
     // Re-fetch to get latest attempts count
     const latest = await getJob(jobId);
     if (latest && latest.attempts < latest.max_attempts) {
       const delay = latest.attempts * 30_000; // exponential-ish backoff
-      console.log(
-        `[job-runner] Retrying tracking job ${jobId} in ${delay / 1000}s (attempt ${latest.attempts}/${latest.max_attempts})`,
+      logger.info(
+        { jobId, delayMs: delay, attempt: latest.attempts, attempts: latest.max_attempts },
+        'retrying tracking job',
       );
 
       await failJob(jobId, err.message);
@@ -135,17 +137,18 @@ export async function runContentJob(jobId, io) {
     }
   } catch (err) {
     if (abortController.signal.aborted) {
-      console.log(`[job-runner] Content job ${jobId} was cancelled`);
+      logger.info({ jobId }, 'content job was cancelled');
       return;
     }
 
-    console.error(`[job-runner] Content job ${jobId} failed:`, err.message);
+    logger.error({ err, jobId }, 'content job failed');
 
     const latest = await getJob(jobId);
     if (latest && latest.attempts < latest.max_attempts) {
       const delay = latest.attempts * 15_000;
-      console.log(
-        `[job-runner] Retrying content job ${jobId} in ${delay / 1000}s (attempt ${latest.attempts}/${latest.max_attempts})`,
+      logger.info(
+        { jobId, delayMs: delay, attempt: latest.attempts, attempts: latest.max_attempts },
+        'retrying content job',
       );
 
       await failJob(jobId, err.message);
