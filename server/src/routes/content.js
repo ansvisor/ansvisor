@@ -88,7 +88,7 @@ router.post('/generate', requireFeature('content_optimization'), async (req, res
       message: 'Content generation job enqueued',
     });
   } catch (error) {
-    console.error('[content] Enqueue error:', error.message);
+    req.log.error({ err: error }, 'content enqueue error');
     return res.status(500).json({ error: error.message });
   }
 });
@@ -116,7 +116,7 @@ router.get('/job/:jobId', async (req, res) => {
       failedReason: job.status === 'failed' ? job.failed_reason : null,
     });
   } catch (error) {
-    console.error('[content] Job status error:', error.message);
+    req.log.error({ err: error }, 'content job status error');
     return res.status(error.status || 500).json({ success: false, message: error.message });
   }
 });
@@ -156,7 +156,7 @@ router.get('/brand/:brandId', async (req, res) => {
       total: count || 0,
     });
   } catch (error) {
-    console.error('List opportunities error:', error);
+    req.log.error({ err: error }, 'list opportunities error');
     return res.status(500).json({
       error: 'Failed to list opportunities',
       details: error.message,
@@ -195,7 +195,7 @@ router.post('/bulk/status', async (req, res) => {
 
     return res.json({ updated: data?.length || 0 });
   } catch (error) {
-    console.error('Bulk status update error:', error);
+    req.log.error({ err: error }, 'bulk status update error');
     return res.status(error.status || 500).json({
       error: 'Failed to bulk update status',
       details: error.message,
@@ -329,7 +329,7 @@ router.post('/bulk/send-webhook', async (req, res) => {
 
     return res.json({ sent, failed });
   } catch (error) {
-    console.error('Bulk send webhook error:', error);
+    req.log.error({ err: error }, 'bulk send webhook error');
     return res.status(500).json({
       error: 'Failed to bulk send webhooks',
       details: error.message,
@@ -367,7 +367,7 @@ router.patch('/:id/status', async (req, res) => {
 
     return res.json(mapOpportunityRow(data));
   } catch (error) {
-    console.error('Update opportunity status error:', error);
+    req.log.error({ err: error }, 'update opportunity status error');
     return res.status(error.status || 500).json({
       error: 'Failed to update status',
       details: error.message,
@@ -479,7 +479,7 @@ router.post('/:id/send-webhook', async (req, res) => {
       opportunityStatus: 'sent',
     });
   } catch (error) {
-    console.error('Send webhook error:', error);
+    req.log.error({ err: error }, 'send webhook error');
     return res.status(error.status || 500).json({
       error: 'Failed to send webhook',
       details: error.message,
@@ -727,7 +727,7 @@ router.get('/briefs/quota', async (req, res) => {
         message: error.message,
       });
     }
-    console.error('[content] Brief quota status error:', error);
+    req.log.error({ err: error }, 'content brief quota status error');
     return res.status(500).json({ error: 'Failed to get brief quota', details: error.message });
   }
 });
@@ -785,7 +785,7 @@ router.post('/:id/brief', async (req, res) => {
     if (error.status === 404) {
       return res.status(404).json({ error: error.message });
     }
-    console.error('[content] Brief generation error:', error);
+    req.log.error({ err: error }, 'content brief generation error');
     return res.status(500).json({
       error: 'Failed to generate brief',
       details: error.message,
@@ -805,7 +805,7 @@ router.get('/:id', async (req, res) => {
 
     return res.json(mapOpportunityRow(opp));
   } catch (error) {
-    console.error('Get opportunity error:', error);
+    req.log.error({ err: error }, 'get opportunity error');
     return res.status(error.status || 500).json({
       error: 'Failed to get opportunity',
       details: error.message,

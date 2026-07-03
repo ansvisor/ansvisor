@@ -178,7 +178,7 @@ router.post('/analyze', requireFeature('prompt_volumes'), async (req, res) => {
         message: error.message,
       });
     }
-    console.error('Volume analysis error:', error);
+    req.log.error({ err: error }, 'volume analysis error');
     return res.status(error.status || 500).json({
       error: 'Failed to analyze prompt volume',
       details: error.message,
@@ -300,7 +300,7 @@ router.post('/analyze-batch', requireFeature('prompt_volumes'), async (req, res)
         message: error.message,
       });
     }
-    console.error('Batch volume analysis error:', error);
+    req.log.error({ err: error }, 'batch volume analysis error');
     return res.status(error.status || 500).json({
       error: 'Failed to analyze prompt volumes',
       details: error.message,
@@ -416,7 +416,7 @@ router.post('/refresh', requireFeature('prompt_volumes'), async (req, res) => {
         message: error.message,
       });
     }
-    console.error('Volume refresh error:', error);
+    req.log.error({ err: error }, 'volume refresh error');
     return res.status(error.status || 500).json({
       error: 'Failed to refresh volumes',
       details: error.message,
@@ -490,7 +490,7 @@ router.get('/brand/:brandId', async (req, res) => {
 
     return res.json({ volumes: enriched, quota });
   } catch (error) {
-    console.error('Fetch volumes error:', error);
+    req.log.error({ err: error }, 'fetch volumes error');
     return res.status(error.status || 500).json({
       error: 'Failed to fetch volume data',
       details: error.message,

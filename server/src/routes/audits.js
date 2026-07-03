@@ -13,6 +13,7 @@
 
 import { Router } from 'express';
 import supabaseAdmin from '../config/supabase.js';
+import logger from '../lib/logger.js';
 import { assertBrandAccess } from '../lib/access.js';
 import {
   requireFeature,
@@ -141,7 +142,7 @@ async function runAuditJob(auditId, brandId, url, orgId) {
         .insert({ organization_id: orgId, audit_id: auditId });
     }
   } catch (err) {
-    console.error('[audit] run failed:', err.message);
+    logger.error({ err, auditId, brandId }, 'audit run failed');
     await supabaseAdmin
       .from('site_audits')
       .update({ status: 'failed', error: err.message, completed_at: new Date().toISOString() })
@@ -169,7 +170,7 @@ export async function createAndRunAudit(brandId, url, orgId) {
 
   // Fire-and-forget — the work continues after the response is sent.
   runAuditJob(created.id, brandId, url, orgId).catch((err) =>
-    console.error('[audit] background job crashed:', err.message),
+    logger.error({ err, auditId: created.id, brandId }, 'audit background job crashed'),
   );
 
   return assembleAudit(created, []);
@@ -218,7 +219,7 @@ router.post('/', requireFeature('content_optimization'), async (req, res) => {
     if (err.status) {
       return res.status(err.status).json({ success: false, message: err.message });
     }
-    console.error('[audit] start failed:', err.message);
+    req.log.error({ err }, 'audit start failed');
     return res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -236,7 +237,7 @@ router.get('/quota', async (req, res) => {
         .status(err.statusCode)
         .json({ success: false, error: 'quota_exceeded', message: err.message });
     }
-    console.error('[audit] quota failed:', err.message);
+    req.log.error({ err }, 'audit quota failed');
     return res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -303,7 +304,7 @@ router.get('/trend', async (req, res) => {
     if (err.status) {
       return res.status(err.status).json({ success: false, message: err.message });
     }
-    console.error('[audit] trend failed:', err.message);
+    req.log.error({ err }, 'audit trend failed');
     return res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -335,7 +336,7 @@ router.get('/:id', async (req, res) => {
     if (err.status) {
       return res.status(err.status).json({ success: false, message: err.message });
     }
-    console.error('[audit] fetch failed:', err.message);
+    req.log.error({ err }, 'audit fetch failed');
     return res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -364,7 +365,7 @@ router.get('/', async (req, res) => {
     if (err.status) {
       return res.status(err.status).json({ success: false, message: err.message });
     }
-    console.error('[audit] list failed:', err.message);
+    req.log.error({ err }, 'audit list failed');
     return res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -394,7 +395,7 @@ router.delete('/:id', async (req, res) => {
     if (err.status) {
       return res.status(err.status).json({ success: false, message: err.message });
     }
-    console.error('[audit] delete failed:', err.message);
+    req.log.error({ err }, 'audit delete failed');
     return res.status(500).json({ success: false, message: err.message });
   }
 });

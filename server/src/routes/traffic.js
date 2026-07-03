@@ -133,7 +133,7 @@ router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res)
 
     return res.status(204).end();
   } catch (error) {
-    console.error('[traffic] Track error:', error.message);
+    req.log.error({ err: error }, 'traffic track error');
     return res.status(500).json({ ok: false });
   }
 });

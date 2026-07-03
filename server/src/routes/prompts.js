@@ -273,7 +273,7 @@ router.post(
       return res.json({ suggestions: inserted });
     } catch (error) {
       const status = error.status || 500;
-      console.error('[prompt-suggestions] refresh error:', error.message);
+      req.log.error({ err: error }, 'prompt-suggestions refresh error');
       return res.status(status).json({ error: error.message || 'Failed to generate suggestions' });
     }
   },
@@ -297,7 +297,7 @@ router.get('/suggestions/:brandId', async (req, res) => {
     });
   } catch (error) {
     const status = error.status || 500;
-    console.error('[prompt-suggestions] list error:', error.message);
+    req.log.error({ err: error }, 'prompt-suggestions list error');
     return res.status(status).json({ error: error.message || 'Failed to load suggestions' });
   }
 });
@@ -320,7 +320,7 @@ router.post('/suggestions/:id/dismiss', async (req, res) => {
     return res.json({ success: true });
   } catch (error) {
     const status = error.status || 500;
-    console.error('[prompt-suggestions] dismiss error:', error.message);
+    req.log.error({ err: error }, 'prompt-suggestions dismiss error');
     return res.status(status).json({ error: error.message || 'Failed to dismiss' });
   }
 });
@@ -351,7 +351,7 @@ router.post('/suggestions/:id/accept', async (req, res) => {
     return res.json({ success: true });
   } catch (error) {
     const status = error.status || 500;
-    console.error('[prompt-suggestions] accept error:', error.message);
+    req.log.error({ err: error }, 'prompt-suggestions accept error');
     return res.status(status).json({ error: error.message || 'Failed to accept' });
   }
 });
@@ -450,7 +450,7 @@ Based on this brand's industry and context, generate 10 short, generic search pr
 
     return res.json({ prompts: object.prompts });
   } catch (error) {
-    console.error('Prompt suggestion error:', error);
+    req.log.error({ err: error }, 'prompt suggestion error');
     return res.status(500).json({
       error: 'Failed to generate prompt suggestions',
       details: error.message,
@@ -512,7 +512,7 @@ Return the exact topic names as provided above.`,
 
     return res.json({ topicPrompts: object.topicPrompts });
   } catch (error) {
-    console.error('Topic prompt generation error:', error);
+    req.log.error({ err: error }, 'topic prompt generation error');
     return res.status(500).json({
       error: 'Failed to generate prompts from topics',
       details: error.message,

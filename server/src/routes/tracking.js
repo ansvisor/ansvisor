@@ -73,7 +73,7 @@ router.post('/check', async (req, res) => {
     if (error instanceof TrackingQuotaError) {
       return res.status(error.statusCode).json(error.body);
     }
-    console.error('[tracking] Check error:', error.message);
+    req.log.error({ err: error }, 'tracking check error');
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -205,7 +205,7 @@ router.post('/analyze-new', async (req, res) => {
     if (error instanceof TrackingQuotaError) {
       return res.status(error.statusCode).json(error.body);
     }
-    console.error('[tracking] analyze-new error:', error.message);
+    req.log.error({ err: error }, 'tracking analyze-new error');
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -252,7 +252,7 @@ router.get('/unanalyzed/:brandId', async (req, res) => {
 
     return res.json({ success: true, count: unanalyzed.length, prompts: unanalyzed });
   } catch (error) {
-    console.error('[tracking] unanalyzed error:', error.message);
+    req.log.error({ err: error }, 'tracking unanalyzed error');
     return res.status(error.status || 500).json({ success: false, message: error.message });
   }
 });
@@ -304,7 +304,7 @@ router.get('/results/:brandId', async (req, res) => {
 
     return res.json({ success: true, results: data, total: count });
   } catch (error) {
-    console.error('[tracking] Results error:', error.message);
+    req.log.error({ err: error }, 'tracking results error');
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -328,7 +328,7 @@ router.get('/status/:brandId', async (req, res) => {
 
     return res.json({ success: true, platforms: platforms || [] });
   } catch (error) {
-    console.error('[tracking] Status error:', error.message);
+    req.log.error({ err: error }, 'tracking status error');
     return res.status(error.status || 500).json({ success: false, message: error.message });
   }
 });
@@ -354,7 +354,7 @@ router.get('/job/:jobId', async (req, res) => {
       failedReason: job.status === 'failed' ? job.failed_reason : null,
     });
   } catch (error) {
-    console.error('[tracking] Job status error:', error.message);
+    req.log.error({ err: error }, 'tracking job status error');
     return res.status(error.status || 500).json({ success: false, message: error.message });
   }
 });
@@ -372,7 +372,7 @@ router.delete('/job/:jobId', async (req, res) => {
     await cancelJob(req.params.jobId);
     return res.json({ success: true, message: 'Job cancelled' });
   } catch (error) {
-    console.error('[tracking] Job cancel error:', error.message);
+    req.log.error({ err: error }, 'tracking job cancel error');
     return res.status(error.status || 500).json({ success: false, message: error.message });
   }
 });

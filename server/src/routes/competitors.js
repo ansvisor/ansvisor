@@ -60,7 +60,7 @@ Find REAL companies that compete directly with "${brandName}" — selling simila
 
     return res.json({ competitors: object.competitors });
   } catch (error) {
-    console.error('Competitor suggestion error:', error);
+    req.log.error({ err: error }, 'competitor suggestion error');
     return res.status(500).json({
       error: 'Failed to generate competitor suggestions',
       details: error.message,

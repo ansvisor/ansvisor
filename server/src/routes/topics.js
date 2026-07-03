@@ -70,7 +70,7 @@ IMPORTANT: Generate all topic names in ${langName}.`;
 
     return res.json({ topics: object.topics });
   } catch (error) {
-    console.error('Topic suggestion error:', error);
+    req.log.error({ err: error }, 'topic suggestion error');
     return res.status(500).json({
       error: 'Failed to generate topic suggestions',
       details: error.message,
