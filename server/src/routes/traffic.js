@@ -4,6 +4,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import supabaseAdmin from '../config/supabase.js';
 import { trafficLimiter } from '../middleware/rate-limiter.js';
+import logger from '../lib/logger.js';
 
 const router = Router();
 
@@ -133,7 +134,10 @@ router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res)
 
     return res.status(204).end();
   } catch (error) {
-    req.log.error({ err: error }, 'traffic track error');
+    // Module logger, not req.log: trafficRoutes is mounted before
+    // requestIdMiddleware in server.js (it needs its own open CORS), so
+    // req.log is undefined on this public beacon path.
+    logger.error({ err: error }, 'traffic track error');
     return res.status(500).json({ ok: false });
   }
 });
