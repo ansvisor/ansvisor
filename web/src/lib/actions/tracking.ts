@@ -2,8 +2,16 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { expandDateToEndOfDay } from '@/lib/dates';
-import type { PromptResult, AIPlatform, Sentiment, Citation, CompetitorMention } from '@/types';
+import type {
+  PromptResult,
+  AIPlatform,
+  Sentiment,
+  Citation,
+  CompetitorMention,
+  Topic,
+} from '@/types';
 import { API_BASE_URL } from '@/config/api';
+import { getTopicById } from './topic';
 
 /** Round to one decimal place (keeps sub-1 averages visible instead of flooring to 0). */
 function roundTo1(n: number): number {
@@ -1993,4 +2001,40 @@ function formatTotalMagnitude(
   if (deltaPct === null) return core;
   const sign = deltaPct < 0 ? '−' : '+';
   return `${core} (${sign}${Math.abs(deltaPct)}%)`;
+}
+
+// ─── Topic detail bundle (#312) ───────────────────────────────────────────
+
+export interface TopicDetailData {
+  topic: Topic | null;
+  summary: InsightsSummary;
+  trend: VisibilityTrendPoint[];
+  sov: ShareOfVoiceData;
+  competitors: CompetitorComparisonData;
+  results: PromptResultWithText[];
+}
+
+/**
+ * One server action for the whole topic detail page (#312).
+ *
+ * The page previously fired six separate server-action calls from the client.
+ * Next.js runs server actions **sequentially** (each is its own queued POST),
+ * so that cost was roughly the sum of all six, not the slowest. Collapsing them
+ * into one action means a single round trip whose body runs the work in a real
+ * server-side `Promise.all` (genuinely parallel). The topic is fetched by id
+ * instead of pulling the whole topics list just to read one name.
+ *
+ * Output is identical to the old per-call results — this is a perf refactor.
+ */
+export async function getTopicDetail(brandId: string, topicId: string): Promise<TopicDetailData> {
+  const [topic, summary, trend, sov, competitors, results] = await Promise.all([
+    getTopicById(brandId, topicId),
+    getInsightsSummary(brandId, { topicId }),
+    getVisibilityTrend(brandId, { topicId }),
+    getShareOfVoiceData(brandId, { topicId }),
+    getCompetitorComparison(brandId, { topicId }),
+    getPromptResults(brandId, { topicId, limit: 50 }),
+  ]);
+
+  return { topic, summary, trend, sov, competitors, results: results.results };
 }

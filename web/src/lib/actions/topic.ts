@@ -45,6 +45,25 @@ export async function getTopics(brandId: string): Promise<Topic[]> {
   return (data ?? []).map((r) => mapTopicRow(r as Record<string, unknown>));
 }
 
+/**
+ * Fetch a single topic by id, scoped to the brand. Returns null when the topic
+ * doesn't exist (or isn't this brand's) — the detail page renders "not found".
+ * Cheaper than getTopics(brandId) + client-side .find() just to read one name.
+ */
+export async function getTopicById(brandId: string, topicId: string): Promise<Topic | null> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from('topics')
+    .select('*')
+    .eq('brand_id', brandId)
+    .eq('id', topicId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data ? mapTopicRow(data as Record<string, unknown>) : null;
+}
+
 export async function createTopic(brandId: string, name: string): Promise<Topic> {
   const supabase = await createClient();
 

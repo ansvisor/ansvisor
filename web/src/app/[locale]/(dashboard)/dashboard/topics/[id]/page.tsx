@@ -4,18 +4,13 @@ import { useCallback, useEffect, useRef, useState, use } from 'react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
-  getInsightsSummary,
-  getVisibilityTrend,
-  getShareOfVoiceData,
-  getCompetitorComparison,
-  getPromptResults,
+  getTopicDetail,
   type InsightsSummary,
   type VisibilityTrendPoint,
   type ShareOfVoiceData,
   type CompetitorComparisonData,
   type PromptResultWithText,
 } from '@/lib/actions/tracking';
-import { getTopics } from '@/lib/actions/topic';
 import type { Topic } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -161,20 +156,16 @@ export default function TopicDetailPage({ params }: { params: Promise<{ id: stri
     if (!activeBrandId || !topicId) return;
     setLoading(true);
     try {
-      const [topics, summ, tr, sv, cmp, res] = await Promise.all([
-        getTopics(activeBrandId),
-        getInsightsSummary(activeBrandId, { topicId }),
-        getVisibilityTrend(activeBrandId, { topicId }),
-        getShareOfVoiceData(activeBrandId, { topicId }),
-        getCompetitorComparison(activeBrandId, { topicId }),
-        getPromptResults(activeBrandId, { topicId, limit: 50 }),
-      ]);
-      setTopic(topics.find((t) => t.id === topicId) ?? null);
-      setSummary(summ);
-      setTrend(tr);
-      setSov(sv);
-      setCompetitors(cmp);
-      setResults(res.results);
+      // One server action (#312): Next.js runs server actions sequentially, so
+      // the old six-call Promise.all paid the sum of all six. This is one round
+      // trip whose body runs the work in a real server-side Promise.all.
+      const detail = await getTopicDetail(activeBrandId, topicId);
+      setTopic(detail.topic);
+      setSummary(detail.summary);
+      setTrend(detail.trend);
+      setSov(detail.sov);
+      setCompetitors(detail.competitors);
+      setResults(detail.results);
     } catch (err) {
       console.error('Failed to load topic detail', err);
     } finally {
