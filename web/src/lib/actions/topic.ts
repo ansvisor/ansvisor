@@ -46,18 +46,21 @@ export async function getTopics(brandId: string): Promise<Topic[]> {
 }
 
 /**
- * Fetch a single topic by id, scoped to the brand. Returns null when the topic
- * doesn't exist (or isn't this brand's) — the detail page renders "not found".
- * Cheaper than getTopics(brandId) + client-side .find() just to read one name.
+ * Fetch a single active topic by id, scoped to the brand. Returns null when the
+ * topic doesn't exist, isn't this brand's, or is inactive — the detail page
+ * renders "not found". The `is_active = true` filter mirrors getTopics(), which
+ * the page used before (via .find() over the active list), so inactive topics
+ * stay hidden. Cheaper than fetching the whole list just to read one name.
  */
 export async function getTopicById(brandId: string, topicId: string): Promise<Topic | null> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from('topics')
-    .select('*')
+    .select('id, brand_id, name, is_active, created_at')
     .eq('brand_id', brandId)
     .eq('id', topicId)
+    .eq('is_active', true)
     .maybeSingle();
 
   if (error) throw new Error(error.message);

@@ -11,7 +11,7 @@ import type {
   Topic,
 } from '@/types';
 import { API_BASE_URL } from '@/config/api';
-import { getTopicById } from './topic';
+import { getTopicById } from '@/lib/actions/topic';
 
 /** Round to one decimal place (keeps sub-1 averages visible instead of flooring to 0). */
 function roundTo1(n: number): number {
