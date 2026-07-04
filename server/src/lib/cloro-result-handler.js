@@ -65,7 +65,7 @@ export async function handleScraperResult({
       competitor_mentions: metrics.competitorMentions,
       shopping_cards: aiResponse.shopping_cards ?? [],
       inline_products: aiResponse.inline_products ?? [],
-      search_queries: aiResponse.search_queries ?? [],
+      search_queries: Array.isArray(aiResponse.search_queries) ? aiResponse.search_queries : [],
     })
     .select('id')
     .single();

@@ -212,6 +212,46 @@ describe('cloro-scraper – parseScraperResponse', () => {
       ]);
     });
 
+    it('trims surrounding whitespace so a sub-query has one canonical form', () => {
+      const copilot = parseScraperResponse(
+        { markdown: 't', sources: [], searchQueries: ['  spaced query  '] },
+        'copilot-web',
+      );
+      expect(copilot.search_queries).toEqual([
+        { query: 'spaced query', source_platform: 'copilot-web' },
+      ]);
+
+      const perplexity = parseScraperResponse(
+        {
+          markdown: 't',
+          sources: [],
+          search_model_queries: [{ query: '  spaced  ', engine: '  web  ' }],
+        },
+        'perplexity-web',
+      );
+      expect(perplexity.search_queries).toEqual([
+        { query: 'spaced', engine: 'web', source_platform: 'perplexity-web' },
+      ]);
+    });
+
+    it('omits a non-string / empty Perplexity engine label', () => {
+      const parsed = parseScraperResponse(
+        {
+          markdown: 't',
+          sources: [],
+          search_model_queries: [
+            { query: 'no engine', engine: 42 },
+            { query: 'blank engine', engine: '   ' },
+          ],
+        },
+        'perplexity-web',
+      );
+      expect(parsed.search_queries).toEqual([
+        { query: 'no engine', source_platform: 'perplexity-web' },
+        { query: 'blank engine', source_platform: 'perplexity-web' },
+      ]);
+    });
+
     it('defaults to an empty array when the engine returns none (ChatGPT in practice)', () => {
       expect(
         parseScraperResponse({ markdown: 't', sources: [], searchQueries: [] }, 'chatgpt-web')

@@ -95,12 +95,17 @@ function buildRequestBody(promptText, scraperId, region) {
  * synthesize sub-queries.
  */
 function normalizeSearchQueries(result, scraperId) {
+  // Trim on write so the same sub-query never fragments into whitespace
+  // variants — the #333 aggregation groups by query string. `engine` is only
+  // kept when it's a non-empty string (never a stray non-string value).
   if (Array.isArray(result.search_model_queries)) {
     return result.search_model_queries
       .filter((q) => typeof q?.query === 'string' && q.query.trim() !== '')
       .map((q) => ({
-        query: q.query,
-        ...(q.engine ? { engine: q.engine } : {}),
+        query: q.query.trim(),
+        ...(typeof q.engine === 'string' && q.engine.trim() !== ''
+          ? { engine: q.engine.trim() }
+          : {}),
         source_platform: scraperId,
       }));
   }
@@ -108,7 +113,7 @@ function normalizeSearchQueries(result, scraperId) {
   if (Array.isArray(result.searchQueries)) {
     return result.searchQueries
       .filter((q) => typeof q === 'string' && q.trim() !== '')
-      .map((q) => ({ query: q, source_platform: scraperId }));
+      .map((q) => ({ query: q.trim(), source_platform: scraperId }));
   }
 
   return [];
