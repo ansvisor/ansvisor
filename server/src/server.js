@@ -167,7 +167,7 @@ async function runDailyTracking() {
     triggered++;
   }
 
-  console.log(`[cron] Daily tracking: triggered=${triggered} total_brands=${brands.length}`);
+  logger.info({ triggered, total: brands.length }, 'daily tracking triggered');
   return { triggered, total: brands.length };
 }
 
@@ -182,7 +182,7 @@ app.post('/api/internal/daily-tracking', async (req, res) => {
     const result = await runDailyTracking();
     return res.json({ success: true, ...result });
   } catch (err) {
-    console.error('[cron] Daily tracking error:', err.message);
+    req.log.error({ err }, 'daily tracking error');
     return res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -224,7 +224,7 @@ app.post('/api/internal/content/:id/brief', async (req, res) => {
         .status(err.statusCode)
         .json({ success: false, error: 'quota_exceeded', message: err.message });
     }
-    console.error('[internal] content brief error:', err.message);
+    req.log.error({ err }, 'internal content brief error');
     return res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -259,7 +259,7 @@ app.post('/api/internal/site-audits', async (req, res) => {
         .status(err.statusCode)
         .json({ success: false, error: 'quota_exceeded', message: err.message });
     }
-    console.error('[internal] site audit error:', err.message);
+    req.log.error({ err }, 'internal site audit error');
     return res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -291,7 +291,7 @@ app.get('/api/internal/site-audit-quota', async (req, res) => {
         .status(err.statusCode)
         .json({ success: false, error: 'quota_exceeded', message: err.message });
     }
-    console.error('[internal] site audit quota error:', err.message);
+    req.log.error({ err }, 'internal site audit quota error');
     return res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -319,7 +319,7 @@ app.post('/api/internal/trigger-tracking', async (req, res) => {
 
     return res.json({ success: true, jobId: job.id });
   } catch (err) {
-    console.error('[internal] trigger-tracking error:', err.message);
+    req.log.error({ err }, 'internal trigger-tracking error');
     return res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -339,8 +339,13 @@ app.post('/cloro/callback', async (req, res) => {
       secret: webhookSecret,
     });
     if (!verdict.ok) {
-      console.warn(
-        `[cloro/callback] Rejected delivery: ${verdict.reason} | webhook_id: ${req.headers['x-cloro-webhook-id'] || 'n/a'} | ip: ${req.ip}`,
+      req.log.warn(
+        {
+          reason: verdict.reason,
+          webhookId: req.headers['x-cloro-webhook-id'] || null,
+          ip: req.ip,
+        },
+        'cloro callback rejected delivery',
       );
       return res.status(verdict.status).json({ error: verdict.reason });
     }
@@ -351,7 +356,7 @@ app.post('/cloro/callback', async (req, res) => {
   try {
     payload = Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString('utf8') || '{}') : req.body;
   } catch {
-    console.warn(`[cloro/callback] Rejected delivery: malformed JSON body | ip: ${req.ip}`);
+    req.log.warn({ ip: req.ip }, 'cloro callback rejected: malformed JSON body');
     return res.status(400).json({ error: 'malformed JSON body' });
   }
 
@@ -364,7 +369,7 @@ app.post('/cloro/callback', async (req, res) => {
     const status = task?.status;
 
     if (!taskId) {
-      console.warn('[cloro/callback] Missing task.id in payload');
+      req.log.warn('cloro callback missing task.id in payload');
       return;
     }
 
@@ -375,23 +380,23 @@ app.post('/cloro/callback', async (req, res) => {
       .maybeSingle();
 
     if (!pending) {
-      console.log(`[cloro/callback] No pending task for ${taskId} (already processed?)`);
+      req.log.info({ taskId }, 'cloro callback: no pending task (already processed?)');
       return;
     }
 
     if (status === 'FAILED') {
-      console.error(`[cloro/callback] Task ${taskId} (${pending.scraper_id}) FAILED`);
+      req.log.error({ taskId, scraperId: pending.scraper_id }, 'cloro callback: task failed');
       await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
       return;
     }
 
     if (status !== 'COMPLETED') {
-      console.log(`[cloro/callback] Task ${taskId} status=${status}, ignoring`);
+      req.log.info({ taskId, status }, 'cloro callback: task status ignored');
       return;
     }
 
     if (!response) {
-      console.error(`[cloro/callback] Task ${taskId} COMPLETED but missing response`);
+      req.log.error({ taskId }, 'cloro callback: task completed but missing response');
       await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
       return;
     }
@@ -404,8 +409,9 @@ app.post('/cloro/callback', async (req, res) => {
     ]);
 
     if (!brand) {
-      console.error(
-        `[cloro/callback] Brand ${pending.brand_id} for task ${taskId} not found — dropping`,
+      req.log.error(
+        { taskId, brandId: pending.brand_id },
+        'cloro callback: brand not found — dropping',
       );
       await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
       return;
@@ -435,9 +441,12 @@ app.post('/cloro/callback', async (req, res) => {
 
     await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
 
-    console.log(`[cloro/callback] Task ${taskId} (${pending.scraper_id}) processed and inserted`);
+    req.log.info(
+      { taskId, scraperId: pending.scraper_id },
+      'cloro callback: task processed and inserted',
+    );
   } catch (err) {
-    console.error('[cloro/callback] Error processing webhook:', err?.message || err);
+    req.log.error({ err }, 'cloro callback: error processing webhook');
   }
 });
 
@@ -456,7 +465,9 @@ app.get('/', (req, res) => {
 
 // --- Global error handler ---
 app.use((err, req, res, _next) => {
-  console.error('Unhandled error:', err.message);
+  // Module logger, not req.log: an error thrown before requestIdMiddleware
+  // (e.g. in the public traffic routes or body parser) has no req.log.
+  logger.error({ err }, 'unhandled error');
   res.status(err.status || 500).json({
     success: false,
     message: process.env.NODE_ENV === 'development' ? err.message : 'Internal Server Error',
@@ -467,7 +478,7 @@ app.use((err, req, res, _next) => {
 const PORT = process.env.PORT || 80;
 
 server.listen(PORT, async () => {
-  console.log(`AEO Server running on port ${PORT} [${process.env.NODE_ENV}]`);
+  logger.info({ port: PORT, env: process.env.NODE_ENV }, 'server running');
 
   await cleanupStaleJobs();
   await cleanupStalePendingTasks();
@@ -475,15 +486,15 @@ server.listen(PORT, async () => {
   if (!isCloud()) {
     const schedule = process.env.DAILY_CRON_SCHEDULE || '0 6 * * *';
     cron.schedule(schedule, async () => {
-      console.log('[cron] Self-hosted daily tracking triggered');
+      logger.info('self-hosted daily tracking triggered');
       try {
         await runDailyTracking();
         await cleanupOldJobs();
       } catch (err) {
-        console.error('[cron] Self-hosted daily tracking failed:', err.message);
+        logger.error({ err }, 'self-hosted daily tracking failed');
       }
     });
-    console.log(`[cron] Self-hosted daily cron active (schedule: ${schedule})`);
+    logger.info({ schedule }, 'self-hosted daily cron active');
   }
 });
 

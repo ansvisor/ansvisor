@@ -1,4 +1,5 @@
 import supabaseAdmin from '../config/supabase.js';
+import logger from '../lib/logger.js';
 
 class Middleware {
   async decodeTokenForSocket(socket, next) {
@@ -15,14 +16,14 @@ class Middleware {
       } = await supabaseAdmin.auth.getUser(token);
 
       if (error || !user) {
-        console.log('Unauthorized Socket Request');
+        logger.warn('unauthorized socket request');
         return next(new Error('Unauthorized'));
       }
 
       socket.user = user;
       return next();
     } catch (e) {
-      console.log('Internal Error (Socket Middleware):', e.message);
+      logger.error({ err: e }, 'socket middleware internal error');
       return next(new Error('Internal Error'));
     }
   }
@@ -81,7 +82,7 @@ class Middleware {
 
       return res.status(403).json({ message: 'Forbidden' });
     } catch (error) {
-      console.log('Domain check error:', error.message);
+      logger.error({ err: error }, 'domain check error');
       return res.status(500).json({ message: 'Internal Error' });
     }
   }
@@ -116,7 +117,7 @@ class Middleware {
 
       return next(new Error('Forbidden Socket'));
     } catch (error) {
-      console.log('Socket domain check error:', error.message);
+      logger.error({ err: error }, 'socket domain check error');
       return next(new Error('Internal Error Socket'));
     }
   }
