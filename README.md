@@ -1,6 +1,6 @@
 <div align="center">
+<img width="1536" height="1024" alt="Optumus Analytics Landing" src="https://github.com/user-attachments/assets/c6136c30-ac27-457e-8741-635a3bd9ed69" />
 
-[![Optumus Analytics Banner](https://via.placeholder.com/900x200.png?text=Optumus+Analytics)](https://optumusanalytics.com)
 
 [![🚀 Try the Cloud — optimusanalytics.com](https://img.shields.io/badge/🚀_Try_the_Cloud-optumusanalytics.com-6366f1?style=for-the-badge&logoColor=white&logo=vercel)](https://optumusanalytics.com)
 [![📚 Docs](https://img.shields.io/badge/📚_Docs-docs.optumusanalytics.com-10b981?style=for-the-badge&logoColor=white&logo=readthedocs)](https://docs.optumusanalytics.com)
