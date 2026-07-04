@@ -76,9 +76,42 @@ function buildRequestBody(promptText, scraperId, region) {
       html: false,
       markdown: true,
       rawResponse: false,
-      searchQueries: false,
+      // Opt in to the observed query fan-out (#332). Copilot/Perplexity
+      // populate it; ChatGPT surfaces the key but returns it empty in
+      // practice — enabling it is free and harmless.
+      searchQueries: true,
     },
   };
+}
+
+/**
+ * Normalize the observed query fan-out from a raw Cloro response into a rich,
+ * engine-labelled array: `[{ query, engine?, source_platform }]` (#332).
+ *
+ * Two provider shapes:
+ *  - Perplexity → `search_model_queries: [{ query, engine, limit }]` (keep `engine`)
+ *  - Copilot / ChatGPT / Grok / Gemini → `searchQueries: string[]`
+ * Anything else (or missing) → `[]`. This is OBSERVED data only — we never
+ * synthesize sub-queries.
+ */
+function normalizeSearchQueries(result, scraperId) {
+  if (Array.isArray(result.search_model_queries)) {
+    return result.search_model_queries
+      .filter((q) => typeof q?.query === 'string' && q.query.trim() !== '')
+      .map((q) => ({
+        query: q.query,
+        ...(q.engine ? { engine: q.engine } : {}),
+        source_platform: scraperId,
+      }));
+  }
+
+  if (Array.isArray(result.searchQueries)) {
+    return result.searchQueries
+      .filter((q) => typeof q === 'string' && q.trim() !== '')
+      .map((q) => ({ query: q, source_platform: scraperId }));
+  }
+
+  return [];
 }
 
 export function parseScraperResponse(result, scraperId) {
@@ -162,6 +195,8 @@ export function parseScraperResponse(result, scraperId) {
     // .shopping_cards column raw, in their own provider shape — downstream
     // branches on `platform` to interpret. Other providers have neither key.
     shopping_cards: result.shopping_cards ?? result.shoppingCards ?? [],
+    // Observed query fan-out (#332) — rich, engine-labelled; [] when absent.
+    search_queries: normalizeSearchQueries(result, scraperId),
   };
 }
 
