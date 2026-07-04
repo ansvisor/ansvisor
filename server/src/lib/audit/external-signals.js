@@ -32,7 +32,7 @@ export async function evaluateBrandEntity(brandName) {
   try {
     const res = await fetch(`${WIKIDATA_API}?${params.toString()}`, {
       signal: controller.signal,
-      headers: { 'user-agent': 'AnsvisorSiteAudit/1.0 (+https://ansvisor.com)' },
+      headers: { 'user-agent': 'OptumusSiteAudit/1.0 (+https://optumusanalytics.com)' },
     });
     if (!res.ok) {
       return { key, status: 'na', score: null, evidence: { error: `wikidata ${res.status}` } };

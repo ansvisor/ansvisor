@@ -1582,7 +1582,7 @@ export default function OnboardingPage() {
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
           Need more?{' '}
-          <a href="mailto:sales@ansvisor.com" className="underline hover:text-foreground">
+          <a href="mailto:sales@optumusanalytics.com" className="underline hover:text-foreground">
             Contact sales
           </a>{' '}
           for Enterprise pricing.

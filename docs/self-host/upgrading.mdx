@@ -1,12 +1,12 @@
 ---
 title: "Upgrading"
-description: "How to safely upgrade your self-hosted Ansvisor instance."
+description: "How to safely upgrade your self-hosted Optumus Analytics instance."
 ---
 
 ## Standard upgrade
 
 ```bash
-cd ansvisor
+cd optimus-analytics
 git pull
 docker compose up -d --build
 ```
@@ -22,7 +22,7 @@ That's it for most releases. Behind the scenes:
 If the release introduces new SQL migrations:
 
 ```bash
-cd ansvisor
+cd optimus-analytics
 git pull
 cd supabase
 supabase db push       # apply new migrations
@@ -34,7 +34,7 @@ Always run migrations **before** restarting containers — new code may expect n
 
 ## Major version upgrades
 
-When jumping a major version (e.g. v1 → v2), check the release notes on [GitHub Releases](https://github.com/ansvisor/ansvisor/releases) for breaking changes. Common scenarios:
+When jumping a major version (e.g. v1 → v2), check the release notes on [GitHub Releases](https://github.com/optumus/optumus-analytics/releases) for breaking changes. Common scenarios:
 
 - Renamed env variables — update `web/.env` and `server/.env`
 - Migration that requires manual data backfill — release notes will spell it out
@@ -45,7 +45,7 @@ When jumping a major version (e.g. v1 → v2), check the release notes on [GitHu
 If an upgrade breaks something:
 
 ```bash
-cd ansvisor
+cd optimus-analytics
 git checkout v0.1.0    # previous tag
 docker compose up -d --build
 ```

@@ -1,41 +1,40 @@
 <div align="center">
 
-[![Ansvisor Banner](https://cdn.prod.website-files.com/69e606308fb6f96fb911b251/6a2a92ca0bf3f52b9dbf73d5_811d97a16c5c5f3b7bf3b4875078037e_1.png)](https://www.ansvisor.com)
+[![Optumus Analytics Banner](https://via.placeholder.com/900x200.png?text=Optumus+Analytics)](https://optumusanalytics.com)
 
-[![🚀 Try the Cloud — ansvisor.com](https://img.shields.io/badge/🚀_Try_the_Cloud-ansvisor.com-6366f1?style=for-the-badge&logoColor=white&logo=vercel)](https://www.ansvisor.com)
-[![📚 Docs](https://img.shields.io/badge/📚_Docs-docs.ansvisor.com-10b981?style=for-the-badge&logoColor=white&logo=readthedocs)](https://docs.ansvisor.com)
+[![🚀 Try the Cloud — optimusanalytics.com](https://img.shields.io/badge/🚀_Try_the_Cloud-optumusanalytics.com-6366f1?style=for-the-badge&logoColor=white&logo=vercel)](https://optumusanalytics.com)
+[![📚 Docs](https://img.shields.io/badge/📚_Docs-docs.optumusanalytics.com-10b981?style=for-the-badge&logoColor=white&logo=readthedocs)](https://docs.optumusanalytics.com)
 [![🎬 Product Tour](https://img.shields.io/badge/🎬_Product_Tour-Watch_the_demo-f59e0b?style=for-the-badge&logoColor=white)](https://app.supademo.com/demo/cmq2b1p5k0rk9qm6ugicrn655)
 
-[![Star on GitHub](https://img.shields.io/github/stars/ansvisor/ansvisor?style=for-the-badge&logo=github&color=gold)](https://github.com/ansvisor/ansvisor)
+[![Star on GitHub](https://img.shields.io/badge/Star-Optumus%20Analytics-6366f1?style=for-the-badge&logo=github&color=gold)](https://github.com/optumus/optumus-analytics)
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![Claude Code](https://img.shields.io/badge/Built%20with-Claude%20Code-green?style=for-the-badge&logo=anthropic)](https://claude.com/claude-code)
 
 </div>
 
-# Ansvisor - Open-source AI Visibility Platform for AI Search
+# Optumus Analytics — AI Search & LLM Visibility
 
 The search landscape is transforming fast. Buyers are moving from traditional search engines to AI platforms like ChatGPT, Claude, Gemini, Google AI Mode, etc.
 
-At Ansvisor, we are building the open future of AI Visibility and AI Search Optimization (AEO/GEO) to help brands claim their spot in AI-generated answers.
+At Optumus Analytics, we are building the open future of AI Visibility and AI Search Optimization (AEO/GEO) to help brands claim their spot in AI-generated answers.
 
-What excites us most about Ansvisor is our commitment to a build-in-public and transparent approach.
+What excites us most about Optumus Analytics is our commitment to a build-in-public and transparent approach.
 
 We believe the future of AI visibility shouldn't be a black box. This field really needs an open platform.
 
 We're incredibly excited to shape what's next alongside our amazing community.
 
-> ⭐ **If you believe AI Visibility should be open and community-driven, [star the repo](https://github.com/ansvisor/ansvisor/stargazers) — it's how the next team discovers Ansvisor.**
+> ⭐ **If you believe AI Visibility should be open and community-driven, [star the repo](https://github.com/optumus/optumus-analytics/stargazers) — it's how the next team discovers Optumus Analytics.**
 
-### Why Ansvisor?
+### Why Optumus Analytics?
 
-> AI search is replacing the traditional click. When ChatGPT recommends a product, no Google ranking saves you. Ansvisor measures what classical SEO can't see — how often AI engines name your brand, which competitors get cited instead, and which prompts move the needle. Self-host it for free, or use the managed cloud at [ansvisor.com](https://www.ansvisor.com).
+> AI search is replacing the traditional click. When ChatGPT recommends a product, no Google ranking saves you. Optumus Analytics measures what classical SEO can't see — how often AI engines name your brand, which competitors get cited instead, and which prompts move the needle. Self-host it for free, or use the managed cloud at [optumusanalytics.com](https://www.optumusanalytics.com).
 
 ## Resources
 
-- 📚 [Explore Documentation](https://docs.ansvisor.com/)
+- 📚 [Explore Documentation](https://docs.optumusanalytics.com/)
 - 🎯 [Take an Interactive Product Tour](https://app.supademo.com/demo/cmq2b1p5k0rk9qm6ugicrn655?utm_source=link)
-- 📖 [AI Visibility Glossary](https://www.ansvisor.com/ai-visibility-glossary)
-- 🔍 [Compare Ansvisor vs Alternatives](https://www.ansvisor.com/compare)
+- 📖 [AI Visibility Glossary](https://www.optumusanalytics.com/ai-visibility-glossary)
+- 🔍 [Compare Optumus Analytics vs Alternatives](https://www.optumusanalytics.com/compare)
 
 ## Features
 
@@ -47,7 +46,7 @@ We're incredibly excited to shape what's next alongside our amazing community.
 - **Competitors** — Compare your AI presence against named competitors and surface visibility gaps to close
 - **Content Optimization** — AI-generated content briefs (title, outline, target keywords, competitor insights) with one-click webhook delivery to your CMS or workflow
 - **Multi-language Support** — 13 languages, 18 regions
-- **Self-hosted or Cloud** — Run it on your own infrastructure with every feature unlocked, or use the managed cloud at [ansvisor.com](https://www.ansvisor.com)
+ - **Self-hosted or Cloud** — Run it on your own infrastructure with every feature unlocked, or use the managed cloud at [optumusanalytics.com](https://www.optumusanalytics.com)
 
 ## Quick Start
 
@@ -78,8 +77,8 @@ We're incredibly excited to shape what's next alongside our amazing community.
 #### 1. Clone and configure
 
 ```bash
-git clone https://github.com/ansvisor/ansvisor.git
-cd ansvisor
+git clone https://github.com/optumus/optumus-analytics.git
+cd optimus-analytics
 
 cp web/.env.example web/.env.local
 cp server/.env.example server/.env
@@ -112,7 +111,7 @@ For local development, `supabase/seed.sql` ships a small fixture (one demo org, 
 npx supabase db reset
 ```
 
-Sign in with **`demo@ansvisor.local` / `demo123`** and you'll land on a populated dashboard — no provider API keys needed to iterate on UI. The seed only runs against a local Supabase via the CLI; hosted projects are unaffected.
+Sign in with **`demo@optumus.local` / `demo123`** and you'll land on a populated dashboard — no provider API keys needed to iterate on UI. The seed only runs against a local Supabase via the CLI; hosted projects are unaffected.
 
 #### 3. Install dependencies
 
@@ -145,7 +144,7 @@ Set `IS_CLOUD=false` (default) in `server/.env` and `NEXT_PUBLIC_IS_CLOUD=false`
 ## Project Structure
 
 ```
-ansvisor/
+optumus-analytics/
 ├── web/                 # Next.js 16 frontend (TypeScript)
 ├── server/              # Express backend (Node.js ESM)
 ├── supabase/            # Database migrations and config
@@ -166,8 +165,8 @@ ansvisor/
 
 What we're planning to build next. React with 👍 on the linked issue (or open a new one) to push something up the list. PRs welcome on any of these.
 
-- [x] **Ansvisor MCP server** — expose insights through a Model Context Protocol server so Claude Desktop, Claude Code, Cursor, Zed, and any other MCP client can query your brand visibility directly. Remote (Streamable HTTP) endpoint at `/api/mcp` — zero install, paste a URL + API key into your client and you're done. Ships with `list_brands` and `get_visibility_summary` today; more tools landing as we go.
-- [x] **Anthropic Skills** — opinionated AEO knowledge that turns Claude into an analyst on your account. Ships in two flavours: an MCP-tool flavour for Claude Desktop / Claude Code / Cursor / Zed, and a standalone REST flavour for claude.ai web (no MCP required). First skill (`ansvisor-aeo-coach`) is live — see [`skills/`](./skills). More (page-audit, rewrite-for-aeo, content-brief) on the way.
+- [x] **Optumus Analytics MCP server** — expose insights through a Model Context Protocol server so Claude Desktop, Claude Code, Cursor, Zed, and any other MCP client can query your brand visibility directly. Remote (Streamable HTTP) endpoint at `/api/mcp` — zero install, paste a URL + API key into your client and you're done. Ships with `list_brands` and `get_visibility_summary` today; more tools landing as we go.
+- [x] **Anthropic Skills** — opinionated AEO knowledge that turns Claude into an analyst on your account. Ships in two flavours: an MCP-tool flavour for Claude Desktop / Claude Code / Cursor / Zed, and a standalone REST flavour for claude.ai web (no MCP required). First skill (`optumus-aeo-coach`) is live — see [`skills/`](./skills). More (page-audit, rewrite-for-aeo, content-brief) on the way.
 - [x] **In-product conversational AI assistant** — chat with your dashboard about visibility trends, competitor moves, and content gaps without leaving the page
 - [ ] **ScrapeLLM integration** — add ScrapeLLM as an alternative scraping backend alongside Cloro for users who prefer it or need a fallback
 - [x] **PostHog integration** — pipe AI-referred sessions and tracking events into PostHog for users already running it as their product analytics layer
@@ -175,7 +174,7 @@ What we're planning to build next. React with 👍 on the linked issue (or open 
 - [ ] **BYO LLM keys** — bring your own OpenAI / Anthropic / Gemini API key for tracking and content generation, so you control cost and data handling
 - [ ] **Webhook recipe library** — one-click Notion / Linear / Asana / Slack templates so a Content Brief can land in your editorial workflow with zero glue code
 
-See an idea missing? Check the [Ideas discussions](https://github.com/ansvisor/ansvisor/discussions/categories/ideas) — upvote an existing one or open a new thread.
+See an idea missing? Check the [Ideas discussions](https://github.com/optumus/optumus-analytics/discussions/categories/ideas) — upvote an existing one or open a new thread.
 
 ## Contributing
 

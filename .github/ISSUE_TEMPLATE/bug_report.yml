@@ -45,7 +45,7 @@ body:
       label: Deployment mode
       description: Are you on the managed cloud or a self-hosted instance?
       options:
-        - Cloud (ansvisor.com)
+        - Cloud (optumusanalytics.com)
         - Self-hosted
     validations:
       required: true

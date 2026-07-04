@@ -1,13 +1,13 @@
 {
-  "name": "@ansvisor/ansvisor-web",
+  "name": "@optumus/optumus-analytics-web",
   "version": "0.1.4",
   "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/ansvisor/ansvisor.git",
+    "url": "https://github.com/optumus/optumus-analytics.git",
     "directory": "web"
   },
-  "homepage": "https://github.com/ansvisor/ansvisor",
+  "homepage": "https://optumusanalytics.com",
   "license": "MIT",
   "scripts": {
     "dev": "next dev",

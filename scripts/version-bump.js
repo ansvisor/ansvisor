@@ -52,7 +52,7 @@ for (const pkgPath of PACKAGE_PATHS) {
 const compose = readFileSync(COMPOSE_PATH, 'utf8');
 let updatedImageCount = 0;
 const updatedCompose = compose.replace(
-  /(image:\s*ghcr\.io\/ansvisor\/ansvisor\/(?:web|server):)\d+\.\d+\.\d+/g,
+  /(image:\s*ghcr\.io\/optumus\/optumus-analytics\/(?:web|server):)\d+\.\d+\.\d+/g,
   (_, prefix) => {
     updatedImageCount += 1;
     return `${prefix}${newVersion}`;

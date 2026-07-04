@@ -1,7 +1,7 @@
 /**
  * Thin wrapper around PostHog that no-ops when PostHog is not configured.
  *
- * Cloud (`app.ansvisor.com`) sets NEXT_PUBLIC_POSTHOG_KEY in Vercel env, so
+ * Cloud (`app.optumusanalytics.com`) sets NEXT_PUBLIC_POSTHOG_KEY in Vercel env, so
  * the provider boots PostHog at startup. Self-hosted instances leave the
  * env var unset by default, which means PostHog never initialises and these
  * helpers compile down to cheap no-ops — no network, no bundle on the wire.
@@ -15,13 +15,13 @@ import type { PostHogInterface } from 'posthog-js';
 
 declare global {
   interface Window {
-    __ansvisor_posthog__?: PostHogInterface;
+    __optumus_posthog__?: PostHogInterface;
   }
 }
 
 function getClient(): PostHogInterface | null {
   if (typeof window === 'undefined') return null;
-  return window.__ansvisor_posthog__ ?? null;
+  return window.__optumus_posthog__ ?? null;
 }
 
 export function track(event: string, properties?: Record<string, unknown>): void {

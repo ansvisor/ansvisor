@@ -1,13 +1,13 @@
 {
-  "name": "ansvisor",
+  "name": "optumus-analytics",
   "version": "0.1.4",
   "private": true,
-  "description": "Open source AI Engine Optimization platform",
+  "description": "Optumus Analytics — AI Search & LLM Visibility platform",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ansvisor/ansvisor.git"
+    "url": "https://github.com/optumus/optumus-analytics.git"
   },
-  "homepage": "https://github.com/ansvisor/ansvisor",
+  "homepage": "https://optumusanalytics.com",
   "type": "module",
   "license": "MIT",
   "scripts": {

@@ -79,7 +79,7 @@ export async function POST(req: Request) {
   }
 
   // BYOK gate. Cloud customers paste their Anthropic key in
-  // Settings → Agent and the agent uses *that* key — Ansvisor never pays
+  // Settings → Agent and the agent uses *that* key — Optumus Analytics never pays
   // for the customer's tokens. Missing key = 403 with a code the UI can
   // intercept to render the "add your key" CTA instead of a generic error.
   const anthropicKey = await resolveAnthropicKey(organizationId);

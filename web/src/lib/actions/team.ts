@@ -206,7 +206,7 @@ export async function inviteMember(email: string, role: TeamRole) {
   // in the Invite User template, which we use as the *base* for the
   // /auth/confirm URL — token_hash + type get appended in the template.
   // The benefit: the prefix is whatever appUrl is for *this* environment
-  // (localhost when running `pnpm dev`, app.ansvisor.com in production),
+  // (localhost when running `pnpm dev`, app.optumusanalytics.com in production),
   // independent of Supabase's project-level Site URL. So a single template
   // works for both dev and prod.
   const inviteLink = `${appUrl}/auth/confirm?next=${encodeURIComponent(`/invite/${token}`)}`;

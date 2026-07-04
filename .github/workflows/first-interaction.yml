@@ -28,7 +28,7 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           pr-message: |
-            Welcome to Ansvisor, and thank you for your first PR! A maintainer will be by soon to review.
+            Welcome to Optumus Analytics, and thank you for your first PR! A maintainer will be by soon to review.
 
             In the meantime, two things that make review faster:
             - A short description of *why* the change matters, not just *what* it does — most of our PRs link a `Fixes #...` to the issue that explains the *why*.

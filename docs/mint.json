@@ -1,17 +1,17 @@
 {
   "$schema": "https://mintlify.com/schema.json",
-  "name": "Ansvisor",
+  "name": "Optumus Analytics",
   "logo": {
     "light": "/logo/light.svg",
     "dark": "/logo/dark.svg"
   },
   "favicon": "/favicon.svg",
   "metadata": {
-    "og:title": "Ansvisor Docs",
+    "og:title": "Optumus Analytics Docs",
     "og:description": "Open-source AI Visibility & AI Search Optimization Platform — track ChatGPT, Gemini, Perplexity, Claude, Copilot brand mentions.",
-    "og:image": "https://app.ansvisor.com/opengraph-image",
+    "og:image": "https://optumusanalytics.com/opengraph-image",
     "twitter:card": "summary_large_image",
-    "twitter:image": "https://app.ansvisor.com/opengraph-image",
+    "twitter:image": "https://optumusanalytics.com/opengraph-image",
     "google-site-verification": "mQlyZ6XbIBAH31OrIjuNhO7_0N-CJGobmfqcpq6biek"
   },
   "colors": {
@@ -26,23 +26,23 @@
   "topbarLinks": [
     {
       "name": "GitHub",
-      "url": "https://github.com/ansvisor/ansvisor"
+      "url": "https://github.com/optumus/optumus-analytics"
     }
   ],
   "topbarCtaButton": {
     "name": "Try the Cloud",
-    "url": "https://ansvisor.com"
+    "url": "https://optumusanalytics.com"
   },
   "anchors": [
     {
       "name": "GitHub",
       "icon": "github",
-      "url": "https://github.com/ansvisor/ansvisor"
+      "url": "https://github.com/optumus/optumus-analytics"
     },
     {
       "name": "Changelog",
       "icon": "list",
-      "url": "https://github.com/ansvisor/ansvisor/releases"
+      "url": "https://github.com/optumus/optumus-analytics/releases"
     }
   ],
   "tabs": [
@@ -110,7 +110,7 @@
     }
   ],
   "footerSocials": {
-    "github": "https://github.com/ansvisor/ansvisor",
-    "website": "https://ansvisor.com"
+    "github": "https://github.com/optumus/optumus-analytics",
+    "website": "https://optumusanalytics.com"
   }
 }

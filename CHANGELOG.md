@@ -67,7 +67,7 @@ Huge thanks to everyone who contributed to this release — and a special welcom
 - Brands: page no longer crashes — `buttonVariants` is now server-safe (#230)
 - Auth: the full reset-password flow is wired end-to-end (#151, #171)
 - Insights: show platform totals (#172, thanks @nanookclaw); group results by platform on both the insights and prompt-detail views (#235, #237, thanks @VrtxOmega); CSV export writes platform display names instead of raw slugs (#234); moved the raw results count out of the page header (#238)
-- Tracking: cloud snippet points at `api.ansvisor.com` (#218); Shopping sidebar entry is gated by the active brand instead of org-wide (#170, #173)
+- Tracking: cloud snippet points at `api.optumusanalytics.com` (#218); Shopping sidebar entry is gated by the active brand instead of org-wide (#170, #173)
 - Team settings: show the role label instead of the raw enum value (#147, thanks @akagifreeez)
 - UI: ChatGPT avatar stays visible in light mode (#162, thanks @nanookclaw); `PasswordInput` merges caller `className` via `cn` (#212, thanks @MaitreyeeDeshmukh); icon-only buttons across the dashboard now have accessible names (a11y) (#253, thanks @BharadwajKanneveti)
 - Billing: removed a stray debug log from the Stripe checkout route (#184, thanks @krishnaprasharkp)

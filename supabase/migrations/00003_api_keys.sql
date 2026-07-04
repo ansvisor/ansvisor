@@ -1,6 +1,6 @@
 -- API keys
 -- Long-lived bearer tokens that let external clients (MCP server, scripts,
--- third-party integrations) authenticate against the Ansvisor API on behalf
+-- third-party integrations) authenticate against the Optumus Analytics API on behalf
 -- of a user without holding a Supabase session.
 --
 -- The plaintext token is shown to the user exactly once at creation time.

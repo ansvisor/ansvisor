@@ -31,7 +31,7 @@ export function PostHogProvider() {
       persistence: 'localStorage+cookie',
       person_profiles: 'identified_only',
       loaded: (instance) => {
-        window.__ansvisor_posthog__ = instance;
+        window.__optumus_posthog__ = instance;
       },
     });
 

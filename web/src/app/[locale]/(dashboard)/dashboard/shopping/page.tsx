@@ -480,7 +480,7 @@ function PromptsTabContent({
     const link = document.createElement('a');
     link.setAttribute('href', url);
     const date = new Date().toISOString().slice(0, 10);
-    link.setAttribute('download', `ansvisor_${brandSlug}_shopping_prompts_${date}.csv`);
+    link.setAttribute('download', `optumusanalytics_${brandSlug}_shopping_prompts_${date}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();

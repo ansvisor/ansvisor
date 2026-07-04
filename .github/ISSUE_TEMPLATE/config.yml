@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Documentation
-    url: https://docs.ansvisor.com
+    url: https://docs.optumusanalytics.com
     about: Setup, self-hosting, and usage guides.
   - name: Questions & Ideas
-    url: https://github.com/ansvisor/ansvisor/discussions
+    url: https://github.com/optumus/optumus-analytics/discussions
     about: Ask a question or propose an idea in Discussions.

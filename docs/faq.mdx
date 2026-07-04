@@ -1,11 +1,11 @@
 ---
 title: "FAQ"
-description: "Common questions about Ansvisor."
+description: "Common questions about Optumus Analytics."
 ---
 
 <AccordionGroup>
-  <Accordion title="Is Ansvisor really fully open source?">
-    Yes. Every line of code that powers ansvisor.com is in the [public repo](https://github.com/ansvisor/ansvisor) under MIT. No paywalled features in the self-hosted build — the cloud service is just a hosted convenience.
+  <Accordion title="Is Optumus Analytics really fully open source?">
+    Yes. Every line of code that powers optimusanalytics.com is in the [public repo](https://github.com/optumus/optumus-analytics) under MIT. No paywalled features in the self-hosted build — the cloud service is just a hosted convenience.
   </Accordion>
 
   <Accordion title="What's the cost difference between cloud and self-hosted?">
@@ -15,7 +15,7 @@ description: "Common questions about Ansvisor."
   </Accordion>
 
   <Accordion title="Why don't you scrape ChatGPT/Gemini directly?">
-    For programmable AI engines (OpenAI, Anthropic, Google Gemini API), Ansvisor uses official APIs — most reliable, well-priced, and TOS-compliant. For *web* AI engines that don't have public APIs (like ChatGPT.com search results), Ansvisor uses Cloro as a managed scraping backend. Cloro handles browser fingerprinting, captcha bypass, and rate-limiting at scale.
+    For programmable AI engines (OpenAI, Anthropic, Google Gemini API), Optumus Analytics uses official APIs — most reliable, well-priced, and TOS-compliant. For *web* AI engines that don't have public APIs (like ChatGPT.com search results), Optumus Analytics uses Cloro as a managed scraping backend. Cloro handles browser fingerprinting, captcha bypass, and rate-limiting at scale.
 
     These are two distinct fetchers: **Cloro** scrapes the AI answer engines, while **Scrape.do** (via `SCRAPEDO_API_KEY`) fetches your *own* pages for the **Site Audit** feature (proxy + JS render). Self-hosters who want Site Audit need a Scrape.do key.
   </Accordion>
@@ -33,20 +33,20 @@ description: "Common questions about Ansvisor."
   </Accordion>
 
   <Accordion title="How do I get help?">
-    - **Bugs / feature requests**: [GitHub Issues](https://github.com/ansvisor/ansvisor/issues)
-    - **Discussion**: [GitHub Discussions](https://github.com/ansvisor/ansvisor/discussions)
+    - **Bugs / feature requests**: [GitHub Issues](https://github.com/optumus/optumus-analytics/issues)
+    - **Discussion**: [GitHub Discussions](https://github.com/optumus/optumus-analytics/discussions)
     - **Cloud customers**: support email in your dashboard footer
   </Accordion>
 
   <Accordion title="Is my data private?">
-    For self-hosted: 100% on your infrastructure, never touches Ansvisor servers. For cloud: standard SaaS privacy — your prompts and responses are stored in our managed Supabase, isolated per organization via RLS, never used for training. Full DPA available on request for enterprise plans.
+    For self-hosted: 100% on your infrastructure, never touches Optumus Analytics servers. For cloud: standard SaaS privacy — your prompts and responses are stored in our managed Supabase, isolated per organization via RLS, never used for training. Full DPA available on request for enterprise plans.
   </Accordion>
 
-  <Accordion title="Does Ansvisor work for non-English brands?">
-    Yes — 13 languages and 18 regions supported. AI engines respond in the language of the prompt; Ansvisor's mention/citation parsing is language-agnostic.
+  <Accordion title="Does Optumus Analytics work for non-English brands?">
+    Yes — 13 languages and 18 regions supported. AI engines respond in the language of the prompt; Optumus Analytics' mention/citation parsing is language-agnostic.
   </Accordion>
 
   <Accordion title="How do I contribute?">
-    Read [CONTRIBUTING.md](https://github.com/ansvisor/ansvisor/blob/main/CONTRIBUTING.md) in the repo. We welcome PRs for: new AI engine adapters, additional citation classifiers, language packs, UI polish, and bug fixes. For larger features, open an issue first to align.
+    Read [CONTRIBUTING.md](https://github.com/optumus/optumus-analytics/blob/main/CONTRIBUTING.md) in the repo. We welcome PRs for: new AI engine adapters, additional citation classifiers, language packs, UI polish, and bug fixes. For larger features, open an issue first to align.
   </Accordion>
 </AccordionGroup>

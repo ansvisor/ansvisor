@@ -1,10 +1,10 @@
 ---
-name: ansvisor-aeo-coach-standalone
+name: optumus-aeo-coach-standalone
 description: |
-  Standalone (no-MCP) version of the Ansvisor AEO Coach. Use this only
-  when the user's Claude client cannot connect to the Ansvisor MCP
+   Standalone (no-MCP) version of the Optumus Analytics AEO Coach. Use this only
+   when the user's Claude client cannot connect to the Optumus Analytics MCP
   server (e.g. claude.ai web without a Connector configured). Fetches
-  live data from the Ansvisor REST API directly with the user's API
+   live data from the Optumus Analytics REST API directly with the user's API
   key via code execution. For clients that support MCP (Claude
   Desktop, Claude Code, Cursor, Zed), prefer the `ansvisor-aeo-coach`
   skill — it's a cleaner UX because tool calls are first-class instead
@@ -36,10 +36,10 @@ Activate this skill when the user asks anything in the shape of:
 
 You need two things from the user, in this order:
 
-1. **API key** — a token starting with `ans_`. Tell them to grab one
-   from their Ansvisor dashboard: **Settings → API Keys → New key**. The
-   token is shown once at creation. If they don't have an Ansvisor
-   account yet, point them at <https://www.ansvisor.com>.
+1. **API key** — a token starting with `opt_`. Tell them to grab one
+   from their Optumus Analytics dashboard: **Settings → API Keys → New key**. The
+   token is shown once at creation. If they don't have an Optumus Analytics
+   account yet, point them at <https://www.optumusanalytics.com>.
 2. **Base URL** — defaults to `https://app.ansvisor.com`. Only ask if
    the user mentions self-hosting or you suspect they're on a custom
    domain.
@@ -124,8 +124,8 @@ surfaces):
 ```python
 import urllib.request, urllib.parse, json
 
-BASE_URL = "https://app.ansvisor.com"  # ask the user if self-hosted
-API_KEY = "ans_..."                     # from user, do not log
+BASE_URL = "https://app.optumusanalytics.com"  # ask the user if self-hosted
+API_KEY = "opt_..."                     # from user, do not log
 
 def call(path, params=None):
     url = f"{BASE_URL}{path}"

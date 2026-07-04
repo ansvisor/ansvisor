@@ -1,6 +1,6 @@
-# Ansvisor Server
+# Optumus Analytics Server
 
-The server package runs the Ansvisor backend: an Express API with Socket.IO support and background workers for brand tracking, keyword volumes, content briefs, competitor and topic workflows, and the AI traffic pixel.
+The server package runs the Optumus Analytics backend: an Express API with Socket.IO support and background workers for brand tracking, keyword volumes, content briefs, competitor and topic workflows, and the AI traffic pixel.
 
 It is designed to run alongside the `web/` app during local development and can also run as the production API service for self-hosted deployments.
 

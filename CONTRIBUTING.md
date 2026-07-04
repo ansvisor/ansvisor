@@ -1,6 +1,6 @@
-# Contributing to Ansvisor
+# Contributing to Optumus Analytics
 
-Thank you for your interest in contributing to Ansvisor! This guide will help you get started.
+Thank you for your interest in contributing to Optumus Analytics! This guide will help you get started.
 
 ## Ways to Contribute
 
@@ -19,7 +19,7 @@ Thank you for your interest in contributing to Ansvisor! This guide will help yo
 ## Project Structure
 
 ```
-ansvisor/
+optumus-analytics/
 ├── web/                 # Next.js 16 frontend (TypeScript)
 ├── server/              # Express backend (Node.js ESM)
 ├── supabase/            # Database migrations and config
@@ -35,15 +35,15 @@ Both `web/` and `server/` are independent packages with their own `package.json`
 
 ### 1. Fork the repository
 
-Click the **Fork** button on [github.com/ansvisor/ansvisor](https://github.com/ansvisor/ansvisor) to create your own copy.
+Click the **Fork** button on [github.com/optumus/optumus-analytics](https://github.com/optumus/optumus-analytics) to create your own copy.
 
 ### 2. Clone your fork
 
 Replace `YOUR_USERNAME` with your GitHub username:
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ansvisor.git
-cd ansvisor
+git clone https://github.com/YOUR_USERNAME/optumus-analytics.git
+cd optimus-analytics
 ```
 
 ### 3. Add upstream remote (recommended)
@@ -51,7 +51,7 @@ cd ansvisor
 This allows you to sync with the main repo:
 
 ```bash
-git remote add upstream https://github.com/ansvisor/ansvisor.git
+git remote add upstream https://github.com/optumus/optumus-analytics.git
 ```
 
 ### 4. Configure environment variables
@@ -91,7 +91,7 @@ For a pre-populated local dashboard, the repo ships `supabase/seed.sql` — an i
 npx supabase db reset
 ```
 
-Sign in with **`demo@ansvisor.local` / `demo123`** to land on a populated dashboard.
+Sign in with **`demo@optumus.local` / `demo123`** to land on a populated dashboard.
 
 > **Heads-up:** the **Prompts** and **Content** pages fetch through the backend API (`server/`), not Supabase directly. Start *both* dev servers (step 7) — otherwise those two pages show a "Failed to load" toast even though the data is seeded. The seed runs only against a local Supabase via the CLI; hosted/production projects are never touched by it.
 
@@ -240,4 +240,4 @@ When opening an issue, please include:
 
 ## License
 
-By contributing to Ansvisor, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+By contributing to Optumus Analytics, you agree that your contributions will be licensed under the [MIT License](LICENSE).

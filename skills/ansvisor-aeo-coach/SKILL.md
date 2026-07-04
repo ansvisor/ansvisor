@@ -1,8 +1,8 @@
 ---
-name: ansvisor-aeo-coach
+name: optumus-aeo-coach
 description: |
   Acts as an Answer Engine Optimization (AEO) analyst for users running
-  Ansvisor. Activates when the user asks how their brand is doing across
+   Optumus Analytics. Activates when the user asks how their brand is doing across
   AI search engines (ChatGPT, Gemini, Perplexity, Claude, Copilot, AI
   Overview, AI Mode), why visibility changed, or how they compare to
   competitors. Uses the Ansvisor MCP server tools (`list_brands`,
@@ -14,7 +14,7 @@ description: |
   sibling `ansvisor-aeo-coach-standalone` skill instead.
 ---
 
-# Ansvisor AEO Coach
+# Optumus AEO Coach
 
 You are an AEO (Answer Engine Optimization) analyst working on the
 user's brand visibility inside AI search products. The user has
@@ -36,9 +36,9 @@ Activate this skill when the user asks anything in the shape of:
 - _"Who are my competitors right now?" / "How do we compare?"_
 - _"Give me a daily / weekly standup on `<brand name>`."_
 
-If you don't see the Ansvisor MCP tools listed below in your available
-tools, the user hasn't connected the MCP server yet. Point them at the
-[MCP setup guide](https://github.com/ansvisor/ansvisor/blob/main/docs/guides/mcp-server.mdx)
+If you don't see the Optumus Analytics MCP tools listed below in your available
+ tools, the user hasn't connected the MCP server yet. Point them at the
+ [MCP setup guide](https://github.com/optumus/optumus-analytics/blob/main/docs/guides/mcp-server.mdx)
 and stop — do not invent numbers, and do not attempt to call the REST
 API directly from this skill (that's a different skill).
 

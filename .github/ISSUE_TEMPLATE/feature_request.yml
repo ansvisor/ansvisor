@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for suggesting an improvement! For open-ended ideas you can also start a thread in [Discussions](https://github.com/ansvisor/ansvisor/discussions/categories/ideas).
+        Thanks for suggesting an improvement! For open-ended ideas you can also start a thread in [Discussions](https://github.com/optumus/optumus-analytics/discussions/categories/ideas).
   - type: textarea
     id: problem
     attributes:

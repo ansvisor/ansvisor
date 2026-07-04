@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
-export const API_KEY_PREFIX = 'ans_';
+export const API_KEY_PREFIX = 'opt_';
 export const API_KEY_DISPLAY_PREFIX_LEN = 12;
 
 export function generateApiKey(): { token: string; hash: string; prefix: string } {
@@ -26,7 +26,7 @@ export interface McpAuthContext {
 /**
  * Resolve the bearer token on a request into a user/org context.
  *
- * Accepts only Ansvisor API keys (prefix `ans_`) — not Supabase session JWTs.
+ * Accepts only Optumus Analytics API keys (prefix `opt_`) — not Supabase session JWTs.
  * MCP endpoints are intended to be hit by long-lived external clients, so we
  * intentionally don't fall back to the dashboard's session cookie.
  */

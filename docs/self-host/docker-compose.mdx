@@ -1,6 +1,6 @@
 ---
 title: "Docker Compose setup"
-description: "Run the full Ansvisor stack on your own server in 10 minutes."
+description: "Run the full Optumus Analytics stack on your own server in 10 minutes."
 ---
 
 ## Stack overview
@@ -25,8 +25,8 @@ Plus an external dependency:
 <Steps>
   <Step title="Clone the repo">
     ```bash
-    git clone https://github.com/ansvisor/ansvisor.git
-    cd ansvisor
+    git clone https://github.com/optumus/optumus-analytics.git
+    cd optimus-analytics
     ```
   </Step>
   <Step title="Apply database migrations">
@@ -74,7 +74,7 @@ For solo deploys we recommend **Cloudflare proxied + Flexible SSL** for the API 
 ## Updating to a new release
 
 ```bash
-cd ansvisor
+cd optimus-analytics
 git pull
 docker compose up -d --build
 ```

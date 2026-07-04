@@ -647,7 +647,7 @@ function KeyMissingState() {
         <h2 className="text-lg font-semibold">Add your Anthropic API key</h2>
         <p className="text-sm text-muted-foreground mt-2">
           The agent uses your own Anthropic key to call Claude directly — usage is billed to your
-          Anthropic account, not to Ansvisor. Paste a key in Settings to unlock the chat.
+          Anthropic account, not to Optumus Analytics. Paste a key in Settings to unlock the chat.
         </p>
         <Link
           href="/dashboard/settings?tab=agent"

@@ -1,17 +1,17 @@
 ---
 title: "MCP server"
-description: "Connect Claude Desktop, Claude Code, Cursor, Zed, and any MCP-aware client to your Ansvisor data — zero install."
+description: "Connect Claude Desktop, Claude Code, Cursor, Zed, and any MCP-aware client to your Optumus Analytics data — zero install."
 ---
 
-Ansvisor ships a [Model Context Protocol](https://modelcontextprotocol.io)
-server at `https://app.ansvisor.com/api/mcp` (or your own host if you
+Optumus Analytics ships a [Model Context Protocol](https://modelcontextprotocol.io)
+server at `https://app.optumusanalytics.com/api/mcp` (or your own host if you
 self-host) so AI assistants can query your brand visibility data through
 natural-language conversation. No npm package, no local process — just a URL
 and an API key.
 
 ## Generate an API key
 
-1. Open your Ansvisor dashboard → **Settings** → **API Keys**
+1. Open your Optumus Analytics dashboard → **Settings** → **API Keys**
 2. Click **New key**, give it a memorable name (e.g. _Claude — laptop_)
 3. Copy the token. It's shown **once** — store it in your password manager
 
@@ -23,30 +23,30 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
 ```json
 {
   "mcpServers": {
-    "ansvisor": {
-      "url": "https://app.ansvisor.com/api/mcp",
+    "optumus": {
+      "url": "https://app.optumusanalytics.com/api/mcp",
       "headers": {
-        "Authorization": "Bearer ans_..."
+        "Authorization": "Bearer opt_..."
       }
     }
   }
 }
 ```
 
-Restart Claude Desktop. Type _"List my Ansvisor brands"_ — Claude should
+Restart Claude Desktop. Type _"List my Optumus Analytics brands"_ — Claude should
 call the `list_brands` tool and show your brands inline.
 
 ## Connect Claude Code
 
 ```bash
-claude mcp add ansvisor --transport http https://app.ansvisor.com/api/mcp \
-  --header "Authorization: Bearer ans_..."
+claude mcp add optimus --transport http https://app.optumusanalytics.com/api/mcp \
+  --header "Authorization: Bearer opt_..."
 ```
 
 ## Self-host? Point at your own instance
 
-The MCP endpoint lives at `/api/mcp` on whatever host runs the Ansvisor web
-app. If you self-host at `ansvisor.mycompany.internal`, use that base URL
+The MCP endpoint lives at `/api/mcp` on whatever host runs the Optumus Analytics web
+app. If you self-host at `optumus.mycompany.internal`, use that base URL
 instead.
 
 ## Available tools
@@ -58,13 +58,13 @@ instead.
 | `list_topics` | List the topics on a brand with a prompt count per topic. Use for coverage audits (empty / over-concentrated topics). |
 | `list_prompts` | List the prompts tracked on a brand, optionally filtered by topic, active status, or capped via `limit`. Returns the prompt text, topic, platforms, models, regions, and active flag. |
 
-More tools land regularly — check the [project roadmap](https://github.com/ansvisor/ansvisor#whats-next).
+More tools land regularly — check the [project roadmap](https://github.com/optumus/optumus-analytics#whats-next).
 
 ## Try it
 
 Ask your client things like:
 
-- _"List my Ansvisor brands."_
+- _"List my Optumus Analytics brands."_
 - _"What's my visibility score on ChatGPT for the last 7 days?"_
 - _"Are my topics balanced?" / "Which topic has the most prompts?"_
 - _"Show me the prompts in my pricing topic."_

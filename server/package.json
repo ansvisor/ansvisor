@@ -1,15 +1,15 @@
 {
-  "name": "@ansvisor/ansvisor-server",
+  "name": "@optumus/optumus-analytics-server",
   "version": "0.1.4",
-  "description": "Ansvisor - AI Engine Optimization Server",
+  "description": "Optumus Analytics - AI Search & LLM Visibility Server",
   "main": "src/server.js",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ansvisor/ansvisor.git",
+    "url": "https://github.com/optumus/optumus-analytics.git",
     "directory": "server"
   },
-  "homepage": "https://github.com/ansvisor/ansvisor",
+  "homepage": "https://optumusanalytics.com",
   "scripts": {
     "dev": "NODE_ENV=development nodemon src/server.js",
     "start": "NODE_ENV=production pm2 start src/server.js --max-restarts 10000",

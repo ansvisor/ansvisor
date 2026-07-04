@@ -6,7 +6,7 @@
 -- Every row uses a fixed UUID and `ON CONFLICT DO NOTHING`, so re-running
 -- the reset is idempotent.
 --
--- Sign-in: demo@ansvisor.local / demo123
+-- Sign-in: demo@optumus.local / demo123
 
 -- ─── Auth user + identity ────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ VALUES (
   '11111111-1111-1111-1111-111111111111',
   'authenticated',
   'authenticated',
-  'demo@ansvisor.local',
+  'demo@optumus.local',
   extensions.crypt('demo123', extensions.gen_salt('bf')),
   now(),
   '{"provider": "email", "providers": ["email"]}'::jsonb,
@@ -64,7 +64,7 @@ VALUES (
   '11111111-1111-1111-1111-111111111111',
   '11111111-1111-1111-1111-111111111111',
   '11111111-1111-1111-1111-111111111111',
-  '{"sub": "11111111-1111-1111-1111-111111111111", "email": "demo@ansvisor.local", "email_verified": true}'::jsonb,
+  '{"sub": "11111111-1111-1111-1111-111111111111", "email": "demo@optumus.local", "email_verified": true}'::jsonb,
   'email',
   now() - interval '30 days',
   now(),

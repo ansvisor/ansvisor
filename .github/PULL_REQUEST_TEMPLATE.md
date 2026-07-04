@@ -1,4 +1,4 @@
-<!-- Thanks for contributing to Ansvisor! Please fill out the sections below. -->
+<!-- Thanks for contributing to Optumus Analytics! Please fill out the sections below. -->
 
 ## Summary
 
@@ -21,7 +21,7 @@
 
 ## Checklist
 
-- [ ] Branch follows the naming convention (`feature/`, `fix/`, `chore/`, `docs/`) — see [CONTRIBUTING.md](https://github.com/ansvisor/ansvisor/blob/main/CONTRIBUTING.md)
+- [ ] Branch follows the naming convention (`feature/`, `fix/`, `chore/`, `docs/`) — see [CONTRIBUTING.md](https://github.com/optumus/optumus-analytics/blob/main/CONTRIBUTING.md)
 - [ ] Commits follow [Conventional Commits](https://www.conventionalcommits.org/)
 - [ ] `yarn lint` passes (run from `web/`)
 - [ ] `yarn typecheck` passes (run from `web/`)

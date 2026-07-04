@@ -1603,7 +1603,7 @@ export default function InsightsPage() {
       const slug = brand.slug ?? 'brand';
 
       link.href = url;
-      link.download = `ansvisor_${slug}_insights_${date}.csv`;
+      link.download = `optumusanalytics_${slug}_insights_${date}.csv`;
       link.click();
 
       URL.revokeObjectURL(url);

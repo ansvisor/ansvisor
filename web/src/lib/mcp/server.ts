@@ -42,7 +42,7 @@ const relaxedUuid = z
 
 export function createMcpServer(auth: McpAuthContext): McpServer {
   const server = new McpServer({
-    name: 'ansvisor',
+    name: 'optumus-analytics',
     version: '0.1.0',
   });
 

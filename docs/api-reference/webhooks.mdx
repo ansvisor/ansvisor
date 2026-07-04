@@ -29,11 +29,11 @@ All webhooks use the same envelope:
 
 ## Signature verification
 
-If `webhook_secret` is set, Ansvisor signs each payload with HMAC-SHA256:
+If `webhook_secret` is set, Optumus Analytics signs each payload with HMAC-SHA256:
 
 ```
-X-Ansvisor-Signature: sha256=<hex digest>
-X-Ansvisor-Timestamp: <unix ms>
+X-Optumus-Signature: sha256=<hex digest>
+X-Optumus-Timestamp: <unix ms>
 ```
 
 Verification (Node example):

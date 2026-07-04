@@ -21,7 +21,7 @@ const versions = packages.map(({ name, path }) => {
 
 const compose = readFileSync(composePath, 'utf8');
 const imageVersions = [...compose.matchAll(
-  /image:\s*ghcr\.io\/ansvisor\/ansvisor\/(web|server):(\d+\.\d+\.\d+)/g,
+  /image:\s*ghcr\.io\/optumus\/optumus-analytics\/(web|server):(\d+\.\d+\.\d+)/g,
 )].map(([, service, version]) => ({
   name: `docker-compose ${service} image`,
   version,

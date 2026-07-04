@@ -3,7 +3,7 @@ import { readFile } from 'fs/promises';
 import path from 'path';
 
 export const runtime = 'nodejs';
-export const alt = 'Ansvisor';
+export const alt = 'Optumus Analytics';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 

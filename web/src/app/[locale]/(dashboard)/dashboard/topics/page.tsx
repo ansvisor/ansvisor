@@ -235,7 +235,7 @@ export default function TopicsPage() {
     const slug = activeBrand?.slug ?? 'brand';
 
     link.href = url;
-    link.download = `ansvisor_${slug}_topics_${date}.csv`;
+    link.download = `optumusanalytics_${slug}_topics_${date}.csv`;
     link.click();
 
     URL.revokeObjectURL(url);

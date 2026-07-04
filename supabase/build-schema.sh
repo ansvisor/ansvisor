@@ -20,7 +20,7 @@ out="schema.sql"
 
 {
   echo "-- ============================================================================"
-  echo "-- ansvisor — consolidated database schema"
+  echo "-- optimus-analytics — consolidated database schema"
   echo "--"
   echo "-- GENERATED FILE — do not edit by hand. This is every migration in"
   echo "-- supabase/migrations/ concatenated in order, so a fresh install can be"

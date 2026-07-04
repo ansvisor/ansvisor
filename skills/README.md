@@ -1,11 +1,11 @@
-# Ansvisor Skills
+# Optumus Analytics Skills
 
 A collection of opinionated [Anthropic Skills](https://docs.anthropic.com/claude/docs/skills)
-that turn Claude into an AEO analyst with live access to your Ansvisor
-account.
+ that turn Claude into an AEO analyst with live access to your Optumus Analytics
+ account.
 
 Most skills come in **two flavours**: one that talks to the
-[Ansvisor MCP server](../docs/guides/mcp-server.mdx) (cleaner UX in
+[Optumus Analytics MCP server](../docs/guides/mcp-server.mdx) (cleaner UX in
 clients that support it) and one that calls the REST API directly with
 code execution (works anywhere). Pick the flavour that matches your
 Claude client — see the table below.
@@ -18,17 +18,17 @@ behaves like an AEO analyst who's been on your account for six months.
 
 | Skill | Flavour | What it's for |
 | --- | --- | --- |
-| [`ansvisor-aeo-coach`](./ansvisor-aeo-coach) | **MCP (preferred)** | Brand snapshots, visibility deep-dives, competitor watch. Use this when your client (Claude Desktop, Claude Code, Cursor, Zed) is connected to the Ansvisor MCP server. |
-| [`ansvisor-aeo-coach-standalone`](./ansvisor-aeo-coach-standalone) | **REST (fallback)** | Same skill, no MCP needed. Use this when you're on claude.ai web without a Connector, or any surface where setting up MCP isn't an option. |
+| [`optumus-aeo-coach`](./optumus-aeo-coach) | **MCP (preferred)** | Brand snapshots, visibility deep-dives, competitor watch. Use this when your client (Claude Desktop, Claude Code, Cursor, Zed) is connected to the Optumus Analytics MCP server. |
+| [`optumus-aeo-coach-standalone`](./optumus-aeo-coach-standalone) | **REST (fallback)** | Same skill, no MCP needed. Use this when you're on claude.ai web without a Connector, or any surface where setting up MCP isn't an option. |
 
 ## Which flavour should I install?
 
 | Your client | Recommended |
 | --- | --- |
-| Claude Desktop | **MCP** — install the [MCP server](../docs/guides/mcp-server.mdx) once, then `ansvisor-aeo-coach` |
+| Claude Desktop | **MCP** — install the [MCP server](../docs/guides/mcp-server.mdx) once, then `optumus-aeo-coach` |
 | Claude Code | **MCP** — same as above |
 | Cursor / Zed / other MCP-aware tools | **MCP** — it's their native primitive |
-| claude.ai web with the Ansvisor Connector configured | **MCP** |
+| claude.ai web with the Optumus Connector configured | **MCP** |
 | claude.ai web without a Connector | **Standalone** — single install, no extra setup |
 | Anywhere else with Skills + code execution | **Standalone** |
 
@@ -38,14 +38,14 @@ fetches numbers — typed tool calls vs. inline Python HTTP requests.
 
 ## Prerequisites
 
-You need an **Ansvisor API key** in either flavour:
+You need an **Optumus Analytics API key** in either flavour:
 
-1. Open your Ansvisor dashboard → **Settings → API Keys**
+1. Open your Optumus Analytics dashboard → **Settings → API Keys**
 2. Click **New key**, give it a memorable name (e.g. _Claude — laptop_)
-3. Copy the token (`ans_...`). It's shown **once** — store it in your
-   password manager
+3. Copy the token (`opt_...`). It's shown **once** — store it in your
+  password manager
 
-If you self-host Ansvisor, both flavours work against your own instance
+If you self-host Optumus Analytics, both flavours work against your own instance
 — you'll just provide a different base URL when prompted (MCP: in your
 client config; standalone: when the skill asks).
 
@@ -61,18 +61,17 @@ supports the Skills feature.
 3. Paste the contents of your chosen flavour's `SKILL.md`
 4. Save
 
-The first time you use the MCP flavour, you also need the **Ansvisor
-Connector** added to your Claude.ai account (see the MCP guide). The
+  The first time you use the MCP flavour, you also need the **Optumus Connector** added to your Claude.ai account (see the MCP guide). The
 standalone flavour will ask you for your API key in the conversation
 itself.
 
 ### Claude Code / Claude Desktop
 
 ```bash
-git clone https://github.com/ansvisor/ansvisor.git
-cp -r ansvisor/skills/ansvisor-aeo-coach ~/.claude/skills/   # MCP flavour
+git clone https://github.com/optumus/optumus-analytics.git
+cp -r optimus-analytics/skills/optumus-aeo-coach ~/.claude/skills/   # MCP flavour
 # or
-cp -r ansvisor/skills/ansvisor-aeo-coach-standalone ~/.claude/skills/
+cp -r optimus-analytics/skills/optumus-aeo-coach-standalone ~/.claude/skills/
 ```
 
 Restart your Claude client and the skill is live. If you chose the MCP
@@ -123,4 +122,4 @@ conventions, and PR workflow.
 
 ## License
 
-[MIT](../LICENSE) — part of [Ansvisor](https://github.com/ansvisor/ansvisor).
+[MIT](../LICENSE) — part of [Optumus Analytics](https://github.com/optumus/optumus-analytics).

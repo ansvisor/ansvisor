@@ -7,7 +7,7 @@ export function MarketingFooter() {
         <p className="text-sm text-muted-foreground">
           &copy; {new Date().getFullYear()} {siteConfig.name}. Open source under{' '}
           <a
-            href="https://github.com/ansvisor/ansvisor/blob/main/LICENSE"
+            href="https://github.com/optumus/optumus-analytics/blob/main/LICENSE"
             target="_blank"
             rel="noopener noreferrer"
             className="underline hover:text-foreground transition-colors"

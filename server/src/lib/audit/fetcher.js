@@ -54,7 +54,7 @@ async function fetchTextDirect(url, { timeoutMs = 8000 } = {}) {
   try {
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: { 'user-agent': 'AnsvisorSiteAudit/1.0 (+https://ansvisor.com)' },
+      headers: { 'user-agent': 'OptumusSiteAudit/1.0 (+https://optumusanalytics.com)' },
       redirect: 'follow',
     });
     if (res.ok) return { body: await res.text(), blocked: false };
