@@ -241,27 +241,30 @@ export async function inviteMember(email: string, role: TeamRole) {
     throw new Error(insertError.message);
   }
 
+  // inviteUserByEmail only emails BRAND-NEW addresses — it errors for an email
+  // that's already registered (Supabase can't "create" that user), so existing
+  // users never get the Supabase invite mail. Surface whether it actually sent
+  // so the UI can be honest ("share this link" vs. "email sent") instead of
+  // always claiming an email went out.
+  let emailSent = false;
   try {
     await supabaseAdmin.auth.admin.inviteUserByEmail(normalizedEmail, {
       redirectTo: emailRedirectTo,
       data: { invitation_token: token },
     });
+    emailSent = true;
   } catch (err) {
-    // inviteUserByEmail only emails BRAND-NEW addresses — it errors for an
-    // email that's already registered (Supabase can't "create" that user), so
-    // existing users never get the Supabase invite mail. That's acceptable:
-    // the invitation row is saved and the admin shares `shareLink` directly.
-    // Log the reason so genuine SMTP failures for new users stay diagnosable
-    // instead of vanishing into a silent catch.
+    // Existing-user or SMTP failure — the invitation row is saved and the admin
+    // shares `shareLink` directly. Log the invitation/org id (not the invitee's
+    // email — that's PII in persistent logs) plus the error for diagnostics.
     console.warn(
-      `[invite] Supabase invite email not sent for ${normalizedEmail} (existing user or SMTP): ${
-        err instanceof Error ? err.message : String(err)
-      }`,
+      `[invite] Supabase invite email not sent (invitation=${invitation.id}, org=${profile.organization_id}) — existing user or SMTP`,
+      err,
     );
   }
 
   revalidatePath('/dashboard/settings');
-  return { invitation, inviteLink: shareLink };
+  return { invitation, inviteLink: shareLink, emailSent };
 }
 
 export async function revokeInvitation(invitationId: string) {

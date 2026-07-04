@@ -417,11 +417,13 @@ function InviteDialog({ canInvite, onInvited }: { canInvite: boolean; onInvited:
   const [role, setRole] = useState<TeamRole>('analyst');
   const [submitting, setSubmitting] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState(true);
 
   function reset() {
     setEmail('');
     setRole('analyst');
     setInviteLink(null);
+    setEmailSent(true);
   }
 
   async function handleSubmit() {
@@ -431,9 +433,10 @@ function InviteDialog({ canInvite, onInvited }: { canInvite: boolean; onInvited:
     }
     setSubmitting(true);
     try {
-      const { inviteLink: link } = await inviteMember(email.trim(), role);
+      const { inviteLink: link, emailSent: sent } = await inviteMember(email.trim(), role);
       setInviteLink(link);
-      toast.success('Invitation sent');
+      setEmailSent(sent);
+      toast.success(sent ? 'Invitation sent' : 'Invite created — share the link');
       onInvited();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to send invitation');
@@ -475,7 +478,9 @@ function InviteDialog({ canInvite, onInvited }: { canInvite: boolean; onInvited:
         {inviteLink ? (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Invitation sent. You can also share this link directly:
+              {emailSent
+                ? 'Invitation sent. You can also share this link directly:'
+                : 'No email was sent — this address may already have an account. Share this link with them directly:'}
             </p>
             <div className="flex items-center gap-2">
               <Input readOnly value={inviteLink} className="flex-1 text-xs" />
