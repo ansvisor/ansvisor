@@ -43,21 +43,35 @@ interface RawSearchQueryItem {
   source_platform?: unknown;
 }
 
+/** Longest fan-out window a caller may request (days). */
+const MAX_FANOUT_DAYS = 90;
+
+/**
+ * Canonical form of a sub-query for display + grouping: trim, then collapse any
+ * internal whitespace run (double spaces, tabs, newlines) to a single space, so
+ * "best  laptops" and "best laptops" group as one row.
+ */
+function normalizeQuery(raw: string): string {
+  return raw.replace(/\s+/g, ' ').trim();
+}
+
 /**
  * Aggregate the brand's observed query fan-out over a rolling window.
  *
  * `timesSearched` counts DISTINCT answers (prompt_results rows) whose
  * `search_queries` contains the sub-query — an observed demand signal that
  * replaces Google Ads volume for these long-tail, natural-language queries.
- * Grouping is by the trimmed, lower-cased query string so whitespace/case
- * variants collapse into one row (the parser already trims on write, #341).
+ * Grouping is by the normalized, lower-cased query string (see normalizeQuery)
+ * so whitespace/case variants collapse into one row.
  */
 export async function getQueryFanout(
   brandId: string,
   opts?: { days?: number },
 ): Promise<QueryFanoutData> {
   const supabase = await createClient();
-  const days = opts?.days ?? 30;
+  // Clamp the window to a sane range so a crafted call can't force an
+  // unbounded prompt_results scan + in-memory aggregation.
+  const days = Math.min(Math.max(Math.trunc(opts?.days ?? 30) || 30, 1), MAX_FANOUT_DAYS);
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
 
   // No server-side "non-empty" filter: comparing a jsonb column to '[]' through
@@ -87,7 +101,7 @@ export async function getQueryFanout(
     // even if the engine listed it twice.
     const seenInRow = new Set<string>();
     for (const item of items) {
-      const q = typeof item?.query === 'string' ? item.query.trim() : '';
+      const q = typeof item?.query === 'string' ? normalizeQuery(item.query) : '';
       if (!q) continue;
       const key = q.toLowerCase();
 
@@ -142,7 +156,7 @@ export async function getQueryFanout(
       .in('prompt_set_id', setIds)
       .eq('is_active', true);
     for (const p of existing ?? []) {
-      trackedByText.set((p.text as string).trim().toLowerCase(), p.id as string);
+      trackedByText.set(normalizeQuery(p.text as string).toLowerCase(), p.id as string);
     }
   }
 
@@ -178,7 +192,7 @@ export async function trackFanoutQuery(
   query: string,
 ): Promise<{ promptId: string }> {
   const supabase = await createClient();
-  const text = query.trim();
+  const text = normalizeQuery(query);
   if (!text) throw new Error('Empty query');
 
   const { data: ps, error: psErr } = await supabase
