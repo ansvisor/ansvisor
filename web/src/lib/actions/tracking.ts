@@ -319,11 +319,14 @@ export async function getPromptResults(
 /** Cheap existence check for a brand's (non-shopping) prompt_results — counts, no rows. */
 async function getBrandResultsTotal(brandId: string): Promise<number> {
   const supabase = await createClient();
-  const { count } = await supabase
+  const { count, error } = await supabase
     .from('prompt_results')
-    .select('*', { count: 'exact', head: true })
+    .select('id', { count: 'exact', head: true })
     .eq('brand_id', brandId)
     .neq('platform', 'chatgpt-shopping');
+  // Throw rather than swallow: a failed count must not masquerade as "no data"
+  // and silently flip the page to its empty state.
+  if (error) throw new Error(error.message);
   return count ?? 0;
 }
 
