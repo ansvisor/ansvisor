@@ -527,6 +527,9 @@ Return the exact topic names as provided above.`,
 // cache-misses hit the LLM. Body: { queries: string[] }.
 const FANOUT_INTENT_MAX_QUERIES = 200;
 const FANOUT_INTENT_CONCURRENCY = 6;
+// Cache-lookup batch size — keeps each `.in('query', ...)` URL well under
+// PostgREST / proxy length limits even with long sub-queries.
+const FANOUT_INTENT_LOOKUP_CHUNK = 40;
 
 function normalizeIntentQuery(raw) {
   return typeof raw === 'string' ? raw.replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 512) : '';
@@ -543,13 +546,20 @@ router.post('/fanout-intents', async (req, res) => {
     );
     if (queries.length === 0) return res.json({ intents: {} });
 
-    // 1. Read the cache.
-    const { data: cached } = await supabaseAdmin
-      .from('fanout_query_intents')
-      .select('query, intent')
-      .in('query', queries);
+    // 1. Read the cache in bounded chunks — a single `.in('query', ...)` over
+    // up to 200 text values can blow past PostgREST's URL length limit. A read
+    // error must surface (500), not silently fall through to classifying every
+    // query via the LLM.
     const intents = {};
-    for (const row of cached ?? []) intents[row.query] = row.intent;
+    for (let i = 0; i < queries.length; i += FANOUT_INTENT_LOOKUP_CHUNK) {
+      const chunk = queries.slice(i, i + FANOUT_INTENT_LOOKUP_CHUNK);
+      const { data: cached, error: cacheErr } = await supabaseAdmin
+        .from('fanout_query_intents')
+        .select('query, intent')
+        .in('query', chunk);
+      if (cacheErr) throw cacheErr;
+      for (const row of cached ?? []) intents[row.query] = row.intent;
+    }
 
     // 2. Classify the misses (bounded concurrency), then persist them.
     const misses = queries.filter((q) => !(q in intents));
