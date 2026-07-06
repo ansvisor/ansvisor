@@ -26,6 +26,7 @@ import {
   Lightbulb,
   Zap,
   Send,
+  Check,
   BarChart3,
   Search,
   Loader2,
@@ -300,6 +301,28 @@ export default function ContentPage() {
     }
   };
 
+const handleBulkDone = async () => {
+  setBulkSending(true);
+
+  try {
+    const ids = Array.from(selectedIds);
+
+    const result = await bulkUpdateStatus(ids, 'done');
+
+    toast.success(`Marked ${result.updated} opportunities as done`);
+
+    setSelectedIds(new Set());
+
+    await loadData();
+  } catch (err) {
+    toast.error(
+      err instanceof Error ? err.message : 'Bulk update failed'
+    );
+  } finally {
+    setBulkSending(false);
+  }
+};
+
   const handleBulkDismiss = async () => {
     setBulkSending(true);
     try {
@@ -491,29 +514,41 @@ export default function ContentPage() {
                 </span>
                 <div className="flex items-center gap-1 ml-auto">
                   <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs gap-1.5"
-                    onClick={handleBulkSend}
-                    disabled={bulkSending}
-                  >
-                    {bulkSending ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Send className="h-3 w-3" />
-                    )}
-                    {t('bulk.sendAll')}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs gap-1.5 text-muted-foreground"
-                    onClick={handleBulkDismiss}
-                    disabled={bulkSending}
-                  >
-                    <X className="h-3 w-3" />
-                    {t('bulk.dismissAll')}
-                  </Button>
+  variant="outline"
+  size="sm"
+  className="h-7 text-xs gap-1.5"
+  onClick={handleBulkSend}
+  disabled={bulkSending}
+>
+  {bulkSending ? (
+    <Loader2 className="h-3 w-3 animate-spin" />
+  ) : (
+    <Send className="h-3 w-3" />
+  )}
+  {t('bulk.sendAll')}
+</Button>
+
+<Button
+  variant="outline"
+  size="sm"
+  className="h-7 text-xs gap-1.5"
+  onClick={handleBulkDone}
+  disabled={bulkSending}
+>
+  <Check className="h-3 w-3" />
+ {t('bulk.done')}
+</Button>
+
+<Button
+  variant="outline"
+  size="sm"
+  className="h-7 text-xs gap-1.5 text-muted-foreground"
+  onClick={handleBulkDismiss}
+  disabled={bulkSending}
+>
+  <X className="h-3 w-3" />
+  {t('bulk.dismissAll')}
+</Button>
                 </div>
               </div>
             )}
