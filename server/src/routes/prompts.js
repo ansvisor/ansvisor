@@ -3,6 +3,7 @@ import { generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from '../lib/ai-provider.js';
+import { classifyPromptIntent } from '../lib/intent-extraction.js';
 import { getLanguageName } from '../lib/languages.js';
 import { requireFeature } from '../lib/plan-guard.js';
 
@@ -517,6 +518,67 @@ Return the exact topic names as provided above.`,
       error: 'Failed to generate prompts from topics',
       details: error.message,
     });
+  }
+});
+
+// POST /api/prompts/fanout-intents — classify the search intent of observed
+// query fan-out sub-queries (#333). Intent is brand-independent, so it's cached
+// globally per normalized query string in `fanout_query_intents`; only
+// cache-misses hit the LLM. Body: { queries: string[] }.
+const FANOUT_INTENT_MAX_QUERIES = 200;
+const FANOUT_INTENT_CONCURRENCY = 6;
+
+function normalizeIntentQuery(raw) {
+  return typeof raw === 'string' ? raw.replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 512) : '';
+}
+
+router.post('/fanout-intents', async (req, res) => {
+  try {
+    const raw = Array.isArray(req.body?.queries) ? req.body.queries : [];
+    // Normalize + dedup; cap the batch so a crafted call can't fan out into
+    // hundreds of LLM calls.
+    const queries = [...new Set(raw.map(normalizeIntentQuery).filter(Boolean))].slice(
+      0,
+      FANOUT_INTENT_MAX_QUERIES,
+    );
+    if (queries.length === 0) return res.json({ intents: {} });
+
+    // 1. Read the cache.
+    const { data: cached } = await supabaseAdmin
+      .from('fanout_query_intents')
+      .select('query, intent')
+      .in('query', queries);
+    const intents = {};
+    for (const row of cached ?? []) intents[row.query] = row.intent;
+
+    // 2. Classify the misses (bounded concurrency), then persist them.
+    const misses = queries.filter((q) => !(q in intents));
+    if (misses.length > 0) {
+      const aiModel = resolveModel();
+      const fresh = [];
+      for (let i = 0; i < misses.length; i += FANOUT_INTENT_CONCURRENCY) {
+        const chunk = misses.slice(i, i + FANOUT_INTENT_CONCURRENCY);
+        const settled = await Promise.allSettled(
+          chunk.map((q) => classifyPromptIntent(q, aiModel).then((intent) => ({ q, intent }))),
+        );
+        for (const s of settled) {
+          if (s.status === 'fulfilled') {
+            intents[s.value.q] = s.value.intent;
+            fresh.push({ query: s.value.q, intent: s.value.intent });
+          }
+        }
+      }
+      if (fresh.length > 0) {
+        await supabaseAdmin
+          .from('fanout_query_intents')
+          .upsert(fresh, { onConflict: 'query', ignoreDuplicates: true });
+      }
+    }
+
+    return res.json({ intents });
+  } catch (error) {
+    req.log.error({ err: error }, 'fanout intents classification error');
+    return res.status(500).json({ error: error.message });
   }
 });
 

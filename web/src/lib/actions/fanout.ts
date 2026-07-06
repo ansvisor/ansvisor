@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { addPromptToSet } from '@/lib/actions/prompt';
+import { API_BASE_URL } from '@/config/api';
 
 /**
  * Query Fan-out (#333) — read + promote actions over the OBSERVED sub-queries
@@ -225,4 +226,35 @@ export async function trackFanoutQuery(
 
   revalidatePath('/dashboard/prompts');
   return { promptId: created.id };
+}
+
+/**
+ * Classify the search intent of fan-out sub-queries via the server (#333).
+ * Intent is brand-independent and cached server-side, so this is a cheap
+ * on-demand lookup — a sub-query is classified by the LLM once and reused
+ * everywhere after. Returns a map of normalized (lower-cased) query → intent.
+ */
+export async function classifyFanoutIntents(queries: string[]): Promise<Record<string, string>> {
+  if (queries.length === 0) return {};
+
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  const res = await fetch(`${API_BASE_URL}/api/prompts/fanout-intents`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ queries }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error: ${res.status}`);
+  }
+  const data = await res.json();
+  return (data.intents ?? {}) as Record<string, string>;
 }

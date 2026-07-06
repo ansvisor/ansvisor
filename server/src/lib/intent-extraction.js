@@ -73,3 +73,41 @@ export async function extractIntentKeywords(promptText, aiModel) {
   });
   return { intent: object.intent, keywords: object.keywords };
 }
+
+// Intent-only schema — reuses the EXACT enum from intentKeywordSchema so the
+// Query Fan-out "intent" column can never drift from the Insights one.
+export const intentOnlySchema = z.object({
+  intent: intentKeywordSchema.shape.intent,
+});
+
+export const INTENT_ONLY_SYSTEM_PROMPT = `You classify the primary search intent behind a short query into exactly one of these labels:
+
+- comparison: weighing multiple options against each other
+- how-to: accomplishing a task or process
+- what-is: a definition or understanding a concept
+- best-top: finding the best / top options in a category
+- vs-review: a head-to-head or a review of a specific thing
+- recommendation: asking for a suggestion or what to pick
+- problem-solving: fixing an issue or troubleshooting
+- other: none of the above fits
+
+Return only the single best-fitting label.`;
+
+/**
+ * Classify the primary search intent of a query — intent only, no keyword
+ * extraction and no volume work, so it's a cheaper call than
+ * extractIntentKeywords. Shares the same intent enum (#333).
+ *
+ * @param {string} text - The sub-query / prompt to classify.
+ * @param {import('ai').LanguageModel} aiModel - A resolved AI SDK model (from `resolveModel`).
+ * @returns {Promise<string>} one of the intent enum values
+ */
+export async function classifyPromptIntent(text, aiModel) {
+  const { object } = await generateObject({
+    model: aiModel,
+    schema: intentOnlySchema,
+    system: INTENT_ONLY_SYSTEM_PROMPT,
+    prompt: `Classify the search intent of this query:\n\n"${text}"`,
+  });
+  return object.intent;
+}

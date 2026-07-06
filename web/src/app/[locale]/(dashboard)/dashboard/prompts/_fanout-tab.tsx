@@ -3,8 +3,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
-import { getQueryFanout, trackFanoutQuery, type QueryFanoutData } from '@/lib/actions/fanout';
+import {
+  getQueryFanout,
+  trackFanoutQuery,
+  classifyFanoutIntents,
+  type QueryFanoutData,
+} from '@/lib/actions/fanout';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
+import { INTENT_LABELS, INTENT_COLORS } from '@/config/intent-labels';
+import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,12 +34,22 @@ export function QueryFanoutTab({ brandId }: { brandId: string }) {
   const [data, setData] = useState<QueryFanoutData | null>(null);
   const [loading, setLoading] = useState(true);
   const [addingKey, setAddingKey] = useState<string | null>(null);
+  // Intent is keyed by the lower-cased sub-query (matches the server cache key).
+  const [intents, setIntents] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const result = await getQueryFanout(brandId, { days: 30 });
       setData(result);
+      // Fill in intents on-demand (cached server-side) — non-blocking, so the
+      // table paints immediately and the intent badges appear as they resolve.
+      const queries = result.subQueries.map((s) => s.query);
+      if (queries.length > 0) {
+        classifyFanoutIntents(queries)
+          .then((map) => setIntents((prev) => ({ ...prev, ...map })))
+          .catch(() => {});
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load query fan-out');
       setData({ subQueries: [], totalObserved: 0 });
@@ -92,7 +109,8 @@ export function QueryFanoutTab({ brandId }: { brandId: string }) {
                 <TableHead>Sub-query</TableHead>
                 <TableHead className="w-[160px]">Engine</TableHead>
                 <TableHead className="w-[120px] text-right">Times searched</TableHead>
-                <TableHead className="w-[240px]">Sourced prompts</TableHead>
+                <TableHead className="w-[220px]">Sourced prompts</TableHead>
+                <TableHead className="w-[130px]">Intent</TableHead>
                 <TableHead className="w-[64px] text-right">Track</TableHead>
               </TableRow>
             </TableHeader>
@@ -115,6 +133,9 @@ export function QueryFanoutTab({ brandId }: { brandId: string }) {
                     <TableCell className="text-right tabular-nums">{sq.timesSearched}</TableCell>
                     <TableCell>
                       <SourcedPrompts prompts={sq.sourcedPrompts} />
+                    </TableCell>
+                    <TableCell>
+                      <IntentBadge intent={intents[key]} />
                     </TableCell>
                     <TableCell className="text-right">
                       {sq.tracked ? (
@@ -185,5 +206,19 @@ function SourcedPrompts({ prompts }: { prompts: { id: string; text: string }[] }
         </span>
       )}
     </div>
+  );
+}
+
+function IntentBadge({ intent }: { intent?: string }) {
+  // Intents load on-demand (async, cached server-side); show a placeholder
+  // until this row's classification resolves.
+  if (!intent) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <Badge
+      variant="outline"
+      className={cn('text-[10px] whitespace-nowrap', INTENT_COLORS[intent] ?? '')}
+    >
+      {INTENT_LABELS[intent] ?? intent}
+    </Badge>
   );
 }
