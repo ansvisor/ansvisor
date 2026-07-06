@@ -619,7 +619,7 @@ export default function PromptsPage() {
 
         {/* ─── Query Fan-out tab ───────────────────────────────────────── */}
         <TabsContent value="fanout" className="mt-4">
-          {activeBrandId && <QueryFanoutTab brandId={activeBrandId} />}
+          {activeBrandId && <QueryFanoutTab brandId={activeBrandId} onTracked={loadData} />}
         </TabsContent>
 
         {/* ─── Insights tab ────────────────────────────────────────────── */}

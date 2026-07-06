@@ -30,7 +30,12 @@ function platformLabel(slug: string): string {
   return PLATFORM_LABELS[slug] ?? slug;
 }
 
-export function QueryFanoutTab({ brandId }: { brandId: string }) {
+type QueryFanoutTabProps = {
+  brandId: string;
+  onTracked?: () => void | Promise<void>;
+};
+
+export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
   const [data, setData] = useState<QueryFanoutData | null>(null);
   const [loading, setLoading] = useState(true);
   const [addingKey, setAddingKey] = useState<string | null>(null);
@@ -59,7 +64,6 @@ export function QueryFanoutTab({ brandId }: { brandId: string }) {
       setLoading(false);
     }
   }, [brandId]);
-
   useEffect(() => {
     load();
   }, [load]);
@@ -73,8 +77,9 @@ export function QueryFanoutTab({ brandId }: { brandId: string }) {
     try {
       await trackFanoutQuery(brandId, query);
       toast.success('Added as a tracked prompt');
-      setPage(1);
       await load();
+      setPage(1);
+      await onTracked?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to track this query');
     } finally {
