@@ -1020,7 +1020,9 @@ function ByCompetitorView({
           }}
         >
           <SelectTrigger className="h-8 w-56 text-xs">
-            <SelectValue placeholder="Select competitor" />
+            <SelectValue placeholder="Select competitor">
+              {(value) => gaps.competitors.find((c) => c.id === value)?.name ?? 'Select competitor'}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {gaps.competitors.map((c) => (
