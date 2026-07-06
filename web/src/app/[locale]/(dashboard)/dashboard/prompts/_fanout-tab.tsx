@@ -36,6 +36,8 @@ export function QueryFanoutTab({ brandId }: { brandId: string }) {
   const [addingKey, setAddingKey] = useState<string | null>(null);
   // Intent is keyed by the lower-cased sub-query (matches the server cache key).
   const [intents, setIntents] = useState<Record<string, string>>({});
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -62,11 +64,16 @@ export function QueryFanoutTab({ brandId }: { brandId: string }) {
     load();
   }, [load]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [brandId]);
+
   async function handleTrack(query: string) {
     setAddingKey(query.toLowerCase());
     try {
       await trackFanoutQuery(brandId, query);
       toast.success('Added as a tracked prompt');
+      setPage(1);
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to track this query');
@@ -78,7 +85,7 @@ export function QueryFanoutTab({ brandId }: { brandId: string }) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium">Query fan-out</CardTitle>
+        <CardTitle className="text-sm font-medium">High frequency</CardTitle>
         <p className="text-xs text-muted-foreground">
           The sub-queries answer engines actually ran while building your answers (last 30 days) —
           observed, never predicted. Sorted by how often they were searched. Track any of them with
@@ -103,76 +110,106 @@ export function QueryFanoutTab({ brandId }: { brandId: string }) {
             </p>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Sub-query</TableHead>
-                <TableHead className="w-[160px]">Engine</TableHead>
-                <TableHead className="w-[120px] text-right">Times searched</TableHead>
-                <TableHead className="w-[220px]">Sourced prompts</TableHead>
-                <TableHead className="w-[130px]">Intent</TableHead>
-                <TableHead className="w-[64px] text-right">Track</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.subQueries.map((sq) => {
-                const key = sq.query.toLowerCase();
-                const adding = addingKey === key;
-                return (
-                  <TableRow key={key}>
-                    <TableCell className="font-medium">{sq.query}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {sq.engines.map((e) => (
-                          <Badge key={e} variant="secondary" className="text-[10px]">
-                            {platformLabel(e)}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{sq.timesSearched}</TableCell>
-                    <TableCell>
-                      <SourcedPrompts prompts={sq.sourcedPrompts} />
-                    </TableCell>
-                    <TableCell>
-                      <IntentBadge intent={intents[key]} />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {sq.tracked ? (
-                        <Badge
-                          variant="outline"
-                          className="gap-1 text-[10px] text-emerald-600 dark:text-emerald-400"
-                          render={
-                            sq.trackedPromptId ? (
-                              <Link href={`/dashboard/prompts/${sq.trackedPromptId}`} />
-                            ) : undefined
-                          }
-                        >
-                          <Check className="h-3 w-3" />
-                          Tracked
-                        </Badge>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          disabled={adding}
-                          onClick={() => handleTrack(sq.query)}
-                          aria-label={`Track "${sq.query}" as a prompt`}
-                        >
-                          {adding ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Plus className="h-4 w-4" />
-                          )}
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <>
+            {(() => {
+              const totalPages = Math.ceil(data.subQueries.length / PAGE_SIZE);
+              const pageRows = data.subQueries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+              return (
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Sub-query</TableHead>
+                        <TableHead className="w-[160px]">Engine</TableHead>
+                        <TableHead className="w-[120px] text-right">Times searched</TableHead>
+                        <TableHead className="w-[220px]">Sourced prompts</TableHead>
+                        <TableHead className="w-[130px]">Intent</TableHead>
+                        <TableHead className="w-[64px] text-right">Track</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pageRows.map((sq) => {
+                        const key = sq.query.toLowerCase();
+                        const adding = addingKey === key;
+                        return (
+                          <TableRow key={key}>
+                            <TableCell className="font-medium">{sq.query}</TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-1">
+                                {sq.engines.map((e) => (
+                                  <Badge key={e} variant="secondary" className="text-[10px]">
+                                    {platformLabel(e)}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {sq.timesSearched}
+                            </TableCell>
+                            <TableCell>
+                              <SourcedPrompts prompts={sq.sourcedPrompts} />
+                            </TableCell>
+                            <TableCell>
+                              <IntentBadge intent={intents[key]} />
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {sq.tracked ? (
+                                <Badge
+                                  variant="outline"
+                                  className="gap-1 text-[10px] text-emerald-600 dark:text-emerald-400"
+                                  render={
+                                    sq.trackedPromptId ? (
+                                      <Link href={`/dashboard/prompts/${sq.trackedPromptId}`} />
+                                    ) : undefined
+                                  }
+                                >
+                                  <Check className="h-3 w-3" />
+                                  Tracked
+                                </Badge>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  disabled={adding}
+                                  onClick={() => handleTrack(sq.query)}
+                                  aria-label={`Track "${sq.query}" as a prompt`}
+                                >
+                                  {adding ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Plus className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-center gap-1 pt-4">
+                      {Array.from({ length: totalPages }, (_, i) => {
+                        const p = i + 1;
+                        return (
+                          <Button
+                            key={p}
+                            variant={page === p ? 'default' : 'ghost'}
+                            size="sm"
+                            className="h-7 w-7 p-0 text-xs"
+                            onClick={() => setPage(p)}
+                          >
+                            {p}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </>
         )}
       </CardContent>
     </Card>
