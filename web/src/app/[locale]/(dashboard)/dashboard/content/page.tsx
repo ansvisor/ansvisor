@@ -151,38 +151,41 @@ export default function ContentPage() {
   const [webhookOpen, setWebhookOpen] = useState(false);
   const pollRef = useRef(false);
 
-  const loadData = useCallback(async () => {
-    if (!activeBrandId) {
-      setOpportunities([]);
-      setTotal(0);
-      setLoading(false);
-      return;
-    }
+  const loadData = useCallback(
+    async (silent = false) => {
+      if (!activeBrandId) {
+        setOpportunities([]);
+        setTotal(0);
+        setLoading(false);
+        return;
+      }
 
-    setLoading(true);
-    setSelectedIds(new Set());
-    try {
-      const filters: Record<string, string> = {};
-      if (statusFilter !== 'all') filters.status = statusFilter;
-      if (impactFilter !== 'all') filters.impact = impactFilter;
-      if (typeFilter !== 'all') filters.type = typeFilter;
+      if (!silent) setLoading(true);
+      setSelectedIds(new Set());
+      try {
+        const filters: Record<string, string> = {};
+        if (statusFilter !== 'all') filters.status = statusFilter;
+        if (impactFilter !== 'all') filters.impact = impactFilter;
+        if (typeFilter !== 'all') filters.type = typeFilter;
 
-      const data = await getOpportunities(activeBrandId, {
-        ...filters,
-        limit: 100,
-        sort: 'score',
-      });
-      setOpportunities(data.opportunities);
-      setTotal(data.total);
-      return data.total;
-    } catch (err) {
-      console.error('Failed to load opportunities:', err);
-      toast.error('Failed to load content opportunities');
-      return 0;
-    } finally {
-      setLoading(false);
-    }
-  }, [activeBrandId, statusFilter, impactFilter, typeFilter]);
+        const data = await getOpportunities(activeBrandId, {
+          ...filters,
+          limit: 100,
+          sort: 'score',
+        });
+        setOpportunities(data.opportunities);
+        setTotal(data.total);
+        return data.total;
+      } catch (err) {
+        console.error('Failed to load opportunities:', err);
+        toast.error('Failed to load content opportunities');
+        return 0;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [activeBrandId, statusFilter, impactFilter, typeFilter],
+  );
 
   useEffect(() => {
     loadData();
@@ -266,7 +269,7 @@ export default function ContentPage() {
     try {
       await sendToWebhook(id);
       toast.success('Sent to workflow!');
-      await loadData();
+      await loadData(true);
     } catch (err) {
       console.error('Webhook send failed:', err);
       toast.error(err instanceof Error ? err.message : 'Failed to send');
@@ -279,7 +282,7 @@ export default function ContentPage() {
     try {
       await updateOpportunityStatus(id, 'dismissed');
       toast.success('Opportunity dismissed');
-      await loadData();
+      await loadData(true);
     } catch (err) {
       console.error('Dismiss failed:', err);
       toast.error('Failed to dismiss');
@@ -293,7 +296,7 @@ export default function ContentPage() {
       toast.success(`Sent ${result.sent} opportunities to workflow`);
       if (result.failed > 0) toast.error(`${result.failed} failed to send`);
       setSelectedIds(new Set());
-      await loadData();
+      await loadData(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Bulk send failed');
     } finally {
@@ -313,7 +316,7 @@ export default function ContentPage() {
 
       setSelectedIds(new Set());
 
-      await loadData();
+      await loadData(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Bulk update failed');
     } finally {
@@ -328,7 +331,7 @@ export default function ContentPage() {
       const result = await bulkUpdateStatus(ids, 'dismissed');
       toast.success(`Dismissed ${result.updated} opportunities`);
       setSelectedIds(new Set());
-      await loadData();
+      await loadData(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Bulk dismiss failed');
     } finally {
@@ -613,9 +616,7 @@ export default function ContentPage() {
                         >
                           {t(
                             `impact.${opp.impact}` as
-                              | 'impact.high'
-                              | 'impact.medium'
-                              | 'impact.low',
+                              'impact.high' | 'impact.medium' | 'impact.low',
                           )}
                         </Badge>
                       </TableCell>
