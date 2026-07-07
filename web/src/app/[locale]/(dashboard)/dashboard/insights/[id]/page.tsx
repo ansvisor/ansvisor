@@ -9,27 +9,18 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, ExternalLink, MessageSquareText, Quote, Eye, Clock } from 'lucide-react';
+import {
+  ArrowLeft,
+  ExternalLink,
+  MessageSquareText,
+  Quote,
+  Eye,
+  Clock,
+  Search,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-const PLATFORM_LABELS: Record<string, string> = {
-  chatgpt: 'ChatGPT',
-  gemini: 'Gemini',
-  perplexity: 'Perplexity',
-  claude: 'Claude',
-  grok: 'Grok',
-  copilot: 'Copilot',
-  'meta-ai': 'Meta AI',
-  'google-ai-overviews': 'Google AI Overview',
-  'google-ai-mode': 'Google AI Mode',
-  'chatgpt-web': 'ChatGPT',
-  'google-aio': 'Google AI Overview',
-  'google-aimode': 'Google AI Mode',
-  'perplexity-web': 'Perplexity',
-  'copilot-web': 'Microsoft Copilot',
-  'grok-web': 'Grok',
-  'gemini-web': 'Gemini',
-};
+import { PLATFORM_LABELS } from '@/config/platform-labels';
+import { formatSearchQuerySource, visibleSearchQueries } from './query-fanout';
 
 function SentimentBadge({ sentiment }: { sentiment: 'positive' | 'neutral' | 'negative' }) {
   return (
@@ -103,6 +94,8 @@ export default function ResultDetailPage() {
       </div>
     );
   }
+
+  const searchQueries = visibleSearchQueries(result.searchQueries);
 
   return (
     <div className="space-y-6 p-2 sm:p-6 max-w-5xl mx-auto">
@@ -199,6 +192,30 @@ export default function ResultDetailPage() {
                     <p className="text-muted-foreground text-xs truncate">{cite.url}</p>
                   </div>
                 </a>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Query fan-out */}
+      {searchQueries.length > 0 && (
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="text-sm font-medium mb-4">Query fan-out ({searchQueries.length})</h2>
+            <div className="space-y-2">
+              {searchQueries.map((item, i) => (
+                <div key={`${item.query}-${i}`} className="rounded-lg border px-4 py-3 text-sm">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <Search className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
+                      <p className="min-w-0 break-words font-medium">{item.query.trim()}</p>
+                    </div>
+                    <Badge variant="secondary" className="w-fit shrink-0 text-xs">
+                      {formatSearchQuerySource(item, result.platform)}
+                    </Badge>
+                  </div>
+                </div>
               ))}
             </div>
           </CardContent>

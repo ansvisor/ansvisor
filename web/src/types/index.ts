@@ -108,6 +108,12 @@ export interface Citation {
   endIndex: number;
 }
 
+export interface ObservedSearchQuery {
+  query: string;
+  engine?: string | null;
+  source_platform?: string | null;
+}
+
 export interface PromptResult {
   id: string;
   promptId: string;
@@ -122,6 +128,7 @@ export interface PromptResult {
   modelUsed?: string;
   region?: string;
   competitorMentions?: CompetitorMention[];
+  searchQueries?: ObservedSearchQuery[];
   createdAt: string;
 }
 

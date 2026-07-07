@@ -9,6 +9,7 @@ import type {
   Citation,
   CompetitorMention,
   Topic,
+  ObservedSearchQuery,
 } from '@/types';
 import { API_BASE_URL } from '@/config/api';
 import { getTopicById } from '@/lib/actions/topic';
@@ -52,6 +53,9 @@ function mapResultRow(row: Record<string, unknown>): PromptResult {
     modelUsed: (row.model_used as string | null) ?? undefined,
     region: (row.region as string | null) ?? undefined,
     competitorMentions: (row.competitor_mentions as CompetitorMention[] | null) ?? undefined,
+    searchQueries: Array.isArray(row.search_queries)
+      ? (row.search_queries as ObservedSearchQuery[])
+      : [],
     createdAt: row.created_at as string,
   };
 }
