@@ -6,6 +6,7 @@
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import { resolveModel } from '../lib/ai-provider.js';
+import { getLanguageName } from '../lib/languages.js';
 import supabaseAdmin from '../config/supabase.js';
 import logger from '../lib/logger.js';
 
@@ -82,11 +83,12 @@ export async function processContentJob({ brandId, model, job }) {
 
   const { data: brand } = await supabaseAdmin
     .from('brands')
-    .select('id, name, description, industry, organization_id')
+    .select('id, name, description, industry, organization_id, language')
     .eq('id', brandId)
     .single();
 
   if (!brand) throw new Error(`Brand not found: ${brandId}`);
+  const langName = getLanguageName(brand.language);
 
   const { data: domains } = await supabaseAdmin
     .from('brand_domains')
@@ -215,7 +217,9 @@ ${scoredPrompts
   )
   .join('\n')}
 
-Generate actionable content opportunities based on this data. Reference specific numbers and competitors where relevant.`;
+Generate actionable content opportunities based on this data. Reference specific numbers and competitors where relevant.
+
+IMPORTANT: Write every opportunity title and description in ${langName}.`;
 
   const aiModel = resolveModel(model);
 
