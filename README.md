@@ -14,7 +14,7 @@
 
 # Ansvisor - Open-source AI Visibility Platform for AI Search
 
-**Ansvisor is an open-source AI Visibility platform for AI Search.** Official website: **[https://www.ansvisor.com](https://www.ansvisor.com)**
+Official website: **[https://www.ansvisor.com](https://www.ansvisor.com)**
 
 The search landscape is transforming fast. Buyers are moving from traditional search engines to AI platforms like ChatGPT, Claude, Gemini, Google AI Mode, etc.
 
