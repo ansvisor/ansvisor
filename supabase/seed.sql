@@ -528,3 +528,86 @@ INSERT INTO public.prompt_result_shopping_cards (
 )
 ON CONFLICT (id) DO NOTHING;
 
+-- ─── Query Fan-out seed data ──────────────────────────────────────────────────
+-- Populates search_queries on copilot-web and perplexity-web prompt_results so
+-- the Query Fan-out tab has data to display locally. Each item mirrors the real
+-- shape: { query, engine?, source_platform }.
+
+-- Prompt 801: "What are the best coffee subscription services in 2026?"
+UPDATE public.prompt_results
+SET search_queries = '[
+  {"query": "best coffee subscription services 2026", "source_platform": "copilot-web"},
+  {"query": "coffee subscription box comparison", "source_platform": "copilot-web"},
+  {"query": "top rated coffee subscription 2026", "source_platform": "copilot-web"}
+]'::jsonb
+WHERE prompt_id = '88888888-8888-8888-8888-888888888801' AND platform = 'copilot-web';
+
+UPDATE public.prompt_results
+SET search_queries = '[
+  {"query": "best coffee subscription services 2026", "engine": "web", "source_platform": "perplexity-web"},
+  {"query": "top rated monthly coffee boxes", "engine": "web", "source_platform": "perplexity-web"}
+]'::jsonb
+WHERE prompt_id = '88888888-8888-8888-8888-888888888801' AND platform = 'perplexity-web';
+
+-- Prompt 802: "Which specialty coffee subscriptions ship internationally?"
+UPDATE public.prompt_results
+SET search_queries = '[
+  {"query": "international coffee subscription shipping", "source_platform": "copilot-web"},
+  {"query": "specialty coffee worldwide delivery", "source_platform": "copilot-web"}
+]'::jsonb
+WHERE prompt_id = '88888888-8888-8888-8888-888888888802' AND platform = 'copilot-web';
+
+UPDATE public.prompt_results
+SET search_queries = '[
+  {"query": "international coffee subscription shipping", "engine": "web", "source_platform": "perplexity-web"},
+  {"query": "worldwide coffee delivery subscription", "engine": "web", "source_platform": "perplexity-web"}
+]'::jsonb
+WHERE prompt_id = '88888888-8888-8888-8888-888888888802' AND platform = 'perplexity-web';
+
+-- Prompt 803: "Best monthly coffee bean subscription for offices"
+UPDATE public.prompt_results
+SET search_queries = '[
+  {"query": "office coffee subscription plans", "source_platform": "copilot-web"},
+  {"query": "bulk coffee beans subscription for teams", "source_platform": "copilot-web"}
+]'::jsonb
+WHERE prompt_id = '88888888-8888-8888-8888-888888888803' AND platform = 'copilot-web';
+
+-- Prompt 804: "Best espresso machines under $500?"
+UPDATE public.prompt_results
+SET search_queries = '[
+  {"query": "best espresso machine under 500", "source_platform": "copilot-web"},
+  {"query": "home espresso machine reviews 2026", "source_platform": "copilot-web"}
+]'::jsonb
+WHERE prompt_id = '88888888-8888-8888-8888-888888888804' AND platform = 'copilot-web';
+
+UPDATE public.prompt_results
+SET search_queries = '[
+  {"query": "best espresso machine under 500", "engine": "web", "source_platform": "perplexity-web"},
+  {"query": "affordable espresso machine comparison", "engine": "web", "source_platform": "perplexity-web"}
+]'::jsonb
+WHERE prompt_id = '88888888-8888-8888-8888-888888888804' AND platform = 'perplexity-web';
+
+-- Prompt 805: "Compare home espresso machines for beginners"
+-- "best espresso machine under 500" is shared with prompt 804 — demonstrates
+-- the cross-prompt grouping the "By prompt" view is designed to show.
+UPDATE public.prompt_results
+SET search_queries = '[
+  {"query": "best espresso machine for beginners", "source_platform": "copilot-web"},
+  {"query": "best espresso machine under 500", "source_platform": "copilot-web"}
+]'::jsonb
+WHERE prompt_id = '88888888-8888-8888-8888-888888888805' AND platform = 'copilot-web';
+
+UPDATE public.prompt_results
+SET search_queries = '[
+  {"query": "best espresso machine for beginners", "engine": "web", "source_platform": "perplexity-web"}
+]'::jsonb
+WHERE prompt_id = '88888888-8888-8888-8888-888888888805' AND platform = 'perplexity-web';
+
+-- Prompt 806: "Manual vs automatic espresso machine for home use"
+UPDATE public.prompt_results
+SET search_queries = '[
+  {"query": "manual vs automatic espresso machine", "source_platform": "copilot-web"},
+  {"query": "home espresso machine comparison 2026", "source_platform": "copilot-web"}
+]'::jsonb
+WHERE prompt_id = '88888888-8888-8888-8888-888888888806' AND platform = 'copilot-web';
+
