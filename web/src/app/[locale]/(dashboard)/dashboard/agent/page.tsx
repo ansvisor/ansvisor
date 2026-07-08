@@ -403,7 +403,7 @@ function MessageBubble({ message }: { message: UIMessage }) {
   async function handleCopy() {
     await navigator.clipboard.writeText(rawText).catch(() => {});
     setCopied(true);
-    toast.success('Link copied');
+    toast.success('Copied');
     setTimeout(() => setCopied(false), 2000);
   }
 
@@ -456,7 +456,7 @@ function MessageBubble({ message }: { message: UIMessage }) {
             type="button"
             onClick={() => void handleCopy()}
             aria-label={copied ? 'Copied' : 'Copy message'}
-            className="absolute bottom-2 right-2 p-1 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground transition-opacity"
+            className="absolute bottom-2 right-2 p-1 rounded text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-foreground transition-opacity"
           >
             {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
           </button>
