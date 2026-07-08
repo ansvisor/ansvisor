@@ -10,7 +10,7 @@ import {
   type SourceCategory,
   SOURCE_CATEGORIES,
 } from '@/lib/citations/classify';
-import { classifyArticleType } from '@/lib/citations/article-type';
+import { classifyArticleType, type ArticleType } from '@/lib/citations/article-type';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -228,6 +228,10 @@ export async function getCitationsOverview(
 
   const domainMap = new Map<string, DomainAgg>();
   const urlMap = new Map<string, UrlAgg>();
+
+  const domainClassificationCache = new Map<string, SourceCategory>();
+  const articleTypeCache = new Map<string, ArticleType | null>();
+
   let totalCitations = 0;
 
   for (const result of results) {
@@ -238,7 +242,13 @@ export async function getCitationsOverview(
       const host = extractHostname(cite.url);
       if (!host) continue;
 
-      const category = classifyDomain(host, classifyCtx);
+      let category = domainClassificationCache.get(host);
+
+      if (category === undefined) {
+        category = classifyDomain(host, classifyCtx);
+        domainClassificationCache.set(host, category);
+      }
+
       if (filters.excludeOwnDomain && category === 'you') continue;
       if (filters.competitorOnly && category !== 'competitor') continue;
       if (filters.ownOnly && category !== 'you') continue;
@@ -257,7 +267,14 @@ export async function getCitationsOverview(
       existingDomain.totalCitations += 1;
       existingDomain.resultsCiting.add(result.id);
       if (modelKey) existingDomain.models.add(modelKey);
-      const articleType = classifyArticleType(cite.url, cite.title);
+      const articleTypeKey = `${cite.url}\n${cite.title ?? ''}`;
+
+      let articleType = articleTypeCache.get(articleTypeKey);
+
+      if (articleType === undefined) {
+        articleType = classifyArticleType(cite.url, cite.title);
+        articleTypeCache.set(articleTypeKey, articleType);
+      }
       if (articleType) {
         existingDomain.articleTypeCounts.set(
           articleType,
@@ -515,14 +532,24 @@ export async function getCitationGaps(
   const byCompMap = new Map<string, Map<string, CompDomainAgg>>();
   let ourAnswerCount = 0;
   const totalAnswers = results.length;
+  const domainClassificationCache = new Map<string, SourceCategory>();
 
   for (const r of results) {
     const citations = Array.isArray(r.citations) ? r.citations : [];
     const domainCat = new Map<string, SourceCategory>();
+
     for (const cite of citations) {
       const host = extractHostname(cite.url);
       if (!host || domainCat.has(host)) continue;
-      domainCat.set(host, classifyDomain(host, classifyCtx));
+
+      let category = domainClassificationCache.get(host);
+
+      if (category === undefined) {
+        category = classifyDomain(host, classifyCtx);
+        domainClassificationCache.set(host, category);
+      }
+
+      domainCat.set(host, category);
     }
     // Weight each answer's co-occurrences by 1 / distinct sources so a focused
     // answer counts more per domain than a sprawling multi-source one.
