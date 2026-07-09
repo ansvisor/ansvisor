@@ -44,6 +44,12 @@ export interface ReportPromptPerf {
   runs: number;
 }
 
+export interface ReportFanoutQuery {
+  query: string;
+  engines: string[];
+  timesSearched: number;
+}
+
 export interface ReportPayload {
   brandName: string;
   /** AI-generated executive summary (plain prose). */
@@ -60,6 +66,8 @@ export interface ReportPayload {
     best: ReportPromptPerf[];
     worst: ReportPromptPerf[];
   };
+  /** Most-run observed fan-out sub-queries in the period (optional, see above). */
+  queryFanout?: ReportFanoutQuery[];
   shareOfVoice: {
     overallSov: number;
     overallSovChange: number | null;
@@ -156,6 +164,64 @@ async function getPromptPerformance(
   return { best, worst };
 }
 
+/** How many fan-out sub-queries a report keeps. */
+const REPORT_FANOUT_COUNT = 10;
+
+/**
+ * Top observed fan-out sub-queries WITHIN the report period. Mirrors the
+ * aggregation in fanout.ts (dedupe per answer, whitespace/case-normalized
+ * grouping) but bounded to [dateFrom, dateTo] instead of a rolling window
+ * anchored to "now", which would lie for historical custom ranges.
+ */
+async function getFanoutSnapshot(
+  brandId: string,
+  dateFrom: string,
+  dateTo: string,
+): Promise<ReportFanoutQuery[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('prompt_results')
+    .select('platform, search_queries')
+    .eq('brand_id', brandId)
+    .gte('created_at', dateFrom)
+    .lte('created_at', dateTo);
+  if (error) throw new Error(error.message);
+
+  const normalize = (raw: string) => raw.replace(/\s+/g, ' ').trim();
+  const byQuery = new Map<string, { display: string; engines: Set<string>; count: number }>();
+
+  for (const row of data ?? []) {
+    const items = Array.isArray(row.search_queries)
+      ? (row.search_queries as { query?: unknown; source_platform?: unknown }[])
+      : [];
+    const seenInRow = new Set<string>();
+    for (const item of items) {
+      const q = typeof item?.query === 'string' ? normalize(item.query) : '';
+      if (!q) continue;
+      const key = q.toLowerCase();
+      let acc = byQuery.get(key);
+      if (!acc) {
+        acc = { display: q, engines: new Set(), count: 0 };
+        byQuery.set(key, acc);
+      }
+      const sp =
+        typeof item?.source_platform === 'string' && item.source_platform
+          ? item.source_platform
+          : (row.platform as string | null);
+      if (sp) acc.engines.add(sp);
+      if (!seenInRow.has(key)) {
+        acc.count += 1;
+        seenInRow.add(key);
+      }
+    }
+  }
+
+  return [...byQuery.values()]
+    .sort((a, b) => b.count - a.count || a.display.localeCompare(b.display))
+    .slice(0, REPORT_FANOUT_COUNT)
+    .map((a) => ({ query: a.display, engines: [...a.engines].sort(), timesSearched: a.count }));
+}
+
 // ─── Actions ─────────────────────────────────────────────────────────────────
 
 export async function createReport(
@@ -172,7 +238,7 @@ export async function createReport(
   const range = { dateFrom, dateTo };
 
   // 1. Gather the metric snapshot through the existing analytics actions.
-  const [brandRow, insights, sov, comparison, citations, trend, promptPerformance] =
+  const [brandRow, insights, sov, comparison, citations, trend, promptPerformance, queryFanout] =
     await Promise.all([
       supabase.from('brands').select('name').eq('id', brandId).single(),
       getInsightsSummary(brandId, range),
@@ -181,6 +247,7 @@ export async function createReport(
       getCitationsOverview(brandId, { datePreset: 'custom', dateFrom, dateTo }),
       getVisibilityTrend(brandId, range),
       getPromptPerformance(brandId, dateFrom, dateTo),
+      getFanoutSnapshot(brandId, dateFrom, dateTo),
     ]);
   const brandName = (brandRow.data?.name as string) ?? 'Brand';
 
@@ -189,6 +256,7 @@ export async function createReport(
     insights,
     visibilityTrend: trend,
     promptPerformance,
+    queryFanout,
     shareOfVoice: {
       overallSov: sov.overallSov,
       overallSovChange: sov.overallSovChange,

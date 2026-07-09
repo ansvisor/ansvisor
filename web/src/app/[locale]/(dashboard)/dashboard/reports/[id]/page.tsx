@@ -110,6 +110,7 @@ export default function ReportDetailPage() {
 
   const { payload } = report;
   const maxSov = Math.max(...payload.shareOfVoice.byPlatform.map((p) => p.sov), 1);
+  const maxTrend = Math.max(...(payload.visibilityTrend ?? []).map((p) => p.score), 1);
 
   return (
     <div className="space-y-6">
@@ -169,55 +170,37 @@ export default function ReportDetailPage() {
 
         {/* Optional sections below guard on their payload field: reports
             generated before a section shipped simply don't render it. */}
-        {payload.visibilityTrend && payload.visibilityTrend.length > 1 && (
+        {payload.visibilityTrend && payload.visibilityTrend.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">{t('visibilityTrend')}</CardTitle>
             </CardHeader>
             <CardContent>
+              {/* Each bar lives in a full-height column wrapper and grows from
+                  the bottom — percentage heights on the bar resolve against
+                  the wrapper, which is reliable across browsers (a bare
+                  percentage height on a flex item is not). Heights normalize
+                  to the window's max score so low-visibility periods still
+                  read as a curve. */}
               <div className="flex h-28 items-end gap-px">
                 {payload.visibilityTrend.map((p, i) => (
                   <div
                     key={`${p.date}-${i}`}
                     title={`${p.date}: ${p.score}%`}
-                    className="flex-1 rounded-t bg-primary/80"
-                    style={{ height: `${Math.max(p.score, 2)}%` }}
-                  />
+                    className="flex h-full flex-1 flex-col justify-end"
+                  >
+                    <div
+                      className="min-h-[2px] rounded-t bg-primary/80"
+                      style={{ height: `${(p.score / maxTrend) * 100}%` }}
+                    />
+                  </div>
                 ))}
               </div>
               <div className="mt-2 flex justify-between text-xs text-muted-foreground">
                 <span>{payload.visibilityTrend[0].date}</span>
+                <span>{t('trendPeak', { score: maxTrend })}</span>
                 <span>{payload.visibilityTrend[payload.visibilityTrend.length - 1].date}</span>
               </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {payload.insights.platformBreakdown.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">{t('platformBreakdown')}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {payload.insights.platformBreakdown.map((p) => (
-                <div key={p.platform} className="flex items-center gap-3">
-                  <span className="w-32 shrink-0 truncate text-sm">
-                    {PLATFORM_LABELS[p.platform] ?? p.platform}
-                  </span>
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary"
-                      style={{ width: `${Math.min(p.avgScore, 100)}%` }}
-                    />
-                  </div>
-                  <span className="w-14 shrink-0 text-right text-sm font-medium">
-                    {p.avgScore}%
-                  </span>
-                  <span className="w-20 shrink-0 text-right text-xs text-muted-foreground">
-                    {t('resultCount', { count: p.resultCount })}
-                  </span>
-                </div>
-              ))}
             </CardContent>
           </Card>
         )}
@@ -338,6 +321,39 @@ export default function ReportDetailPage() {
               )}
             </div>
           )}
+
+        {payload.queryFanout && payload.queryFanout.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('queryFanout')}</CardTitle>
+              <p className="text-sm text-muted-foreground">{t('queryFanoutDescription')}</p>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('columns.query')}</TableHead>
+                    <TableHead>{t('columns.engines')}</TableHead>
+                    <TableHead className="w-32 text-right">{t('columns.timesSearched')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {payload.queryFanout.map((q) => (
+                    <TableRow key={q.query}>
+                      <TableCell className="max-w-[320px] truncate font-medium">
+                        {q.query}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {q.engines.map((e) => PLATFORM_LABELS[e] ?? e).join(', ')}
+                      </TableCell>
+                      <TableCell className="text-right">{q.timesSearched}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
