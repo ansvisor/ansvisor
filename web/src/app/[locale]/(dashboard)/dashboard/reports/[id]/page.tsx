@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/table';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { PLATFORM_LABELS } from '@/config/platform-labels';
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', {
@@ -166,6 +167,61 @@ export default function ReportDetailPage() {
           />
         </div>
 
+        {/* Optional sections below guard on their payload field: reports
+            generated before a section shipped simply don't render it. */}
+        {payload.visibilityTrend && payload.visibilityTrend.length > 1 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('visibilityTrend')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex h-28 items-end gap-px">
+                {payload.visibilityTrend.map((p, i) => (
+                  <div
+                    key={`${p.date}-${i}`}
+                    title={`${p.date}: ${p.score}%`}
+                    className="flex-1 rounded-t bg-primary/80"
+                    style={{ height: `${Math.max(p.score, 2)}%` }}
+                  />
+                ))}
+              </div>
+              <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+                <span>{payload.visibilityTrend[0].date}</span>
+                <span>{payload.visibilityTrend[payload.visibilityTrend.length - 1].date}</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {payload.insights.platformBreakdown.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('platformBreakdown')}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {payload.insights.platformBreakdown.map((p) => (
+                <div key={p.platform} className="flex items-center gap-3">
+                  <span className="w-32 shrink-0 truncate text-sm">
+                    {PLATFORM_LABELS[p.platform] ?? p.platform}
+                  </span>
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{ width: `${Math.min(p.avgScore, 100)}%` }}
+                    />
+                  </div>
+                  <span className="w-14 shrink-0 text-right text-sm font-medium">
+                    {p.avgScore}%
+                  </span>
+                  <span className="w-20 shrink-0 text-right text-xs text-muted-foreground">
+                    {t('resultCount', { count: p.resultCount })}
+                  </span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-baseline gap-2 text-base">
@@ -235,6 +291,54 @@ export default function ReportDetailPage() {
           </CardContent>
         </Card>
 
+        {payload.promptPerformance &&
+          (payload.promptPerformance.best.length > 0 ||
+            payload.promptPerformance.worst.length > 0) && (
+            <div className="grid gap-6 lg:grid-cols-2">
+              {(
+                [
+                  ['bestPrompts', payload.promptPerformance.best],
+                  ['worstPrompts', payload.promptPerformance.worst],
+                ] as const
+              ).map(
+                ([key, prompts]) =>
+                  prompts.length > 0 && (
+                    <Card key={key}>
+                      <CardHeader>
+                        <CardTitle className="text-base">{t(key)}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>{t('columns.prompt')}</TableHead>
+                              <TableHead className="w-24 text-right">
+                                {t('kpi.visibility')}
+                              </TableHead>
+                              <TableHead className="w-16 text-right">{t('columns.runs')}</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {prompts.map((p) => (
+                              <TableRow key={p.text}>
+                                <TableCell className="max-w-[280px] truncate font-medium">
+                                  {p.text}
+                                </TableCell>
+                                <TableCell className="text-right">{p.avgVisibility}%</TableCell>
+                                <TableCell className="text-right text-muted-foreground">
+                                  {p.runs}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    </Card>
+                  ),
+              )}
+            </div>
+          )}
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{t('topCitationSources')}</CardTitle>
@@ -245,7 +349,26 @@ export default function ReportDetailPage() {
               })}
             </p>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            {payload.citations.sourceTypeBreakdown.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('sourceTypeBreakdown')}
+                </p>
+                {payload.citations.sourceTypeBreakdown.map((s) => (
+                  <div key={s.category} className="flex items-center gap-3">
+                    <span className="w-32 shrink-0 truncate text-sm capitalize">{s.category}</span>
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary"
+                        style={{ width: `${Math.min(s.pct, 100)}%` }}
+                      />
+                    </div>
+                    <span className="w-14 shrink-0 text-right text-sm font-medium">{s.pct}%</span>
+                  </div>
+                ))}
+              </div>
+            )}
             {payload.citations.topDomains.length === 0 ? (
               <p className="text-sm text-muted-foreground">{t('noData')}</p>
             ) : (

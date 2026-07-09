@@ -425,8 +425,16 @@
       "change": "Change",
       "domain": "Domain",
       "sourceType": "Source Type",
-      "usage": "Usage"
+      "usage": "Usage",
+      "prompt": "Prompt",
+      "runs": "Runs"
     },
+    "visibilityTrend": "Visibility Trend",
+    "platformBreakdown": "Platform Breakdown",
+    "sourceTypeBreakdown": "Source Type Breakdown",
+    "bestPrompts": "Best Performing Prompts",
+    "worstPrompts": "Weakest Prompts",
+    "resultCount": "{count} results",
     "notFound": "Report not found.",
     "backToReports": "Back to Reports",
     "generatedOn": "Generated on",

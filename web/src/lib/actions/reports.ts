@@ -8,9 +8,11 @@ import {
   getInsightsSummary,
   getShareOfVoiceData,
   getCompetitorComparison,
+  getVisibilityTrend,
   type InsightsSummary,
   type CompetitorComparisonEntry,
   type SoVByPlatform,
+  type VisibilityTrendPoint,
 } from '@/lib/actions/tracking';
 import { getCitationsOverview, type CitationsSourceBreakdown } from '@/lib/actions/citations';
 import type { SourceCategory } from '@/lib/citations/classify';
@@ -35,11 +37,29 @@ export interface ReportTopDomain {
   usagePct: number;
 }
 
+export interface ReportPromptPerf {
+  text: string;
+  avgVisibility: number;
+  totalMentions: number;
+  runs: number;
+}
+
 export interface ReportPayload {
   brandName: string;
   /** AI-generated executive summary (plain prose). */
   summaryText: string;
   insights: InsightsSummary;
+  /**
+   * Daily visibility trend over the report period. Optional: reports
+   * generated before this field shipped simply don't have it (the payload is
+   * immutable), and the detail page hides the section.
+   */
+  visibilityTrend?: VisibilityTrendPoint[];
+  /** Best/worst performing prompts in the period (also optional, see above). */
+  promptPerformance?: {
+    best: ReportPromptPerf[];
+    worst: ReportPromptPerf[];
+  };
   shareOfVoice: {
     overallSov: number;
     overallSovChange: number | null;
@@ -77,6 +97,65 @@ export interface Report extends ReportListItem {
 /** How many citation domains a report keeps (the table is capped, by design). */
 const REPORT_TOP_DOMAINS = 10;
 
+/** How many best/worst prompts a report keeps. */
+const REPORT_PROMPT_COUNT = 5;
+
+/**
+ * Best/worst prompts by average visibility WITHIN the report period.
+ * getPromptVisibilitySummaries anchors its window to "now", which lies for
+ * custom historical ranges — so reports aggregate over [dateFrom, dateTo]
+ * directly (same shape: exclude chatgpt-shopping, average per prompt).
+ */
+async function getPromptPerformance(
+  brandId: string,
+  dateFrom: string,
+  dateTo: string,
+): Promise<{ best: ReportPromptPerf[]; worst: ReportPromptPerf[] }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('prompt_results')
+    .select('prompt_id, visibility_score, mention_count')
+    .eq('brand_id', brandId)
+    .neq('platform', 'chatgpt-shopping')
+    .gte('created_at', dateFrom)
+    .lte('created_at', dateTo);
+  if (error) throw new Error(error.message);
+
+  const acc = new Map<string, { sumVis: number; mentions: number; runs: number }>();
+  for (const r of data ?? []) {
+    const pid = r.prompt_id as string | null;
+    if (!pid) continue;
+    const entry = acc.get(pid) ?? { sumVis: 0, mentions: 0, runs: 0 };
+    entry.sumVis += (r.visibility_score as number) ?? 0;
+    entry.mentions += (r.mention_count as number) ?? 0;
+    entry.runs += 1;
+    acc.set(pid, entry);
+  }
+  if (acc.size === 0) return { best: [], worst: [] };
+
+  const { data: promptRows } = await supabase
+    .from('prompts')
+    .select('id, text')
+    .in('id', [...acc.keys()]);
+  const textById = new Map((promptRows ?? []).map((p) => [p.id as string, p.text as string]));
+
+  const ranked = [...acc.entries()]
+    .map(([pid, v]) => ({
+      text: textById.get(pid) ?? '',
+      avgVisibility: Math.round((v.sumVis / v.runs) * 10) / 10,
+      totalMentions: v.mentions,
+      runs: v.runs,
+    }))
+    .filter((p) => p.text)
+    .sort((a, b) => b.avgVisibility - a.avgVisibility);
+
+  const best = ranked.slice(0, REPORT_PROMPT_COUNT);
+  // Worst come from the remaining pool so a short prompt list doesn't show
+  // the same prompt in both columns.
+  const worst = ranked.slice(REPORT_PROMPT_COUNT).slice(-REPORT_PROMPT_COUNT).reverse();
+  return { best, worst };
+}
+
 // ─── Actions ─────────────────────────────────────────────────────────────────
 
 export async function createReport(
@@ -93,18 +172,23 @@ export async function createReport(
   const range = { dateFrom, dateTo };
 
   // 1. Gather the metric snapshot through the existing analytics actions.
-  const [brandRow, insights, sov, comparison, citations] = await Promise.all([
-    supabase.from('brands').select('name').eq('id', brandId).single(),
-    getInsightsSummary(brandId, range),
-    getShareOfVoiceData(brandId, range),
-    getCompetitorComparison(brandId, range),
-    getCitationsOverview(brandId, { datePreset: 'custom', dateFrom, dateTo }),
-  ]);
+  const [brandRow, insights, sov, comparison, citations, trend, promptPerformance] =
+    await Promise.all([
+      supabase.from('brands').select('name').eq('id', brandId).single(),
+      getInsightsSummary(brandId, range),
+      getShareOfVoiceData(brandId, range),
+      getCompetitorComparison(brandId, range),
+      getCitationsOverview(brandId, { datePreset: 'custom', dateFrom, dateTo }),
+      getVisibilityTrend(brandId, range),
+      getPromptPerformance(brandId, dateFrom, dateTo),
+    ]);
   const brandName = (brandRow.data?.name as string) ?? 'Brand';
 
   const snapshot: Omit<ReportPayload, 'summaryText'> = {
     brandName,
     insights,
+    visibilityTrend: trend,
+    promptPerformance,
     shareOfVoice: {
       overallSov: sov.overallSov,
       overallSovChange: sov.overallSovChange,
