@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Building2,
+  FileBarChart,
   FileText,
   Gauge,
   Globe,
@@ -96,6 +97,11 @@ export const dashboardNav: NavGroup[] = [
         href: '/dashboard/competitors',
         icon: Users,
         requiredFeature: 'competitor_tracking',
+      },
+      {
+        title: 'Reports',
+        href: '/dashboard/reports',
+        icon: FileBarChart,
       },
     ],
   },
