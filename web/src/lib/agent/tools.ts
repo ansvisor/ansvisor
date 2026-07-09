@@ -281,5 +281,23 @@ export function buildAgentTools(auth: McpAuthContext) {
       }),
       execute: async (args) => args,
     }),
+    render_audit: tool({
+      description:
+        'Render a Site Audit result inline in the chat. Call this AFTER you have the completed audit data from get_site_audit (typically after running run_site_audit and polling until completion). Pass the audit result directly from the previous tool result — never invent or recalculate scores. The tool only echoes the audit data back; the UI renders the audit card.',
+      inputSchema: z.object({
+        url: z.string().describe('The URL that was audited.'),
+
+        totalScore: z.number().nullable().describe('The overall Site Audit score.'),
+
+        categoryScores: z.record(z.string(), z.unknown()).describe('Per-category audit scores.'),
+
+        recommendations: z.array(z.unknown()).describe('AI-generated audit recommendations.'),
+
+        signalsEvaluated: z.number().nullable().describe('Number of audit signals evaluated.'),
+
+        signalsTotal: z.number().nullable().describe('Total number of audit signals.'),
+      }),
+      execute: async (args) => args,
+    }),
   };
 }

@@ -39,7 +39,7 @@ export function scoreColor(score: number | null): string {
   return 'text-destructive';
 }
 
-function barColor(score: number | null): string {
+export function barColor(score: number | null): string {
   if (score === null) return 'bg-muted';
   if (score >= 0.7) return 'bg-green-600';
   if (score >= 0.4) return 'bg-amber-500';
@@ -67,7 +67,7 @@ function gradeKey(score: number | null): 'good' | 'needsWork' | 'poor' | null {
   return 'poor';
 }
 
-function ScoreGauge({ score }: { score: number | null }) {
+export function ScoreGauge({ score }: { score: number | null }) {
   const p = pct(score) ?? 0;
   const radius = 52;
   const circ = 2 * Math.PI * radius;

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, type UIMessage } from 'ai';
 import type { AgentChartSpec } from '@/components/agent/agent-chart';
+import { AuditResultCard } from '@/components/audit/audit-result-card';
+import type { AgentAuditSpec } from '@/components/agent/agent-chart';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 const AgentChart = dynamic(
@@ -446,6 +448,9 @@ function MessageBubble({ message }: { message: UIMessage }) {
           if (part.type === 'tool-render_chart') {
             return <ChartToolPart key={i} part={part} />;
           }
+          if (part.type === 'tool-render_audit') {
+            return <AuditToolPart key={i} part={part} />;
+          }
           if (part.type.startsWith('tool-')) {
             return <ToolCallDisclosure key={i} part={part} />;
           }
@@ -604,6 +609,37 @@ function ChartToolPart({ part }: { part: UIMessage['parts'][number] }) {
   }
 
   return <AgentChart spec={spec} />;
+}
+function AuditToolPart({ part }: { part: UIMessage['parts'][number] }) {
+  const toolPart = part as unknown as {
+    type: string;
+    state?: 'input-streaming' | 'input-available' | 'output-available' | 'output-error';
+    input?: AgentAuditSpec;
+    output?: AgentAuditSpec;
+    errorText?: string;
+  };
+
+  if (toolPart.state === 'output-error') {
+    return (
+      <div className="my-2 rounded-md border bg-destructive/10 px-2 py-1 text-xs text-destructive">
+        <span className="font-mono">render_audit</span>
+        {toolPart.errorText && <span className="ml-2">{toolPart.errorText}</span>}
+      </div>
+    );
+  }
+
+  const audit = toolPart.output ?? toolPart.input;
+
+  if (!audit) {
+    return (
+      <div className="my-2 inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        <span className="font-mono">render_audit</span>
+      </div>
+    );
+  }
+
+  return <AuditResultCard audit={audit} />;
 }
 
 function EmptyState() {
