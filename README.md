@@ -30,7 +30,7 @@ We're incredibly excited to shape what's next alongside our amazing community.
 
 ### Why Ansvisor?
 
-> AI search is replacing the traditional click. When ChatGPT recommends a product, no Google ranking saves you. Ansvisor measures what classical SEO can't see — how often AI engines name your brand, which competitors get cited instead, and which prompts move the needle. Self-host it for free, or use the managed cloud at [ansvisor.com](https://www.ansvisor.com).
+> AI search is replacing the traditional click. When ChatGPT recommends a product, no Google ranking saves you. Ansvisor measures what classical SEO can't see — how often AI engines name your brand, which competitors get cited instead, and which prompts move the needle. Self-host it for free, or use the managed [cloud](https://www.ansvisor.com).
 
 ## Resources
 
