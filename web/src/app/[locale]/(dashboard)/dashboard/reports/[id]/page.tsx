@@ -3,7 +3,16 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import dynamic from 'next/dynamic';
 import { Link } from '@/i18n/navigation';
+import { Skeleton } from '@/components/ui/skeleton';
+
+// Reuse the insights page's Recharts trend chart (same VisibilityTrendPoint
+// shape the report payload stores), loaded client-only like insights does.
+const TrendChart = dynamic(() => import('../../insights/_charts').then((m) => m.TrendChart), {
+  ssr: false,
+  loading: () => <Skeleton className="h-48 w-full" />,
+});
 import { getReport, type Report } from '@/lib/actions/reports';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -110,7 +119,6 @@ export default function ReportDetailPage() {
 
   const { payload } = report;
   const maxSov = Math.max(...payload.shareOfVoice.byPlatform.map((p) => p.sov), 1);
-  const maxTrend = Math.max(...(payload.visibilityTrend ?? []).map((p) => p.score), 1);
 
   return (
     <div className="space-y-6">
@@ -176,31 +184,7 @@ export default function ReportDetailPage() {
               <CardTitle className="text-base">{t('visibilityTrend')}</CardTitle>
             </CardHeader>
             <CardContent>
-              {/* Each bar lives in a full-height column wrapper and grows from
-                  the bottom — percentage heights on the bar resolve against
-                  the wrapper, which is reliable across browsers (a bare
-                  percentage height on a flex item is not). Heights normalize
-                  to the window's max score so low-visibility periods still
-                  read as a curve. */}
-              <div className="flex h-28 items-end gap-px">
-                {payload.visibilityTrend.map((p, i) => (
-                  <div
-                    key={`${p.date}-${i}`}
-                    title={`${p.date}: ${p.score}%`}
-                    className="flex h-full flex-1 flex-col justify-end"
-                  >
-                    <div
-                      className="min-h-[2px] rounded-t bg-primary/80"
-                      style={{ height: `${(p.score / maxTrend) * 100}%` }}
-                    />
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-                <span>{payload.visibilityTrend[0].date}</span>
-                <span>{t('trendPeak', { score: maxTrend })}</span>
-                <span>{payload.visibilityTrend[payload.visibilityTrend.length - 1].date}</span>
-              </div>
+              <TrendChart data={payload.visibilityTrend} />
             </CardContent>
           </Card>
         )}

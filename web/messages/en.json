@@ -433,7 +433,6 @@
       "timesSearched": "Times Searched"
     },
     "visibilityTrend": "Visibility Trend",
-    "trendPeak": "peak {score}%",
     "sourceTypeBreakdown": "Source Type Breakdown",
     "bestPrompts": "Best Performing Prompts",
     "worstPrompts": "Weakest Prompts",
