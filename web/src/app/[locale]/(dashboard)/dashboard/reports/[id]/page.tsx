@@ -13,8 +13,10 @@ const TrendChart = dynamic(() => import('../../insights/_charts').then((m) => m.
   ssr: false,
   loading: () => <Skeleton className="h-48 w-full" />,
 });
+import { toast } from 'sonner';
 import { getReport, type Report } from '@/lib/actions/reports';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -23,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, FileDown, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 
@@ -78,6 +80,7 @@ export default function ReportDetailPage() {
 
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +123,38 @@ export default function ReportDetailPage() {
   const { payload } = report;
   const maxSov = Math.max(...payload.shareOfVoice.byPlatform.map((p) => p.sov), 1);
 
+  // Render a true vector PDF from the saved payload with @react-pdf/renderer
+  // (selectable text, exact layout — no screenshot artifacts). The renderer
+  // and the document component both load on demand: PDF export is rare and
+  // the library is heavy.
+  const handleDownloadPdf = async () => {
+    setDownloading(true);
+    try {
+      const [{ pdf }, { ReportPdfDocument }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('./_report-pdf'),
+      ]);
+      const blob = await pdf(<ReportPdfDocument report={report} />).toBlob();
+
+      const slug =
+        payload.brandName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, '') || 'brand';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ansvisor_${slug}_report_${report.dateTo.slice(0, 10)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('PDF download error:', err);
+      toast.error(t('downloadFailed'));
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -137,6 +172,14 @@ export default function ReportDetailPage() {
             {formatDate(report.createdAt)}
           </p>
         </div>
+        <Button onClick={handleDownloadPdf} disabled={downloading} className="gap-2">
+          {downloading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <FileDown className="h-4 w-4" />
+          )}
+          {t('downloadPDF')}
+        </Button>
       </div>
 
       {/* Everything below renders from the immutable saved payload; the
@@ -350,25 +393,6 @@ export default function ReportDetailPage() {
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            {payload.citations.sourceTypeBreakdown.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  {t('sourceTypeBreakdown')}
-                </p>
-                {payload.citations.sourceTypeBreakdown.map((s) => (
-                  <div key={s.category} className="flex items-center gap-3">
-                    <span className="w-32 shrink-0 truncate text-sm capitalize">{s.category}</span>
-                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-primary"
-                        style={{ width: `${Math.min(s.pct, 100)}%` }}
-                      />
-                    </div>
-                    <span className="w-14 shrink-0 text-right text-sm font-medium">{s.pct}%</span>
-                  </div>
-                ))}
-              </div>
-            )}
             {payload.citations.topDomains.length === 0 ? (
               <p className="text-sm text-muted-foreground">{t('noData')}</p>
             ) : (
