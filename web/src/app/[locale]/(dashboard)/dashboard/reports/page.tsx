@@ -27,8 +27,11 @@ import {
 } from '@/components/ui/table';
 import { FileBarChart, Loader2, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { REPORT_TEMPLATES, type ReportTemplateId } from '@/lib/reports/templates';
 
 type DatePreset = '7d' | '30d' | '90d' | 'custom';
+
+const KNOWN_TEMPLATE_IDS = new Set<string>(REPORT_TEMPLATES.map((tpl) => tpl.id));
 
 /** Resolve a preset into the concrete [from, to] ISO range a report snapshots. */
 function getDateRange(preset: DatePreset, custom: { from: string; to: string }) {
@@ -65,9 +68,18 @@ export default function ReportsPage() {
   const [generating, setGenerating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const [template, setTemplate] = useState<ReportTemplateId>('executive_summary');
   const [preset, setPreset] = useState<DatePreset>('30d');
   const [customRange, setCustomRange] = useState({ from: '', to: '' });
   const [reportTitle, setReportTitle] = useState('');
+
+  const selectTemplate = (id: ReportTemplateId) => {
+    setTemplate(id);
+    // Templates carry a sensible default window (weekly → 7d); the user can
+    // still override it below.
+    const def = REPORT_TEMPLATES.find((tpl) => tpl.id === id);
+    if (def) setPreset(def.defaultPreset);
+  };
 
   const load = useCallback(async () => {
     if (!activeBrandId) return;
@@ -99,6 +111,7 @@ export default function ReportsPage() {
         dateFrom,
         dateTo,
         title: reportTitle || undefined,
+        template,
       });
       toast.success(t('generated'));
       setDialogOpen(false);
@@ -166,7 +179,14 @@ export default function ReportsPage() {
               <TableBody>
                 {reports.map((report) => (
                   <TableRow key={report.id}>
-                    <TableCell className="font-medium">{report.title}</TableCell>
+                    <TableCell>
+                      <span className="font-medium">{report.title}</span>
+                      {KNOWN_TEMPLATE_IDS.has(report.template) && (
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {t(`templates.${report.template}.name`)}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {formatDate(report.dateFrom)} — {formatDate(report.dateTo)}
                     </TableCell>
@@ -206,13 +226,53 @@ export default function ReportsPage() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={(open) => !generating && setDialogOpen(open)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{t('dialogTitle')}</DialogTitle>
             <DialogDescription>{t('dialogDescription')}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{t('templateLabel')}</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {REPORT_TEMPLATES.map((tpl) => (
+                  <button
+                    key={tpl.id}
+                    type="button"
+                    onClick={() => selectTemplate(tpl.id)}
+                    disabled={generating}
+                    className={cn(
+                      'rounded-lg border p-3 text-left transition-colors',
+                      template === tpl.id
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-muted-foreground/40',
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium">{t(`templates.${tpl.id}.name`)}</span>
+                      <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                        {t(`presets.${tpl.defaultPreset}`)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t(`templates.${tpl.id}.description`)}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {tpl.sections.map((s) => (
+                        <span
+                          key={s}
+                          className="rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                        >
+                          {t(`sections.${s}`)}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="space-y-2">
               <p className="text-sm font-medium">{t('reportTitleLabel')}</p>
               <Input

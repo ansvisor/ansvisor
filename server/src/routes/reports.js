@@ -1,7 +1,7 @@
 /**
  * Reports routes (Simple Reports MVP).
  *
- *   POST /api/reports/summary   { brandId, snapshot, dateFrom, dateTo, model? }
+ *   POST /api/reports/summary   { brandId, snapshot, dateFrom, dateTo, template?, model? }
  *                               → { success, summary }
  *
  * Generates the AI executive summary for a report from the metric snapshot the
@@ -29,11 +29,26 @@ Write a 1-2 paragraph executive summary in English for a marketing executive:
 - Call out the most notable competitor dynamics (who leads, who moved).
 - Mention citation reach (domains/URLs) only if it adds signal.
 - Be concrete: use the numbers from the snapshot. Never invent metrics that are not present.
+- Cover only what the snapshot contains — templates gather different sections, so skip anything absent.
 - No headings, no bullet points, no markdown — plain prose only.`;
+
+/**
+ * Per-template flavor appended to the system prompt. The snapshot already
+ * contains only that template's sections; this just steers the prose focus.
+ */
+const TEMPLATE_FLAVOR = {
+  weekly_visibility:
+    'This is a WEEKLY visibility summary: keep it to one tight paragraph focused on week-over-week movement in visibility, mentions and share of voice.',
+  executive_summary: '',
+  competitor_benchmark:
+    'This is a COMPETITOR BENCHMARK report: lead with where the brand stands versus each competitor, who gained and who lost, and where the largest gaps are.',
+  citation_sources:
+    'This is a CITATION & SOURCES report: focus on citation reach, which domains and source types dominate, and notable concentration or gaps in the source mix.',
+};
 
 router.post('/summary', async (req, res) => {
   const userId = req.user?.id;
-  const { brandId, snapshot, dateFrom, dateTo, model } = req.body || {};
+  const { brandId, snapshot, dateFrom, dateTo, template, model } = req.body || {};
 
   if (!brandId || !snapshot || typeof snapshot !== 'object') {
     return res.status(400).json({ success: false, message: 'brandId and snapshot are required' });
@@ -57,9 +72,10 @@ ${JSON.stringify(snapshot, null, 2)}
 
 Write the executive summary.`;
 
+    const flavor = TEMPLATE_FLAVOR[template] || '';
     const { text: summary } = await generateText({
       model: resolveModel(model),
-      system: SUMMARY_SYSTEM_PROMPT,
+      system: flavor ? `${SUMMARY_SYSTEM_PROMPT}\n\n${flavor}` : SUMMARY_SYSTEM_PROMPT,
       prompt: userPrompt,
     });
 

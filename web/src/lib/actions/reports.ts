@@ -16,6 +16,11 @@ import {
 } from '@/lib/actions/tracking';
 import { getCitationsOverview, type CitationsSourceBreakdown } from '@/lib/actions/citations';
 import type { SourceCategory } from '@/lib/citations/classify';
+import {
+  getReportTemplate,
+  type ReportSection,
+  type ReportTemplateId,
+} from '@/lib/reports/templates';
 
 /**
  * Simple Reports MVP — generate, list and delete immutable report snapshots.
@@ -50,32 +55,34 @@ export interface ReportFanoutQuery {
   timesSearched: number;
 }
 
+/**
+ * All metric fields are optional: a template only gathers its own sections
+ * (see lib/reports/templates.ts), and the detail page + PDF render purely by
+ * field presence. Reports generated before a field shipped simply don't have
+ * it — the payload is immutable.
+ */
 export interface ReportPayload {
   brandName: string;
   /** AI-generated executive summary (plain prose). */
   summaryText: string;
-  insights: InsightsSummary;
-  /**
-   * Daily visibility trend over the report period. Optional: reports
-   * generated before this field shipped simply don't have it (the payload is
-   * immutable), and the detail page hides the section.
-   */
+  insights?: InsightsSummary;
+  /** Daily visibility trend over the report period. */
   visibilityTrend?: VisibilityTrendPoint[];
-  /** Best/worst performing prompts in the period (also optional, see above). */
+  /** Best/worst performing prompts in the period. */
   promptPerformance?: {
     best: ReportPromptPerf[];
     worst: ReportPromptPerf[];
   };
-  /** Most-run observed fan-out sub-queries in the period (optional, see above). */
+  /** Most-run observed fan-out sub-queries in the period. */
   queryFanout?: ReportFanoutQuery[];
-  shareOfVoice: {
+  shareOfVoice?: {
     overallSov: number;
     overallSovChange: number | null;
     byPlatform: SoVByPlatform[];
   };
   /** Own brand + competitors, as returned by getCompetitorComparison. */
-  competitors: CompetitorComparisonEntry[];
-  citations: {
+  competitors?: CompetitorComparisonEntry[];
+  citations?: {
     totals: {
       domains: number;
       urls: number;
@@ -224,9 +231,17 @@ async function getFanoutSnapshot(
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
 
+/** English display names used in stored (immutable) report titles. */
+const TEMPLATE_TITLES: Record<ReportTemplateId, string> = {
+  weekly_visibility: 'Weekly Visibility Summary',
+  executive_summary: 'Executive Summary',
+  competitor_benchmark: 'Competitor Benchmark',
+  citation_sources: 'Citation & Sources Report',
+};
+
 export async function createReport(
   brandId: string,
-  opts: { dateFrom: string; dateTo: string; title?: string },
+  opts: { dateFrom: string; dateTo: string; title?: string; template?: ReportTemplateId },
 ): Promise<{ id: string }> {
   const supabase = await createClient();
   const {
@@ -236,54 +251,68 @@ export async function createReport(
 
   const { dateFrom, dateTo } = opts;
   const range = { dateFrom, dateTo };
+  const template = getReportTemplate(opts.template);
+  const has = (s: ReportSection) => template.sections.includes(s);
 
-  // 1. Gather the metric snapshot through the existing analytics actions.
+  // 1. Gather the metric snapshot through the existing analytics actions —
+  //    only the sections this template renders (null = section not gathered).
   const [brandRow, insights, sov, comparison, citations, trend, promptPerformance, queryFanout] =
     await Promise.all([
       supabase.from('brands').select('name').eq('id', brandId).single(),
-      getInsightsSummary(brandId, range),
-      getShareOfVoiceData(brandId, range),
-      getCompetitorComparison(brandId, range),
-      getCitationsOverview(brandId, { datePreset: 'custom', dateFrom, dateTo }),
-      getVisibilityTrend(brandId, range),
-      getPromptPerformance(brandId, dateFrom, dateTo),
-      getFanoutSnapshot(brandId, dateFrom, dateTo),
+      has('kpis') ? getInsightsSummary(brandId, range) : null,
+      has('shareOfVoice') ? getShareOfVoiceData(brandId, range) : null,
+      has('competitors') ? getCompetitorComparison(brandId, range) : null,
+      has('citations')
+        ? getCitationsOverview(brandId, { datePreset: 'custom', dateFrom, dateTo })
+        : null,
+      has('trend') ? getVisibilityTrend(brandId, range) : null,
+      has('promptPerformance') ? getPromptPerformance(brandId, dateFrom, dateTo) : null,
+      has('queryFanout') ? getFanoutSnapshot(brandId, dateFrom, dateTo) : null,
     ]);
   const brandName = (brandRow.data?.name as string) ?? 'Brand';
 
   const snapshot: Omit<ReportPayload, 'summaryText'> = {
     brandName,
-    insights,
-    visibilityTrend: trend,
-    promptPerformance,
-    queryFanout,
-    shareOfVoice: {
-      overallSov: sov.overallSov,
-      overallSovChange: sov.overallSovChange,
-      byPlatform: sov.byPlatform,
-    },
-    competitors: comparison.brands,
-    citations: {
-      totals: citations.totals,
-      sourceTypeBreakdown: citations.sourceTypeBreakdown,
-      topDomains: citations.rows.slice(0, REPORT_TOP_DOMAINS).map((r) => ({
-        domain: r.domain,
-        category: r.category,
-        totalCitations: r.totalCitations,
-        resultsCiting: r.resultsCiting,
-        usagePct: r.usagePct,
-      })),
-    },
+    ...(insights ? { insights } : {}),
+    ...(trend ? { visibilityTrend: trend } : {}),
+    ...(promptPerformance ? { promptPerformance } : {}),
+    ...(queryFanout ? { queryFanout } : {}),
+    ...(sov
+      ? {
+          shareOfVoice: {
+            overallSov: sov.overallSov,
+            overallSovChange: sov.overallSovChange,
+            byPlatform: sov.byPlatform,
+          },
+        }
+      : {}),
+    ...(comparison ? { competitors: comparison.brands } : {}),
+    ...(citations
+      ? {
+          citations: {
+            totals: citations.totals,
+            sourceTypeBreakdown: citations.sourceTypeBreakdown,
+            topDomains: citations.rows.slice(0, REPORT_TOP_DOMAINS).map((r) => ({
+              domain: r.domain,
+              category: r.category,
+              totalCitations: r.totalCitations,
+              resultsCiting: r.resultsCiting,
+              usagePct: r.usagePct,
+            })),
+          },
+        }
+      : {}),
   };
 
   // 2. AI executive summary from the server (content.js-style single call).
+  //    The template id lets the server flavor the prose for the report type.
   const res = await fetch(`${API_BASE_URL}/api/reports/summary`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ brandId, snapshot, dateFrom, dateTo }),
+    body: JSON.stringify({ brandId, snapshot, dateFrom, dateTo, template: template.id }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -296,14 +325,14 @@ export async function createReport(
   // 3. Persist the immutable snapshot (RLS scopes the insert to org members).
   const title =
     opts.title?.trim() ||
-    `${brandName} — Executive Summary (${dateFrom.slice(0, 10)} → ${dateTo.slice(0, 10)})`;
+    `${brandName} — ${TEMPLATE_TITLES[template.id]} (${dateFrom.slice(0, 10)} → ${dateTo.slice(0, 10)})`;
 
   const { data: created, error } = await supabase
     .from('reports')
     .insert({
       brand_id: brandId,
       title,
-      template: 'executive_summary',
+      template: template.id,
       date_from: dateFrom,
       date_to: dateTo,
       payload: payload as unknown as Json,

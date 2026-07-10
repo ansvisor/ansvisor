@@ -228,7 +228,9 @@ function formatDate(iso: string) {
 
 export function ReportPdfDocument({ report }: { report: Report }) {
   const { payload } = report;
-  const maxSov = Math.max(...payload.shareOfVoice.byPlatform.map((p) => p.sov), 1);
+  // Every metric field is optional — templates only gather their own
+  // sections, so each block below guards on its payload field.
+  const maxSov = Math.max(...(payload.shareOfVoice?.byPlatform.map((p) => p.sov) ?? []), 1);
   const trend = payload.visibilityTrend ?? [];
   const hasCompetitorTrend = trend.some((d) => d.competitors !== null);
 
@@ -250,36 +252,42 @@ export function ReportPdfDocument({ report }: { report: Report }) {
         </View>
 
         {/* KPI row */}
-        <View style={[styles.section, styles.kpiRow]} wrap={false}>
-          {(
-            [
+        {payload.insights && (
+          <View style={[styles.section, styles.kpiRow]} wrap={false}>
+            {(
               [
-                'Visibility',
-                `${payload.insights.avgVisibilityScore}%`,
-                payload.insights.visibilityChange,
-              ],
-              ['Mentions', String(payload.insights.totalMentions), payload.insights.mentionsChange],
-              [
-                'Citations',
-                String(payload.insights.totalCitations),
-                payload.insights.citationsChange,
-              ],
-              [
-                'Positive Sentiment',
-                `${payload.insights.positiveSentimentPct}%`,
-                payload.insights.sentimentChange,
-              ],
-            ] as const
-          ).map(([label, value, change]) => (
-            <View key={label} style={styles.kpiBox}>
-              <Text style={styles.kpiLabel}>{label}</Text>
-              <View style={styles.kpiValueRow}>
-                <Text style={styles.kpiValue}>{value}</Text>
-                <DeltaText value={change} />
+                [
+                  'Visibility',
+                  `${payload.insights.avgVisibilityScore}%`,
+                  payload.insights.visibilityChange,
+                ],
+                [
+                  'Mentions',
+                  String(payload.insights.totalMentions),
+                  payload.insights.mentionsChange,
+                ],
+                [
+                  'Citations',
+                  String(payload.insights.totalCitations),
+                  payload.insights.citationsChange,
+                ],
+                [
+                  'Positive Sentiment',
+                  `${payload.insights.positiveSentimentPct}%`,
+                  payload.insights.sentimentChange,
+                ],
+              ] as const
+            ).map(([label, value, change]) => (
+              <View key={label} style={styles.kpiBox}>
+                <Text style={styles.kpiLabel}>{label}</Text>
+                <View style={styles.kpiValueRow}>
+                  <Text style={styles.kpiValue}>{value}</Text>
+                  <DeltaText value={change} />
+                </View>
               </View>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        )}
 
         {/* Visibility trend */}
         {trend.length > 1 && (
@@ -306,22 +314,24 @@ export function ReportPdfDocument({ report }: { report: Report }) {
         )}
 
         {/* Share of Voice */}
-        <View style={styles.section} wrap={false}>
-          <Text style={styles.sectionTitle}>
-            Share of Voice — {payload.shareOfVoice.overallSov}%
-          </Text>
-          {payload.shareOfVoice.byPlatform.map((p) => (
-            <HBar
-              key={p.provider}
-              label={p.provider}
-              pct={(p.sov / maxSov) * 100}
-              value={`${p.sov}%`}
-            />
-          ))}
-        </View>
+        {payload.shareOfVoice && (
+          <View style={styles.section} wrap={false}>
+            <Text style={styles.sectionTitle}>
+              Share of Voice — {payload.shareOfVoice.overallSov}%
+            </Text>
+            {payload.shareOfVoice.byPlatform.map((p) => (
+              <HBar
+                key={p.provider}
+                label={p.provider}
+                pct={(p.sov / maxSov) * 100}
+                value={`${p.sov}%`}
+              />
+            ))}
+          </View>
+        )}
 
         {/* Competitor leaderboard */}
-        {payload.competitors.length > 0 && (
+        {payload.competitors && payload.competitors.length > 0 && (
           <View style={styles.section} wrap={false}>
             <Text style={styles.sectionTitle}>Competitor Leaderboard</Text>
             <View style={styles.tableHeader}>
@@ -402,38 +412,40 @@ export function ReportPdfDocument({ report }: { report: Report }) {
         )}
 
         {/* Citations */}
-        <View style={styles.section} wrap={false}>
-          <Text style={styles.sectionTitle}>
-            Top Citation Sources — {payload.citations.totals.domains} domains ·{' '}
-            {payload.citations.totals.citations} citations
-          </Text>
-          {payload.citations.topDomains.length > 0 && (
-            <View style={{ marginTop: 8 }}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Domain</Text>
-                <Text style={[styles.tableHeaderCell, { width: 80 }]}>Source Type</Text>
-                <Text style={[styles.tableHeaderCell, { width: 60, textAlign: 'right' }]}>
-                  Citations
-                </Text>
-                <Text style={[styles.tableHeaderCell, { width: 50, textAlign: 'right' }]}>
-                  Usage
-                </Text>
-              </View>
-              {payload.citations.topDomains.map((d) => (
-                <View key={d.domain} style={styles.tableRow}>
-                  <Text style={[styles.cell, { flex: 1, paddingRight: 8 }]}>{d.domain}</Text>
-                  <Text style={[styles.cell, { width: 80, color: MUTED }]}>{d.category}</Text>
-                  <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>
-                    {d.totalCitations}
+        {payload.citations && (
+          <View style={styles.section} wrap={false}>
+            <Text style={styles.sectionTitle}>
+              Top Citation Sources — {payload.citations.totals.domains} domains ·{' '}
+              {payload.citations.totals.citations} citations
+            </Text>
+            {payload.citations.topDomains.length > 0 && (
+              <View style={{ marginTop: 8 }}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Domain</Text>
+                  <Text style={[styles.tableHeaderCell, { width: 80 }]}>Source Type</Text>
+                  <Text style={[styles.tableHeaderCell, { width: 60, textAlign: 'right' }]}>
+                    Citations
                   </Text>
-                  <Text style={[styles.cell, { width: 50, textAlign: 'right' }]}>
-                    {d.usagePct}%
+                  <Text style={[styles.tableHeaderCell, { width: 50, textAlign: 'right' }]}>
+                    Usage
                   </Text>
                 </View>
-              ))}
-            </View>
-          )}
-        </View>
+                {payload.citations.topDomains.map((d) => (
+                  <View key={d.domain} style={styles.tableRow}>
+                    <Text style={[styles.cell, { flex: 1, paddingRight: 8 }]}>{d.domain}</Text>
+                    <Text style={[styles.cell, { width: 80, color: MUTED }]}>{d.category}</Text>
+                    <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>
+                      {d.totalCitations}
+                    </Text>
+                    <Text style={[styles.cell, { width: 50, textAlign: 'right' }]}>
+                      {d.usagePct}%
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Footer */}
         <View style={styles.footer} fixed>
