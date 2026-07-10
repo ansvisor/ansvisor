@@ -34,6 +34,7 @@ import {
   type BriefQuota,
 } from '@/lib/actions/content';
 import type { ContentBrief, ContentOpportunity } from '@/types';
+import { getPromptFanout, type FanoutSubQuery } from '@/lib/actions/fanout';
 import { toast } from 'sonner';
 
 const IMPACT_COLORS: Record<string, string> = {
@@ -94,6 +95,7 @@ export default function ContentDetailPage() {
   const [generatingBrief, setGeneratingBrief] = useState(false);
   const [brief, setBrief] = useState<ContentBrief | null>(null);
   const [quota, setQuota] = useState<BriefQuota | null>(null);
+  const [fanoutQueries, setFanoutQueries] = useState<FanoutSubQuery[]>([]);
 
   useEffect(() => {
     setLoading(true);
@@ -101,6 +103,11 @@ export default function ContentDetailPage() {
       .then((opp) => {
         setOpportunity(opp);
         if (opp.brief) setBrief(opp.brief);
+        if (opp.brandId && opp.promptId) {
+          getPromptFanout(opp.brandId, opp.promptId)
+            .then((d) => setFanoutQueries(d.subQueries))
+            .catch(() => setFanoutQueries([]));
+        }
       })
       .catch((err) => {
         console.error('Failed to load opportunity:', err);
@@ -289,6 +296,26 @@ export default function ContentDetailPage() {
                   {sd.keywords.map((kw) => (
                     <Badge key={kw} variant="outline" className="text-xs">
                       {kw}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {fanoutQueries.length > 0 && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1.5">Observed fan-out queries</p>
+                <div className="flex flex-wrap gap-1">
+                  {fanoutQueries.map((sq) => (
+                    <Badge
+                      key={sq.query}
+                      variant="outline"
+                      className="text-xs border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400 gap-1"
+                      title={`Searched ${sq.timesSearched}× by answer engines`}
+                    >
+                      <Search className="h-2.5 w-2.5 shrink-0" />
+                      {sq.query}
+                      <span className="opacity-60 tabular-nums">×{sq.timesSearched}</span>
                     </Badge>
                   ))}
                 </div>
