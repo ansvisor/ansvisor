@@ -267,12 +267,16 @@ export default function ContentPage() {
   const handleSendWebhook = async (id: string) => {
     setSendingId(id);
     try {
-      await sendToWebhook(id);
+      const result = await sendToWebhook(id);
+      if (!result.success) {
+        toast.error(result.error || 'Failed to send');
+        return;
+      }
       toast.success('Sent to workflow!');
       await loadData(true);
     } catch (err) {
       console.error('Webhook send failed:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to send');
+      toast.error('Failed to send');
     } finally {
       setSendingId(null);
     }
@@ -626,9 +630,7 @@ export default function ContentPage() {
                         >
                           {t(
                             `impact.${opp.impact}` as
-                              | 'impact.high'
-                              | 'impact.medium'
-                              | 'impact.low',
+                              'impact.high' | 'impact.medium' | 'impact.low',
                           )}
                         </Badge>
                       </TableCell>

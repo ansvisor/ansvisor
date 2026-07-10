@@ -197,25 +197,46 @@ export async function updateOpportunityStatus(
   return res.json();
 }
 
-export async function sendToWebhook(
-  id: string,
-): Promise<{ success: boolean; webhookStatus: number; opportunityStatus: string }> {
+export async function sendToWebhook(id: string): Promise<{
+  success: boolean;
+  webhookStatus?: number;
+  opportunityStatus?: string;
+  error?: string;
+}> {
   const session = await getSession();
 
-  const res = await fetch(`${AEO_SERVER_URL}/api/content/${id}/send-webhook`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.access_token}`,
-    },
-  });
+  try {
+    const res = await fetch(`${AEO_SERVER_URL}/api/content/${id}/send-webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Server error: ${res.status}`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const errorMsg = body.error || `Server error: ${res.status}`;
+      return {
+        success: false,
+        error: errorMsg.includes('No active webhook configured')
+          ? 'No workflow connected'
+          : errorMsg,
+      };
+    }
+
+    const data = await res.json();
+    return {
+      success: true,
+      webhookStatus: data.webhookStatus,
+      opportunityStatus: data.opportunityStatus,
+    };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to send',
+    };
   }
-
-  return res.json();
 }
 
 export async function testWebhook(
