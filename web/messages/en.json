@@ -395,6 +395,7 @@
     "description": "Export and share your AI visibility reports.",
     "generateReport": "Generate Report",
     "downloadPDF": "Download PDF",
+    "downloadFailed": "PDF export failed. Please try again.",
     "dateRange": "Date Range",
     "platforms": "Platforms",
     "libraryTitle": "Generated Reports",
@@ -433,7 +434,6 @@
       "timesSearched": "Times Searched"
     },
     "visibilityTrend": "Visibility Trend",
-    "sourceTypeBreakdown": "Source Type Breakdown",
     "bestPrompts": "Best Performing Prompts",
     "worstPrompts": "Weakest Prompts",
     "queryFanout": "Query Fan-out",
