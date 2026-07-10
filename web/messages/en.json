@@ -18,11 +18,11 @@
   "nav": {
     "overview": "Overview",
     "agent": "Agent",
-    "insights": "Answer Engine Insights",
+    "insights": "Visibility",
     "traffic": "AI Traffic Analytics",
     "prompts": "Prompts",
     "topics": "Topics",
-    "content": "Content Optimization",
+    "content": "Content",
     "audit": "Site Audit",
     "competitors": "Competitors",
     "citations": "Citations",
