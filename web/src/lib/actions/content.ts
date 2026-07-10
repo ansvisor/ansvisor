@@ -197,9 +197,12 @@ export async function updateOpportunityStatus(
   return res.json();
 }
 
-export async function sendToWebhook(
-  id: string,
-): Promise<{ success: boolean; webhookStatus: number; opportunityStatus: string }> {
+export async function sendToWebhook(id: string): Promise<{
+  success: boolean;
+  webhookStatus?: number;
+  opportunityStatus?: string;
+  error?: string;
+}> {
   const session = await getSession();
 
   const res = await fetch(`${AEO_SERVER_URL}/api/content/${id}/send-webhook`, {
@@ -212,10 +215,13 @@ export async function sendToWebhook(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Server error: ${res.status}`);
+    return {
+      success: false,
+      error: body.error || `Server error: ${res.status}`,
+    };
   }
 
-  return res.json();
+  return await res.json();
 }
 
 export async function testWebhook(

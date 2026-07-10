@@ -240,7 +240,7 @@ router.post('/bulk/send-webhook', async (req, res) => {
     if (!webhookConfig) {
       return res
         .status(400)
-        .json({ error: 'No active webhook configured for this brand. Set up a webhook first.' });
+        .json({ error: 'No workflow connected' });
     }
 
     const { data: brand } = await supabaseAdmin
@@ -396,7 +396,7 @@ router.post('/:id/send-webhook', async (req, res) => {
     if (!webhookConfig) {
       return res
         .status(400)
-        .json({ error: 'No active webhook configured for this brand. Set up a webhook first.' });
+        .json({ error: 'No workflow connected' });
     }
 
     const { data: brand } = await supabaseAdmin
