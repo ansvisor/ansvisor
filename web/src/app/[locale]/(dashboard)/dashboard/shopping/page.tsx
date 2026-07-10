@@ -1192,11 +1192,13 @@ function ProductTable({
                   </TableCell>
                 )}
                 <TableCell>
-                  <div className="flex flex-wrap gap-1 max-w-[180px]">
+                  <div className="flex items-center gap-1">
                     {p.platforms.map((plat) => (
-                      <Badge key={plat} variant="secondary" className="text-[10px] py-0 px-1.5">
-                        {plat}
-                      </Badge>
+                      <AIProviderAvatar
+                        key={plat}
+                        provider={resolveAIProvider(plat)}
+                        className="h-5 w-5 border"
+                      />
                     ))}
                   </div>
                 </TableCell>
@@ -1337,10 +1339,14 @@ function ProductAppearancesDrawer({ t, product, onOpenChange }: ProductAppearanc
               <Card key={app.id} className="border hover:shadow-xs transition-shadow">
                 <CardContent className="p-4 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
-                        {app.platform}
-                      </Badge>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 font-medium text-foreground text-xs">
+                        <AIProviderAvatar
+                          provider={resolveAIProvider(app.platform)}
+                          className="h-4.5 w-4.5"
+                        />
+                        <span>{getAIProviderDisplayName(resolveAIProvider(app.platform))}</span>
+                      </div>
                       {app.region && (
                         <Badge variant="outline" className="text-[10px] py-0 px-1.5">
                           {app.region}
