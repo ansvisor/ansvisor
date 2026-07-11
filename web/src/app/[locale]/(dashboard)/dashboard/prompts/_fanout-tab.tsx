@@ -55,42 +55,52 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
   const [view, setView] = useState<View>('frequency');
   const PAGE_SIZE = 10;
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await getQueryFanout(brandId, { days: 30 });
-      setData(result);
-      const queries = result.subQueries.map((s) => s.query);
-      if (queries.length > 0) {
-        const intentPromise = classifyFanoutIntents(queries);
-        const intentResult = await Promise.race<
-          | { status: 'resolved'; map: Record<string, string> }
-          | { status: 'failed' }
-          | { status: 'timeout' }
-        >([
-          intentPromise
-            .then((map) => ({ status: 'resolved' as const, map }))
-            .catch(() => ({ status: 'failed' as const })),
-          new Promise<{ status: 'timeout' }>((resolve) =>
-            setTimeout(() => resolve({ status: 'timeout' }), INTENT_INITIAL_LOAD_TIMEOUT_MS),
-          ),
-        ]);
+  const load = useCallback(
+    async (options?: { silent?: boolean }) => {
+      const silent = options?.silent ?? false;
+      if (!silent) {
+        setLoading(true);
+      }
+      try {
+        const result = await getQueryFanout(brandId, { days: 30 });
+        setData(result);
+        const queries = result.subQueries.map((s) => s.query);
+        if (queries.length > 0) {
+          const intentPromise = classifyFanoutIntents(queries);
+          const intentResult = await Promise.race<
+            | { status: 'resolved'; map: Record<string, string> }
+            | { status: 'failed' }
+            | { status: 'timeout' }
+          >([
+            intentPromise
+              .then((map) => ({ status: 'resolved' as const, map }))
+              .catch(() => ({ status: 'failed' as const })),
+            new Promise<{ status: 'timeout' }>((resolve) =>
+              setTimeout(() => resolve({ status: 'timeout' }), INTENT_INITIAL_LOAD_TIMEOUT_MS),
+            ),
+          ]);
 
-        if (intentResult.status === 'resolved') {
-          setIntents((prev) => ({ ...prev, ...intentResult.map }));
-        } else if (intentResult.status === 'timeout') {
-          // Keep first paint bounded on cold/slow classifications; fill badges
-          // when the original batch resolves instead of issuing a second call.
-          intentPromise.then((map) => setIntents((prev) => ({ ...prev, ...map }))).catch(() => {});
+          if (intentResult.status === 'resolved') {
+            setIntents((prev) => ({ ...prev, ...intentResult.map }));
+          } else if (intentResult.status === 'timeout') {
+            // Keep first paint bounded on cold/slow classifications; fill badges
+            // when the original batch resolves instead of issuing a second call.
+            intentPromise
+              .then((map) => setIntents((prev) => ({ ...prev, ...map })))
+              .catch(() => {});
+          }
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to load query fan-out');
+        setData({ subQueries: [], totalObserved: 0 });
+      } finally {
+        if (!silent) {
+          setLoading(false);
         }
       }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load query fan-out');
-      setData({ subQueries: [], totalObserved: 0 });
-    } finally {
-      setLoading(false);
-    }
-  }, [brandId]);
+    },
+    [brandId],
+  );
   useEffect(() => {
     load();
   }, [load]);
@@ -117,10 +127,25 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
   async function handleTrack(query: string) {
     setAddingKey(query.toLowerCase());
     try {
-      await trackFanoutQuery(brandId, query);
+      const result = await trackFanoutQuery(brandId, query);
       toast.success('Added as a tracked prompt');
-      await load();
-      setPage(1);
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          subQueries: prev.subQueries.map((sq) => {
+            if (sq.query.toLowerCase() === query.toLowerCase()) {
+              return {
+                ...sq,
+                tracked: true,
+                trackedPromptId: result.promptId,
+              };
+            }
+            return sq;
+          }),
+        };
+      });
+      await load({ silent: true });
       await onTracked?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to track this query');
