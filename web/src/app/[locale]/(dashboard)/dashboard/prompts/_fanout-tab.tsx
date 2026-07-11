@@ -55,8 +55,11 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
   const [view, setView] = useState<View>('frequency');
   const PAGE_SIZE = 10;
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
+    if (!silent) {
+      setLoading(true);
+    }
     try {
       const result = await getQueryFanout(brandId, { days: 30 });
       setData(result);
@@ -88,7 +91,9 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
       toast.error(err instanceof Error ? err.message : 'Failed to load query fan-out');
       setData({ subQueries: [], totalObserved: 0 });
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [brandId]);
   useEffect(() => {
@@ -117,10 +122,25 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
   async function handleTrack(query: string) {
     setAddingKey(query.toLowerCase());
     try {
-      await trackFanoutQuery(brandId, query);
+      const result = await trackFanoutQuery(brandId, query);
       toast.success('Added as a tracked prompt');
-      await load();
-      setPage(1);
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          subQueries: prev.subQueries.map((sq) => {
+            if (sq.query.toLowerCase() === query.toLowerCase()) {
+              return {
+                ...sq,
+                tracked: true,
+                trackedPromptId: result.promptId,
+              };
+            }
+            return sq;
+          }),
+        };
+      });
+      await load({ silent: true });
       await onTracked?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to track this query');
