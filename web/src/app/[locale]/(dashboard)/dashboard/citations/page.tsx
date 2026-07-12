@@ -961,9 +961,12 @@ const PAGE_SIZE = 100;
 export function usePagination(totalRows: number, resetKey: unknown) {
   const [page, setPage] = useState(0);
 
-  useEffect(() => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const resetKeyRef = useRef(resetKey);
+  if (resetKeyRef.current !== resetKey) {
+    resetKeyRef.current = resetKey;
     setPage(0);
-  }, [resetKey]);
+  }
 
   const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
   const clampedPage = Math.min(page, totalPages - 1);
