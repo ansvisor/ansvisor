@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-07-12
+
+### Added
+
+- **Reports (Simple Reports MVP)**: generate an immutable snapshot report for a brand over a chosen period — AI-written executive summary, KPI cards with deltas, visibility trend chart, share of voice, competitor leaderboard, best/weakest prompts, observed query fan-outs, and top citation sources — plus a report library and a true **vector PDF export** (selectable text, smart page breaks, embedded Inter so Turkish characters render correctly). Soft-launched: reachable at `/dashboard/reports`, no sidebar entry yet (#390)
+- Prompts / Query Fan-out: **Intent column** — sub-queries are classified once via LLM and cached, so intents load on demand everywhere after (#333, #353)
+- Prompts / Query Fan-out: **By Prompt** grouped view — expand any tracked prompt to see the sub-queries its answers actually ran (#358)
+- Prompts / Query Fan-out: the high-frequency table is paginated at 10 rows per page with numbered controls (#349, #355)
+- Insights: the result detail now shows the query fan-out captured for that answer (#362)
+- Content: the opportunity's Source Data card shows the related prompt's observed query fan-outs — first-hand demand signal next to the estimated keywords (#392, #405)
+- Content: bulk **Done** button for selected opportunities (#356), and opportunities are generated in the brand's language (#369)
+- Agent: completed Site Audit results render inline in the chat as an audit card (score gauge, category breakdown, top recommendations) instead of raw JSON (#272, #386), and assistant messages gained a copy button (#371, #374)
+- Shopping: provider logos replace raw platform slugs in the product tables (#398, #401)
+- Citations: the Top Sources **Domains and URLs tables are paginated** at 100 rows per page with globally continuous ranks and per-tab page state (#395, #411)
+- Teams: removed the member seat limit on cloud plans (#373)
+
+### Changed
+
+- Sidebar: "Answer Engine Insights" is now **Visibility** and "Content Optimization" is now **Content** (#391)
+- Insights: the page title is wired to next-intl (part of #384) (#389)
+- Prompts: removed the misleading Keywords and Multiplier columns from the Prompt Volumes table (#347, #359), and large counts use the shared compact number formatter (#348, #370)
+
+### Performance
+
+- Insights: the initial load no longer scans the full results table — counts and limits moved into SQL (#313, #352)
+- Citations: domain and article-type classifications are memoized per load (#366, #375)
+
+### Fixed
+
+- Shopping: **ChatGPT Shopping cards were captured but never reached the dashboard** — the normalizer had no ChatGPT branch, so only Copilot cards ever showed. Added the parser (derived from real captured payloads), fixed thousand-separator price parsing ("₺2.699,99" no longer reads as 2.699), and history is recoverable via the existing backfill script (#399, #408)
+- Shopping: filter selects show readable labels instead of raw values (#396, #397)
+- Onboarding: the competitor step can no longer be skipped without adding at least one competitor (#377, #378)
+- Content: sending to a workflow with none connected shows a short "No workflow connected" error instead of a redacted production stack message — single and bulk send (#393, #400)
+- Content: filter selects show their labels in the trigger (#364, #368), and the list no longer flashes a skeleton on filter changes or bulk actions (#367)
+- Prompts: fan-out intent badges paint together with the table instead of popping in (#380, #387); tracking a fan-out query updates the row in place without a skeleton flash (#346, #407) and reflects on All Prompts (#357); the unanalyzed banner says prompts, not keywords (#381, #388); navigating away mid-load no longer fires a spurious "Failed to load prompt data" toast (#394, #402)
+- Topics: KPI cards no longer render a bare `0pts` delta when the change is zero (#360, #410)
+- Citations: the competitor filter shows the competitor's name in the trigger instead of its id (#344)
+
+### Docs
+
+- README and docs: Ansvisor mentions, the docs topbar logo, and managed-cloud references now link to the website (#376)
+
+### Internal
+
+- Server: structured logging final slice — the Cloro scraper joined the pino migration (#351)
+
+### Contributors
+
+Thanks to everyone who contributed to this release, including @Sam-syntax35, @Maqbool61, @d180, @prakashiitp, @BharadwajKanneveti and @AyushSrivastava1818! 🙌
+
 ## [0.1.5] - 2026-07-06
 
 ### Added

@@ -1,6 +1,6 @@
 {
   "name": "@ansvisor/ansvisor-server",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Ansvisor - AI Engine Optimization Server",
   "main": "src/server.js",
   "type": "module",

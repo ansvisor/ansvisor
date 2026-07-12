@@ -1,6 +1,6 @@
 services:
   web:
-    image: ghcr.io/ansvisor/ansvisor/web:0.1.5
+    image: ghcr.io/ansvisor/ansvisor/web:0.1.6
     build: ./web
     ports:
       - "3000:3000"
@@ -11,7 +11,7 @@ services:
     restart: unless-stopped
 
   server:
-    image: ghcr.io/ansvisor/ansvisor/server:0.1.5
+    image: ghcr.io/ansvisor/ansvisor/server:0.1.6
     build: ./server
     ports:
       - "80:80"
