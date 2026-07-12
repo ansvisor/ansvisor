@@ -25,7 +25,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Check, ChevronRight, Plus, Loader2, Search } from 'lucide-react';
+import { Check, ChevronRight, Plus, Loader2, Search, X } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 
 function platformLabel(slug: string): string {
   return PLATFORM_LABELS[slug] ?? slug;
@@ -331,6 +332,7 @@ function ByPromptView({
   onTrack: (query: string) => void;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
 
   function toggle(id: string) {
     setExpanded((prev) => {
@@ -341,8 +343,50 @@ function ByPromptView({
     });
   }
 
+  const filteredGroups = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return groups;
+    return groups.filter((g) => g.prompt.text.toLowerCase().includes(q));
+  }, [groups, searchQuery]);
+
   return (
-    <Table>
+    <div className="space-y-3">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search prompts…"
+          className="h-8 pl-8 pr-8 text-sm"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            aria-label="Clear search"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
+      {filteredGroups.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-10 text-center">
+          <Search className="h-6 w-6 text-muted-foreground/50" />
+          <p className="text-sm font-medium">No prompts match your search</p>
+          <p className="text-xs text-muted-foreground">
+            Try a different search term or{' '}
+            <button
+              onClick={() => setSearchQuery('')}
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              clear the filter
+            </button>
+            .
+          </p>
+        </div>
+      ) : (
+      <Table>
       <TableHeader>
         <TableRow>
           <TableHead className="w-[28px]" />
@@ -351,7 +395,7 @@ function ByPromptView({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {groups.map(({ prompt, subQueries }) => {
+        {filteredGroups.map(({ prompt, subQueries }) => {
           const isOpen = expanded.has(prompt.id);
           return (
             <Fragment key={prompt.id}>
@@ -420,6 +464,8 @@ function ByPromptView({
         })}
       </TableBody>
     </Table>
+      )}
+    </div>
   );
 }
 
