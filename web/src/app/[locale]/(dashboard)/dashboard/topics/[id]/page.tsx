@@ -93,7 +93,7 @@ function KpiCard({
               <span className="text-sm font-normal text-muted-foreground ml-0.5">{suffix}</span>
             )}
           </div>
-          {change !== null && change !== undefined && (
+          {change !== null && change !== undefined && change !== 0 && (
             <span
               className={cn(
                 'flex items-center text-xs font-medium',

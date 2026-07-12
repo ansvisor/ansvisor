@@ -192,6 +192,11 @@ function BarList({ data }: { data: { name: string; value: number; color: string 
 
 export function TrendChart({ data }: { data: VisibilityTrendPoint[] }) {
   const hasCompetitors = data.some((d) => d.competitors !== null);
+  // Adaptive Y ceiling (see niceVisibilityYMax): a fixed 0–100 axis flattens
+  // realistic low-single-digit visibility averages into a floor-hugging line.
+  const yMax = niceVisibilityYMax(
+    data.flatMap((d) => [d.score, ...(d.competitors !== null ? [d.competitors] : [])]),
+  );
 
   if (data.length === 0) {
     return (
@@ -233,7 +238,7 @@ export function TrendChart({ data }: { data: VisibilityTrendPoint[] }) {
             tickLine={false}
             axisLine={false}
             className="fill-muted-foreground"
-            domain={[0, 100]}
+            domain={[0, yMax]}
           />
           <Tooltip content={<AreaTooltip />} />
           <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />

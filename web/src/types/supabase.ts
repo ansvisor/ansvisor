@@ -932,6 +932,57 @@ export type Database = {
           },
         ];
       };
+      reports: {
+        Row: {
+          brand_id: string;
+          created_at: string;
+          created_by: string | null;
+          date_from: string;
+          date_to: string;
+          id: string;
+          payload: Json;
+          template: string;
+          title: string;
+        };
+        Insert: {
+          brand_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          date_from: string;
+          date_to: string;
+          id?: string;
+          payload?: Json;
+          template?: string;
+          title: string;
+        };
+        Update: {
+          brand_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          date_from?: string;
+          date_to?: string;
+          id?: string;
+          payload?: Json;
+          template?: string;
+          title?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'reports_brand_id_fkey';
+            columns: ['brand_id'];
+            isOneToOne: false;
+            referencedRelation: 'brands';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'reports_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       topics: {
         Row: {
           brand_id: string;

@@ -6,6 +6,7 @@ import contentRoutes from './content.js';
 import competitorRoutes from './competitors.js';
 import topicRoutes from './topics.js';
 import auditRoutes from './audits.js';
+import reportRoutes from './reports.js';
 
 const router = Router();
 
@@ -16,6 +17,7 @@ router.use('/content', contentRoutes);
 router.use('/competitors', competitorRoutes);
 router.use('/topics', topicRoutes);
 router.use('/audits', auditRoutes);
+router.use('/reports', reportRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', user: req.user?.id });

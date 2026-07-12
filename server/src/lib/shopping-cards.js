@@ -1,7 +1,7 @@
 /**
  * Normalize shopping cards captured into `prompt_results.shopping_cards`.
  *
- * Three providers feed this column today with three different raw shapes:
+ * Four providers feed this column today with four different raw shapes:
  *
  *   - **Perplexity** (`platform = 'perplexity-web'`) — snake_case keys
  *     (`image_url`, `review_count`, …).
@@ -9,6 +9,10 @@
  *     (`imageUrl`, `reviewCount`, …). NB: the live response is camelCase
  *     even though the docs show snake_case — verified in #86.
  *   - **Microsoft Copilot** (`platform = 'copilot-web'`) — camelCase keys.
+ *   - **ChatGPT Shopping** (`platform = 'chatgpt-shopping'`) — snake_case
+ *     keys inside `{ products: [ … ], tags }` wrappers; rich product
+ *     objects with formatted price strings ("₺2.699,99") and an `offers`
+ *     array (#399).
  *
  * The downstream `prompt_result_shopping_cards` table flattens those onto
  * a single set of analytical columns. Each normalizer here pulls the
@@ -115,13 +119,40 @@ function parsePrice(value) {
       }
     }
 
-    // Amount — first decimal-looking number. Handles both "29.99" and
-    // "29,99" (EU comma decimals) by normalizing comma → dot.
-    const amountMatch = trimmed.replace(/\s+/g, '').match(/-?\d+(?:[.,]\d+)?/);
-    const amount = amountMatch ? Number.parseFloat(amountMatch[0].replace(',', '.')) : null;
+    // Amount — first number-looking run, then disambiguate separators.
+    // Providers ship every locale convention: "29.99", "29,99" (EU decimal),
+    // "1,299.99" (US thousands) and "₺2.699,99" (TR thousands — ChatGPT
+    // Shopping, #399). Rule: when both separators appear, the LAST one is
+    // the decimal point; a lone separator is decimal only when it's the
+    // only one of its kind and is followed by 1-2 digits, else thousands.
+    const amountMatch = trimmed.replace(/\s+/g, '').match(/-?\d[\d.,]*/);
+    let amount = null;
+    if (amountMatch) {
+      let s = amountMatch[0];
+      const lastDot = s.lastIndexOf('.');
+      const lastComma = s.lastIndexOf(',');
+      if (lastDot !== -1 && lastComma !== -1) {
+        const thousands = lastDot > lastComma ? ',' : '.';
+        s = s.split(thousands).join('');
+        if (thousands === '.') s = s.replace(',', '.');
+      } else if (lastComma !== -1) {
+        const frac = s.length - lastComma - 1;
+        s =
+          frac >= 1 && frac <= 2 && s.indexOf(',') === lastComma
+            ? s.replace(',', '.')
+            : s.split(',').join('');
+      } else if (lastDot !== -1) {
+        const frac = s.length - lastDot - 1;
+        if (!(frac >= 1 && frac <= 2 && s.indexOf('.') === lastDot)) {
+          s = s.split('.').join('');
+        }
+      }
+      const parsed = Number.parseFloat(s);
+      amount = Number.isFinite(parsed) ? parsed : null;
+    }
 
     return {
-      amount: Number.isFinite(amount) ? amount : null,
+      amount,
       currency,
     };
   }
@@ -275,7 +306,78 @@ export function parseCopilotCard(card, position) {
 }
 
 /**
+ * ChatGPT Shopping product normalizer (#399). Cloro ships shopping data as
+ * `{ products: [ … ], tags }` wrappers; `normalizeShoppingCards` flattens
+ * those, so this receives an individual product (snake_case, derived from
+ * captured production payloads):
+ *
+ *   { id, title, url, price: "₺2.699,99", image_urls: [ … ],
+ *     merchants: "kayra.com", rating, num_reviews, position, query,
+ *     offers: [{ url, price, brand, tag, details, … }], variants, specs,
+ *     price_history, … }
+ *
+ * Unlike the other parsers, `raw` keeps only a compact subset: a single
+ * ChatGPT product runs to tens of KB (variants, price_history, specs,
+ * analytics metadata), and the full original is already persisted on
+ * `prompt_results.shopping_cards` — which is what the backfill script
+ * re-derives from, so nothing is lost by trimming here.
+ *
+ * @param {object} card
+ * @param {number} position
+ */
+export function parseChatgptCard(card, position) {
+  const firstOffer =
+    Array.isArray(card.offers) && card.offers[0] && typeof card.offers[0] === 'object'
+      ? card.offers[0]
+      : null;
+  const price = parsePrice(card.price ?? firstOffer?.price);
+  const merchantUrl = toStringOrNull(card.url) ?? toStringOrNull(firstOffer?.url);
+  // `merchants` is a bare string in captured payloads; tolerate an array.
+  const merchant = Array.isArray(card.merchants)
+    ? toStringOrNull(card.merchants[0])
+    : toStringOrNull(card.merchants);
+  return {
+    position: toInteger(card.position) ?? position,
+    product_title: toStringOrNull(card.title ?? card.name),
+    product_brand: toStringOrNull(firstOffer?.brand) ?? merchant,
+    price_amount: price.amount,
+    price_currency: price.currency,
+    image_url: Array.isArray(card.image_urls)
+      ? toStringOrNull(card.image_urls[0])
+      : toStringOrNull(card.image_url ?? card.image),
+    merchant_url: merchantUrl,
+    merchant_domain: extractHostname(merchantUrl),
+    rating: toNumber(card.rating),
+    review_count: toInteger(card.num_reviews ?? card.review_count),
+    raw: {
+      id: card.id ?? null,
+      title: card.title ?? null,
+      url: card.url ?? null,
+      price: card.price ?? null,
+      merchants: card.merchants ?? null,
+      rating: card.rating ?? null,
+      num_reviews: card.num_reviews ?? null,
+      position: card.position ?? null,
+      query: card.query ?? null,
+      offers: firstOffer
+        ? [
+            {
+              url: firstOffer.url ?? null,
+              price: firstOffer.price ?? null,
+              brand: firstOffer.brand ?? null,
+            },
+          ]
+        : [],
+    },
+  };
+}
+
+/**
  * Pick the right normalizer for a platform / scraper id.
+ *
+ * NB: `chatgpt-shopping` matches exactly — plain `chatgpt-web` answers never
+ * carry shopping cards, and keeping it unmatched preserves the "unsupported
+ * platform → []" behavior for it.
  *
  * @param {string|null|undefined} platform
  */
@@ -285,15 +387,17 @@ function pickParser(platform) {
   if (p.startsWith('perplexity')) return parsePerplexityCard;
   if (p.startsWith('google-aimode') || p === 'google-ai-mode') return parseAiModeCard;
   if (p.startsWith('copilot')) return parseCopilotCard;
+  if (p === 'chatgpt-shopping') return parseChatgptCard;
   return null;
 }
 
 /**
- * Some providers (Microsoft Copilot) return shopping data as wrapper
- * objects — `{ type: 'shoppingProducts', layout, products: [ … ] }` — rather
- * than a flat array of product cards. Flatten any such wrapper into its
- * `products` so each product becomes its own normalized card. Elements that
- * are already flat product objects pass through untouched.
+ * Some providers (Microsoft Copilot, ChatGPT Shopping) return shopping data
+ * as wrapper objects — `{ type: 'shoppingProducts', layout, products: [ … ] }`
+ * or `{ products: [ … ], tags }` — rather than a flat array of product cards.
+ * Flatten any such wrapper into its `products` so each product becomes its
+ * own normalized card. Elements that are already flat product objects pass
+ * through untouched.
  *
  * @param {unknown[]} cards
  * @returns {object[]}

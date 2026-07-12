@@ -1524,8 +1524,12 @@ export async function getVisibilityTrend(
 
     points.push({
       date: label,
-      score: Math.round(d.totalScore / d.count),
-      competitors: d.compCount > 0 ? Math.round(d.compTotalScore / d.compCount) : null,
+      // One decimal, not integer rounding: realistic daily averages for a
+      // low-visibility brand sit in the 0.3–1.5 band (see the sub-1 note on
+      // getInsightsSummary), and Math.round crushed the whole window into a
+      // flat "1" line on the chart.
+      score: roundTo1(d.totalScore / d.count),
+      competitors: d.compCount > 0 ? roundTo1(d.compTotalScore / d.compCount) : null,
     });
   }
 

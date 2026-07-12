@@ -34,6 +34,15 @@ export interface AgentChartSpec {
   labelKey?: string;
 }
 
+export interface AgentAuditSpec {
+  url: string;
+  totalScore: number | null;
+  categoryScores: Record<string, unknown>;
+  recommendations: unknown[];
+  signalsEvaluated: number | null;
+  signalsTotal: number | null;
+}
+
 // Palette pulled from globals.css (`--chart-1` … `--chart-5`). Wraps
 // around for charts with more than 5 series — fine in practice because
 // the agent rarely emits beyond that, and even if it does the wrap is
