@@ -766,123 +766,174 @@ const DomainsTable = memo(function DomainsTable({
   rows,
   brandId,
   onAdded,
+  page,
+  onPage,
 }: {
   rows: CitationDomainRow[];
   brandId: string;
   onAdded: () => void;
+  page: number;
+  onPage: (p: number) => void;
 }) {
   if (rows.length === 0) return <EmptyRows />;
 
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const clampedPage = Math.min(page, totalPages - 1);
+  const start = clampedPage * PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, rows.length);
+  const pageRows = rows.slice(start, end);
+
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="w-[56px] text-xs">Rank</TableHead>
-          <TableHead className="text-xs">Domain</TableHead>
-          <TableHead className="text-xs">Platforms</TableHead>
-          <TableHead className="text-xs">Usage</TableHead>
-          <TableHead className="text-right text-xs">Avg Citations</TableHead>
-          <TableHead className="w-[44px]">
-            <span className="sr-only">Add as competitor</span>
-          </TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row, i) => (
-          <TableRow key={row.domain}>
-            <TableCell className="text-xs text-muted-foreground tabular-nums">{i + 1}</TableCell>
-            <TableCell>
-              <div className="flex items-center gap-2 min-w-0">
-                <DomainFavicon domain={row.domain} />
-                <div className="flex min-w-0 flex-col">
-                  <span className="truncate text-sm font-medium">{row.domain}</span>
-                  <div className="flex items-center gap-1.5 pt-0.5">
-                    <CategoryBadge category={row.category} />
-                    <a
-                      href={`https://${row.domain}`}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="inline-flex items-center text-muted-foreground hover:text-foreground"
-                      aria-label={`Open ${row.domain} in a new tab`}
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
+    <div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[56px] text-xs">Rank</TableHead>
+            <TableHead className="text-xs">Domain</TableHead>
+            <TableHead className="text-xs">Platforms</TableHead>
+            <TableHead className="text-xs">Usage</TableHead>
+            <TableHead className="text-right text-xs">Avg Citations</TableHead>
+            <TableHead className="w-[44px]">
+              <span className="sr-only">Add as competitor</span>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {pageRows.map((row, i) => (
+            <TableRow key={row.domain}>
+              {/* Global rank — offset by page so rank is continuous across pages */}
+              <TableCell className="text-xs text-muted-foreground tabular-nums">
+                {start + i + 1}
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2 min-w-0">
+                  <DomainFavicon domain={row.domain} />
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm font-medium">{row.domain}</span>
+                    <div className="flex items-center gap-1.5 pt-0.5">
+                      <CategoryBadge category={row.category} />
+                      <a
+                        href={`https://${row.domain}`}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="inline-flex items-center text-muted-foreground hover:text-foreground"
+                        aria-label={`Open ${row.domain} in a new tab`}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </TableCell>
-            <TableCell>
-              <PlatformsCell models={row.models} />
-            </TableCell>
-            <TableCell>
-              <UsageBar pct={row.usagePct} />
-            </TableCell>
-            <TableCell className="text-right text-xs tabular-nums">
-              {row.avgCitationsPerResult.toFixed(1)}
-            </TableCell>
-            <TableCell className="text-right">
-              {/* Offer to track third-party domains as competitors; skip our own
-                  domain and ones already tracked (they show the Competitor badge). */}
-              {row.category !== 'you' && row.category !== 'competitor' && brandId ? (
-                <AddCompetitorButton brandId={brandId} domain={row.domain} onAdded={onAdded} />
-              ) : null}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+              </TableCell>
+              <TableCell>
+                <PlatformsCell models={row.models} />
+              </TableCell>
+              <TableCell>
+                <UsageBar pct={row.usagePct} />
+              </TableCell>
+              <TableCell className="text-right text-xs tabular-nums">
+                {row.avgCitationsPerResult.toFixed(1)}
+              </TableCell>
+              <TableCell className="text-right">
+                {row.category !== 'you' && row.category !== 'competitor' && brandId ? (
+                  <AddCompetitorButton brandId={brandId} domain={row.domain} onAdded={onAdded} />
+                ) : null}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <TablePager
+        page={clampedPage}
+        totalPages={totalPages}
+        total={rows.length}
+        start={start}
+        end={end}
+        onPage={onPage}
+      />
+    </div>
   );
 });
 
-const UrlsTable = memo(function UrlsTable({ rows }: { rows: CitationUrlRow[] }) {
+const UrlsTable = memo(function UrlsTable({
+  rows,
+  page,
+  onPage,
+}: {
+  rows: CitationUrlRow[];
+  page: number;
+  onPage: (p: number) => void;
+}) {
   if (rows.length === 0) return <EmptyRows />;
 
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const clampedPage = Math.min(page, totalPages - 1);
+  const start = clampedPage * PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, rows.length);
+  const pageRows = rows.slice(start, end);
+
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="w-[56px] text-xs">Rank</TableHead>
-          <TableHead className="text-xs">URL</TableHead>
-          <TableHead className="text-xs">Platforms</TableHead>
-          <TableHead className="text-xs">Usage</TableHead>
-          <TableHead className="text-right text-xs">Citations</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row, i) => (
-          <TableRow key={row.url}>
-            <TableCell className="text-xs text-muted-foreground tabular-nums">{i + 1}</TableCell>
-            <TableCell>
-              <div className="flex items-start gap-2 min-w-0">
-                <DomainFavicon domain={row.domain} />
-                <div className="flex min-w-0 max-w-[480px] flex-col">
-                  <a
-                    href={row.url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="truncate text-sm font-medium text-foreground hover:underline"
-                    title={row.title || row.url}
-                  >
-                    {row.title || row.url}
-                  </a>
-                  <div className="flex items-center gap-1.5 pt-0.5">
-                    <span className="truncate text-[11px] text-muted-foreground">{row.domain}</span>
-                    <CategoryBadge category={row.category} />
+    <div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[56px] text-xs">Rank</TableHead>
+            <TableHead className="text-xs">URL</TableHead>
+            <TableHead className="text-xs">Platforms</TableHead>
+            <TableHead className="text-xs">Usage</TableHead>
+            <TableHead className="text-right text-xs">Citations</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {pageRows.map((row, i) => (
+            <TableRow key={row.url}>
+              <TableCell className="text-xs text-muted-foreground tabular-nums">
+                {start + i + 1}
+              </TableCell>
+              <TableCell>
+                <div className="flex items-start gap-2 min-w-0">
+                  <DomainFavicon domain={row.domain} />
+                  <div className="flex min-w-0 max-w-[480px] flex-col">
+                    <a
+                      href={row.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="truncate text-sm font-medium text-foreground hover:underline"
+                      title={row.title || row.url}
+                    >
+                      {row.title || row.url}
+                    </a>
+                    <div className="flex items-center gap-1.5 pt-0.5">
+                      <span className="truncate text-[11px] text-muted-foreground">
+                        {row.domain}
+                      </span>
+                      <CategoryBadge category={row.category} />
+                    </div>
                   </div>
                 </div>
-              </div>
-            </TableCell>
-            <TableCell>
-              <PlatformsCell models={row.models} />
-            </TableCell>
-            <TableCell>
-              <UsageBar pct={row.usagePct} />
-            </TableCell>
-            <TableCell className="text-right text-xs tabular-nums">{row.totalCitations}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+              </TableCell>
+              <TableCell>
+                <PlatformsCell models={row.models} />
+              </TableCell>
+              <TableCell>
+                <UsageBar pct={row.usagePct} />
+              </TableCell>
+              <TableCell className="text-right text-xs tabular-nums">
+                {row.totalCitations}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <TablePager
+        page={clampedPage}
+        totalPages={totalPages}
+        total={rows.length}
+        start={start}
+        end={end}
+        onPage={onPage}
+      />
+    </div>
   );
 });
 
@@ -894,6 +945,86 @@ function EmptyRows() {
       <p className="mt-1 text-xs text-muted-foreground">
         Try widening your date range or removing filters.
       </p>
+    </div>
+  );
+}
+
+// ─── Pagination ───────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 100;
+
+/**
+ * Per-table pagination state.
+ * resetKey — pass a JSON.stringify of the active filters so the pager
+ * automatically jumps back to page 0 whenever any filter changes.
+ */
+export function usePagination(totalRows: number, resetKey: unknown) {
+  const [page, setPage] = useState(0);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const resetKeyRef = useRef(resetKey);
+  if (resetKeyRef.current !== resetKey) {
+    resetKeyRef.current = resetKey;
+    setPage(0);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+  const clampedPage = Math.min(page, totalPages - 1);
+
+  return {
+    page: clampedPage,
+    setPage,
+    totalPages,
+    start: clampedPage * PAGE_SIZE,
+    end: Math.min((clampedPage + 1) * PAGE_SIZE, totalRows),
+  };
+}
+
+function TablePager({
+  page,
+  totalPages,
+  total,
+  start,
+  end,
+  onPage,
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  start: number;
+  end: number;
+  onPage: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="flex items-center justify-between border-t px-4 py-3">
+      <span className="text-xs text-muted-foreground tabular-nums">
+        {start + 1}–{end} of {total}
+      </span>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 px-3 text-xs"
+          disabled={page === 0}
+          onClick={() => onPage(page - 1)}
+        >
+          Previous
+        </Button>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {page + 1} / {totalPages}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 px-3 text-xs"
+          disabled={page >= totalPages - 1}
+          onClick={() => onPage(page + 1)}
+        >
+          Next
+        </Button>
+      </div>
     </div>
   );
 }
@@ -1186,6 +1317,11 @@ export default function CitationsPage() {
 
   const [filters, setFilters] = useState<UIFilters>(DEFAULT_FILTERS);
   const [data, setData] = useState<CitationsOverview | null>(null);
+
+  // Pagination — resets to page 0 whenever any filter changes
+  const filterKey = JSON.stringify(filters);
+  const domainPager = usePagination(data?.rows?.length ?? 0, filterKey);
+  const urlPager = usePagination(data?.urlRows?.length ?? 0, filterKey);
   const [isLoading, setIsLoading] = useState(true);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [prompts, setPrompts] = useState<PromptOption[]>([]);
@@ -1396,10 +1532,16 @@ export default function CitationsPage() {
                       rows={data?.rows ?? []}
                       brandId={activeBrandId ?? ''}
                       onAdded={loadData}
+                      page={domainPager.page}
+                      onPage={domainPager.setPage}
                     />
                   </TabsContent>
                   <TabsContent value="urls" keepMounted className="mt-4">
-                    <UrlsTable rows={data?.urlRows ?? []} />
+                    <UrlsTable
+                      rows={data?.urlRows ?? []}
+                      page={urlPager.page}
+                      onPage={urlPager.setPage}
+                    />
                   </TabsContent>
                   <TabsContent value="gaps" className="mt-4">
                     <CompetitorGapsTab loading={gapsLoading} gaps={gaps} />
