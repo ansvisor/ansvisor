@@ -92,6 +92,7 @@ import {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const DATE_PRESETS: CitationsDatePreset[] = ['24h', '7d', '30d', '90d', 'all', 'custom'];
+const PAGE_SIZE = 100;
 
 const CATEGORY_COLORS: Record<SourceCategory, string> = {
   you: '#6366f1',
@@ -766,10 +767,12 @@ const DomainsTable = memo(function DomainsTable({
   rows,
   brandId,
   onAdded,
+  startRank,
 }: {
   rows: CitationDomainRow[];
   brandId: string;
   onAdded: () => void;
+  startRank: number;
 }) {
   if (rows.length === 0) return <EmptyRows />;
 
@@ -790,7 +793,9 @@ const DomainsTable = memo(function DomainsTable({
       <TableBody>
         {rows.map((row, i) => (
           <TableRow key={row.domain}>
-            <TableCell className="text-xs text-muted-foreground tabular-nums">{i + 1}</TableCell>
+            <TableCell className="text-xs text-muted-foreground tabular-nums">
+              {startRank + i}
+            </TableCell>
             <TableCell>
               <div className="flex items-center gap-2 min-w-0">
                 <DomainFavicon domain={row.domain} />
@@ -834,7 +839,13 @@ const DomainsTable = memo(function DomainsTable({
   );
 });
 
-const UrlsTable = memo(function UrlsTable({ rows }: { rows: CitationUrlRow[] }) {
+const UrlsTable = memo(function UrlsTable({
+  rows,
+  startRank,
+}: {
+  rows: CitationUrlRow[];
+  startRank: number;
+}) {
   if (rows.length === 0) return <EmptyRows />;
 
   return (
@@ -851,7 +862,9 @@ const UrlsTable = memo(function UrlsTable({ rows }: { rows: CitationUrlRow[] }) 
       <TableBody>
         {rows.map((row, i) => (
           <TableRow key={row.url}>
-            <TableCell className="text-xs text-muted-foreground tabular-nums">{i + 1}</TableCell>
+            <TableCell className="text-xs text-muted-foreground tabular-nums">
+              {startRank + i}
+            </TableCell>
             <TableCell>
               <div className="flex items-start gap-2 min-w-0">
                 <DomainFavicon domain={row.domain} />
@@ -894,6 +907,53 @@ function EmptyRows() {
       <p className="mt-1 text-xs text-muted-foreground">
         Try widening your date range or removing filters.
       </p>
+    </div>
+  );
+}
+
+function Pager({
+  page,
+  pageSize,
+  total,
+  onPageChange,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}) {
+  if (total <= pageSize) return null; // nothing to page through
+
+  const start = page * pageSize + 1;
+  const end = Math.min(total, (page + 1) * pageSize);
+  const canPrev = page > 0;
+  const canNext = end < total;
+
+  return (
+    <div className="flex items-center justify-between pt-3">
+      <span className="text-xs text-muted-foreground tabular-nums">
+        {start}–{end} of {total}
+      </span>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs"
+          disabled={!canPrev}
+          onClick={() => onPageChange(page - 1)}
+        >
+          Previous
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs"
+          disabled={!canNext}
+          onClick={() => onPageChange(page + 1)}
+        >
+          Next
+        </Button>
+      </div>
     </div>
   );
 }
@@ -1195,6 +1255,8 @@ export default function CitationsPage() {
   const activeBrandId = brand?.id ?? null;
 
   const [sourceTab, setSourceTab] = useState<'domains' | 'urls' | 'gaps'>('domains');
+  const [domainsPage, setDomainsPage] = useState(0);
+  const [urlsPage, setUrlsPage] = useState(0);
   const [gaps, setGaps] = useState<CitationGaps | null>(null);
   const [gapsLoading, setGapsLoading] = useState(false);
 
@@ -1234,6 +1296,11 @@ export default function CitationsPage() {
     }),
     [gapFilters, filters.excludeOwnDomain, filters.competitorOnly, filters.ownOnly],
   );
+
+  useEffect(() => {
+    setDomainsPage(0);
+    setUrlsPage(0);
+  }, [apiFilters]);
 
   useEffect(() => {
     if (!activeBrandId) return;
@@ -1331,6 +1398,15 @@ export default function CitationsPage() {
     ],
     [totals, t],
   );
+  const pagedDomainRows = useMemo(() => {
+    const rows = data?.rows ?? [];
+    return rows.slice(domainsPage * PAGE_SIZE, domainsPage * PAGE_SIZE + PAGE_SIZE);
+  }, [data?.rows, domainsPage]);
+
+  const pagedUrlRows = useMemo(() => {
+    const rows = data?.urlRows ?? [];
+    return rows.slice(urlsPage * PAGE_SIZE, urlsPage * PAGE_SIZE + PAGE_SIZE);
+  }, [data?.urlRows, urlsPage]);
 
   if (!brand) {
     return (
@@ -1393,13 +1469,26 @@ export default function CitationsPage() {
                       once and make switching a pure CSS visibility toggle (#299). */}
                   <TabsContent value="domains" keepMounted className="mt-4">
                     <DomainsTable
-                      rows={data?.rows ?? []}
+                      rows={pagedDomainRows}
                       brandId={activeBrandId ?? ''}
                       onAdded={loadData}
+                      startRank={domainsPage * PAGE_SIZE + 1}
+                    />
+                    <Pager
+                      page={domainsPage}
+                      pageSize={PAGE_SIZE}
+                      total={data?.totals.domains ?? 0}
+                      onPageChange={setDomainsPage}
                     />
                   </TabsContent>
                   <TabsContent value="urls" keepMounted className="mt-4">
-                    <UrlsTable rows={data?.urlRows ?? []} />
+                    <UrlsTable rows={pagedUrlRows} startRank={urlsPage * PAGE_SIZE + 1} />
+                    <Pager
+                      page={urlsPage}
+                      pageSize={PAGE_SIZE}
+                      total={data?.totals.urls ?? 0}
+                      onPageChange={setUrlsPage}
+                    />
                   </TabsContent>
                   <TabsContent value="gaps" className="mt-4">
                     <CompetitorGapsTab loading={gapsLoading} gaps={gaps} />
