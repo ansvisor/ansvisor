@@ -228,7 +228,9 @@ function formatDate(iso: string) {
 
 export function ReportPdfDocument({ report }: { report: Report }) {
   const { payload } = report;
-  const maxSov = Math.max(...payload.shareOfVoice.byPlatform.map((p) => p.sov), 1);
+  // Every metric field is optional — templates only gather their own
+  // sections, so each block below guards on its payload field.
+  const maxSov = Math.max(...(payload.shareOfVoice?.byPlatform.map((p) => p.sov) ?? []), 1);
   const trend = payload.visibilityTrend ?? [];
   const hasCompetitorTrend = trend.some((d) => d.competitors !== null);
 
@@ -250,36 +252,42 @@ export function ReportPdfDocument({ report }: { report: Report }) {
         </View>
 
         {/* KPI row */}
-        <View style={[styles.section, styles.kpiRow]} wrap={false}>
-          {(
-            [
+        {payload.insights && (
+          <View style={[styles.section, styles.kpiRow]} wrap={false}>
+            {(
               [
-                'Visibility',
-                `${payload.insights.avgVisibilityScore}%`,
-                payload.insights.visibilityChange,
-              ],
-              ['Mentions', String(payload.insights.totalMentions), payload.insights.mentionsChange],
-              [
-                'Citations',
-                String(payload.insights.totalCitations),
-                payload.insights.citationsChange,
-              ],
-              [
-                'Positive Sentiment',
-                `${payload.insights.positiveSentimentPct}%`,
-                payload.insights.sentimentChange,
-              ],
-            ] as const
-          ).map(([label, value, change]) => (
-            <View key={label} style={styles.kpiBox}>
-              <Text style={styles.kpiLabel}>{label}</Text>
-              <View style={styles.kpiValueRow}>
-                <Text style={styles.kpiValue}>{value}</Text>
-                <DeltaText value={change} />
+                [
+                  'Visibility',
+                  `${payload.insights.avgVisibilityScore}%`,
+                  payload.insights.visibilityChange,
+                ],
+                [
+                  'Mentions',
+                  String(payload.insights.totalMentions),
+                  payload.insights.mentionsChange,
+                ],
+                [
+                  'Citations',
+                  String(payload.insights.totalCitations),
+                  payload.insights.citationsChange,
+                ],
+                [
+                  'Positive Sentiment',
+                  `${payload.insights.positiveSentimentPct}%`,
+                  payload.insights.sentimentChange,
+                ],
+              ] as const
+            ).map(([label, value, change]) => (
+              <View key={label} style={styles.kpiBox}>
+                <Text style={styles.kpiLabel}>{label}</Text>
+                <View style={styles.kpiValueRow}>
+                  <Text style={styles.kpiValue}>{value}</Text>
+                  <DeltaText value={change} />
+                </View>
               </View>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        )}
 
         {/* Visibility trend */}
         {trend.length > 1 && (
@@ -306,22 +314,24 @@ export function ReportPdfDocument({ report }: { report: Report }) {
         )}
 
         {/* Share of Voice */}
-        <View style={styles.section} wrap={false}>
-          <Text style={styles.sectionTitle}>
-            Share of Voice — {payload.shareOfVoice.overallSov}%
-          </Text>
-          {payload.shareOfVoice.byPlatform.map((p) => (
-            <HBar
-              key={p.provider}
-              label={p.provider}
-              pct={(p.sov / maxSov) * 100}
-              value={`${p.sov}%`}
-            />
-          ))}
-        </View>
+        {payload.shareOfVoice && (
+          <View style={styles.section} wrap={false}>
+            <Text style={styles.sectionTitle}>
+              Share of Voice — {payload.shareOfVoice.overallSov}%
+            </Text>
+            {payload.shareOfVoice.byPlatform.map((p) => (
+              <HBar
+                key={p.provider}
+                label={p.provider}
+                pct={(p.sov / maxSov) * 100}
+                value={`${p.sov}%`}
+              />
+            ))}
+          </View>
+        )}
 
         {/* Competitor leaderboard */}
-        {payload.competitors.length > 0 && (
+        {payload.competitors && payload.competitors.length > 0 && (
           <View style={styles.section} wrap={false}>
             <Text style={styles.sectionTitle}>Competitor Leaderboard</Text>
             <View style={styles.tableHeader}>
@@ -368,6 +378,39 @@ export function ReportPdfDocument({ report }: { report: Report }) {
           </View>
         )}
 
+        {/* Topic performance */}
+        {payload.topicPerformance && payload.topicPerformance.length > 0 && (
+          <View style={styles.section} wrap={false}>
+            <Text style={styles.sectionTitle}>Topic Performance</Text>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Topic</Text>
+              <Text style={[styles.tableHeaderCell, { width: 60, textAlign: 'right' }]}>
+                Visibility
+              </Text>
+              <Text style={[styles.tableHeaderCell, { width: 50, textAlign: 'right' }]}>
+                Change
+              </Text>
+              <Text style={[styles.tableHeaderCell, { width: 50, textAlign: 'right' }]}>
+                Results
+              </Text>
+            </View>
+            {payload.topicPerformance.map((tp) => (
+              <View key={tp.name} style={styles.tableRow}>
+                <Text style={[styles.cell, { flex: 1, paddingRight: 8 }]}>{tp.name}</Text>
+                <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>
+                  {tp.avgVisibility}%
+                </Text>
+                <View style={{ width: 50, alignItems: 'flex-end' }}>
+                  <DeltaText value={tp.change} />
+                </View>
+                <Text style={[styles.cell, { width: 50, textAlign: 'right', color: MUTED }]}>
+                  {tp.results}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Best / worst prompts */}
         {payload.promptPerformance && payload.promptPerformance.best.length > 0 && (
           <PromptTable title="Best Performing Prompts" prompts={payload.promptPerformance.best} />
@@ -401,39 +444,134 @@ export function ReportPdfDocument({ report }: { report: Report }) {
           </View>
         )}
 
-        {/* Citations */}
-        <View style={styles.section} wrap={false}>
-          <Text style={styles.sectionTitle}>
-            Top Citation Sources — {payload.citations.totals.domains} domains ·{' '}
-            {payload.citations.totals.citations} citations
-          </Text>
-          {payload.citations.topDomains.length > 0 && (
-            <View style={{ marginTop: 8 }}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Domain</Text>
-                <Text style={[styles.tableHeaderCell, { width: 80 }]}>Source Type</Text>
-                <Text style={[styles.tableHeaderCell, { width: 60, textAlign: 'right' }]}>
-                  Citations
-                </Text>
-                <Text style={[styles.tableHeaderCell, { width: 50, textAlign: 'right' }]}>
-                  Usage
-                </Text>
+        {/* AI traffic */}
+        {payload.aiTraffic && (
+          <View style={styles.section} wrap={false}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
+              <Text style={styles.sectionTitle}>
+                AI Traffic — {payload.aiTraffic.totalVisits} visits
+              </Text>
+              <View style={{ marginBottom: 6 }}>
+                <DeltaText value={payload.aiTraffic.change} />
               </View>
-              {payload.citations.topDomains.map((d) => (
-                <View key={d.domain} style={styles.tableRow}>
-                  <Text style={[styles.cell, { flex: 1, paddingRight: 8 }]}>{d.domain}</Text>
-                  <Text style={[styles.cell, { width: 80, color: MUTED }]}>{d.category}</Text>
-                  <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>
-                    {d.totalCitations}
-                  </Text>
-                  <Text style={[styles.cell, { width: 50, textAlign: 'right' }]}>
-                    {d.usagePct}%
+            </View>
+            {payload.aiTraffic.platformBreakdown.map((p) => (
+              <View key={p.platform} style={styles.tableRow}>
+                <Text style={[styles.cell, { flex: 1 }]}>{p.platform}</Text>
+                <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>{p.visits}</Text>
+              </View>
+            ))}
+            {payload.aiTraffic.topPages.length > 0 && (
+              <View style={{ marginTop: 6 }}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Top Page</Text>
+                  <Text style={[styles.tableHeaderCell, { width: 60, textAlign: 'right' }]}>
+                    Visits
                   </Text>
                 </View>
-              ))}
+                {payload.aiTraffic.topPages.map((p) => (
+                  <View key={p.url} style={styles.tableRow}>
+                    <Text style={[styles.cell, { flex: 1, paddingRight: 8 }]}>{p.url}</Text>
+                    <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>{p.visits}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Shopping visibility */}
+        {payload.shoppingVisibility && (
+          <View style={styles.section} wrap={false}>
+            <Text style={styles.sectionTitle}>Shopping Visibility</Text>
+            <View style={styles.kpiRow}>
+              <View style={styles.kpiBox}>
+                <Text style={styles.kpiLabel}>Shopping SoV</Text>
+                <View style={styles.kpiValueRow}>
+                  <Text style={styles.kpiValue}>{payload.shoppingVisibility.shoppingSovPct}%</Text>
+                  <DeltaText value={payload.shoppingVisibility.sovChange} />
+                </View>
+              </View>
+              <View style={styles.kpiBox}>
+                <Text style={styles.kpiLabel}>Products Surfaced</Text>
+                <Text style={styles.kpiValue}>{payload.shoppingVisibility.productsSurfaced}</Text>
+              </View>
+              <View style={styles.kpiBox}>
+                <Text style={styles.kpiLabel}>Card Rate</Text>
+                <Text style={styles.kpiValue}>{payload.shoppingVisibility.cardRatePct}%</Text>
+              </View>
+              <View style={styles.kpiBox}>
+                <Text style={styles.kpiLabel}>Top Merchant</Text>
+                <Text style={[styles.cell, { fontWeight: 700 }]}>
+                  {payload.shoppingVisibility.topMerchant ?? '—'}
+                </Text>
+              </View>
             </View>
-          )}
-        </View>
+          </View>
+        )}
+
+        {/* Site audit score */}
+        {payload.auditScore && (
+          <View style={styles.section} wrap={false}>
+            <Text style={styles.sectionTitle}>Site Audit Score</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+              <Text style={{ fontSize: 18, fontWeight: 700 }}>
+                {payload.auditScore.totalScore ?? '—'}
+              </Text>
+              {payload.auditScore.totalScore !== null &&
+                payload.auditScore.previousScore !== null && (
+                  <View style={{ marginBottom: 2 }}>
+                    <DeltaText
+                      value={
+                        Math.round(
+                          (payload.auditScore.totalScore - payload.auditScore.previousScore) * 10,
+                        ) / 10
+                      }
+                    />
+                  </View>
+                )}
+              <Text style={[styles.cell, { color: MUTED, marginBottom: 2 }]}>
+                {payload.auditScore.url} · audited {formatDate(payload.auditScore.auditedAt)}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Citations */}
+        {payload.citations && (
+          <View style={styles.section} wrap={false}>
+            <Text style={styles.sectionTitle}>
+              Top Citation Sources — {payload.citations.totals.domains} domains ·{' '}
+              {payload.citations.totals.citations} citations
+            </Text>
+            {payload.citations.topDomains.length > 0 && (
+              <View style={{ marginTop: 8 }}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Domain</Text>
+                  <Text style={[styles.tableHeaderCell, { width: 80 }]}>Source Type</Text>
+                  <Text style={[styles.tableHeaderCell, { width: 60, textAlign: 'right' }]}>
+                    Citations
+                  </Text>
+                  <Text style={[styles.tableHeaderCell, { width: 50, textAlign: 'right' }]}>
+                    Usage
+                  </Text>
+                </View>
+                {payload.citations.topDomains.map((d) => (
+                  <View key={d.domain} style={styles.tableRow}>
+                    <Text style={[styles.cell, { flex: 1, paddingRight: 8 }]}>{d.domain}</Text>
+                    <Text style={[styles.cell, { width: 80, color: MUTED }]}>{d.category}</Text>
+                    <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>
+                      {d.totalCitations}
+                    </Text>
+                    <Text style={[styles.cell, { width: 50, textAlign: 'right' }]}>
+                      {d.usagePct}%
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Footer */}
         <View style={styles.footer} fixed>

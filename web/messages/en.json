@@ -407,6 +407,41 @@
     "deleteConfirm": "Delete this report?",
     "deleteFailed": "Failed to delete report",
     "selectDates": "Pick a start and end date",
+    "templateLabel": "Template",
+    "templates": {
+      "weekly_visibility": {
+        "name": "Weekly Visibility Summary",
+        "description": "A tight weekly pulse: visibility KPIs, trend and share of voice."
+      },
+      "executive_summary": {
+        "name": "Monthly Executive Report",
+        "description": "The full picture: every section, ready for a monthly review."
+      },
+      "competitor_benchmark": {
+        "name": "Competitor Benchmark",
+        "description": "Where you stand against each competitor, and who moved."
+      },
+      "citation_sources": {
+        "name": "Citation & Sources Report",
+        "description": "Which domains and source types AI engines cite around your brand."
+      }
+    },
+    "sections": {
+      "kpis": "KPIs",
+      "trend": "Trend",
+      "shareOfVoice": "Share of Voice",
+      "competitors": "Competitors",
+      "topicPerformance": "Topics",
+      "promptPerformance": "Prompts",
+      "queryFanout": "Fan-out",
+      "aiTraffic": "AI Traffic",
+      "shoppingVisibility": "Shopping",
+      "auditScore": "Audit Score",
+      "citations": "Citations"
+    },
+    "brandLabel": "Brand",
+    "sectionsLabel": "Sections",
+    "selectSections": "Pick at least one section",
     "dialogTitle": "Generate Report",
     "dialogDescription": "Snapshot your brand's AI visibility for a period, with an AI-written executive summary.",
     "reportTitleLabel": "Title (optional)",
@@ -431,7 +466,22 @@
       "runs": "Runs",
       "query": "Query",
       "engines": "Engines",
-      "timesSearched": "Times Searched"
+      "timesSearched": "Times Searched",
+      "topic": "Topic",
+      "results": "Results",
+      "platform": "Platform",
+      "topPages": "Top Pages"
+    },
+    "topicPerformance": "Topic Performance",
+    "aiTraffic": "AI Traffic",
+    "shoppingVisibility": "Shopping Visibility",
+    "auditScore": "Site Audit Score",
+    "auditedOn": "Audited on",
+    "shopping": {
+      "sov": "Shopping SoV",
+      "products": "Products Surfaced",
+      "cardRate": "Card Rate",
+      "topMerchant": "Top Merchant"
     },
     "visibilityTrend": "Visibility Trend",
     "bestPrompts": "Best Performing Prompts",

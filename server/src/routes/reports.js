@@ -1,7 +1,7 @@
 /**
  * Reports routes (Simple Reports MVP).
  *
- *   POST /api/reports/summary   { brandId, snapshot, dateFrom, dateTo, model? }
+ *   POST /api/reports/summary   { brandId, snapshot, dateFrom, dateTo, template?, model? }
  *                               → { success, summary }
  *
  * Generates the AI executive summary for a report from the metric snapshot the
@@ -22,18 +22,34 @@ const router = Router();
 
 const SUMMARY_SYSTEM_PROMPT = `You are an AI search visibility analyst writing the executive summary of a brand's AI visibility report.
 
-You will receive a JSON snapshot of the brand's metrics for the report period: overall visibility KPIs (with deltas vs the previous period), share of voice, a competitor comparison, and a citations overview.
+You will receive a JSON snapshot of the brand's metrics for the report period. Depending on the report's sections it may include: overall visibility KPIs (with deltas vs the previous period), a daily visibility trend, share of voice, a competitor comparison, per-topic performance, best/weakest prompts, observed query fan-outs, AI-referred traffic, shopping visibility, a site audit score, and a citations overview. Every delta in the snapshot compares against the previous period of equal length.
 
-Write a 1-2 paragraph executive summary in English for a marketing executive:
-- Lead with the overall picture (visibility, mentions, citations) and how it changed.
-- Call out the most notable competitor dynamics (who leads, who moved).
-- Mention citation reach (domains/URLs) only if it adds signal.
+Write a 1-2 paragraph executive summary in English for a marketing executive. It must tell the CHANGE STORY of the period, not describe a static snapshot:
+- Open with the headline movement as an arc — e.g. "Visibility climbed from 42 to 48" — using the trend's first/last points or the KPI deltas.
+- Name the DRIVER behind that movement when the data shows one: the platform, topic or prompt that moved most (share-of-voice shifts, best/weakest prompts, topic deltas).
+- Name the biggest RISK when the data shows one: a competitor gaining ground, a topic or platform sliding, or citation share concentrating away from the brand.
+- Close with the single most consequential implication or next focus, in one sentence.
 - Be concrete: use the numbers from the snapshot. Never invent metrics that are not present.
+- Cover only what the snapshot contains — reports include different sections, so skip anything absent. If no previous-period data exists, say the period sets the baseline instead of inventing a change.
 - No headings, no bullet points, no markdown — plain prose only.`;
+
+/**
+ * Per-template flavor appended to the system prompt. The snapshot already
+ * contains only that template's sections; this just steers the prose focus.
+ */
+const TEMPLATE_FLAVOR = {
+  weekly_visibility:
+    'This is a WEEKLY visibility summary: keep it to one tight paragraph focused on week-over-week movement in visibility, mentions and share of voice.',
+  executive_summary: '',
+  competitor_benchmark:
+    'This is a COMPETITOR BENCHMARK report: lead with where the brand stands versus each competitor, who gained and who lost, and where the largest gaps are.',
+  citation_sources:
+    'This is a CITATION & SOURCES report: focus on citation reach, which domains and source types dominate, and notable concentration or gaps in the source mix.',
+};
 
 router.post('/summary', async (req, res) => {
   const userId = req.user?.id;
-  const { brandId, snapshot, dateFrom, dateTo, model } = req.body || {};
+  const { brandId, snapshot, dateFrom, dateTo, template, model } = req.body || {};
 
   if (!brandId || !snapshot || typeof snapshot !== 'object') {
     return res.status(400).json({ success: false, message: 'brandId and snapshot are required' });
@@ -57,9 +73,10 @@ ${JSON.stringify(snapshot, null, 2)}
 
 Write the executive summary.`;
 
+    const flavor = TEMPLATE_FLAVOR[template] || '';
     const { text: summary } = await generateText({
       model: resolveModel(model),
-      system: SUMMARY_SYSTEM_PROMPT,
+      system: flavor ? `${SUMMARY_SYSTEM_PROMPT}\n\n${flavor}` : SUMMARY_SYSTEM_PROMPT,
       prompt: userPrompt,
     });
 

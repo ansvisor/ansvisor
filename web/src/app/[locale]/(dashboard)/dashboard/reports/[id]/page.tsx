@@ -28,6 +28,9 @@ import {
 import { ArrowLeft, FileDown, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
+import { REPORT_TEMPLATES } from '@/lib/reports/templates';
+
+const KNOWN_TEMPLATE_IDS = new Set<string>(REPORT_TEMPLATES.map((tpl) => tpl.id));
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', {
@@ -121,7 +124,7 @@ export default function ReportDetailPage() {
   }
 
   const { payload } = report;
-  const maxSov = Math.max(...payload.shareOfVoice.byPlatform.map((p) => p.sov), 1);
+  const maxSov = Math.max(...(payload.shareOfVoice?.byPlatform.map((p) => p.sov) ?? []), 1);
 
   // Render a true vector PDF from the saved payload with @react-pdf/renderer
   // (selectable text, exact layout — no screenshot artifacts). The renderer
@@ -168,6 +171,9 @@ export default function ReportDetailPage() {
           </Link>
           <h1 className="text-2xl font-bold tracking-tight">{report.title}</h1>
           <p className="text-sm text-muted-foreground">
+            {KNOWN_TEMPLATE_IDS.has(report.template) && (
+              <>{t(`templates.${report.template}.name`)} · </>
+            )}
             {formatDate(report.dateFrom)} — {formatDate(report.dateTo)} · {t('generatedOn')}{' '}
             {formatDate(report.createdAt)}
           </p>
@@ -196,31 +202,33 @@ export default function ReportDetailPage() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <KpiCard
-            label={t('kpi.visibility')}
-            value={`${payload.insights.avgVisibilityScore}%`}
-            change={payload.insights.visibilityChange}
-          />
-          <KpiCard
-            label={t('kpi.mentions')}
-            value={String(payload.insights.totalMentions)}
-            change={payload.insights.mentionsChange}
-          />
-          <KpiCard
-            label={t('kpi.citations')}
-            value={String(payload.insights.totalCitations)}
-            change={payload.insights.citationsChange}
-          />
-          <KpiCard
-            label={t('kpi.sentiment')}
-            value={`${payload.insights.positiveSentimentPct}%`}
-            change={payload.insights.sentimentChange}
-          />
-        </div>
-
-        {/* Optional sections below guard on their payload field: reports
-            generated before a section shipped simply don't render it. */}
+        {/* Every metric section guards on its payload field: templates only
+            gather their own sections, and older (immutable) reports may
+            predate a field entirely. */}
+        {payload.insights && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <KpiCard
+              label={t('kpi.visibility')}
+              value={`${payload.insights.avgVisibilityScore}%`}
+              change={payload.insights.visibilityChange}
+            />
+            <KpiCard
+              label={t('kpi.mentions')}
+              value={String(payload.insights.totalMentions)}
+              change={payload.insights.mentionsChange}
+            />
+            <KpiCard
+              label={t('kpi.citations')}
+              value={String(payload.insights.totalCitations)}
+              change={payload.insights.citationsChange}
+            />
+            <KpiCard
+              label={t('kpi.sentiment')}
+              value={`${payload.insights.positiveSentimentPct}%`}
+              change={payload.insights.sentimentChange}
+            />
+          </div>
+        )}
         {payload.visibilityTrend && payload.visibilityTrend.length > 0 && (
           <Card>
             <CardHeader>
@@ -232,74 +240,114 @@ export default function ReportDetailPage() {
           </Card>
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-baseline gap-2 text-base">
-              {t('shareOfVoice')}
-              <span className="text-2xl font-bold">{payload.shareOfVoice.overallSov}%</span>
-              <Delta value={payload.shareOfVoice.overallSovChange} />
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {payload.shareOfVoice.byPlatform.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t('noData')}</p>
-            ) : (
-              payload.shareOfVoice.byPlatform.map((p) => (
-                <div key={p.provider} className="flex items-center gap-3">
-                  <span className="w-32 shrink-0 truncate text-sm">{p.provider}</span>
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary"
-                      style={{ width: `${Math.min((p.sov / maxSov) * 100, 100)}%` }}
-                    />
+        {payload.shareOfVoice && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-baseline gap-2 text-base">
+                {t('shareOfVoice')}
+                <span className="text-2xl font-bold">{payload.shareOfVoice.overallSov}%</span>
+                <Delta value={payload.shareOfVoice.overallSovChange} />
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {payload.shareOfVoice.byPlatform.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t('noData')}</p>
+              ) : (
+                payload.shareOfVoice.byPlatform.map((p) => (
+                  <div key={p.provider} className="flex items-center gap-3">
+                    <span className="w-32 shrink-0 truncate text-sm">{p.provider}</span>
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary"
+                        style={{ width: `${Math.min((p.sov / maxSov) * 100, 100)}%` }}
+                      />
+                    </div>
+                    <span className="w-14 shrink-0 text-right text-sm font-medium">{p.sov}%</span>
                   </div>
-                  <span className="w-14 shrink-0 text-right text-sm font-medium">{p.sov}%</span>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t('competitorLeaderboard')}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {payload.competitors.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t('noData')}</p>
-            ) : (
+        {payload.competitors && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('competitorLeaderboard')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {payload.competitors.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t('noData')}</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t('columns.brand')}</TableHead>
+                      <TableHead className="text-right">{t('kpi.visibility')}</TableHead>
+                      <TableHead className="text-right">{t('columns.change')}</TableHead>
+                      <TableHead className="text-right">{t('kpi.mentions')}</TableHead>
+                      <TableHead className="text-right">{t('kpi.citations')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {payload.competitors.map((c) => (
+                      <TableRow key={c.name} className={cn(c.isOwnBrand && 'bg-primary/5')}>
+                        <TableCell className={cn('font-medium', c.isOwnBrand && 'text-primary')}>
+                          {c.name}
+                          {c.isOwnBrand && (
+                            <span className="ml-2 text-xs text-muted-foreground">{t('you')}</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">{c.avgVisibilityScore}%</TableCell>
+                        <TableCell className="text-right">
+                          <Delta value={c.change} />
+                        </TableCell>
+                        <TableCell className="text-right">{c.totalMentions}</TableCell>
+                        <TableCell className="text-right">{c.totalCitations}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {payload.topicPerformance && payload.topicPerformance.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('topicPerformance')}</CardTitle>
+            </CardHeader>
+            <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t('columns.brand')}</TableHead>
-                    <TableHead className="text-right">{t('kpi.visibility')}</TableHead>
-                    <TableHead className="text-right">{t('columns.change')}</TableHead>
-                    <TableHead className="text-right">{t('kpi.mentions')}</TableHead>
-                    <TableHead className="text-right">{t('kpi.citations')}</TableHead>
+                    <TableHead>{t('columns.topic')}</TableHead>
+                    <TableHead className="w-28 text-right">{t('kpi.visibility')}</TableHead>
+                    <TableHead className="w-24 text-right">{t('columns.change')}</TableHead>
+                    <TableHead className="w-24 text-right">{t('columns.results')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {payload.competitors.map((c) => (
-                    <TableRow key={c.name} className={cn(c.isOwnBrand && 'bg-primary/5')}>
-                      <TableCell className={cn('font-medium', c.isOwnBrand && 'text-primary')}>
-                        {c.name}
-                        {c.isOwnBrand && (
-                          <span className="ml-2 text-xs text-muted-foreground">{t('you')}</span>
-                        )}
+                  {payload.topicPerformance.map((tp) => (
+                    <TableRow key={tp.name}>
+                      <TableCell className="max-w-[280px] truncate font-medium">
+                        {tp.name}
                       </TableCell>
-                      <TableCell className="text-right">{c.avgVisibilityScore}%</TableCell>
+                      <TableCell className="text-right">{tp.avgVisibility}%</TableCell>
                       <TableCell className="text-right">
-                        <Delta value={c.change} />
+                        <Delta value={tp.change} />
                       </TableCell>
-                      <TableCell className="text-right">{c.totalMentions}</TableCell>
-                      <TableCell className="text-right">{c.totalCitations}</TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {tp.results}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {payload.promptPerformance &&
           (payload.promptPerformance.best.length > 0 ||
@@ -382,45 +430,163 @@ export default function ReportDetailPage() {
           </Card>
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t('topCitationSources')}</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {t('citationTotals', {
-                domains: payload.citations.totals.domains,
-                citations: payload.citations.totals.citations,
-              })}
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {payload.citations.topDomains.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t('noData')}</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t('columns.domain')}</TableHead>
-                    <TableHead>{t('columns.sourceType')}</TableHead>
-                    <TableHead className="text-right">{t('kpi.citations')}</TableHead>
-                    <TableHead className="text-right">{t('columns.usage')}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {payload.citations.topDomains.map((d) => (
-                    <TableRow key={d.domain}>
-                      <TableCell className="font-medium">{d.domain}</TableCell>
-                      <TableCell className="capitalize text-muted-foreground">
-                        {d.category}
-                      </TableCell>
-                      <TableCell className="text-right">{d.totalCitations}</TableCell>
-                      <TableCell className="text-right">{d.usagePct}%</TableCell>
+        {payload.aiTraffic && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-baseline gap-2 text-base">
+                {t('aiTraffic')}
+                <span className="text-2xl font-bold">{payload.aiTraffic.totalVisits}</span>
+                <Delta value={payload.aiTraffic.change} />
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-6 sm:grid-cols-2">
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('columns.platform')}
+                </p>
+                {payload.aiTraffic.platformBreakdown.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t('noData')}</p>
+                ) : (
+                  payload.aiTraffic.platformBreakdown.map((p) => (
+                    <div key={p.platform} className="flex items-center justify-between text-sm">
+                      <span className="truncate">{PLATFORM_LABELS[p.platform] ?? p.platform}</span>
+                      <span className="font-medium tabular-nums">{p.visits}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('columns.topPages')}
+                </p>
+                {payload.aiTraffic.topPages.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t('noData')}</p>
+                ) : (
+                  payload.aiTraffic.topPages.map((p) => (
+                    <div key={p.url} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="min-w-0 truncate text-muted-foreground">{p.url}</span>
+                      <span className="shrink-0 font-medium tabular-nums">{p.visits}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {payload.shoppingVisibility && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('shoppingVisibility')}</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('shopping.sov')}
+                </p>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className="text-2xl font-bold">
+                    {payload.shoppingVisibility.shoppingSovPct}%
+                  </span>
+                  <Delta value={payload.shoppingVisibility.sovChange} />
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('shopping.products')}
+                </p>
+                <p className="mt-1 text-2xl font-bold">
+                  {payload.shoppingVisibility.productsSurfaced}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('shopping.cardRate')}
+                </p>
+                <p className="mt-1 text-2xl font-bold">{payload.shoppingVisibility.cardRatePct}%</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('shopping.topMerchant')}
+                </p>
+                <p className="mt-1 truncate text-sm font-medium">
+                  {payload.shoppingVisibility.topMerchant ?? '—'}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {payload.auditScore && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('auditScore')}</CardTitle>
+            </CardHeader>
+            <CardContent className="flex items-center gap-6">
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold">{payload.auditScore.totalScore ?? '—'}</span>
+                {payload.auditScore.totalScore !== null &&
+                  payload.auditScore.previousScore !== null && (
+                    <Delta
+                      value={
+                        Math.round(
+                          (payload.auditScore.totalScore - payload.auditScore.previousScore) * 10,
+                        ) / 10
+                      }
+                    />
+                  )}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{payload.auditScore.url}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t('auditedOn')} {formatDate(payload.auditScore.auditedAt)}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {payload.citations && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('topCitationSources')}</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {t('citationTotals', {
+                  domains: payload.citations.totals.domains,
+                  citations: payload.citations.totals.citations,
+                })}
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {payload.citations.topDomains.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t('noData')}</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t('columns.domain')}</TableHead>
+                      <TableHead>{t('columns.sourceType')}</TableHead>
+                      <TableHead className="text-right">{t('kpi.citations')}</TableHead>
+                      <TableHead className="text-right">{t('columns.usage')}</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {payload.citations.topDomains.map((d) => (
+                      <TableRow key={d.domain}>
+                        <TableCell className="font-medium">{d.domain}</TableCell>
+                        <TableCell className="capitalize text-muted-foreground">
+                          {d.category}
+                        </TableCell>
+                        <TableCell className="text-right">{d.totalCitations}</TableCell>
+                        <TableCell className="text-right">{d.usagePct}%</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
