@@ -3,6 +3,17 @@ title: "Authentication"
 description: "How to authenticate API requests to the Ansvisor server."
 ---
 
+## API keys (Public Metrics API)
+
+The versioned `/api/v1/*` endpoints on the **web app** authenticate with long-lived Ansvisor API keys (prefix `ans_`), created under **Settings → API Keys** in the dashboard:
+
+```bash
+curl "https://app.ansvisor.com/api/v1/brands" \
+  -H "Authorization: Bearer ans_..."
+```
+
+This is the right choice for external integrations — Looker Studio, Sheets, scripts, and the [MCP server](/guides/mcp-server). See the [Metrics API reference](/api-reference/metrics) for the endpoint list.
+
 ## Bearer token
 
 All `/api/*` endpoints on the Ansvisor server require a Supabase JWT bearer token in the `Authorization` header:
@@ -17,10 +28,12 @@ curl https://api.your-domain.com/api/health \
 The cleanest way is via the Supabase JS client in your own backend code:
 
 ```ts
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const { data: { session } } = await supabase.auth.signInWithPassword({
+const {
+  data: { session },
+} = await supabase.auth.signInWithPassword({
   email,
   password,
 });
@@ -50,9 +63,15 @@ Three endpoints don't require any auth:
 - `GET /healthz` (where exposed) — basic uptime check
 
 <Note>
-The internal `/api/health` endpoint described in the routes file IS auth-protected — by design, it returns the authenticated user's ID. For uptime monitoring, use `/t.js` instead (returns 200 + JS content).
+  The internal `/api/health` endpoint described in the routes file IS
+  auth-protected — by design, it returns the authenticated user's ID. For uptime
+  monitoring, use `/t.js` instead (returns 200 + JS content).
 </Note>
 
-<Card title="Continue: Brands API" icon="arrow-right" href="/api-reference/brands">
+<Card
+  title="Continue: Brands API"
+  icon="arrow-right"
+  href="/api-reference/brands"
+>
   CRUD endpoints for managing brands programmatically.
 </Card>
