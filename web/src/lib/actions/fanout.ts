@@ -258,3 +258,79 @@ export async function classifyFanoutIntents(queries: string[]): Promise<Record<s
   const data = await res.json();
   return (data.intents ?? {}) as Record<string, string>;
 }
+
+/**
+ * Observed query fan-out for a single prompt (#392).
+ * Filters prompt_results by both brand_id and prompt_id so only sub-queries
+ * from answers to THIS prompt are returned. Aggregation is identical to
+ * getQueryFanout (normalise → dedupe per answer → count distinct answers).
+ */
+export async function getPromptFanout(
+  brandId: string,
+  promptId: string,
+  opts?: { days?: number },
+): Promise<QueryFanoutData> {
+  const supabase = await createClient();
+  const days = Math.min(Math.max(Math.trunc(opts?.days ?? 30) || 30, 1), MAX_FANOUT_DAYS);
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+
+  const { data: rows, error } = await supabase
+    .from('prompt_results')
+    .select('prompt_id, platform, search_queries')
+    .eq('brand_id', brandId)
+    .eq('prompt_id', promptId)
+    .gte('created_at', since);
+
+  if (error) throw new Error(error.message);
+
+  interface Acc {
+    display: string;
+    engines: Set<string>;
+    answerCount: number;
+  }
+  const byQuery = new Map<string, Acc>();
+
+  for (const row of rows ?? []) {
+    const items = Array.isArray(row.search_queries)
+      ? (row.search_queries as RawSearchQueryItem[])
+      : [];
+    const seenInRow = new Set<string>();
+    for (const item of items) {
+      const q = typeof item?.query === 'string' ? normalizeQuery(item.query) : '';
+      if (!q) continue;
+      const key = q.toLowerCase();
+
+      let acc = byQuery.get(key);
+      if (!acc) {
+        acc = { display: q, engines: new Set(), answerCount: 0 };
+        byQuery.set(key, acc);
+      }
+
+      const sp =
+        typeof item?.source_platform === 'string' && item.source_platform
+          ? item.source_platform
+          : (row.platform as string | null);
+      if (sp) acc.engines.add(sp);
+
+      if (!seenInRow.has(key)) {
+        acc.answerCount += 1;
+        seenInRow.add(key);
+      }
+    }
+  }
+
+  if (byQuery.size === 0) return { subQueries: [], totalObserved: 0 };
+
+  const subQueries: FanoutSubQuery[] = [...byQuery.entries()]
+    .map(([, acc]) => ({
+      query: acc.display,
+      engines: [...acc.engines].sort(),
+      timesSearched: acc.answerCount,
+      sourcedPrompts: [],
+      tracked: false,
+      trackedPromptId: null,
+    }))
+    .sort((a, b) => b.timesSearched - a.timesSearched || a.query.localeCompare(b.query));
+
+  return { subQueries, totalObserved: subQueries.length };
+}

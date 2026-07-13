@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
@@ -53,51 +54,67 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
   const [intents, setIntents] = useState<Record<string, string>>({});
   const [page, setPage] = useState(1);
   const [view, setView] = useState<View>('frequency');
+  const [searchText, setSearchText] = useState('');
   const PAGE_SIZE = 10;
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await getQueryFanout(brandId, { days: 30 });
-      setData(result);
-      const queries = result.subQueries.map((s) => s.query);
-      if (queries.length > 0) {
-        const intentPromise = classifyFanoutIntents(queries);
-        const intentResult = await Promise.race<
-          | { status: 'resolved'; map: Record<string, string> }
-          | { status: 'failed' }
-          | { status: 'timeout' }
-        >([
-          intentPromise
-            .then((map) => ({ status: 'resolved' as const, map }))
-            .catch(() => ({ status: 'failed' as const })),
-          new Promise<{ status: 'timeout' }>((resolve) =>
-            setTimeout(() => resolve({ status: 'timeout' }), INTENT_INITIAL_LOAD_TIMEOUT_MS),
-          ),
-        ]);
+  const load = useCallback(
+    async (options?: { silent?: boolean }) => {
+      const silent = options?.silent ?? false;
+      if (!silent) {
+        setLoading(true);
+      }
+      try {
+        const result = await getQueryFanout(brandId, { days: 30 });
+        setData(result);
+        const queries = result.subQueries.map((s) => s.query);
+        if (queries.length > 0) {
+          const intentPromise = classifyFanoutIntents(queries);
+          const intentResult = await Promise.race<
+            | { status: 'resolved'; map: Record<string, string> }
+            | { status: 'failed' }
+            | { status: 'timeout' }
+          >([
+            intentPromise
+              .then((map) => ({ status: 'resolved' as const, map }))
+              .catch(() => ({ status: 'failed' as const })),
+            new Promise<{ status: 'timeout' }>((resolve) =>
+              setTimeout(() => resolve({ status: 'timeout' }), INTENT_INITIAL_LOAD_TIMEOUT_MS),
+            ),
+          ]);
 
-        if (intentResult.status === 'resolved') {
-          setIntents((prev) => ({ ...prev, ...intentResult.map }));
-        } else if (intentResult.status === 'timeout') {
-          // Keep first paint bounded on cold/slow classifications; fill badges
-          // when the original batch resolves instead of issuing a second call.
-          intentPromise.then((map) => setIntents((prev) => ({ ...prev, ...map }))).catch(() => {});
+          if (intentResult.status === 'resolved') {
+            setIntents((prev) => ({ ...prev, ...intentResult.map }));
+          } else if (intentResult.status === 'timeout') {
+            // Keep first paint bounded on cold/slow classifications; fill badges
+            // when the original batch resolves instead of issuing a second call.
+            intentPromise
+              .then((map) => setIntents((prev) => ({ ...prev, ...map })))
+              .catch(() => {});
+          }
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to load query fan-out');
+        setData({ subQueries: [], totalObserved: 0 });
+      } finally {
+        if (!silent) {
+          setLoading(false);
         }
       }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load query fan-out');
-      setData({ subQueries: [], totalObserved: 0 });
-    } finally {
-      setLoading(false);
-    }
-  }, [brandId]);
+    },
+    [brandId],
+  );
   useEffect(() => {
     load();
   }, [load]);
 
   useEffect(() => {
     setPage(1);
+    setSearchText('');
   }, [brandId]);
+
+  useEffect(() => {
+    setSearchText('');
+  }, [view]);
 
   // Invert sub-query → prompts into prompt → sub-queries for the "By prompt" view.
   const byPrompt = useMemo<PromptGroup[]>(() => {
@@ -114,13 +131,34 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
     return [...map.values()].sort((a, b) => b.subQueries.length - a.subQueries.length);
   }, [data]);
 
+  const filteredByPrompt = useMemo<PromptGroup[]>(() => {
+    if (!searchText) return byPrompt;
+    const lower = searchText.toLowerCase();
+    return byPrompt.filter((group) => group.prompt.text.toLowerCase().includes(lower));
+  }, [byPrompt, searchText]);
+
   async function handleTrack(query: string) {
     setAddingKey(query.toLowerCase());
     try {
-      await trackFanoutQuery(brandId, query);
+      const result = await trackFanoutQuery(brandId, query);
       toast.success('Added as a tracked prompt');
-      await load();
-      setPage(1);
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          subQueries: prev.subQueries.map((sq) => {
+            if (sq.query.toLowerCase() === query.toLowerCase()) {
+              return {
+                ...sq,
+                tracked: true,
+                trackedPromptId: result.promptId,
+              };
+            }
+            return sq;
+          }),
+        };
+      });
+      await load({ silent: true });
       await onTracked?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to track this query');
@@ -190,10 +228,12 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
           />
         ) : (
           <ByPromptView
-            groups={byPrompt}
+            groups={filteredByPrompt}
             intents={intents}
             addingKey={addingKey}
             onTrack={handleTrack}
+            searchText={searchText}
+            onSearchChange={setSearchText}
           />
         )}
       </CardContent>
@@ -299,11 +339,15 @@ function ByPromptView({
   intents,
   addingKey,
   onTrack,
+  searchText,
+  onSearchChange,
 }: {
   groups: PromptGroup[];
   intents: Record<string, string>;
   addingKey: string | null;
   onTrack: (query: string) => void;
+  searchText: string;
+  onSearchChange: (text: string) => void;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -317,84 +361,112 @@ function ByPromptView({
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="w-[28px]" />
-          <TableHead>Prompt</TableHead>
-          <TableHead className="w-[110px] text-right">Sub-queries</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {groups.map(({ prompt, subQueries }) => {
-          const isOpen = expanded.has(prompt.id);
-          return (
-            <Fragment key={prompt.id}>
-              <TableRow className="cursor-pointer select-none" onClick={() => toggle(prompt.id)}>
-                <TableCell className="pr-0">
-                  <ChevronRight
-                    className={cn(
-                      'h-4 w-4 text-muted-foreground transition-transform duration-150',
-                      isOpen && 'rotate-90',
-                    )}
-                  />
-                </TableCell>
-                <TableCell className="font-medium">{prompt.text}</TableCell>
-                <TableCell className="text-right">
-                  <Badge variant="secondary" className="tabular-nums text-[10px]">
-                    {subQueries.length}
-                  </Badge>
-                </TableCell>
-              </TableRow>
-              {isOpen && (
-                <TableRow key={`${prompt.id}-expanded`} className="hover:bg-transparent">
-                  <TableCell />
-                  <TableCell colSpan={2} className="pb-3 pt-0">
-                    <div className="rounded-md border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Sub-query</TableHead>
-                            <TableHead className="w-[160px]">Engine</TableHead>
-                            <TableHead className="w-[120px] text-right">Times searched</TableHead>
-                            <TableHead className="w-[130px] pl-6">Intent</TableHead>
-                            <TableHead className="w-[64px] text-right">Track</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {subQueries.map((sq) => {
-                            const key = sq.query.toLowerCase();
-                            return (
-                              <TableRow key={key} className="align-middle">
-                                <TableCell className="align-middle font-medium">
-                                  {sq.query}
-                                </TableCell>
-                                <TableCell className="align-middle">
-                                  <EngineBadges engines={sq.engines} />
-                                </TableCell>
-                                <TableCell className="align-middle text-right tabular-nums">
-                                  {sq.timesSearched}
-                                </TableCell>
-                                <TableCell className="align-middle pl-6">
-                                  <IntentBadge intent={intents[key]} />
-                                </TableCell>
-                                <TableCell className="align-middle text-right">
-                                  <TrackCell sq={sq} adding={addingKey === key} onTrack={onTrack} />
-                                </TableCell>
+    <div className="space-y-4">
+      <div className="relative w-60">
+        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+        <Input
+          placeholder="Search prompts…"
+          value={searchText}
+          onChange={(e) => onSearchChange(e.target.value)}
+          className="pl-8 h-8 text-xs"
+        />
+      </div>
+
+      {groups.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-12 text-center">
+          <Search className="h-8 w-8 text-muted-foreground/50" />
+          <p className="text-sm font-medium">No prompts match your search</p>
+        </div>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[28px]" />
+              <TableHead>Prompt</TableHead>
+              <TableHead className="w-[110px] text-right">Sub-queries</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {groups.map(({ prompt, subQueries }) => {
+              const isOpen = expanded.has(prompt.id);
+              return (
+                <Fragment key={prompt.id}>
+                  <TableRow
+                    className="cursor-pointer select-none"
+                    onClick={() => toggle(prompt.id)}
+                  >
+                    <TableCell className="pr-0">
+                      <ChevronRight
+                        className={cn(
+                          'h-4 w-4 text-muted-foreground transition-transform duration-150',
+                          isOpen && 'rotate-90',
+                        )}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium">{prompt.text}</TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant="secondary" className="tabular-nums text-[10px]">
+                        {subQueries.length}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                  {isOpen && (
+                    <TableRow key={`${prompt.id}-expanded`} className="hover:bg-transparent">
+                      <TableCell />
+                      <TableCell colSpan={2} className="pb-3 pt-0">
+                        <div className="rounded-md border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Sub-query</TableHead>
+                                <TableHead className="w-[160px]">Engine</TableHead>
+                                <TableHead className="w-[120px] text-right">
+                                  Times searched
+                                </TableHead>
+                                <TableHead className="w-[130px] pl-6">Intent</TableHead>
+                                <TableHead className="w-[64px] text-right">Track</TableHead>
                               </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              )}
-            </Fragment>
-          );
-        })}
-      </TableBody>
-    </Table>
+                            </TableHeader>
+                            <TableBody>
+                              {subQueries.map((sq) => {
+                                const key = sq.query.toLowerCase();
+                                return (
+                                  <TableRow key={key} className="align-middle">
+                                    <TableCell className="align-middle font-medium">
+                                      {sq.query}
+                                    </TableCell>
+                                    <TableCell className="align-middle">
+                                      <EngineBadges engines={sq.engines} />
+                                    </TableCell>
+                                    <TableCell className="align-middle text-right tabular-nums">
+                                      {sq.timesSearched}
+                                    </TableCell>
+                                    <TableCell className="align-middle pl-6">
+                                      <IntentBadge intent={intents[key]} />
+                                    </TableCell>
+                                    <TableCell className="align-middle text-right">
+                                      <TrackCell
+                                        sq={sq}
+                                        adding={addingKey === key}
+                                        onTrack={onTrack}
+                                      />
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
+              );
+            })}
+          </TableBody>
+        </Table>
+      )}
+    </div>
   );
 }
 

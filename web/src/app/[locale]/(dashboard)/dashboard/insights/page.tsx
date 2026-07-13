@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from '@/i18n/navigation';
 import { useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
+import { useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 const CompetitorChart = dynamic(() => import('./_charts').then((m) => m.CompetitorChart), {
@@ -1242,6 +1243,7 @@ function PromptResultsGrouped({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function InsightsPage() {
+  const t = useTranslations('insights');
   const router = useRouter();
   const { isCloud } = usePlanContext();
   const brand = useBrandStore((s) => s.getActiveBrand());
@@ -1604,7 +1606,7 @@ export default function InsightsPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Answer Engine Insights</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
           <p className="text-muted-foreground text-sm">{brand.name}</p>
         </div>
         <TrackingProgressBanner jobStatus={jobStatus} onStop={handleStopTracking} />
@@ -1642,7 +1644,7 @@ export default function InsightsPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Answer Engine Insights</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
 
           <p className="text-muted-foreground text-sm">
             {brand.name} · Last run: {lastCheckedLabel}

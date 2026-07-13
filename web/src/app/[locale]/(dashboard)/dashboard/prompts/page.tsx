@@ -306,37 +306,47 @@ export default function PromptsPage() {
     });
   }, [tab, searchParams, router]);
 
-  const loadData = useCallback(async () => {
-    if (!activeBrandId) {
-      setVolumes([]);
-      setAllPrompts([]);
-      setVisibility({});
-      setLoading(false);
-      return;
-    }
+  const loadData = useCallback(
+    async (isCancelled?: () => boolean) => {
+      if (!activeBrandId) {
+        if (isCancelled?.()) return;
+        setVolumes([]);
+        setAllPrompts([]);
+        setVisibility({});
+        setLoading(false);
+        return;
+      }
 
-    setLoading(true);
-    try {
-      const [volumeResult, promptSets, visSummary] = await Promise.all([
-        getPromptVolumes(activeBrandId),
-        getPromptSets(activeBrandId),
-        getPromptVisibilitySummaries(activeBrandId, { days: 30 }),
-      ]);
-      setVolumes(volumeResult.volumes);
-      if (volumeResult.quota) setQuota(volumeResult.quota);
-      const prompts = promptSets.flatMap((ps) => ps.prompts);
-      setAllPrompts(prompts);
-      setVisibility(visSummary);
-    } catch (err) {
-      console.error('Failed to load prompt data:', err);
-      toast.error('Failed to load prompt data');
-    } finally {
-      setLoading(false);
-    }
-  }, [activeBrandId]);
+      setLoading(true);
+      try {
+        const [volumeResult, promptSets, visSummary] = await Promise.all([
+          getPromptVolumes(activeBrandId),
+          getPromptSets(activeBrandId),
+          getPromptVisibilitySummaries(activeBrandId, { days: 30 }),
+        ]);
+        if (isCancelled?.()) return;
+        setVolumes(volumeResult.volumes);
+        if (volumeResult.quota) setQuota(volumeResult.quota);
+        const prompts = promptSets.flatMap((ps) => ps.prompts);
+        setAllPrompts(prompts);
+        setVisibility(visSummary);
+      } catch (err) {
+        if (isCancelled?.()) return;
+        console.error('Failed to load prompt data:', err);
+        toast.error('Failed to load prompt data');
+      } finally {
+        if (!isCancelled?.()) setLoading(false);
+      }
+    },
+    [activeBrandId],
+  );
 
   useEffect(() => {
-    loadData();
+    let cancelled = false;
+    loadData(() => cancelled);
+    return () => {
+      cancelled = true;
+    };
   }, [loadData]);
 
   const handleAnalyzeNew = async () => {
