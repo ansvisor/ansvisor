@@ -899,6 +899,7 @@ export type Database = {
           prompt_set_id: string;
           regions: string[];
           text: string;
+          topic_id: string | null;
         };
         Insert: {
           category?: string | null;
@@ -979,6 +980,62 @@ export type Database = {
             columns: ['created_by'];
             isOneToOne: false;
             referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      site_audits: {
+        Row: {
+          brand_id: string;
+          category_scores: Json;
+          completed_at: string | null;
+          created_at: string;
+          error: string | null;
+          final_url: string | null;
+          id: string;
+          rubric_version: string | null;
+          signals_evaluated: number | null;
+          signals_total: number | null;
+          status: string;
+          total_score: number | null;
+          url: string;
+        };
+        Insert: {
+          brand_id: string;
+          category_scores?: Json;
+          completed_at?: string | null;
+          created_at?: string;
+          error?: string | null;
+          final_url?: string | null;
+          id?: string;
+          rubric_version?: string | null;
+          signals_evaluated?: number | null;
+          signals_total?: number | null;
+          status?: string;
+          total_score?: number | null;
+          url: string;
+        };
+        Update: {
+          brand_id?: string;
+          category_scores?: Json;
+          completed_at?: string | null;
+          created_at?: string;
+          error?: string | null;
+          final_url?: string | null;
+          id?: string;
+          rubric_version?: string | null;
+          signals_evaluated?: number | null;
+          signals_total?: number | null;
+          status?: string;
+          total_score?: number | null;
+          url?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'site_audits_brand_id_fkey';
+            columns: ['brand_id'];
+            isOneToOne: false;
+            referencedRelation: 'brands';
             referencedColumns: ['id'];
           },
         ];

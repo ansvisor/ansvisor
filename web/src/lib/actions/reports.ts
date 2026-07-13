@@ -15,9 +15,11 @@ import {
   type VisibilityTrendPoint,
 } from '@/lib/actions/tracking';
 import { getCitationsOverview, type CitationsSourceBreakdown } from '@/lib/actions/citations';
+import { getShoppingKpis } from '@/lib/actions/shopping';
 import type { SourceCategory } from '@/lib/citations/classify';
 import {
   getReportTemplate,
+  ALL_REPORT_SECTIONS,
   type ReportSection,
   type ReportTemplateId,
 } from '@/lib/reports/templates';
@@ -55,6 +57,41 @@ export interface ReportFanoutQuery {
   timesSearched: number;
 }
 
+export interface ReportTopicPerf {
+  name: string;
+  avgVisibility: number;
+  /** Points change vs the previous window of equal length; null when no prior data. */
+  change: number | null;
+  results: number;
+}
+
+export interface ReportAiTraffic {
+  totalVisits: number;
+  /** Percent change vs the previous window; null when the previous window had no visits. */
+  change: number | null;
+  platformBreakdown: { platform: string; visits: number }[];
+  topPages: { url: string; visits: number }[];
+}
+
+export interface ReportShoppingVisibility {
+  /** Own share of all shopping cards in the window, as a percentage. */
+  shoppingSovPct: number;
+  /** Points change vs the previous window; null when no prior shopping data. */
+  sovChange: number | null;
+  productsSurfaced: number;
+  /** Share of tracked answers that produced shopping cards, as a percentage. */
+  cardRatePct: number;
+  topMerchant: string | null;
+}
+
+export interface ReportAuditScore {
+  url: string;
+  totalScore: number | null;
+  /** The prior completed audit's score, for the delta; null when first audit. */
+  previousScore: number | null;
+  auditedAt: string;
+}
+
 /**
  * All metric fields are optional: a template only gathers its own sections
  * (see lib/reports/templates.ts), and the detail page + PDF render purely by
@@ -75,6 +112,14 @@ export interface ReportPayload {
   };
   /** Most-run observed fan-out sub-queries in the period. */
   queryFanout?: ReportFanoutQuery[];
+  /** Per-topic visibility with deltas vs the previous window. */
+  topicPerformance?: ReportTopicPerf[];
+  /** Real AI-referred visits in the period. */
+  aiTraffic?: ReportAiTraffic;
+  /** Shopping card presence (only gathered when the brand's shopping mode is on). */
+  shoppingVisibility?: ReportShoppingVisibility;
+  /** Latest completed Site Audit as of the period end. */
+  auditScore?: ReportAuditScore;
   shareOfVoice?: {
     overallSov: number;
     overallSovChange: number | null;
@@ -229,6 +274,203 @@ async function getFanoutSnapshot(
     .map((a) => ({ query: a.display, engines: [...a.engines].sort(), timesSearched: a.count }));
 }
 
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/** The window of equal length immediately before [dateFrom, dateTo] — every
+ *  report delta (US-1.4) compares against this. */
+function previousWindow(dateFrom: string, dateTo: string): { from: string; to: string } {
+  const from = new Date(dateFrom).getTime();
+  const to = new Date(dateTo).getTime();
+  return { from: new Date(from - (to - from)).toISOString(), to: dateFrom };
+}
+
+/** How many topics a report keeps. */
+const REPORT_TOPIC_COUNT = 8;
+
+/**
+ * Per-topic average visibility WITHIN the report period, with a points delta
+ * vs the previous window. Same two-step pattern as getPromptPerformance:
+ * one prompt_results scan spanning both windows, then resolve topic names.
+ */
+async function getTopicPerformance(
+  brandId: string,
+  dateFrom: string,
+  dateTo: string,
+): Promise<ReportTopicPerf[]> {
+  const supabase = await createClient();
+  const prev = previousWindow(dateFrom, dateTo);
+
+  const { data, error } = await supabase
+    .from('prompt_results')
+    .select('prompt_id, visibility_score, created_at')
+    .eq('brand_id', brandId)
+    .neq('platform', 'chatgpt-shopping')
+    .gte('created_at', prev.from)
+    .lte('created_at', dateTo);
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) return [];
+
+  const promptIds = [...new Set(data.map((r) => r.prompt_id as string).filter(Boolean))];
+  const { data: promptRows } = await supabase
+    .from('prompts')
+    .select('id, topic_id')
+    .in('id', promptIds);
+  const topicByPrompt = new Map(
+    (promptRows ?? []).filter((p) => p.topic_id).map((p) => [p.id as string, p.topic_id as string]),
+  );
+  if (topicByPrompt.size === 0) return [];
+
+  interface Acc {
+    sumVis: number;
+    n: number;
+    prevSumVis: number;
+    prevN: number;
+  }
+  const byTopic = new Map<string, Acc>();
+  for (const r of data) {
+    const topicId = topicByPrompt.get(r.prompt_id as string);
+    if (!topicId) continue;
+    const acc = byTopic.get(topicId) ?? { sumVis: 0, n: 0, prevSumVis: 0, prevN: 0 };
+    const vis = (r.visibility_score as number) ?? 0;
+    if ((r.created_at as string) >= dateFrom) {
+      acc.sumVis += vis;
+      acc.n += 1;
+    } else {
+      acc.prevSumVis += vis;
+      acc.prevN += 1;
+    }
+    byTopic.set(topicId, acc);
+  }
+
+  const { data: topicRows } = await supabase
+    .from('topics')
+    .select('id, name')
+    .in('id', [...byTopic.keys()]);
+  const nameById = new Map((topicRows ?? []).map((t) => [t.id as string, t.name as string]));
+
+  return [...byTopic.entries()]
+    .filter(([id, acc]) => acc.n > 0 && nameById.has(id))
+    .map(([id, acc]) => {
+      const avg = round1(acc.sumVis / acc.n);
+      const prevAvg = acc.prevN > 0 ? acc.prevSumVis / acc.prevN : null;
+      return {
+        name: nameById.get(id)!,
+        avgVisibility: avg,
+        change: prevAvg === null ? null : round1(avg - prevAvg),
+        results: acc.n,
+      };
+    })
+    .sort((a, b) => b.results - a.results || b.avgVisibility - a.avgVisibility)
+    .slice(0, REPORT_TOPIC_COUNT);
+}
+
+/**
+ * Real AI-referred visits WITHIN the report period, with a percent delta vs
+ * the previous window. Windowed here (getTrafficSummary anchors to "now").
+ */
+async function getTrafficSnapshot(
+  brandId: string,
+  dateFrom: string,
+  dateTo: string,
+): Promise<ReportAiTraffic> {
+  const supabase = await createClient();
+  const prev = previousWindow(dateFrom, dateTo);
+
+  const [{ data: cur, error }, { data: prevRows }] = await Promise.all([
+    supabase
+      .from('ai_traffic_logs')
+      .select('source_platform, url')
+      .eq('brand_id', brandId)
+      .gte('created_at', dateFrom)
+      .lte('created_at', dateTo),
+    supabase
+      .from('ai_traffic_logs')
+      .select('id')
+      .eq('brand_id', brandId)
+      .gte('created_at', prev.from)
+      .lt('created_at', prev.to),
+  ]);
+  if (error) throw new Error(error.message);
+
+  const byPlatform = new Map<string, number>();
+  const byPage = new Map<string, number>();
+  for (const r of cur ?? []) {
+    const p = (r.source_platform as string) || 'unknown';
+    byPlatform.set(p, (byPlatform.get(p) ?? 0) + 1);
+    const u = (r.url as string) || '';
+    if (u) byPage.set(u, (byPage.get(u) ?? 0) + 1);
+  }
+
+  const totalVisits = cur?.length ?? 0;
+  const prevVisits = prevRows?.length ?? 0;
+  return {
+    totalVisits,
+    change: prevVisits > 0 ? round1(((totalVisits - prevVisits) / prevVisits) * 100) : null,
+    platformBreakdown: [...byPlatform.entries()]
+      .map(([platform, visits]) => ({ platform, visits }))
+      .sort((a, b) => b.visits - a.visits)
+      .slice(0, 5),
+    topPages: [...byPage.entries()]
+      .map(([url, visits]) => ({ url, visits }))
+      .sort((a, b) => b.visits - a.visits)
+      .slice(0, 5),
+  };
+}
+
+/**
+ * Shopping card presence WITHIN the report period (reuses getShoppingKpis
+ * with an explicit window), plus a points delta on shopping SoV vs the
+ * previous window. Callers gate on the brand's shopping mode.
+ */
+async function getShoppingSnapshot(
+  brandId: string,
+  dateFrom: string,
+  dateTo: string,
+): Promise<ReportShoppingVisibility> {
+  const prev = previousWindow(dateFrom, dateTo);
+  const [cur, prior] = await Promise.all([
+    getShoppingKpis(brandId, { datePreset: 'all', dateFrom, dateTo }),
+    getShoppingKpis(brandId, { datePreset: 'all', dateFrom: prev.from, dateTo: prev.to }),
+  ]);
+
+  const sovPct = round1(cur.shoppingSov * 100);
+  const priorHasData = prior.shoppingCardRateSampleSize > 0;
+  return {
+    shoppingSovPct: sovPct,
+    sovChange: priorHasData ? round1(sovPct - prior.shoppingSov * 100) : null,
+    productsSurfaced: cur.productsSurfaced,
+    cardRatePct: round1(cur.shoppingCardRate * 100),
+    topMerchant: cur.topMerchant?.domain ?? null,
+  };
+}
+
+/**
+ * Latest completed Site Audit as of the period end, with the prior audit's
+ * score for the delta. Audits aren't period-bound like the other metrics, so
+ * "as of dateTo" keeps historical reports honest.
+ */
+async function getAuditSnapshot(brandId: string, dateTo: string): Promise<ReportAuditScore | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('site_audits')
+    .select('url, total_score, created_at')
+    .eq('brand_id', brandId)
+    .eq('status', 'completed')
+    .lte('created_at', dateTo)
+    .order('created_at', { ascending: false })
+    .limit(2);
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) return null;
+
+  const [latest, prior] = data;
+  return {
+    url: latest.url as string,
+    totalScore: latest.total_score === null ? null : round1(Number(latest.total_score)),
+    previousScore: prior && prior.total_score !== null ? round1(Number(prior.total_score)) : null,
+    auditedAt: latest.created_at as string,
+  };
+}
+
 // ─── Actions ─────────────────────────────────────────────────────────────────
 
 /** English display names used in stored (immutable) report titles. */
@@ -241,7 +483,14 @@ const TEMPLATE_TITLES: Record<ReportTemplateId, string> = {
 
 export async function createReport(
   brandId: string,
-  opts: { dateFrom: string; dateTo: string; title?: string; template?: ReportTemplateId },
+  opts: {
+    dateFrom: string;
+    dateTo: string;
+    title?: string;
+    template?: ReportTemplateId;
+    /** Explicit section picks (US-1.3); falls back to the template's defaults. */
+    sections?: ReportSection[];
+  },
 ): Promise<{ id: string }> {
   const supabase = await createClient();
   const {
@@ -252,24 +501,53 @@ export async function createReport(
   const { dateFrom, dateTo } = opts;
   const range = { dateFrom, dateTo };
   const template = getReportTemplate(opts.template);
-  const has = (s: ReportSection) => template.sections.includes(s);
+
+  // The brand row gates the shopping section server-side: even if a caller
+  // sends `shoppingVisibility`, a brand with shopping mode off never gathers
+  // it (mirrors the sidebar's requiresBrandPref rule).
+  const { data: brand } = await supabase
+    .from('brands')
+    .select('name, shopping_mode_enabled')
+    .eq('id', brandId)
+    .single();
+  const brandName = (brand?.name as string) ?? 'Brand';
+
+  const picked = (opts.sections ?? template.sections).filter((s) =>
+    ALL_REPORT_SECTIONS.includes(s),
+  );
+  const sectionSet = new Set<ReportSection>(picked);
+  if (!brand?.shopping_mode_enabled) sectionSet.delete('shoppingVisibility');
+  const has = (s: ReportSection) => sectionSet.has(s);
 
   // 1. Gather the metric snapshot through the existing analytics actions —
-  //    only the sections this template renders (null = section not gathered).
-  const [brandRow, insights, sov, comparison, citations, trend, promptPerformance, queryFanout] =
-    await Promise.all([
-      supabase.from('brands').select('name').eq('id', brandId).single(),
-      has('kpis') ? getInsightsSummary(brandId, range) : null,
-      has('shareOfVoice') ? getShareOfVoiceData(brandId, range) : null,
-      has('competitors') ? getCompetitorComparison(brandId, range) : null,
-      has('citations')
-        ? getCitationsOverview(brandId, { datePreset: 'custom', dateFrom, dateTo })
-        : null,
-      has('trend') ? getVisibilityTrend(brandId, range) : null,
-      has('promptPerformance') ? getPromptPerformance(brandId, dateFrom, dateTo) : null,
-      has('queryFanout') ? getFanoutSnapshot(brandId, dateFrom, dateTo) : null,
-    ]);
-  const brandName = (brandRow.data?.name as string) ?? 'Brand';
+  //    only the picked sections (null = section not gathered).
+  const [
+    insights,
+    sov,
+    comparison,
+    citations,
+    trend,
+    promptPerformance,
+    queryFanout,
+    topicPerformance,
+    aiTraffic,
+    shoppingVisibility,
+    auditScore,
+  ] = await Promise.all([
+    has('kpis') ? getInsightsSummary(brandId, range) : null,
+    has('shareOfVoice') ? getShareOfVoiceData(brandId, range) : null,
+    has('competitors') ? getCompetitorComparison(brandId, range) : null,
+    has('citations')
+      ? getCitationsOverview(brandId, { datePreset: 'custom', dateFrom, dateTo })
+      : null,
+    has('trend') ? getVisibilityTrend(brandId, range) : null,
+    has('promptPerformance') ? getPromptPerformance(brandId, dateFrom, dateTo) : null,
+    has('queryFanout') ? getFanoutSnapshot(brandId, dateFrom, dateTo) : null,
+    has('topicPerformance') ? getTopicPerformance(brandId, dateFrom, dateTo) : null,
+    has('aiTraffic') ? getTrafficSnapshot(brandId, dateFrom, dateTo) : null,
+    has('shoppingVisibility') ? getShoppingSnapshot(brandId, dateFrom, dateTo) : null,
+    has('auditScore') ? getAuditSnapshot(brandId, dateTo) : null,
+  ]);
 
   const snapshot: Omit<ReportPayload, 'summaryText'> = {
     brandName,
@@ -277,6 +555,10 @@ export async function createReport(
     ...(trend ? { visibilityTrend: trend } : {}),
     ...(promptPerformance ? { promptPerformance } : {}),
     ...(queryFanout ? { queryFanout } : {}),
+    ...(topicPerformance && topicPerformance.length > 0 ? { topicPerformance } : {}),
+    ...(aiTraffic ? { aiTraffic } : {}),
+    ...(shoppingVisibility ? { shoppingVisibility } : {}),
+    ...(auditScore ? { auditScore } : {}),
     ...(sov
       ? {
           shareOfVoice: {

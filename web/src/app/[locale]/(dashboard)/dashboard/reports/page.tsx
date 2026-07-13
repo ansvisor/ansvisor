@@ -25,9 +25,21 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { FileBarChart, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Check, FileBarChart, Loader2, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { REPORT_TEMPLATES, type ReportTemplateId } from '@/lib/reports/templates';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  REPORT_TEMPLATES,
+  ALL_REPORT_SECTIONS,
+  type ReportSection,
+  type ReportTemplateId,
+} from '@/lib/reports/templates';
 
 type DatePreset = '7d' | '30d' | '90d' | 'custom';
 
@@ -61,6 +73,7 @@ export default function ReportsPage() {
   const tc = useTranslations('common');
   const router = useRouter();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
+  const brands = useBrandStore((s) => s.brands);
 
   const [reports, setReports] = useState<ReportListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,13 +85,43 @@ export default function ReportsPage() {
   const [preset, setPreset] = useState<DatePreset>('30d');
   const [customRange, setCustomRange] = useState({ from: '', to: '' });
   const [reportTitle, setReportTitle] = useState('');
+  // US-1.1: the dialog can generate for any brand, defaulting to the active one.
+  const [reportBrandId, setReportBrandId] = useState<string | null>(activeBrandId);
+  // US-1.3: templates only pre-select; the user adjusts the module set freely.
+  const [sections, setSections] = useState<Set<ReportSection>>(
+    () => new Set(REPORT_TEMPLATES.find((tpl) => tpl.id === 'executive_summary')!.sections),
+  );
+
+  const reportBrand = brands.find((b) => b.id === (reportBrandId ?? activeBrandId));
+  // Shopping is brand-pref-gated: hidden here exactly like the sidebar hides
+  // the Shopping nav item (and the server refuses to gather it regardless).
+  const pickableSections = ALL_REPORT_SECTIONS.filter(
+    (s) => s !== 'shoppingVisibility' || reportBrand?.shoppingModeEnabled,
+  );
 
   const selectTemplate = (id: ReportTemplateId) => {
     setTemplate(id);
-    // Templates carry a sensible default window (weekly → 7d); the user can
-    // still override it below.
+    // Templates carry a sensible default window (weekly → 7d) and a default
+    // module set; the user can still override both below.
     const def = REPORT_TEMPLATES.find((tpl) => tpl.id === id);
-    if (def) setPreset(def.defaultPreset);
+    if (def) {
+      setPreset(def.defaultPreset);
+      setSections(new Set(def.sections));
+    }
+  };
+
+  const toggleSection = (s: ReportSection) => {
+    setSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s);
+      else next.add(s);
+      return next;
+    });
+  };
+
+  const openDialog = () => {
+    setReportBrandId(activeBrandId);
+    setDialogOpen(true);
   };
 
   const load = useCallback(async () => {
@@ -99,19 +142,25 @@ export default function ReportsPage() {
   }, [load]);
 
   const handleGenerate = async () => {
-    if (!activeBrandId) return;
+    const targetBrandId = reportBrandId ?? activeBrandId;
+    if (!targetBrandId) return;
     const { dateFrom, dateTo } = getDateRange(preset, customRange);
     if (!dateFrom || !dateTo) {
       toast.error(t('selectDates'));
       return;
     }
+    if (sections.size === 0) {
+      toast.error(t('selectSections'));
+      return;
+    }
     setGenerating(true);
     try {
-      const { id } = await createReport(activeBrandId, {
+      const { id } = await createReport(targetBrandId, {
         dateFrom,
         dateTo,
         title: reportTitle || undefined,
         template,
+        sections: pickableSections.filter((s) => sections.has(s)),
       });
       toast.success(t('generated'));
       setDialogOpen(false);
@@ -145,7 +194,7 @@ export default function ReportsPage() {
           <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
           <p className="text-muted-foreground">{t('description')}</p>
         </div>
-        <Button className="gap-2" onClick={() => setDialogOpen(true)} disabled={!activeBrandId}>
+        <Button className="gap-2" onClick={openDialog} disabled={!activeBrandId}>
           <Plus className="h-4 w-4" />
           {t('generateReport')}
         </Button>
@@ -226,7 +275,7 @@ export default function ReportsPage() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={(open) => !generating && setDialogOpen(open)}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{t('dialogTitle')}</DialogTitle>
             <DialogDescription>{t('dialogDescription')}</DialogDescription>
@@ -270,6 +319,61 @@ export default function ReportsPage() {
                     </div>
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {brands.length > 1 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">{t('brandLabel')}</p>
+                <Select value={reportBrandId ?? ''} onValueChange={(v) => v && setReportBrandId(v)}>
+                  <SelectTrigger className="w-full" disabled={generating}>
+                    <SelectValue>
+                      {(v: string) => brands.find((b) => b.id === v)?.name ?? t('brandLabel')}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {brands.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{t('sectionsLabel')}</p>
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                {pickableSections.map((s) => {
+                  const on = sections.has(s);
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => toggleSection(s)}
+                      disabled={generating}
+                      className={cn(
+                        'flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors',
+                        on
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border text-muted-foreground hover:border-muted-foreground/40',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border',
+                          on
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-muted-foreground/30',
+                        )}
+                      >
+                        {on && <Check className="h-2.5 w-2.5" />}
+                      </span>
+                      {t(`sections.${s}`)}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

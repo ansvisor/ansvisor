@@ -378,6 +378,39 @@ export function ReportPdfDocument({ report }: { report: Report }) {
           </View>
         )}
 
+        {/* Topic performance */}
+        {payload.topicPerformance && payload.topicPerformance.length > 0 && (
+          <View style={styles.section} wrap={false}>
+            <Text style={styles.sectionTitle}>Topic Performance</Text>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Topic</Text>
+              <Text style={[styles.tableHeaderCell, { width: 60, textAlign: 'right' }]}>
+                Visibility
+              </Text>
+              <Text style={[styles.tableHeaderCell, { width: 50, textAlign: 'right' }]}>
+                Change
+              </Text>
+              <Text style={[styles.tableHeaderCell, { width: 50, textAlign: 'right' }]}>
+                Results
+              </Text>
+            </View>
+            {payload.topicPerformance.map((tp) => (
+              <View key={tp.name} style={styles.tableRow}>
+                <Text style={[styles.cell, { flex: 1, paddingRight: 8 }]}>{tp.name}</Text>
+                <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>
+                  {tp.avgVisibility}%
+                </Text>
+                <View style={{ width: 50, alignItems: 'flex-end' }}>
+                  <DeltaText value={tp.change} />
+                </View>
+                <Text style={[styles.cell, { width: 50, textAlign: 'right', color: MUTED }]}>
+                  {tp.results}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Best / worst prompts */}
         {payload.promptPerformance && payload.promptPerformance.best.length > 0 && (
           <PromptTable title="Best Performing Prompts" prompts={payload.promptPerformance.best} />
@@ -408,6 +441,99 @@ export function ReportPdfDocument({ report }: { report: Report }) {
                 </Text>
               </View>
             ))}
+          </View>
+        )}
+
+        {/* AI traffic */}
+        {payload.aiTraffic && (
+          <View style={styles.section} wrap={false}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
+              <Text style={styles.sectionTitle}>
+                AI Traffic — {payload.aiTraffic.totalVisits} visits
+              </Text>
+              <View style={{ marginBottom: 6 }}>
+                <DeltaText value={payload.aiTraffic.change} />
+              </View>
+            </View>
+            {payload.aiTraffic.platformBreakdown.map((p) => (
+              <View key={p.platform} style={styles.tableRow}>
+                <Text style={[styles.cell, { flex: 1 }]}>{p.platform}</Text>
+                <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>{p.visits}</Text>
+              </View>
+            ))}
+            {payload.aiTraffic.topPages.length > 0 && (
+              <View style={{ marginTop: 6 }}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Top Page</Text>
+                  <Text style={[styles.tableHeaderCell, { width: 60, textAlign: 'right' }]}>
+                    Visits
+                  </Text>
+                </View>
+                {payload.aiTraffic.topPages.map((p) => (
+                  <View key={p.url} style={styles.tableRow}>
+                    <Text style={[styles.cell, { flex: 1, paddingRight: 8 }]}>{p.url}</Text>
+                    <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>{p.visits}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Shopping visibility */}
+        {payload.shoppingVisibility && (
+          <View style={styles.section} wrap={false}>
+            <Text style={styles.sectionTitle}>Shopping Visibility</Text>
+            <View style={styles.kpiRow}>
+              <View style={styles.kpiBox}>
+                <Text style={styles.kpiLabel}>Shopping SoV</Text>
+                <View style={styles.kpiValueRow}>
+                  <Text style={styles.kpiValue}>{payload.shoppingVisibility.shoppingSovPct}%</Text>
+                  <DeltaText value={payload.shoppingVisibility.sovChange} />
+                </View>
+              </View>
+              <View style={styles.kpiBox}>
+                <Text style={styles.kpiLabel}>Products Surfaced</Text>
+                <Text style={styles.kpiValue}>{payload.shoppingVisibility.productsSurfaced}</Text>
+              </View>
+              <View style={styles.kpiBox}>
+                <Text style={styles.kpiLabel}>Card Rate</Text>
+                <Text style={styles.kpiValue}>{payload.shoppingVisibility.cardRatePct}%</Text>
+              </View>
+              <View style={styles.kpiBox}>
+                <Text style={styles.kpiLabel}>Top Merchant</Text>
+                <Text style={[styles.cell, { fontWeight: 700 }]}>
+                  {payload.shoppingVisibility.topMerchant ?? '—'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Site audit score */}
+        {payload.auditScore && (
+          <View style={styles.section} wrap={false}>
+            <Text style={styles.sectionTitle}>Site Audit Score</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+              <Text style={{ fontSize: 18, fontWeight: 700 }}>
+                {payload.auditScore.totalScore ?? '—'}
+              </Text>
+              {payload.auditScore.totalScore !== null &&
+                payload.auditScore.previousScore !== null && (
+                  <View style={{ marginBottom: 2 }}>
+                    <DeltaText
+                      value={
+                        Math.round(
+                          (payload.auditScore.totalScore - payload.auditScore.previousScore) * 10,
+                        ) / 10
+                      }
+                    />
+                  </View>
+                )}
+              <Text style={[styles.cell, { color: MUTED, marginBottom: 2 }]}>
+                {payload.auditScore.url} · audited {formatDate(payload.auditScore.auditedAt)}
+              </Text>
+            </View>
           </View>
         )}
 

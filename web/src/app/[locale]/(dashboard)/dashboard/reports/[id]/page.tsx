@@ -313,6 +313,42 @@ export default function ReportDetailPage() {
           </Card>
         )}
 
+        {payload.topicPerformance && payload.topicPerformance.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('topicPerformance')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('columns.topic')}</TableHead>
+                    <TableHead className="w-28 text-right">{t('kpi.visibility')}</TableHead>
+                    <TableHead className="w-24 text-right">{t('columns.change')}</TableHead>
+                    <TableHead className="w-24 text-right">{t('columns.results')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {payload.topicPerformance.map((tp) => (
+                    <TableRow key={tp.name}>
+                      <TableCell className="max-w-[280px] truncate font-medium">
+                        {tp.name}
+                      </TableCell>
+                      <TableCell className="text-right">{tp.avgVisibility}%</TableCell>
+                      <TableCell className="text-right">
+                        <Delta value={tp.change} />
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {tp.results}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+
         {payload.promptPerformance &&
           (payload.promptPerformance.best.length > 0 ||
             payload.promptPerformance.worst.length > 0) && (
@@ -390,6 +426,122 @@ export default function ReportDetailPage() {
                   ))}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+        )}
+
+        {payload.aiTraffic && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-baseline gap-2 text-base">
+                {t('aiTraffic')}
+                <span className="text-2xl font-bold">{payload.aiTraffic.totalVisits}</span>
+                <Delta value={payload.aiTraffic.change} />
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-6 sm:grid-cols-2">
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('columns.platform')}
+                </p>
+                {payload.aiTraffic.platformBreakdown.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t('noData')}</p>
+                ) : (
+                  payload.aiTraffic.platformBreakdown.map((p) => (
+                    <div key={p.platform} className="flex items-center justify-between text-sm">
+                      <span className="truncate">{PLATFORM_LABELS[p.platform] ?? p.platform}</span>
+                      <span className="font-medium tabular-nums">{p.visits}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('columns.topPages')}
+                </p>
+                {payload.aiTraffic.topPages.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t('noData')}</p>
+                ) : (
+                  payload.aiTraffic.topPages.map((p) => (
+                    <div key={p.url} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="min-w-0 truncate text-muted-foreground">{p.url}</span>
+                      <span className="shrink-0 font-medium tabular-nums">{p.visits}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {payload.shoppingVisibility && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('shoppingVisibility')}</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('shopping.sov')}
+                </p>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className="text-2xl font-bold">
+                    {payload.shoppingVisibility.shoppingSovPct}%
+                  </span>
+                  <Delta value={payload.shoppingVisibility.sovChange} />
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('shopping.products')}
+                </p>
+                <p className="mt-1 text-2xl font-bold">
+                  {payload.shoppingVisibility.productsSurfaced}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('shopping.cardRate')}
+                </p>
+                <p className="mt-1 text-2xl font-bold">{payload.shoppingVisibility.cardRatePct}%</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('shopping.topMerchant')}
+                </p>
+                <p className="mt-1 truncate text-sm font-medium">
+                  {payload.shoppingVisibility.topMerchant ?? '—'}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {payload.auditScore && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('auditScore')}</CardTitle>
+            </CardHeader>
+            <CardContent className="flex items-center gap-6">
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold">{payload.auditScore.totalScore ?? '—'}</span>
+                {payload.auditScore.totalScore !== null &&
+                  payload.auditScore.previousScore !== null && (
+                    <Delta
+                      value={
+                        Math.round(
+                          (payload.auditScore.totalScore - payload.auditScore.previousScore) * 10,
+                        ) / 10
+                      }
+                    />
+                  )}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{payload.auditScore.url}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t('auditedOn')} {formatDate(payload.auditScore.auditedAt)}
+                </p>
+              </div>
             </CardContent>
           </Card>
         )}

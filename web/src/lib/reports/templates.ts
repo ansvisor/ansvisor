@@ -1,10 +1,11 @@
 /**
- * Report template registry (US-1.1) — the four ready-made report shapes a
- * user can generate without building anything from scratch. A template
- * decides which payload sections `createReport` gathers and, since the
- * detail page and the PDF both render by payload-field presence, which
- * sections show up in the output. Names/descriptions live in the `reports`
- * i18n namespace under `templates.<id>.*`.
+ * Report template registry (US-1.1/1.3) — ready-made report shapes a user
+ * can generate without building anything from scratch. A template is a
+ * DEFAULT section set: the generate dialog pre-selects its sections and the
+ * user can toggle any module on/off before generating (US-1.3). Since the
+ * detail page and the PDF both render by payload-field presence, the chosen
+ * sections are exactly what shows up in the output. Names/descriptions live
+ * in the `reports` i18n namespace under `templates.<id>.*` / `sections.*`.
  *
  * Template ids are persisted in `reports.template`, so they are part of the
  * data contract: never rename an id, only add new ones. `executive_summary`
@@ -22,13 +23,37 @@ export type ReportSection =
   | 'trend'
   | 'shareOfVoice'
   | 'competitors'
+  | 'topicPerformance'
   | 'promptPerformance'
   | 'queryFanout'
+  | 'aiTraffic'
+  | 'shoppingVisibility'
+  | 'auditScore'
   | 'citations';
+
+/**
+ * Every pickable section, in report render order — drives the section
+ * checkboxes in the generate dialog. `shoppingVisibility` is additionally
+ * gated on the brand's shopping mode (hidden entirely when off, mirroring
+ * the sidebar's `requiresBrandPref` rule).
+ */
+export const ALL_REPORT_SECTIONS: ReportSection[] = [
+  'kpis',
+  'trend',
+  'shareOfVoice',
+  'competitors',
+  'topicPerformance',
+  'promptPerformance',
+  'queryFanout',
+  'aiTraffic',
+  'shoppingVisibility',
+  'auditScore',
+  'citations',
+];
 
 export interface ReportTemplateDef {
   id: ReportTemplateId;
-  /** Payload sections this template gathers and renders (AI summary is always included). */
+  /** Default payload sections (AI summary is always included); user-adjustable in the dialog. */
   sections: ReportSection[];
   /** Date-range preset the generate dialog starts on (user can still override). */
   defaultPreset: '7d' | '30d' | '90d';
@@ -47,15 +72,19 @@ export const REPORT_TEMPLATES: ReportTemplateDef[] = [
       'trend',
       'shareOfVoice',
       'competitors',
+      'topicPerformance',
       'promptPerformance',
       'queryFanout',
+      'aiTraffic',
+      'shoppingVisibility',
+      'auditScore',
       'citations',
     ],
     defaultPreset: '30d',
   },
   {
     id: 'competitor_benchmark',
-    sections: ['kpis', 'shareOfVoice', 'competitors'],
+    sections: ['kpis', 'shareOfVoice', 'competitors', 'topicPerformance'],
     defaultPreset: '30d',
   },
   {
@@ -71,8 +100,4 @@ export function getReportTemplate(id: string | null | undefined): ReportTemplate
     REPORT_TEMPLATES.find((t) => t.id === id) ??
     REPORT_TEMPLATES.find((t) => t.id === 'executive_summary')!
   );
-}
-
-export function templateHasSection(id: string | null | undefined, section: ReportSection): boolean {
-  return getReportTemplate(id).sections.includes(section);
 }
