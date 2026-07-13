@@ -98,6 +98,7 @@ const PLATFORM_COLORS: Record<string, string> = {
   'google-aimode': '#4285f4',
   'gpt-5-chat-latest': '#8b5cf6',
   'gpt-5-mini': '#a78bfa',
+  'claude-sonnet-5': '#fb923c',
   'claude-sonnet-4-6': '#f97316',
   'claude-opus-4-6': '#ea580c',
   'gemini-2.5-pro': '#22c55e',

@@ -8,11 +8,10 @@ import { createAnthropic, type AnthropicProvider } from '@ai-sdk/anthropic';
  * chat route resolves the key per turn via `resolveAnthropicKey(orgId)`
  * and hands it to this builder; self-host passes the operator's env key.
  *
- * Model choice (claude-sonnet-4-6) stays consistent with the
- * brief-generation flow on aeo-server so behavior + cost shape match
- * across the product.
+ * Model choice (claude-sonnet-5) matches the tracking flow's Claude
+ * option so behavior + cost shape stay consistent across the product.
  */
 export function buildAgentModel(apiKey: string): ReturnType<AnthropicProvider> {
   const anthropic = createAnthropic({ apiKey });
-  return anthropic('claude-sonnet-4-6');
+  return anthropic('claude-sonnet-5');
 }

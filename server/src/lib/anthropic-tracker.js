@@ -20,7 +20,7 @@ function getClient() {
 /**
  * Run a single prompt through Anthropic Messages API with web_search enabled.
  * @param {string} promptText
- * @param {string} model - e.g. "claude-sonnet-4-6"
+ * @param {string} model - e.g. "claude-sonnet-5"
  * @param {string} [region] - ISO 2-letter country code for web_search user_location
  * @returns {Promise<{ text: string, citations: Array<{ url: string, title: string, startIndex: number, endIndex: number }>, model: string }>}
  */

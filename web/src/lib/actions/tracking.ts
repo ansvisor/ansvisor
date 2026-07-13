@@ -1052,6 +1052,7 @@ const MODEL_TO_PROVIDER: Record<string, string> = {
   'gpt-5-chat-latest': 'ChatGPT',
   'gpt-5-mini': 'ChatGPT',
   'gpt-4o': 'ChatGPT',
+  'claude-sonnet-5': 'Claude',
   'claude-sonnet-4-6': 'Claude',
   'claude-opus-4-6': 'Claude',
   'gemini-2.5-pro': 'Gemini',

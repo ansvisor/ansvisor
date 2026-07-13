@@ -42,7 +42,7 @@ export type LanguageCode = (typeof LANGUAGES)[number]['code'];
 export const MODEL_GROUPS = [
   {
     provider: 'Claude',
-    models: [{ id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' }],
+    models: [{ id: 'claude-sonnet-5', label: 'Claude Sonnet 5' }],
   },
 ] as const;
 

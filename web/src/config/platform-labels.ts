@@ -33,6 +33,7 @@ export const PLATFORM_LABELS: Record<string, string> = {
   // Model slugs reused as a fallback label in a few chart/progress spots.
   'gpt-5-chat-latest': 'GPT-5',
   'gpt-5-mini': 'GPT-5 Mini',
+  'claude-sonnet-5': 'Claude Sonnet 5',
   'claude-sonnet-4-6': 'Claude Sonnet 4.6',
   'claude-opus-4-6': 'Claude Opus 4.6',
   'gemini-2.5-pro': 'Gemini 2.5 Pro',

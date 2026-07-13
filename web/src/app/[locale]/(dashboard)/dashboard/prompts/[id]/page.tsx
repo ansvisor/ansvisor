@@ -43,6 +43,7 @@ const MODEL_DISPLAY_NAME: Record<string, string> = {
   'gpt-4.1-mini': 'GPT-4.1 Mini',
   'gpt-4.1-nano': 'GPT-4.1 Nano',
   'gpt-5-chat-latest': 'ChatGPT',
+  'claude-sonnet-5': 'Claude',
   'claude-sonnet-4-6': 'Claude',
   'claude-opus-4-6': 'Claude',
   'claude-haiku-4-5': 'Claude',
