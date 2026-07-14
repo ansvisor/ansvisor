@@ -230,11 +230,12 @@ export default function ReportsPage() {
                   <TableRow key={report.id}>
                     <TableCell>
                       <span className="font-medium">{report.title}</span>
-                      {KNOWN_TEMPLATE_IDS.has(report.template) && t.has(`templates.${report.template}.name`) && (
-                        <span className="mt-0.5 block text-xs text-muted-foreground">
-                          {t(`templates.${report.template}.name`)}
-                        </span>
-                      )}
+                      {KNOWN_TEMPLATE_IDS.has(report.template) &&
+                        t.has(`templates.${report.template}.name`) && (
+                          <span className="mt-0.5 block text-xs text-muted-foreground">
+                            {t(`templates.${report.template}.name`)}
+                          </span>
+                        )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {formatDate(report.dateFrom)} — {formatDate(report.dateTo)}
@@ -299,7 +300,9 @@ export default function ReportsPage() {
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium">{t.has(`templates.${tpl.id}.name`) ? t(`templates.${tpl.id}.name`) : tpl.id}</span>
+                      <span className="text-sm font-medium">
+                        {t.has(`templates.${tpl.id}.name`) ? t(`templates.${tpl.id}.name`) : tpl.id}
+                      </span>
                       <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                         {t(`presets.${tpl.defaultPreset}`)}
                       </span>
