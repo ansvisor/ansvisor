@@ -8,6 +8,7 @@ import { createTopics } from '@/lib/actions/topic';
 import { savePromptSet } from '@/lib/actions/prompt';
 import { addCompetitor } from '@/lib/actions/competitor';
 import { triggerTrackingCheck } from '@/lib/actions/tracking';
+import { usePlanContext } from '@/components/providers/plan-provider';
 import { getFaviconUrl } from '@/lib/favicon';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { REGIONS, LANGUAGES } from '@/config/prompt-options';
@@ -279,7 +280,9 @@ export default function NewBrandPage() {
   const activeScrapers = allowedScraperIds
     ? ALL_SCRAPERS.filter((s) => allowedScraperIds.includes(s.id))
     : ALL_SCRAPERS;
-  const allowedModelIds = currentPlan.limits.allowedModels;
+  // From context, not the static plan config: Enterprise orgs can have Claude
+  // switched on per customer via plan_overrides, which the layout merges in.
+  const { allowedModelIds } = usePlanContext();
   const activeModels = allowedModelIds
     ? ALL_MODELS.filter((m) => allowedModelIds.includes(m.id))
     : ALL_MODELS;

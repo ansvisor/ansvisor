@@ -9,7 +9,7 @@ import { RoleProvider, type TeamRole } from '@/components/providers/role-provide
 import { BrandLoader } from '@/components/providers/brand-loader';
 import { BrandGuard } from '@/components/providers/brand-guard';
 import { getBrands } from '@/lib/actions/brand';
-import { isCloud, type PlanId } from '@/config/plans';
+import { getPlan, isCloud, type PlanId } from '@/config/plans';
 import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
 import { SubscriptionExpiredNotice } from '@/components/billing/subscription-expired-notice';
 
@@ -38,7 +38,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const [{ data: org }, brands] = await Promise.all([
     supabase
       .from('organizations')
-      .select('plan, subscription_status')
+      .select('plan, subscription_status, plan_overrides')
       .eq('id', profile.organization_id)
       .single(),
     getBrands(profile.organization_id),
@@ -66,11 +66,24 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const planId = (org?.plan ?? 'starter') as PlanId;
 
+  // Effective API-model allowlist for the client (null = all allowed).
+  // Enterprise orgs can be switched on per customer via
+  // organizations.plan_overrides — same merge getOrgPlan applies.
+  let allowedModelIds: string[] | null = null;
+  if (isCloud()) {
+    const overrides =
+      planId === 'enterprise' && org?.plan_overrides
+        ? (org.plan_overrides as { allowedModels?: string[] })
+        : null;
+    const effective = overrides?.allowedModels ?? getPlan(planId).limits.allowedModels;
+    allowedModelIds = effective ? [...effective] : null;
+  }
+
   return (
     <>
       <AuthProvider user={user} />
       <BrandLoader brands={brands} />
-      <PlanProvider planId={planId}>
+      <PlanProvider planId={planId} allowedModelIds={allowedModelIds}>
         <RoleProvider role={role}>
           <div className="flex h-screen overflow-hidden">
             {/* Desktop sidebar */}

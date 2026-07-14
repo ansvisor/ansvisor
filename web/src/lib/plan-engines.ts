@@ -59,7 +59,23 @@ export async function alignPromptsToPlanForOrg(
   models: string[];
   promptCount: number;
 }> {
-  const { platforms, models } = getActiveEngineIdsForPlan(planId);
+  const { platforms, models: baseModels } = getActiveEngineIdsForPlan(planId);
+
+  // Enterprise: API-model tracking (Claude) is a per-customer opt-in via
+  // organizations.plan_overrides.allowedModels — without this check, an
+  // alignment run would strip Claude from a customer we've enabled it for.
+  let models = baseModels;
+  if (planId === 'enterprise') {
+    const { data: org } = await supabaseAdmin
+      .from('organizations')
+      .select('plan_overrides')
+      .eq('id', orgId)
+      .maybeSingle();
+    const overrides = org?.plan_overrides as { allowedModels?: string[] } | null;
+    if (overrides?.allowedModels) {
+      models = ALL_MODELS.filter((m) => overrides.allowedModels!.includes(m.id)).map((m) => m.id);
+    }
+  }
 
   const { data: brands, error: brandsErr } = await supabaseAdmin
     .from('brands')

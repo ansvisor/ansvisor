@@ -7,7 +7,8 @@ import { runPrompt, analyzeSentimentAI } from '../lib/ai-tracker.js';
 import { submitScraperTask, pollScraperResult } from '../lib/cloro-scraper.js';
 import { parseResponse, countBrandMentions } from '../lib/response-parser.js';
 import supabaseAdmin from '../config/supabase.js';
-import { hasFeature, getPlan } from '../config/plans.js';
+import { hasFeature, getPlan, isCloud } from '../config/plans.js';
+import { applyPlanOverrides } from '../lib/plan-guard.js';
 import { generateContentOpportunities } from '../lib/opportunity-generator.js';
 import logger from '../lib/logger.js';
 
@@ -84,10 +85,33 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
     domain: c.domain || '',
   }));
 
+  // 3b. Cloud: API-model tracking is plan-gated (Growth has no Claude;
+  // Enterprise is per-customer via organizations.plan_overrides.allowedModels).
+  // Prompts can still carry disallowed model ids from an earlier plan, so
+  // filter at run time instead of trusting the stored arrays. `null` means
+  // every model is allowed (self-host, or a plan without the restriction).
+  let allowedModels = null;
+  if (isCloud()) {
+    const { data: org } = await supabaseAdmin
+      .from('organizations')
+      .select('plan, plan_overrides')
+      .eq('id', brand.organization_id)
+      .single();
+    const plan = applyPlanOverrides(getPlan(org?.plan), org);
+    allowedModels = plan.limits.allowedModels ?? null;
+    if (allowedModels) {
+      logger.info({ brandId, allowedModels }, 'api-model tracking plan-gated for this org');
+    }
+  }
+  const allowedModelsFor = (prompt) => {
+    const models = prompt.models && prompt.models.length > 0 ? prompt.models : [];
+    return allowedModels ? models.filter((m) => allowedModels.includes(m)) : models;
+  };
+
   // 4. Count total tasks: prompt × (models + scrapers) × regions
   let totalTasks = 0;
   for (const prompt of prompts) {
-    const mc = prompt.models && prompt.models.length > 0 ? prompt.models.length : 0;
+    const mc = allowedModelsFor(prompt).length;
     const sc = prompt.platforms && prompt.platforms.length > 0 ? prompt.platforms.length : 0;
     const rc = prompt.regions && prompt.regions.length > 0 ? prompt.regions.length : 1;
     totalTasks += (mc + sc) * rc;
@@ -337,7 +361,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
   // 7. Phase 2: Run AI model tasks concurrently
   const modelTasks = [];
   for (const prompt of prompts) {
-    const modelsToRun = prompt.models && prompt.models.length > 0 ? prompt.models : [];
+    const modelsToRun = allowedModelsFor(prompt);
     const regionsToRun = prompt.regions && prompt.regions.length > 0 ? prompt.regions : [null];
 
     for (const modelName of modelsToRun) {

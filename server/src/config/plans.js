@@ -77,6 +77,9 @@ export const PLANS = {
       maxSiteAudits: 500,
       maxDailyOnDemand: 10,
       onDemandCooldownMinutes: 5,
+      // API-model tracking (Claude) is not part of Growth — scraper engines
+      // only. Enterprise can get it per customer via plan_overrides.
+      allowedModels: [],
       features: [
         'basic_insights',
         'prompt_suggestions',
@@ -107,6 +110,10 @@ export const PLANS = {
       maxSiteAudits: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
+      // API-model tracking (Claude) is a per-customer opt-in on Enterprise:
+      // default off; enable via
+      // organizations.plan_overrides = { "allowedModels": ["claude-sonnet-5"] }.
+      allowedModels: [],
       features: [
         'basic_insights',
         'prompt_suggestions',

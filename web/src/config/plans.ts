@@ -153,6 +153,9 @@ export const PLANS: Record<PlanId, Plan> = {
       maxSiteAudits: 500,
       maxDailyOnDemand: 10,
       onDemandCooldownMinutes: 5,
+      // API-model tracking (Claude) is not part of Growth — scraper engines
+      // only. Enterprise can get it per customer via plan_overrides below.
+      allowedModels: [],
       features: [
         'basic_insights',
         'prompt_suggestions',
@@ -185,6 +188,12 @@ export const PLANS: Record<PlanId, Plan> = {
       maxSiteAudits: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
+      // API-model tracking (Claude) is a per-customer opt-in on Enterprise:
+      // default off; enable by setting
+      // organizations.plan_overrides = { "allowedModels": ["claude-sonnet-5"] }.
+      // getOrgPlan / the server's applyPlanOverrides merge that over these
+      // limits, so no code change is needed to switch a customer on.
+      allowedModels: [],
       features: [
         'basic_insights',
         'prompt_suggestions',

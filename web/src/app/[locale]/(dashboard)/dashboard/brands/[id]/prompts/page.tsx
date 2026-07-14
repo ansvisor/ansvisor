@@ -74,16 +74,18 @@ export default function PromptsPage() {
   const [manualText, setManualText] = useState('');
   const [manualCategory, setManualCategory] = useState('');
   const [generateTopics, setGenerateTopics] = useState<string[] | null>(null);
-  const { planId } = usePlanContext();
+  const { planId, allowedModelIds: planAllowedModelIds } = usePlanContext();
   const { canManage } = useUserRole();
   const allowedScraperIds = useMemo(() => {
     const allowed = PLANS[planId].limits.allowedScrapers;
     return allowed ? [...allowed] : ALL_SCRAPERS.map((s) => s.id);
   }, [planId]);
-  const allowedModelIds = useMemo(() => {
-    const allowed = PLANS[planId].limits.allowedModels;
-    return allowed ? [...allowed] : ALL_MODELS.map((m) => m.id);
-  }, [planId]);
+  // From context, not PLANS[planId]: Enterprise orgs can have Claude switched
+  // on per customer via plan_overrides, which only the layout can see.
+  const allowedModelIds = useMemo(
+    () => planAllowedModelIds ?? ALL_MODELS.map((m) => m.id),
+    [planAllowedModelIds],
+  );
   const visibleScrapers = useMemo(
     () => ALL_SCRAPERS.filter((s) => allowedScraperIds.includes(s.id)),
     [allowedScraperIds],
