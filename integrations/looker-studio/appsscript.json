@@ -1,0 +1,16 @@
+{
+  "timeZone": "Etc/UTC",
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "urlFetchWhitelist": ["https://app.ansvisor.com/"],
+  "dataStudio": {
+    "name": "Ansvisor — AI Visibility Metrics",
+    "logoUrl": "https://github.com/ansvisor.png",
+    "company": "Ansvisor",
+    "companyUrl": "https://www.ansvisor.com",
+    "addonUrl": "https://www.ansvisor.com",
+    "supportUrl": "https://github.com/ansvisor/ansvisor/issues",
+    "description": "Blend Ansvisor AI visibility metrics — ChatGPT, Gemini, Perplexity, Claude and more — with GA4 and Search Console data in one Looker Studio dashboard.",
+    "shortDescription": "AI visibility metrics for Looker Studio"
+  }
+}
