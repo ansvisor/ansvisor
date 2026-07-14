@@ -171,7 +171,7 @@ export default function ReportDetailPage() {
           </Link>
           <h1 className="text-2xl font-bold tracking-tight">{report.title}</h1>
           <p className="text-sm text-muted-foreground">
-            {KNOWN_TEMPLATE_IDS.has(report.template) && (
+            {KNOWN_TEMPLATE_IDS.has(report.template) && t.has(`templates.${report.template}.name`) && (
               <>{t(`templates.${report.template}.name`)} · </>
             )}
             {formatDate(report.dateFrom)} — {formatDate(report.dateTo)} · {t('generatedOn')}{' '}
