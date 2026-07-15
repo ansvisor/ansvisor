@@ -26,6 +26,7 @@ import { verifyCloroWebhook } from './lib/cloro-webhook-verify.js';
 import { generateBriefForOpportunity } from './routes/content.js';
 import { startSiteAuditForBrand } from './routes/audits.js';
 import { getSiteAuditQuotaStatus } from './lib/plan-guard.js';
+import { recountBrandCitations } from './lib/citation-recount.js';
 import supabaseAdmin from './config/supabase.js';
 import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/plans.js';
 
@@ -292,6 +293,31 @@ app.get('/api/internal/site-audit-quota', async (req, res) => {
         .json({ success: false, error: 'quota_exceeded', message: err.message });
     }
     req.log.error({ err }, 'internal site audit quota error');
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// --- Internal citation-recount endpoint (CRON_SECRET auth, called by the web
+// layer whenever a brand's domain list changes) ---
+// Recomputes prompt_results.citation_count for the brand against its current
+// domain list so the stored tally never diverges from the Citations page's
+// live classification. See lib/citation-recount.js.
+app.post('/api/internal/recount-citations', async (req, res) => {
+  const secret = req.headers.authorization?.replace('Bearer ', '');
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  const { brandId } = req.body || {};
+  if (!brandId) {
+    return res.status(400).json({ success: false, message: 'brandId is required' });
+  }
+
+  try {
+    const result = await recountBrandCitations(brandId);
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    req.log.error({ err, brandId }, 'internal recount-citations error');
     return res.status(500).json({ success: false, message: err.message });
   }
 });
