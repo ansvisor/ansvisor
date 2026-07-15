@@ -46,6 +46,23 @@ type QueryFanoutTabProps = {
 
 const INTENT_INITIAL_LOAD_TIMEOUT_MS = 1500;
 
+/**
+ * Server-action failures reach the client with Next's production-masked
+ * message ("An error occurred in the Server Components render… A digest
+ * property is included…"), which is meaningless to users (#427). Surface the
+ * real message only when it survived; otherwise fall back to a friendly one.
+ */
+function userErrorMessage(err: unknown, fallback: string): string {
+  if (
+    err instanceof Error &&
+    err.message &&
+    !/^An error occurred in the Server/i.test(err.message)
+  ) {
+    return err.message;
+  }
+  return fallback;
+}
+
 export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
   const [data, setData] = useState<QueryFanoutData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +110,8 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
           }
         }
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to load query fan-out');
+        console.error('[fanout] load failed', err);
+        toast.error(userErrorMessage(err, 'Failed to load query fan-out — please retry.'));
         setData({ subQueries: [], totalObserved: 0 });
       } finally {
         if (!silent) {
@@ -161,7 +179,8 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
       await load({ silent: true });
       await onTracked?.();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to track this query');
+      console.error('[fanout] track failed', err);
+      toast.error(userErrorMessage(err, 'Failed to track this query — please retry.'));
     } finally {
       setAddingKey(null);
     }

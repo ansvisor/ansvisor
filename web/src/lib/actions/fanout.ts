@@ -48,6 +48,53 @@ interface RawSearchQueryItem {
 const MAX_FANOUT_DAYS = 90;
 
 /**
+ * PostgREST silently caps un-paginated selects at 1000 rows, which quietly
+ * truncated the aggregation on exactly the brands where fan-out matters most
+ * (#427). Page through the window instead, with a hard row ceiling so a
+ * pathological brand can't pin the server action.
+ */
+const FANOUT_PAGE_SIZE = 1000;
+const FANOUT_MAX_ROWS = 50_000;
+
+/** How long the intent-classification round-trip may take before we abort (#427). */
+const FANOUT_INTENT_FETCH_TIMEOUT_MS = 20_000;
+
+interface FanoutResultRow {
+  prompt_id: string | null;
+  platform: string | null;
+  search_queries: unknown;
+}
+
+async function fetchFanoutRows(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  since: string,
+  promptId?: string,
+): Promise<FanoutResultRow[]> {
+  const rows: FanoutResultRow[] = [];
+  for (let from = 0; from < FANOUT_MAX_ROWS; from += FANOUT_PAGE_SIZE) {
+    let query = supabase
+      .from('prompt_results')
+      .select('prompt_id, platform, search_queries')
+      .eq('brand_id', brandId)
+      .gte('created_at', since)
+      // Deterministic order so .range() pages don't shuffle between requests.
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + FANOUT_PAGE_SIZE - 1);
+    if (promptId) query = query.eq('prompt_id', promptId);
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+
+    const batch = (data ?? []) as FanoutResultRow[];
+    rows.push(...batch);
+    if (batch.length < FANOUT_PAGE_SIZE) break;
+  }
+  return rows;
+}
+
+/**
  * Canonical form of a sub-query for display + grouping: trim, then collapse any
  * internal whitespace run (double spaces, tabs, newlines) to a single space, so
  * "best  laptops" and "best laptops" group as one row.
@@ -78,13 +125,7 @@ export async function getQueryFanout(
   // No server-side "non-empty" filter: comparing a jsonb column to '[]' through
   // PostgREST is unreliable, and rows with an empty fan-out contribute nothing
   // to the aggregation below anyway (the item loop skips them).
-  const { data: rows, error } = await supabase
-    .from('prompt_results')
-    .select('prompt_id, platform, search_queries')
-    .eq('brand_id', brandId)
-    .gte('created_at', since);
-
-  if (error) throw new Error(error.message);
+  const rows = await fetchFanoutRows(supabase, brandId, since);
 
   interface Acc {
     display: string;
@@ -243,6 +284,9 @@ export async function classifyFanoutIntents(queries: string[]): Promise<Record<s
   } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
 
+  // Bounded: classifying a cold cache can take the aeo-server a while, and a
+  // hung upstream must never pin this server action until the platform kills
+  // it (#427). The tab degrades gracefully to no intent badges on rejection.
   const res = await fetch(`${API_BASE_URL}/api/prompts/fanout-intents`, {
     method: 'POST',
     headers: {
@@ -250,6 +294,7 @@ export async function classifyFanoutIntents(queries: string[]): Promise<Record<s
       Authorization: `Bearer ${session.access_token}`,
     },
     body: JSON.stringify({ queries }),
+    signal: AbortSignal.timeout(FANOUT_INTENT_FETCH_TIMEOUT_MS),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -274,14 +319,7 @@ export async function getPromptFanout(
   const days = Math.min(Math.max(Math.trunc(opts?.days ?? 30) || 30, 1), MAX_FANOUT_DAYS);
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
 
-  const { data: rows, error } = await supabase
-    .from('prompt_results')
-    .select('prompt_id, platform, search_queries')
-    .eq('brand_id', brandId)
-    .eq('prompt_id', promptId)
-    .gte('created_at', since);
-
-  if (error) throw new Error(error.message);
+  const rows = await fetchFanoutRows(supabase, brandId, since, promptId);
 
   interface Acc {
     display: string;
