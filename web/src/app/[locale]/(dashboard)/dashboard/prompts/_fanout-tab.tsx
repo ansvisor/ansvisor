@@ -159,6 +159,10 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
     setAddingKey(query.toLowerCase());
     try {
       const result = await trackFanoutQuery(brandId, query);
+      if ('error' in result) {
+        toast.error(result.error);
+        return;
+      }
       toast.success('Added as a tracked prompt');
       setData((prev) => {
         if (!prev) return prev;

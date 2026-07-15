@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { addPromptToSet } from '@/lib/actions/prompt';
+import { PlanLimitError } from '@/lib/guards/plan-guard';
 import { API_BASE_URL } from '@/config/api';
 
 /**
@@ -229,13 +230,12 @@ export async function getQueryFanout(
  * set, deriving platforms/models from its most recent active prompt.
  * `addPromptToSet` enforces the plan's `maxPrompts` limit.
  */
-export async function trackFanoutQuery(
-  brandId: string,
-  query: string,
-): Promise<{ promptId: string }> {
+export type TrackFanoutResult = { promptId: string } | { error: string };
+
+export async function trackFanoutQuery(brandId: string, query: string): Promise<TrackFanoutResult> {
   const supabase = await createClient();
   const text = normalizeQuery(query);
-  if (!text) throw new Error('Empty query');
+  if (!text) return { error: 'Empty query' };
 
   const { data: ps, error: psErr } = await supabase
     .from('prompt_sets')
@@ -245,7 +245,7 @@ export async function trackFanoutQuery(
     .limit(1)
     .maybeSingle();
   if (psErr || !ps) {
-    throw new Error('No prompt set exists for this brand. Create one first.');
+    return { error: 'No prompt set exists for this brand. Create one first.' };
   }
 
   const { data: defaults } = await supabase
@@ -263,7 +263,16 @@ export async function trackFanoutQuery(
       : ['chatgpt-web'];
   const models = Array.isArray(defaults?.models) ? (defaults!.models as string[]) : [];
 
-  const created = await addPromptToSet({ promptSetId: ps.id as string, text, platforms, models });
+  // User-facing failures (plan limit, invalid input) come back as a VALUE:
+  // production masks every error thrown from a server action, so a thrown
+  // PlanLimitError reached users as the meaningless digest message (#427).
+  let created;
+  try {
+    created = await addPromptToSet({ promptSetId: ps.id as string, text, platforms, models });
+  } catch (err) {
+    if (err instanceof PlanLimitError) return { error: err.message };
+    throw err;
+  }
 
   revalidatePath('/dashboard/prompts');
   return { promptId: created.id };
