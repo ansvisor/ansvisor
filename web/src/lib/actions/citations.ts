@@ -135,6 +135,73 @@ function applyModelFilter<T extends { eq: any; in: any }>(
   return query.in('model_used', list);
 }
 
+/**
+ * PostgREST silently caps un-paginated selects at 1000 rows, which quietly
+ * truncated every citations aggregation on brands with more than 1000 results
+ * in the selected window (the overview literally reported `results: 1000`).
+ * Page through the filtered window instead, feeding each batch to `onBatch` so
+ * full citation payloads never accumulate in memory. Returns the total rows
+ * scanned. The hard row ceiling bounds the `all` preset on huge brands.
+ */
+const CITATIONS_SCAN_PAGE_SIZE = 1000;
+const CITATIONS_SCAN_MAX_ROWS = 50_000;
+
+async function scanFilteredResults<T>(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  filters: CitationsFilters,
+  select: string,
+  onBatch: (batch: T[]) => void,
+): Promise<number> {
+  // Resolve topic → prompt ids once, not per page.
+  let topicPromptIds: string[] | null = null;
+  if (filters.topicIds && filters.topicIds.length > 0) {
+    const { data: topicPrompts } = await supabase
+      .from('prompts')
+      .select('id')
+      .in('topic_id', filters.topicIds);
+    topicPromptIds = ((topicPrompts ?? []) as { id: string }[]).map((p) => p.id);
+  }
+
+  const { from, to } = resolveDateRange(filters);
+  const expandedTo = expandDateToEndOfDay(to);
+
+  let total = 0;
+  for (let offset = 0; offset < CITATIONS_SCAN_MAX_ROWS; offset += CITATIONS_SCAN_PAGE_SIZE) {
+    let query = supabase.from('prompt_results').select(select).eq('brand_id', brandId);
+    if (from) query = query.gte('created_at', from);
+    if (expandedTo) query = query.lte('created_at', expandedTo);
+    if (filters.platforms && filters.platforms.length > 0) {
+      query = applyModelFilter(query, filters.platforms);
+    }
+    if (filters.regions && filters.regions.length > 0) {
+      query = query.in('region', filters.regions);
+    }
+    if (filters.promptIds && filters.promptIds.length > 0) {
+      query = query.in('prompt_id', filters.promptIds);
+    }
+    if (topicPromptIds) {
+      query = query.in(
+        'prompt_id',
+        topicPromptIds.length > 0 ? topicPromptIds : ['00000000-0000-0000-0000-000000000000'],
+      );
+    }
+
+    const { data, error } = await query
+      // Deterministic order so .range() pages don't shuffle between requests.
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(offset, offset + CITATIONS_SCAN_PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+
+    const batch = (data ?? []) as unknown as T[];
+    total += batch.length;
+    if (batch.length > 0) onBatch(batch);
+    if (batch.length < CITATIONS_SCAN_PAGE_SIZE) break;
+  }
+  return total;
+}
+
 export async function getCitationsOverview(
   brandId: string,
   filters: CitationsFilters,
@@ -161,42 +228,9 @@ export async function getCitationsOverview(
 
   const classifyCtx = { brandDomains, competitorDomains };
 
-  // 3. Build filtered prompt_results query.
-  let query = supabase
-    .from('prompt_results')
-    .select('id, prompt_id, platform, model_used, region, created_at, citations, citation_count')
-    .eq('brand_id', brandId);
-
-  const { from, to } = resolveDateRange(filters);
-  const expandedTo = expandDateToEndOfDay(to);
-  if (from) query = query.gte('created_at', from);
-  if (expandedTo) query = query.lte('created_at', expandedTo);
-  if (filters.platforms && filters.platforms.length > 0) {
-    query = applyModelFilter(query, filters.platforms);
-  }
-  if (filters.regions && filters.regions.length > 0) {
-    query = query.in('region', filters.regions);
-  }
-  if (filters.promptIds && filters.promptIds.length > 0) {
-    query = query.in('prompt_id', filters.promptIds);
-  }
-
-  if (filters.topicIds && filters.topicIds.length > 0) {
-    const { data: topicPrompts } = await supabase
-      .from('prompts')
-      .select('id')
-      .in('topic_id', filters.topicIds);
-    const topicPromptIds = ((topicPrompts ?? []) as { id: string }[]).map((p) => p.id);
-    query = query.in(
-      'prompt_id',
-      topicPromptIds.length > 0 ? topicPromptIds : ['00000000-0000-0000-0000-000000000000'],
-    );
-  }
-
-  const { data: rows, error } = await query;
-  if (error) throw new Error(error.message);
-
-  const results = (rows ?? []) as Array<{
+  // 3+4. Page through the filtered window (see scanFilteredResults) and
+  // aggregate in memory batch by batch.
+  interface OverviewResultRow {
     id: string;
     prompt_id: string;
     platform: string | null;
@@ -204,9 +238,7 @@ export async function getCitationsOverview(
     region: string | null;
     created_at: string;
     citations: Citation[] | null;
-  }>;
-
-  // 4. Aggregate in memory.
+  }
   interface DomainAgg {
     domain: string;
     category: SourceCategory;
@@ -234,7 +266,7 @@ export async function getCitationsOverview(
 
   let totalCitations = 0;
 
-  for (const result of results) {
+  const aggregateResult = (result: OverviewResultRow) => {
     const citations = Array.isArray(result.citations) ? result.citations : [];
     const modelKey = result.model_used || result.platform || '';
 
@@ -309,9 +341,17 @@ export async function getCitationsOverview(
       if (!existingUrl.title && cite.title) existingUrl.title = cite.title;
       urlMap.set(normalizedUrl, existingUrl);
     }
-  }
+  };
 
-  const totalResults = results.length;
+  const totalResults = await scanFilteredResults<OverviewResultRow>(
+    supabase,
+    brandId,
+    filters,
+    'id, prompt_id, platform, model_used, region, created_at, citations, citation_count',
+    (batch) => {
+      for (const result of batch) aggregateResult(result);
+    },
+  );
 
   // 5. Build output arrays.
   const rowsOut: CitationDomainRow[] = Array.from(domainMap.values())
@@ -473,45 +513,12 @@ export async function getCitationGaps(
 
   const classifyCtx = { brandDomains, competitorDomains };
 
-  let query = supabase
-    .from('prompt_results')
-    .select('id, citations, competitor_mentions, mention_count')
-    .eq('brand_id', brandId);
-
-  const { from, to } = resolveDateRange(filters);
-  const expandedTo = expandDateToEndOfDay(to);
-  if (from) query = query.gte('created_at', from);
-  if (expandedTo) query = query.lte('created_at', expandedTo);
-  if (filters.platforms && filters.platforms.length > 0) {
-    query = applyModelFilter(query, filters.platforms);
-  }
-  if (filters.regions && filters.regions.length > 0) {
-    query = query.in('region', filters.regions);
-  }
-  if (filters.promptIds && filters.promptIds.length > 0) {
-    query = query.in('prompt_id', filters.promptIds);
-  }
-  if (filters.topicIds && filters.topicIds.length > 0) {
-    const { data: topicPrompts } = await supabase
-      .from('prompts')
-      .select('id')
-      .in('topic_id', filters.topicIds);
-    const topicPromptIds = ((topicPrompts ?? []) as { id: string }[]).map((p) => p.id);
-    query = query.in(
-      'prompt_id',
-      topicPromptIds.length > 0 ? topicPromptIds : ['00000000-0000-0000-0000-000000000000'],
-    );
-  }
-
-  const { data: rows, error } = await query;
-  if (error) throw new Error(error.message);
-
-  const results = (rows ?? []) as Array<{
+  interface GapResultRow {
     id: string;
     citations: Citation[] | null;
     competitor_mentions: CompetitorMention[] | null;
     mention_count: number | null;
-  }>;
+  }
 
   interface DomainAgg {
     domain: string;
@@ -531,10 +538,9 @@ export async function getCitationGaps(
   const domainMap = new Map<string, DomainAgg>();
   const byCompMap = new Map<string, Map<string, CompDomainAgg>>();
   let ourAnswerCount = 0;
-  const totalAnswers = results.length;
   const domainClassificationCache = new Map<string, SourceCategory>();
 
-  for (const r of results) {
+  const aggregateAnswer = (r: GapResultRow) => {
     const citations = Array.isArray(r.citations) ? r.citations : [];
     const domainCat = new Map<string, SourceCategory>();
 
@@ -605,7 +611,17 @@ export async function getCitationGaps(
         }
       }
     }
-  }
+  };
+
+  const totalAnswers = await scanFilteredResults<GapResultRow>(
+    supabase,
+    brandId,
+    filters,
+    'id, citations, competitor_mentions, mention_count',
+    (batch) => {
+      for (const r of batch) aggregateAnswer(r);
+    },
+  );
 
   const gapDomains: CitationGapDomain[] = Array.from(domainMap.values())
     .filter((g) => !g.appearsInOurAnswers && g.competitorAnswers.size >= GAP_MIN_COMPETITOR_ANSWERS)
