@@ -168,7 +168,14 @@ async function scanFilteredResults<T>(
 
   let total = 0;
   for (let offset = 0; offset < CITATIONS_SCAN_MAX_ROWS; offset += CITATIONS_SCAN_PAGE_SIZE) {
-    let query = supabase.from('prompt_results').select(select).eq('brand_id', brandId);
+    let query = supabase
+      .from('prompt_results')
+      .select(select)
+      .eq('brand_id', brandId)
+      // #155 — chatgpt-shopping rows are isolated from analytical aggregates.
+      // The insights KPIs already exclude them; without this, the Citations
+      // page counted a superset of what the KPI counts.
+      .neq('platform', 'chatgpt-shopping');
     if (from) query = query.gte('created_at', from);
     if (expandedTo) query = query.lte('created_at', expandedTo);
     if (filters.platforms && filters.platforms.length > 0) {
