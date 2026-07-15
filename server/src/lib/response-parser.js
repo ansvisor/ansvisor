@@ -25,6 +25,54 @@ function countOccurrences(text, term) {
 }
 
 /**
+ * Normalized hostname of a URL ("https://www.FOO.com/bar" → "foo.com").
+ * Mirrors extractHostname in web/src/lib/citations/classify.ts — keep the two
+ * in sync: citation_count must agree with the Citations page's read-time
+ * classification, or the same metric shows different numbers per surface.
+ */
+export function extractHostname(rawUrl) {
+  if (!rawUrl) return null;
+  try {
+    const url = new URL(String(rawUrl).trim());
+    let host = url.hostname.toLowerCase();
+    if (host.startsWith('www.')) host = host.slice(4);
+    return host || null;
+  } catch {
+    const match = String(rawUrl).match(/^(?:https?:\/\/)?(?:www\.)?([^/\s?#]+)/i);
+    return match ? match[1].toLowerCase() : null;
+  }
+}
+
+/**
+ * Count the citations that point at one of the brand's own domains: exact
+ * host or subdomain match, same rule as the web classifier's 'you' category.
+ * The old substring check (url.includes(domain)) also matched the brand's
+ * domain inside another site's path or query string, and disagreed with the
+ * Citations page over www/subdomain variants.
+ */
+export function countOwnDomainCitations(citations, brandDomains) {
+  const normalized = (brandDomains || [])
+    .map(
+      (d) =>
+        extractHostname(d) ??
+        String(d ?? '')
+          .trim()
+          .toLowerCase(),
+    )
+    .filter(Boolean);
+  if (normalized.length === 0) return 0;
+
+  let count = 0;
+  for (const cite of citations || []) {
+    const host = extractHostname(cite?.url || '');
+    if (host && normalized.some((d) => host === d || host.endsWith(`.${d}`))) {
+      count++;
+    }
+  }
+  return count;
+}
+
+/**
  * Count how many times the brand (name or any of its domains) is mentioned
  * in an AI response. URL-stripped to avoid double-counting citations.
  * Used to short-circuit sentiment analysis when the brand isn't mentioned.
@@ -57,17 +105,8 @@ export function parseResponse(response, brand, sentiment = 'neutral', competitor
     mentionCount += countOccurrences(cleanText, domain);
   }
 
-  // --- Brand citation count ---
-  let citationCount = 0;
-  for (const cite of citations) {
-    const url = (cite.url || '').toLowerCase();
-    for (const domain of brand.domains) {
-      if (url.includes(domain.toLowerCase())) {
-        citationCount++;
-        break;
-      }
-    }
-  }
+  // --- Brand citation count (hostname-based, see countOwnDomainCitations) ---
+  const citationCount = countOwnDomainCitations(citations, brand.domains);
 
   // --- Visibility Score (0-100) ---
   const visibilityScore = computeVisibilityScore({

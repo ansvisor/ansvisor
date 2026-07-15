@@ -61,19 +61,40 @@ describe('response-parser', () => {
     });
 
     describe('citation count', () => {
-      it('should count case-insensitive domain matches against citations[].url', () => {
+      it('should count case-insensitive hostname matches against citations[].url', () => {
         const response = {
           text: 'Acme is featured in these links.',
           citations: [
             { url: 'https://ACME.com/page1', title: 'Page 1' },
-            { url: 'https://other.com/acme-corp.com/info', title: 'Page 2' },
+            { url: 'https://www.acme-corp.com/info', title: 'Page 2' },
           ],
         };
         const result = parseResponse(response, brand, 'neutral');
-        // acme.com matches ACME.com/page1
-        // acme-corp.com matches other.com/acme-corp.com/info
-        // total brand citations = 2
+        // acme.com matches ACME.com/page1; acme-corp.com matches the www variant.
         expect(result.citationCount).toBe(2);
+      });
+
+      it('should count subdomains of a brand domain', () => {
+        const response = {
+          text: 'Acme docs.',
+          citations: [{ url: 'https://docs.acme.com/setup', title: 'Docs' }],
+        };
+        const result = parseResponse(response, brand, 'neutral');
+        expect(result.citationCount).toBe(1);
+      });
+
+      it('should NOT count a brand domain appearing in another site path or query', () => {
+        const response = {
+          text: 'Acme is referenced.',
+          citations: [
+            { url: 'https://other.com/acme-corp.com/info', title: 'Path lookalike' },
+            { url: 'https://other.com/?ref=acme.com', title: 'Query lookalike' },
+          ],
+        };
+        const result = parseResponse(response, brand, 'neutral');
+        // The hostname is other.com in both — matches the Citations page's
+        // classification, which the stored count must agree with.
+        expect(result.citationCount).toBe(0);
       });
 
       it('should count a citation once even if multiple brand domains match it', () => {
