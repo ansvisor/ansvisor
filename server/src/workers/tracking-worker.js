@@ -26,7 +26,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
   // 1. Fetch brand info with domains
   const { data: brand, error: brandErr } = await supabaseAdmin
     .from('brands')
-    .select('id, name, organization_id')
+    .select('id, name, organization_id, shopping_mode_enabled')
     .eq('id', brandId)
     .single();
   if (brandErr || !brand) throw new Error(`Brand not found: ${brandId}`);
@@ -108,11 +108,23 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
     return allowedModels ? models.filter((m) => allowedModels.includes(m)) : models;
   };
 
+  // Shopping tracking is opt-in per brand: prompts can still carry the
+  // chatgpt-shopping platform from before the brand turned Shopping off (or
+  // from a picker that offered it regardless of the pref), so filter at run
+  // time instead of trusting the stored arrays — each skipped task is a paid
+  // Cloro scrape for data the brand can't even see.
+  const allowedPlatformsFor = (prompt) => {
+    const platforms = prompt.platforms && prompt.platforms.length > 0 ? prompt.platforms : [];
+    return brand.shopping_mode_enabled
+      ? platforms
+      : platforms.filter((p) => p !== 'chatgpt-shopping');
+  };
+
   // 4. Count total tasks: prompt × (models + scrapers) × regions
   let totalTasks = 0;
   for (const prompt of prompts) {
     const mc = allowedModelsFor(prompt).length;
-    const sc = prompt.platforms && prompt.platforms.length > 0 ? prompt.platforms.length : 0;
+    const sc = allowedPlatformsFor(prompt).length;
     const rc = prompt.regions && prompt.regions.length > 0 ? prompt.regions.length : 1;
     totalTasks += (mc + sc) * rc;
   }
@@ -133,7 +145,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
   // 6. Phase 1: Collect & run all scraper (platform) tasks first
   const scraperTasks = [];
   for (const prompt of prompts) {
-    const scrapersToRun = prompt.platforms && prompt.platforms.length > 0 ? prompt.platforms : [];
+    const scrapersToRun = allowedPlatformsFor(prompt);
     const regionsToRun = prompt.regions && prompt.regions.length > 0 ? prompt.regions : [null];
 
     for (const scraperId of scrapersToRun) {

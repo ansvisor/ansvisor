@@ -78,8 +78,11 @@ export default function PromptsPage() {
   const { canManage } = useUserRole();
   const allowedScraperIds = useMemo(() => {
     const allowed = PLANS[planId].limits.allowedScrapers;
-    return allowed ? [...allowed] : ALL_SCRAPERS.map((s) => s.id);
-  }, [planId]);
+    const ids = allowed ? [...allowed] : ALL_SCRAPERS.map((s) => s.id);
+    // Shopping tracking is opt-in per brand (#155): hide the engine entirely
+    // when the pref is off. The write actions strip it server-side too.
+    return brand?.shoppingModeEnabled ? ids : ids.filter((id) => id !== 'chatgpt-shopping');
+  }, [planId, brand?.shoppingModeEnabled]);
   // From context, not PLANS[planId]: Enterprise orgs can have Claude switched
   // on per customer via plan_overrides, which only the layout can see.
   const allowedModelIds = useMemo(

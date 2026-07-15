@@ -20,6 +20,21 @@ function filterByPlan(plan: Plan, platforms: string[], models: string[]) {
   };
 }
 
+/**
+ * Shopping tracking is opt-in per brand (#155). Every prompt write must pass
+ * through this: with the pref OFF, `chatgpt-shopping` is stripped no matter
+ * where it came from — the pickers offer the full engine list, and inherited
+ * defaults (fan-out Track copies the latest prompt's platforms) would
+ * otherwise keep leaking paid shopping scrapes onto brands that can't even
+ * see the data.
+ */
+function stripShoppingWhenDisabled(
+  platforms: string[],
+  shoppingEnabled: boolean | null | undefined,
+): string[] {
+  return shoppingEnabled ? platforms : platforms.filter((p) => p !== 'chatgpt-shopping');
+}
+
 // ─── Row Mappers ──────────────────────────────────────────────────────────────
 
 function mapPromptRow(row: Record<string, unknown>): Prompt {
@@ -180,6 +195,13 @@ export async function savePromptSet(input: SavePromptSetInput): Promise<PromptSe
   let insertedPrompts: Record<string, unknown>[] = [];
 
   if (input.prompts.length > 0) {
+    const { data: brandRow } = await supabase
+      .from('brands')
+      .select('shopping_mode_enabled')
+      .eq('id', input.brandId)
+      .single();
+    const shoppingEnabled = !!brandRow?.shopping_mode_enabled;
+
     const categories = [
       ...new Set(input.prompts.map((p) => p.category).filter(Boolean)),
     ] as string[];
@@ -196,7 +218,8 @@ export async function savePromptSet(input: SavePromptSetInput): Promise<PromptSe
       .insert(
         input.prompts.map((p) => {
           const filtered = filterByPlan(plan, p.platforms, p.models ?? []);
-          if (filtered.platforms.length === 0 && filtered.models.length === 0) {
+          const platforms = stripShoppingWhenDisabled(filtered.platforms, shoppingEnabled);
+          if (platforms.length === 0 && filtered.models.length === 0) {
             throw new Error('At least one platform or model must be selected for each prompt.');
           }
           return {
@@ -204,7 +227,7 @@ export async function savePromptSet(input: SavePromptSetInput): Promise<PromptSe
             text: p.text,
             category: p.category || null,
             topic_id: (p.category && topicIdMap.get(p.category)) || null,
-            platforms: filtered.platforms,
+            platforms,
             regions: [brandRegion],
             models: filtered.models,
             is_active: p.isActive ?? true,
@@ -254,19 +277,23 @@ export async function updatePrompt(
   if (updates.platforms !== undefined || updates.models !== undefined) {
     const { data: promptRow } = await supabase
       .from('prompts')
-      .select('prompt_sets!inner(brands!inner(organization_id))')
+      .select('prompt_sets!inner(brands!inner(organization_id, shopping_mode_enabled))')
       .eq('id', id)
       .single();
-    const orgId = (promptRow?.prompt_sets as { brands: { organization_id: string } })?.brands
-      ?.organization_id;
-    if (!orgId) throw new Error('Prompt not found');
+    const brandRow = (
+      promptRow?.prompt_sets as {
+        brands: { organization_id: string; shopping_mode_enabled: boolean | null };
+      }
+    )?.brands;
+    if (!brandRow?.organization_id) throw new Error('Prompt not found');
 
-    const plan = await getOrgPlan(orgId);
+    const plan = await getOrgPlan(brandRow.organization_id);
     const filtered = filterByPlan(plan, updates.platforms ?? [], updates.models ?? []);
-    if (filtered.platforms.length === 0 && filtered.models.length === 0) {
+    const platforms = stripShoppingWhenDisabled(filtered.platforms, brandRow.shopping_mode_enabled);
+    if (platforms.length === 0 && filtered.models.length === 0) {
       throw new Error('At least one platform or model must be selected.');
     }
-    if (updates.platforms !== undefined) payload.platforms = filtered.platforms;
+    if (updates.platforms !== undefined) payload.platforms = platforms;
     if (updates.models !== undefined) payload.models = filtered.models;
   }
 
@@ -318,10 +345,10 @@ export async function addPromptToSet(input: AddPromptInput): Promise<Prompt> {
 
   const topicId = await resolveTopicId(supabase, ps.brand_id as string, input.category);
 
-  // #155 — if the brand has Shopping mode on, every new prompt gets the
-  // chatgpt-shopping platform appended automatically so the user doesn't
-  // have to remember to flip it for each prompt. The caller's filtered
-  // platforms still take precedence; we just ensure inclusion.
+  // #155 — the brand's Shopping pref drives chatgpt-shopping BOTH ways: on
+  // means every new prompt gets it appended automatically (the user doesn't
+  // flip it per prompt), off means it's stripped even when inherited from a
+  // picker default or a copied platform list.
   const { data: brandRow } = await supabase
     .from('brands')
     .select('shopping_mode_enabled')
@@ -329,7 +356,10 @@ export async function addPromptToSet(input: AddPromptInput): Promise<Prompt> {
     .single();
   const platforms = brandRow?.shopping_mode_enabled
     ? Array.from(new Set([...filtered.platforms, 'chatgpt-shopping']))
-    : filtered.platforms;
+    : stripShoppingWhenDisabled(filtered.platforms, false);
+  if (platforms.length === 0 && filtered.models.length === 0) {
+    throw new Error('At least one platform or model must be selected.');
+  }
 
   const { data, error } = await supabase
     .from('prompts')
