@@ -13,8 +13,16 @@ const opportunitySchema = z.object({
   opportunities: z
     .array(
       z.object({
-        title: z.string(),
-        description: z.string(),
+        title: z
+          .string()
+          .describe(
+            'A specific, actionable content recommendation. Never reference prompts by their bracketed index like [0] or "Prompt 3" — name the topic or paraphrase the prompt text instead.',
+          ),
+        description: z
+          .string()
+          .describe(
+            'A 1-2 sentence explanation of why this action matters, referencing specific metrics. Never reference prompts by their bracketed index like [0] or "Prompt 3" — name the topic or paraphrase the prompt text instead.',
+          ),
         type: z.enum(['owned', 'earned']),
         impact: z.enum(['high', 'medium', 'low']),
         relatedPromptIndex: z.number(),
@@ -30,7 +38,8 @@ Rules:
 - Reference specific data points: volumes, visibility scores, competitor gaps.
 - Focus on content that will improve the brand's visibility in AI-generated answers.
 - Categorize as "owned" or "earned".
-- Generate between 5 and 15 opportunities.`;
+- Generate between 5 and 15 opportunities.
+- The bracketed [N] indexes in the prompt data exist ONLY for the relatedPromptIndex field. NEVER mention an index like "[0]" or "Prompt 3" in titles or descriptions — refer to the prompt by quoting or paraphrasing its actual text/topic instead.`;
 
 function computeScore(volume, visibility, competitorGap, intent) {
   const weights = {

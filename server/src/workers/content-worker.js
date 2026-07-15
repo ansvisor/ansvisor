@@ -16,11 +16,13 @@ const opportunitySchema = z.object({
       z.object({
         title: z
           .string()
-          .describe('A specific, actionable content recommendation backed by the data provided'),
+          .describe(
+            'A specific, actionable content recommendation backed by the data provided. Never reference prompts by their bracketed index like [0] or "Prompt 3" — name the topic or paraphrase the prompt text instead.',
+          ),
         description: z
           .string()
           .describe(
-            'A 1-2 sentence explanation of why this action matters, referencing specific metrics',
+            'A 1-2 sentence explanation of why this action matters, referencing specific metrics. Never reference prompts by their bracketed index like [0] or "Prompt 3" — name the topic or paraphrase the prompt text instead.',
           ),
         type: z
           .enum(['owned', 'earned'])
@@ -48,7 +50,8 @@ Rules:
 - Categorize as "owned" (blog posts, landing pages, FAQ pages the brand controls) or "earned" (guest posts, PR, review sites).
 - Set impact based on: volume × (100 - current visibility) × competitor gap.
 - Generate between 5 and 15 opportunities depending on data richness.
-- Do NOT repeat the same recommendation in different wording.`;
+- Do NOT repeat the same recommendation in different wording.
+- The bracketed [N] indexes in the prompt data exist ONLY for the relatedPromptIndex field. NEVER mention an index like "[0]" or "Prompt 3" in titles or descriptions — refer to the prompt by quoting or paraphrasing its actual text/topic instead.`;
 
 function computeOpportunityScore(volume, visibility, competitorGap, intent) {
   const intentWeights = {
