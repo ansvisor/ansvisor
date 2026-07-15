@@ -308,7 +308,8 @@ export default function ReportsPage() {
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {t(`templates.${tpl.id}.description`)}
+                      {t.has(`templates.${tpl.id}.description`) &&
+                        t(`templates.${tpl.id}.description`)}
                     </p>
                     <div className="mt-2 flex flex-wrap gap-1">
                       {tpl.sections.map((s) => (
