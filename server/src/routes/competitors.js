@@ -3,6 +3,7 @@ import { generateText, generateObject } from 'ai';
 import { z } from 'zod';
 import { resolveModel } from '../lib/ai-provider.js';
 import { getLanguageName } from '../lib/languages.js';
+import { withRetry } from '../lib/retry.js';
 
 const router = Router();
 
@@ -45,18 +46,26 @@ Description: ${description || 'Not specified'}
 
 Find REAL companies that compete directly with "${brandName}" — selling similar products/services to similar audiences, especially in the ${langName}-speaking market. For each competitor, provide the company name and their actual website domain.`;
 
-    const { text: research } = await generateText({
-      model: resolveModel(competitorModel, { useSearchGrounding: true }),
-      prompt: researchPrompt,
-    });
+    // #379 — retry the WHOLE two-phase flow: the schema's .min(3) means a
+    // Phase-2 under-count throws NoObjectGeneratedError, and re-running the
+    // research gives the structuring phase fresh material to work with.
+    const { object } = await withRetry(
+      async () => {
+        const { text: research } = await generateText({
+          model: resolveModel(competitorModel, { useSearchGrounding: true }),
+          prompt: researchPrompt,
+        });
 
-    // Phase 2: structure the research into the schema
-    const { object } = await generateObject({
-      model: resolveModel(competitorModel),
-      schema: competitorSchema,
-      system: `Extract competitor information from the research below. Only include companies with REAL, verified domains. Return the root domain (e.g. "monday.com"), not full URLs. Do NOT include "${brandName}" itself.`,
-      prompt: research,
-    });
+        // Phase 2: structure the research into the schema
+        return generateObject({
+          model: resolveModel(competitorModel),
+          schema: competitorSchema,
+          system: `Extract competitor information from the research below. Only include companies with REAL, verified domains. Return the root domain (e.g. "monday.com"), not full URLs. Do NOT include "${brandName}" itself.`,
+          prompt: research,
+        });
+      },
+      { attempts: 3, baseDelayMs: 500, label: 'competitor-suggest' },
+    );
 
     return res.json({ competitors: object.competitors });
   } catch (error) {

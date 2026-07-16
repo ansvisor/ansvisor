@@ -247,6 +247,9 @@ export default function OnboardingPage() {
   const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
   const [customTopic, setCustomTopic] = useState('');
   const [loadingTopics, setLoadingTopics] = useState(false);
+  // #379 — suggestions can fail even after the server's retries; each step
+  // then shows an inline "add your own" fallback instead of a bare toast.
+  const [topicSuggestError, setTopicSuggestError] = useState(false);
   const [topicLoadingMsg, setTopicLoadingMsg] = useState('');
   const topicMsgIdx = useRef(0);
 
@@ -269,6 +272,7 @@ export default function OnboardingPage() {
   // Step 4
   const [topicPrompts, setTopicPrompts] = useState<TopicPromptsData[]>([]);
   const [loadingPrompts, setLoadingPrompts] = useState(false);
+  const [promptGenError, setPromptGenError] = useState(false);
 
   // Step 5
   interface CompetitorItem {
@@ -278,6 +282,7 @@ export default function OnboardingPage() {
   }
   const [suggestedCompetitors, setSuggestedCompetitors] = useState<CompetitorItem[]>([]);
   const [loadingCompetitors, setLoadingCompetitors] = useState(false);
+  const [competitorSuggestError, setCompetitorSuggestError] = useState(false);
   const [competitorName, setCompetitorName] = useState('');
   const [competitorDomain, setCompetitorDomain] = useState('');
   const [savingCompetitors, setSavingCompetitors] = useState(false);
@@ -570,6 +575,7 @@ export default function OnboardingPage() {
 
   const fetchTopicSuggestions = async () => {
     setLoadingTopics(true);
+    setTopicSuggestError(false);
     try {
       const supabase = createClient();
       const {
@@ -599,7 +605,7 @@ export default function OnboardingPage() {
       setSelectedTopics(new Set(names.slice(0, 7)));
     } catch (err) {
       console.error('Topic suggestion error:', err);
-      toast.error('Failed to generate topic suggestions');
+      setTopicSuggestError(true);
     } finally {
       setLoadingTopics(false);
     }
@@ -638,9 +644,10 @@ export default function OnboardingPage() {
   const handleGeneratePrompts = async () => {
     if (!createdBrand) return;
     setLoadingPrompts(true);
+    setPromptGenError(false);
+    const topicNames = Array.from(selectedTopics);
     try {
       // Save topics to DB
-      const topicNames = Array.from(selectedTopics);
       await createTopics(createdBrand.id, topicNames);
 
       const supabase = createClient();
@@ -680,7 +687,13 @@ export default function OnboardingPage() {
       setStep(4);
     } catch (err) {
       console.error('Prompt generation error:', err);
-      toast.error('Failed to generate prompts from topics');
+      // #379 — don't strand the user on the topics step behind a bare toast:
+      // advance with empty per-topic groups so the manual add inputs are
+      // usable, and explain inline. Continue stays disabled until they add
+      // at least one prompt.
+      setPromptGenError(true);
+      setTopicPrompts(topicNames.map((topic) => ({ topic, prompts: [] })));
+      setStep(4);
     } finally {
       setLoadingPrompts(false);
     }
@@ -734,6 +747,7 @@ export default function OnboardingPage() {
 
   const fetchCompetitorSuggestions = async () => {
     setLoadingCompetitors(true);
+    setCompetitorSuggestError(false);
     try {
       const supabase = createClient();
       const {
@@ -766,7 +780,7 @@ export default function OnboardingPage() {
       );
     } catch (err) {
       console.error('Competitor suggestion error:', err);
-      toast.error('Failed to generate competitor suggestions');
+      setCompetitorSuggestError(true);
     } finally {
       setLoadingCompetitors(false);
     }
@@ -1130,6 +1144,16 @@ export default function OnboardingPage() {
                 </div>
               ) : (
                 <div className="space-y-2">
+                  {topicSuggestError && (
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+                      <span>
+                        Couldn&apos;t fetch topic suggestions right now — add your own below.
+                      </span>
+                      <Button variant="outline" size="sm" onClick={fetchTopicSuggestions}>
+                        Try again
+                      </Button>
+                    </div>
+                  )}
                   {suggestedTopics.map((topic) => {
                     const isSelected = selectedTopics.has(topic);
                     return (
@@ -1280,6 +1304,13 @@ export default function OnboardingPage() {
             </Button>
           </div>
 
+          {promptGenError && (
+            <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+              Couldn&apos;t generate prompt suggestions right now — add your own to each topic below
+              to continue.
+            </div>
+          )}
+
           <div className="mb-4">
             <p className="text-sm font-medium">Your Prompt List</p>
             <p className="text-xs text-muted-foreground">{totalPrompts} prompts total</p>
@@ -1349,6 +1380,16 @@ export default function OnboardingPage() {
             </div>
           ) : (
             <div className="space-y-4">
+              {competitorSuggestError && (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+                  <span>
+                    Couldn&apos;t fetch competitor suggestions right now — add your own below.
+                  </span>
+                  <Button variant="outline" size="sm" onClick={fetchCompetitorSuggestions}>
+                    Try again
+                  </Button>
+                </div>
+              )}
               {suggestedCompetitors.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">

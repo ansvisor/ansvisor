@@ -5,7 +5,7 @@ import { fleschReadingEase, classifyLinks, jsonLd, countPhrases } from './signal
 import { jsonLdPresence, h1Quality } from './signals/structure.js';
 import { https, metaDescription } from './signals/trust.js';
 import { length } from './signals/content.js';
-import { withRetry } from './retry.js';
+import { withRetry } from '../retry.js';
 
 /** Build a minimal audit context from an HTML string (no network). */
 function ctxFromHtml(html, extra = {}) {

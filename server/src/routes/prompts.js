@@ -6,6 +6,7 @@ import { resolveModel } from '../lib/ai-provider.js';
 import { classifyPromptIntent } from '../lib/intent-extraction.js';
 import { getLanguageName } from '../lib/languages.js';
 import { requireFeature } from '../lib/plan-guard.js';
+import { withRetry } from '../lib/retry.js';
 
 const router = Router();
 
@@ -442,12 +443,18 @@ Based on this brand's industry and context, generate 10 short, generic search pr
     const promptModel = process.env.PROMPT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
     const aiModel = resolveModel(model || promptModel);
 
-    const { object } = await generateObject({
-      model: aiModel,
-      schema: promptSuggestionSchema,
-      system: getSystemPrompt(langName),
-      prompt: userPrompt,
-    });
+    // #379 — bounded retry so one transient failure or schema miss doesn't
+    // drop the whole suggestion step.
+    const { object } = await withRetry(
+      () =>
+        generateObject({
+          model: aiModel,
+          schema: promptSuggestionSchema,
+          system: getSystemPrompt(langName),
+          prompt: userPrompt,
+        }),
+      { attempts: 3, baseDelayMs: 500, label: 'prompt-suggest' },
+    );
 
     return res.json({ prompts: object.prompts });
   } catch (error) {
@@ -487,10 +494,14 @@ router.post('/from-topics', async (req, res) => {
 
     const topicList = topics.map((t, i) => `${i + 1}. ${t}`).join('\n');
 
-    const { object } = await generateObject({
-      model: aiModel,
-      schema: topicPromptSchema,
-      system: `You are an AEO (Answer Engine Optimization) expert. Generate exactly 5 search prompts per topic that real users would type into AI search engines. Current year: ${new Date().getFullYear()}.
+    // #379 — this is the onboarding prompts step's generator; a single
+    // transient failure here used to strand the user with an empty step.
+    const { object } = await withRetry(
+      () =>
+        generateObject({
+          model: aiModel,
+          schema: topicPromptSchema,
+          system: `You are an AEO (Answer Engine Optimization) expert. Generate exactly 5 search prompts per topic that real users would type into AI search engines. Current year: ${new Date().getFullYear()}.
 
 RULES:
 - Keep prompts SHORT and concise — between 30 and 100 characters. Aim for 40-80 characters.
@@ -500,7 +511,7 @@ RULES:
 - Focus on queries where the brand could organically appear in AI-generated answers.
 - Make prompts diverse: include comparisons, how-tos, best-of lists, recommendations, alternatives.
 IMPORTANT: All prompts MUST be written in ${langName}.`,
-      prompt: `Brand: ${brandName}
+          prompt: `Brand: ${brandName}
 Industry: ${industry || 'Not specified'}
 Description: ${description || 'Not specified'}
 Language: ${langName} — write ALL prompts in this language.
@@ -509,7 +520,9 @@ Generate 5 search prompts for each of these topics:
 ${topicList}
 
 Return the exact topic names as provided above.`,
-    });
+        }),
+      { attempts: 3, baseDelayMs: 500, label: 'prompts-from-topics' },
+    );
 
     return res.json({ topicPrompts: object.topicPrompts });
   } catch (error) {

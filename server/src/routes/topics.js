@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { generateText, generateObject } from 'ai';
 import { z } from 'zod';
 import { resolveModel } from '../lib/ai-provider.js';
+import { withRetry } from '../lib/retry.js';
 import { getLanguageName } from '../lib/languages.js';
 
 const router = Router();
@@ -56,17 +57,24 @@ Topics should be diverse: include competitive comparisons, product features, ind
 
 IMPORTANT: Generate all topic names in ${langName}.`;
 
-    const { text: research } = await generateText({
-      model: resolveModel(topicModel, { useSearchGrounding: true }),
-      prompt: researchPrompt,
-    });
+    // #379 — retry the WHOLE two-phase flow: a schema miss in the structuring
+    // phase re-runs the research too, not just the last call.
+    const { object } = await withRetry(
+      async () => {
+        const { text: research } = await generateText({
+          model: resolveModel(topicModel, { useSearchGrounding: true }),
+          prompt: researchPrompt,
+        });
 
-    const { object } = await generateObject({
-      model: resolveModel(topicModel),
-      schema: topicSchema,
-      system: `Extract AEO tracking topics from the research below. Each topic should be concise (3-8 words) and represent an area where AI assistants might mention or discuss "${brandName}". Do NOT include the brand name "${brandName}" in any topic — keep them generic. Include a mix of: competitive comparisons, product/service features, industry trends, use cases, and problem-solving topics. Each topic MUST focus on a single concept — never combine two ideas with "and" or "&". IMPORTANT: All topic names MUST be written in ${langName}.`,
-      prompt: research,
-    });
+        return generateObject({
+          model: resolveModel(topicModel),
+          schema: topicSchema,
+          system: `Extract AEO tracking topics from the research below. Each topic should be concise (3-8 words) and represent an area where AI assistants might mention or discuss "${brandName}". Do NOT include the brand name "${brandName}" in any topic — keep them generic. Include a mix of: competitive comparisons, product/service features, industry trends, use cases, and problem-solving topics. Each topic MUST focus on a single concept — never combine two ideas with "and" or "&". IMPORTANT: All topic names MUST be written in ${langName}.`,
+          prompt: research,
+        });
+      },
+      { attempts: 3, baseDelayMs: 500, label: 'topic-suggest' },
+    );
 
     return res.json({ topics: object.topics });
   } catch (error) {

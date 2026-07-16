@@ -14,7 +14,7 @@ import { generateObject } from 'ai';
 import { z } from 'zod';
 import { resolveModel } from '../ai-provider.js';
 import { signalsByKey } from './rubric.js';
-import { withRetry } from './retry.js';
+import { withRetry } from '../retry.js';
 import { logger } from '../logger.js';
 
 const DEFAULT_MODEL = 'google/gemini-3-flash-preview';
