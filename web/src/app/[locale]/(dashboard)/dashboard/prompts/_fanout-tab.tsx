@@ -70,7 +70,7 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
   // Intent is keyed by the lower-cased sub-query (matches the server cache key).
   const [intents, setIntents] = useState<Record<string, string>>({});
   const [page, setPage] = useState(1);
-  const [view, setView] = useState<View>('frequency');
+  const [view, setView] = useState<View>('by-prompt');
   const [searchText, setSearchText] = useState('');
   const PAGE_SIZE = 10;
 
@@ -202,17 +202,6 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
               <button
                 className={cn(
                   'rounded px-3 py-1 text-xs font-medium transition-colors',
-                  view === 'frequency'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-                onClick={() => setView('frequency')}
-              >
-                High frequency
-              </button>
-              <button
-                className={cn(
-                  'rounded px-3 py-1 text-xs font-medium transition-colors',
                   view === 'by-prompt'
                     ? 'bg-background text-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground',
@@ -220,6 +209,17 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
                 onClick={() => setView('by-prompt')}
               >
                 By prompt
+              </button>
+              <button
+                className={cn(
+                  'rounded px-3 py-1 text-xs font-medium transition-colors',
+                  view === 'frequency'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+                onClick={() => setView('frequency')}
+              >
+                High frequency
               </button>
             </div>
           )}
