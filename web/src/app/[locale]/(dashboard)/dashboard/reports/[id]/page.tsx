@@ -228,6 +228,9 @@ export default function ReportDetailPage() {
               value={`${payload.insights.positiveSentimentPct}%`}
               change={payload.insights.sentimentChange}
             />
+            <p className="text-xs text-muted-foreground sm:col-span-2 lg:col-span-4">
+              {t('kpiCitationsNote')}
+            </p>
           </div>
         )}
         {payload.visibilityTrend && payload.visibilityTrend.length > 0 && (
@@ -398,6 +401,43 @@ export default function ReportDetailPage() {
             </div>
           )}
 
+        {payload.mentionEvidence && payload.mentionEvidence.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('mentionEvidence')}</CardTitle>
+              <p className="text-sm text-muted-foreground">{t('mentionEvidenceDescription')}</p>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[220px]">{t('columns.prompt')}</TableHead>
+                    <TableHead className="w-28">{t('columns.platform')}</TableHead>
+                    <TableHead className="w-24">{t('columns.date')}</TableHead>
+                    <TableHead>{t('columns.excerpt')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {payload.mentionEvidence.map((m, idx) => (
+                    <TableRow key={`${m.promptText}-${idx}`}>
+                      <TableCell className="max-w-[220px] truncate font-medium">
+                        {m.promptText}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {PLATFORM_LABELS[m.platform] ?? m.platform}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{formatDate(m.date)}</TableCell>
+                      <TableCell className="whitespace-normal text-sm text-muted-foreground">
+                        {m.excerpt}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+
         {payload.queryFanout && payload.queryFanout.length > 0 && (
           <Card>
             <CardHeader>
@@ -555,7 +595,8 @@ export default function ReportDetailPage() {
                 {t('citationTotals', {
                   domains: payload.citations.totals.domains,
                   citations: payload.citations.totals.citations,
-                })}
+                })}{' '}
+                {t('citationsSectionNote')}
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -567,7 +608,7 @@ export default function ReportDetailPage() {
                     <TableRow>
                       <TableHead>{t('columns.domain')}</TableHead>
                       <TableHead>{t('columns.sourceType')}</TableHead>
-                      <TableHead className="text-right">{t('kpi.citations')}</TableHead>
+                      <TableHead className="text-right">{t('columns.citations')}</TableHead>
                       <TableHead className="text-right">{t('columns.usage')}</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -585,6 +626,50 @@ export default function ReportDetailPage() {
                   </TableBody>
                 </Table>
               )}
+            </CardContent>
+          </Card>
+        )}
+
+        {payload.citationEvidence && payload.citationEvidence.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('citationEvidence')}</CardTitle>
+              <p className="text-sm text-muted-foreground">{t('citationEvidenceDescription')}</p>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('columns.url')}</TableHead>
+                    <TableHead className="w-24 text-right">{t('columns.citations')}</TableHead>
+                    <TableHead className="w-[280px]">{t('columns.citedIn')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {payload.citationEvidence.map((c) => (
+                    <TableRow key={c.url}>
+                      <TableCell className="max-w-[320px]">
+                        <a
+                          href={c.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block truncate font-medium hover:underline"
+                          title={c.title || c.url}
+                        >
+                          {c.title || c.url}
+                        </a>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {c.domain}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">{c.totalCitations}</TableCell>
+                      <TableCell className="whitespace-normal text-xs text-muted-foreground">
+                        {c.sourcedPrompts.join(' · ')}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         )}

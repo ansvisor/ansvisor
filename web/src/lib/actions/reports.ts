@@ -16,7 +16,7 @@ import {
 } from '@/lib/actions/tracking';
 import { getCitationsOverview, type CitationsSourceBreakdown } from '@/lib/actions/citations';
 import { getShoppingKpis } from '@/lib/actions/shopping';
-import type { SourceCategory } from '@/lib/citations/classify';
+import { extractHostname, type SourceCategory } from '@/lib/citations/classify';
 import {
   getReportTemplate,
   ALL_REPORT_SECTIONS,
@@ -55,6 +55,27 @@ export interface ReportFanoutQuery {
   query: string;
   engines: string[];
   timesSearched: number;
+}
+
+/** One concrete brand mention: which prompt, where, and the passage (#429). */
+export interface ReportMentionEvidence {
+  promptText: string;
+  /** Platform slug as stored on the result (UI maps to a label). */
+  platform: string;
+  date: string;
+  mentionCount: number;
+  /** Short passage of the answer around the brand mention. */
+  excerpt: string;
+}
+
+/** One concrete cited URL and the prompts whose answers cited it (#429). */
+export interface ReportCitationEvidence {
+  url: string;
+  domain: string;
+  title: string;
+  totalCitations: number;
+  /** Up to a few tracked prompts whose answers cited this URL. */
+  sourcedPrompts: string[];
 }
 
 export interface ReportTopicPerf {
@@ -110,6 +131,10 @@ export interface ReportPayload {
     best: ReportPromptPerf[];
     worst: ReportPromptPerf[];
   };
+  /** The top mentioning answers, with the passage around the mention (#429). */
+  mentionEvidence?: ReportMentionEvidence[];
+  /** The top cited URLs with the prompts whose answers cited them (#429). */
+  citationEvidence?: ReportCitationEvidence[];
   /** Most-run observed fan-out sub-queries in the period. */
   queryFanout?: ReportFanoutQuery[];
   /** Per-topic visibility with deltas vs the previous window. */
@@ -471,6 +496,193 @@ async function getAuditSnapshot(brandId: string, dateTo: string): Promise<Report
   };
 }
 
+/** How many evidence rows a report keeps per evidence section (#429). */
+const REPORT_EVIDENCE_COUNT = 10;
+/** How many sourcing prompts each cited URL lists. */
+const EVIDENCE_PROMPTS_PER_URL = 3;
+
+/** Light markdown/URL strip so excerpts read as prose. */
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\[([^\]]*)\]\([^)]+\)/g, '$1')
+    .replace(/https?:\/\/[^\s)>\]]+/g, '')
+    .replace(/[*_#`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * The passage of an answer around the first brand mention — the "how was I
+ * mentioned" a KPI total can't convey. Falls back to the answer's opening
+ * when the mention came via a domain rather than the brand name.
+ */
+function mentionExcerpt(response: string, brandName: string): string {
+  const clean = stripMarkdown(response);
+  const idx = clean.toLowerCase().indexOf(brandName.toLowerCase());
+  if (idx === -1) {
+    return clean.length > 180 ? `${clean.slice(0, 180).trimEnd()}…` : clean;
+  }
+  const start = Math.max(0, idx - 60);
+  const end = Math.min(clean.length, idx + brandName.length + 140);
+  const prefix = start > 0 ? '…' : '';
+  const suffix = end < clean.length ? '…' : '';
+  return `${prefix}${clean.slice(start, end).trim()}${suffix}`;
+}
+
+/**
+ * Top mentioning answers in the window (#429): prompt, platform, date and the
+ * passage around the mention. Server-side ORDER BY + LIMIT — no scan needed.
+ */
+async function getMentionEvidence(
+  brandId: string,
+  brandName: string,
+  dateFrom: string,
+  dateTo: string,
+): Promise<ReportMentionEvidence[]> {
+  const supabase = await createClient();
+
+  const { data: rows } = await supabase
+    .from('prompt_results')
+    .select('prompt_id, platform, created_at, mention_count, response')
+    .eq('brand_id', brandId)
+    .neq('platform', 'chatgpt-shopping')
+    .gt('mention_count', 0)
+    .gte('created_at', dateFrom)
+    .lte('created_at', dateTo)
+    .order('mention_count', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(REPORT_EVIDENCE_COUNT);
+
+  const results = (rows ?? []) as Array<{
+    prompt_id: string | null;
+    platform: string | null;
+    created_at: string;
+    mention_count: number | null;
+    response: string | null;
+  }>;
+  if (results.length === 0) return [];
+
+  const promptIds = [...new Set(results.map((r) => r.prompt_id).filter(Boolean))] as string[];
+  const promptTextById = new Map<string, string>();
+  if (promptIds.length > 0) {
+    const { data: promptRows } = await supabase
+      .from('prompts')
+      .select('id, text')
+      .in('id', promptIds);
+    for (const p of promptRows ?? []) promptTextById.set(p.id as string, p.text as string);
+  }
+
+  return results.map((r) => ({
+    promptText: (r.prompt_id && promptTextById.get(r.prompt_id)) || '(deleted prompt)',
+    platform: r.platform ?? '',
+    date: r.created_at,
+    mentionCount: r.mention_count ?? 0,
+    excerpt: mentionExcerpt(r.response ?? '', brandName),
+  }));
+}
+
+/**
+ * Top cited URLs in the window with the prompts whose answers cited them
+ * (#429). Needs its own paginated scan: the citations overview aggregates
+ * URLs but doesn't keep the prompt attribution the evidence section is for.
+ */
+async function getCitationEvidence(
+  brandId: string,
+  dateFrom: string,
+  dateTo: string,
+): Promise<ReportCitationEvidence[]> {
+  const supabase = await createClient();
+  const PAGE_SIZE = 1000;
+  const MAX_ROWS = 50_000;
+
+  interface UrlAgg {
+    url: string;
+    domain: string;
+    title: string;
+    count: number;
+    promptIds: Set<string>;
+  }
+  const byUrl = new Map<string, UrlAgg>();
+
+  for (let offset = 0; offset < MAX_ROWS; offset += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('prompt_results')
+      .select('prompt_id, citations')
+      .eq('brand_id', brandId)
+      .neq('platform', 'chatgpt-shopping')
+      .gte('created_at', dateFrom)
+      .lte('created_at', dateTo)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+
+    const batch = (data ?? []) as Array<{
+      prompt_id: string | null;
+      citations: Array<{ url?: string; title?: string }> | null;
+    }>;
+
+    for (const row of batch) {
+      const citations = Array.isArray(row.citations) ? row.citations : [];
+      for (const cite of citations) {
+        if (!cite?.url) continue;
+        const host = extractHostname(cite.url);
+        if (!host) continue;
+        // Same URL normalization the Citations page uses, so the evidence
+        // list lines up with the overview's Top URLs.
+        let normalized = cite.url;
+        try {
+          const parsed = new URL(cite.url);
+          parsed.search = '';
+          parsed.hash = '';
+          normalized = parsed.toString().replace(/\/$/, '');
+        } catch {
+          // leave as-is
+        }
+        const agg = byUrl.get(normalized) ?? {
+          url: normalized,
+          domain: host,
+          title: cite.title || '',
+          count: 0,
+          promptIds: new Set<string>(),
+        };
+        agg.count += 1;
+        if (!agg.title && cite.title) agg.title = cite.title;
+        if (row.prompt_id) agg.promptIds.add(row.prompt_id);
+        byUrl.set(normalized, agg);
+      }
+    }
+
+    if (batch.length < PAGE_SIZE) break;
+  }
+
+  const top = [...byUrl.values()]
+    .sort((a, b) => b.count - a.count || a.url.localeCompare(b.url))
+    .slice(0, REPORT_EVIDENCE_COUNT);
+  if (top.length === 0) return [];
+
+  const allPromptIds = [...new Set(top.flatMap((u) => [...u.promptIds]))];
+  const promptTextById = new Map<string, string>();
+  if (allPromptIds.length > 0) {
+    const { data: promptRows } = await supabase
+      .from('prompts')
+      .select('id, text')
+      .in('id', allPromptIds);
+    for (const p of promptRows ?? []) promptTextById.set(p.id as string, p.text as string);
+  }
+
+  return top.map((u) => ({
+    url: u.url,
+    domain: u.domain,
+    title: u.title,
+    totalCitations: u.count,
+    sourcedPrompts: [...u.promptIds]
+      .map((id) => promptTextById.get(id))
+      .filter((t): t is string => Boolean(t))
+      .slice(0, EVIDENCE_PROMPTS_PER_URL),
+  }));
+}
+
 // ─── Actions ─────────────────────────────────────────────────────────────────
 
 /** English display names used in stored (immutable) report titles. */
@@ -528,6 +740,8 @@ export async function createReport(
     citations,
     trend,
     promptPerformance,
+    mentionEvidence,
+    citationEvidence,
     queryFanout,
     topicPerformance,
     aiTraffic,
@@ -542,6 +756,8 @@ export async function createReport(
       : null,
     has('trend') ? getVisibilityTrend(brandId, range) : null,
     has('promptPerformance') ? getPromptPerformance(brandId, dateFrom, dateTo) : null,
+    has('mentionEvidence') ? getMentionEvidence(brandId, brandName, dateFrom, dateTo) : null,
+    has('citationEvidence') ? getCitationEvidence(brandId, dateFrom, dateTo) : null,
     has('queryFanout') ? getFanoutSnapshot(brandId, dateFrom, dateTo) : null,
     has('topicPerformance') ? getTopicPerformance(brandId, dateFrom, dateTo) : null,
     has('aiTraffic') ? getTrafficSnapshot(brandId, dateFrom, dateTo) : null,
@@ -554,6 +770,8 @@ export async function createReport(
     ...(insights ? { insights } : {}),
     ...(trend ? { visibilityTrend: trend } : {}),
     ...(promptPerformance ? { promptPerformance } : {}),
+    ...(mentionEvidence && mentionEvidence.length > 0 ? { mentionEvidence } : {}),
+    ...(citationEvidence && citationEvidence.length > 0 ? { citationEvidence } : {}),
     ...(queryFanout ? { queryFanout } : {}),
     ...(topicPerformance && topicPerformance.length > 0 ? { topicPerformance } : {}),
     ...(aiTraffic ? { aiTraffic } : {}),

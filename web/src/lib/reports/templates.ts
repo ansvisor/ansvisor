@@ -25,11 +25,13 @@ export type ReportSection =
   | 'competitors'
   | 'topicPerformance'
   | 'promptPerformance'
+  | 'mentionEvidence'
   | 'queryFanout'
   | 'aiTraffic'
   | 'shoppingVisibility'
   | 'auditScore'
-  | 'citations';
+  | 'citations'
+  | 'citationEvidence';
 
 /**
  * Every pickable section, in report render order — drives the section
@@ -44,11 +46,13 @@ export const ALL_REPORT_SECTIONS: ReportSection[] = [
   'competitors',
   'topicPerformance',
   'promptPerformance',
+  'mentionEvidence',
   'queryFanout',
   'aiTraffic',
   'shoppingVisibility',
   'auditScore',
   'citations',
+  'citationEvidence',
 ];
 
 export interface ReportTemplateDef {
@@ -74,11 +78,13 @@ export const REPORT_TEMPLATES: ReportTemplateDef[] = [
       'competitors',
       'topicPerformance',
       'promptPerformance',
+      'mentionEvidence',
       'queryFanout',
       'aiTraffic',
       'shoppingVisibility',
       'auditScore',
       'citations',
+      'citationEvidence',
     ],
     defaultPreset: '30d',
   },
@@ -89,7 +95,7 @@ export const REPORT_TEMPLATES: ReportTemplateDef[] = [
   },
   {
     id: 'citation_sources',
-    sections: ['citations'],
+    sections: ['citations', 'citationEvidence'],
     defaultPreset: '30d',
   },
 ];

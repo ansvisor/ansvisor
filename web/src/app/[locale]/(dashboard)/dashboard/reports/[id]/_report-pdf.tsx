@@ -267,7 +267,7 @@ export function ReportPdfDocument({ report }: { report: Report }) {
                   payload.insights.mentionsChange,
                 ],
                 [
-                  'Citations',
+                  'Brand Citations',
                   String(payload.insights.totalCitations),
                   payload.insights.citationsChange,
                 ],
@@ -287,6 +287,11 @@ export function ReportPdfDocument({ report }: { report: Report }) {
               </View>
             ))}
           </View>
+        )}
+        {payload.insights && (
+          <Text style={{ fontSize: 7, color: MUTED, marginTop: -8, marginBottom: 12 }}>
+            &quot;Brand Citations&quot; counts citations of your own site in AI answers.
+          </Text>
         )}
 
         {/* Visibility trend */}
@@ -417,6 +422,27 @@ export function ReportPdfDocument({ report }: { report: Report }) {
         )}
         {payload.promptPerformance && payload.promptPerformance.worst.length > 0 && (
           <PromptTable title="Weakest Prompts" prompts={payload.promptPerformance.worst} />
+        )}
+
+        {/* Mention evidence (#429) — which answers mentioned the brand, and how */}
+        {payload.mentionEvidence && payload.mentionEvidence.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Mention Evidence</Text>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.tableHeaderCell, { width: 130 }]}>Prompt</Text>
+              <Text style={[styles.tableHeaderCell, { width: 60 }]}>Platform</Text>
+              <Text style={[styles.tableHeaderCell, { width: 50 }]}>Date</Text>
+              <Text style={[styles.tableHeaderCell, { flex: 1 }]}>How you were mentioned</Text>
+            </View>
+            {payload.mentionEvidence.map((m, idx) => (
+              <View key={`${m.promptText}-${idx}`} style={styles.tableRow}>
+                <Text style={[styles.cell, { width: 130, paddingRight: 6 }]}>{m.promptText}</Text>
+                <Text style={[styles.cell, { width: 60, color: MUTED }]}>{m.platform}</Text>
+                <Text style={[styles.cell, { width: 50, color: MUTED }]}>{formatDate(m.date)}</Text>
+                <Text style={[styles.cell, { flex: 1, color: MUTED }]}>{m.excerpt}</Text>
+              </View>
+            ))}
+          </View>
         )}
 
         {/* Query fan-out */}
@@ -570,6 +596,34 @@ export function ReportPdfDocument({ report }: { report: Report }) {
                 ))}
               </View>
             )}
+          </View>
+        )}
+
+        {/* Citation evidence (#429) — the exact URLs and the prompts that surfaced them */}
+        {payload.citationEvidence && payload.citationEvidence.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Citation Evidence</Text>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.tableHeaderCell, { flex: 1 }]}>URL</Text>
+              <Text style={[styles.tableHeaderCell, { width: 55, textAlign: 'right' }]}>
+                Citations
+              </Text>
+              <Text style={[styles.tableHeaderCell, { width: 170 }]}>Cited in</Text>
+            </View>
+            {payload.citationEvidence.map((c) => (
+              <View key={c.url} style={styles.tableRow}>
+                <View style={{ flex: 1, paddingRight: 6 }}>
+                  <Text style={styles.cell}>{c.title || c.url}</Text>
+                  <Text style={[styles.cell, { color: MUTED, fontSize: 7 }]}>{c.url}</Text>
+                </View>
+                <Text style={[styles.cell, { width: 55, textAlign: 'right' }]}>
+                  {c.totalCitations}
+                </Text>
+                <Text style={[styles.cell, { width: 170, color: MUTED, fontSize: 7 }]}>
+                  {c.sourcedPrompts.join(' · ')}
+                </Text>
+              </View>
+            ))}
           </View>
         )}
 

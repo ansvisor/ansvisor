@@ -437,7 +437,9 @@
       "aiTraffic": "AI Traffic",
       "shoppingVisibility": "Shopping",
       "auditScore": "Audit Score",
-      "citations": "Citations"
+      "citations": "Citations",
+      "mentionEvidence": "Mention Evidence",
+      "citationEvidence": "Citation Evidence"
     },
     "brandLabel": "Brand",
     "sectionsLabel": "Sections",
@@ -470,7 +472,13 @@
       "topic": "Topic",
       "results": "Results",
       "platform": "Platform",
-      "topPages": "Top Pages"
+      "topPages": "Top Pages",
+      "date": "Date",
+      "mentions": "Mentions",
+      "excerpt": "How you were mentioned",
+      "url": "URL",
+      "citations": "Citations",
+      "citedIn": "Cited in"
     },
     "topicPerformance": "Topic Performance",
     "aiTraffic": "AI Traffic",
@@ -495,7 +503,7 @@
     "kpi": {
       "visibility": "Visibility",
       "mentions": "Mentions",
-      "citations": "Citations",
+      "citations": "Brand Citations",
       "sentiment": "Positive Sentiment"
     },
     "shareOfVoice": "Share of Voice",
@@ -503,7 +511,13 @@
     "topCitationSources": "Top Citation Sources",
     "citationTotals": "{domains} domains · {citations} citations in this period",
     "noData": "No data for this period.",
-    "you": "(you)"
+    "you": "(you)",
+    "kpiCitationsNote": "\"Brand Citations\" counts citations of your own site in AI answers.",
+    "citationsSectionNote": "All sources AI answers cited around your brand — not just your own site.",
+    "mentionEvidence": "Mention Evidence",
+    "mentionEvidenceDescription": "The answers that mentioned you most in this period, with the passage around the mention.",
+    "citationEvidence": "Citation Evidence",
+    "citationEvidenceDescription": "The URLs AI answers cited most in this period, and which tracked prompts surfaced them."
   },
   "settings": {
     "title": "Settings",
