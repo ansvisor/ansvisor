@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
 import {
@@ -44,7 +44,14 @@ type QueryFanoutTabProps = {
   onTracked?: () => void | Promise<void>;
 };
 
-const INTENT_INITIAL_LOAD_TIMEOUT_MS = 1500;
+/**
+ * Background intent-classification batch size (#431). One request per chunk:
+ * a chunk of 20 cold queries is at most ~4 LLM waves on the server
+ * (concurrency 6), comfortably inside the action's 20s fetch timeout —
+ * classifying the whole observed set in one request was not (120 cold
+ * queries ≈ 40s+, aborted, badges never arrived that session).
+ */
+const INTENT_CHUNK_SIZE = 20;
 
 /**
  * Server-action failures reach the client with Next's production-masked
@@ -74,6 +81,41 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
   const [searchText, setSearchText] = useState('');
   const PAGE_SIZE = 10;
 
+  // Mirror of `intents` for the async classification chain (avoids stale
+  // closures), plus a run counter so a reload/brand switch/unmount cancels
+  // the previous chain instead of racing it.
+  const intentsRef = useRef<Record<string, string>>({});
+  const intentRunRef = useRef(0);
+
+  /**
+   * Classify intents progressively (#431): the visible page's queries first
+   * (the list is frequency-sorted, which is exactly page order), then the
+   * rest in background chunks, merging each chunk into state as it resolves.
+   * Never awaited by the table load — badges fill in; rows never wait.
+   */
+  const classifyProgressively = useCallback(async (queries: string[]) => {
+    const run = ++intentRunRef.current;
+    const pending = queries.filter((q) => !(q.toLowerCase() in intentsRef.current));
+    if (pending.length === 0) return;
+
+    const chunks: string[][] = [pending.slice(0, PAGE_SIZE)];
+    for (let i = PAGE_SIZE; i < pending.length; i += INTENT_CHUNK_SIZE) {
+      chunks.push(pending.slice(i, i + INTENT_CHUNK_SIZE));
+    }
+    for (const chunk of chunks) {
+      if (intentRunRef.current !== run) return;
+      try {
+        const map = await classifyFanoutIntents(chunk);
+        if (intentRunRef.current !== run) return;
+        intentsRef.current = { ...intentsRef.current, ...map };
+        setIntents(intentsRef.current);
+      } catch {
+        // A failed/timed-out chunk must not kill the chain — its rows keep
+        // the "—" placeholder and the next chunk still gets its shot.
+      }
+    }
+  }, []);
+
   const load = useCallback(
     async (options?: { silent?: boolean }) => {
       const silent = options?.silent ?? false;
@@ -83,32 +125,7 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
       try {
         const result = await getQueryFanout(brandId, { days: 30 });
         setData(result);
-        const queries = result.subQueries.map((s) => s.query);
-        if (queries.length > 0) {
-          const intentPromise = classifyFanoutIntents(queries);
-          const intentResult = await Promise.race<
-            | { status: 'resolved'; map: Record<string, string> }
-            | { status: 'failed' }
-            | { status: 'timeout' }
-          >([
-            intentPromise
-              .then((map) => ({ status: 'resolved' as const, map }))
-              .catch(() => ({ status: 'failed' as const })),
-            new Promise<{ status: 'timeout' }>((resolve) =>
-              setTimeout(() => resolve({ status: 'timeout' }), INTENT_INITIAL_LOAD_TIMEOUT_MS),
-            ),
-          ]);
-
-          if (intentResult.status === 'resolved') {
-            setIntents((prev) => ({ ...prev, ...intentResult.map }));
-          } else if (intentResult.status === 'timeout') {
-            // Keep first paint bounded on cold/slow classifications; fill badges
-            // when the original batch resolves instead of issuing a second call.
-            intentPromise
-              .then((map) => setIntents((prev) => ({ ...prev, ...map })))
-              .catch(() => {});
-          }
-        }
+        void classifyProgressively(result.subQueries.map((s) => s.query));
       } catch (err) {
         console.error('[fanout] load failed', err);
         toast.error(userErrorMessage(err, 'Failed to load query fan-out — please retry.'));
@@ -119,10 +136,14 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
         }
       }
     },
-    [brandId],
+    [brandId, classifyProgressively],
   );
   useEffect(() => {
     load();
+    // Cancel the in-flight classification chain on unmount/brand switch.
+    return () => {
+      intentRunRef.current += 1;
+    };
   }, [load]);
 
   useEffect(() => {
