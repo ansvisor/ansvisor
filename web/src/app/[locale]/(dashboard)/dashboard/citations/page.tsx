@@ -20,6 +20,7 @@ import {
   Loader2,
   Info,
   Plus,
+  Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -48,6 +49,7 @@ import {
   ComboboxTrigger,
   ComboboxValue,
 } from '@/components/ui/combobox';
+import { toCsv } from '@/lib/csv';
 import type { Topic } from '@/types';
 import { SOURCE_CATEGORY_LABELS, type SourceCategory } from '@/lib/citations/classify';
 import { getFaviconUrl } from '@/lib/favicon';
@@ -1311,6 +1313,22 @@ function getDateRange(
   return { dateFrom: from.toISOString() };
 }
 
+function triggerDownload(csv: string, filename: string) {
+  const blob = new Blob([csv], {
+    type: 'text/csv;charset=utf-8;',
+  });
+
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download = filename;
+  link.click();
+
+  URL.revokeObjectURL(url);
+}
+
 export default function CitationsPage() {
   const t = useTranslations('citations');
   const { getActiveBrand } = useBrandStore();
@@ -1324,6 +1342,7 @@ export default function CitationsPage() {
   const domainPager = usePagination(data?.rows?.length ?? 0, filterKey);
   const urlPager = usePagination(data?.urlRows?.length ?? 0, filterKey);
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [prompts, setPrompts] = useState<PromptOption[]>([]);
   const [availablePlatforms, setAvailablePlatforms] = useState<PlatformOption[]>([]);
@@ -1469,6 +1488,69 @@ export default function CitationsPage() {
     [totals, t],
   );
 
+  const handleExportCsv = useCallback(() => {
+    if (!brand || !data) return;
+
+    setIsExporting(true);
+
+    try {
+      const date = new Date().toISOString().slice(0, 10);
+      const slug = brand.slug ?? 'brand';
+
+      if (sourceTab === 'domains') {
+        const DOMAIN_HEADERS = [
+          'domain',
+          'category',
+          'total_citations',
+          'results_citing',
+          'usage_pct',
+          'models',
+        ];
+
+        const rows = (data.rows ?? []).map((r) => ({
+          domain: r.domain,
+          category: r.category,
+          total_citations: r.totalCitations,
+          results_citing: r.resultsCiting,
+          usage_pct: r.usagePct,
+          models: r.models.join(', '),
+        }));
+
+        const csv = toCsv(rows, DOMAIN_HEADERS);
+
+        triggerDownload(csv, `ansvisor_${slug}_citations_domains_${date}.csv`);
+      } else if (sourceTab === 'urls') {
+        const URL_HEADERS = [
+          'url',
+          'domain',
+          'category',
+          'title',
+          'total_citations',
+          'results_citing',
+          'usage_pct',
+        ];
+
+        const rows = (data.urlRows ?? []).map((r) => ({
+          url: r.url,
+          domain: r.domain,
+          category: r.category,
+          title: r.title ?? '',
+          total_citations: r.totalCitations,
+          results_citing: r.resultsCiting,
+          usage_pct: r.usagePct,
+        }));
+
+        const csv = toCsv(rows, URL_HEADERS);
+
+        triggerDownload(csv, `ansvisor_${slug}_citations_urls_${date}.csv`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to export CSV');
+    } finally {
+      setIsExporting(false);
+    }
+  }, [brand, data, sourceTab]);
+
   if (!brand) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -1486,6 +1568,20 @@ export default function CitationsPage() {
           <h1 className="text-2xl font-bold">{t('title')}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{t('description')}</p>
         </div>
+        <Button
+          variant="outline"
+          className="gap-2"
+          onClick={handleExportCsv}
+          disabled={isExporting || sourceTab === 'gaps' || isLoading}
+        >
+          {isExporting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="h-4 w-4" />
+          )}
+
+          {isExporting ? 'Exporting...' : 'Export CSV'}
+        </Button>
       </div>
 
       <FilterBar
