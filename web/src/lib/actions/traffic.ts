@@ -54,40 +54,94 @@ function getDateRange(days: number): {
   return { from, to, prevFrom, prevTo };
 }
 
+/**
+ * PostgREST silently caps un-paginated selects at 1000 rows, which froze the
+ * visits KPI at 1000 and truncated every breakdown on busy brands (#450).
+ * Totals come from exact count queries; the breakdown/trend scans page
+ * through the window with deterministic ordering and a hard ceiling so a
+ * pathological brand can't pin the server action.
+ */
+const TRAFFIC_PAGE_SIZE = 1000;
+const TRAFFIC_MAX_ROWS = 50_000;
+
+async function scanTrafficLogs(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  window: { columns: string; from: string; to?: string },
+  onRow: (row: Record<string, unknown>) => void,
+): Promise<void> {
+  for (let start = 0; start < TRAFFIC_MAX_ROWS; start += TRAFFIC_PAGE_SIZE) {
+    let query = supabase
+      .from('ai_traffic_logs')
+      .select(window.columns)
+      .eq('brand_id', brandId)
+      .gte('created_at', window.from)
+      // Deterministic order so .range() pages don't shuffle between requests.
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(start, start + TRAFFIC_PAGE_SIZE - 1);
+    if (window.to) query = query.lt('created_at', window.to);
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+
+    const batch = (data ?? []) as unknown as Record<string, unknown>[];
+    for (const row of batch) onRow(row);
+    if (batch.length < TRAFFIC_PAGE_SIZE) break;
+  }
+}
+
 export async function getTrafficSummary(brandId: string, days = 7): Promise<TrafficSummary> {
   const supabase = await createClient();
   const { from, prevFrom, prevTo } = getDateRange(days);
 
-  // Current period
-  const { data: current } = await supabase
-    .from('ai_traffic_logs')
-    .select('source_platform, url')
-    .eq('brand_id', brandId)
-    .gte('created_at', from);
+  // Exact totals — count queries transfer no rows and are immune to the cap.
+  const countVisits = async (fromTs: string, toTs?: string) => {
+    let query = supabase
+      .from('ai_traffic_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand_id', brandId)
+      .gte('created_at', fromTs);
+    if (toTs) query = query.lt('created_at', toTs);
+    const { count, error } = await query;
+    if (error) throw new Error(error.message);
+    return count ?? 0;
+  };
 
-  // Previous period
-  const { data: previous } = await supabase
-    .from('ai_traffic_logs')
-    .select('source_platform, url')
-    .eq('brand_id', brandId)
-    .gte('created_at', prevFrom)
-    .lt('created_at', prevTo);
-
-  const rows = current ?? [];
-  const prevRows = previous ?? [];
-
-  // Platform breakdown
+  // Platform breakdown + top pages, aggregated per batch.
   const platformMap = new Map<string, number>();
   const platformMapPrev = new Map<string, number>();
+  const pageMap = new Map<string, number>();
+  const pageMapPrev = new Map<string, number>();
 
-  for (const r of rows) {
-    const p = (r.source_platform as string) || 'unknown';
-    platformMap.set(p, (platformMap.get(p) ?? 0) + 1);
-  }
-  for (const r of prevRows) {
-    const p = (r.source_platform as string) || 'unknown';
-    platformMapPrev.set(p, (platformMapPrev.get(p) ?? 0) + 1);
-  }
+  const aggregate = (platforms: Map<string, number>, pages: Map<string, number>) => {
+    return (r: Record<string, unknown>) => {
+      const p = (r.source_platform as string) || 'unknown';
+      platforms.set(p, (platforms.get(p) ?? 0) + 1);
+
+      const url = r.url as string;
+      let key = url;
+      try {
+        key = new URL(url).pathname;
+      } catch {
+        // Not a parseable URL — bucket by the raw value.
+      }
+      pages.set(key, (pages.get(key) ?? 0) + 1);
+    };
+  };
+
+  const columns = 'source_platform, url, created_at, id';
+  const [totalVisits, totalVisitsPrev] = await Promise.all([
+    countVisits(from),
+    countVisits(prevFrom, prevTo),
+    scanTrafficLogs(supabase, brandId, { columns, from }, aggregate(platformMap, pageMap)),
+    scanTrafficLogs(
+      supabase,
+      brandId,
+      { columns, from: prevFrom, to: prevTo },
+      aggregate(platformMapPrev, pageMapPrev),
+    ),
+  ]);
 
   const allPlatforms = new Set([...platformMap.keys(), ...platformMapPrev.keys()]);
   const platformBreakdown = Array.from(allPlatforms)
@@ -97,29 +151,6 @@ export async function getTrafficSummary(brandId: string, days = 7): Promise<Traf
       visitsPrev: platformMapPrev.get(platform) ?? 0,
     }))
     .sort((a, b) => b.visits - a.visits);
-
-  // Top pages
-  const pageMap = new Map<string, number>();
-  const pageMapPrev = new Map<string, number>();
-
-  for (const r of rows) {
-    const url = r.url as string;
-    try {
-      const path = new URL(url).pathname;
-      pageMap.set(path, (pageMap.get(path) ?? 0) + 1);
-    } catch {
-      pageMap.set(url, (pageMap.get(url) ?? 0) + 1);
-    }
-  }
-  for (const r of prevRows) {
-    const url = r.url as string;
-    try {
-      const path = new URL(url).pathname;
-      pageMapPrev.set(path, (pageMapPrev.get(path) ?? 0) + 1);
-    } catch {
-      pageMapPrev.set(url, (pageMapPrev.get(url) ?? 0) + 1);
-    }
-  }
 
   const topPages = Array.from(pageMap.entries())
     .map(([url, visits]) => ({
@@ -131,8 +162,8 @@ export async function getTrafficSummary(brandId: string, days = 7): Promise<Traf
     .slice(0, 10);
 
   return {
-    totalVisits: rows.length,
-    totalVisitsPrev: prevRows.length,
+    totalVisits,
+    totalVisitsPrev,
     platformBreakdown,
     topPages,
   };
@@ -142,28 +173,24 @@ export async function getTrafficTrend(brandId: string, days = 7): Promise<Traffi
   const supabase = await createClient();
   const from = new Date(Date.now() - days * 86400000).toISOString();
 
-  const { data } = await supabase
-    .from('ai_traffic_logs')
-    .select('source_platform, created_at')
-    .eq('brand_id', brandId)
-    .gte('created_at', from)
-    .order('created_at', { ascending: true });
-
-  const rows = data ?? [];
-
-  // Group by day + platform
+  // Group by day + platform, aggregated per batch (#450).
   const dayMap = new Map<string, Map<string, number>>();
   const allPlatforms = new Set<string>();
 
-  for (const r of rows) {
-    const day = (r.created_at as string).slice(0, 10);
-    const platform = (r.source_platform as string) || 'unknown';
-    allPlatforms.add(platform);
+  await scanTrafficLogs(
+    supabase,
+    brandId,
+    { columns: 'source_platform, created_at, id', from },
+    (r) => {
+      const day = (r.created_at as string).slice(0, 10);
+      const platform = (r.source_platform as string) || 'unknown';
+      allPlatforms.add(platform);
 
-    if (!dayMap.has(day)) dayMap.set(day, new Map());
-    const dm = dayMap.get(day)!;
-    dm.set(platform, (dm.get(platform) ?? 0) + 1);
-  }
+      if (!dayMap.has(day)) dayMap.set(day, new Map());
+      const dm = dayMap.get(day)!;
+      dm.set(platform, (dm.get(platform) ?? 0) + 1);
+    },
+  );
 
   // Fill missing days
   const result: TrafficTrendPoint[] = [];
