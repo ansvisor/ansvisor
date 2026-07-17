@@ -209,8 +209,8 @@ export async function getTrafficLogs(
   }
 
   if (search) {
-    // Escape % and _ for ILIKE to treat them as literals, not wildcards
-    const escaped = search.replace(/[%_]/g, '\\$&');
+    // Escape \, % and _ for ILIKE to treat them as literals, not wildcards
+    const escaped = search.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
     query = query.ilike('url', `%${escaped}%`);
   }
 

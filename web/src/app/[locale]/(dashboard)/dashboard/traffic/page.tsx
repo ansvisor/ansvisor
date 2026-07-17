@@ -224,15 +224,10 @@ function TrafficFilterBar({
           value={searchInput}
           onChange={(e) => onSearchInputChange(e.target.value)}
           className="pl-9 h-9 text-sm"
-          disabled={isLoading}
         />
       </div>
 
-      <Select
-        value={filters.platform || ''}
-        onValueChange={(v) => onChange({ platform: v || '' })}
-        disabled={isLoading}
-      >
+      <Select value={filters.platform || ''} onValueChange={(v) => onChange({ platform: v || '' })}>
         <SelectTrigger className="w-40 h-9 text-sm">
           <SelectValue placeholder="All platforms" />
         </SelectTrigger>
@@ -363,13 +358,22 @@ export default function TrafficPage() {
 
   useEffect(() => {
     setPage(0);
-  }, [filters.platform, filters.search]);
+    setSearchInput('');
+    setFilters({ platform: '', search: '' });
+  }, [brand?.id]);
 
   useEffect(() => {
     const id = window.setTimeout(() => {
-      setFilters((prevFilters) =>
-        prevFilters.search === searchInput ? prevFilters : { ...prevFilters, search: searchInput },
-      );
+      setFilters((prevFilters) => {
+        if (prevFilters.search === searchInput) {
+          return prevFilters;
+        }
+        setPage(0);
+        return {
+          ...prevFilters,
+          search: searchInput,
+        };
+      });
     }, 300);
 
     return () => window.clearTimeout(id);
@@ -409,6 +413,7 @@ export default function TrafficPage() {
   }, [brand, page, filters.platform, filters.search]);
 
   const handleFiltersChange = useCallback((patch: Partial<TrafficFilters>) => {
+    setPage(0);
     setFilters((f) => ({ ...f, ...patch }));
   }, []);
 
