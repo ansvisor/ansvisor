@@ -183,16 +183,43 @@ export async function getTrafficTrend(brandId: string, days = 7): Promise<Traffi
 
 export async function getTrafficLogs(
   brandId: string,
-  opts?: { limit?: number; offset?: number },
+  opts?: {
+    limit?: number;
+    offset?: number;
+    platform?: string;
+    search?: string;
+    days?: number;
+  },
 ): Promise<{ logs: TrafficLog[]; total: number }> {
   const supabase = await createClient();
   const limit = opts?.limit ?? 20;
   const offset = opts?.offset ?? 0;
+  const platform = opts?.platform;
+  const search = opts?.search;
+  const days = opts?.days;
 
-  const { data, error, count } = await supabase
+  let query = supabase
     .from('ai_traffic_logs')
     .select('*', { count: 'exact' })
-    .eq('brand_id', brandId)
+    .eq('brand_id', brandId);
+
+  // Apply filters
+  if (platform) {
+    query = query.eq('source_platform', platform);
+  }
+
+  if (search) {
+    // Escape % and _ for ILIKE to treat them as literals, not wildcards
+    const escaped = search.replace(/[%_]/g, '\\$&');
+    query = query.ilike('url', `%${escaped}%`);
+  }
+
+  if (days) {
+    const from = new Date(Date.now() - days * 86400000).toISOString();
+    query = query.gte('created_at', from);
+  }
+
+  const { data, error, count } = await query
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 

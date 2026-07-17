@@ -45,9 +45,22 @@ import {
   Code,
   Copy,
   Check,
+  Search,
+  X,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+const PAGE_SIZE = 10;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -177,6 +190,160 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
+// ─── Filter Bar ───────────────────────────────────────────────────────────────
+
+interface TrafficFilters {
+  platform: string;
+  search: string;
+}
+
+function TrafficFilterBar({
+  searchInput,
+  onSearchInputChange,
+  filters,
+  onChange,
+  platforms,
+  isLoading,
+}: {
+  searchInput: string;
+  onSearchInputChange: (value: string) => void;
+  filters: TrafficFilters;
+  onChange: (patch: Partial<TrafficFilters>) => void;
+  platforms: string[];
+  isLoading: boolean;
+}) {
+  const hasActiveFilters = filters.platform || filters.search;
+
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="relative flex-1 min-w-[240px]">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+        <Input
+          type="text"
+          placeholder="Search by URL or path..."
+          value={searchInput}
+          onChange={(e) => onSearchInputChange(e.target.value)}
+          className="pl-9 h-9 text-sm"
+          disabled={isLoading}
+        />
+      </div>
+
+      <Select
+        value={filters.platform || ''}
+        onValueChange={(v) => onChange({ platform: v || '' })}
+        disabled={isLoading}
+      >
+        <SelectTrigger className="w-40 h-9 text-sm">
+          <SelectValue placeholder="All platforms" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">All platforms</SelectItem>
+          {platforms.map((p) => (
+            <SelectItem key={p} value={p}>
+              {getPlatformName(p)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {hasActiveFilters && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 gap-2"
+          onClick={() => {
+            onSearchInputChange('');
+            onChange({ platform: '', search: '' });
+          }}
+          disabled={isLoading}
+        >
+          <X className="h-3.5 w-3.5" />
+          Clear filters
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// ─── Pagination ───────────────────────────────────────────────────────────────
+
+function TablePager({
+  page,
+  totalPages,
+  total,
+  start,
+  end,
+  onPage,
+  isLoading,
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  start: number;
+  end: number;
+  onPage: (p: number) => void;
+  isLoading: boolean;
+}) {
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="flex items-center justify-between border-t px-4 py-3">
+      <span className="text-xs text-muted-foreground tabular-nums">
+        {start + 1}–{end} of {total}
+      </span>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 px-3 text-xs"
+          disabled={page === 0 || isLoading}
+          onClick={() => onPage(page - 1)}
+        >
+          Previous
+        </Button>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {page + 1} / {totalPages}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 px-3 text-xs"
+          disabled={page >= totalPages - 1 || isLoading}
+          onClick={() => onPage(page + 1)}
+        >
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Empty State ──────────────────────────────────────────────────────────────
+
+function EmptyLogsState({ hasFilters }: { hasFilters: boolean }) {
+  if (hasFilters) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <Search className="h-10 w-10 text-muted-foreground/40 mb-3" />
+        <h3 className="text-sm font-medium">No matching visits</h3>
+        <p className="text-xs text-muted-foreground mt-1 max-w-md">
+          Try adjusting your filters or search terms.
+        </p>
+      </div>
+    );
+  } else {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <LayoutList className="h-10 w-10 text-muted-foreground/40 mb-3" />
+        <h3 className="text-sm font-medium">No visits yet</h3>
+        <p className="text-xs text-muted-foreground mt-1 max-w-md">
+          Once visitors arrive from AI platforms, their visits will appear here.
+        </p>
+      </div>
+    );
+  }
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function TrafficPage() {
@@ -187,31 +354,71 @@ export default function TrafficPage() {
   const [trend, setTrend] = useState<TrafficTrendPoint[]>([]);
   const [logs, setLogs] = useState<TrafficLog[]>([]);
   const [logsTotal, setLogsTotal] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingSummary, setIsLoadingSummary] = useState(true);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
 
-  const load = useCallback(async () => {
+  const [filters, setFilters] = useState<TrafficFilters>({ platform: '', search: '' });
+  const [searchInput, setSearchInput] = useState(filters.search);
+  const [page, setPage] = useState(0);
+
+  useEffect(() => {
+    setPage(0);
+  }, [filters.platform, filters.search]);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      setFilters((prevFilters) =>
+        prevFilters.search === searchInput ? prevFilters : { ...prevFilters, search: searchInput },
+      );
+    }, 300);
+
+    return () => window.clearTimeout(id);
+  }, [searchInput]);
+
+  const loadSummary = useCallback(async () => {
     if (!brand) return;
-    setIsLoading(true);
+    setIsLoadingSummary(true);
     try {
-      const [s, t, l] = await Promise.all([
-        getTrafficSummary(brand.id),
-        getTrafficTrend(brand.id),
-        getTrafficLogs(brand.id, { limit: 10 }),
-      ]);
+      const [s, t] = await Promise.all([getTrafficSummary(brand.id), getTrafficTrend(brand.id)]);
       setSummary(s);
       setTrend(t);
-      setLogs(l.logs);
-      setLogsTotal(l.total);
     } catch (err) {
-      console.error('Failed to load traffic data:', err);
+      console.error('Failed to load traffic summary:', err);
     } finally {
-      setIsLoading(false);
+      setIsLoadingSummary(false);
     }
   }, [brand]);
 
+  const loadLogs = useCallback(async () => {
+    if (!brand) return;
+    setIsLoadingLogs(true);
+    try {
+      const result = await getTrafficLogs(brand.id, {
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+        platform: filters.platform || undefined,
+        search: filters.search || undefined,
+      });
+      setLogs(result.logs);
+      setLogsTotal(result.total);
+    } catch (err) {
+      console.error('Failed to load traffic logs:', err);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  }, [brand, page, filters.platform, filters.search]);
+
+  const handleFiltersChange = useCallback((patch: Partial<TrafficFilters>) => {
+    setFilters((f) => ({ ...f, ...patch }));
+  }, []);
+
   useEffect(() => {
-    load();
-  }, [load]);
+    loadSummary();
+  }, [loadSummary]);
+
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
 
   if (!brand) {
     return (
@@ -226,7 +433,7 @@ export default function TrafficPage() {
 
   const primaryDomain = brand.domains.find((d) => d.isPrimary)?.domain ?? brand.domains[0]?.domain;
 
-  if (isLoading) {
+  if (isLoadingSummary) {
     return (
       <div className="space-y-6">
         <div>
@@ -418,60 +625,101 @@ export default function TrafficPage() {
             </Card>
           </div>
 
-          {/* Recent Visit Log */}
+          {/* Recent Visit Log with filtering and pagination*/}
           <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <LayoutList className="h-4 w-4 text-muted-foreground" />
-                  <CardTitle className="text-sm font-medium">Recent AI Referral Visits</CardTitle>
+            <CardHeader className="pb-3">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <LayoutList className="h-4 w-4 text-muted-foreground" />
+                    <CardTitle className="text-sm font-medium">Recent AI Referral Visits</CardTitle>
+                  </div>
+                  {logsTotal > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {logsTotal} total
+                    </Badge>
+                  )}
                 </div>
-                {logsTotal > 10 && (
-                  <Badge variant="secondary" className="text-xs">
-                    {logsTotal} total
-                  </Badge>
-                )}
+                <TrafficFilterBar
+                  filters={filters}
+                  searchInput={searchInput}
+                  onSearchInputChange={setSearchInput}
+                  onChange={handleFiltersChange}
+                  platforms={summary?.platformBreakdown.map((p) => p.platform) ?? []}
+                  isLoading={isLoadingLogs}
+                />
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="pl-6 w-[100px]">Time</TableHead>
-                    <TableHead>Platform</TableHead>
-                    <TableHead>Page</TableHead>
-                    <TableHead className="text-right pr-6">Country</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {logs.map((row) => (
-                    <TableRow key={row.id} className="hover:bg-muted/50">
-                      <TableCell className="pl-6 text-xs text-muted-foreground whitespace-nowrap">
-                        {timeAgo(row.createdAt)}
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm">
-                          {getPlatformName(row.sourcePlatform ?? 'unknown')}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-mono text-xs text-muted-foreground line-clamp-1">
-                          {(() => {
-                            try {
-                              return new URL(row.url).pathname;
-                            } catch {
-                              return row.url;
-                            }
-                          })()}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right pr-6">
-                        <span className="text-xs text-muted-foreground">{row.country ?? '—'}</span>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              {isLoadingLogs ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : (filters.platform || filters.search) && logs.length === 0 ? (
+                <EmptyLogsState hasFilters={true} />
+              ) : logs.length === 0 ? (
+                <EmptyLogsState hasFilters={false} />
+              ) : (
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="pl-6 w-[100px]">Time</TableHead>
+                        <TableHead>Platform</TableHead>
+                        <TableHead>Page</TableHead>
+                        <TableHead className="text-right pr-6">Country</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {logs.map((row) => (
+                        <TableRow key={row.id} className="hover:bg-muted/50">
+                          <TableCell className="pl-6 text-xs text-muted-foreground whitespace-nowrap">
+                            {timeAgo(row.createdAt)}
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm">
+                              {getPlatformName(row.sourcePlatform ?? 'unknown')}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="font-mono text-xs text-muted-foreground line-clamp-1">
+                              {(() => {
+                                try {
+                                  return new URL(row.url).pathname;
+                                } catch {
+                                  return row.url;
+                                }
+                              })()}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right pr-6">
+                            <span className="text-xs text-muted-foreground">
+                              {row.country ?? '—'}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {(() => {
+                    const totalPages = Math.max(1, Math.ceil(logsTotal / PAGE_SIZE));
+                    const clampedPage = Math.min(page, totalPages - 1);
+                    const start = clampedPage * PAGE_SIZE;
+                    const end = Math.min(start + PAGE_SIZE, logsTotal);
+                    return (
+                      <TablePager
+                        page={clampedPage}
+                        totalPages={totalPages}
+                        total={logsTotal}
+                        start={start}
+                        end={end}
+                        onPage={setPage}
+                        isLoading={isLoadingLogs}
+                      />
+                    );
+                  })()}
+                </>
+              )}
             </CardContent>
           </Card>
         </>
