@@ -146,6 +146,8 @@ interface UpdateBrandInput {
   logoUrl?: string | null;
   industry?: string | null;
   description?: string | null;
+  region?: string;
+  language?: string;
 }
 
 export async function updateBrand(id: string, updates: UpdateBrandInput): Promise<Brand> {
@@ -159,6 +161,8 @@ export async function updateBrand(id: string, updates: UpdateBrandInput): Promis
   if ('logoUrl' in updates) payload.logo_url = updates.logoUrl ?? null;
   if ('industry' in updates) payload.industry = updates.industry ?? null;
   if ('description' in updates) payload.description = updates.description ?? null;
+  if (updates.region !== undefined) payload.region = updates.region;
+  if (updates.language !== undefined) payload.language = updates.language;
 
   const { data, error } = await supabase
     .from('brands')

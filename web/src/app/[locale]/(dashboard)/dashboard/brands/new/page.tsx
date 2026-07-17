@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { createBrand } from '@/lib/actions/brand';
+import { createBrand, updateBrand } from '@/lib/actions/brand';
+import { syncDomains } from '@/lib/actions/brand-domain';
 import { createTopics } from '@/lib/actions/topic';
 import { savePromptSet } from '@/lib/actions/prompt';
 import { addCompetitor } from '@/lib/actions/competitor';
@@ -215,7 +216,7 @@ const TOTAL_STEPS = 5;
 
 export default function NewBrandPage() {
   const router = useRouter();
-  const { addBrand, setActiveBrand } = useBrandStore();
+  const { addBrand, setActiveBrand, updateBrand: updateBrandInStore } = useBrandStore();
 
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -238,6 +239,7 @@ export default function NewBrandPage() {
   const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
   const [customTopic, setCustomTopic] = useState('');
   const [loadingTopics, setLoadingTopics] = useState(false);
+  const [topicSuggestError, setTopicSuggestError] = useState(false);
   const [topicLoadingMsg, setTopicLoadingMsg] = useState('');
   const topicMsgIdx = useRef(0);
 
@@ -269,6 +271,7 @@ export default function NewBrandPage() {
   }
   const [suggestedCompetitors, setSuggestedCompetitors] = useState<CompetitorItem[]>([]);
   const [loadingCompetitors, setLoadingCompetitors] = useState(false);
+  const [competitorSuggestError, setCompetitorSuggestError] = useState(false);
   const [competitorName, setCompetitorName] = useState('');
   const [competitorDomain, setCompetitorDomain] = useState('');
   const [savingCompetitors, setSavingCompetitors] = useState(false);
@@ -353,35 +356,60 @@ export default function NewBrandPage() {
   const handleCreateBrand = async () => {
     setIsLoading(true);
     try {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user.id)
-        .single();
-
-      if (!profile?.organization_id) throw new Error('No organization found');
-
       const logoUrl = domain ? getFaviconUrl(domain) : undefined;
 
-      const brand = await createBrand({
-        organizationId: profile.organization_id,
-        name: brandName.trim(),
-        logoUrl,
-        description: description.trim() || undefined,
-        region,
-        language,
-        domains: domain ? [{ domain, isPrimary: true }] : [],
-      });
+      // Back → Continue must not create a second brand (#447): once the brand
+      // exists, re-submitting this step updates it in place instead.
+      if (createdBrand) {
+        let brand = await updateBrand(createdBrand.id, {
+          name: brandName.trim(),
+          logoUrl: logoUrl ?? null,
+          description: description.trim() || null,
+          region,
+          language,
+        });
 
-      setCreatedBrand(brand);
-      addBrand(brand);
-      setActiveBrand(brand.id);
+        const previousDomain =
+          createdBrand.domains.find((d) => d.isPrimary)?.domain ?? createdBrand.domains[0]?.domain;
+        if (domain !== (previousDomain ?? '')) {
+          const domains = await syncDomains(
+            createdBrand.id,
+            domain ? [{ domain, isPrimary: true }] : [],
+          );
+          brand = { ...brand, domains };
+        }
+
+        setCreatedBrand(brand);
+        updateBrandInStore(brand.id, brand);
+      } else {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('organization_id')
+          .eq('id', user.id)
+          .single();
+
+        if (!profile?.organization_id) throw new Error('No organization found');
+
+        const brand = await createBrand({
+          organizationId: profile.organization_id,
+          name: brandName.trim(),
+          logoUrl,
+          description: description.trim() || undefined,
+          region,
+          language,
+          domains: domain ? [{ domain, isPrimary: true }] : [],
+        });
+
+        setCreatedBrand(brand);
+        addBrand(brand);
+        setActiveBrand(brand.id);
+      }
 
       setStep(3);
 
@@ -389,7 +417,7 @@ export default function NewBrandPage() {
         fetchTopicSuggestions();
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create brand');
+      toast.error(err instanceof Error ? err.message : 'Failed to save brand');
     } finally {
       setIsLoading(false);
     }
@@ -399,6 +427,7 @@ export default function NewBrandPage() {
 
   const fetchTopicSuggestions = async () => {
     setLoadingTopics(true);
+    setTopicSuggestError(false);
     try {
       const supabase = createClient();
       const {
@@ -427,8 +456,10 @@ export default function NewBrandPage() {
       setSuggestedTopics(names);
       setSelectedTopics(new Set(names.slice(0, 7)));
     } catch (err) {
+      // Inline banner + Try again instead of a transient toast (#447) — a
+      // toast leaves the user stranded on an empty step with no way forward.
       console.error('Topic suggestion error:', err);
-      toast.error('Failed to generate topic suggestions');
+      setTopicSuggestError(true);
     } finally {
       setLoadingTopics(false);
     }
@@ -550,6 +581,7 @@ export default function NewBrandPage() {
 
   const fetchCompetitorSuggestions = async () => {
     setLoadingCompetitors(true);
+    setCompetitorSuggestError(false);
     try {
       const supabase = createClient();
       const {
@@ -582,7 +614,7 @@ export default function NewBrandPage() {
       );
     } catch (err) {
       console.error('Competitor suggestion error:', err);
-      toast.error('Failed to generate competitor suggestions');
+      setCompetitorSuggestError(true);
     } finally {
       setLoadingCompetitors(false);
     }
@@ -856,6 +888,16 @@ export default function NewBrandPage() {
                 </div>
               ) : (
                 <div className="space-y-2">
+                  {topicSuggestError && (
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+                      <span>
+                        Couldn&apos;t fetch topic suggestions right now — add your own below.
+                      </span>
+                      <Button variant="outline" size="sm" onClick={fetchTopicSuggestions}>
+                        Try again
+                      </Button>
+                    </div>
+                  )}
                   {suggestedTopics.map((topic) => {
                     const isSelected = selectedTopics.has(topic);
                     return (
@@ -1074,6 +1116,16 @@ export default function NewBrandPage() {
             </div>
           ) : (
             <div className="space-y-4">
+              {competitorSuggestError && (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+                  <span>
+                    Couldn&apos;t fetch competitor suggestions right now — add them manually below.
+                  </span>
+                  <Button variant="outline" size="sm" onClick={fetchCompetitorSuggestions}>
+                    Try again
+                  </Button>
+                </div>
+              )}
               {suggestedCompetitors.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
