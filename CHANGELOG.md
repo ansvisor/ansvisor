@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Prompts / Query Fan-out: the High frequency pager no longer renders one button per page — replaced with a windowed pager (`‹ 1 … n-1 n n+1 … last ›`) that caps at ~9 elements, preventing overflow on brands with hundreds of pages; Previous/Next chevron buttons added, disabled at boundaries; ellipsis shown as a non-interactive span; all page numbers shown without ellipsis when total pages ≤ 7 (#446)
+
+
 ## [0.1.6] - 2026-07-12
 
 ### Added
