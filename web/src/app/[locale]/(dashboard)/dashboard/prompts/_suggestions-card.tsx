@@ -92,7 +92,7 @@ export function SuggestionsCard({ brandId }: Props) {
   };
 
   return (
-    <Card>
+    <Card id="prompt-opportunities">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2">
