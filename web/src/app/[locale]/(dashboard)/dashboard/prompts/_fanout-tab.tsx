@@ -278,6 +278,20 @@ function EmptyState() {
   );
 }
 
+function getPagerItems(page: number, totalPages: number): (number | '...')[] {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+  const items: (number | '...')[] = [1];
+  if (page > 3) items.push('...');
+  for (let p = Math.max(2, page - 1); p <= Math.min(totalPages - 1, page + 1); p++) {
+    items.push(p);
+  }
+  if (page < totalPages - 2) items.push('...');
+  items.push(totalPages);
+  return items;
+}
+
 function HighFrequencyView({
   subQueries,
   intents,
@@ -337,20 +351,44 @@ function HighFrequencyView({
       </Table>
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-1 pt-4">
-          {Array.from({ length: totalPages }, (_, i) => {
-            const p = i + 1;
-            return (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0 text-xs"
+            onClick={() => onPageChange(page - 1)}
+            disabled={page === 1}
+          >
+            ‹
+          </Button>
+          {getPagerItems(page, totalPages).map((item, idx) =>
+            item === '...' ? (
+              <span
+                key={`ellipsis-${idx}`}
+                className="flex h-7 w-7 items-center justify-center text-xs text-muted-foreground"
+              >
+                …
+              </span>
+            ) : (
               <Button
-                key={p}
-                variant={page === p ? 'default' : 'ghost'}
+                key={item}
+                variant={page === item ? 'default' : 'ghost'}
                 size="sm"
                 className="h-7 w-7 p-0 text-xs"
-                onClick={() => onPageChange(p)}
+                onClick={() => onPageChange(item as number)}
               >
-                {p}
+                {item}
               </Button>
-            );
-          })}
+            ),
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0 text-xs"
+            onClick={() => onPageChange(page + 1)}
+            disabled={page === totalPages}
+          >
+            ›
+          </Button>
         </div>
       )}
     </>
