@@ -138,8 +138,20 @@ export interface TopicOverviewSummary {
  * Looks at last 30 days of prompt_results and derives visibility, mentions,
  * citations, SoV, top competitor and a short sparkline per topic.
  * Change is computed as (current 7d avg) - (previous 7d avg) to mirror
- * the logic used by Insights KPI cards.
+ * the logic used by Insights KPI cards. Like every analytical surface,
+ * chatgpt-shopping rows are excluded (#155) — totals here must agree with
+ * the Insights KPIs on the same 30d window (#464).
  */
+/**
+ * PostgREST silently caps un-paginated selects at 1000 rows, which sampled the
+ * topic aggregation on exactly the brands with the most data (#464) — page
+ * through the window instead, with a hard ceiling so a pathological brand
+ * can't pin the server action. Mirrors the citations scans (#430).
+ */
+const TOPIC_RESULTS_PAGE_SIZE = 1000;
+const TOPIC_RESULTS_MAX_ROWS = 50_000;
+const TOPIC_PROMPTS_MAX_ROWS = 10_000;
+
 export async function getTopicsOverview(brandId: string): Promise<TopicOverviewSummary> {
   const supabase = await createClient();
 
@@ -148,46 +160,45 @@ export async function getTopicsOverview(brandId: string): Promise<TopicOverviewS
   const curFrom = new Date(now - 7 * 24 * 60 * 60 * 1000).getTime();
   const prevFrom = new Date(now - 14 * 24 * 60 * 60 * 1000).getTime();
 
-  const [topicsRes, promptsRes, resultsRes] = await Promise.all([
+  const [topicsRes, setsRes] = await Promise.all([
     supabase
       .from('topics')
       .select('id, name, created_at')
       .eq('brand_id', brandId)
       .eq('is_active', true)
       .order('created_at', { ascending: true }),
-    supabase.from('prompts').select('id, topic_id, prompt_set_id').eq('is_active', true),
-    supabase
-      .from('prompt_results')
-      .select(
-        'prompt_id, created_at, visibility_score, mention_count, citation_count, competitor_mentions',
-      )
-      .eq('brand_id', brandId)
-      .gte('created_at', since30d),
+    supabase.from('prompt_sets').select('id').eq('brand_id', brandId),
   ]);
 
   if (topicsRes.error) throw new Error(topicsRes.error.message);
-  if (promptsRes.error) throw new Error(promptsRes.error.message);
-  if (resultsRes.error) throw new Error(resultsRes.error.message);
+  if (setsRes.error) throw new Error(setsRes.error.message);
 
   const topics = (topicsRes.data ?? []) as {
     id: string;
     name: string;
     created_at: string;
   }[];
-  const allPrompts = (promptsRes.data ?? []) as unknown as {
-    id: string;
-    topic_id: string | null;
-    prompt_set_id: string;
-  }[];
-  const results = (resultsRes.data ?? []) as Record<string, unknown>[];
+  const brandSetIds = ((setsRes.data ?? []) as { id: string }[]).map((s) => s.id);
 
-  // Restrict prompts to those owned by this brand's prompt_sets
-  const { data: brandSets } = await supabase
-    .from('prompt_sets')
-    .select('id')
-    .eq('brand_id', brandId);
-  const brandSetIds = new Set(((brandSets ?? []) as { id: string }[]).map((s) => s.id));
-  const prompts = allPrompts.filter((p) => brandSetIds.has(p.prompt_set_id));
+  // Brand-scoped at the DB level (the old version fetched every org prompt and
+  // filtered client-side — the same silent-1000-cap trap for large orgs).
+  const prompts: { id: string; topic_id: string | null }[] = [];
+  if (brandSetIds.length > 0) {
+    for (let from = 0; from < TOPIC_PROMPTS_MAX_ROWS; from += TOPIC_RESULTS_PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from('prompts')
+        .select('id, topic_id')
+        .in('prompt_set_id', brandSetIds)
+        .eq('is_active', true)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, from + TOPIC_RESULTS_PAGE_SIZE - 1);
+      if (error) throw new Error(error.message);
+      const batch = (data ?? []) as { id: string; topic_id: string | null }[];
+      prompts.push(...batch);
+      if (batch.length < TOPIC_RESULTS_PAGE_SIZE) break;
+    }
+  }
 
   const promptTopicMap = new Map<string, string | null>();
   for (const p of prompts) promptTopicMap.set(p.id, p.topic_id);
@@ -239,13 +250,13 @@ export async function getTopicsOverview(brandId: string): Promise<TopicOverviewS
     promptCountByTopic.set(p.topic_id, (promptCountByTopic.get(p.topic_id) ?? 0) + 1);
   }
 
-  for (const row of results) {
+  const processRow = (row: Record<string, unknown>) => {
     const promptId = row.prompt_id as string;
     const topicId = promptTopicMap.get(promptId);
-    if (!topicId) continue;
+    if (!topicId) return;
 
     const agg = aggByTopic.get(topicId);
-    if (!agg) continue;
+    if (!agg) return;
 
     const createdAt = row.created_at as string;
     const ts = new Date(createdAt).getTime();
@@ -290,6 +301,28 @@ export async function getTopicsOverview(brandId: string): Promise<TopicOverviewS
       ec.sov += info.mentions;
       agg.competitors.set(compId, ec);
     }
+  };
+
+  // Paged scan over the 30-day window, aggregated per batch. Excludes
+  // chatgpt-shopping so the totals match the Insights aggregates (#155/#464).
+  for (let from = 0; from < TOPIC_RESULTS_MAX_ROWS; from += TOPIC_RESULTS_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('prompt_results')
+      .select(
+        'prompt_id, created_at, visibility_score, mention_count, citation_count, competitor_mentions',
+      )
+      .eq('brand_id', brandId)
+      .neq('platform', 'chatgpt-shopping')
+      .gte('created_at', since30d)
+      // Deterministic order so .range() pages don't shuffle between requests.
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + TOPIC_RESULTS_PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+
+    const batch = (data ?? []) as Record<string, unknown>[];
+    for (const row of batch) processRow(row);
+    if (batch.length < TOPIC_RESULTS_PAGE_SIZE) break;
   }
 
   const rows: TopicOverviewRow[] = topics.map((t) => {
