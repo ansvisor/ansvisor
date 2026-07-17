@@ -16,9 +16,10 @@ import {
 
 interface Props {
   brandId: string;
+  onAccepted?: () => void;
 }
 
-export function SuggestionsCard({ brandId }: Props) {
+export function SuggestionsCard({ brandId, onAccepted }: Props) {
   const [suggestions, setSuggestions] = useState<PromptSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -48,8 +49,14 @@ export function SuggestionsCard({ brandId }: Props) {
 
   useEffect(() => {
     setLoading(true);
-    load(true);
+    load(false);
   }, [load]);
+
+  useEffect(() => {
+    if (!loading && window.location.hash === '#prompt-opportunities') {
+      document.getElementById('prompt-opportunities')?.scrollIntoView();
+    }
+  }, [loading]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -70,6 +77,7 @@ export function SuggestionsCard({ brandId }: Props) {
       try {
         await acceptSuggestion(s.id);
         setSuggestions((prev) => prev.filter((x) => x.id !== s.id));
+        onAccepted?.();
         toast.success('Prompt added to your tracked list');
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to add');

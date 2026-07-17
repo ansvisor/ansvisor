@@ -582,7 +582,7 @@ export default function PromptsPage() {
 
         {/* ─── All Prompts tab ─────────────────────────────────────────── */}
         <TabsContent value="all" className="mt-4 space-y-4">
-          {activeBrandId && <SuggestionsCard brandId={activeBrandId} />}
+          {activeBrandId && <SuggestionsCard brandId={activeBrandId} onAccepted={loadData} />}
 
           {!loading && unanalyzedCount > 0 && (
             <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/50 dark:bg-amber-950/30">
