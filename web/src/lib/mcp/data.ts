@@ -998,7 +998,11 @@ export async function getCompetitorComparisonFor(
   const competitors = comp.by_competitor.map((c) => ({
     competitor_id: c.competitor_id,
     name: c.name && c.name.trim() !== '' ? c.name : c.competitor_id,
-    avg_visibility_score: c.row_count > 0 ? Math.round(Number(c.sum_visibility) / c.row_count) : 0,
+    // Same denominator as the brand's average (every filtered row, absence
+    // counts as 0) — mirrors getCompetitorComparison in actions/tracking.ts
+    // so the MCP surface ranks brands the same way the Insights page does.
+    avg_visibility_score:
+      comp.brand_row_count > 0 ? Math.round(Number(c.sum_visibility) / comp.brand_row_count) : 0,
     total_mentions: Number(c.total_mentions),
     total_citations: Number(c.total_citations),
     appearance_count: c.row_count,

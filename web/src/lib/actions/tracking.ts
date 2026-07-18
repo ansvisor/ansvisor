@@ -1219,13 +1219,23 @@ export async function getCompetitorComparison(
       ? prevWin.brand_sum_visibility / prevWin.brand_row_count
       : null;
 
+  // Competitor averages use the SAME denominator as the brand's — every
+  // filtered result row, not just the rows where the competitor happened to
+  // appear. A competitor absent from a response scores 0 for it, exactly
+  // like the brand does. Dividing by the appearance count instead graded
+  // competitors only on their best runs and could rank a rarely-seen
+  // competitor above a frequently-mentioned brand.
   const curCompAvg = new Map<string, number>();
-  for (const c of curWin?.by_competitor ?? []) {
-    if (c.row_count > 0) curCompAvg.set(c.competitor_id, c.sum_visibility / c.row_count);
+  if (curWin && curWin.brand_row_count > 0) {
+    for (const c of curWin.by_competitor) {
+      curCompAvg.set(c.competitor_id, c.sum_visibility / curWin.brand_row_count);
+    }
   }
   const prevCompAvg = new Map<string, number>();
-  for (const c of prevWin?.by_competitor ?? []) {
-    if (c.row_count > 0) prevCompAvg.set(c.competitor_id, c.sum_visibility / c.row_count);
+  if (prevWin && prevWin.brand_row_count > 0) {
+    for (const c of prevWin.by_competitor) {
+      prevCompAvg.set(c.competitor_id, c.sum_visibility / prevWin.brand_row_count);
+    }
   }
 
   const brandName = (brand?.name as string) ?? 'Your Brand';
@@ -1259,7 +1269,9 @@ export async function getCompetitorComparison(
   ];
 
   for (const c of agg.by_competitor) {
-    const avg = c.row_count > 0 ? Math.round(c.sum_visibility / c.row_count) : 0;
+    // Same-denominator rule as the window averages above (agg.brand_row_count
+    // is guaranteed > 0 by the early return).
+    const avg = Math.round(c.sum_visibility / agg.brand_row_count);
     entries.push({
       name: competitorDisplayName(c.name, c.competitor_id),
       avgVisibilityScore: avg,
@@ -1317,7 +1329,12 @@ export async function getCompetitorComparison(
     row[brandName] = bp && bp.count > 0 ? Math.round(bp.totalScore / bp.count) : 0;
     for (const [compName, pm] of compByProvider) {
       const cp = pm.get(provider);
-      row[compName] = cp && cp.count > 0 ? Math.round(cp.totalScore / cp.count) : 0;
+      // Same-denominator rule: divide by the provider bucket's total run
+      // count (the brand's, which spans every filtered row), not the
+      // competitor's appearance count. Competitor rows are a subset of the
+      // brand's, so bp always exists when cp does.
+      const denom = bp?.count ?? 0;
+      row[compName] = cp && denom > 0 ? Math.round(cp.totalScore / denom) : 0;
     }
     return row;
   });
