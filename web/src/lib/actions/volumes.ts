@@ -131,6 +131,9 @@ export async function getPromptVolumes(
     headers: {
       Authorization: `Bearer ${session.access_token}`,
     },
+    // A hung upstream must never pin this action — and with it the whole
+    // Prompts page load — until the platform kills it (#427 lesson).
+    signal: AbortSignal.timeout(15_000),
   });
 
   if (!res.ok) {

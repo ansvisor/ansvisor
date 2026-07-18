@@ -1204,6 +1204,19 @@ export type Database = {
         };
         Returns: number;
       };
+      prompt_visibility_summaries: {
+        Args: {
+          p_brand_id: string;
+          p_date_from?: string | null;
+        };
+        Returns: {
+          prompt_id: string;
+          avg_visibility: number;
+          total_mentions: number;
+          runs: number;
+          last_run_at: string;
+        }[];
+      };
       competitor_aggregates: {
         Args: {
           p_brand_id: string;

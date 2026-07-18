@@ -67,6 +67,9 @@ export async function getPromptSuggestions(
   const res = await fetch(`${AEO_SERVER_URL}/api/prompts/suggestions/${brandId}`, {
     headers: { Authorization: `Bearer ${session.access_token}` },
     cache: 'no-store',
+    // Read-only cache lookup — a hung upstream must not pin the suggestions
+    // card (and the serialized server-action queue behind it) indefinitely.
+    signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

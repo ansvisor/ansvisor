@@ -1009,51 +1009,25 @@ export async function getPromptVisibilitySummaries(
   const days = opts?.days ?? 30;
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-  // #155 — visibility summary per prompt; exclude chatgpt-shopping to
-  // match the aggregate-RPC filters one level up.
-  const { data, error } = await supabase
-    .from('prompt_results')
-    .select('prompt_id, visibility_score, mention_count, created_at')
-    .eq('brand_id', brandId)
-    .neq('platform', 'chatgpt-shopping')
-    .gte('created_at', since);
+  // One GROUP BY in Postgres (migration 00025) instead of pulling the raw
+  // result window into JS: the old un-paginated select silently capped at
+  // 1000 rows (wrong health columns on busy brands — the #430/#464 defect
+  // family) and its transfer cost slowed the Prompts page's first load.
+  // The RPC excludes chatgpt-shopping (#155) like every analytical surface.
+  const { data, error } = await supabase.rpc('prompt_visibility_summaries', {
+    p_brand_id: brandId,
+    p_date_from: since,
+  });
 
   if (error) throw new Error(error.message);
 
-  const acc: Record<
-    string,
-    { sumVis: number; sumMentions: number; runs: number; lastRunAt: string }
-  > = {};
-
-  for (const r of (data ?? []) as Record<string, unknown>[]) {
-    const pid = r.prompt_id as string;
-    if (!pid) continue;
-    const vis = (r.visibility_score as number) ?? 0;
-    const mentions = (r.mention_count as number) ?? 0;
-    const createdAt = r.created_at as string;
-    const existing = acc[pid];
-    if (existing) {
-      existing.sumVis += vis;
-      existing.sumMentions += mentions;
-      existing.runs += 1;
-      if (createdAt > existing.lastRunAt) existing.lastRunAt = createdAt;
-    } else {
-      acc[pid] = {
-        sumVis: vis,
-        sumMentions: mentions,
-        runs: 1,
-        lastRunAt: createdAt,
-      };
-    }
-  }
-
   const result: Record<string, PromptVisibilitySummary> = {};
-  for (const [pid, v] of Object.entries(acc)) {
-    result[pid] = {
-      avgVisibility: v.runs > 0 ? v.sumVis / v.runs : 0,
-      totalMentions: v.sumMentions,
-      runs: v.runs,
-      lastRunAt: v.lastRunAt,
+  for (const row of data ?? []) {
+    result[row.prompt_id] = {
+      avgVisibility: row.avg_visibility ?? 0,
+      totalMentions: Number(row.total_mentions ?? 0),
+      runs: Number(row.runs ?? 0),
+      lastRunAt: row.last_run_at,
     };
   }
   return result;

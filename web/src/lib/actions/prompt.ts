@@ -2,10 +2,12 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import type { PromptSet, Prompt, AIPlatform } from '@/types';
+import type { PromptSet, Prompt, AIPlatform, PromptVolume } from '@/types';
 import { enforceLimit, getOrgPlan } from '@/lib/guards/plan-guard';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
 import type { Plan } from '@/config/plans';
+import { getPromptVolumes, type VolumeQuota } from '@/lib/actions/volumes';
+import { getPromptVisibilitySummaries, type PromptVisibilitySummary } from '@/lib/actions/tracking';
 
 function filterByPlan(plan: Plan, platforms: string[], models: string[]) {
   const allowedScrapers = plan.limits.allowedScrapers
@@ -398,4 +400,48 @@ export async function deletePromptSet(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 
   revalidatePath('/dashboard/brands');
+}
+
+export interface PromptsPageData {
+  promptSets: PromptSet[];
+  visibility: Record<string, PromptVisibilitySummary>;
+  volumes: PromptVolume[];
+  quota: VolumeQuota | null;
+  /** True when the volumes upstream failed/timed out — the table still renders. */
+  volumesDegraded: boolean;
+}
+
+/**
+ * One consolidated server action for the Prompts page's first load.
+ *
+ * Next.js runs server actions sequentially — each is its own queued POST — so
+ * the page's old three separate calls (volumes + prompt sets + visibility)
+ * cost roughly their SUM on a cold load, with the suggestions card queued
+ * behind them (the #313 lesson from Insights). This runs them in a real
+ * server-side Promise.all: one round trip, genuinely parallel.
+ *
+ * Volumes come from the aeo-server and are the least reliable dependency, so
+ * their failure degrades to an empty list instead of blanking the prompt
+ * table — the page's core content must never be hostage to the volumes API.
+ */
+export async function getPromptsPageData(brandId: string): Promise<PromptsPageData> {
+  const [promptSets, visibility, volumesResult] = await Promise.all([
+    getPromptSets(brandId),
+    getPromptVisibilitySummaries(brandId, { days: 30 }),
+    getPromptVolumes(brandId).then(
+      (r) => ({ volumes: r.volumes, quota: r.quota ?? null, degraded: false }),
+      (err) => {
+        console.error('[prompts] volumes fetch failed, rendering without them:', err);
+        return { volumes: [] as PromptVolume[], quota: null, degraded: true };
+      },
+    ),
+  ]);
+
+  return {
+    promptSets,
+    visibility,
+    volumes: volumesResult.volumes,
+    quota: volumesResult.quota,
+    volumesDegraded: volumesResult.degraded,
+  };
 }

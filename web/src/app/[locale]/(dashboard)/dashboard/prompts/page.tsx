@@ -46,14 +46,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
-import {
-  getPromptVolumes,
-  analyzePromptVolumesBatch,
-  refreshVolumes,
-  type VolumeQuota,
-} from '@/lib/actions/volumes';
-import { getPromptSets } from '@/lib/actions/prompt';
-import { getPromptVisibilitySummaries, type PromptVisibilitySummary } from '@/lib/actions/tracking';
+import { analyzePromptVolumesBatch, refreshVolumes, type VolumeQuota } from '@/lib/actions/volumes';
+import { getPromptsPageData } from '@/lib/actions/prompt';
+import { type PromptVisibilitySummary } from '@/lib/actions/tracking';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import type { PromptVolume, Prompt } from '@/types';
 import { toast } from 'sonner';
@@ -319,17 +314,19 @@ export default function PromptsPage() {
 
       setLoading(true);
       try {
-        const [volumeResult, promptSets, visSummary] = await Promise.all([
-          getPromptVolumes(activeBrandId),
-          getPromptSets(activeBrandId),
-          getPromptVisibilitySummaries(activeBrandId, { days: 30 }),
-        ]);
+        // One consolidated server action: Next.js queues client-fired server
+        // actions sequentially, so the old three separate calls cost their
+        // SUM on a cold load — the main culprit behind the slow first paint.
+        const page = await getPromptsPageData(activeBrandId);
         if (isCancelled?.()) return;
-        setVolumes(volumeResult.volumes);
-        if (volumeResult.quota) setQuota(volumeResult.quota);
-        const prompts = promptSets.flatMap((ps) => ps.prompts);
+        setVolumes(page.volumes);
+        if (page.quota) setQuota(page.quota);
+        const prompts = page.promptSets.flatMap((ps) => ps.prompts);
         setAllPrompts(prompts);
-        setVisibility(visSummary);
+        setVisibility(page.visibility);
+        if (page.volumesDegraded) {
+          toast.warning('Volume data is temporarily unavailable — showing prompts without it.');
+        }
       } catch (err) {
         if (isCancelled?.()) return;
         console.error('Failed to load prompt data:', err);
