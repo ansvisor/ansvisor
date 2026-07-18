@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
-import { Link, useRouter } from '@/i18n/navigation';
+import { Link } from '@/i18n/navigation';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -280,7 +280,6 @@ export default function PromptsPage() {
   const activeBrand = useBrandStore(
     (s) => s.brands.find((brand) => brand.id === s.activeBrandId) ?? null,
   );
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const initialTab: TabId = (() => {
@@ -290,16 +289,19 @@ export default function PromptsPage() {
   const [tab, setTab] = useState<TabId>(initialTab);
 
   // Keep the URL in sync with the active tab so deep links / refreshes land
-  // back on the same view.
+  // back on the same view. Shallow history update on purpose: the tab is pure
+  // client state, and `router.replace` here fired an RSC round-trip whose
+  // prefetch render 500s server-side — the never-completing navigation then
+  // blocked Next's server-action queue, so the page's data fetch never even
+  // dispatched (the "prompts table spins forever" bug). replaceState updates
+  // the URL with no server request; Next's router syncs with the History API.
   useEffect(() => {
     const current = searchParams.get('tab');
     if (current === tab) return;
     const params = new URLSearchParams(Array.from(searchParams.entries()));
     params.set('tab', tab);
-    router.replace(`/dashboard/prompts?${params.toString()}`, {
-      scroll: false,
-    });
-  }, [tab, searchParams, router]);
+    window.history.replaceState(null, '', `?${params.toString()}`);
+  }, [tab, searchParams]);
 
   const loadData = useCallback(
     async (isCancelled?: () => boolean) => {
@@ -994,7 +996,6 @@ function AllPromptsTab({
   visibility: Record<string, PromptVisibilitySummary>;
 }) {
   const [search, setSearch] = useState('');
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const rawSort = searchParams.get('sort');
@@ -1004,6 +1005,8 @@ function AllPromptsTab({
   // Click a header to sort: a new column starts at desc ("show me the extremes");
   // re-clicking the active column toggles desc⇄asc. Persisted to the URL so the
   // sort survives reloads and is shareable (matches the existing `tab` sync).
+  // Shallow history update — same reasoning as the tab sync: pure client
+  // state must not trigger an RSC round-trip that can block the action queue.
   const handleSort = useCallback(
     (key: AllPromptsSortKey) => {
       const params = new URLSearchParams(Array.from(searchParams.entries()));
@@ -1011,9 +1014,9 @@ function AllPromptsTab({
       params.set('tab', 'all');
       params.set('sort', key);
       params.set('dir', nextDir);
-      router.replace(`/dashboard/prompts?${params.toString()}`, { scroll: false });
+      window.history.replaceState(null, '', `?${params.toString()}`);
     },
-    [searchParams, router, activeSort, dir],
+    [searchParams, activeSort, dir],
   );
 
   const filtered = useMemo(() => {
