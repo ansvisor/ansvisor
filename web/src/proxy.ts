@@ -55,6 +55,30 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
+  // Workaround for a Next.js framework issue (vercel/next.js#91723): RSC
+  // prefetch/navigation requests and server-action POSTs that go through
+  // next-intl's middleware intermittently die server-side with "The router
+  // state header was sent but could not be parsed" — and the client then
+  // holds its whole server-action queue behind the failed transition, which
+  // froze the Prompts page. With a single 'en' locale the only thing the
+  // intl middleware does for these requests is the /en rewrite, so do that
+  // by hand and skip the intl machinery entirely.
+  const isRscOrAction = request.headers.has('rsc') || request.headers.has('next-action');
+  if (isRscOrAction) {
+    const needsLocalePrefix = !(pathname === '/en' || pathname.startsWith('/en/'));
+    const response = needsLocalePrefix
+      ? NextResponse.rewrite(new URL(`/en${pathname}${request.nextUrl.search}`, request.url), {
+          request,
+        })
+      : NextResponse.next({ request });
+    if (supabaseResponse) {
+      supabaseResponse.cookies.getAll().forEach((cookie) => {
+        response.cookies.set(cookie.name, cookie.value, cookie);
+      });
+    }
+    return response;
+  }
+
   const intlResponse = intlMiddleware(request);
 
   if (supabaseResponse) {
