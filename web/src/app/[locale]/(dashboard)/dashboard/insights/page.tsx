@@ -48,6 +48,7 @@ import {
   exportPromptResults,
   type PromptResultWithText,
   type InsightsSummary,
+  type TrackedPromptsKpi,
   type CompetitorComparisonData,
   type ShareOfVoiceData,
   type TrackingJobStatus,
@@ -83,6 +84,7 @@ import {
   Tag,
   ArrowUpRight,
   Download,
+  Layers,
 } from 'lucide-react';
 import {
   Select,
@@ -1249,6 +1251,7 @@ export default function InsightsPage() {
   const { isCloud } = usePlanContext();
   const brand = useBrandStore((s) => s.getActiveBrand());
   const [summary, setSummary] = useState<InsightsSummary | null>(null);
+  const [trackedPrompts, setTrackedPrompts] = useState<TrackedPromptsKpi | null>(null);
   const [results, setResults] = useState<PromptResultWithText[]>([]);
   const [totalResults, setTotalResults] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -1298,6 +1301,7 @@ export default function InsightsPage() {
           checkUnfiltered: hasFilters,
         });
         setSummary(insights.summary);
+        setTrackedPrompts(insights.trackedPrompts);
         setResults(insights.results);
         setTotalResults(insights.total);
         setCompetitorData(insights.competitors.brands.length > 1 ? insights.competitors : null);
@@ -1706,7 +1710,7 @@ export default function InsightsPage() {
       ) : (
         <>
           {/* KPI Cards */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
             <KpiCard
               title="Visibility Score"
               tooltip="A composite score (0–100) reflecting how prominently your brand appears across AI engine responses. Combines mentions, citations, and sentiment."
@@ -1719,6 +1723,36 @@ export default function InsightsPage() {
                   : 'muted'
               }
               onClick={() => setBreakdownMetric('visibility')}
+            />
+            <KpiCard
+              title="Tracked Prompts"
+              tooltip="Distinct prompts that produced tracked results in the selected period and filters. The quota below is current usage across your organization — it does not change with the date range."
+              icon={Layers}
+              value={trackedPrompts?.activeInPeriod ?? 0}
+              sub={
+                trackedPrompts && trackedPrompts.quotaLimit !== -1 ? (
+                  <>
+                    <span className="tabular-nums">
+                      {trackedPrompts.quotaUsed} / {trackedPrompts.quotaLimit} prompts
+                    </span>
+                    {trackedPrompts.quotaUsed >= trackedPrompts.quotaLimit * 0.9 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push('/dashboard/settings');
+                        }}
+                        className="ml-1 underline underline-offset-2 hover:text-foreground"
+                      >
+                        Upgrade
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  `${trackedPrompts?.quotaUsed ?? 0} prompts tracked`
+                )
+              }
+              onClick={() => router.push('/dashboard/prompts')}
             />
             <KpiCard
               title="Mentions"

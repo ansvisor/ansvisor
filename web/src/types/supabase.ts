@@ -1192,6 +1192,18 @@ export type Database = {
         };
         Returns: Json;
       };
+      tracked_prompt_count: {
+        Args: {
+          p_brand_id: string;
+          p_platform?: string | null;
+          p_models?: string[] | null;
+          p_region?: string | null;
+          p_date_from?: string | null;
+          p_date_to?: string | null;
+          p_topic_id?: string | null;
+        };
+        Returns: number;
+      };
       competitor_aggregates: {
         Args: {
           p_brand_id: string;

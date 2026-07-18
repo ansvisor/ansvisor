@@ -13,6 +13,7 @@ import type {
 } from '@/types';
 import { API_BASE_URL } from '@/config/api';
 import { getTopicById } from '@/lib/actions/topic';
+import { getOrgPlan } from '@/lib/guards/plan-guard';
 
 /** Round to one decimal place (keeps sub-1 averages visible instead of flooring to 0). */
 function roundTo1(n: number): number {
@@ -320,6 +321,71 @@ export async function getPromptResults(
   return { results, total };
 }
 
+export interface TrackedPromptsKpi {
+  /** Distinct prompts with results in the filtered window (shopping excluded). */
+  activeInPeriod: number;
+  /** Org-wide prompt count — the number the plan limit is enforced against. */
+  quotaUsed: number;
+  /** Effective org limit with Enterprise plan_overrides merged; -1 = unlimited. */
+  quotaLimit: number;
+}
+
+/**
+ * Tracked Prompts KPI (#457). The main value is period-aware — distinct
+ * prompts that produced results under the SAME filters as the other KPI
+ * cards (the `tracked_prompt_count` RPC mirrors `insights_aggregates`,
+ * shopping excluded) — because a static account-state number sitting in a
+ * filter-reactive row would read as inconsistent. The quota sub-line is
+ * deliberately a "now" fact: org-wide usage against the effective plan
+ * limit, matching what `enforceLimit` counts on write.
+ */
+export async function getTrackedPromptsKpi(
+  brandId: string,
+  opts?: { model?: string; region?: string; dateFrom?: string; dateTo?: string; topicId?: string },
+): Promise<TrackedPromptsKpi> {
+  const supabase = await createClient();
+
+  const { data: brand } = await supabase
+    .from('brands')
+    .select('organization_id')
+    .eq('id', brandId)
+    .single();
+  const orgId = (brand?.organization_id as string | undefined) ?? null;
+
+  const countOrgPrompts = async (): Promise<number> => {
+    if (!orgId) return 0;
+    const { count } = await supabase
+      .from('prompts')
+      .select('id, prompt_sets!inner(brand_id, brands!inner(organization_id))', {
+        count: 'exact',
+        head: true,
+      })
+      .eq('prompt_sets.brands.organization_id', orgId);
+    return count ?? 0;
+  };
+
+  const [rpcResult, plan, quotaUsed] = await Promise.all([
+    supabase.rpc('tracked_prompt_count', {
+      p_brand_id: brandId,
+      p_platform: null,
+      p_models: modelFilterArray(opts?.model),
+      p_region: opts?.region ?? null,
+      p_date_from: opts?.dateFrom ?? null,
+      p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? null,
+      p_topic_id: opts?.topicId ?? null,
+    }),
+    orgId ? getOrgPlan(orgId) : Promise.resolve(null),
+    countOrgPrompts(),
+  ]);
+  if (rpcResult.error) throw new Error(rpcResult.error.message);
+
+  return {
+    activeInPeriod: (rpcResult.data as number | null) ?? 0,
+    quotaUsed,
+    quotaLimit: plan?.limits.maxPrompts ?? -1,
+  };
+}
+
 /** Cheap existence check for a brand's (non-shopping) prompt_results — counts, no rows. */
 async function getBrandResultsTotal(brandId: string): Promise<number> {
   const supabase = await createClient();
@@ -340,6 +406,7 @@ export interface InsightsData {
   total: number;
   competitors: CompetitorComparisonData;
   sov: ShareOfVoiceData;
+  trackedPrompts: TrackedPromptsKpi;
   hasAnyData: boolean;
 }
 
@@ -374,13 +441,15 @@ export async function getInsightsData(
     dateTo: opts.dateTo,
   };
 
-  const [summary, resultsData, competitors, sov, unfilteredTotal] = await Promise.all([
-    getInsightsSummary(brandId, filterOpts),
-    getPromptResults(brandId, { limit: opts.rowLimit ?? 50, ...filterOpts }),
-    getCompetitorComparison(brandId, filterOpts),
-    getShareOfVoiceData(brandId, filterOpts),
-    opts.checkUnfiltered ? getBrandResultsTotal(brandId) : Promise.resolve(null),
-  ]);
+  const [summary, resultsData, competitors, sov, trackedPrompts, unfilteredTotal] =
+    await Promise.all([
+      getInsightsSummary(brandId, filterOpts),
+      getPromptResults(brandId, { limit: opts.rowLimit ?? 50, ...filterOpts }),
+      getCompetitorComparison(brandId, filterOpts),
+      getShareOfVoiceData(brandId, filterOpts),
+      getTrackedPromptsKpi(brandId, filterOpts),
+      opts.checkUnfiltered ? getBrandResultsTotal(brandId) : Promise.resolve(null),
+    ]);
 
   const hasAnyData = unfilteredTotal !== null ? unfilteredTotal > 0 : resultsData.total > 0;
 
@@ -390,6 +459,7 @@ export async function getInsightsData(
     total: resultsData.total,
     competitors,
     sov,
+    trackedPrompts,
     hasAnyData,
   };
 }
