@@ -148,11 +148,7 @@ const newSuggestionSchema = z.object({
         // rejects the WHOLE batch deterministically ("No object generated"),
         // and retrying can't help. Out-of-range protection is a clamp at the
         // insert site instead.
-        estVolume: z
-          .number()
-          .int()
-          .min(0)
-          .describe('Estimated monthly AI search volume (rough)'),
+        estVolume: z.number().int().min(0).describe('Estimated monthly AI search volume (rough)'),
       }),
     )
     .min(6)
