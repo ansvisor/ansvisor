@@ -36,17 +36,14 @@ const ShareOfVoiceTrendChart = dynamic(
   },
 );
 import { MetricBreakdownSheet } from './_metric-breakdown-sheet';
-import { groupResultsByTopic, type PlatformGroup, type PromptGroup } from './grouping';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
-  getPromptResults,
   getInsightsData,
   triggerTrackingCheck,
   getJobStatus,
   cancelTrackingJob,
   getBrandPrompts,
   exportPromptResults,
-  type PromptResultWithText,
   type InsightsSummary,
   type TrackedPromptsKpi,
   type CompetitorComparisonData,
@@ -62,11 +59,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import {
   BarChart3,
   CalendarX2,
-  ChevronDown,
   HelpCircle,
   Play,
   TrendingUp,
@@ -75,13 +70,10 @@ import {
   Zap,
   AlertCircle,
   Loader2,
-  Eye,
-  RefreshCw,
   FlaskConical,
   PieChart,
   Users,
   StopCircle,
-  Tag,
   ArrowUpRight,
   Download,
   Layers,
@@ -95,11 +87,7 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import {
-  AIProviderAvatar,
-  getAIProviderDisplayName,
-  resolveAIProvider,
-} from '@/components/ai-provider-avatar';
+import { getAIProviderDisplayName, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { toast } from 'sonner';
 
@@ -139,11 +127,6 @@ const INSIGHT_EXPORT_HEADERS = [
   'citation_urls',
   'competitor_mentions',
 ];
-
-/** Max rows loaded for the grouped Prompt Results table (newest first).
- *  Sized to show several recent runs per (prompt × platform) pair so the
- *  "previous runs" history inside each platform group has meaningful depth. */
-const PROMPT_RESULTS_ROW_LIMIT = 1500;
 
 function getDateRange(preset: DatePreset, custom: { from: string; to: string }) {
   if (preset === 'all') return { dateFrom: undefined, dateTo: undefined };
@@ -201,43 +184,6 @@ function InfoTip({ content }: { content: string }) {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function SentimentBadge({ sentiment }: { sentiment: 'positive' | 'neutral' | 'negative' }) {
-  return (
-    <Badge
-      variant="outline"
-      className={cn(
-        'text-xs capitalize',
-        sentiment === 'positive' &&
-          'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400',
-        sentiment === 'neutral' &&
-          'border-yellow-500/30 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
-        sentiment === 'negative' &&
-          'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
-      )}
-    >
-      {sentiment}
-    </Badge>
-  );
-}
-
-function VisibilityBar({ score, max = 100 }: { score: number; max?: number }) {
-  const pct = Math.round((score / max) * 100);
-  return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 w-24 rounded-full bg-muted overflow-hidden">
-        <div
-          className={cn(
-            'h-full rounded-full transition-all',
-            score >= 60 ? 'bg-green-500' : score >= 40 ? 'bg-yellow-500' : 'bg-red-500',
-          )}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <span className="text-sm font-medium tabular-nums">{Math.round(score)}</span>
-    </div>
-  );
-}
-
 const MODEL_DISPLAY_NAME: Record<string, string> = {
   'gpt-4o': 'GPT-4o',
   'gpt-4o-mini': 'GPT-4o Mini',
@@ -261,27 +207,6 @@ const MODEL_DISPLAY_NAME: Record<string, string> = {
   'grok-web': 'Grok',
   'gemini-web': 'Gemini',
 };
-
-function getModelDisplayName(model: string, platform?: string): string {
-  if (platform && MODEL_DISPLAY_NAME[platform]) {
-    const modelName = MODEL_DISPLAY_NAME[model];
-    return modelName && modelName !== MODEL_DISPLAY_NAME[platform]
-      ? `${MODEL_DISPLAY_NAME[platform]} · ${modelName}`
-      : MODEL_DISPLAY_NAME[platform];
-  }
-  return MODEL_DISPLAY_NAME[model] ?? model;
-}
-
-function ModelBadge({ model, platform }: { model: string; platform?: string }) {
-  const provider = resolveAIProvider(model, platform);
-
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <AIProviderAvatar provider={provider} />
-      <span className="text-xs">{getModelDisplayName(model, platform)}</span>
-    </span>
-  );
-}
 
 // ─── Delta Badge ──────────────────────────────────────────────────────────────
 
@@ -819,430 +744,6 @@ function TrackingProgressBanner({
   );
 }
 
-// ─── Prompt Results Grouped ───────────────────────────────────────────────────
-
-function formatTimestamp(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-function PlatformSubGroup({
-  group,
-  expanded,
-  onToggle,
-  onViewResult,
-}: {
-  group: PlatformGroup;
-  expanded: boolean;
-  onToggle: () => void;
-  onViewResult: (r: PromptResultWithText) => void;
-}) {
-  const HISTORY_LIMIT = 8;
-  const history = group.results.slice(1, 1 + HISTORY_LIMIT);
-  const hasMoreHistory = group.results.length > 1 + HISTORY_LIMIT;
-  const latest = group.latest;
-  const responsePreview =
-    (latest.response ?? '').trim().length > 0 ? latest.response : 'No response text available.';
-
-  return (
-    <div className="rounded-md border bg-background/50">
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={onToggle}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onToggle();
-          }
-        }}
-        className="flex w-full items-center gap-3 px-3 py-2 hover:bg-muted/40 transition-colors cursor-pointer select-none"
-      >
-        <ChevronDown
-          className={cn(
-            'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
-            !expanded && '-rotate-90',
-          )}
-        />
-        <div className="flex-1 min-w-0 flex items-center gap-2">
-          <ModelBadge model={latest.modelUsed ?? latest.platform} platform={latest.platform} />
-          {latest.region && (
-            <Badge variant="outline" className="text-[10px]">
-              {latest.region}
-            </Badge>
-          )}
-          <span className="text-[10px] text-muted-foreground tabular-nums ml-1">
-            {group.results.length} run{group.results.length !== 1 ? 's' : ''}
-          </span>
-        </div>
-        <div className="flex items-center gap-4 shrink-0">
-          <div className="hidden sm:block text-right">
-            <p className="text-[10px] text-muted-foreground">Mentions</p>
-            <p className="text-xs font-semibold tabular-nums">{group.totalMentions}</p>
-          </div>
-          <div className="hidden sm:block text-right">
-            <p className="text-[10px] text-muted-foreground">Citations</p>
-            <p className="text-xs font-semibold tabular-nums">{group.totalCitations}</p>
-          </div>
-          <SentimentBadge sentiment={latest.sentiment} />
-          <div className="w-[100px] sm:w-[140px]">
-            <VisibilityBar score={latest.visibilityScore} />
-          </div>
-        </div>
-      </div>
-
-      {expanded && (
-        <div className="border-t bg-muted/20 px-4 py-3 space-y-3">
-          <div>
-            <div className="flex items-center justify-between gap-3 mb-1.5">
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
-                Latest response · {formatTimestamp(latest.createdAt)}
-              </p>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 gap-1.5 text-[11px]"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onViewResult(latest);
-                }}
-              >
-                <Eye className="h-3 w-3" />
-                Full detail
-              </Button>
-            </div>
-            <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap line-clamp-6">
-              {responsePreview}
-            </p>
-          </div>
-
-          {history.length > 0 && (
-            <div>
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium mb-1">
-                Previous runs
-              </p>
-              <div className="rounded border overflow-hidden">
-                <Table>
-                  <TableBody>
-                    {history.map((r) => (
-                      <TableRow key={r.id} className="hover:bg-muted/30">
-                        <TableCell className="text-xs text-muted-foreground py-1.5">
-                          {formatTimestamp(r.createdAt)}
-                        </TableCell>
-                        <TableCell className="text-center py-1.5 text-xs tabular-nums w-[110px]">
-                          <span className="font-semibold">{r.mentionCount}</span>
-                          <span className="text-muted-foreground">
-                            {' '}
-                            mention{r.mentionCount !== 1 ? 's' : ''}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-center py-1.5 text-xs tabular-nums w-[110px]">
-                          <span className="font-semibold">{r.citationCount}</span>
-                          <span className="text-muted-foreground">
-                            {' '}
-                            citation{r.citationCount !== 1 ? 's' : ''}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-center py-1.5 w-[100px]">
-                          <SentimentBadge sentiment={r.sentiment} />
-                        </TableCell>
-                        <TableCell className="py-1.5 w-[140px]">
-                          <VisibilityBar score={r.visibilityScore} />
-                        </TableCell>
-                        <TableCell className="text-center py-1.5 w-[50px]">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            title="View detail"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onViewResult(r);
-                            }}
-                            aria-label="View previous run details"
-                          >
-                            <Eye className="h-3 w-3" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              {hasMoreHistory && (
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Showing latest {HISTORY_LIMIT} of {group.results.length - 1} previous runs.
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PromptSubGroup({
-  group,
-  expanded,
-  expandedPlatforms,
-  refreshingId,
-  onToggle,
-  onTogglePlatform,
-  onRefresh,
-  onViewResult,
-}: {
-  group: PromptGroup;
-  expanded: boolean;
-  expandedPlatforms: Set<string>;
-  refreshingId: string | null;
-  onToggle: () => void;
-  onTogglePlatform: (compositeKey: string) => void;
-  onRefresh: (promptId: string) => void;
-  onViewResult: (r: PromptResultWithText) => void;
-}) {
-  return (
-    <div className="rounded-lg border overflow-hidden">
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={onToggle}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onToggle();
-          }
-        }}
-        className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/50 transition-colors cursor-pointer select-none"
-      >
-        <ChevronDown
-          className={cn(
-            'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
-            !expanded && '-rotate-90',
-          )}
-        />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm line-clamp-1">{group.promptText}</p>
-          <span className="text-[11px] text-muted-foreground">
-            {group.platformGroups.length} platform{group.platformGroups.length !== 1 ? 's' : ''}
-            {' · '}
-            {group.results.length} result{group.results.length !== 1 ? 's' : ''}
-          </span>
-        </div>
-        <div className="flex items-center gap-4 shrink-0">
-          <div className="text-right">
-            <p className="text-[10px] text-muted-foreground">Score</p>
-            <p className="text-xs font-semibold tabular-nums">{group.avgScore}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-[10px] text-muted-foreground">Mentions</p>
-            <p className="text-xs font-semibold tabular-nums">{group.totalMentions}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-[10px] text-muted-foreground">Citations</p>
-            <p className="text-xs font-semibold tabular-nums">{group.totalCitations}</p>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            title="Refresh results"
-            disabled={refreshingId !== null}
-            onClick={(e) => {
-              e.stopPropagation();
-              onRefresh(group.promptId);
-            }}
-            aria-label="Refresh prompt results"
-          >
-            {refreshingId === group.promptId ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <RefreshCw className="h-3 w-3" />
-            )}
-          </Button>
-        </div>
-      </div>
-
-      {expanded && (
-        <div className="border-t px-3 py-2 space-y-1.5 bg-muted/10">
-          {group.platformGroups.map((pg) => {
-            const compositeKey = `${group.promptId}::${pg.key}`;
-            return (
-              <PlatformSubGroup
-                key={compositeKey}
-                group={pg}
-                expanded={expandedPlatforms.has(compositeKey)}
-                onToggle={() => onTogglePlatform(compositeKey)}
-                onViewResult={onViewResult}
-              />
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PromptResultsGrouped({
-  results,
-  loadedRowCount,
-  totalRowCount,
-  onViewResult,
-  onRefreshPrompt,
-}: {
-  results: PromptResultWithText[];
-  loadedRowCount: number;
-  totalRowCount: number;
-  onViewResult: (r: PromptResultWithText) => void;
-  onRefreshPrompt: (promptId: string) => Promise<void>;
-}) {
-  const topicGroups = groupResultsByTopic(results);
-  const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
-  const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(new Set());
-  const [expandedPlatforms, setExpandedPlatforms] = useState<Set<string>>(new Set());
-  const [refreshingId, setRefreshingId] = useState<string | null>(null);
-
-  const toggleTopic = (id: string) =>
-    setExpandedTopics((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
-  const togglePrompt = (id: string) =>
-    setExpandedPrompts((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
-  const togglePlatform = (id: string) =>
-    setExpandedPlatforms((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
-  const handleRefresh = async (promptId: string) => {
-    setRefreshingId(promptId);
-    try {
-      await onRefreshPrompt(promptId);
-    } finally {
-      setRefreshingId(null);
-    }
-  };
-
-  const truncated = totalRowCount > loadedRowCount && loadedRowCount > 0;
-
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-          <CardTitle className="text-sm font-medium">Prompt Results by Topic</CardTitle>
-          {truncated ? (
-            <p className="text-xs text-muted-foreground font-normal">
-              Showing {loadedRowCount} of {totalRowCount} rows (newest first). Narrow the date range
-              or filters to focus the list.
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground font-normal">
-              {totalRowCount} result{totalRowCount !== 1 ? 's' : ''}
-            </p>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="pt-0">
-        {topicGroups.length === 0 && (
-          <p className="text-center text-muted-foreground py-8 text-sm">
-            No results yet. Click &quot;Run Prompts&quot; to start tracking.
-          </p>
-        )}
-
-        <div className="space-y-3">
-          {topicGroups.map((topic) => {
-            const isTopicOpen = expandedTopics.has(topic.topicId);
-            return (
-              <div
-                key={topic.topicId + topic.topicName}
-                className="rounded-lg border overflow-hidden"
-              >
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => toggleTopic(topic.topicId)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      toggleTopic(topic.topicId);
-                    }
-                  }}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors cursor-pointer select-none"
-                >
-                  <ChevronDown
-                    className={cn(
-                      'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
-                      !isTopicOpen && '-rotate-90',
-                    )}
-                  />
-                  <Tag className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{topic.topicName}</p>
-                    <span className="text-[11px] text-muted-foreground">
-                      {topic.prompts.length} prompt{topic.prompts.length !== 1 ? 's' : ''} ·{' '}
-                      {topic.totalResults} result{topic.totalResults !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4 shrink-0">
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">Avg Score</p>
-                      <p className="text-sm font-semibold tabular-nums">{topic.avgScore}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">Mentions</p>
-                      <p className="text-sm font-semibold tabular-nums">{topic.totalMentions}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">Citations</p>
-                      <p className="text-sm font-semibold tabular-nums">{topic.totalCitations}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {isTopicOpen && (
-                  <div className="border-t px-3 py-2 space-y-2 bg-muted/10">
-                    {topic.prompts.map((pg) => (
-                      <PromptSubGroup
-                        key={pg.promptId}
-                        group={pg}
-                        expanded={expandedPrompts.has(pg.promptId)}
-                        expandedPlatforms={expandedPlatforms}
-                        refreshingId={refreshingId}
-                        onToggle={() => togglePrompt(pg.promptId)}
-                        onTogglePlatform={togglePlatform}
-                        onRefresh={handleRefresh}
-                        onViewResult={onViewResult}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function InsightsPage() {
@@ -1252,8 +753,6 @@ export default function InsightsPage() {
   const brand = useBrandStore((s) => s.getActiveBrand());
   const [summary, setSummary] = useState<InsightsSummary | null>(null);
   const [trackedPrompts, setTrackedPrompts] = useState<TrackedPromptsKpi | null>(null);
-  const [results, setResults] = useState<PromptResultWithText[]>([]);
-  const [totalResults, setTotalResults] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
@@ -1291,34 +790,27 @@ export default function InsightsPage() {
 
         const hasFilters = Boolean(f.datePreset !== 'all' || f.model || f.region || f.topic);
 
-        // One consolidated server action (#313): summary + results + competitor
-        // + SoV run in a real server-side Promise.all (one round trip instead
-        // of five serialized POSTs), and "has any data" comes from a cheap
+        // One consolidated server action (#313): summary + competitor + SoV
+        // run in a real server-side Promise.all (one round trip instead of
+        // five serialized POSTs), and "has any data" comes from a cheap
         // count instead of an unbounded full-table scan.
         const insights = await getInsightsData(brand.id, {
           ...filterOpts,
-          rowLimit: PROMPT_RESULTS_ROW_LIMIT,
           checkUnfiltered: hasFilters,
         });
         setSummary(insights.summary);
         setTrackedPrompts(insights.trackedPrompts);
-        setResults(insights.results);
-        setTotalResults(insights.total);
         setCompetitorData(insights.competitors.brands.length > 1 ? insights.competitors : null);
         setSovData(insights.sov.byPlatform.length > 0 ? insights.sov : null);
         setHasAnyData(insights.hasAnyData);
 
-        const regions = [
-          ...new Set(insights.results.map((r) => r.region).filter(Boolean) as string[]),
-        ].sort();
         // Group raw model slugs by their resolved display name so different
         // ChatGPT versions ("gpt-5-3-mini" + "gpt-5-5") collapse into one
         // "ChatGPT" filter option. Stored as `slugA,slugB` so the server can
         // filter the whole family with .in() via applyModelFilter().
         const slugToLabel = new Map<string, string>();
-        for (const r of insights.results) {
-          const slug = r.modelUsed;
-          if (!slug || slugToLabel.has(slug)) continue;
+        for (const slug of insights.filterOptions.models) {
+          if (slugToLabel.has(slug)) continue;
           const label =
             MODEL_DISPLAY_NAME[slug] ??
             PLATFORM_LABELS[slug] ??
@@ -1334,12 +826,8 @@ export default function InsightsPage() {
         const models = Array.from(familyToSlugs.values())
           .map((slugs) => slugs.sort().join(','))
           .sort();
-        setAvailableRegions((prev) =>
-          [...new Set([...prev, ...regions])].sort((a, b) => a.localeCompare(b)),
-        );
-        setAvailableModels((prev) =>
-          [...new Set([...prev, ...models])].sort((a, b) => a.localeCompare(b)),
-        );
+        setAvailableRegions([...insights.filterOptions.regions].sort((a, b) => a.localeCompare(b)));
+        setAvailableModels(models.sort((a, b) => a.localeCompare(b)));
       } catch (err) {
         const message = err instanceof Error ? err.message : '';
 
@@ -1504,30 +992,6 @@ export default function InsightsPage() {
       result: null,
       failedReason: null,
     });
-  };
-
-  const handleRefreshPrompt = async (promptId: string) => {
-    if (!brand) return;
-    try {
-      const { dateFrom, dateTo } = getDateRange(filtersRef.current.datePreset, {
-        from: filtersRef.current.dateFrom,
-        to: filtersRef.current.dateTo,
-      });
-      const { results: fresh } = await getPromptResults(brand.id, {
-        promptId,
-        dateFrom,
-        dateTo,
-        limit: 500,
-      });
-      // Merge fresh results into existing state — replace old entries for this prompt
-      setResults((prev) => {
-        const without = prev.filter((r) => r.promptId !== promptId);
-        return [...without, ...fresh];
-      });
-      toast.success('Results refreshed');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to refresh results');
-    }
   };
 
   const handleExportCsv = useCallback(async () => {
@@ -1857,15 +1321,6 @@ export default function InsightsPage() {
               </Card>
             </div>
           )}
-
-          {/* Prompt Results by Topic */}
-          <PromptResultsGrouped
-            results={results}
-            loadedRowCount={results.length}
-            totalRowCount={totalResults}
-            onViewResult={(r) => router.push(`/dashboard/insights/${r.id}`)}
-            onRefreshPrompt={handleRefreshPrompt}
-          />
         </>
       )}
 

@@ -1217,6 +1217,15 @@ export type Database = {
           last_run_at: string;
         }[];
       };
+      insights_filter_options: {
+        Args: {
+          p_brand_id: string;
+        };
+        Returns: {
+          regions: string[];
+          models: string[];
+        }[];
+      };
       competitor_aggregates: {
         Args: {
           p_brand_id: string;

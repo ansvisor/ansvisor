@@ -386,6 +386,31 @@ export async function getTrackedPromptsKpi(
   };
 }
 
+export interface InsightsFilterOptions {
+  /** Distinct result regions for the brand (shopping excluded), sorted. */
+  regions: string[];
+  /** Distinct model_used slugs for the brand (shopping excluded), sorted. */
+  models: string[];
+}
+
+/**
+ * Filter dropdown options for the Insights page (#458). These used to be
+ * derived client-side from the removed results tree's 1500-row fetch; one
+ * DISTINCT scan in Postgres returns the same sets without shipping rows.
+ * Deliberately unfiltered (whole-brand): the dropdowns must keep offering
+ * every value the brand has ever produced, not just the current window's.
+ */
+async function getInsightsFilterOptions(brandId: string): Promise<InsightsFilterOptions> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('insights_filter_options', { p_brand_id: brandId });
+  if (error) throw new Error(error.message);
+  const row = (data as { regions: string[] | null; models: string[] | null }[] | null)?.[0];
+  return {
+    regions: row?.regions ?? [],
+    models: row?.models ?? [],
+  };
+}
+
 /** Cheap existence check for a brand's (non-shopping) prompt_results — counts, no rows. */
 async function getBrandResultsTotal(brandId: string): Promise<number> {
   const supabase = await createClient();
@@ -402,11 +427,10 @@ async function getBrandResultsTotal(brandId: string): Promise<number> {
 
 export interface InsightsData {
   summary: InsightsSummary;
-  results: PromptResultWithText[];
-  total: number;
   competitors: CompetitorComparisonData;
   sov: ShareOfVoiceData;
   trackedPrompts: TrackedPromptsKpi;
+  filterOptions: InsightsFilterOptions;
   hasAnyData: boolean;
 }
 
@@ -414,11 +438,12 @@ export interface InsightsData {
  * One consolidated server action for the Insights page's first load (#313).
  *
  * Next.js runs server actions sequentially (each is its own queued POST), so
- * firing the summary / results / competitor / SoV reads separately from the
- * client cost roughly their sum, not the slowest. This runs them in a real
- * server-side `Promise.all` (genuinely parallel, one round trip), and derives
- * "has any data" from a cheap count instead of the old unbounded full-table
- * scan. Output is identical to the previous per-call flow.
+ * firing the summary / competitor / SoV reads separately from the client cost
+ * roughly their sum, not the slowest. This runs them in a real server-side
+ * `Promise.all` (genuinely parallel, one round trip), and derives "has any
+ * data" from a cheap count instead of the old unbounded full-table scan.
+ * The raw prompt_results rows are no longer part of the payload — the
+ * "Prompt Results by Topic" tree they fed was removed in #458.
  */
 export async function getInsightsData(
   brandId: string,
@@ -428,7 +453,6 @@ export async function getInsightsData(
     topicId?: string;
     dateFrom?: string;
     dateTo?: string;
-    rowLimit?: number;
     /** When the current view is filtered, check unfiltered data existence too. */
     checkUnfiltered?: boolean;
   },
@@ -441,25 +465,26 @@ export async function getInsightsData(
     dateTo: opts.dateTo,
   };
 
-  const [summary, resultsData, competitors, sov, trackedPrompts, unfilteredTotal] =
+  const [summary, competitors, sov, trackedPrompts, filterOptions, unfilteredTotal] =
     await Promise.all([
       getInsightsSummary(brandId, filterOpts),
-      getPromptResults(brandId, { limit: opts.rowLimit ?? 50, ...filterOpts }),
       getCompetitorComparison(brandId, filterOpts),
       getShareOfVoiceData(brandId, filterOpts),
       getTrackedPromptsKpi(brandId, filterOpts),
+      getInsightsFilterOptions(brandId),
       opts.checkUnfiltered ? getBrandResultsTotal(brandId) : Promise.resolve(null),
     ]);
 
-  const hasAnyData = unfilteredTotal !== null ? unfilteredTotal > 0 : resultsData.total > 0;
+  // insights_aggregates counts the same filtered set the summary shows, so it
+  // stands in for the removed results fetch when no unfiltered check ran.
+  const hasAnyData = unfilteredTotal !== null ? unfilteredTotal > 0 : summary.totalResults > 0;
 
   return {
     summary,
-    results: resultsData.results,
-    total: resultsData.total,
     competitors,
     sov,
     trackedPrompts,
+    filterOptions,
     hasAnyData,
   };
 }
