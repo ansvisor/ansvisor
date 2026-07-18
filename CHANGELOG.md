@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Sidebar / Mobile nav: Agent nav item now shows a **"Set up"** badge on cloud when the org has no Anthropic API key saved — clicking still lands on the existing Settings CTA; badge disappears automatically after the key is saved and the page is reloaded; self-host instances are unaffected and make no extra network calls (#456)
+
 ### Fixed
 
 - Prompts / Query Fan-out: the High frequency pager no longer renders one button per page — replaced with a windowed pager (`‹ 1 … n-1 n n+1 … last ›`) that caps at ~9 elements, preventing overflow on brands with hundreds of pages; Previous/Next chevron buttons added, disabled at boundaries; ellipsis shown as a non-interactive span; all page numbers shown without ellipsis when total pages ≤ 7 (#446)

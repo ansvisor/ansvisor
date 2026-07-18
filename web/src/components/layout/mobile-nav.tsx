@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { usePathname, Link } from '@/i18n/navigation';
 import { dashboardNav } from '@/config/dashboard';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
+import { useAgentKeyStatus } from '@/hooks/use-agent-key-status';
 import { siteConfig } from '@/config/site';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,10 @@ export function MobileNav() {
   const t = useTranslations('nav');
   const tBrands = useTranslations('brands');
   const { canUse, requiredPlanFor, isCloud } = useFeatureGate();
+  // Probe once per session — shares the module-level cache with sidebar.tsx
+  // so at most one network request is made even when both components mount.
+  const agentKeyStatus = useAgentKeyStatus(isCloud);
+  const agentKeyMissing = isCloud && agentKeyStatus === 'missing';
   const { activeBrandId } = useBrandStore();
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -97,6 +102,11 @@ export function MobileNav() {
                     : pathname.startsWith(item.href);
                 const label = getLabel(item.title);
 
+                // Dynamic badge override: show "Set up" on the Agent item
+                // when the org has no Anthropic key saved (cloud only).
+                const effectiveBadge =
+                  item.href === '/dashboard/agent' && agentKeyMissing ? 'Set up' : item.badge;
+
                 const isLocked =
                   isCloud && item.requiredFeature != null && !canUse(item.requiredFeature);
 
@@ -130,7 +140,15 @@ export function MobileNav() {
                       )}
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
-                      {label}
+                      <span className="flex-1">{label}</span>
+                      {effectiveBadge && (
+                        <Badge
+                          variant="secondary"
+                          className="h-5 shrink-0 px-1.5 text-[10px] font-normal"
+                        >
+                          {effectiveBadge}
+                        </Badge>
+                      )}
                     </span>
                   </Link>
                 );

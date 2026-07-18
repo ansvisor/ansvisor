@@ -9,6 +9,7 @@ import { dashboardNav } from '@/config/dashboard';
 import { useSidebarStore } from '@/stores/use-sidebar-store';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
+import { useAgentKeyStatus } from '@/hooks/use-agent-key-status';
 import { siteConfig } from '@/config/site';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,10 @@ export function Sidebar() {
   const t = useTranslations('nav');
   const tBrands = useTranslations('brands');
   const { canUse, requiredPlanFor, isCloud } = useFeatureGate();
+  // Probe once per session whether the org has saved an Anthropic key.
+  // Returns 'configured' immediately on self-host (no network call).
+  const agentKeyStatus = useAgentKeyStatus(isCloud);
+  const agentKeyMissing = isCloud && agentKeyStatus === 'missing';
   // Brand-scoped gates follow the active brand, not the org. Selecting the
   // derived brand keeps this reactive: switching brands via BrandSwitcher or
   // toggling the flag in Brand Settings flips the gate without a route change.
@@ -118,6 +123,11 @@ export function Sidebar() {
                 const labelFn = navKeyMap[item.title];
                 const label = labelFn ? labelFn() : item.title;
 
+                // Dynamic badge override: show "Set up" on the Agent item
+                // when the org has no Anthropic key saved (cloud only).
+                const effectiveBadge =
+                  item.href === '/dashboard/agent' && agentKeyMissing ? 'Set up' : item.badge;
+
                 const isLocked =
                   isCloud && item.requiredFeature != null && !canUse(item.requiredFeature);
 
@@ -165,10 +175,28 @@ export function Sidebar() {
                           : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                         isCollapsed && 'justify-center',
                       )}
-                      title={isCollapsed ? label : undefined}
+                      title={
+                        isCollapsed
+                          ? effectiveBadge
+                            ? `${label} (${effectiveBadge})`
+                            : label
+                          : undefined
+                      }
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
-                      {!isCollapsed && <span className="truncate">{label}</span>}
+                      {!isCollapsed && (
+                        <>
+                          <span className="flex-1 truncate">{label}</span>
+                          {effectiveBadge && (
+                            <Badge
+                              variant="secondary"
+                              className="ml-auto h-5 shrink-0 px-1.5 text-[10px] font-normal"
+                            >
+                              {effectiveBadge}
+                            </Badge>
+                          )}
+                        </>
+                      )}
                     </span>
                   </Link>
                 );
