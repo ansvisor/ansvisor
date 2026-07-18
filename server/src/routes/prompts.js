@@ -142,11 +142,16 @@ const newSuggestionSchema = z.object({
           .describe(
             'One sentence explaining why this prompt matters for the brand (gap, trend, competitor coverage)',
           ),
+        // No .max() ceiling: the prompt tells the model to calibrate volumes
+        // against the brand's real tracked volumes, so on high-volume brands
+        // it legitimately estimates six figures — a hard schema cap then
+        // rejects the WHOLE batch deterministically ("No object generated"),
+        // and retrying can't help. Out-of-range protection is a clamp at the
+        // insert site instead.
         estVolume: z
           .number()
           .int()
           .min(0)
-          .max(100000)
           .describe('Estimated monthly AI search volume (rough)'),
       }),
     )
@@ -205,12 +210,20 @@ Suggest the next 8 prompts this brand should start tracking, with topic, reason 
   const promptModel = process.env.PROMPT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
   const aiModel = resolveModel(promptModel);
 
-  const { object } = await generateObject({
-    model: aiModel,
-    schema: newSuggestionSchema,
-    system,
-    prompt: userPrompt,
-  });
+  // #379 pattern — bounded retry: generateObject throws "No object generated:
+  // response did not match schema" when the model misses a constraint (short
+  // reason, <6 items, non-integer estVolume, …); a fresh sample usually
+  // passes, so one miss must not fail the whole refresh.
+  const { object } = await withRetry(
+    () =>
+      generateObject({
+        model: aiModel,
+        schema: newSuggestionSchema,
+        system,
+        prompt: userPrompt,
+      }),
+    { attempts: 3, baseDelayMs: 500, label: 'suggestion-refresh' },
+  );
 
   return object.suggestions;
 }
@@ -259,7 +272,9 @@ router.post(
           topic_name: s.topic,
           topic_id: topicId,
           reason: s.reason,
-          est_volume: s.estVolume,
+          // Sanity clamp replacing the removed schema ceiling — one absurd
+          // estimate must cap out, not reject the whole generated batch.
+          est_volume: Math.min(s.estVolume, 10_000_000),
           source: 'llm',
           status: 'new',
           expires_at: expiresAt,
