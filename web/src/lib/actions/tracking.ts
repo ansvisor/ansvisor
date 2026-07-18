@@ -14,6 +14,9 @@ import type {
 import { API_BASE_URL } from '@/config/api';
 import { getTopicById } from '@/lib/actions/topic';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
+import { getPromptVolumes } from '@/lib/actions/volumes';
+import { getPromptSuggestions } from '@/lib/actions/prompt-suggestions';
+import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 
 /** Round to one decimal place (keeps sub-1 averages visible instead of flooring to 0). */
 function roundTo1(n: number): number {
@@ -411,6 +414,62 @@ async function getInsightsFilterOptions(brandId: string): Promise<InsightsFilter
   };
 }
 
+export interface TopicOpportunity {
+  keyword: string;
+  estimatedAiVolume: number;
+  promptCount: number;
+}
+
+export interface PromptOpportunity {
+  id: string;
+  text: string;
+  topicName?: string;
+  estVolume?: number;
+}
+
+export interface InsightsRecommendations {
+  topics: TopicOpportunity[];
+  prompts: PromptOpportunity[];
+}
+
+/** Items per Recommendations teaser card on the Insights page (#459). */
+const RECOMMENDATION_ITEM_LIMIT = 5;
+
+/**
+ * Teaser data for the Insights Recommendations row (#459): the top stored
+ * similar-topic clusters and prompt suggestions. Both are bounded reads of
+ * already-persisted data — generation only ever happens from the Prompts
+ * page's explicit refresh actions, never from the Insights load path.
+ * Each read degrades independently to an empty list on failure so a hiccup
+ * here can never take the Insights page down with it.
+ */
+async function getInsightsRecommendations(brandId: string): Promise<InsightsRecommendations> {
+  const [topics, prompts] = await Promise.all([
+    getPromptVolumes(brandId)
+      .then(({ volumes }) =>
+        aggregatePromptVolumeClusters(volumes)
+          .slice(0, RECOMMENDATION_ITEM_LIMIT)
+          .map((c) => ({
+            keyword: c.keyword,
+            estimatedAiVolume: c.estimatedAiVolume,
+            promptCount: c.prompts.length,
+          })),
+      )
+      .catch(() => [] as TopicOpportunity[]),
+    getPromptSuggestions(brandId)
+      .then(({ suggestions }) =>
+        suggestions.slice(0, RECOMMENDATION_ITEM_LIMIT).map((s) => ({
+          id: s.id,
+          text: s.suggestedText,
+          topicName: s.topicName ?? undefined,
+          estVolume: s.estVolume ?? undefined,
+        })),
+      )
+      .catch(() => [] as PromptOpportunity[]),
+  ]);
+  return { topics, prompts };
+}
+
 /** Cheap existence check for a brand's (non-shopping) prompt_results — counts, no rows. */
 async function getBrandResultsTotal(brandId: string): Promise<number> {
   const supabase = await createClient();
@@ -431,6 +490,7 @@ export interface InsightsData {
   sov: ShareOfVoiceData;
   trackedPrompts: TrackedPromptsKpi;
   filterOptions: InsightsFilterOptions;
+  recommendations: InsightsRecommendations;
   hasAnyData: boolean;
 }
 
@@ -465,15 +525,23 @@ export async function getInsightsData(
     dateTo: opts.dateTo,
   };
 
-  const [summary, competitors, sov, trackedPrompts, filterOptions, unfilteredTotal] =
-    await Promise.all([
-      getInsightsSummary(brandId, filterOpts),
-      getCompetitorComparison(brandId, filterOpts),
-      getShareOfVoiceData(brandId, filterOpts),
-      getTrackedPromptsKpi(brandId, filterOpts),
-      getInsightsFilterOptions(brandId),
-      opts.checkUnfiltered ? getBrandResultsTotal(brandId) : Promise.resolve(null),
-    ]);
+  const [
+    summary,
+    competitors,
+    sov,
+    trackedPrompts,
+    filterOptions,
+    recommendations,
+    unfilteredTotal,
+  ] = await Promise.all([
+    getInsightsSummary(brandId, filterOpts),
+    getCompetitorComparison(brandId, filterOpts),
+    getShareOfVoiceData(brandId, filterOpts),
+    getTrackedPromptsKpi(brandId, filterOpts),
+    getInsightsFilterOptions(brandId),
+    getInsightsRecommendations(brandId),
+    opts.checkUnfiltered ? getBrandResultsTotal(brandId) : Promise.resolve(null),
+  ]);
 
   // insights_aggregates counts the same filtered set the summary shows, so it
   // stands in for the removed results fetch when no unfiltered check ran.
@@ -485,6 +553,7 @@ export async function getInsightsData(
     sov,
     trackedPrompts,
     filterOptions,
+    recommendations,
     hasAnyData,
   };
 }

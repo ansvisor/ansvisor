@@ -300,8 +300,20 @@ export default function PromptsPage() {
     if (current === tab) return;
     const params = new URLSearchParams(Array.from(searchParams.entries()));
     params.set('tab', tab);
-    window.history.replaceState(null, '', `?${params.toString()}`);
+    // Keep the hash: deep links like #prompt-opportunities arrive without a
+    // tab param, and this sync must not strip their anchor from the URL.
+    window.history.replaceState(null, '', `?${params.toString()}${window.location.hash}`);
   }, [tab, searchParams]);
+
+  // Deep link from the Insights Recommendations row (#459): the target card
+  // only exists once the Insights tab's volume data has rendered, so a bare
+  // anchor never scrolls on its own — re-apply the hash after loading ends.
+  useEffect(() => {
+    if (tab !== 'insights' || loading) return;
+    if (window.location.hash === '#topic-opportunities') {
+      document.getElementById('topic-opportunities')?.scrollIntoView();
+    }
+  }, [tab, loading]);
 
   const loadData = useCallback(
     async (isCancelled?: () => boolean) => {
@@ -789,7 +801,7 @@ export default function PromptsPage() {
                   </CardContent>
                 </Card>
 
-                <Card>
+                <Card id="topic-opportunities">
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between gap-3">
                       <div>
