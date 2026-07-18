@@ -35,7 +35,8 @@ const EXPANDED_KEY = 'aeo:prompt-suggestions-expanded';
 
 export function SuggestionsCard({ brandId, onAccepted }: Props) {
   const [suggestions, setSuggestions] = useState<PromptSuggestion[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   // Collapsed by default so the card is a one-line strip and the prompt table
@@ -51,6 +52,12 @@ export function SuggestionsCard({ brandId, onAccepted }: Props) {
     } catch {
       // Storage unavailable (private mode) — stay collapsed.
     }
+    if (window.location.hash === '#prompt-opportunities') {
+      // Deep links mean "show me the suggestions" — expand (without touching
+      // the stored preference) and scroll the card into view.
+      setExpanded(true);
+      document.getElementById('prompt-opportunities')?.scrollIntoView();
+    }
   }, []);
 
   const toggleExpanded = () => {
@@ -65,46 +72,43 @@ export function SuggestionsCard({ brandId, onAccepted }: Props) {
     });
   };
 
-  const load = useCallback(
-    async (autoRefresh = false) => {
-      try {
-        const { suggestions: s, stale } = await getPromptSuggestions(brandId);
-        if (autoRefresh && stale) {
-          setRefreshing(true);
-          const fresh = await refreshPromptSuggestions(brandId);
-          setSuggestions(fresh);
-          setRefreshing(false);
-        } else {
-          setSuggestions(s);
-        }
-      } catch (err) {
-        console.error('Failed to load suggestions:', err);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [brandId],
-  );
-
-  useEffect(() => {
+  const load = useCallback(async () => {
     setLoading(true);
-    load(false);
-  }, [load]);
+    try {
+      const { suggestions: s } = await getPromptSuggestions(brandId);
+      setSuggestions(s);
+      setLoaded(true);
+    } catch (err) {
+      console.error('Failed to load suggestions:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [brandId]);
+
+  // Fetch ONLY once the card is actually expanded — never on page load. The
+  // collapsed strip must not fire a server action: when this card moved to
+  // the All Prompts tab its mount-time call became the FIRST action in
+  // Next's serialized queue and every hiccup in it stalled the prompt
+  // table's own data fetch behind it (the "table spins forever" bug). While
+  // collapsed the card costs zero requests, exactly like before the move.
+  useEffect(() => {
+    setLoaded(false);
+    setSuggestions([]);
+  }, [brandId]);
 
   useEffect(() => {
-    if (!loading && window.location.hash === '#prompt-opportunities') {
-      // Deep links mean "show me the suggestions" — expand (without touching
-      // the stored preference) before scrolling the card into view.
-      setExpanded(true);
-      document.getElementById('prompt-opportunities')?.scrollIntoView();
+    if (expanded && !loaded && !loading) {
+      load();
     }
-  }, [loading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded, loaded, brandId]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
       const fresh = await refreshPromptSuggestions(brandId);
       setSuggestions(fresh);
+      setLoaded(true);
       toast.success('Suggestions refreshed');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Refresh failed');
@@ -169,13 +173,17 @@ export function SuggestionsCard({ brandId, onAccepted }: Props) {
             </Info>
             {loading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-            ) : suggestions.length > 0 ? (
+            ) : loaded && suggestions.length > 0 ? (
               <Badge variant="secondary" className="text-xs tabular-nums">
                 {suggestions.length}
               </Badge>
-            ) : (
+            ) : loaded ? (
               !expanded && (
                 <span className="text-xs text-muted-foreground">no new ideas — expand</span>
+              )
+            ) : (
+              !expanded && (
+                <span className="text-xs text-muted-foreground">expand for AI prompt ideas</span>
               )
             )}
           </button>
