@@ -1350,7 +1350,7 @@ export default function CitationsPage() {
 
   const activeBrandId = brand?.id ?? null;
 
-  const [sourceTab, setSourceTab] = useState<'domains' | 'urls' | 'gaps'>('domains');
+  const [sourceTab, setSourceTab] = useState<'domains' | 'urls' | 'gaps' | 'types'>('domains');
   const [gaps, setGaps] = useState<CitationGaps | null>(null);
   const [gapsLoading, setGapsLoading] = useState(false);
 
@@ -1572,7 +1572,7 @@ export default function CitationsPage() {
           variant="outline"
           className="gap-2"
           onClick={handleExportCsv}
-          disabled={isExporting || sourceTab === 'gaps' || isLoading}
+          disabled={isExporting || sourceTab === 'gaps' || sourceTab === 'types' || isLoading}
         >
           {isExporting ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -1603,62 +1603,60 @@ export default function CitationsPage() {
             ))}
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-5">
-            <Card className="lg:col-span-3">
-              <CardHeader>
-                <CardTitle className="text-base">{t('sourcesTitle')}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Tabs
-                  value={sourceTab}
-                  onValueChange={(v) => setSourceTab(v as 'domains' | 'urls' | 'gaps')}
-                >
-                  <TabsList>
-                    <TabsTrigger value="domains">
-                      {t('tabDomains')} ({data?.totals.domains ?? 0})
-                    </TabsTrigger>
-                    <TabsTrigger value="urls">
-                      {t('tabUrls')} ({data?.totals.urls ?? 0})
-                    </TabsTrigger>
-                    <TabsTrigger value="gaps">Competitor Gaps</TabsTrigger>
-                  </TabsList>
-                  {/* keepMounted: data is already in memory, so mount both panels
-                      once and make switching a pure CSS visibility toggle (#299). */}
-                  <TabsContent value="domains" keepMounted className="mt-4">
-                    <DomainsTable
-                      rows={data?.rows ?? []}
-                      brandId={activeBrandId ?? ''}
-                      onAdded={loadData}
-                      page={domainPager.page}
-                      onPage={domainPager.setPage}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('sourcesTitle')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Tabs
+                value={sourceTab}
+                onValueChange={(v) => setSourceTab(v as 'domains' | 'urls' | 'gaps' | 'types')}
+              >
+                <TabsList>
+                  <TabsTrigger value="domains">
+                    {t('tabDomains')} ({data?.totals.domains ?? 0})
+                  </TabsTrigger>
+                  <TabsTrigger value="urls">
+                    {t('tabUrls')} ({data?.totals.urls ?? 0})
+                  </TabsTrigger>
+                  <TabsTrigger value="gaps">Competitor Gaps</TabsTrigger>
+                  <TabsTrigger value="types">{t('sourceTypesTitle')}</TabsTrigger>
+                </TabsList>
+                {/* keepMounted: data is already in memory, so mount these panels
+                    once and make switching a pure CSS visibility toggle (#299).
+                    Competitor Gaps stays lazy — it fetches on activation. */}
+                <TabsContent value="domains" keepMounted className="mt-4">
+                  <DomainsTable
+                    rows={data?.rows ?? []}
+                    brandId={activeBrandId ?? ''}
+                    onAdded={loadData}
+                    page={domainPager.page}
+                    onPage={domainPager.setPage}
+                  />
+                </TabsContent>
+                <TabsContent value="urls" keepMounted className="mt-4">
+                  <UrlsTable
+                    rows={data?.urlRows ?? []}
+                    page={urlPager.page}
+                    onPage={urlPager.setPage}
+                  />
+                </TabsContent>
+                <TabsContent value="gaps" className="mt-4">
+                  <CompetitorGapsTab loading={gapsLoading} gaps={gaps} />
+                </TabsContent>
+                <TabsContent value="types" keepMounted className="mt-4">
+                  {/* Cap the width: the donut sizes itself to its container, and
+                      an unbounded full-width chart dwarfs the legend (#486). */}
+                  <div className="mx-auto w-full max-w-md">
+                    <SourceTypeDonut
+                      data={data?.sourceTypeBreakdown ?? []}
+                      total={data?.totals.domains ?? 0}
                     />
-                  </TabsContent>
-                  <TabsContent value="urls" keepMounted className="mt-4">
-                    <UrlsTable
-                      rows={data?.urlRows ?? []}
-                      page={urlPager.page}
-                      onPage={urlPager.setPage}
-                    />
-                  </TabsContent>
-                  <TabsContent value="gaps" className="mt-4">
-                    <CompetitorGapsTab loading={gapsLoading} gaps={gaps} />
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="text-base">{t('sourceTypesTitle')}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <SourceTypeDonut
-                  data={data?.sourceTypeBreakdown ?? []}
-                  total={data?.totals.domains ?? 0}
-                />
-              </CardContent>
-            </Card>
-          </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
         </>
       )}
     </div>
@@ -1679,19 +1677,12 @@ function CitationsSkeleton() {
           </Card>
         ))}
       </div>
-      <div className="grid gap-4 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
-          <CardContent className="pt-6">
-            <Skeleton className="mb-4 h-8 w-48" />
-            <Skeleton className="h-64 w-full" />
-          </CardContent>
-        </Card>
-        <Card className="lg:col-span-2">
-          <CardContent className="pt-6">
-            <Skeleton className="h-56 w-full" />
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardContent className="pt-6">
+          <Skeleton className="mb-4 h-8 w-48" />
+          <Skeleton className="h-64 w-full" />
+        </CardContent>
+      </Card>
     </div>
   );
 }
