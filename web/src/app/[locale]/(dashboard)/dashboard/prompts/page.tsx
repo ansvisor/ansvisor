@@ -711,8 +711,8 @@ export default function PromptsPage() {
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center min-h-[300px]">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : volumes.length === 0 ? (
             <Card>
@@ -1065,8 +1065,8 @@ function AllPromptsTab({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[300px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex items-center justify-center py-10">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     );
   }
