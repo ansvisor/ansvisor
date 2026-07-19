@@ -341,10 +341,19 @@ function EmptyLogsState({ hasFilters }: { hasFilters: boolean }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+const TIME_RANGE_OPTIONS = [
+  { label: '7d', value: 7 },
+  { label: '30d', value: 30 },
+  { label: '90d', value: 90 },
+] as const;
+
+type TimeRangeDays = (typeof TIME_RANGE_OPTIONS)[number]['value'];
+
 export default function TrafficPage() {
   const { getActiveBrand } = useBrandStore();
   const brand = getActiveBrand();
 
+  const [days, setDays] = useState<TimeRangeDays>(7);
   const [summary, setSummary] = useState<TrafficSummary | null>(null);
   const [trend, setTrend] = useState<TrafficTrendPoint[]>([]);
   const [logs, setLogs] = useState<TrafficLog[]>([]);
@@ -357,6 +366,7 @@ export default function TrafficPage() {
   const [page, setPage] = useState(0);
 
   useEffect(() => {
+    setDays(7);
     setPage(0);
     setSearchInput('');
     setFilters({ platform: '', search: '' });
@@ -383,7 +393,10 @@ export default function TrafficPage() {
     if (!brand) return;
     setIsLoadingSummary(true);
     try {
-      const [s, t] = await Promise.all([getTrafficSummary(brand.id), getTrafficTrend(brand.id)]);
+      const [s, t] = await Promise.all([
+        getTrafficSummary(brand.id, days),
+        getTrafficTrend(brand.id, days),
+      ]);
       setSummary(s);
       setTrend(t);
     } catch (err) {
@@ -391,7 +404,7 @@ export default function TrafficPage() {
     } finally {
       setIsLoadingSummary(false);
     }
-  }, [brand]);
+  }, [brand, days]);
 
   const loadLogs = useCallback(async () => {
     if (!brand) return;
@@ -402,6 +415,7 @@ export default function TrafficPage() {
         offset: page * PAGE_SIZE,
         platform: filters.platform || undefined,
         search: filters.search || undefined,
+        days,
       });
       setLogs(result.logs);
       setLogsTotal(result.total);
@@ -410,11 +424,16 @@ export default function TrafficPage() {
     } finally {
       setIsLoadingLogs(false);
     }
-  }, [brand, page, filters.platform, filters.search]);
+  }, [brand, page, filters.platform, filters.search, days]);
 
   const handleFiltersChange = useCallback((patch: Partial<TrafficFilters>) => {
     setPage(0);
     setFilters((f) => ({ ...f, ...patch }));
+  }, []);
+
+  const handleDaysChange = useCallback((d: TimeRangeDays) => {
+    setDays(d);
+    setPage(0);
   }, []);
 
   useEffect(() => {
@@ -469,11 +488,29 @@ export default function TrafficPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">AI Traffic Analytics</h1>
-        <p className="text-muted-foreground text-sm">
-          {primaryDomain ? `${primaryDomain} · ` : ''}AI-referred visits to your website
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">AI Traffic Analytics</h1>
+          <p className="text-muted-foreground text-sm">
+            {primaryDomain ? `${primaryDomain} · ` : ''}AI-referred visits to your website
+          </p>
+        </div>
+        <div className="flex rounded-md border p-0.5 self-center">
+          {TIME_RANGE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              className={cn(
+                'rounded px-3 py-1 text-xs font-medium transition-colors',
+                days === opt.value
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+              onClick={() => handleDaysChange(opt.value)}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Snippet Banner */}
@@ -511,7 +548,7 @@ export default function TrafficPage() {
                     {visitsDelta}% vs previous period
                   </>
                 ) : (
-                  'last 7 days'
+                  `last ${days} days`
                 )
               }
               subPositive={visitsDelta > 0 ? true : visitsDelta < 0 ? false : undefined}
@@ -535,7 +572,7 @@ export default function TrafficPage() {
             <Card className="lg:col-span-2">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">
-                  AI Referral Trend — Last 7 Days
+                  AI Referral Trend — Last {days} Days
                 </CardTitle>
               </CardHeader>
               <CardContent>
