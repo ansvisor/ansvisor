@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import type { PromptSet, Prompt, AIPlatform, PromptVolume } from '@/types';
-import { enforceLimit, getOrgPlan } from '@/lib/guards/plan-guard';
+import { enforceLimit, getOrgPlan, PlanLimitError } from '@/lib/guards/plan-guard';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
 import type { Plan } from '@/config/plans';
 import { getPromptVolumes, type VolumeQuota } from '@/lib/actions/volumes';
@@ -384,6 +384,68 @@ export async function addPromptToSet(input: AddPromptInput): Promise<Prompt> {
 
   revalidatePath('/dashboard/brands');
   return mapPromptRow(data as Record<string, unknown>);
+}
+
+export type AddPromptToBrandResult = { prompt: Prompt } | { error: string };
+
+/**
+ * Add a single prompt to a brand from the main Prompts page (#460). Mirrors
+ * trackFanoutQuery's promote flow: earliest prompt set, platforms/models
+ * derived from its most recent active prompt.
+ *
+ * User-facing failures (plan limit, no prompt set) come back as a VALUE:
+ * production masks every error thrown from a server action, so a thrown
+ * PlanLimitError would reach users as the meaningless digest message (#427).
+ */
+export async function addPromptToBrand(
+  brandId: string,
+  text: string,
+): Promise<AddPromptToBrandResult> {
+  const supabase = await createClient();
+  const trimmed = text.trim();
+  if (!trimmed) return { error: 'Prompt text is required.' };
+
+  const { data: ps, error: psErr } = await supabase
+    .from('prompt_sets')
+    .select('id')
+    .eq('brand_id', brandId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (psErr || !ps) {
+    return { error: 'No prompt set exists for this brand. Create one first.' };
+  }
+
+  const { data: defaults } = await supabase
+    .from('prompts')
+    .select('platforms, models')
+    .eq('prompt_set_id', ps.id)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const platforms =
+    Array.isArray(defaults?.platforms) && defaults!.platforms.length > 0
+      ? (defaults!.platforms as string[])
+      : ['chatgpt-web'];
+  const models = Array.isArray(defaults?.models) ? (defaults!.models as string[]) : [];
+
+  let created: Prompt;
+  try {
+    created = await addPromptToSet({
+      promptSetId: ps.id as string,
+      text: trimmed,
+      platforms,
+      models,
+    });
+  } catch (err) {
+    if (err instanceof PlanLimitError) return { error: err.message };
+    throw err;
+  }
+
+  revalidatePath('/dashboard/prompts');
+  return { prompt: created };
 }
 
 export async function deletePrompt(id: string): Promise<void> {

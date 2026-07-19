@@ -27,6 +27,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { CompetitionBars } from '@/components/ui/competition-bars';
 import {
   TrendingUp,
@@ -39,6 +47,7 @@ import {
   Loader2,
   RefreshCw,
   Pencil,
+  Plus,
   Settings2,
   Download,
   ChevronUp,
@@ -47,7 +56,8 @@ import {
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { analyzePromptVolumesBatch, refreshVolumes, type VolumeQuota } from '@/lib/actions/volumes';
-import { getPromptsPageData } from '@/lib/actions/prompt';
+import { addPromptToBrand, getPromptsPageData } from '@/lib/actions/prompt';
+import { useUserRole } from '@/hooks/use-user-role';
 import { type PromptVisibilitySummary } from '@/lib/actions/tracking';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import type { PromptVolume, Prompt } from '@/types';
@@ -224,6 +234,108 @@ function visibilityBarClass(score: number): string {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
+/**
+ * Quick-add dialog for the active brand (#460). Text only — platforms/models
+ * are derived server-side from the brand's most recent active prompt (same
+ * promote flow as tracking a fan-out query). Plan-limit and other user-facing
+ * failures come back as a value and render inside the dialog instead of the
+ * masked production digest (#427).
+ */
+function AddPromptDialog({
+  brandId,
+  open,
+  onClose,
+  onAdded,
+}: {
+  brandId: string;
+  open: boolean;
+  onClose: () => void;
+  onAdded: () => void;
+}) {
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const handleClose = () => {
+    if (saving) return;
+    setText('');
+    setError(null);
+    onClose();
+  };
+
+  const handleAdd = async () => {
+    if (!text.trim() || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await addPromptToBrand(brandId, text);
+      if ('error' in result) {
+        setError(result.error);
+        return;
+      }
+      setText('');
+      onClose();
+      toast.success('Prompt added — it will be picked up by the next tracking run.');
+      onAdded();
+    } catch {
+      setError('Failed to add prompt. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Plus className="h-4 w-4" />
+            Add Prompt
+          </DialogTitle>
+          <DialogDescription>
+            Track a new prompt for this brand. Platforms and models follow your existing prompts —
+            fine-tune later from the brand&apos;s Manage prompts page.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Input
+            autoFocus
+            placeholder="e.g. Best project management tools for startups"
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              if (error) setError(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleAdd();
+            }}
+            disabled={saving}
+          />
+          {error && <p className="text-xs text-red-500">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={handleClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={handleAdd} disabled={saving || !text.trim()}>
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Adding…
+              </>
+            ) : (
+              <>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Prompt
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function KpiCard({
   title,
   icon: Icon,
@@ -275,6 +387,8 @@ export default function PromptsPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [quota, setQuota] = useState<VolumeQuota | null>(null);
+  const [addPromptOpen, setAddPromptOpen] = useState(false);
+  const { canManage } = useUserRole();
 
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore(
@@ -565,6 +679,17 @@ export default function PromptsPage() {
             <TabsTrigger value="insights">Insights</TabsTrigger>
           </TabsList>
           <div className="flex items-center gap-2">
+            {tab === 'all' && canManage && (
+              <Button
+                type="button"
+                size="sm"
+                className="gap-2"
+                onClick={() => setAddPromptOpen(true)}
+              >
+                <Plus className="h-4 w-4" />
+                Add prompt
+              </Button>
+            )}
             {tab === 'all' && (
               <span title={!canExport ? PROMPT_EXPORT_HINT : undefined}>
                 <Button
@@ -637,6 +762,7 @@ export default function PromptsPage() {
             activeBrandId={activeBrandId}
             volumeByPromptId={volumeByPromptId}
             visibility={visibility}
+            onAddPrompt={canManage ? () => setAddPromptOpen(true) : undefined}
           />
         </TabsContent>
 
@@ -988,6 +1114,15 @@ export default function PromptsPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {activeBrandId && (
+        <AddPromptDialog
+          brandId={activeBrandId}
+          open={addPromptOpen}
+          onClose={() => setAddPromptOpen(false)}
+          onAdded={loadData}
+        />
+      )}
     </div>
   );
 }
@@ -1000,12 +1135,15 @@ function AllPromptsTab({
   activeBrandId,
   volumeByPromptId,
   visibility,
+  onAddPrompt,
 }: {
   loading: boolean;
   prompts: Prompt[];
   activeBrandId: string;
   volumeByPromptId: Map<string, PromptVolume>;
   visibility: Record<string, PromptVisibilitySummary>;
+  /** Opens the Add Prompt dialog; undefined when the user can't write (member role). */
+  onAddPrompt?: () => void;
 }) {
   const [search, setSearch] = useState('');
   const searchParams = useSearchParams();
@@ -1082,12 +1220,20 @@ function AllPromptsTab({
               Add prompts to your brand to start tracking their AI visibility.
             </p>
           </div>
-          <Link href={`/dashboard/brands/${activeBrandId}/prompts`}>
-            <Button size="sm" className="gap-2">
-              <Pencil className="h-4 w-4" />
-              Manage prompts
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            {onAddPrompt && (
+              <Button size="sm" className="gap-2" onClick={onAddPrompt}>
+                <Plus className="h-4 w-4" />
+                Add prompt
+              </Button>
+            )}
+            <Link href={`/dashboard/brands/${activeBrandId}/prompts`}>
+              <Button size="sm" variant={onAddPrompt ? 'outline' : 'default'} className="gap-2">
+                <Pencil className="h-4 w-4" />
+                Manage prompts
+              </Button>
+            </Link>
+          </div>
         </CardContent>
       </Card>
     );
