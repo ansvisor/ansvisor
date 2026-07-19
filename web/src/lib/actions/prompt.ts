@@ -389,21 +389,25 @@ export async function addPromptToSet(input: AddPromptInput): Promise<Prompt> {
 export type AddPromptToBrandResult = { prompt: Prompt } | { error: string };
 
 /**
- * Add a single prompt to a brand from the main Prompts page (#460). Mirrors
- * trackFanoutQuery's promote flow: earliest prompt set, platforms/models
- * derived from its most recent active prompt.
+ * Add a single prompt to a brand from the main Prompts page (#460). Same
+ * write path as the brand page's Add Prompt card (addPromptToSet with the
+ * caller's topic/platform/model choices); the brand's earliest prompt set is
+ * the target, created on the fly when the brand has none yet.
  *
- * User-facing failures (plan limit, no prompt set) come back as a VALUE:
+ * User-facing failures (plan limit, empty selection) come back as a VALUE:
  * production masks every error thrown from a server action, so a thrown
  * PlanLimitError would reach users as the meaningless digest message (#427).
  */
 export async function addPromptToBrand(
   brandId: string,
-  text: string,
+  input: { text: string; category?: string; platforms: string[]; models?: string[] },
 ): Promise<AddPromptToBrandResult> {
   const supabase = await createClient();
-  const trimmed = text.trim();
+  const trimmed = input.text.trim();
   if (!trimmed) return { error: 'Prompt text is required.' };
+  if (input.platforms.length === 0 && (input.models ?? []).length === 0) {
+    return { error: 'Select at least one platform or model.' };
+  }
 
   const { data: ps, error: psErr } = await supabase
     .from('prompt_sets')
@@ -412,32 +416,29 @@ export async function addPromptToBrand(
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
-  if (psErr || !ps) {
-    return { error: 'No prompt set exists for this brand. Create one first.' };
+  if (psErr) return { error: psErr.message };
+
+  let promptSetId = ps?.id as string | undefined;
+  if (!promptSetId) {
+    const { data: createdSet, error: setErr } = await supabase
+      .from('prompt_sets')
+      .insert({ brand_id: brandId, name: 'Prompts' })
+      .select('id')
+      .single();
+    if (setErr || !createdSet) {
+      return { error: setErr?.message ?? 'Failed to create a prompt set for this brand.' };
+    }
+    promptSetId = createdSet.id as string;
   }
-
-  const { data: defaults } = await supabase
-    .from('prompts')
-    .select('platforms, models')
-    .eq('prompt_set_id', ps.id)
-    .eq('is_active', true)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const platforms =
-    Array.isArray(defaults?.platforms) && defaults!.platforms.length > 0
-      ? (defaults!.platforms as string[])
-      : ['chatgpt-web'];
-  const models = Array.isArray(defaults?.models) ? (defaults!.models as string[]) : [];
 
   let created: Prompt;
   try {
     created = await addPromptToSet({
-      promptSetId: ps.id as string,
+      promptSetId,
       text: trimmed,
-      platforms,
-      models,
+      category: input.category,
+      platforms: input.platforms,
+      models: input.models ?? [],
     });
   } catch (err) {
     if (err instanceof PlanLimitError) return { error: err.message };
