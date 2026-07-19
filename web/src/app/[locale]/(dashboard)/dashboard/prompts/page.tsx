@@ -59,12 +59,19 @@ import {
   Download,
   ChevronUp,
   ChevronDown,
+  Trash2,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { analyzePromptVolumesBatch, refreshVolumes, type VolumeQuota } from '@/lib/actions/volumes';
-import { addPromptToBrand, getPromptsPageData } from '@/lib/actions/prompt';
+import {
+  addPromptToBrand,
+  deletePrompt,
+  getPromptsPageData,
+  updatePrompt,
+} from '@/lib/actions/prompt';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useUserRole } from '@/hooks/use-user-role';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { MODEL_GROUPS, ALL_MODELS, SCRAPER_GROUPS, ALL_SCRAPERS } from '@/config/prompt-options';
@@ -247,6 +254,211 @@ function visibilityBarClass(score: number): string {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 /**
+ * Plan- and brand-scoped engine lists shared by the Add / Edit prompt dialogs.
+ * Shopping tracking is opt-in per brand (#155): the engine is hidden entirely
+ * when the pref is off. The write actions strip it server-side too.
+ */
+function useAllowedEngines(shoppingEnabled: boolean) {
+  const { planId, allowedModelIds: planAllowedModelIds } = usePlanContext();
+
+  const allowedScraperIds = useMemo(() => {
+    const allowed = PLANS[planId].limits.allowedScrapers;
+    const ids = allowed ? [...allowed] : ALL_SCRAPERS.map((s) => s.id);
+    return shoppingEnabled ? ids : ids.filter((id) => id !== 'chatgpt-shopping');
+  }, [planId, shoppingEnabled]);
+  const allowedModelIds = useMemo(
+    () => planAllowedModelIds ?? ALL_MODELS.map((m) => m.id),
+    [planAllowedModelIds],
+  );
+  const visibleScrapers = useMemo(
+    () => ALL_SCRAPERS.filter((s) => allowedScraperIds.includes(s.id)),
+    [allowedScraperIds],
+  );
+  const visibleModels = useMemo(
+    () => ALL_MODELS.filter((m) => allowedModelIds.includes(m.id)),
+    [allowedModelIds],
+  );
+
+  return { allowedScraperIds, allowedModelIds, visibleScrapers, visibleModels };
+}
+
+/**
+ * Shared form body of the Add / Edit prompt dialogs (#460, #484): text input,
+ * topic select and the grouped Platform & Models picker with badge chips.
+ * Both dialogs must present the same fields — keep them here so the two
+ * can't drift apart.
+ */
+function PromptFormFields({
+  text,
+  onTextChange,
+  onSubmit,
+  category,
+  onCategoryChange,
+  topics,
+  scrapers,
+  models,
+  setScrapers,
+  setModels,
+  visibleScrapers,
+  visibleModels,
+  saving,
+  autoFocus,
+}: {
+  text: string;
+  onTextChange: (value: string) => void;
+  onSubmit: () => void;
+  category: string;
+  onCategoryChange: (value: string) => void;
+  topics: Topic[];
+  scrapers: string[];
+  models: string[];
+  setScrapers: React.Dispatch<React.SetStateAction<string[]>>;
+  setModels: React.Dispatch<React.SetStateAction<string[]>>;
+  visibleScrapers: typeof ALL_SCRAPERS;
+  visibleModels: typeof ALL_MODELS;
+  saving: boolean;
+  autoFocus?: boolean;
+}) {
+  return (
+    <>
+      <Input
+        autoFocus={autoFocus}
+        placeholder="e.g. Best project management tools for startups"
+        value={text}
+        onChange={(e) => onTextChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onSubmit();
+        }}
+        disabled={saving}
+      />
+
+      {/* Topic */}
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Topic</label>
+        {topics.length > 0 ? (
+          <Select value={category || null} onValueChange={(v) => v && onCategoryChange(String(v))}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a topic" />
+            </SelectTrigger>
+            <SelectContent>
+              {topics.map((topic) => (
+                <SelectItem key={topic.id} value={topic.name}>
+                  {topic.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <p className="text-xs text-muted-foreground py-2">
+            No topics defined yet. Add topics in brand settings.
+          </p>
+        )}
+      </div>
+
+      {/* Platform & Models — combined select, same as brands/[id]/prompts */}
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+          Platform & Models
+        </label>
+        <Select
+          value="__placeholder__"
+          onValueChange={(v) => {
+            if (!v || v === '__placeholder__') return;
+            const id = String(v);
+            if (visibleModels.some((m) => m.id === id) && !models.includes(id)) {
+              setModels((prev) => [...prev, id]);
+            } else if (visibleScrapers.some((s) => s.id === id) && !scrapers.includes(id)) {
+              setScrapers((prev) => [...prev, id]);
+            }
+          }}
+        >
+          <SelectTrigger className="w-full">
+            <span className="truncate text-muted-foreground">
+              {models.length + scrapers.length > 0
+                ? `${models.length + scrapers.length} selected`
+                : 'Select platform & models'}
+            </span>
+          </SelectTrigger>
+          <SelectContent>
+            {SCRAPER_GROUPS.map((group) => {
+              const groupScrapers = group.scrapers.filter((s) =>
+                visibleScrapers.some((vs) => vs.id === s.id),
+              );
+              if (groupScrapers.length === 0) return null;
+              return (
+                <div key={group.provider}>
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                    {group.provider} (Scraper)
+                  </div>
+                  {groupScrapers.map((s) => (
+                    <SelectItem key={s.id} value={s.id} disabled={scrapers.includes(s.id)}>
+                      <div>
+                        <div>{s.label}</div>
+                        <div className="text-[10px] text-muted-foreground font-mono">{s.id}</div>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </div>
+              );
+            })}
+            {MODEL_GROUPS.map((group) => {
+              const groupModels = group.models.filter((m) =>
+                visibleModels.some((vm) => vm.id === m.id),
+              );
+              if (groupModels.length === 0) return null;
+              return (
+                <div key={group.provider}>
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                    {group.provider} (API)
+                  </div>
+                  {groupModels.map((m) => (
+                    <SelectItem key={m.id} value={m.id} disabled={models.includes(m.id)}>
+                      <div>
+                        <div>{m.label}</div>
+                        <div className="text-[10px] text-muted-foreground font-mono">{m.id}</div>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </div>
+              );
+            })}
+          </SelectContent>
+        </Select>
+        {(models.length > 0 || scrapers.length > 0) && (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {scrapers.map((id) => {
+              const s = ALL_SCRAPERS.find((as_) => as_.id === id);
+              return (
+                <Badge key={id} variant="outline" className="gap-1 text-xs">
+                  {s?.label ?? id}
+                  <button
+                    type="button"
+                    onClick={() => setScrapers((p) => p.filter((i) => i !== id))}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              );
+            })}
+            {models.map((id) => {
+              const m = ALL_MODELS.find((am) => am.id === id);
+              return (
+                <Badge key={id} variant="secondary" className="gap-1 text-xs">
+                  {m?.label ?? id}
+                  <button type="button" onClick={() => setModels((p) => p.filter((i) => i !== id))}>
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/**
  * Quick-add dialog for the active brand (#460). Same mechanism as the Add
  * Prompt card on brands/[id]/prompts: topic select + the grouped
  * Platform & Models picker (plan-filtered, shopping hidden unless the brand
@@ -267,27 +479,8 @@ function AddPromptDialog({
   onClose: () => void;
   onAdded: () => void;
 }) {
-  const { planId, allowedModelIds: planAllowedModelIds } = usePlanContext();
-
-  const allowedScraperIds = useMemo(() => {
-    const allowed = PLANS[planId].limits.allowedScrapers;
-    const ids = allowed ? [...allowed] : ALL_SCRAPERS.map((s) => s.id);
-    // Shopping tracking is opt-in per brand (#155): hide the engine entirely
-    // when the pref is off. The write actions strip it server-side too.
-    return shoppingEnabled ? ids : ids.filter((id) => id !== 'chatgpt-shopping');
-  }, [planId, shoppingEnabled]);
-  const allowedModelIds = useMemo(
-    () => planAllowedModelIds ?? ALL_MODELS.map((m) => m.id),
-    [planAllowedModelIds],
-  );
-  const visibleScrapers = useMemo(
-    () => ALL_SCRAPERS.filter((s) => allowedScraperIds.includes(s.id)),
-    [allowedScraperIds],
-  );
-  const visibleModels = useMemo(
-    () => ALL_MODELS.filter((m) => allowedModelIds.includes(m.id)),
-    [allowedModelIds],
-  );
+  const { allowedScraperIds, allowedModelIds, visibleScrapers, visibleModels } =
+    useAllowedEngines(shoppingEnabled);
 
   const [text, setText] = useState('');
   const [category, setCategory] = useState('');
@@ -363,149 +556,25 @@ function AddPromptDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <Input
+          <PromptFormFields
             autoFocus
-            placeholder="e.g. Best project management tools for startups"
-            value={text}
-            onChange={(e) => {
-              setText(e.target.value);
+            text={text}
+            onTextChange={(value) => {
+              setText(value);
               if (error) setError(null);
             }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleAdd();
-            }}
-            disabled={saving}
+            onSubmit={handleAdd}
+            category={category}
+            onCategoryChange={setCategory}
+            topics={topics}
+            scrapers={scrapers}
+            models={models}
+            setScrapers={setScrapers}
+            setModels={setModels}
+            visibleScrapers={visibleScrapers}
+            visibleModels={visibleModels}
+            saving={saving}
           />
-
-          {/* Topic */}
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Topic</label>
-            {topics.length > 0 ? (
-              <Select value={category || null} onValueChange={(v) => v && setCategory(String(v))}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a topic" />
-                </SelectTrigger>
-                <SelectContent>
-                  {topics.map((topic) => (
-                    <SelectItem key={topic.id} value={topic.name}>
-                      {topic.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <p className="text-xs text-muted-foreground py-2">
-                No topics defined yet. Add topics in brand settings.
-              </p>
-            )}
-          </div>
-
-          {/* Platform & Models — combined select, same as brands/[id]/prompts */}
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-              Platform & Models
-            </label>
-            <Select
-              value="__placeholder__"
-              onValueChange={(v) => {
-                if (!v || v === '__placeholder__') return;
-                const id = String(v);
-                if (visibleModels.some((m) => m.id === id) && !models.includes(id)) {
-                  setModels((prev) => [...prev, id]);
-                } else if (visibleScrapers.some((s) => s.id === id) && !scrapers.includes(id)) {
-                  setScrapers((prev) => [...prev, id]);
-                }
-              }}
-            >
-              <SelectTrigger className="w-full">
-                <span className="truncate text-muted-foreground">
-                  {models.length + scrapers.length > 0
-                    ? `${models.length + scrapers.length} selected`
-                    : 'Select platform & models'}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                {SCRAPER_GROUPS.map((group) => {
-                  const groupScrapers = group.scrapers.filter((s) =>
-                    visibleScrapers.some((vs) => vs.id === s.id),
-                  );
-                  if (groupScrapers.length === 0) return null;
-                  return (
-                    <div key={group.provider}>
-                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-                        {group.provider} (Scraper)
-                      </div>
-                      {groupScrapers.map((s) => (
-                        <SelectItem key={s.id} value={s.id} disabled={scrapers.includes(s.id)}>
-                          <div>
-                            <div>{s.label}</div>
-                            <div className="text-[10px] text-muted-foreground font-mono">
-                              {s.id}
-                            </div>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </div>
-                  );
-                })}
-                {MODEL_GROUPS.map((group) => {
-                  const groupModels = group.models.filter((m) =>
-                    visibleModels.some((vm) => vm.id === m.id),
-                  );
-                  if (groupModels.length === 0) return null;
-                  return (
-                    <div key={group.provider}>
-                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-                        {group.provider} (API)
-                      </div>
-                      {groupModels.map((m) => (
-                        <SelectItem key={m.id} value={m.id} disabled={models.includes(m.id)}>
-                          <div>
-                            <div>{m.label}</div>
-                            <div className="text-[10px] text-muted-foreground font-mono">
-                              {m.id}
-                            </div>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </div>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-            {(models.length > 0 || scrapers.length > 0) && (
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {scrapers.map((id) => {
-                  const s = ALL_SCRAPERS.find((as_) => as_.id === id);
-                  return (
-                    <Badge key={id} variant="outline" className="gap-1 text-xs">
-                      {s?.label ?? id}
-                      <button
-                        type="button"
-                        onClick={() => setScrapers((p) => p.filter((i) => i !== id))}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  );
-                })}
-                {models.map((id) => {
-                  const m = ALL_MODELS.find((am) => am.id === id);
-                  return (
-                    <Badge key={id} variant="secondary" className="gap-1 text-xs">
-                      {m?.label ?? id}
-                      <button
-                        type="button"
-                        onClick={() => setModels((p) => p.filter((i) => i !== id))}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  );
-                })}
-              </div>
-            )}
-          </div>
 
           {error && <p className="text-xs text-red-500">{error}</p>}
         </div>
@@ -530,6 +599,225 @@ function AddPromptDialog({
               </>
             )}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Edit/delete-in-place dialog for a row on the All Prompts tab (#484) — the
+ * sibling of AddPromptDialog, sharing its form body. Saving goes through the
+ * existing updatePrompt (topic resolution, plan filtering and shopping
+ * stripping happen server-side); editing keeps the prompt id so its tracking
+ * history stays attached. Delete sits behind an inline confirm step because
+ * prompt_results cascade — the prompt's history goes with it.
+ */
+function EditPromptDialog({
+  prompt,
+  brandId,
+  shoppingEnabled,
+  onClose,
+  onChanged,
+}: {
+  /** The prompt being edited; null keeps the dialog closed. */
+  prompt: Prompt | null;
+  brandId: string;
+  shoppingEnabled: boolean;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const { allowedScraperIds, allowedModelIds, visibleScrapers, visibleModels } =
+    useAllowedEngines(shoppingEnabled);
+
+  const [text, setText] = useState('');
+  const [category, setCategory] = useState('');
+  const [scrapers, setScrapers] = useState<string[]>([]);
+  const [models, setModels] = useState<string[]>([]);
+  const [isActive, setIsActive] = useState(true);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  const promptId = prompt?.id;
+
+  // Seed the form from the clicked prompt on every open. Selections are
+  // intersected with the allowed lists so the chips only show engines the
+  // picker could re-add; anything outside the plan (or a disabled shopping
+  // engine) would be stripped server-side on save anyway. Topics are fetched
+  // lazily — the dialog costs zero requests until it is actually opened.
+  useEffect(() => {
+    if (!prompt) return;
+    setText(prompt.text);
+    setCategory(prompt.category ?? '');
+    setScrapers(prompt.platforms.filter((id) => allowedScraperIds.includes(id)));
+    setModels(prompt.models.filter((id) => allowedModelIds.includes(id)));
+    setIsActive(prompt.isActive);
+    setError(null);
+    setConfirmingDelete(false);
+    let cancelled = false;
+    getTopics(brandId)
+      .then((t) => {
+        if (!cancelled) setTopics(t);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [promptId, brandId]);
+
+  const busy = saving || deleting;
+
+  const handleClose = () => {
+    if (busy) return;
+    onClose();
+  };
+
+  const handleSave = async () => {
+    if (!prompt || !text.trim() || (scrapers.length === 0 && models.length === 0) || busy) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await updatePrompt(prompt.id, {
+        text: text.trim(),
+        category: category || undefined,
+        platforms: scrapers,
+        models,
+        isActive,
+      });
+      onClose();
+      toast.success('Prompt updated.');
+      onChanged();
+    } catch {
+      setError('Failed to update prompt. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!prompt || busy) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await deletePrompt(prompt.id);
+      onClose();
+      toast.success('Prompt deleted.');
+      onChanged();
+    } catch {
+      setError('Failed to delete prompt. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <Dialog open={prompt !== null} onOpenChange={(v) => !v && handleClose()}>
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Pencil className="h-4 w-4" />
+            Edit Prompt
+          </DialogTitle>
+          <DialogDescription>
+            Changes apply from the next tracking run; past results stay attached to this prompt.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <PromptFormFields
+            text={text}
+            onTextChange={(value) => {
+              setText(value);
+              if (error) setError(null);
+            }}
+            onSubmit={handleSave}
+            category={category}
+            onCategoryChange={setCategory}
+            topics={topics}
+            scrapers={scrapers}
+            models={models}
+            setScrapers={setScrapers}
+            setModels={setModels}
+            visibleScrapers={visibleScrapers}
+            visibleModels={visibleModels}
+            saving={busy}
+          />
+
+          <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
+            <Checkbox
+              checked={isActive}
+              onCheckedChange={(v) => setIsActive(v === true)}
+              disabled={busy}
+            />
+            <span>Active — included in tracking runs</span>
+          </label>
+
+          {error && <p className="text-xs text-red-500">{error}</p>}
+        </div>
+        <DialogFooter className="gap-2">
+          {confirmingDelete ? (
+            <div className="flex w-full flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-red-500">Delete this prompt and its tracking history?</p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirmingDelete(false)}
+                  disabled={deleting}
+                >
+                  Keep it
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                >
+                  {deleting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-2 h-4 w-4" />
+                  )}
+                  Delete
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-red-500 hover:text-red-600 sm:mr-auto"
+                onClick={() => setConfirmingDelete(true)}
+                disabled={busy}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </Button>
+              <Button type="button" variant="outline" onClick={handleClose} disabled={busy}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleSave}
+                disabled={busy || !text.trim() || (scrapers.length === 0 && models.length === 0)}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving…
+                  </>
+                ) : (
+                  'Save changes'
+                )}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -588,6 +876,7 @@ export default function PromptsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [quota, setQuota] = useState<VolumeQuota | null>(null);
   const [addPromptOpen, setAddPromptOpen] = useState(false);
+  const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
   const { canManage } = useUserRole();
 
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
@@ -963,6 +1252,7 @@ export default function PromptsPage() {
             volumeByPromptId={volumeByPromptId}
             visibility={visibility}
             onAddPrompt={canManage ? () => setAddPromptOpen(true) : undefined}
+            onEditPrompt={canManage ? setEditingPrompt : undefined}
           />
         </TabsContent>
 
@@ -1324,6 +1614,16 @@ export default function PromptsPage() {
           onAdded={loadData}
         />
       )}
+
+      {activeBrandId && (
+        <EditPromptDialog
+          prompt={editingPrompt}
+          brandId={activeBrandId}
+          shoppingEnabled={!!activeBrand?.shoppingModeEnabled}
+          onClose={() => setEditingPrompt(null)}
+          onChanged={loadData}
+        />
+      )}
     </div>
   );
 }
@@ -1337,6 +1637,7 @@ function AllPromptsTab({
   volumeByPromptId,
   visibility,
   onAddPrompt,
+  onEditPrompt,
 }: {
   loading: boolean;
   prompts: Prompt[];
@@ -1345,6 +1646,8 @@ function AllPromptsTab({
   visibility: Record<string, PromptVisibilitySummary>;
   /** Opens the Add Prompt dialog; undefined when the user can't write (member role). */
   onAddPrompt?: () => void;
+  /** Opens the Edit Prompt dialog for a row; undefined hides the pencil (member role). */
+  onEditPrompt?: (prompt: Prompt) => void;
 }) {
   const [search, setSearch] = useState('');
   const searchParams = useSearchParams();
@@ -1447,7 +1750,9 @@ function AllPromptsTab({
           <div>
             <CardTitle className="text-sm font-medium">All Prompts ({prompts.length})</CardTitle>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Read-only overview · edit prompts from each brand&apos;s page
+              {onEditPrompt
+                ? 'Every tracked prompt for this brand · edit or pause any row in place'
+                : 'Read-only overview of every tracked prompt for this brand'}
             </p>
           </div>
           <div className="relative w-60">
@@ -1514,7 +1819,7 @@ function AllPromptsTab({
               >
                 Last run
               </SortableHead>
-              <TableHead className="text-right pr-6 w-[60px]">Edit</TableHead>
+              {onEditPrompt && <TableHead className="text-right pr-6 w-[60px]">Edit</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1601,18 +1906,19 @@ function AllPromptsTab({
                   <TableCell className="text-right text-xs text-muted-foreground">
                     {formatRelative(vis?.lastRunAt)}
                   </TableCell>
-                  <TableCell className="text-right pr-6">
-                    <Link href={`/dashboard/brands/${activeBrandId}/prompts`}>
+                  {onEditPrompt && (
+                    <TableCell className="text-right pr-6">
                       <Button
                         size="sm"
                         variant="ghost"
                         className="h-7 w-7 p-0"
                         aria-label="Edit prompt"
+                        onClick={() => onEditPrompt(p)}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                    </Link>
-                  </TableCell>
+                    </TableCell>
+                  )}
                 </TableRow>
               );
             })}
