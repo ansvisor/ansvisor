@@ -1214,6 +1214,11 @@ export default function InsightsPage() {
 
   const noResults = !summary || summary.totalResults === 0;
 
+  // First load renders the skeleton (summary is still null); once data has
+  // ever arrived, a reload from a filter change is a "refetch" — the stale
+  // content stays visible under the overlay instead of flashing a skeleton.
+  const isRefetching = isLoading && summary !== null;
+
   // Visibility Rate = prompts the brand appeared in ÷ prompts that produced
   // results, both under the same filters (the Tracked Prompts KPI is the
   // denominator on purpose — the two cards must agree).
@@ -1321,162 +1326,180 @@ export default function InsightsPage() {
       {/* Tracking Progress */}
       <TrackingProgressBanner jobStatus={jobStatus} onStop={handleStopTracking} />
 
-      {noResults ? (
-        <NoDataForPeriod datePreset={filters.datePreset} onReset={handleResetFilters} />
-      ) : (
-        <>
-          {/* KPI Cards — Visibility Rate leads the row: the raw all-results
+      {/* Refetch overlay: on a filter/date change the previous window's data
+          stays mounted (no skeleton — that's first-load only), so without a
+          signal the user reads stale numbers as the new period's. Dim the
+          content and float a spinner over it; the overlay also swallows
+          clicks so a stale card can't be interacted with. The filter bar
+          stays outside, so switching presets mid-load keeps working. */}
+      <div className="relative">
+        {isRefetching && (
+          <div className="absolute inset-0 z-10 flex items-start justify-center rounded-lg bg-background/50 pt-32">
+            <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground shadow-sm">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Updating…
+            </div>
+          </div>
+        )}
+        <div className={cn('space-y-6', isRefetching && 'opacity-60')}>
+          {noResults ? (
+            <NoDataForPeriod datePreset={filters.datePreset} onReset={handleResetFilters} />
+          ) : (
+            <>
+              {/* KPI Cards — Visibility Rate leads the row: the raw all-results
               score average reads near zero for most brands (absent answers
               each contribute 0) and buried the number users act on. The old
               average survives in the breakdown sheet; Share of Voice has its
               own chart section below. */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
-            <KpiCard
-              title="Visibility Rate"
-              tooltip="Share of tracked prompts where your brand appeared in at least one AI answer under the current filters."
-              icon={Eye}
-              value={`${visibilityRatePct}%`}
-              sub={null}
-              onClick={() => setBreakdownMetric('visibility')}
-            />
-            <KpiCard
-              title="Tracked Prompts"
-              tooltip="Distinct prompts that produced tracked results in the selected period and filters. The quota below is current usage across your organization — it does not change with the date range."
-              icon={Layers}
-              value={trackedPrompts?.activeInPeriod ?? 0}
-              sub={
-                trackedPrompts && trackedPrompts.quotaLimit !== -1 ? (
-                  <>
-                    <span className="tabular-nums">
-                      {trackedPrompts.quotaUsed} / {trackedPrompts.quotaLimit} prompts
-                    </span>
-                    {trackedPrompts.quotaUsed >= trackedPrompts.quotaLimit * 0.9 && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          router.push('/dashboard/settings');
-                        }}
-                        className="ml-1 underline underline-offset-2 hover:text-foreground"
-                      >
-                        Upgrade
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  `${trackedPrompts?.quotaUsed ?? 0} prompts tracked`
-                )
-              }
-              onClick={() => router.push('/dashboard/prompts')}
-            />
-            <KpiCard
-              title="Mentions"
-              tooltip="How many times your brand was referenced by name in AI-generated responses."
-              icon={Zap}
-              value={summary!.totalMentions}
-              sub={<DeltaBadge delta={summary!.mentionsChange} />}
-              subVariant={
-                summary!.mentionsChange !== null && summary!.mentionsChange > 0
-                  ? 'positive'
-                  : 'muted'
-              }
-              onClick={() => setBreakdownMetric('mentions')}
-            />
-            <KpiCard
-              title="Citations"
-              tooltip="Times your brand's domain was cited as a source with a direct link in AI responses."
-              icon={Quote}
-              value={summary!.totalCitations}
-              sub={<DeltaBadge delta={summary!.citationsChange} />}
-              subVariant={
-                summary!.citationsChange !== null && summary!.citationsChange > 0
-                  ? 'positive'
-                  : 'muted'
-              }
-              onClick={() => router.push('/dashboard/citations')}
-            />
-            <KpiCard
-              title="Positive Sentiment"
-              tooltip="Percentage of AI responses that described your brand in a positive context."
-              icon={AlertCircle}
-              value={`${summary!.positiveSentimentPct}%`}
-              sub={<DeltaBadge delta={summary!.sentimentChange} suffix=" pts" />}
-              subVariant={
-                summary!.sentimentChange !== null && summary!.sentimentChange > 0
-                  ? 'positive'
-                  : 'muted'
-              }
-            />
-          </div>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
+                <KpiCard
+                  title="Visibility Rate"
+                  tooltip="Share of tracked prompts where your brand appeared in at least one AI answer under the current filters."
+                  icon={Eye}
+                  value={`${visibilityRatePct}%`}
+                  sub={null}
+                  onClick={() => setBreakdownMetric('visibility')}
+                />
+                <KpiCard
+                  title="Tracked Prompts"
+                  tooltip="Distinct prompts that produced tracked results in the selected period and filters. The quota below is current usage across your organization — it does not change with the date range."
+                  icon={Layers}
+                  value={trackedPrompts?.activeInPeriod ?? 0}
+                  sub={
+                    trackedPrompts && trackedPrompts.quotaLimit !== -1 ? (
+                      <>
+                        <span className="tabular-nums">
+                          {trackedPrompts.quotaUsed} / {trackedPrompts.quotaLimit} prompts
+                        </span>
+                        {trackedPrompts.quotaUsed >= trackedPrompts.quotaLimit * 0.9 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push('/dashboard/settings');
+                            }}
+                            className="ml-1 underline underline-offset-2 hover:text-foreground"
+                          >
+                            Upgrade
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      `${trackedPrompts?.quotaUsed ?? 0} prompts tracked`
+                    )
+                  }
+                  onClick={() => router.push('/dashboard/prompts')}
+                />
+                <KpiCard
+                  title="Mentions"
+                  tooltip="How many times your brand was referenced by name in AI-generated responses."
+                  icon={Zap}
+                  value={summary!.totalMentions}
+                  sub={<DeltaBadge delta={summary!.mentionsChange} />}
+                  subVariant={
+                    summary!.mentionsChange !== null && summary!.mentionsChange > 0
+                      ? 'positive'
+                      : 'muted'
+                  }
+                  onClick={() => setBreakdownMetric('mentions')}
+                />
+                <KpiCard
+                  title="Citations"
+                  tooltip="Times your brand's domain was cited as a source with a direct link in AI responses."
+                  icon={Quote}
+                  value={summary!.totalCitations}
+                  sub={<DeltaBadge delta={summary!.citationsChange} />}
+                  subVariant={
+                    summary!.citationsChange !== null && summary!.citationsChange > 0
+                      ? 'positive'
+                      : 'muted'
+                  }
+                  onClick={() => router.push('/dashboard/citations')}
+                />
+                <KpiCard
+                  title="Positive Sentiment"
+                  tooltip="Percentage of AI responses that described your brand in a positive context."
+                  icon={AlertCircle}
+                  value={`${summary!.positiveSentimentPct}%`}
+                  sub={<DeltaBadge delta={summary!.sentimentChange} suffix=" pts" />}
+                  subVariant={
+                    summary!.sentimentChange !== null && summary!.sentimentChange > 0
+                      ? 'positive'
+                      : 'muted'
+                  }
+                />
+              </div>
 
-          {/* Competitor Comparison */}
-          {competitorData && (
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-              <Card className="lg:col-span-3">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                    <Users className="h-4 w-4" />
-                    AI Visibility — Brand vs Competitors
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CompetitorChart
-                    providerRows={competitorData.providerRows}
-                    brands={competitorData.brands}
-                  />
-                </CardContent>
-              </Card>
+              {/* Competitor Comparison */}
+              {competitorData && (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+                  <Card className="lg:col-span-3">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                        <Users className="h-4 w-4" />
+                        AI Visibility — Brand vs Competitors
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <CompetitorChart
+                        providerRows={competitorData.providerRows}
+                        brands={competitorData.brands}
+                      />
+                    </CardContent>
+                  </Card>
 
-              <Card className="lg:col-span-2">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Leaderboard</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CompetitorLeaderboard data={competitorData.brands} />
-                </CardContent>
-              </Card>
-            </div>
+                  <Card className="lg:col-span-2">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">Leaderboard</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <CompetitorLeaderboard data={competitorData.brands} />
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {/* Share of Voice */}
+              {sovData && (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                        <PieChart className="h-4 w-4" />
+                        Share of Voice by Platform
+                      </CardTitle>
+                      {sovData.overallSovChange !== null && sovData.overallSovChange !== 0 && (
+                        <DeltaBadge delta={sovData.overallSovChange} suffix=" pts" />
+                      )}
+                    </CardHeader>
+                    <CardContent>
+                      <ShareOfVoicePlatformChart
+                        data={sovData.byPlatform}
+                        overallSov={sovData.overallSov}
+                      />
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                        <TrendingUp className="h-4 w-4" />
+                        Share of Voice Trend
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ShareOfVoiceTrendChart data={sovData.trend} />
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {/* Recommendations (#459) — stored data, not period-scoped */}
+              {recommendations && <RecommendationsSection data={recommendations} />}
+            </>
           )}
-
-          {/* Share of Voice */}
-          {sovData && (
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                    <PieChart className="h-4 w-4" />
-                    Share of Voice by Platform
-                  </CardTitle>
-                  {sovData.overallSovChange !== null && sovData.overallSovChange !== 0 && (
-                    <DeltaBadge delta={sovData.overallSovChange} suffix=" pts" />
-                  )}
-                </CardHeader>
-                <CardContent>
-                  <ShareOfVoicePlatformChart
-                    data={sovData.byPlatform}
-                    overallSov={sovData.overallSov}
-                  />
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                    <TrendingUp className="h-4 w-4" />
-                    Share of Voice Trend
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ShareOfVoiceTrendChart data={sovData.trend} />
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {/* Recommendations (#459) — stored data, not period-scoped */}
-          {recommendations && <RecommendationsSection data={recommendations} />}
-        </>
-      )}
+        </div>
+      </div>
 
       {/* Single Prompt Runner */}
       <RunSinglePromptDialog
