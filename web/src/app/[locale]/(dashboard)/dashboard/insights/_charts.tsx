@@ -464,6 +464,10 @@ function LeaderboardEntry({ entry, rank }: { entry: CompetitorComparisonEntry; r
           {entry.isOwnBrand && <span className="text-[10px] font-medium text-primary">YOU</span>}
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+          <span>{entry.totalMentions} mentions</span>
+          <span>{entry.totalCitations} citations</span>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
           <span className="tabular-nums">
             appeared in {entry.visiblePrompts}/{entry.promptCount} prompts
           </span>
