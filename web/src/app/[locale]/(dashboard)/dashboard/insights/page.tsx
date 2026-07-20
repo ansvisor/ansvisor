@@ -66,7 +66,6 @@ import {
   CalendarX2,
   Eye,
   HelpCircle,
-  Megaphone,
   Play,
   TrendingUp,
   TrendingDown,
@@ -599,8 +598,8 @@ function InsightsSkeleton() {
         </div>
         <Skeleton className="h-10 w-32" />
       </div>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
-        {Array.from({ length: 6 }).map((_, i) => (
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
           <Card key={i}>
             <CardContent className="pt-6 space-y-2">
               <Skeleton className="h-4 w-24" />
@@ -945,9 +944,7 @@ export default function InsightsPage() {
         setTrackedPrompts(insights.trackedPrompts);
         setVisibilityRate(insights.visibilityRate);
         setCompetitorData(insights.competitors.brands.length > 1 ? insights.competitors : null);
-        // Kept even with no per-platform rows: the Share of Voice KPI card
-        // needs overallSov; the chart section gates on byPlatform itself.
-        setSovData(insights.sov);
+        setSovData(insights.sov.byPlatform.length > 0 ? insights.sov : null);
         setRecommendations(insights.recommendations);
         setHasAnyData(insights.hasAnyData);
 
@@ -1328,12 +1325,12 @@ export default function InsightsPage() {
         <NoDataForPeriod datePreset={filters.datePreset} onReset={handleResetFilters} />
       ) : (
         <>
-          {/* KPI Cards — Visibility Rate + Share of Voice lead the row: the raw
-              all-results score average reads near zero for most brands (absent
-              answers each contribute 0) and buried the two numbers users act
-              on. The old average survives as "avg N" in the rate's sub-line
-              (quality when present) and in the breakdown sheet. */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
+          {/* KPI Cards — Visibility Rate leads the row: the raw all-results
+              score average reads near zero for most brands (absent answers
+              each contribute 0) and buried the number users act on. The old
+              average survives in the breakdown sheet; Share of Voice has its
+              own chart section below. */}
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
             <KpiCard
               title="Visibility Rate"
               tooltip="Share of tracked prompts where your brand appeared in at least one AI answer under the current filters."
@@ -1341,18 +1338,6 @@ export default function InsightsPage() {
               value={`${visibilityRatePct}%`}
               sub={null}
               onClick={() => setBreakdownMetric('visibility')}
-            />
-            <KpiCard
-              title="Share of Voice"
-              tooltip="Your brand's share of all mentions — yours plus your tracked competitors' — across the AI answers in the current filters."
-              icon={Megaphone}
-              value={`${sovData?.overallSov ?? 0}%`}
-              sub={<DeltaBadge delta={sovData?.overallSovChange ?? null} suffix=" pts" />}
-              subVariant={
-                sovData?.overallSovChange != null && sovData.overallSovChange > 0
-                  ? 'positive'
-                  : 'muted'
-              }
             />
             <KpiCard
               title="Tracked Prompts"
@@ -1454,7 +1439,7 @@ export default function InsightsPage() {
           )}
 
           {/* Share of Voice */}
-          {sovData && sovData.byPlatform.length > 0 && (
+          {sovData && (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <Card>
                 <CardHeader className="pb-2">
