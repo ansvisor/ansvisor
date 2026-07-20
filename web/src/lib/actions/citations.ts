@@ -667,3 +667,24 @@ export async function getCitationGaps(
 
   return { gapDomains, byCompetitor, competitors, ourAnswerCount, totalAnswers, lowVisibility };
 }
+
+// ─── Existence check (#485) ───────────────────────────────────────────────────
+
+/**
+ * Cheap unfiltered existence check — counts prompt_results rows for a brand
+ * with no date/filter constraints, so the Citations page can distinguish
+ * "no data in this window" from "no data at all".
+ *
+ * Mirrors getBrandResultsTotal in tracking.ts (used by the Insights page).
+ * Uses `head: true` so Supabase returns only the count, not any rows.
+ */
+export async function getCitationsTotal(brandId: string): Promise<number> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from('prompt_results')
+    .select('id', { count: 'exact', head: true })
+    .eq('brand_id', brandId)
+    .neq('platform', 'chatgpt-shopping');
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}

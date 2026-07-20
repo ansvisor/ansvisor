@@ -28,6 +28,7 @@ import { addCompetitor } from '@/lib/actions/competitor';
 import {
   getCitationsOverview,
   getCitationGaps,
+  getCitationsTotal,
   type CitationsFilters,
   type CitationsOverview,
   type CitationDomainRow,
@@ -212,7 +213,7 @@ interface PlatformOption {
 }
 
 const DEFAULT_FILTERS: UIFilters = {
-  datePreset: 'all',
+  datePreset: '24h',
   dateFrom: '',
   dateTo: '',
   platform: '',
@@ -771,14 +772,25 @@ const DomainsTable = memo(function DomainsTable({
   onAdded,
   page,
   onPage,
+  filters,
+  onResetFilters,
 }: {
   rows: CitationDomainRow[];
   brandId: string;
   onAdded: () => void;
   page: number;
   onPage: (p: number) => void;
+  filters: UIFilters;
+  onResetFilters: () => void;
 }) {
-  if (rows.length === 0) return <EmptyRows />;
+  if (rows.length === 0)
+    return (
+      <EmptyRows
+        isFiltered={filters.datePreset !== 'all'}
+        datePreset={filters.datePreset}
+        onShowAll={onResetFilters}
+      />
+    );
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const clampedPage = Math.min(page, totalPages - 1);
@@ -862,12 +874,23 @@ const UrlsTable = memo(function UrlsTable({
   rows,
   page,
   onPage,
+  filters,
+  onResetFilters,
 }: {
   rows: CitationUrlRow[];
   page: number;
   onPage: (p: number) => void;
+  filters: UIFilters;
+  onResetFilters: () => void;
 }) {
-  if (rows.length === 0) return <EmptyRows />;
+  if (rows.length === 0)
+    return (
+      <EmptyRows
+        isFiltered={filters.datePreset !== 'all'}
+        datePreset={filters.datePreset}
+        onShowAll={onResetFilters}
+      />
+    );
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const clampedPage = Math.min(page, totalPages - 1);
@@ -940,7 +963,86 @@ const UrlsTable = memo(function UrlsTable({
   );
 });
 
-function EmptyRows() {
+/**
+ * Period-aware empty state for the Domains / URLs tables (#485).
+ *
+ * Three states:
+ *  1. Loading  — running the cheap unfiltered count; shows a spinner.
+ *  2. Has data outside window — "No citations in the last Xh/d" + "Show all data" button.
+ *  3. No data at all — generic filter message (original behaviour).
+ */
+function EmptyRows({
+  isFiltered,
+  datePreset,
+  onShowAll,
+}: {
+  isFiltered: boolean;
+  datePreset: CitationsDatePreset;
+  onShowAll: () => void;
+}) {
+  const [hasAnyData, setHasAnyData] = useState<boolean | null>(null);
+  const { getActiveBrand } = useBrandStore();
+  const brand = getActiveBrand();
+
+  useEffect(() => {
+    // When 'all' is selected and still empty, no need to run an extra check —
+    // there simply is no data. Schedule via Promise to avoid synchronous setState
+    // inside an effect body (react-hooks/set-state-in-effect).
+    if (!isFiltered || !brand?.id) {
+      Promise.resolve().then(() => setHasAnyData(false));
+      return;
+    }
+    let cancelled = false;
+    getCitationsTotal(brand.id)
+      .then((total) => {
+        if (!cancelled) setHasAnyData(total > 0);
+      })
+      .catch(() => {
+        if (!cancelled) setHasAnyData(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isFiltered, brand?.id]);
+
+  // ── 1. Loading ───────────────────────────────────────────────────────────────
+  if (hasAnyData === null) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/60 mb-3" />
+        <p className="text-xs text-muted-foreground">Checking citation data…</p>
+      </div>
+    );
+  }
+
+  // ── 2. Period-aware: data exists outside this window ─────────────────────────
+  if (hasAnyData && isFiltered) {
+    const periodLabel =
+      datePreset === '24h'
+        ? 'the last 24 hours'
+        : datePreset === '7d'
+          ? 'the last 7 days'
+          : datePreset === '30d'
+            ? 'the last 30 days'
+            : datePreset === '90d'
+              ? 'the last 90 days'
+              : 'the selected period';
+
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <FilterIcon className="h-8 w-8 text-muted-foreground/40 mb-3" />
+        <p className="text-sm font-medium">No citations in {periodLabel}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Citation data exists outside this window.
+        </p>
+        <Button variant="outline" size="sm" className="mt-4 text-xs" onClick={onShowAll}>
+          Show all data
+        </Button>
+      </div>
+    );
+  }
+
+  // ── 3. No data at all — original generic message ──────────────────────────────
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <FilterIcon className="h-8 w-8 text-muted-foreground/40 mb-3" />
@@ -1168,7 +1270,7 @@ function ByCompetitorView({
         </Select>
       </div>
       {rows.length === 0 ? (
-        <EmptyRows />
+        <EmptyRows isFiltered={false} datePreset="all" onShowAll={() => {}} />
       ) : (
         <Table>
           <TableHeader>
@@ -1234,7 +1336,7 @@ function CompetitorGapsTab({ loading, gaps }: { loading: boolean; gaps: Citation
       </div>
     );
   }
-  if (!gaps) return <EmptyRows />;
+  if (!gaps) return <EmptyRows isFiltered={false} datePreset="all" onShowAll={() => {}} />;
 
   return (
     <div className="space-y-3">
@@ -1632,6 +1734,8 @@ export default function CitationsPage() {
                     onAdded={loadData}
                     page={domainPager.page}
                     onPage={domainPager.setPage}
+                    filters={filters}
+                    onResetFilters={() => setFilters(DEFAULT_FILTERS)}
                   />
                 </TabsContent>
                 <TabsContent value="urls" keepMounted className="mt-4">
@@ -1639,6 +1743,8 @@ export default function CitationsPage() {
                     rows={data?.urlRows ?? []}
                     page={urlPager.page}
                     onPage={urlPager.setPage}
+                    filters={filters}
+                    onResetFilters={() => setFilters(DEFAULT_FILTERS)}
                   />
                 </TabsContent>
                 <TabsContent value="gaps" className="mt-4">
