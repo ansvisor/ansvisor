@@ -1225,6 +1225,10 @@ export interface CompetitorComparisonEntry {
    * denominator for the brand and every competitor — the leaderboard metric.
    */
   visibilityRate: number;
+  /** Distinct prompts this entity appeared in (the rate's numerator). */
+  visiblePrompts: number;
+  /** Distinct prompts that produced results in the window (shared denominator). */
+  promptCount: number;
   /**
    * Point change of the visibility rate versus the previous comparable
    * window (e.g. last 7 days vs the 7 days before that).
@@ -1417,6 +1421,8 @@ export async function getCompetitorComparison(
       name: brandName,
       avgVisibilityScore: brandAvg,
       visibilityRate: brandRate,
+      visiblePrompts: agg.brand_visible_prompts,
+      promptCount: agg.brand_prompt_count,
       change: rateDiff(curBrandRate, prevBrandRate),
       totalMentions: agg.brand_total_mentions,
       totalCitations: agg.brand_total_citations,
@@ -1433,6 +1439,8 @@ export async function getCompetitorComparison(
       name: competitorDisplayName(c.name, c.competitor_id),
       avgVisibilityScore: avg,
       visibilityRate: rateOf(c.visible_prompts, agg.brand_prompt_count) ?? 0,
+      visiblePrompts: c.visible_prompts,
+      promptCount: agg.brand_prompt_count,
       change: rateDiff(
         curCompRate.get(c.competitor_id) ?? null,
         prevCompRate.get(c.competitor_id) ?? null,
