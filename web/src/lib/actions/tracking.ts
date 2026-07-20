@@ -146,6 +146,8 @@ interface CompetitorAggregatesRow {
   brand_sum_visibility: number;
   brand_total_mentions: number;
   brand_total_citations: number;
+  brand_prompt_count: number;
+  brand_visible_prompts: number;
   by_competitor: Array<{
     competitor_id: string;
     name: string | null;
@@ -153,6 +155,7 @@ interface CompetitorAggregatesRow {
     row_count: number;
     total_mentions: number;
     total_citations: number;
+    visible_prompts: number;
   }>;
   by_brand_provider: Array<{
     model_used: string | null;
@@ -1217,8 +1220,14 @@ export interface CompetitorComparisonEntry {
   name: string;
   avgVisibilityScore: number;
   /**
-   * Percentage change of the average visibility score versus the previous
-   * comparable window (e.g. last 7 days vs the 7 days before that).
+   * Prompt-level visibility rate (%): distinct prompts this entity appeared
+   * in ÷ distinct prompts that produced results in the window. Same
+   * denominator for the brand and every competitor — the leaderboard metric.
+   */
+  visibilityRate: number;
+  /**
+   * Point change of the visibility rate versus the previous comparable
+   * window (e.g. last 7 days vs the 7 days before that).
    * `null` when there is no comparable previous-period value.
    */
   change: number | null;
@@ -1356,43 +1365,44 @@ export async function getCompetitorComparison(
   const curWin = curRes.data as unknown as CompetitorAggregatesRow | null;
   const prevWin = prevRes.data as unknown as CompetitorAggregatesRow | null;
 
-  const curBrandAvg =
-    curWin && curWin.brand_row_count > 0
-      ? curWin.brand_sum_visibility / curWin.brand_row_count
-      : null;
-  const prevBrandAvg =
-    prevWin && prevWin.brand_row_count > 0
-      ? prevWin.brand_sum_visibility / prevWin.brand_row_count
-      : null;
+  // The leaderboard metric is the prompt-level visibility rate: distinct
+  // prompts an entity appeared in ÷ distinct prompts that produced results.
+  // Same-denominator rule as before (#478) — the brand and every competitor
+  // divide by the same prompt count, so absence still costs; but a prompt
+  // counts once no matter how many platforms answered it, which keeps the
+  // number readable instead of the near-zero all-rows score average.
+  const rateOf = (visible: number, prompts: number): number | null =>
+    prompts > 0 ? Math.round((visible / prompts) * 1000) / 10 : null;
 
-  // Competitor averages use the SAME denominator as the brand's — every
-  // filtered result row, not just the rows where the competitor happened to
-  // appear. A competitor absent from a response scores 0 for it, exactly
-  // like the brand does. Dividing by the appearance count instead graded
-  // competitors only on their best runs and could rank a rarely-seen
-  // competitor above a frequently-mentioned brand.
-  const curCompAvg = new Map<string, number>();
-  if (curWin && curWin.brand_row_count > 0) {
+  const curBrandRate = curWin
+    ? rateOf(curWin.brand_visible_prompts, curWin.brand_prompt_count)
+    : null;
+  const prevBrandRate = prevWin
+    ? rateOf(prevWin.brand_visible_prompts, prevWin.brand_prompt_count)
+    : null;
+
+  const curCompRate = new Map<string, number | null>();
+  if (curWin) {
     for (const c of curWin.by_competitor) {
-      curCompAvg.set(c.competitor_id, c.sum_visibility / curWin.brand_row_count);
+      curCompRate.set(c.competitor_id, rateOf(c.visible_prompts, curWin.brand_prompt_count));
     }
   }
-  const prevCompAvg = new Map<string, number>();
-  if (prevWin && prevWin.brand_row_count > 0) {
+  const prevCompRate = new Map<string, number | null>();
+  if (prevWin) {
     for (const c of prevWin.by_competitor) {
-      prevCompAvg.set(c.competitor_id, c.sum_visibility / prevWin.brand_row_count);
+      prevCompRate.set(c.competitor_id, rateOf(c.visible_prompts, prevWin.brand_prompt_count));
     }
   }
 
   const brandName = (brand?.name as string) ?? 'Your Brand';
   const brandAvg = Math.round(agg.brand_sum_visibility / agg.brand_row_count);
+  const brandRate = rateOf(agg.brand_visible_prompts, agg.brand_prompt_count) ?? 0;
 
-  // Percentage change relative to the previous-period value.
-  // Null when no comparable previous value exists (or growth from 0 → x is undefined).
-  const pctChange = (cur: number | null, prev: number | null): number | null => {
+  // Point change of the rate relative to the previous-period value.
+  // Null when no comparable previous value exists.
+  const rateDiff = (cur: number | null, prev: number | null): number | null => {
     if (cur === null || prev === null) return null;
-    if (prev === 0) return cur === 0 ? 0 : null;
-    return Math.round(((cur - prev) / prev) * 1000) / 10;
+    return Math.round((cur - prev) * 10) / 10;
   };
 
   // Falls back to the competitor id when the name is null/empty so two
@@ -1406,7 +1416,8 @@ export async function getCompetitorComparison(
     {
       name: brandName,
       avgVisibilityScore: brandAvg,
-      change: pctChange(curBrandAvg, prevBrandAvg),
+      visibilityRate: brandRate,
+      change: rateDiff(curBrandRate, prevBrandRate),
       totalMentions: agg.brand_total_mentions,
       totalCitations: agg.brand_total_citations,
       resultCount: agg.brand_row_count,
@@ -1415,15 +1426,16 @@ export async function getCompetitorComparison(
   ];
 
   for (const c of agg.by_competitor) {
-    // Same-denominator rule as the window averages above (agg.brand_row_count
+    // Same-denominator rule as the window rates above (agg.brand_row_count
     // is guaranteed > 0 by the early return).
     const avg = Math.round(c.sum_visibility / agg.brand_row_count);
     entries.push({
       name: competitorDisplayName(c.name, c.competitor_id),
       avgVisibilityScore: avg,
-      change: pctChange(
-        curCompAvg.get(c.competitor_id) ?? null,
-        prevCompAvg.get(c.competitor_id) ?? null,
+      visibilityRate: rateOf(c.visible_prompts, agg.brand_prompt_count) ?? 0,
+      change: rateDiff(
+        curCompRate.get(c.competitor_id) ?? null,
+        prevCompRate.get(c.competitor_id) ?? null,
       ),
       totalMentions: c.total_mentions,
       totalCitations: c.total_citations,
@@ -1432,7 +1444,7 @@ export async function getCompetitorComparison(
     });
   }
 
-  entries.sort((a, b) => b.avgVisibilityScore - a.avgVisibilityScore);
+  entries.sort((a, b) => b.visibilityRate - a.visibilityRate || b.totalMentions - a.totalMentions);
 
   // --- Per-provider breakdown ---
   // resolveProvider stays in JS so we don't keep a SQL copy of the mapping

@@ -1336,19 +1336,10 @@ export default function InsightsPage() {
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
             <KpiCard
               title="Visibility Rate"
-              tooltip="Share of tracked prompts where your brand appeared in at least one AI answer under the current filters. The sub-line's avg is the visibility score (0–100) of only the answers you appeared in."
+              tooltip="Share of tracked prompts where your brand appeared in at least one AI answer under the current filters."
               icon={Eye}
               value={`${visibilityRatePct}%`}
-              sub={
-                visibilityRate && visibilityRate.visiblePrompts > 0 ? (
-                  <span className="tabular-nums">
-                    {visibilityRate.visiblePrompts}/{trackedPrompts?.activeInPeriod ?? 0} prompts ·
-                    avg {visibilityRate.avgScoreWhenVisible}
-                  </span>
-                ) : (
-                  'No appearances in this period'
-                )
-              }
+              sub={null}
               onClick={() => setBreakdownMetric('visibility')}
             />
             <KpiCard
