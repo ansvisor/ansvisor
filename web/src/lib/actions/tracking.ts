@@ -162,6 +162,8 @@ interface CompetitorAggregatesRow {
     platform: string | null;
     sum_visibility: number;
     row_count: number;
+    prompt_count: number;
+    visible_prompts: number;
   }>;
   by_competitor_provider: Array<{
     model_used: string | null;
@@ -170,6 +172,7 @@ interface CompetitorAggregatesRow {
     competitor_name: string | null;
     sum_visibility: number;
     row_count: number;
+    visible_prompts: number;
   }>;
 }
 
@@ -1457,30 +1460,31 @@ export async function getCompetitorComparison(
   // --- Per-provider breakdown ---
   // resolveProvider stays in JS so we don't keep a SQL copy of the mapping
   // table in sync — fold the (model_used, platform) groups into provider
-  // buckets here.
-  type Agg = { totalScore: number; count: number };
+  // buckets here. The chart plots the same prompt-level rate as the
+  // leaderboard; summing DISTINCT counts across two engines of one provider
+  // counts a shared prompt once per engine in numerator and denominator
+  // alike, so the folded rate stays unbiased.
+  type Agg = { visiblePrompts: number; promptCount: number };
   const brandByProvider = new Map<string, Agg>();
   for (const bp of agg.by_brand_provider) {
     const provider = resolveProvider(bp.model_used, bp.platform);
-    const ex = brandByProvider.get(provider) ?? { totalScore: 0, count: 0 };
-    ex.totalScore += Number(bp.sum_visibility);
-    ex.count += bp.row_count;
+    const ex = brandByProvider.get(provider) ?? { visiblePrompts: 0, promptCount: 0 };
+    ex.visiblePrompts += bp.visible_prompts;
+    ex.promptCount += bp.prompt_count;
     brandByProvider.set(provider, ex);
   }
 
-  // compName -> provider -> agg. Keyed by the same display name used in
-  // entries[] above so the providerRows column headers line up with the
-  // table rows (empty/null names fall back to competitor_id).
-  const compByProvider = new Map<string, Map<string, Agg>>();
+  // compName -> provider -> visible prompt count. Keyed by the same display
+  // name used in entries[] above so the providerRows column headers line up
+  // with the table rows (empty/null names fall back to competitor_id). No
+  // denominator here — competitors divide by the brand's provider bucket.
+  const compByProvider = new Map<string, Map<string, number>>();
   for (const cp of agg.by_competitor_provider) {
     const provider = resolveProvider(cp.model_used, cp.platform);
     const name = competitorDisplayName(cp.competitor_name, cp.competitor_id);
     if (!compByProvider.has(name)) compByProvider.set(name, new Map());
     const pm = compByProvider.get(name)!;
-    const ex = pm.get(provider) ?? { totalScore: 0, count: 0 };
-    ex.totalScore += Number(cp.sum_visibility);
-    ex.count += cp.row_count;
-    pm.set(provider, ex);
+    pm.set(provider, (pm.get(provider) ?? 0) + cp.visible_prompts);
   }
 
   const allProviders = new Set<string>();
@@ -1492,15 +1496,15 @@ export async function getCompetitorComparison(
   const providerRows: ProviderComparisonRow[] = [...allProviders].sort().map((provider) => {
     const row: ProviderComparisonRow = { provider };
     const bp = brandByProvider.get(provider);
-    row[brandName] = bp && bp.count > 0 ? Math.round(bp.totalScore / bp.count) : 0;
+    // Same-denominator rule: everyone divides by the brand bucket's prompt
+    // count (which spans every filtered prompt for the provider), not their
+    // own appearance count. Competitor rows are a subset of the brand's, so
+    // bp always exists when a competitor has data for the provider.
+    const denom = bp?.promptCount ?? 0;
+    row[brandName] = bp && denom > 0 ? Math.round((bp.visiblePrompts / denom) * 1000) / 10 : 0;
     for (const [compName, pm] of compByProvider) {
-      const cp = pm.get(provider);
-      // Same-denominator rule: divide by the provider bucket's total run
-      // count (the brand's, which spans every filtered row), not the
-      // competitor's appearance count. Competitor rows are a subset of the
-      // brand's, so bp always exists when cp does.
-      const denom = bp?.count ?? 0;
-      row[compName] = cp && denom > 0 ? Math.round(cp.totalScore / denom) : 0;
+      const visible = pm.get(provider) ?? 0;
+      row[compName] = denom > 0 ? Math.round((visible / denom) * 1000) / 10 : 0;
     }
     return row;
   });
