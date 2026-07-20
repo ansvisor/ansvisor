@@ -1335,9 +1335,8 @@ export default function InsightsPage() {
       <div className="relative">
         {isRefetching && (
           <div className="absolute inset-0 z-10 flex items-start justify-center rounded-lg bg-background/50 pt-32">
-            <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground shadow-sm">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Updating…
+            <div className="flex items-center rounded-md border bg-background p-2.5 shadow-sm">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
           </div>
         )}
