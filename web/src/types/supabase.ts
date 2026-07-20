@@ -1204,6 +1204,18 @@ export type Database = {
         };
         Returns: number;
       };
+      visible_prompt_stats: {
+        Args: {
+          p_brand_id: string;
+          p_platform?: string | null;
+          p_models?: string[] | null;
+          p_region?: string | null;
+          p_date_from?: string | null;
+          p_date_to?: string | null;
+          p_topic_id?: string | null;
+        };
+        Returns: Json;
+      };
       prompt_visibility_summaries: {
         Args: {
           p_brand_id: string;

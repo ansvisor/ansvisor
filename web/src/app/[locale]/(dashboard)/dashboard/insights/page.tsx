@@ -46,6 +46,7 @@ import {
   exportPromptResults,
   type InsightsSummary,
   type TrackedPromptsKpi,
+  type VisibilityRateKpi,
   type CompetitorComparisonData,
   type ShareOfVoiceData,
   type InsightsRecommendations,
@@ -63,7 +64,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   BarChart3,
   CalendarX2,
+  Eye,
   HelpCircle,
+  Megaphone,
   Play,
   TrendingUp,
   TrendingDown,
@@ -596,8 +599,8 @@ function InsightsSkeleton() {
         </div>
         <Skeleton className="h-10 w-32" />
       </div>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, i) => (
           <Card key={i}>
             <CardContent className="pt-6 space-y-2">
               <Skeleton className="h-4 w-24" />
@@ -891,6 +894,7 @@ export default function InsightsPage() {
   const brand = useBrandStore((s) => s.getActiveBrand());
   const [summary, setSummary] = useState<InsightsSummary | null>(null);
   const [trackedPrompts, setTrackedPrompts] = useState<TrackedPromptsKpi | null>(null);
+  const [visibilityRate, setVisibilityRate] = useState<VisibilityRateKpi | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
@@ -939,8 +943,11 @@ export default function InsightsPage() {
         });
         setSummary(insights.summary);
         setTrackedPrompts(insights.trackedPrompts);
+        setVisibilityRate(insights.visibilityRate);
         setCompetitorData(insights.competitors.brands.length > 1 ? insights.competitors : null);
-        setSovData(insights.sov.byPlatform.length > 0 ? insights.sov : null);
+        // Kept even with no per-platform rows: the Share of Voice KPI card
+        // needs overallSov; the chart section gates on byPlatform itself.
+        setSovData(insights.sov);
         setRecommendations(insights.recommendations);
         setHasAnyData(insights.hasAnyData);
 
@@ -1209,6 +1216,14 @@ export default function InsightsPage() {
   if (!brand || (isLoading && !summary)) return <InsightsSkeleton />;
 
   const noResults = !summary || summary.totalResults === 0;
+
+  // Visibility Rate = prompts the brand appeared in ÷ prompts that produced
+  // results, both under the same filters (the Tracked Prompts KPI is the
+  // denominator on purpose — the two cards must agree).
+  const visibilityRatePct =
+    visibilityRate && trackedPrompts && trackedPrompts.activeInPeriod > 0
+      ? Math.round((visibilityRate.visiblePrompts / trackedPrompts.activeInPeriod) * 1000) / 10
+      : 0;
   const trulyEmpty = noResults && !hasAnyData;
 
   if (trulyEmpty) {
@@ -1313,20 +1328,40 @@ export default function InsightsPage() {
         <NoDataForPeriod datePreset={filters.datePreset} onReset={handleResetFilters} />
       ) : (
         <>
-          {/* KPI Cards */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
+          {/* KPI Cards — Visibility Rate + Share of Voice lead the row: the raw
+              all-results score average reads near zero for most brands (absent
+              answers each contribute 0) and buried the two numbers users act
+              on. The old average survives as "avg N" in the rate's sub-line
+              (quality when present) and in the breakdown sheet. */}
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
             <KpiCard
-              title="Visibility Score"
-              tooltip="A composite score (0–100) reflecting how prominently your brand appears across AI engine responses. Combines mentions, citations, and sentiment."
-              icon={BarChart3}
-              value={summary!.avgVisibilityScore}
-              sub={<DeltaBadge delta={summary!.visibilityChange} suffix=" pts" />}
+              title="Visibility Rate"
+              tooltip="Share of tracked prompts where your brand appeared in at least one AI answer under the current filters. The sub-line's avg is the visibility score (0–100) of only the answers you appeared in."
+              icon={Eye}
+              value={`${visibilityRatePct}%`}
+              sub={
+                visibilityRate && visibilityRate.visiblePrompts > 0 ? (
+                  <span className="tabular-nums">
+                    {visibilityRate.visiblePrompts}/{trackedPrompts?.activeInPeriod ?? 0} prompts ·
+                    avg {visibilityRate.avgScoreWhenVisible}
+                  </span>
+                ) : (
+                  'No appearances in this period'
+                )
+              }
+              onClick={() => setBreakdownMetric('visibility')}
+            />
+            <KpiCard
+              title="Share of Voice"
+              tooltip="Your brand's share of all mentions — yours plus your tracked competitors' — across the AI answers in the current filters."
+              icon={Megaphone}
+              value={`${sovData?.overallSov ?? 0}%`}
+              sub={<DeltaBadge delta={sovData?.overallSovChange ?? null} suffix=" pts" />}
               subVariant={
-                summary!.visibilityChange !== null && summary!.visibilityChange > 0
+                sovData?.overallSovChange != null && sovData.overallSovChange > 0
                   ? 'positive'
                   : 'muted'
               }
-              onClick={() => setBreakdownMetric('visibility')}
             />
             <KpiCard
               title="Tracked Prompts"
@@ -1428,7 +1463,7 @@ export default function InsightsPage() {
           )}
 
           {/* Share of Voice */}
-          {sovData && (
+          {sovData && sovData.byPlatform.length > 0 && (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <Card>
                 <CardHeader className="pb-2">

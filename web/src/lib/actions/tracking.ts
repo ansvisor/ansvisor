@@ -333,6 +333,54 @@ export interface TrackedPromptsKpi {
   quotaLimit: number;
 }
 
+export interface VisibilityRateKpi {
+  /** Distinct prompts with >= 1 answer mentioning or citing the brand. */
+  visiblePrompts: number;
+  /** Result rows where the brand appeared. */
+  visibleResults: number;
+  /** Average visibility score over only the rows the brand appeared in. */
+  avgScoreWhenVisible: number;
+}
+
+/**
+ * Visibility Rate KPI — the "appeared" side of the how-often ⁄ how-good
+ * split. Averaging visibility over ALL results reads near zero for most
+ * brands (absent answers contribute 0 each), so the headline shows how many
+ * tracked prompts the brand actually surfaced in, and the average score of
+ * only those appearances. Same filters and shopping exclusion as the rest of
+ * the KPI row; the rate's denominator is TrackedPromptsKpi.activeInPeriod.
+ */
+export async function getVisibilityRateKpi(
+  brandId: string,
+  opts?: { model?: string; region?: string; dateFrom?: string; dateTo?: string; topicId?: string },
+): Promise<VisibilityRateKpi> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc('visible_prompt_stats', {
+    p_brand_id: brandId,
+    p_platform: null,
+    p_models: modelFilterArray(opts?.model),
+    p_region: opts?.region ?? null,
+    p_date_from: opts?.dateFrom ?? null,
+    p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? null,
+    p_topic_id: opts?.topicId ?? null,
+  });
+  if (error) throw new Error(error.message);
+
+  const row = (data ?? {}) as {
+    visible_prompts?: number;
+    visible_results?: number;
+    sum_visibility_visible?: number;
+  };
+  const visibleResults = Number(row.visible_results ?? 0);
+  return {
+    visiblePrompts: Number(row.visible_prompts ?? 0),
+    visibleResults,
+    avgScoreWhenVisible:
+      visibleResults > 0 ? Math.round(Number(row.sum_visibility_visible ?? 0) / visibleResults) : 0,
+  };
+}
+
 /**
  * Tracked Prompts KPI (#457). The main value is period-aware — distinct
  * prompts that produced results under the SAME filters as the other KPI
@@ -489,6 +537,7 @@ export interface InsightsData {
   competitors: CompetitorComparisonData;
   sov: ShareOfVoiceData;
   trackedPrompts: TrackedPromptsKpi;
+  visibilityRate: VisibilityRateKpi;
   filterOptions: InsightsFilterOptions;
   recommendations: InsightsRecommendations;
   hasAnyData: boolean;
@@ -530,6 +579,7 @@ export async function getInsightsData(
     competitors,
     sov,
     trackedPrompts,
+    visibilityRate,
     filterOptions,
     recommendations,
     unfilteredTotal,
@@ -538,6 +588,7 @@ export async function getInsightsData(
     getCompetitorComparison(brandId, filterOpts),
     getShareOfVoiceData(brandId, filterOpts),
     getTrackedPromptsKpi(brandId, filterOpts),
+    getVisibilityRateKpi(brandId, filterOpts),
     getInsightsFilterOptions(brandId),
     getInsightsRecommendations(brandId),
     opts.checkUnfiltered ? getBrandResultsTotal(brandId) : Promise.resolve(null),
@@ -552,6 +603,7 @@ export async function getInsightsData(
     competitors,
     sov,
     trackedPrompts,
+    visibilityRate,
     filterOptions,
     recommendations,
     hasAnyData,
