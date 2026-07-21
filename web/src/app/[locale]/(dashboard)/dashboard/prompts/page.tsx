@@ -1359,7 +1359,7 @@ export default function PromptsPage() {
                     </Button>
                     {quotaExhausted && (
                       <p className="text-xs text-red-500">
-                        Monthly analysis limit reached. Resets on the 1st.
+                        Monthly analysis limit reached. Resets when your subscription renews.
                       </p>
                     )}
                     {quota && quota.limit !== -1 && !quotaExhausted && (

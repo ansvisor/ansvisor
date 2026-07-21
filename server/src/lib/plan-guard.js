@@ -6,6 +6,7 @@ import {
   isCloud,
   isSubscriptionActive,
 } from '../config/plans.js';
+import { anchoredPeriodStart } from './quota-period.js';
 
 export class PlanLimitError extends Error {
   constructor(message, statusCode = 403) {
@@ -135,20 +136,18 @@ export async function enforceVolumeQuota(userId) {
     throw new PlanLimitError('No organization found for user.', 400);
   }
 
-  const startOfMonth = new Date();
-  startOfMonth.setUTCDate(1);
-  startOfMonth.setUTCHours(0, 0, 0, 0);
+  const periodStart = await quotaPeriodStart(profile.organization_id);
 
   const { count } = await supabaseAdmin
     .from('volume_usage')
     .select('*', { count: 'exact', head: true })
     .eq('organization_id', profile.organization_id)
-    .gte('used_at', startOfMonth.toISOString());
+    .gte('used_at', periodStart.toISOString());
 
   const used = count || 0;
   if (used >= maxAnalyses) {
     throw new PlanLimitError(
-      `Monthly volume analysis limit reached (${used}/${maxAnalyses}). Resets on the 1st of next month.`,
+      `Monthly volume analysis limit reached (${used}/${maxAnalyses}). Resets when your subscription renews.`,
     );
   }
 
@@ -172,15 +171,13 @@ export async function getVolumeQuotaStatus(userId) {
 
   if (!profile?.organization_id) return { used: 0, limit: maxAnalyses, remaining: maxAnalyses };
 
-  const startOfMonth = new Date();
-  startOfMonth.setUTCDate(1);
-  startOfMonth.setUTCHours(0, 0, 0, 0);
+  const periodStart = await quotaPeriodStart(profile.organization_id);
 
   const { count } = await supabaseAdmin
     .from('volume_usage')
     .select('*', { count: 'exact', head: true })
     .eq('organization_id', profile.organization_id)
-    .gte('used_at', startOfMonth.toISOString());
+    .gte('used_at', periodStart.toISOString());
 
   const used = count || 0;
   return { used, limit: maxAnalyses, remaining: maxAnalyses - used };
@@ -193,12 +190,41 @@ function startOfCurrentMonth() {
   return start;
 }
 
+/**
+ * Start of the monthly quota window containing `now`, anchored to the
+ * subscription's billing day (`subscription_ends_at` = Stripe's
+ * current_period_end, kept fresh by the webhook). Quotas renew when the
+ * customer's payment renews — not on the 1st of the calendar month, which
+ * made a renewal day feel like a limit that never reset (#500).
+ *
+ * Orgs without an active subscription (free, incomplete, self-host paths
+ * that still reach here) fall back to the calendar month. Window math lives
+ * in quota-period.js.
+ */
+export async function quotaPeriodStart(orgId, now = new Date()) {
+  if (!isCloud() || !orgId) return startOfCurrentMonth();
+
+  const { data: org } = await supabaseAdmin
+    .from('organizations')
+    .select('subscription_ends_at, subscription_status')
+    .eq('id', orgId)
+    .maybeSingle();
+
+  const endsAt = org?.subscription_ends_at ? new Date(org.subscription_ends_at) : null;
+  if (!endsAt || Number.isNaN(endsAt.getTime()) || !isSubscriptionActive(org.subscription_status)) {
+    return startOfCurrentMonth();
+  }
+
+  return anchoredPeriodStart(endsAt, now);
+}
+
 async function countBriefUsageThisMonth(orgId) {
+  const periodStart = await quotaPeriodStart(orgId);
   const { count } = await supabaseAdmin
     .from('brief_usage')
     .select('*', { count: 'exact', head: true })
     .eq('organization_id', orgId)
-    .gte('used_at', startOfCurrentMonth().toISOString());
+    .gte('used_at', periodStart.toISOString());
   return count || 0;
 }
 
@@ -216,7 +242,7 @@ export async function enforceBriefQuota(orgId) {
   const used = await countBriefUsageThisMonth(orgId);
   if (used >= max) {
     throw new PlanLimitError(
-      `Monthly content brief limit reached (${used}/${max}) on the ${plan.name} plan. Resets on the 1st of next month — upgrade for more.`,
+      `Monthly content brief limit reached (${used}/${max}) on the ${plan.name} plan. Resets when your subscription renews — upgrade for more.`,
     );
   }
 
@@ -237,11 +263,12 @@ export async function getBriefQuotaStatus(orgId) {
 }
 
 async function countSiteAuditUsageThisMonth(orgId) {
+  const periodStart = await quotaPeriodStart(orgId);
   const { count } = await supabaseAdmin
     .from('site_audit_usage')
     .select('*', { count: 'exact', head: true })
     .eq('organization_id', orgId)
-    .gte('used_at', startOfCurrentMonth().toISOString());
+    .gte('used_at', periodStart.toISOString());
   return count || 0;
 }
 
@@ -259,7 +286,7 @@ export async function enforceSiteAuditQuota(orgId) {
   const used = await countSiteAuditUsageThisMonth(orgId);
   if (used >= max) {
     throw new PlanLimitError(
-      `Monthly Site Audit limit reached (${used}/${max}) on the ${plan.name} plan. Resets on the 1st of next month — upgrade for more.`,
+      `Monthly Site Audit limit reached (${used}/${max}) on the ${plan.name} plan. Resets when your subscription renews — upgrade for more.`,
       429,
     );
   }
