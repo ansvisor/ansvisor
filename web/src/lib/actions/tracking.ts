@@ -87,6 +87,18 @@ export interface PromptTopSource {
   usagePct: number;
 }
 
+/** One URL row of the prompt detail "Top Sources" card — mirrors CitationUrlRow. */
+export interface PromptTopSourceUrl {
+  url: string;
+  domain: string;
+  category: SourceCategory;
+  title: string;
+  models: string[];
+  totalCitations: number;
+  resultsCiting: number;
+  usagePct: number;
+}
+
 export interface PromptDetailData {
   prompt: {
     id: string;
@@ -107,6 +119,7 @@ export interface PromptDetailData {
   };
   results: PromptResultWithText[];
   topSources: PromptTopSource[];
+  topSourceUrls: PromptTopSourceUrl[];
 }
 
 export interface InsightsSummary {
@@ -878,15 +891,22 @@ export async function getPromptDetail(
     resultsCiting: Set<string>;
     models: Set<string>;
   }
+  interface UrlAgg extends SourceAgg {
+    url: string;
+    title: string;
+  }
   const sourceMap = new Map<string, SourceAgg>();
+  const urlMap = new Map<string, UrlAgg>();
   for (const result of results) {
     const modelKey = result.modelUsed || result.platform || '';
     for (const cite of result.citations) {
       const host = extractHostname(cite.url);
       if (!host) continue;
+      const category = sourceMap.get(host)?.category ?? classifyDomain(host, classifyCtx);
+
       const agg = sourceMap.get(host) ?? {
         domain: host,
-        category: classifyDomain(host, classifyCtx),
+        category,
         totalCitations: 0,
         resultsCiting: new Set<string>(),
         models: new Set<string>(),
@@ -895,8 +915,36 @@ export async function getPromptDetail(
       agg.resultsCiting.add(result.id);
       if (modelKey) agg.models.add(modelKey);
       sourceMap.set(host, agg);
+
+      // URL aggregation (strip query/fragment and trailing slash for dedupe,
+      // same as getCitationsOverview).
+      let normalizedUrl = cite.url;
+      try {
+        const parsed = new URL(cite.url);
+        parsed.search = '';
+        parsed.hash = '';
+        normalizedUrl = parsed.toString().replace(/\/$/, '');
+      } catch {
+        // leave as-is
+      }
+      const urlAgg = urlMap.get(normalizedUrl) ?? {
+        url: normalizedUrl,
+        domain: host,
+        category,
+        title: cite.title || '',
+        totalCitations: 0,
+        resultsCiting: new Set<string>(),
+        models: new Set<string>(),
+      };
+      urlAgg.totalCitations += 1;
+      urlAgg.resultsCiting.add(result.id);
+      if (modelKey) urlAgg.models.add(modelKey);
+      if (!urlAgg.title && cite.title) urlAgg.title = cite.title;
+      urlMap.set(normalizedUrl, urlAgg);
     }
   }
+  const usagePctOf = (resultsCiting: number) =>
+    totalResults > 0 ? Math.round((resultsCiting / totalResults) * 1000) / 10 : 0;
   const topSources: PromptTopSource[] = Array.from(sourceMap.values())
     .map((agg) => ({
       domain: agg.domain,
@@ -904,10 +952,21 @@ export async function getPromptDetail(
       models: Array.from(agg.models).sort(),
       totalCitations: agg.totalCitations,
       resultsCiting: agg.resultsCiting.size,
-      usagePct:
-        totalResults > 0 ? Math.round((agg.resultsCiting.size / totalResults) * 1000) / 10 : 0,
+      usagePct: usagePctOf(agg.resultsCiting.size),
     }))
     .sort((a, b) => b.totalCitations - a.totalCitations || a.domain.localeCompare(b.domain));
+  const topSourceUrls: PromptTopSourceUrl[] = Array.from(urlMap.values())
+    .map((agg) => ({
+      url: agg.url,
+      domain: agg.domain,
+      category: agg.category,
+      title: agg.title,
+      models: Array.from(agg.models).sort(),
+      totalCitations: agg.totalCitations,
+      resultsCiting: agg.resultsCiting.size,
+      usagePct: usagePctOf(agg.resultsCiting.size),
+    }))
+    .sort((a, b) => b.totalCitations - a.totalCitations || a.url.localeCompare(b.url));
 
   return {
     prompt: {
@@ -929,6 +988,7 @@ export async function getPromptDetail(
     },
     results,
     topSources,
+    topSourceUrls,
   };
 }
 
