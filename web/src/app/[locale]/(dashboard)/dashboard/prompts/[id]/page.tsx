@@ -43,50 +43,8 @@ import {
   UsageBar,
 } from '@/components/citations/source-cells';
 import { TablePager, usePagination } from '@/components/table-pager';
+import { MODEL_PROVIDER_LABELS, PLATFORM_LABELS } from '@/config/platform-labels';
 import { groupByPlatform, type PlatformGroup } from './grouping';
-
-const PLATFORM_LABELS: Record<string, string> = {
-  chatgpt: 'ChatGPT',
-  gemini: 'Gemini',
-  perplexity: 'Perplexity',
-  claude: 'Claude',
-  grok: 'Grok',
-  copilot: 'Copilot',
-  'meta-ai': 'Meta AI',
-  'google-ai-overviews': 'Google AI',
-  'google-ai-mode': 'Google AI Mode',
-  'chatgpt-web': 'ChatGPT',
-  'google-aio': 'Google AI Overview',
-  'google-aimode': 'Google AI Mode',
-  'perplexity-web': 'Perplexity',
-  'copilot-web': 'Microsoft Copilot',
-  'grok-web': 'Grok',
-  'gemini-web': 'Gemini',
-};
-
-const MODEL_DISPLAY_NAME: Record<string, string> = {
-  'gpt-4o': 'GPT-4o',
-  'gpt-4o-mini': 'GPT-4o Mini',
-  'gpt-4.1': 'GPT-4.1',
-  'gpt-4.1-mini': 'GPT-4.1 Mini',
-  'gpt-4.1-nano': 'GPT-4.1 Nano',
-  'gpt-5-chat-latest': 'ChatGPT',
-  'claude-sonnet-5': 'Claude',
-  'claude-sonnet-4-6': 'Claude',
-  'claude-opus-4-6': 'Claude',
-  'claude-haiku-4-5': 'Claude',
-  'gemini-2.5-pro': 'Gemini 2.5 Pro',
-  'gemini-2.5-flash': 'Gemini 2.5 Flash',
-  'grok-3': 'Grok',
-  'grok-4-auto': 'Grok',
-  'chatgpt-web': 'ChatGPT',
-  'perplexity-web': 'Perplexity',
-  'google-aio': 'Google AI Overview',
-  'google-aimode': 'Google AI Mode',
-  'copilot-web': 'Microsoft Copilot',
-  'grok-web': 'Grok',
-  'gemini-web': 'Gemini',
-};
 
 // ─── Date range (kept in sync with the insights page filter bar) ─────────────
 
@@ -177,7 +135,7 @@ function DateRangeBar({
 }
 
 function getModelDisplayName(model?: string, platform?: string): string {
-  if (model && MODEL_DISPLAY_NAME[model]) return MODEL_DISPLAY_NAME[model];
+  if (model && MODEL_PROVIDER_LABELS[model]) return MODEL_PROVIDER_LABELS[model];
   if (platform && PLATFORM_LABELS[platform]) return PLATFORM_LABELS[platform];
   return model ?? platform ?? 'Unknown';
 }

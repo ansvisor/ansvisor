@@ -54,7 +54,7 @@ import {
   type BreakdownMetric,
 } from '@/lib/actions/tracking';
 import { getTopics } from '@/lib/actions/topic';
-import { PLATFORM_LABELS } from '@/config/platform-labels';
+import { MODEL_PROVIDER_LABELS, PLATFORM_LABELS } from '@/config/platform-labels';
 import { formatRegionDisplay } from '@/lib/region';
 import type { Topic } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -190,30 +190,6 @@ function InfoTip({ content }: { content: string }) {
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-const MODEL_DISPLAY_NAME: Record<string, string> = {
-  'gpt-4o': 'GPT-4o',
-  'gpt-4o-mini': 'GPT-4o Mini',
-  'gpt-4.1': 'GPT-4.1',
-  'gpt-4.1-mini': 'GPT-4.1 Mini',
-  'gpt-4.1-nano': 'GPT-4.1 Nano',
-  'gpt-5-chat-latest': 'ChatGPT',
-  'claude-sonnet-5': 'Claude',
-  'claude-sonnet-4-6': 'Claude',
-  'claude-opus-4-6': 'Claude',
-  'claude-haiku-4-5': 'Claude',
-  'gemini-2.5-pro': 'Gemini 2.5 Pro',
-  'gemini-2.5-flash': 'Gemini 2.5 Flash',
-  'grok-3': 'Grok',
-  'grok-4-auto': 'Grok',
-  'chatgpt-web': 'ChatGPT',
-  'perplexity-web': 'Perplexity',
-  'google-aio': 'Google AI Overview',
-  'google-aimode': 'Google AI Mode',
-  'copilot-web': 'Microsoft Copilot',
-  'grok-web': 'Grok',
-  'gemini-web': 'Gemini',
-};
 
 // ─── Delta Badge ──────────────────────────────────────────────────────────────
 
@@ -559,7 +535,7 @@ function FilterBar({
                 if (!value || value === '__all__') return 'All Platforms';
                 const firstSlug = String(value).split(',')[0];
                 return (
-                  MODEL_DISPLAY_NAME[firstSlug] ??
+                  MODEL_PROVIDER_LABELS[firstSlug] ??
                   PLATFORM_LABELS[firstSlug] ??
                   getAIProviderDisplayName(resolveAIProvider(firstSlug))
                 );
@@ -573,7 +549,7 @@ function FilterBar({
               const firstSlug = m.split(',')[0];
               return (
                 <SelectItem key={m} value={m}>
-                  {MODEL_DISPLAY_NAME[firstSlug] ??
+                  {MODEL_PROVIDER_LABELS[firstSlug] ??
                     PLATFORM_LABELS[firstSlug] ??
                     getAIProviderDisplayName(resolveAIProvider(firstSlug))}
                 </SelectItem>
@@ -955,7 +931,7 @@ export default function InsightsPage() {
         for (const slug of insights.filterOptions.models) {
           if (slugToLabel.has(slug)) continue;
           const label =
-            MODEL_DISPLAY_NAME[slug] ??
+            MODEL_PROVIDER_LABELS[slug] ??
             PLATFORM_LABELS[slug] ??
             getAIProviderDisplayName(resolveAIProvider(slug));
           slugToLabel.set(slug, label);

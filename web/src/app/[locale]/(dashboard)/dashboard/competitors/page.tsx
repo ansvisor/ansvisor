@@ -15,6 +15,7 @@ import {
   type HeadToHeadPromptRow,
 } from '@/lib/actions/tracking';
 import { getFaviconUrl } from '@/lib/favicon';
+import { MODEL_LABELS } from '@/config/platform-labels';
 import type { Competitor } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -64,38 +65,14 @@ import {
 
 // ─── Shared Visual Components (mirroring Insights) ───────────────────────────
 
-const MODEL_DISPLAY_NAME: Record<string, string> = {
-  'gpt-4o': 'GPT-4o',
-  'gpt-4o-mini': 'GPT-4o Mini',
-  'gpt-4.1': 'GPT-4.1',
-  'gpt-4.1-mini': 'GPT-4.1 Mini',
-  'gpt-4.1-nano': 'GPT-4.1 Nano',
-  'gpt-5-chat-latest': 'ChatGPT',
-  'claude-sonnet-5': 'Claude Sonnet 5',
-  'claude-sonnet-4-6': 'Claude Sonnet',
-  'claude-opus-4-6': 'Claude Opus',
-  'claude-haiku-4-5': 'Claude Haiku',
-  'gemini-2.5-pro': 'Gemini 2.5 Pro',
-  'gemini-2.5-flash': 'Gemini 2.5 Flash',
-  'grok-3': 'Grok',
-  'grok-4-auto': 'Grok',
-  'chatgpt-web': 'ChatGPT',
-  'perplexity-web': 'Perplexity',
-  'google-aio': 'Google AI Overview',
-  'google-aimode': 'Google AI Mode',
-  'copilot-web': 'Microsoft Copilot',
-  'grok-web': 'Grok',
-  'gemini-web': 'Gemini',
-};
-
 function getModelDisplayName(model: string, platform?: string): string {
   // In h2h data, platform is already resolved (e.g. "ChatGPT", "Perplexity")
   // so use it directly if available
   if (platform) {
-    const modelName = MODEL_DISPLAY_NAME[model];
+    const modelName = MODEL_LABELS[model];
     return modelName && modelName !== platform ? `${platform} · ${modelName}` : platform;
   }
-  return MODEL_DISPLAY_NAME[model] ?? model;
+  return MODEL_LABELS[model] ?? model;
 }
 
 function ModelBadge({ model, platform }: { model: string; platform?: string }) {

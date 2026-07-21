@@ -52,6 +52,7 @@ import {
 import { toCsv } from '@/lib/csv';
 import type { Topic } from '@/types';
 import { SOURCE_CATEGORY_LABELS, type SourceCategory } from '@/lib/citations/classify';
+import { MODEL_PROVIDER_LABELS, PLATFORM_LABELS } from '@/config/platform-labels';
 import {
   CategoryBadge,
   DomainFavicon,
@@ -107,53 +108,9 @@ const CATEGORY_COLORS: Record<SourceCategory, string> = {
   other: '#94a3b8',
 };
 
-// AI platform / model friendly names — kept in sync with the insights page.
-const PLATFORM_LABELS: Record<string, string> = {
-  chatgpt: 'ChatGPT',
-  gemini: 'Gemini',
-  perplexity: 'Perplexity',
-  claude: 'Claude',
-  grok: 'Grok',
-  copilot: 'Copilot',
-  'meta-ai': 'Meta AI',
-  'google-ai-overviews': 'Google AI',
-  'google-ai-mode': 'Google AI Mode',
-  'chatgpt-web': 'ChatGPT',
-  'google-aio': 'Google AI Overview',
-  'google-aimode': 'Google AI Mode',
-  'copilot-web': 'Microsoft Copilot',
-  'grok-web': 'Grok',
-  'perplexity-web': 'Perplexity',
-  'gemini-web': 'Google Gemini',
-};
-
-const MODEL_DISPLAY_NAME: Record<string, string> = {
-  'gpt-4o': 'GPT-4o',
-  'gpt-4o-mini': 'GPT-4o Mini',
-  'gpt-4.1': 'GPT-4.1',
-  'gpt-4.1-mini': 'GPT-4.1 Mini',
-  'gpt-4.1-nano': 'GPT-4.1 Nano',
-  'gpt-5-chat-latest': 'ChatGPT',
-  'claude-sonnet-5': 'Claude',
-  'claude-sonnet-4-6': 'Claude',
-  'claude-opus-4-6': 'Claude',
-  'claude-haiku-4-5': 'Claude',
-  'gemini-2.5-pro': 'Gemini 2.5 Pro',
-  'gemini-2.5-flash': 'Gemini 2.5 Flash',
-  'grok-3': 'Grok',
-  'grok-4-auto': 'Grok',
-  'chatgpt-web': 'ChatGPT',
-  'perplexity-web': 'Perplexity',
-  'google-aio': 'Google AI Overview',
-  'google-aimode': 'Google AI Mode',
-  'copilot-web': 'Microsoft Copilot',
-  'grok-web': 'Grok',
-  'gemini-web': 'Gemini',
-};
-
 function getPlatformDisplayLabel(slug: string): string {
   return (
-    MODEL_DISPLAY_NAME[slug] ??
+    MODEL_PROVIDER_LABELS[slug] ??
     PLATFORM_LABELS[slug] ??
     getAIProviderDisplayName(resolveAIProvider(slug))
   );
