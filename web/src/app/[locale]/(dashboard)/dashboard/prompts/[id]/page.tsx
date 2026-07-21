@@ -40,6 +40,7 @@ import {
   PlatformsCell,
   UsageBar,
 } from '@/components/citations/source-cells';
+import { TablePager, usePagination } from '@/components/table-pager';
 import { groupByPlatform, type PlatformGroup } from './grouping';
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -171,36 +172,9 @@ function KpiCard({
   );
 }
 
-const TOP_SOURCES_PREVIEW = 10;
-
-function ShowAllToggle({
-  showAll,
-  total,
-  label,
-  onToggle,
-}: {
-  showAll: boolean;
-  total: number;
-  label: string;
-  onToggle: () => void;
-}) {
-  return (
-    <div className="pt-2">
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-7 text-xs text-muted-foreground"
-        onClick={onToggle}
-      >
-        {showAll ? 'Show fewer' : `Show all ${total} ${label}`}
-      </Button>
-    </div>
-  );
-}
-
 function TopSourceDomainsTable({ rows }: { rows: PromptTopSource[] }) {
-  const [showAll, setShowAll] = useState(false);
-  const visible = showAll ? rows : rows.slice(0, TOP_SOURCES_PREVIEW);
+  const pager = usePagination(rows.length, rows.length);
+  const pageRows = rows.slice(pager.start, pager.end);
 
   return (
     <div>
@@ -215,9 +189,12 @@ function TopSourceDomainsTable({ rows }: { rows: PromptTopSource[] }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {visible.map((row, i) => (
+          {pageRows.map((row, i) => (
             <TableRow key={row.domain}>
-              <TableCell className="text-xs text-muted-foreground tabular-nums">{i + 1}</TableCell>
+              {/* Global rank — offset by page so rank is continuous across pages */}
+              <TableCell className="text-xs text-muted-foreground tabular-nums">
+                {pager.start + i + 1}
+              </TableCell>
               <TableCell>
                 <div className="flex min-w-0 items-center gap-2">
                   <DomainFavicon domain={row.domain} />
@@ -251,21 +228,21 @@ function TopSourceDomainsTable({ rows }: { rows: PromptTopSource[] }) {
           ))}
         </TableBody>
       </Table>
-      {(rows.length > TOP_SOURCES_PREVIEW || showAll) && (
-        <ShowAllToggle
-          showAll={showAll}
-          total={rows.length}
-          label="domains"
-          onToggle={() => setShowAll((prev) => !prev)}
-        />
-      )}
+      <TablePager
+        page={pager.page}
+        totalPages={pager.totalPages}
+        total={rows.length}
+        start={pager.start}
+        end={pager.end}
+        onPage={pager.setPage}
+      />
     </div>
   );
 }
 
 function TopSourceUrlsTable({ rows }: { rows: PromptTopSourceUrl[] }) {
-  const [showAll, setShowAll] = useState(false);
-  const visible = showAll ? rows : rows.slice(0, TOP_SOURCES_PREVIEW);
+  const pager = usePagination(rows.length, rows.length);
+  const pageRows = rows.slice(pager.start, pager.end);
 
   return (
     <div>
@@ -280,9 +257,12 @@ function TopSourceUrlsTable({ rows }: { rows: PromptTopSourceUrl[] }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {visible.map((row, i) => (
+          {pageRows.map((row, i) => (
             <TableRow key={row.url}>
-              <TableCell className="text-xs text-muted-foreground tabular-nums">{i + 1}</TableCell>
+              {/* Global rank — offset by page so rank is continuous across pages */}
+              <TableCell className="text-xs text-muted-foreground tabular-nums">
+                {pager.start + i + 1}
+              </TableCell>
               <TableCell>
                 <div className="flex min-w-0 items-start gap-2">
                   <DomainFavicon domain={row.domain} />
@@ -318,14 +298,14 @@ function TopSourceUrlsTable({ rows }: { rows: PromptTopSourceUrl[] }) {
           ))}
         </TableBody>
       </Table>
-      {(rows.length > TOP_SOURCES_PREVIEW || showAll) && (
-        <ShowAllToggle
-          showAll={showAll}
-          total={rows.length}
-          label="URLs"
-          onToggle={() => setShowAll((prev) => !prev)}
-        />
-      )}
+      <TablePager
+        page={pager.page}
+        totalPages={pager.totalPages}
+        total={rows.length}
+        start={pager.start}
+        end={pager.end}
+        onPage={pager.setPage}
+      />
     </div>
   );
 }

@@ -58,6 +58,7 @@ import {
   PlatformsCell,
   UsageBar,
 } from '@/components/citations/source-cells';
+import { PAGE_SIZE, TablePager, usePagination } from '@/components/table-pager';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
@@ -956,86 +957,6 @@ function EmptyRows({
       <p className="mt-1 text-xs text-muted-foreground">
         Try widening your date range or removing filters.
       </p>
-    </div>
-  );
-}
-
-// ─── Pagination ───────────────────────────────────────────────────────────────
-
-const PAGE_SIZE = 100;
-
-/**
- * Per-table pagination state.
- * resetKey — pass a JSON.stringify of the active filters so the pager
- * automatically jumps back to page 0 whenever any filter changes.
- */
-export function usePagination(totalRows: number, resetKey: unknown) {
-  const [page, setPage] = useState(0);
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const resetKeyRef = useRef(resetKey);
-  if (resetKeyRef.current !== resetKey) {
-    resetKeyRef.current = resetKey;
-    setPage(0);
-  }
-
-  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
-  const clampedPage = Math.min(page, totalPages - 1);
-
-  return {
-    page: clampedPage,
-    setPage,
-    totalPages,
-    start: clampedPage * PAGE_SIZE,
-    end: Math.min((clampedPage + 1) * PAGE_SIZE, totalRows),
-  };
-}
-
-function TablePager({
-  page,
-  totalPages,
-  total,
-  start,
-  end,
-  onPage,
-}: {
-  page: number;
-  totalPages: number;
-  total: number;
-  start: number;
-  end: number;
-  onPage: (p: number) => void;
-}) {
-  if (totalPages <= 1) return null;
-
-  return (
-    <div className="flex items-center justify-between border-t px-4 py-3">
-      <span className="text-xs text-muted-foreground tabular-nums">
-        {start + 1}–{end} of {total}
-      </span>
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 px-3 text-xs"
-          disabled={page === 0}
-          onClick={() => onPage(page - 1)}
-        >
-          Previous
-        </Button>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {page + 1} / {totalPages}
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 px-3 text-xs"
-          disabled={page >= totalPages - 1}
-          onClick={() => onPage(page + 1)}
-        >
-          Next
-        </Button>
-      </div>
     </div>
   );
 }
