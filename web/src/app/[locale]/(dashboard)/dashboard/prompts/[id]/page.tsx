@@ -7,14 +7,37 @@ import {
   getPromptDetail,
   type PromptDetailData,
   type PromptResultWithText,
+  type PromptTopSource,
 } from '@/lib/actions/tracking';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, ChevronDown, Clock, Eye, MessageSquareText, Quote } from 'lucide-react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  ArrowLeft,
+  ChevronDown,
+  Clock,
+  ExternalLink,
+  Eye,
+  MessageSquareText,
+  Quote,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
+import {
+  CategoryBadge,
+  DomainFavicon,
+  PlatformsCell,
+  UsageBar,
+} from '@/components/citations/source-cells';
 import { groupByPlatform, type PlatformGroup } from './grouping';
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -141,6 +164,88 @@ function KpiCard({
           <p className="text-2xl font-bold tabular-nums">{value}</p>
           <p className="text-xs text-muted-foreground">{title}</p>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+const TOP_SOURCES_PREVIEW = 10;
+
+function TopSourcesCard({ sources }: { sources: PromptTopSource[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? sources : sources.slice(0, TOP_SOURCES_PREVIEW);
+  const hiddenCount = sources.length - visible.length;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-medium">Top Sources</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Domains AI platforms cite when answering this prompt.
+        </p>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[56px] text-xs">Rank</TableHead>
+              <TableHead className="text-xs">Domain</TableHead>
+              <TableHead className="text-xs">Platforms</TableHead>
+              <TableHead className="text-xs">Usage</TableHead>
+              <TableHead className="text-right text-xs">Citations</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {visible.map((row, i) => (
+              <TableRow key={row.domain}>
+                <TableCell className="text-xs text-muted-foreground tabular-nums">
+                  {i + 1}
+                </TableCell>
+                <TableCell>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <DomainFavicon domain={row.domain} />
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate text-sm font-medium">{row.domain}</span>
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <CategoryBadge category={row.category} />
+                        <a
+                          href={`https://${row.domain}`}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="inline-flex items-center text-muted-foreground hover:text-foreground"
+                          aria-label={`Open ${row.domain} in a new tab`}
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <PlatformsCell models={row.models} />
+                </TableCell>
+                <TableCell>
+                  <UsageBar pct={row.usagePct} />
+                </TableCell>
+                <TableCell className="text-right text-xs tabular-nums">
+                  {row.totalCitations}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        {(hiddenCount > 0 || showAll) && (
+          <div className="pt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs text-muted-foreground"
+              onClick={() => setShowAll((prev) => !prev)}
+            >
+              {showAll ? 'Show fewer' : `Show all ${sources.length} sources`}
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -412,6 +517,8 @@ export default function PromptDetailPage() {
           icon={Quote}
         />
       </div>
+
+      {data.topSources.length > 0 && <TopSourcesCard sources={data.topSources} />}
 
       <Card>
         <CardHeader className="pb-3">

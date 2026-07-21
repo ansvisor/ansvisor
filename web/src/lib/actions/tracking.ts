@@ -12,6 +12,12 @@ import type {
   ObservedSearchQuery,
 } from '@/types';
 import { API_BASE_URL } from '@/config/api';
+import {
+  classifyDomain,
+  extractHostname,
+  normalizeDomain,
+  type SourceCategory,
+} from '@/lib/citations/classify';
 import { getTopicById } from '@/lib/actions/topic';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
 import { getPromptVolumes } from '@/lib/actions/volumes';
@@ -71,6 +77,16 @@ export interface PromptResultWithText extends PromptResult {
   topicName?: string;
 }
 
+/** One row of the prompt detail "Top Sources" card — mirrors CitationDomainRow. */
+export interface PromptTopSource {
+  domain: string;
+  category: SourceCategory;
+  models: string[];
+  totalCitations: number;
+  resultsCiting: number;
+  usagePct: number;
+}
+
 export interface PromptDetailData {
   prompt: {
     id: string;
@@ -90,6 +106,7 @@ export interface PromptDetailData {
     lastCheckedAt: string | null;
   };
   results: PromptResultWithText[];
+  topSources: PromptTopSource[];
 }
 
 export interface InsightsSummary {
@@ -799,6 +816,20 @@ export async function getPromptDetail(
 
   const brandId = (promptSetData?.brand_id as string | undefined) ?? '';
 
+  // Brand + competitor domains feed classifyDomain, same as the citations page.
+  const [{ data: brandDomainRows }, { data: competitorRows }] = await Promise.all([
+    supabase.from('brand_domains').select('domain').eq('brand_id', brandId),
+    supabase.from('competitors').select('domain').eq('brand_id', brandId),
+  ]);
+  const classifyCtx = {
+    brandDomains: (brandDomainRows ?? [])
+      .map((r) => normalizeDomain((r as { domain: string }).domain))
+      .filter(Boolean),
+    competitorDomains: (competitorRows ?? [])
+      .map((r) => normalizeDomain((r as { domain: string }).domain))
+      .filter(Boolean),
+  };
+
   let topicName: string | undefined;
   if (prompt.topic_id) {
     const { data: topic } = await supabase
@@ -838,6 +869,46 @@ export async function getPromptDetail(
       ? Math.round(results.reduce((sum, row) => sum + row.visibilityScore, 0) / totalResults)
       : 0;
 
+  // Aggregate citations by domain — same shape and rounding as getCitationsOverview,
+  // but scoped to this prompt's already-loaded results.
+  interface SourceAgg {
+    domain: string;
+    category: SourceCategory;
+    totalCitations: number;
+    resultsCiting: Set<string>;
+    models: Set<string>;
+  }
+  const sourceMap = new Map<string, SourceAgg>();
+  for (const result of results) {
+    const modelKey = result.modelUsed || result.platform || '';
+    for (const cite of result.citations) {
+      const host = extractHostname(cite.url);
+      if (!host) continue;
+      const agg = sourceMap.get(host) ?? {
+        domain: host,
+        category: classifyDomain(host, classifyCtx),
+        totalCitations: 0,
+        resultsCiting: new Set<string>(),
+        models: new Set<string>(),
+      };
+      agg.totalCitations += 1;
+      agg.resultsCiting.add(result.id);
+      if (modelKey) agg.models.add(modelKey);
+      sourceMap.set(host, agg);
+    }
+  }
+  const topSources: PromptTopSource[] = Array.from(sourceMap.values())
+    .map((agg) => ({
+      domain: agg.domain,
+      category: agg.category,
+      models: Array.from(agg.models).sort(),
+      totalCitations: agg.totalCitations,
+      resultsCiting: agg.resultsCiting.size,
+      usagePct:
+        totalResults > 0 ? Math.round((agg.resultsCiting.size / totalResults) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.totalCitations - a.totalCitations || a.domain.localeCompare(b.domain));
+
   return {
     prompt: {
       id: prompt.id as string,
@@ -857,6 +928,7 @@ export async function getPromptDetail(
       lastCheckedAt: results[0]?.createdAt ?? null,
     },
     results,
+    topSources,
   };
 }
 
