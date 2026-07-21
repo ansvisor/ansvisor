@@ -23,12 +23,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
 import {
   ArrowLeft,
   ChevronDown,
   Clock,
   ExternalLink,
   Eye,
+  Loader2,
   MessageSquareText,
   Quote,
 } from 'lucide-react';
@@ -85,6 +87,94 @@ const MODEL_DISPLAY_NAME: Record<string, string> = {
   'grok-web': 'Grok',
   'gemini-web': 'Gemini',
 };
+
+// ─── Date range (kept in sync with the insights page filter bar) ─────────────
+
+type DatePreset = '24h' | '7d' | '30d' | '90d' | 'all' | 'custom';
+
+const DATE_PRESETS: DatePreset[] = ['24h', '7d', '30d', '90d', 'all', 'custom'];
+
+function getDateRange(preset: DatePreset, custom: { from: string; to: string }) {
+  if (preset === 'all') return { dateFrom: undefined, dateTo: undefined };
+  if (preset === 'custom') {
+    return {
+      dateFrom: custom.from || undefined,
+      dateTo: custom.to ? `${custom.to}T23:59:59.999Z` : undefined,
+    };
+  }
+  if (preset === '24h') {
+    const from = new Date();
+    from.setHours(from.getHours() - 24);
+    return { dateFrom: from.toISOString(), dateTo: undefined };
+  }
+  const days = preset === '7d' ? 7 : preset === '30d' ? 30 : 90;
+  const from = new Date();
+  from.setDate(from.getDate() - days);
+  return { dateFrom: from.toISOString(), dateTo: undefined };
+}
+
+function DateRangeBar({
+  preset,
+  customFrom,
+  customTo,
+  onPreset,
+  onCustomFrom,
+  onCustomTo,
+}: {
+  preset: DatePreset;
+  customFrom: string;
+  customTo: string;
+  onPreset: (p: DatePreset) => void;
+  onCustomFrom: (v: string) => void;
+  onCustomTo: (v: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-end gap-3">
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Date Range</label>
+        <div className="flex overflow-hidden rounded-md border">
+          {DATE_PRESETS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => onPreset(p)}
+              className={cn(
+                'px-3 py-1.5 text-xs font-medium transition-colors',
+                preset === p
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-card hover:bg-muted text-foreground',
+              )}
+            >
+              {p === 'custom' ? 'Custom' : p === 'all' ? 'All' : p}
+            </button>
+          ))}
+        </div>
+      </div>
+      {preset === 'custom' && (
+        <>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">From</label>
+            <Input
+              type="date"
+              value={customFrom}
+              onChange={(e) => onCustomFrom(e.target.value)}
+              className="h-8 w-36 text-xs"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">To</label>
+            <Input
+              type="date"
+              value={customTo}
+              onChange={(e) => onCustomTo(e.target.value)}
+              className="h-8 w-36 text-xs"
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function getModelDisplayName(model?: string, platform?: string): string {
   if (model && MODEL_DISPLAY_NAME[model]) return MODEL_DISPLAY_NAME[model];
@@ -489,12 +579,16 @@ export default function PromptDetailPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [datePreset, setDatePreset] = useState<DatePreset>('30d');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       setLoading(true);
-      const detail = await getPromptDetail(promptId);
+      const { dateFrom, dateTo } = getDateRange(datePreset, { from: customFrom, to: customTo });
+      const detail = await getPromptDetail(promptId, { dateFrom, dateTo });
       if (cancelled) return;
       if (!detail) {
         setNotFound(true);
@@ -509,7 +603,7 @@ export default function PromptDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [promptId]);
+  }, [promptId, datePreset, customFrom, customTo]);
 
   const platformGroups = useMemo(() => groupByPlatform(data?.results ?? []), [data?.results]);
 
@@ -521,7 +615,12 @@ export default function PromptDetailPage() {
       return next;
     });
 
-  if (loading) {
+  // First load renders the skeleton (data is still null); once data has ever
+  // arrived, a reload from a date change is a "refetch" — the stale content
+  // stays visible under the overlay instead of flashing a skeleton (#494).
+  const isRefetching = loading && data !== null;
+
+  if (loading && !data && !notFound) {
     return (
       <div className="mx-auto max-w-5xl space-y-6 p-2 sm:p-6">
         <Skeleton className="h-8 w-48" />
@@ -592,54 +691,91 @@ export default function PromptDetailPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <KpiCard
-          title="Visibility Score"
-          value={`${data.summary.avgVisibilityScore}/100`}
-          icon={Eye}
-        />
-        <KpiCard
-          title="Mentions"
-          value={data.summary.totalMentions.toLocaleString()}
-          icon={MessageSquareText}
-        />
-        <KpiCard
-          title="Citations"
-          value={data.summary.totalCitations.toLocaleString()}
-          icon={Quote}
-        />
-      </div>
+      <DateRangeBar
+        preset={datePreset}
+        customFrom={customFrom}
+        customTo={customTo}
+        onPreset={setDatePreset}
+        onCustomFrom={setCustomFrom}
+        onCustomTo={setCustomTo}
+      />
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium">Platform Results</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            {data.summary.totalResults} result{data.summary.totalResults !== 1 ? 's' : ''} grouped
-            by platform and model.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {platformGroups.length === 0 ? (
-            <div className="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
-              No tracking results yet for this prompt.
+      {/* Refetch overlay: on a date change the previous window's data stays
+          mounted; dim it and float a spinner so stale numbers aren't read as
+          the new period's. The date bar stays outside, so switching presets
+          mid-load keeps working (#494). */}
+      <div className="relative">
+        {isRefetching && (
+          <div className="absolute inset-0 z-10 flex items-start justify-center rounded-lg bg-background/50 pt-32">
+            <div className="flex items-center rounded-md border bg-background p-2.5 shadow-sm">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
-          ) : (
-            platformGroups.map((group) => (
-              <PlatformResultGroup
-                key={group.key}
-                group={group}
-                expanded={expanded.has(group.key)}
-                onToggle={() => togglePlatform(group.key)}
-                onViewResult={(result) => router.push(`/dashboard/insights/${result.id}`)}
-              />
-            ))
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        )}
+        <div className={cn('space-y-6', isRefetching && 'opacity-60')}>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <KpiCard
+              title="Visibility Score"
+              value={`${data.summary.avgVisibilityScore}/100`}
+              icon={Eye}
+            />
+            <KpiCard
+              title="Mentions"
+              value={data.summary.totalMentions.toLocaleString()}
+              icon={MessageSquareText}
+            />
+            <KpiCard
+              title="Citations"
+              value={data.summary.totalCitations.toLocaleString()}
+              icon={Quote}
+            />
+          </div>
 
-      {data.topSources.length > 0 && (
-        <TopSourcesCard sources={data.topSources} sourceUrls={data.topSourceUrls} />
-      )}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">Platform Results</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                {data.summary.totalResults} result{data.summary.totalResults !== 1 ? 's' : ''}{' '}
+                grouped by platform and model.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {platformGroups.length === 0 ? (
+                <div className="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
+                  {datePreset === 'all' ? (
+                    'No tracking results yet for this prompt.'
+                  ) : (
+                    <>
+                      No results in the selected date range.{' '}
+                      <button
+                        type="button"
+                        className="font-medium text-foreground underline underline-offset-2"
+                        onClick={() => setDatePreset('all')}
+                      >
+                        Show all data
+                      </button>
+                    </>
+                  )}
+                </div>
+              ) : (
+                platformGroups.map((group) => (
+                  <PlatformResultGroup
+                    key={group.key}
+                    group={group}
+                    expanded={expanded.has(group.key)}
+                    onToggle={() => togglePlatform(group.key)}
+                    onViewResult={(result) => router.push(`/dashboard/insights/${result.id}`)}
+                  />
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          {data.topSources.length > 0 && (
+            <TopSourcesCard sources={data.topSources} sourceUrls={data.topSourceUrls} />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

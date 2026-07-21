@@ -806,7 +806,7 @@ export async function getPromptResultById(resultId: string): Promise<PromptResul
  */
 export async function getPromptDetail(
   promptId: string,
-  opts?: { limit?: number },
+  opts?: { limit?: number; dateFrom?: string; dateTo?: string },
 ): Promise<PromptDetailData | null> {
   const supabase = await createClient();
 
@@ -830,10 +830,21 @@ export async function getPromptDetail(
   const brandId = (promptSetData?.brand_id as string | undefined) ?? '';
 
   // Brand + competitor domains feed classifyDomain, same as the citations page.
-  const [{ data: brandDomainRows }, { data: competitorRows }] = await Promise.all([
-    supabase.from('brand_domains').select('domain').eq('brand_id', brandId),
-    supabase.from('competitors').select('domain').eq('brand_id', brandId),
-  ]);
+  // The extra query pins lastCheckedAt to the prompt's true latest run so the
+  // "Last run" badge doesn't move (or empty out) when a date window is applied.
+  const [{ data: brandDomainRows }, { data: competitorRows }, { data: lastRunRows }] =
+    await Promise.all([
+      supabase.from('brand_domains').select('domain').eq('brand_id', brandId),
+      supabase.from('competitors').select('domain').eq('brand_id', brandId),
+      supabase
+        .from('prompt_results')
+        .select('created_at')
+        .eq('prompt_id', promptId)
+        .neq('platform', 'chatgpt-shopping')
+        .order('created_at', { ascending: false })
+        .limit(1),
+    ]);
+  const lastCheckedAt = (lastRunRows?.[0]?.created_at as string | undefined) ?? null;
   const classifyCtx = {
     brandDomains: (brandDomainRows ?? [])
       .map((r) => normalizeDomain((r as { domain: string }).domain))
@@ -857,11 +868,15 @@ export async function getPromptDetail(
   }
 
   // #155 — same isolation rule as the other aggregating queries here.
-  const { data: resultRows, error: resultError } = await supabase
+  let resultQuery = supabase
     .from('prompt_results')
     .select('*')
     .eq('prompt_id', promptId)
-    .neq('platform', 'chatgpt-shopping')
+    .neq('platform', 'chatgpt-shopping');
+  if (opts?.dateFrom) resultQuery = resultQuery.gte('created_at', opts.dateFrom);
+  const expandedDateTo = expandDateToEndOfDay(opts?.dateTo);
+  if (expandedDateTo) resultQuery = resultQuery.lte('created_at', expandedDateTo);
+  const { data: resultRows, error: resultError } = await resultQuery
     .order('created_at', { ascending: false })
     .limit(opts?.limit ?? 500);
 
@@ -984,7 +999,7 @@ export async function getPromptDetail(
       totalMentions: results.reduce((sum, row) => sum + row.mentionCount, 0),
       totalCitations: results.reduce((sum, row) => sum + row.citationCount, 0),
       totalResults,
-      lastCheckedAt: results[0]?.createdAt ?? null,
+      lastCheckedAt,
     },
     results,
     topSources,
