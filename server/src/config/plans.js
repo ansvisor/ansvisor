@@ -21,6 +21,7 @@ export const PLANS = {
       features: [
         'basic_insights',
         'prompt_suggestions',
+        'topic_suggestions',
         'prompt_volumes',
         'advanced_analytics',
         'daily_monitoring',
@@ -53,6 +54,7 @@ export const PLANS = {
         'basic_insights',
         'advanced_analytics',
         'prompt_suggestions',
+        'topic_suggestions',
         'prompt_volumes',
         'daily_monitoring',
         'competitor_tracking',
@@ -83,6 +85,7 @@ export const PLANS = {
       features: [
         'basic_insights',
         'prompt_suggestions',
+        'topic_suggestions',
         'prompt_volumes',
         'advanced_analytics',
         'daily_monitoring',
@@ -117,6 +120,7 @@ export const PLANS = {
       features: [
         'basic_insights',
         'prompt_suggestions',
+        'topic_suggestions',
         'prompt_volumes',
         'advanced_analytics',
         'daily_monitoring',

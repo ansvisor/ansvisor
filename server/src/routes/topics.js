@@ -3,6 +3,7 @@ import { generateText, generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { assertBrandAccess } from '../lib/access.js';
+import { requireFeature } from '../lib/plan-guard.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import { withRetry } from '../lib/retry.js';
 import { getLanguageName } from '../lib/languages.js';
@@ -257,90 +258,94 @@ router.get('/suggestions/:brandId', async (req, res) => {
  * it — excluding topics the brand already tracks and names it previously
  * dismissed or added, so decided suggestions never reappear (#463).
  */
-router.post('/suggestions/:brandId/refresh', async (req, res) => {
-  try {
-    const brandId = req.params.brandId;
-    await assertBrandAccess(brandId, req.user.id);
+router.post(
+  '/suggestions/:brandId/refresh',
+  requireFeature('topic_suggestions'),
+  async (req, res) => {
+    try {
+      const brandId = req.params.brandId;
+      await assertBrandAccess(brandId, req.user.id);
 
-    const { data: brand } = await supabaseAdmin
-      .from('brands')
-      .select('name, industry, description, language')
-      .eq('id', brandId)
-      .single();
-    if (!brand) return res.status(404).json({ error: 'Brand not found' });
+      const { data: brand } = await supabaseAdmin
+        .from('brands')
+        .select('name, industry, description, language')
+        .eq('id', brandId)
+        .single();
+      if (!brand) return res.status(404).json({ error: 'Brand not found' });
 
-    const [{ data: primaryDomain }, signals] = await Promise.all([
-      supabaseAdmin
-        .from('brand_domains')
-        .select('domain')
-        .eq('brand_id', brandId)
-        .order('is_primary', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      loadTopicSignals(brandId),
-    ]);
+      const [{ data: primaryDomain }, signals] = await Promise.all([
+        supabaseAdmin
+          .from('brand_domains')
+          .select('domain')
+          .eq('brand_id', brandId)
+          .order('is_primary', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        loadTopicSignals(brandId),
+      ]);
 
-    const ideas = await generateTopicIdeas({
-      brandName: brand.name,
-      industry: brand.industry,
-      description: brand.description,
-      website: primaryDomain?.domain,
-      language: brand.language,
-      signals,
-    });
+      const ideas = await generateTopicIdeas({
+        brandName: brand.name,
+        industry: brand.industry,
+        description: brand.description,
+        website: primaryDomain?.domain,
+        language: brand.language,
+        signals,
+      });
 
-    const [{ data: existingTopics }, { data: decided }] = await Promise.all([
-      supabaseAdmin.from('topics').select('name').eq('brand_id', brandId),
-      supabaseAdmin
+      const [{ data: existingTopics }, { data: decided }] = await Promise.all([
+        supabaseAdmin.from('topics').select('name').eq('brand_id', brandId),
+        supabaseAdmin
+          .from('topic_suggestions')
+          .select('name')
+          .eq('brand_id', brandId)
+          .in('status', ['dismissed', 'added']),
+      ]);
+      const taken = new Set(
+        [...(existingTopics || []), ...(decided || [])].map((r) => r.name.trim().toLowerCase()),
+      );
+
+      const seen = new Set();
+      const fresh = ideas.filter((t) => {
+        const key = t.name.trim().toLowerCase();
+        if (!key || taken.has(key) || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      // Replace the undecided batch wholesale — same behavior as prompt
+      // suggestions refresh. Dismissed/added rows are never touched.
+      await supabaseAdmin
         .from('topic_suggestions')
-        .select('name')
+        .delete()
         .eq('brand_id', brandId)
-        .in('status', ['dismissed', 'added']),
-    ]);
-    const taken = new Set(
-      [...(existingTopics || []), ...(decided || [])].map((r) => r.name.trim().toLowerCase()),
-    );
+        .eq('status', 'new');
 
-    const seen = new Set();
-    const fresh = ideas.filter((t) => {
-      const key = t.name.trim().toLowerCase();
-      if (!key || taken.has(key) || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+      if (fresh.length === 0) {
+        return res.json({ suggestions: [] });
+      }
 
-    // Replace the undecided batch wholesale — same behavior as prompt
-    // suggestions refresh. Dismissed/added rows are never touched.
-    await supabaseAdmin
-      .from('topic_suggestions')
-      .delete()
-      .eq('brand_id', brandId)
-      .eq('status', 'new');
+      const { data: inserted, error } = await supabaseAdmin
+        .from('topic_suggestions')
+        .insert(
+          fresh.map((t) => ({
+            brand_id: brandId,
+            name: t.name.trim(),
+            source: 'llm',
+            status: 'new',
+          })),
+        )
+        .select();
+      if (error) throw error;
 
-    if (fresh.length === 0) {
-      return res.json({ suggestions: [] });
+      return res.json({ suggestions: inserted });
+    } catch (error) {
+      const status = error.status || 500;
+      req.log.error({ err: error }, 'topic-suggestions refresh error');
+      return res.status(status).json({ error: error.message || 'Failed to generate suggestions' });
     }
-
-    const { data: inserted, error } = await supabaseAdmin
-      .from('topic_suggestions')
-      .insert(
-        fresh.map((t) => ({
-          brand_id: brandId,
-          name: t.name.trim(),
-          source: 'llm',
-          status: 'new',
-        })),
-      )
-      .select();
-    if (error) throw error;
-
-    return res.json({ suggestions: inserted });
-  } catch (error) {
-    const status = error.status || 500;
-    req.log.error({ err: error }, 'topic-suggestions refresh error');
-    return res.status(status).json({ error: error.message || 'Failed to generate suggestions' });
-  }
-});
+  },
+);
 
 /**
  * POST /api/topics/suggestions/:id/dismiss
