@@ -684,7 +684,8 @@ export async function getCitationsTotal(brandId: string): Promise<number> {
     .from('prompt_results')
     .select('id', { count: 'exact', head: true })
     .eq('brand_id', brandId)
-    .neq('platform', 'chatgpt-shopping');
+    .neq('platform', 'chatgpt-shopping')
+    .neq('citations', '[]');
   if (error) throw new Error(error.message);
   return count ?? 0;
 }

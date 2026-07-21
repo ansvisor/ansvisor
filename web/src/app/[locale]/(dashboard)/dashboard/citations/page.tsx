@@ -774,6 +774,7 @@ const DomainsTable = memo(function DomainsTable({
   onPage,
   filters,
   onResetFilters,
+  hasAnyCitations,
 }: {
   rows: CitationDomainRow[];
   brandId: string;
@@ -782,6 +783,7 @@ const DomainsTable = memo(function DomainsTable({
   onPage: (p: number) => void;
   filters: UIFilters;
   onResetFilters: () => void;
+  hasAnyCitations: boolean | null;
 }) {
   if (rows.length === 0)
     return (
@@ -789,6 +791,7 @@ const DomainsTable = memo(function DomainsTable({
         isFiltered={filters.datePreset !== 'all'}
         datePreset={filters.datePreset}
         onShowAll={onResetFilters}
+        hasAnyCitations={hasAnyCitations}
       />
     );
 
@@ -876,12 +879,14 @@ const UrlsTable = memo(function UrlsTable({
   onPage,
   filters,
   onResetFilters,
+  hasAnyCitations,
 }: {
   rows: CitationUrlRow[];
   page: number;
   onPage: (p: number) => void;
   filters: UIFilters;
   onResetFilters: () => void;
+  hasAnyCitations: boolean | null;
 }) {
   if (rows.length === 0)
     return (
@@ -889,6 +894,7 @@ const UrlsTable = memo(function UrlsTable({
         isFiltered={filters.datePreset !== 'all'}
         datePreset={filters.datePreset}
         onShowAll={onResetFilters}
+        hasAnyCitations={hasAnyCitations}
       />
     );
 
@@ -966,47 +972,31 @@ const UrlsTable = memo(function UrlsTable({
 /**
  * Period-aware empty state for the Domains / URLs tables (#485).
  *
+ * hasAnyCitations is fetched once in loadData (via getCitationsTotal) and
+ * passed down, so both keepMounted panels share a single server call instead
+ * of each firing their own (#313 action queue note).
+ *
  * Three states:
- *  1. Loading  — running the cheap unfiltered count; shows a spinner.
+ *  1. Checking (null) — loadData is still in flight; shows a spinner.
  *  2. Has data outside window — "No citations in the last Xh/d" + "Show all data" button.
  *  3. No data at all — generic filter message (original behaviour).
+ *
+ * isFiltered / datePreset / onShowAll default to gap-safe values so
+ * ByCompetitorView / CompetitorGapsTab can render <EmptyRows /> with no props.
  */
 function EmptyRows({
-  isFiltered,
-  datePreset,
-  onShowAll,
+  isFiltered = false,
+  datePreset = 'all',
+  onShowAll = () => {},
+  hasAnyCitations = null,
 }: {
-  isFiltered: boolean;
-  datePreset: CitationsDatePreset;
-  onShowAll: () => void;
+  isFiltered?: boolean;
+  datePreset?: CitationsDatePreset;
+  onShowAll?: () => void;
+  hasAnyCitations?: boolean | null;
 }) {
-  const [hasAnyData, setHasAnyData] = useState<boolean | null>(null);
-  const { getActiveBrand } = useBrandStore();
-  const brand = getActiveBrand();
-
-  useEffect(() => {
-    // When 'all' is selected and still empty, no need to run an extra check —
-    // there simply is no data. Schedule via Promise to avoid synchronous setState
-    // inside an effect body (react-hooks/set-state-in-effect).
-    if (!isFiltered || !brand?.id) {
-      Promise.resolve().then(() => setHasAnyData(false));
-      return;
-    }
-    let cancelled = false;
-    getCitationsTotal(brand.id)
-      .then((total) => {
-        if (!cancelled) setHasAnyData(total > 0);
-      })
-      .catch(() => {
-        if (!cancelled) setHasAnyData(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [isFiltered, brand?.id]);
-
-  // ── 1. Loading ───────────────────────────────────────────────────────────────
-  if (hasAnyData === null) {
+  // ── 1. Checking ──────────────────────────────────────────────────────────────
+  if (hasAnyCitations === null) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/60 mb-3" />
@@ -1016,7 +1006,7 @@ function EmptyRows({
   }
 
   // ── 2. Period-aware: data exists outside this window ─────────────────────────
-  if (hasAnyData && isFiltered) {
+  if (hasAnyCitations && isFiltered) {
     const periodLabel =
       datePreset === '24h'
         ? 'the last 24 hours'
@@ -1270,7 +1260,7 @@ function ByCompetitorView({
         </Select>
       </div>
       {rows.length === 0 ? (
-        <EmptyRows isFiltered={false} datePreset="all" onShowAll={() => {}} />
+        <EmptyRows />
       ) : (
         <Table>
           <TableHeader>
@@ -1336,7 +1326,7 @@ function CompetitorGapsTab({ loading, gaps }: { loading: boolean; gaps: Citation
       </div>
     );
   }
-  if (!gaps) return <EmptyRows isFiltered={false} datePreset="all" onShowAll={() => {}} />;
+  if (!gaps) return <EmptyRows />;
 
   return (
     <div className="space-y-3">
@@ -1438,6 +1428,7 @@ export default function CitationsPage() {
 
   const [filters, setFilters] = useState<UIFilters>(DEFAULT_FILTERS);
   const [data, setData] = useState<CitationsOverview | null>(null);
+  const [hasAnyCitations, setHasAnyCitations] = useState<boolean | null>(null);
 
   // Pagination — resets to page 0 whenever any filter changes
   const filterKey = JSON.stringify(filters);
@@ -1510,8 +1501,12 @@ export default function CitationsPage() {
     }
     setIsLoading(true);
     try {
-      const overview = await getCitationsOverview(activeBrandId, apiFilters);
+      const [overview, total] = await Promise.all([
+        getCitationsOverview(activeBrandId, apiFilters),
+        getCitationsTotal(activeBrandId),
+      ]);
       setData(overview);
+      setHasAnyCitations(total > 0);
 
       // Surface filter options from the observed models/regions.
       const platformOptions = buildPlatformOptions(overview.rows);
@@ -1735,7 +1730,8 @@ export default function CitationsPage() {
                     page={domainPager.page}
                     onPage={domainPager.setPage}
                     filters={filters}
-                    onResetFilters={() => setFilters(DEFAULT_FILTERS)}
+                    onResetFilters={() => setFilters({ ...DEFAULT_FILTERS, datePreset: 'all' })}
+                    hasAnyCitations={hasAnyCitations}
                   />
                 </TabsContent>
                 <TabsContent value="urls" keepMounted className="mt-4">
@@ -1744,7 +1740,8 @@ export default function CitationsPage() {
                     page={urlPager.page}
                     onPage={urlPager.setPage}
                     filters={filters}
-                    onResetFilters={() => setFilters(DEFAULT_FILTERS)}
+                    onResetFilters={() => setFilters({ ...DEFAULT_FILTERS, datePreset: 'all' })}
+                    hasAnyCitations={hasAnyCitations}
                   />
                 </TabsContent>
                 <TabsContent value="gaps" className="mt-4">
