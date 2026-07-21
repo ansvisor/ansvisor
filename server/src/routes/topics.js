@@ -23,18 +23,142 @@ const topicSchema = z.object({
 });
 
 /**
+ * Tracked-data signals for topic generation (#463 follow-up): high-volume /
+ * low-competition prompts and underperforming topics, mined from the brand's
+ * own prompt_volumes and prompt_results. Returns null when the brand has no
+ * usable data yet (nothing tracked, no volume analysis) — generation then
+ * runs on the brand profile alone, exactly like onboarding.
+ */
+async function loadTopicSignals(brandId) {
+  const [{ data: prompts }, { data: topicRows }, { data: results }] = await Promise.all([
+    supabaseAdmin
+      .from('prompts')
+      .select('id, text, topic_id, prompt_sets!inner(brand_id), prompt_volumes(est_ai_volume)')
+      .eq('prompt_sets.brand_id', brandId)
+      .eq('is_active', true)
+      .limit(200),
+    supabaseAdmin.from('topics').select('id, name').eq('brand_id', brandId).eq('is_active', true),
+    // #155 — shopping results are excluded from every aggregate.
+    supabaseAdmin
+      .from('prompt_results')
+      .select('prompt_id, mention_count, citation_count, competitor_mentions')
+      .eq('brand_id', brandId)
+      .neq('platform', 'chatgpt-shopping')
+      .order('created_at', { ascending: false })
+      .limit(500),
+  ]);
+  if (!prompts?.length || !results?.length) return null;
+
+  const topicNameById = new Map((topicRows || []).map((t) => [t.id, t.name]));
+
+  // Per-prompt aggregates over the recent results window.
+  const byPrompt = new Map();
+  for (const r of results) {
+    const agg = byPrompt.get(r.prompt_id) || { runs: 0, visible: 0, competitors: new Set() };
+    agg.runs += 1;
+    if ((r.mention_count || 0) > 0 || (r.citation_count || 0) > 0) agg.visible += 1;
+    const mentions = r.competitor_mentions;
+    if (Array.isArray(mentions)) {
+      for (const m of mentions) {
+        const name = typeof m === 'string' ? m : m?.name;
+        if (name) agg.competitors.add(name);
+      }
+    } else if (mentions && typeof mentions === 'object') {
+      for (const name of Object.keys(mentions)) agg.competitors.add(name);
+    }
+    byPrompt.set(r.prompt_id, agg);
+  }
+
+  const enriched = prompts
+    .map((p) => {
+      const pv = p.prompt_volumes;
+      const volume = (Array.isArray(pv) ? pv[0]?.est_ai_volume : pv?.est_ai_volume) || 0;
+      const agg = byPrompt.get(p.id);
+      return {
+        text: p.text,
+        topicName: topicNameById.get(p.topic_id) || null,
+        volume,
+        runs: agg?.runs || 0,
+        visibleRate: agg && agg.runs > 0 ? agg.visible / agg.runs : null,
+        competitorCount: agg ? agg.competitors.size : null,
+      };
+    })
+    .filter((p) => p.runs > 0);
+  if (!enriched.length) return null;
+
+  // Gap prompts: real demand (volume), weak brand presence, few competitors
+  // already owning the answer — the space a new topic can still win.
+  const gaps = enriched
+    .filter((p) => p.volume > 0 && p.visibleRate !== null && p.visibleRate < 0.5)
+    .sort((a, b) => b.volume - a.volume || (a.competitorCount ?? 99) - (b.competitorCount ?? 99))
+    .slice(0, 8);
+
+  // Weakest existing topics by visible-answer rate (needs a few runs to mean
+  // anything) — candidates for adjacent, more winnable topic variants.
+  const topicAgg = new Map();
+  for (const p of enriched) {
+    if (!p.topicName || p.visibleRate === null) continue;
+    const t = topicAgg.get(p.topicName) || { runs: 0, visible: 0 };
+    t.runs += p.runs;
+    t.visible += p.visibleRate * p.runs;
+    topicAgg.set(p.topicName, t);
+  }
+  const weakTopics = [...topicAgg.entries()]
+    .filter(([, t]) => t.runs >= 5)
+    .map(([name, t]) => ({ name, visibleRate: t.visible / t.runs }))
+    .sort((a, b) => a.visibleRate - b.visibleRate)
+    .slice(0, 3);
+
+  if (!gaps.length && !weakTopics.length) return null;
+  return { gaps, weakTopics };
+}
+
+function formatTopicSignals(signals) {
+  if (!signals) return '';
+  const pct = (rate) => `${Math.round(rate * 100)}%`;
+  const lines = [];
+  if (signals.gaps.length) {
+    lines.push(
+      `Opportunity signal (from this brand's tracked prompts — high user demand, weak brand presence, little competition):`,
+      ...signals.gaps.map(
+        (g) =>
+          `  • [~${g.volume.toLocaleString('en-US')}/mo, visible in ${pct(g.visibleRate)} of answers, ${g.competitorCount ?? '?'} competitors cited${g.topicName ? `, topic: ${g.topicName}` : ''}] ${g.text}`,
+      ),
+      `Prioritize NEW topics that cover the themes behind these prompts — demand exists and no one owns the answer yet.`,
+    );
+  }
+  if (signals.weakTopics.length) {
+    lines.push(
+      `Weakest existing topics by AI visibility (consider adjacent, more winnable angles — do NOT re-suggest these names):`,
+      ...signals.weakTopics.map(
+        (t) => `  • ${t.name} (visible in ${pct(t.visibleRate)} of answers)`,
+      ),
+    );
+  }
+  return `\n${lines.join('\n')}\n`;
+}
+
+/**
  * Two-phase generation (web research → structured extraction), shared by the
  * ephemeral onboarding endpoint below and the persisted Topics-page
- * suggestions (#463).
+ * suggestions (#463). `signals` (optional) injects tracked-prompt data into
+ * the research phase; onboarding has none and passes nothing.
  */
-async function generateTopicIdeas({ brandName, industry, description, website, language }) {
+async function generateTopicIdeas({
+  brandName,
+  industry,
+  description,
+  website,
+  language,
+  signals,
+}) {
   const langName = getLanguageName(language);
   const topicModel = process.env.TOPIC_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
 
   const researchPrompt = `Search the web and research "${brandName}" (${website || 'no website provided'}).
 Industry: ${industry || 'Not specified'}
 Description: ${description || 'Not specified'}
-
+${formatTopicSignals(signals)}
 Find 8-12 relevant TOPICS that this brand should track for Answer Engine Optimization (AEO). Topics should represent key areas where users might ask AI assistants about this brand or its industry.
 
 IMPORTANT: Do NOT include the brand name "${brandName}" in any topic. Topics must be generic industry terms.
@@ -145,13 +269,16 @@ router.post('/suggestions/:brandId/refresh', async (req, res) => {
       .single();
     if (!brand) return res.status(404).json({ error: 'Brand not found' });
 
-    const { data: primaryDomain } = await supabaseAdmin
-      .from('brand_domains')
-      .select('domain')
-      .eq('brand_id', brandId)
-      .order('is_primary', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const [{ data: primaryDomain }, signals] = await Promise.all([
+      supabaseAdmin
+        .from('brand_domains')
+        .select('domain')
+        .eq('brand_id', brandId)
+        .order('is_primary', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      loadTopicSignals(brandId),
+    ]);
 
     const ideas = await generateTopicIdeas({
       brandName: brand.name,
@@ -159,6 +286,7 @@ router.post('/suggestions/:brandId/refresh', async (req, res) => {
       description: brand.description,
       website: primaryDomain?.domain,
       language: brand.language,
+      signals,
     });
 
     const [{ data: existingTopics }, { data: decided }] = await Promise.all([
