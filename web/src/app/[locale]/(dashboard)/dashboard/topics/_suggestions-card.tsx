@@ -33,9 +33,6 @@ interface Props {
 /** localStorage key remembering whether the card is expanded across visits. */
 const EXPANDED_KEY = 'aeo:topic-suggestions-expanded';
 
-/** The leaderboard is the page's main content — keep the card compact. */
-const VISIBLE_LIMIT = 5;
-
 export function TopicSuggestionsCard({ brandId, canManage, onAccepted }: Props) {
   const [suggestions, setSuggestions] = useState<TopicSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -147,9 +144,6 @@ export function TopicSuggestionsCard({ brandId, canManage, onAccepted }: Props) 
       .finally(() => setPendingId(null));
   };
 
-  const visible = suggestions.slice(0, VISIBLE_LIMIT);
-  const hiddenCount = suggestions.length - visible.length;
-
   return (
     <Card id="topic-opportunities">
       <CardHeader className={expanded ? 'pb-3' : 'py-4'}>
@@ -237,64 +231,54 @@ export function TopicSuggestionsCard({ brandId, canManage, onAccepted }: Props) 
               )}
             </div>
           ) : (
-            <>
-              <ul className="space-y-2">
-                {visible.map((s) => {
-                  const busy = pendingId === s.id;
-                  return (
-                    <li
-                      key={s.id}
-                      className="group flex items-center gap-3 rounded-lg border bg-muted/20 p-3 transition-colors hover:bg-muted/40"
-                    >
-                      <div className="flex-1 min-w-0 space-y-1">
-                        <p className="text-sm font-medium leading-snug">{s.name}</p>
-                        {s.reason && (
-                          <p className="text-xs text-muted-foreground leading-relaxed">
-                            {s.reason}
-                          </p>
-                        )}
-                      </div>
-                      {canManage && (
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-8 w-8"
-                            onClick={() => handleAccept(s)}
-                            disabled={busy}
-                            title="Add to tracked topics"
-                            aria-label="Add to tracked topics"
-                          >
-                            {busy ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Plus className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-muted-foreground"
-                            onClick={() => handleDismiss(s)}
-                            disabled={busy}
-                            title="Dismiss suggestion"
-                            aria-label="Dismiss suggestion"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
+            <ul className="space-y-2">
+              {suggestions.map((s) => {
+                const busy = pendingId === s.id;
+                return (
+                  <li
+                    key={s.id}
+                    className="group flex items-center gap-3 rounded-lg border bg-muted/20 p-3 transition-colors hover:bg-muted/40"
+                  >
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <p className="text-sm font-medium leading-snug">{s.name}</p>
+                      {s.reason && (
+                        <p className="text-xs text-muted-foreground leading-relaxed">{s.reason}</p>
                       )}
-                    </li>
-                  );
-                })}
-              </ul>
-              {hiddenCount > 0 && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {hiddenCount} more idea{hiddenCount !== 1 ? 's' : ''} queued — decide on these
-                  first.
-                </p>
-              )}
-            </>
+                    </div>
+                    {canManage && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8"
+                          onClick={() => handleAccept(s)}
+                          disabled={busy}
+                          title="Add to tracked topics"
+                          aria-label="Add to tracked topics"
+                        >
+                          {busy ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Plus className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-muted-foreground"
+                          onClick={() => handleDismiss(s)}
+                          disabled={busy}
+                          title="Dismiss suggestion"
+                          aria-label="Dismiss suggestion"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </CardContent>
       )}
