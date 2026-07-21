@@ -118,7 +118,13 @@ export interface TopicOverviewRow {
   id: string;
   name: string;
   promptCount: number;
-  avgVisibilityScore: number;
+  /** % of the topic's prompts with results where the brand appeared at least once (#490 semantics). */
+  visibilityRate: number;
+  /** Distinct prompts with ≥1 mention/citation in the window (rate numerator). */
+  visiblePrompts: number;
+  /** Distinct prompts that produced results in the window (rate denominator). */
+  activePrompts: number;
+  /** Rate difference in points: (current 7d) − (previous 7d). */
   visibilityChange: number | null;
   totalMentions: number;
   totalCitations: number;
@@ -135,12 +141,14 @@ export interface TopicOverviewSummary {
 
 /**
  * Aggregate per-topic analytics for a brand.
- * Looks at last 30 days of prompt_results and derives visibility, mentions,
- * citations, SoV, top competitor and a short sparkline per topic.
- * Change is computed as (current 7d avg) - (previous 7d avg) to mirror
- * the logic used by Insights KPI cards. Like every analytical surface,
- * chatgpt-shopping rows are excluded (#155) — totals here must agree with
- * the Insights KPIs on the same 30d window (#464).
+ * Looks at last 30 days of prompt_results and derives visibility rate,
+ * mentions, citations, SoV, top competitor and a short sparkline per topic.
+ * Visibility uses the prompt-level rate from #490 (prompts appeared in ÷
+ * prompts with results), NOT the raw score average — the Topics page must
+ * read on the same scale as the Insights headline (#493). Change is
+ * (current 7d rate) − (previous 7d rate) in points. Like every analytical
+ * surface, chatgpt-shopping rows are excluded (#155) — totals here must
+ * agree with the Insights KPIs on the same 30d window (#464).
  */
 /**
  * PostgREST silently caps un-paginated selects at 1000 rows, which sampled the
@@ -204,27 +212,29 @@ export async function getTopicsOverview(brandId: string): Promise<TopicOverviewS
   for (const p of prompts) promptTopicMap.set(p.id, p.topic_id);
 
   interface Agg {
-    curScoreSum: number;
-    curCount: number;
-    prevScoreSum: number;
-    prevCount: number;
-    allScoreSum: number;
-    allCount: number;
+    // Prompt-level visibility (#490): distinct prompts with results vs
+    // distinct prompts where the brand appeared, per window.
+    allPrompts: Set<string>;
+    visiblePrompts: Set<string>;
+    curPrompts: Set<string>;
+    curVisiblePrompts: Set<string>;
+    prevPrompts: Set<string>;
+    prevVisiblePrompts: Set<string>;
     totalMentions: number;
     totalCitations: number;
     brandMentions: number;
     compMentions: number;
     lastRunAt: number;
     competitors: Map<string, { name: string; sov: number }>;
-    daily: Map<string, { sum: number; count: number }>;
+    daily: Map<string, { visible: number; count: number }>;
   }
   const emptyAgg = (): Agg => ({
-    curScoreSum: 0,
-    curCount: 0,
-    prevScoreSum: 0,
-    prevCount: 0,
-    allScoreSum: 0,
-    allCount: 0,
+    allPrompts: new Set(),
+    visiblePrompts: new Set(),
+    curPrompts: new Set(),
+    curVisiblePrompts: new Set(),
+    prevPrompts: new Set(),
+    prevVisiblePrompts: new Set(),
     totalMentions: 0,
     totalCitations: 0,
     brandMentions: 0,
@@ -260,28 +270,29 @@ export async function getTopicsOverview(brandId: string): Promise<TopicOverviewS
 
     const createdAt = row.created_at as string;
     const ts = new Date(createdAt).getTime();
-    const score = (row.visibility_score as number) ?? 0;
     const mentions = (row.mention_count as number) ?? 0;
     const citations = (row.citation_count as number) ?? 0;
+    // Same "appeared" rule as the Insights rate (#490).
+    const visible = mentions > 0 || citations > 0;
 
-    agg.allScoreSum += score;
-    agg.allCount += 1;
+    agg.allPrompts.add(promptId);
+    if (visible) agg.visiblePrompts.add(promptId);
     agg.totalMentions += mentions;
     agg.totalCitations += citations;
     agg.brandMentions += mentions;
     if (ts > agg.lastRunAt) agg.lastRunAt = ts;
 
     if (ts >= curFrom) {
-      agg.curScoreSum += score;
-      agg.curCount += 1;
+      agg.curPrompts.add(promptId);
+      if (visible) agg.curVisiblePrompts.add(promptId);
     } else if (ts >= prevFrom) {
-      agg.prevScoreSum += score;
-      agg.prevCount += 1;
+      agg.prevPrompts.add(promptId);
+      if (visible) agg.prevVisiblePrompts.add(promptId);
     }
 
     const day = createdAt.slice(0, 10);
-    const d = agg.daily.get(day) ?? { sum: 0, count: 0 };
-    d.sum += score;
+    const d = agg.daily.get(day) ?? { visible: 0, count: 0 };
+    if (visible) d.visible += 1;
     d.count += 1;
     agg.daily.set(day, d);
 
@@ -329,10 +340,16 @@ export async function getTopicsOverview(brandId: string): Promise<TopicOverviewS
     const agg = aggByTopic.get(t.id) ?? emptyAgg();
     const promptCount = promptCountByTopic.get(t.id) ?? 0;
 
-    const avg = agg.allCount > 0 ? Math.round(agg.allScoreSum / agg.allCount) : 0;
+    const rateOf = (visible: number, total: number) =>
+      total > 0 ? Math.round((visible / total) * 1000) / 10 : 0;
+    const visibilityRate = rateOf(agg.visiblePrompts.size, agg.allPrompts.size);
     const change =
-      agg.curCount > 0 && agg.prevCount > 0
-        ? Math.round((agg.curScoreSum / agg.curCount - agg.prevScoreSum / agg.prevCount) * 10) / 10
+      agg.curPrompts.size > 0 && agg.prevPrompts.size > 0
+        ? Math.round(
+            (rateOf(agg.curVisiblePrompts.size, agg.curPrompts.size) -
+              rateOf(agg.prevVisiblePrompts.size, agg.prevPrompts.size)) *
+              10,
+          ) / 10
         : null;
 
     const totalForSov = agg.brandMentions + agg.compMentions;
@@ -349,20 +366,26 @@ export async function getTopicsOverview(brandId: string): Promise<TopicOverviewS
       topCompetitor = best;
     }
 
+    // Daily visible-answer share (result-level) — a trend proxy for the
+    // prompt-level headline rate; sparklines have no axis, only shape matters.
     const sparklineDays: number[] = [];
     const todayMs = now;
     for (let i = 13; i >= 0; i--) {
       const d = new Date(todayMs - i * 24 * 60 * 60 * 1000);
       const key = d.toISOString().slice(0, 10);
       const bucket = agg.daily.get(key);
-      sparklineDays.push(bucket && bucket.count > 0 ? Math.round(bucket.sum / bucket.count) : 0);
+      sparklineDays.push(
+        bucket && bucket.count > 0 ? Math.round((bucket.visible / bucket.count) * 100) : 0,
+      );
     }
 
     return {
       id: t.id,
       name: t.name,
       promptCount,
-      avgVisibilityScore: avg,
+      visibilityRate,
+      visiblePrompts: agg.visiblePrompts.size,
+      activePrompts: agg.allPrompts.size,
       visibilityChange: change,
       totalMentions: agg.totalMentions,
       totalCitations: agg.totalCitations,

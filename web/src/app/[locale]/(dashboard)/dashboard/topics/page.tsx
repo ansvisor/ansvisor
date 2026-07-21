@@ -65,7 +65,9 @@ function visibilityTextColor(score: number) {
 const TOPIC_EXPORT_HEADERS = [
   'topic',
   'prompt_count',
-  'avg_visibility_score',
+  'visibility_rate',
+  'visible_prompts',
+  'active_prompts',
   'visibility_change',
   'total_mentions',
   'total_citations',
@@ -182,13 +184,13 @@ export default function TopicsPage() {
   }, [loadData]);
 
   const sortedByVisibility = useMemo(
-    () => [...topics].sort((a, b) => b.avgVisibilityScore - a.avgVisibilityScore),
+    () => [...topics].sort((a, b) => b.visibilityRate - a.visibilityRate),
     [topics],
   );
 
   const kpis = useMemo(() => {
     if (topics.length === 0) return null;
-    const withData = topics.filter((t) => t.avgVisibilityScore > 0);
+    const withData = topics.filter((t) => t.visibilityRate > 0);
     if (withData.length === 0) {
       return {
         total: topics.length,
@@ -197,8 +199,8 @@ export default function TopicsPage() {
         gainer: null as TopicOverviewRow | null,
       };
     }
-    const best = [...withData].sort((a, b) => b.avgVisibilityScore - a.avgVisibilityScore)[0];
-    const weakest = [...withData].sort((a, b) => a.avgVisibilityScore - b.avgVisibilityScore)[0];
+    const best = [...withData].sort((a, b) => b.visibilityRate - a.visibilityRate)[0];
+    const weakest = [...withData].sort((a, b) => a.visibilityRate - b.visibilityRate)[0];
     const withChange = topics.filter((t) => t.visibilityChange !== null);
     const gainer = withChange.length
       ? [...withChange].sort((a, b) => (b.visibilityChange ?? 0) - (a.visibilityChange ?? 0))[0]
@@ -220,7 +222,9 @@ export default function TopicsPage() {
     const rows = topics.map((t) => ({
       topic: t.name,
       prompt_count: t.promptCount,
-      avg_visibility_score: t.avgVisibilityScore,
+      visibility_rate: t.visibilityRate,
+      visible_prompts: t.visiblePrompts,
+      active_prompts: t.activePrompts,
       visibility_change: t.visibilityChange ?? '',
       total_mentions: t.totalMentions,
       total_citations: t.totalCitations,
@@ -316,14 +320,14 @@ export default function TopicsPage() {
           <KpiCard
             icon={Trophy}
             label="Best performer"
-            value={kpis.best ? `${kpis.best.avgVisibilityScore}%` : '—'}
+            value={kpis.best ? `${kpis.best.visibilityRate}%` : '—'}
             sub={kpis.best?.name ?? 'No data yet'}
             tone="positive"
           />
           <KpiCard
             icon={TrendingDown}
             label="Biggest gap"
-            value={kpis.weakest ? `${kpis.weakest.avgVisibilityScore}%` : '—'}
+            value={kpis.weakest ? `${kpis.weakest.visibilityRate}%` : '—'}
             sub={kpis.weakest?.name ?? 'No data yet'}
             tone="warning"
           />
@@ -332,7 +336,7 @@ export default function TopicsPage() {
             label="Top mover (7d)"
             value={
               kpis.gainer && kpis.gainer.visibilityChange !== null
-                ? `${kpis.gainer.visibilityChange > 0 ? '+' : ''}${kpis.gainer.visibilityChange}%`
+                ? `${kpis.gainer.visibilityChange > 0 ? '+' : ''}${kpis.gainer.visibilityChange} pts`
                 : '—'
             }
             sub={kpis.gainer?.name ?? 'Not enough data'}
@@ -400,24 +404,27 @@ export default function TopicsPage() {
                       {t.promptCount}
                     </TableCell>
                     <TableCell className="min-w-[160px]">
-                      {t.avgVisibilityScore > 0 ? (
-                        <div className="flex items-center gap-2">
+                      {t.activePrompts > 0 ? (
+                        <div
+                          className="flex items-center gap-2"
+                          title={`Appeared in ${t.visiblePrompts} of ${t.activePrompts} prompts`}
+                        >
                           <span
                             className={cn(
-                              'text-sm font-semibold tabular-nums w-8',
-                              visibilityTextColor(t.avgVisibilityScore),
+                              'text-sm font-semibold tabular-nums w-11',
+                              visibilityTextColor(t.visibilityRate),
                             )}
                           >
-                            {t.avgVisibilityScore}
+                            {t.visibilityRate}%
                           </span>
                           <div className="h-1.5 flex-1 max-w-[90px] rounded-full bg-muted overflow-hidden">
                             <div
                               className={cn(
                                 'h-full rounded-full',
-                                visibilityBarColor(t.avgVisibilityScore),
+                                visibilityBarColor(t.visibilityRate),
                               )}
                               style={{
-                                width: `${Math.min(100, t.avgVisibilityScore)}%`,
+                                width: `${Math.min(100, t.visibilityRate)}%`,
                               }}
                             />
                           </div>
@@ -453,7 +460,7 @@ export default function TopicsPage() {
                               ) : (
                                 <TrendingDown className="h-3 w-3 inline mr-0.5" />
                               )}
-                              {Math.abs(t.visibilityChange).toFixed(1)}%
+                              {Math.abs(t.visibilityChange).toFixed(1)} pts
                             </span>
                           )}
                           {t.visibilityChange === 0 && (
