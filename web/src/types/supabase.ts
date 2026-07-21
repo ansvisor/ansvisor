@@ -1040,6 +1040,60 @@ export type Database = {
           },
         ];
       };
+      topic_suggestions: {
+        Row: {
+          added_topic_id: string | null;
+          brand_id: string;
+          created_at: string;
+          generated_at: string;
+          id: string;
+          name: string;
+          reason: string | null;
+          source: string;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          added_topic_id?: string | null;
+          brand_id: string;
+          created_at?: string;
+          generated_at?: string;
+          id?: string;
+          name: string;
+          reason?: string | null;
+          source?: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          added_topic_id?: string | null;
+          brand_id?: string;
+          created_at?: string;
+          generated_at?: string;
+          id?: string;
+          name?: string;
+          reason?: string | null;
+          source?: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'topic_suggestions_added_topic_id_fkey';
+            columns: ['added_topic_id'];
+            isOneToOne: false;
+            referencedRelation: 'topics';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'topic_suggestions_brand_id_fkey';
+            columns: ['brand_id'];
+            isOneToOne: false;
+            referencedRelation: 'brands';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       topics: {
         Row: {
           brand_id: string;

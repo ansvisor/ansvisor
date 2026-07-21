@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useUserRole } from '@/hooks/use-user-role';
 import { getTopicsOverview, type TopicOverviewRow } from '@/lib/actions/topic';
+import { TopicSuggestionsCard } from './_suggestions-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -152,6 +154,7 @@ export default function TopicsPage() {
   const activeBrand = useBrandStore(
     (s) => s.brands.find((brand) => brand.id === s.activeBrandId) ?? null,
   );
+  const { canManage } = useUserRole();
   const [topics, setTopics] = useState<TopicOverviewRow[]>([]);
   const [unassignedPromptCount, setUnassignedPromptCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -341,6 +344,10 @@ export default function TopicsPage() {
           />
         </div>
       ) : null}
+
+      {/* Topic Suggestions (#463) — collapsed strip by default; loads its
+          persisted rows only when expanded and never generates on page load. */}
+      <TopicSuggestionsCard brandId={activeBrandId} canManage={canManage} onAccepted={loadData} />
 
       {/* Leaderboard */}
       <Card>

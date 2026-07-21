@@ -673,11 +673,10 @@ function NoDataForPeriod({ datePreset, onReset }: { datePreset: DatePreset; onRe
 
 // ─── Recommendations ──────────────────────────────────────────────────────────
 
-/** Targets on the Prompts page. The prompt-suggestions card lives on the
- *  default All Prompts tab and already expands + scrolls itself for this
- *  hash; the similar-topics card lives on the Insights tab, which is
- *  selected via `?tab=` (a bare hash would land on the wrong tab). */
-const TOPIC_OPPORTUNITIES_HREF = '/dashboard/prompts?tab=insights#topic-opportunities';
+/** Teaser targets. Topic suggestions live on the Topics page (#463) — its
+ *  card expands + scrolls itself for this hash; the prompt-suggestions card
+ *  lives on the Prompts page's default All Prompts tab and does the same. */
+const TOPIC_OPPORTUNITIES_HREF = '/dashboard/topics#topic-opportunities';
 const PROMPT_OPPORTUNITIES_HREF = '/dashboard/prompts#prompt-opportunities';
 
 function RecommendationCard({
