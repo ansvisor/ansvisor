@@ -65,7 +65,15 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'get_visibility_summary',
     {
       description:
-        'Get aggregate visibility metrics for a brand over an optional date range and filter. Returns result count, average visibility score (0-100), total mentions, total citations, and the top 5 competitors by mention count. Use this for "how is my brand doing" / "what changed" style questions.',
+        'Get aggregate visibility metrics for a brand over an optional date range and filter. ' +
+        'The headline metric is visibilityRatePct (totals.visibilityRatePct): the percentage of ' +
+        'tracked prompts the brand appeared in (distinct visible prompts ÷ distinct prompts with ' +
+        'results, shopping excluded). This matches the Insights KPI card — use it when describing ' +
+        'how visible a brand is. Also returns totals.avgVisibility (0-100 intensity score over all ' +
+        'result rows), totals.visiblePrompts, totals.promptCount, total mentions, total citations, ' +
+        'and the top 5 competitors by mention count with avgVisibility divided by the same ' +
+        "denominator as the brand (not just the competitor's own appearances). " +
+        'Use this for "how is my brand doing" / "what changed" style questions.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         date_from: z
@@ -390,7 +398,17 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'get_competitor_comparison',
     {
       description:
-        'Get a brand\'s competitor benchmark and share of voice for a window. Returns the brand and every tracked competitor with avg visibility score (0-100), total mentions, total citations, and how many tracked prompt results each appeared in. Also returns overall share-of-voice as a percentage (brand mentions / (brand + competitor mentions)) and the same split per (model_used, platform). Use this for "how do I compare to my competitors?" or "who is gaining share of voice?" style questions. This is a snapshot for the given window — call again with an earlier window to compute a delta.',
+        "Get a brand's competitor benchmark and share of voice for a window. " +
+        'The headline metric per entry is visibility_rate_pct: distinct prompts the brand (or ' +
+        'competitor) appeared in ÷ the shared brand_prompt_count denominator × 100. All entries ' +
+        'use the same denominator so rates are directly comparable — this matches the Insights ' +
+        'dashboard leaderboard. Each entry also exposes visible_prompts, prompt_count, ' +
+        'avg_visibility_score (0-100 intensity, kept for backward compatibility), total_mentions, ' +
+        'total_citations, and appearance_count. Also returns overall share-of-voice as a ' +
+        'percentage (brand mentions ÷ (brand + competitor mentions)) and the same split per ' +
+        '(model_used, platform). Use this for "how do I compare to my competitors?" or "who is ' +
+        'gaining share of voice?" questions. Snapshot for the given window — call again with an ' +
+        'earlier window to compute a delta.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         date_from: z

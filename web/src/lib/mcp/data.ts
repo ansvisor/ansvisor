@@ -56,10 +56,25 @@ export interface VisibilitySummary {
     avgVisibility: number;
     totalMentions: number;
     totalCitations: number;
+    /** Distinct prompts the brand appeared in (mention_count > 0 OR citation_count > 0). */
+    visiblePrompts: number;
+    /** Distinct prompts that produced results (shopping excluded). */
+    promptCount: number;
+    /**
+     * Headline metric: visiblePrompts / promptCount × 100, rounded to one decimal.
+     * Matches the Insights KPI card. Use this to describe how visible the brand is.
+     */
+    visibilityRatePct: number;
   };
   topCompetitors: Array<{
     name: string;
     mentions: number;
+    /**
+     * Average visibility score divided by the same denominator as the brand
+     * (every filtered result row, not just rows where the competitor appeared).
+     * This prevents inflated scores from competitors that only appear in their
+     * best runs.
+     */
     avgVisibility: number;
   }>;
 }
@@ -84,9 +99,34 @@ export async function getVisibilitySummaryFor(
     .maybeSingle();
   if (!brand) return null;
 
+  // Build a shared model list once — used by both the raw query and the RPCs.
+  const p_models = params.model
+    ? params.model
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : null;
+  const p_models_arg = p_models && p_models.length > 0 ? p_models : null;
+
+  const rpcBaseArgs = {
+    p_brand_id: params.brandId,
+    p_platform: null as string | null,
+    p_models: p_models_arg,
+    p_region: params.region ?? null,
+    p_date_from: params.dateFrom ?? null,
+    p_date_to: expandDateToEndOfDay(params.dateTo) ?? null,
+    p_topic_id: null as string | null,
+  };
+
   // #155 — getVisibilitySummaryFor mirrors the insights_aggregates RPC and
   // excludes chatgpt-shopping for the same reason: its model isn't
   // comparable to a normal ChatGPT answer and would skew brand visibility.
+  //
+  // Run the raw-row query and the two rate RPCs in parallel:
+  //   • visible_prompt_stats  → visiblePrompts (numerator)
+  //   • tracked_prompt_count  → promptCount (denominator)
+  // This is the exact same source pair used by getVisibilityRateKpi /
+  // getTrackedPromptsKpi on the Insights KPI card, so the numbers match.
   let query = supabaseAdmin
     .from('prompt_results')
     .select(
@@ -99,19 +139,22 @@ export async function getVisibilitySummaryFor(
   const expandedDateTo = expandDateToEndOfDay(params.dateTo);
   if (expandedDateTo) query = query.lte('created_at', expandedDateTo);
   if (params.region) query = query.eq('region', params.region);
-  if (params.model) {
-    const list = params.model
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+  if (p_models_arg) {
     query =
-      list.length > 1
-        ? query.in('model_used', list)
-        : query.eq('model_used', list[0] ?? params.model);
+      p_models_arg.length > 1
+        ? query.in('model_used', p_models_arg)
+        : query.eq('model_used', p_models_arg[0]);
   }
 
-  const { data: rows, error } = await query;
+  const [{ data: rows, error }, visibleRes, promptCountRes] = await Promise.all([
+    query,
+    supabaseAdmin.rpc('visible_prompt_stats', rpcBaseArgs),
+    supabaseAdmin.rpc('tracked_prompt_count', rpcBaseArgs),
+  ]);
+
   if (error) throw new Error(error.message);
+  if (visibleRes.error) throw new Error(visibleRes.error.message);
+  if (promptCountRes.error) throw new Error(promptCountRes.error.message);
 
   const results = (rows ?? []) as Array<{
     visibility_score: number;
@@ -122,6 +165,17 @@ export async function getVisibilitySummaryFor(
     competitor_mentions: CompetitorMentionRow[] | null;
   }>;
 
+  // Rate fields come from the RPCs — single source of truth, exact parity
+  // with the Insights KPI card for the same brand/window/filters.
+  const visRpcRow = (visibleRes.data ?? {}) as {
+    visible_prompts?: number;
+    visible_results?: number;
+  };
+  const visiblePrompts = Number(visRpcRow.visible_prompts ?? 0);
+  const promptCount = Number(promptCountRes.data ?? 0);
+  const visibilityRatePct =
+    promptCount > 0 ? Math.round((visiblePrompts / promptCount) * 1000) / 10 : 0;
+
   if (results.length === 0) {
     return {
       brand: { id: brand.id, name: brand.name },
@@ -130,6 +184,9 @@ export async function getVisibilitySummaryFor(
         avgVisibility: 0,
         totalMentions: 0,
         totalCitations: 0,
+        visiblePrompts,
+        promptCount,
+        visibilityRatePct,
       },
       topCompetitors: [],
     };
@@ -144,6 +201,7 @@ export async function getVisibilitySummaryFor(
     sumVis += r.visibility_score ?? 0;
     totalMentions += r.mention_count ?? 0;
     totalCitations += r.citation_count ?? 0;
+
     for (const cm of r.competitor_mentions ?? []) {
       const agg = compTotals.get(cm.name) ?? { mentions: 0, visSum: 0 };
       agg.mentions += cm.mention_count ?? 0;
@@ -154,11 +212,17 @@ export async function getVisibilitySummaryFor(
 
   const avgVisibility = Math.round((sumVis / results.length) * 10) / 10;
 
+  // Fix: divide competitor scores by the same total result-row count as the
+  // brand (every filtered row, not just rows where the competitor appeared).
+  // Prevents inflated scores for competitors that only appear in their best
+  // runs — the same denominator fix applied to the dashboard leaderboard in
+  // PR #478.
+  const totalRows = results.length;
   const topCompetitors = [...compTotals.entries()]
     .map(([name, agg]) => ({
       name,
       mentions: agg.mentions,
-      avgVisibility: Math.round((agg.visSum / Math.max(agg.mentions, 1)) * 10) / 10,
+      avgVisibility: totalRows > 0 ? Math.round((agg.visSum / totalRows) * 10) / 10 : 0,
     }))
     .sort((a, b) => b.mentions - a.mentions)
     .slice(0, 5);
@@ -170,6 +234,9 @@ export async function getVisibilitySummaryFor(
       avgVisibility,
       totalMentions,
       totalCitations,
+      visiblePrompts,
+      promptCount,
+      visibilityRatePct,
     },
     topCompetitors,
   };
@@ -887,6 +954,15 @@ export interface CompetitorComparisonOutput {
     total_mentions: number;
     total_citations: number;
     appearance_count: number;
+    /** Distinct prompts the brand appeared in. */
+    visible_prompts: number;
+    /** Distinct prompts that produced results (shared denominator for all entries). */
+    prompt_count: number;
+    /**
+     * Headline metric: visible_prompts / prompt_count × 100.
+     * Matches the Insights dashboard leaderboard. Use this for comparisons.
+     */
+    visibility_rate_pct: number;
   };
   competitors: Array<{
     competitor_id: string;
@@ -895,6 +971,15 @@ export interface CompetitorComparisonOutput {
     total_mentions: number;
     total_citations: number;
     appearance_count: number;
+    /** Distinct prompts this competitor appeared in. */
+    visible_prompts: number;
+    /**
+     * visible_prompts / prompt_count × 100, where prompt_count is the brand's
+     * denominator so all entries are on the same scale.
+     */
+    visibility_rate_pct: number;
+    /** Same prompt_count denominator as the brand for transparency. */
+    prompt_count: number;
   }>;
   share_of_voice: {
     overall_sov_pct: number;
@@ -915,6 +1000,10 @@ interface CompetitorAggRpc {
   brand_sum_visibility: number;
   brand_total_mentions: number;
   brand_total_citations: number;
+  /** Distinct prompts that produced result rows (shared denominator for all rates). */
+  brand_prompt_count: number;
+  /** Distinct prompts the brand appeared in (mention_count > 0 OR citation_count > 0). */
+  brand_visible_prompts: number;
   by_competitor: Array<{
     competitor_id: string;
     name: string | null;
@@ -922,6 +1011,8 @@ interface CompetitorAggRpc {
     row_count: number;
     total_mentions: number;
     total_citations: number;
+    /** Distinct prompts this competitor appeared in, using brand_prompt_count as denominator. */
+    visible_prompts: number;
   }>;
 }
 
@@ -995,6 +1086,14 @@ export async function getCompetitorComparisonFor(
   const brandAvg =
     comp.brand_row_count > 0 ? Math.round(comp.brand_sum_visibility / comp.brand_row_count) : 0;
 
+  const brandPromptCount = Number(comp.brand_prompt_count ?? 0);
+  const brandVisiblePrompts = Number(comp.brand_visible_prompts ?? 0);
+  const brandRatePct =
+    brandPromptCount > 0 ? Math.round((brandVisiblePrompts / brandPromptCount) * 1000) / 10 : 0;
+
+  const rateOf = (visible: number, total: number): number =>
+    total > 0 ? Math.round((Number(visible) / total) * 1000) / 10 : 0;
+
   const competitors = comp.by_competitor.map((c) => ({
     competitor_id: c.competitor_id,
     name: c.name && c.name.trim() !== '' ? c.name : c.competitor_id,
@@ -1006,6 +1105,11 @@ export async function getCompetitorComparisonFor(
     total_mentions: Number(c.total_mentions),
     total_citations: Number(c.total_citations),
     appearance_count: c.row_count,
+    visible_prompts: Number(c.visible_prompts ?? 0),
+    // Use brand_prompt_count as the shared denominator so all entries are
+    // directly comparable — matches the leaderboard semantics from PR #490.
+    visibility_rate_pct: rateOf(c.visible_prompts ?? 0, brandPromptCount),
+    prompt_count: brandPromptCount,
   }));
 
   const totalBrandMentions = Number(sov.total_brand_mentions);
@@ -1034,6 +1138,9 @@ export async function getCompetitorComparisonFor(
       total_mentions: Number(comp.brand_total_mentions),
       total_citations: Number(comp.brand_total_citations),
       appearance_count: comp.brand_row_count,
+      visible_prompts: brandVisiblePrompts,
+      prompt_count: brandPromptCount,
+      visibility_rate_pct: brandRatePct,
     },
     competitors,
     share_of_voice: {
