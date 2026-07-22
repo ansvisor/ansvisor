@@ -1521,7 +1521,8 @@ export default function OnboardingPage() {
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold tracking-tight">Choose your plan</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Start with a 14-day free trial. Cancel anytime.
+            Start your 14-day free trial — your card won&apos;t be charged until the trial ends.
+            Cancel anytime in Settings → Billing.
           </p>
         </div>
 
@@ -1636,6 +1637,9 @@ export default function OnboardingPage() {
             Contact sales
           </a>{' '}
           for Enterprise pricing.
+        </p>
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          Secure payments powered by Stripe.
         </p>
       </div>
 
