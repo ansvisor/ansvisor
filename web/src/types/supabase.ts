@@ -649,6 +649,45 @@ export type Database = {
           },
         ];
       };
+      prompt_notes: {
+        Row: {
+          author_id: string | null;
+          body: string;
+          created_at: string;
+          id: string;
+          prompt_id: string;
+        };
+        Insert: {
+          author_id?: string | null;
+          body: string;
+          created_at?: string;
+          id?: string;
+          prompt_id: string;
+        };
+        Update: {
+          author_id?: string | null;
+          body?: string;
+          created_at?: string;
+          id?: string;
+          prompt_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'prompt_notes_author_id_fkey';
+            columns: ['author_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'prompt_notes_prompt_id_fkey';
+            columns: ['prompt_id'];
+            isOneToOne: false;
+            referencedRelation: 'prompts';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       prompt_results: {
         Row: {
           brand_id: string;
@@ -888,6 +927,48 @@ export type Database = {
           },
         ];
       };
+      prompt_target_urls: {
+        Row: {
+          added_by: string | null;
+          created_at: string;
+          id: string;
+          label: string | null;
+          prompt_id: string;
+          url: string;
+        };
+        Insert: {
+          added_by?: string | null;
+          created_at?: string;
+          id?: string;
+          label?: string | null;
+          prompt_id: string;
+          url: string;
+        };
+        Update: {
+          added_by?: string | null;
+          created_at?: string;
+          id?: string;
+          label?: string | null;
+          prompt_id?: string;
+          url?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'prompt_target_urls_added_by_fkey';
+            columns: ['added_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'prompt_target_urls_prompt_id_fkey';
+            columns: ['prompt_id'];
+            isOneToOne: false;
+            referencedRelation: 'prompts';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       prompts: {
         Row: {
           category: string | null;
@@ -900,6 +981,7 @@ export type Database = {
           regions: string[];
           text: string;
           topic_id: string | null;
+          work_status: string | null;
         };
         Insert: {
           category?: string | null;
@@ -911,6 +993,7 @@ export type Database = {
           prompt_set_id: string;
           regions?: string[];
           text: string;
+          work_status?: string | null;
         };
         Update: {
           category?: string | null;
@@ -922,6 +1005,7 @@ export type Database = {
           prompt_set_id?: string;
           regions?: string[];
           text?: string;
+          work_status?: string | null;
         };
         Relationships: [
           {

@@ -56,6 +56,8 @@ export interface Prompt {
   regions: string[];
   models: string[];
   isActive: boolean;
+  /** Workflow state (#463 follow-up): null = no status set. */
+  workStatus: 'todo' | 'in_progress' | 'done' | null;
   createdAt: string;
 }
 

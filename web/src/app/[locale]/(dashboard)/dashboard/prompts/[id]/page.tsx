@@ -35,7 +35,18 @@ import {
   Quote,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { useUserRole } from '@/hooks/use-user-role';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
+import { WorkStatusBadge } from '@/components/prompts/work-status';
+import {
+  getPromptWorkflow,
+  setPromptWorkStatus,
+  type PromptNote,
+  type PromptTargetUrl,
+  type PromptWorkStatus,
+} from '@/lib/actions/prompt-workflow';
+import { NotesCard, TargetUrlsCard } from './_workflow-cards';
 import {
   CategoryBadge,
   DomainFavicon,
@@ -533,6 +544,8 @@ export default function PromptDetailPage() {
   const router = useRouter();
   const promptId = params.id as string;
 
+  const { canManage } = useUserRole();
+
   const [data, setData] = useState<PromptDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -540,6 +553,35 @@ export default function PromptDetailPage() {
   const [datePreset, setDatePreset] = useState<DatePreset>('30d');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
+  const [workStatus, setWorkStatus] = useState<PromptWorkStatus | null>(null);
+  const [notes, setNotes] = useState<PromptNote[]>([]);
+  const [targetUrls, setTargetUrls] = useState<PromptTargetUrl[]>([]);
+
+  // Workflow data is independent of the date window — load it once per
+  // prompt, outside the main load cycle, so date changes don't refetch it.
+  useEffect(() => {
+    let cancelled = false;
+    getPromptWorkflow(promptId)
+      .then((wf) => {
+        if (cancelled) return;
+        setWorkStatus(wf.workStatus);
+        setNotes(wf.notes);
+        setTargetUrls(wf.targetUrls);
+      })
+      .catch((err) => console.error('Failed to load prompt workflow:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [promptId]);
+
+  const handleStatusChange = (status: PromptWorkStatus | null) => {
+    const previous = workStatus;
+    setWorkStatus(status);
+    setPromptWorkStatus(promptId, status).catch(() => {
+      setWorkStatus(previous);
+      toast.error('Failed to update status');
+    });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -646,6 +688,10 @@ export default function PromptDetailPage() {
               Last run: {formatTimestamp(data.summary.lastCheckedAt)}
             </Badge>
           )}
+          <WorkStatusBadge
+            status={workStatus}
+            onChange={canManage ? handleStatusChange : undefined}
+          />
         </div>
       </div>
 
@@ -733,6 +779,23 @@ export default function PromptDetailPage() {
             <TopSourcesCard sources={data.topSources} sourceUrls={data.topSourceUrls} />
           )}
         </div>
+      </div>
+
+      {/* Workflow — outside the refetch overlay: notes and target URLs are
+          date-window independent. */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <NotesCard
+          promptId={promptId}
+          notes={notes}
+          onNotesChange={setNotes}
+          canManage={canManage}
+        />
+        <TargetUrlsCard
+          promptId={promptId}
+          urls={targetUrls}
+          onUrlsChange={setTargetUrls}
+          canManage={canManage}
+        />
       </div>
     </div>
   );

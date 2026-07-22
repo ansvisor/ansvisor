@@ -49,6 +49,7 @@ function mapPromptRow(row: Record<string, unknown>): Prompt {
     regions: (row.regions as string[]) ?? [],
     models: (row.models as string[]) ?? [],
     isActive: row.is_active as boolean,
+    workStatus: (row.work_status as Prompt['workStatus']) ?? null,
     createdAt: row.created_at as string,
   };
 }

@@ -1,0 +1,273 @@
+'use client';
+
+/**
+ * Prompt workflow section on the prompt detail page: a notes thread and the
+ * target URLs list. The work-status picker lives in the page header (next to
+ * the Active badge); these two cards carry the collaboration surface.
+ */
+
+import { useCallback, useEffect, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { ExternalLink, Link2, Loader2, MessageSquare, Plus, Send, X } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  addPromptNote,
+  addPromptTargetUrl,
+  deletePromptNote,
+  deletePromptTargetUrl,
+  type PromptNote,
+  type PromptTargetUrl,
+} from '@/lib/actions/prompt-workflow';
+
+function formatNoteDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+export function NotesCard({
+  promptId,
+  notes,
+  onNotesChange,
+  canManage,
+}: {
+  promptId: string;
+  notes: PromptNote[];
+  onNotesChange: (notes: PromptNote[]) => void;
+  canManage: boolean;
+}) {
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleAdd = useCallback(async () => {
+    const body = draft.trim();
+    if (!body) return;
+    setSaving(true);
+    try {
+      const note = await addPromptNote(promptId, body);
+      onNotesChange([note, ...notes]);
+      setDraft('');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add note');
+    } finally {
+      setSaving(false);
+    }
+  }, [draft, promptId, notes, onNotesChange]);
+
+  const handleDelete = (note: PromptNote) => {
+    onNotesChange(notes.filter((n) => n.id !== note.id));
+    deletePromptNote(note.id).catch(() => {
+      onNotesChange(notes);
+      toast.error('Failed to delete note');
+    });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm font-medium">
+          <MessageSquare className="h-4 w-4" />
+          Notes
+          {notes.length > 0 && (
+            <Badge variant="secondary" className="text-xs tabular-nums">
+              {notes.length}
+            </Badge>
+          )}
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Keep track of the work behind this prompt — what was published, planned or decided.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {canManage && (
+          <div className="space-y-2">
+            <Textarea
+              placeholder="e.g. Published a comparison blog post targeting this prompt…"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={2}
+              className="text-sm"
+            />
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                className="gap-2"
+                onClick={handleAdd}
+                disabled={saving || !draft.trim()}
+              >
+                {saving ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Send className="h-3.5 w-3.5" />
+                )}
+                Add note
+              </Button>
+            </div>
+          </div>
+        )}
+        {notes.length === 0 ? (
+          <p className="py-4 text-center text-xs text-muted-foreground">
+            No notes yet{canManage ? ' — add the first one above.' : '.'}
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {notes.map((note) => (
+              <li key={note.id} className="group rounded-lg border bg-muted/20 p-3">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed">{note.body}</p>
+                <div className="mt-1.5 flex items-center justify-between gap-2">
+                  <p className="text-[11px] text-muted-foreground">
+                    {note.authorName ?? 'Unknown'} · {formatNoteDate(note.createdAt)}
+                  </p>
+                  {canManage && (
+                    <button
+                      type="button"
+                      className="text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                      onClick={() => handleDelete(note)}
+                      aria-label="Delete note"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function TargetUrlsCard({
+  promptId,
+  urls,
+  onUrlsChange,
+  canManage,
+}: {
+  promptId: string;
+  urls: PromptTargetUrl[];
+  onUrlsChange: (urls: PromptTargetUrl[]) => void;
+  canManage: boolean;
+}) {
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleAdd = useCallback(async () => {
+    const value = draft.trim();
+    if (!value) return;
+    setSaving(true);
+    try {
+      const added = await addPromptTargetUrl(promptId, value);
+      onUrlsChange([...urls, added]);
+      setDraft('');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add URL');
+    } finally {
+      setSaving(false);
+    }
+  }, [draft, promptId, urls, onUrlsChange]);
+
+  const handleDelete = (target: PromptTargetUrl) => {
+    onUrlsChange(urls.filter((u) => u.id !== target.id));
+    deletePromptTargetUrl(target.id).catch(() => {
+      onUrlsChange(urls);
+      toast.error('Failed to remove URL');
+    });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm font-medium">
+          <Link2 className="h-4 w-4" />
+          Target URLs
+          {urls.length > 0 && (
+            <Badge variant="secondary" className="text-xs tabular-nums">
+              {urls.length}
+            </Badge>
+          )}
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Pages you want AI answers to cite for this prompt.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {canManage && (
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="https://example.com/blog/comparison-post"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAdd();
+                }
+              }}
+              className="h-8 text-xs"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5"
+              onClick={handleAdd}
+              disabled={saving || !draft.trim()}
+            >
+              {saving ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Plus className="h-3.5 w-3.5" />
+              )}
+              Add
+            </Button>
+          </div>
+        )}
+        {urls.length === 0 ? (
+          <p className="py-4 text-center text-xs text-muted-foreground">
+            No target URLs yet{canManage ? ' — add the pages you want cited.' : '.'}
+          </p>
+        ) : (
+          <ul className="space-y-1.5">
+            {urls.map((target) => (
+              <li
+                key={target.id}
+                className="group flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2"
+              >
+                <a
+                  href={target.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="inline-flex min-w-0 flex-1 items-center gap-1.5 text-sm hover:underline"
+                  title={target.url}
+                >
+                  <span className="truncate">{target.url.replace(/^https?:\/\//, '')}</span>
+                  <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                </a>
+                {canManage && (
+                  <button
+                    type="button"
+                    className="text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                    onClick={() => handleDelete(target)}
+                    aria-label="Remove target URL"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

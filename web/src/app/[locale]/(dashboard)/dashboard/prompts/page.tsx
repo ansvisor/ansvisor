@@ -43,6 +43,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CompetitionBars } from '@/components/ui/competition-bars';
+import { WorkStatusBadge } from '@/components/prompts/work-status';
+import { setPromptWorkStatus, type PromptWorkStatus } from '@/lib/actions/prompt-workflow';
 import {
   TrendingUp,
   Search,
@@ -1650,7 +1652,33 @@ function AllPromptsTab({
   onEditPrompt?: (prompt: Prompt) => void;
 }) {
   const [search, setSearch] = useState('');
+  const [workFilter, setWorkFilter] = useState<'all' | 'none' | PromptWorkStatus>('all');
+  // Optimistic per-row status overrides — the prompts prop belongs to the
+  // parent's load cycle; a full reload for a one-column change would flash
+  // the whole table.
+  const [statusOverrides, setStatusOverrides] = useState<Map<string, PromptWorkStatus | null>>(
+    new Map(),
+  );
   const searchParams = useSearchParams();
+
+  const statusOf = useCallback(
+    (p: Prompt) => (statusOverrides.has(p.id) ? statusOverrides.get(p.id)! : p.workStatus),
+    [statusOverrides],
+  );
+
+  const handleStatusChange = useCallback(
+    (prompt: Prompt, status: PromptWorkStatus | null) => {
+      const previous = statusOverrides.has(prompt.id)
+        ? statusOverrides.get(prompt.id)!
+        : prompt.workStatus;
+      setStatusOverrides((prev) => new Map(prev).set(prompt.id, status));
+      setPromptWorkStatus(prompt.id, status).catch(() => {
+        setStatusOverrides((prev) => new Map(prev).set(prompt.id, previous));
+        toast.error('Failed to update status');
+      });
+    },
+    [statusOverrides],
+  );
 
   const rawSort = searchParams.get('sort');
   const activeSort: AllPromptsSortKey | null = isAllPromptsSortKey(rawSort) ? rawSort : null;
@@ -1681,6 +1709,11 @@ function AllPromptsTab({
         (p) => p.text.toLowerCase().includes(q) || (p.category ?? '').toLowerCase().includes(q),
       );
     }
+    if (workFilter !== 'all') {
+      list = list.filter((p) =>
+        workFilter === 'none' ? statusOf(p) === null : statusOf(p) === workFilter,
+      );
+    }
 
     if (!activeSort) {
       // Default ordering: newest first.
@@ -1703,7 +1736,7 @@ function AllPromptsTab({
     };
 
     return list.sort((a, b) => compareNullsLast(valueOf(a), valueOf(b), dir));
-  }, [prompts, search, activeSort, dir, visibility, volumeByPromptId]);
+  }, [prompts, search, workFilter, statusOf, activeSort, dir, visibility, volumeByPromptId]);
 
   if (loading) {
     return (
@@ -1755,14 +1788,31 @@ function AllPromptsTab({
                 : 'Read-only overview of every tracked prompt for this brand'}
             </p>
           </div>
-          <div className="relative w-60">
-            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              placeholder="Search prompts…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 h-8 text-xs"
-            />
+          <div className="flex items-center gap-2">
+            <Select
+              value={workFilter}
+              onValueChange={(v) => setWorkFilter((v as typeof workFilter) ?? 'all')}
+            >
+              <SelectTrigger className="h-8 w-32 text-xs">
+                <SelectValue placeholder="All work" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All work</SelectItem>
+                <SelectItem value="todo">To do</SelectItem>
+                <SelectItem value="in_progress">In progress</SelectItem>
+                <SelectItem value="done">Done</SelectItem>
+                <SelectItem value="none">No status</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="relative w-60">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search prompts…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8 h-8 text-xs"
+              />
+            </div>
           </div>
         </div>
       </CardHeader>
@@ -1773,6 +1823,12 @@ function AllPromptsTab({
               <TableHead className="pl-6">Prompt</TableHead>
               <TableHead>Topic</TableHead>
               <TableHead className="text-center">Status</TableHead>
+              <ColHead
+                className="text-center"
+                tooltip="Your workflow state for this prompt — has content work been done for it yet?"
+              >
+                Work
+              </ColHead>
               <SortableHead
                 className="text-right"
                 tooltip="Average brand visibility score in AI answers for this prompt over the last 30 days."
@@ -1853,6 +1909,12 @@ function AllPromptsTab({
                     >
                       {p.isActive ? 'Active' : 'Paused'}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <WorkStatusBadge
+                      status={statusOf(p)}
+                      onChange={onEditPrompt ? (s) => handleStatusChange(p, s) : undefined}
+                    />
                   </TableCell>
                   <TableCell className="text-right">
                     {vis ? (
