@@ -1921,10 +1921,25 @@ function AllPromptsTab({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
-                    <WorkStatusBadge
-                      status={statusOf(p)}
-                      onChange={onEditPrompt ? (s) => handleStatusChange(p, s) : undefined}
-                    />
+                    <div className="inline-flex flex-col items-center gap-0.5">
+                      <WorkStatusBadge
+                        status={statusOf(p)}
+                        onChange={onEditPrompt ? (s) => handleStatusChange(p, s) : undefined}
+                      />
+                      {p.targetUrlCount > 0 && (
+                        <span
+                          className={cn(
+                            'text-[10px] tabular-nums',
+                            p.citedUrlCount > 0
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-muted-foreground',
+                          )}
+                          title={`${p.citedUrlCount} of ${p.targetUrlCount} target URLs cited in AI answers`}
+                        >
+                          {p.citedUrlCount}/{p.targetUrlCount} cited
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     {vis ? (

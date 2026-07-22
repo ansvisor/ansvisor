@@ -6,13 +6,23 @@
  * the Active badge); these two cards carry the collaboration surface.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { ExternalLink, Link2, Loader2, MessageSquare, Plus, Send, X } from 'lucide-react';
+import {
+  CheckCircle2,
+  ExternalLink,
+  Link2,
+  Loader2,
+  MessageSquare,
+  Plus,
+  Send,
+  X,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
   addPromptNote,
@@ -22,6 +32,52 @@ import {
   type PromptNote,
   type PromptTargetUrl,
 } from '@/lib/actions/prompt-workflow';
+
+function formatShortDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+/**
+ * Cited-status badge for a target URL. Distinguishes "cited after we started
+ * targeting it" (the win) from "was already cited before targeting".
+ */
+function CitedBadge({ target }: { target: PromptTargetUrl }) {
+  if (target.citedCount === 0) {
+    return (
+      <Badge
+        variant="outline"
+        className="shrink-0 border-dashed border-muted-foreground/30 text-[10px] text-muted-foreground whitespace-nowrap"
+      >
+        Not cited yet
+      </Badge>
+    );
+  }
+  const alreadyCited =
+    target.firstCitedAt !== null && new Date(target.firstCitedAt) < new Date(target.createdAt);
+  const tooltip = [
+    `Cited in ${target.citedCount} answer${target.citedCount !== 1 ? 's' : ''}`,
+    target.firstCitedAt ? `first ${formatShortDate(target.firstCitedAt)}` : null,
+    target.lastCitedAt ? `last ${formatShortDate(target.lastCitedAt)}` : null,
+    alreadyCited ? 'was already cited before targeting' : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return (
+    <Badge
+      variant="outline"
+      title={tooltip}
+      className={cn(
+        'shrink-0 gap-1 text-[10px] whitespace-nowrap',
+        'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+      )}
+    >
+      <CheckCircle2 className="h-3 w-3" />
+      Cited ×{target.citedCount}
+    </Badge>
+  );
+}
 
 function formatNoteDate(iso: string): string {
   const date = new Date(iso);
@@ -198,7 +254,8 @@ export function TargetUrlsCard({
           )}
         </CardTitle>
         <p className="text-xs text-muted-foreground">
-          Pages you want AI answers to cite for this prompt.
+          Pages you want AI answers to cite for this prompt. Citation status updates automatically
+          as new tracking results arrive.
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -253,6 +310,7 @@ export function TargetUrlsCard({
                   <span className="truncate">{target.url.replace(/^https?:\/\//, '')}</span>
                   <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
                 </a>
+                <CitedBadge target={target} />
                 {canManage && (
                   <button
                     type="button"

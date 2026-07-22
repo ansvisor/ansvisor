@@ -17,6 +17,7 @@ import supabaseAdmin from '../config/supabase.js';
 import { analyzeSentimentAI } from './ai-tracker.js';
 import { parseResponse, countBrandMentions } from './response-parser.js';
 import { normalizeShoppingCards, matchCardBrand } from './shopping-cards.js';
+import { updateTargetUrlStats } from './target-url-stats.js';
 import { logger } from './logger.js';
 
 /**
@@ -74,6 +75,9 @@ export async function handleScraperResult({
     logger.error({ err: error }, '[cloro-result] failed to insert result');
     throw error;
   }
+
+  // Best-effort: mark target URLs cited by this answer (00032).
+  await updateTargetUrlStats(promptId, aiResponse.citations, new Date().toISOString());
 
   // Best-effort normalization of any shopping cards on this result.
   // Failures here must not abort the result insert — the raw cards are

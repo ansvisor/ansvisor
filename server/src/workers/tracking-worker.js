@@ -10,6 +10,7 @@ import supabaseAdmin from '../config/supabase.js';
 import { hasFeature, getPlan, isCloud } from '../config/plans.js';
 import { applyPlanOverrides } from '../lib/plan-guard.js';
 import { generateContentOpportunities } from '../lib/opportunity-generator.js';
+import { updateTargetUrlStats } from '../lib/target-url-stats.js';
 import logger from '../lib/logger.js';
 
 function resolveModelPlatform(model) {
@@ -140,6 +141,8 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
       throw error;
     }
     insertedCount++;
+    // Best-effort: mark target URLs cited by this answer (00032).
+    await updateTargetUrlStats(row.prompt_id, row.citations, new Date().toISOString());
   }
 
   // 6. Phase 1: Collect & run all scraper (platform) tasks first

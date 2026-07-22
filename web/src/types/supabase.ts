@@ -930,25 +930,34 @@ export type Database = {
       prompt_target_urls: {
         Row: {
           added_by: string | null;
+          cited_count: number;
           created_at: string;
+          first_cited_at: string | null;
           id: string;
           label: string | null;
+          last_cited_at: string | null;
           prompt_id: string;
           url: string;
         };
         Insert: {
           added_by?: string | null;
+          cited_count?: number;
           created_at?: string;
+          first_cited_at?: string | null;
           id?: string;
           label?: string | null;
+          last_cited_at?: string | null;
           prompt_id: string;
           url: string;
         };
         Update: {
           added_by?: string | null;
+          cited_count?: number;
           created_at?: string;
+          first_cited_at?: string | null;
           id?: string;
           label?: string | null;
+          last_cited_at?: string | null;
           prompt_id?: string;
           url?: string;
         };

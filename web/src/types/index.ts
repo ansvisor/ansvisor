@@ -58,6 +58,10 @@ export interface Prompt {
   isActive: boolean;
   /** Workflow state (#463 follow-up): null = no status set. */
   workStatus: 'todo' | 'in_progress' | 'done' | null;
+  /** Target URLs attached to this prompt (0 when the embed isn't selected). */
+  targetUrlCount: number;
+  /** Target URLs cited by at least one answer. */
+  citedUrlCount: number;
   createdAt: string;
 }
 
