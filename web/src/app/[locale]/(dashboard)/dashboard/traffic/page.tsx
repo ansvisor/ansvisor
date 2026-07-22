@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getPlatformName } from './_charts';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,6 +18,7 @@ const PlatformBreakdownChart = dynamic(
   },
 );
 import { useBrandStore } from '@/stores/use-brand-store';
+import type { Brand } from '@/types';
 import {
   getTrafficSummary,
   getTrafficTrend,
@@ -25,6 +26,7 @@ import {
   type TrafficSummary,
   type TrafficTrendPoint,
   type TrafficLog,
+  type TrafficDateWindow,
 } from '@/lib/actions/traffic';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -339,21 +341,159 @@ function EmptyLogsState({ hasFilters }: { hasFilters: boolean }) {
   }
 }
 
+// ─── Date range ─────────────
+
+type DatePreset = '24h' | '7d' | '30d' | '90d' | 'all' | 'custom';
+
+const DATE_PRESETS: DatePreset[] = ['24h', '7d', '30d', '90d', 'all', 'custom'];
+
+function getDateRange(preset: DatePreset, custom: { from: string; to: string }): TrafficDateWindow {
+  if (preset === 'all') return {};
+  if (preset === 'custom') {
+    return {
+      dateFrom: custom.from || undefined,
+      dateTo: custom.to ? `${custom.to}T23:59:59.999Z` : undefined,
+    };
+  }
+  if (preset === '24h') {
+    const from = new Date();
+    from.setHours(from.getHours() - 24);
+    return { dateFrom: from.toISOString() };
+  }
+  const days = preset === '7d' ? 7 : preset === '30d' ? 30 : 90;
+  const from = new Date();
+  from.setDate(from.getDate() - days);
+  return { dateFrom: from.toISOString() };
+}
+
+function getRangeSubLabel(preset: DatePreset, custom: { from: string; to: string }): string {
+  switch (preset) {
+    case '24h':
+      return 'last 24 hours';
+    case '7d':
+      return 'last 7 days';
+    case '30d':
+      return 'last 30 days';
+    case '90d':
+      return 'last 90 days';
+    case 'all':
+      return 'all time';
+    case 'custom':
+      if (custom.from && custom.to) return `${custom.from} – ${custom.to}`;
+      if (custom.from) return `from ${custom.from}`;
+      if (custom.to) return `through ${custom.to}`;
+      return 'selected period';
+  }
+}
+
+function getTrendTitle(preset: DatePreset, custom: { from: string; to: string }): string {
+  switch (preset) {
+    case '24h':
+      return 'AI Referral Trend — Last 24 Hours';
+    case '7d':
+      return 'AI Referral Trend — Last 7 Days';
+    case '30d':
+      return 'AI Referral Trend — Last 30 Days';
+    case '90d':
+      return 'AI Referral Trend — Last 90 Days';
+    case 'all':
+      return 'AI Referral Trend — All Time';
+    case 'custom':
+      if (custom.from && custom.to) return `AI Referral Trend — ${custom.from} – ${custom.to}`;
+      return 'AI Referral Trend';
+  }
+}
+
+function DateRangePicker({
+  preset,
+  customFrom,
+  customTo,
+  onPreset,
+  onCustomFrom,
+  onCustomTo,
+}: {
+  preset: DatePreset;
+  customFrom: string;
+  customTo: string;
+  onPreset: (p: DatePreset) => void;
+  onCustomFrom: (v: string) => void;
+  onCustomTo: (v: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-end gap-3">
+      <div>
+        <label className="block mb-1.5 font-medium text-muted-foreground text-xs">Date Range</label>
+        <div className="flex border rounded-md overflow-hidden">
+          {DATE_PRESETS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              className={cn(
+                'px-3 py-1.5 font-medium text-xs transition-colors',
+                preset === p
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-card hover:bg-muted text-foreground',
+              )}
+              onClick={() => onPreset(p)}
+            >
+              {p === 'custom' ? 'Custom' : p === 'all' ? 'All' : p}
+            </button>
+          ))}
+        </div>
+      </div>
+      {preset === 'custom' && (
+        <>
+          <div>
+            <label className="block mb-1.5 font-medium text-muted-foreground text-xs">From</label>
+            <Input
+              type="date"
+              value={customFrom}
+              onChange={(e) => onCustomFrom(e.target.value)}
+              className="w-36 h-8 text-xs"
+            />
+          </div>
+          <div>
+            <label className="block mb-1.5 font-medium text-muted-foreground text-xs">To</label>
+            <Input
+              type="date"
+              value={customTo}
+              onChange={(e) => onCustomTo(e.target.value)}
+              className="w-36 h-8 text-xs"
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-const TIME_RANGE_OPTIONS = [
-  { label: '7d', value: 7 },
-  { label: '30d', value: 30 },
-  { label: '90d', value: 90 },
-] as const;
-
-type TimeRangeDays = (typeof TIME_RANGE_OPTIONS)[number]['value'];
-
 export default function TrafficPage() {
-  const { getActiveBrand } = useBrandStore();
-  const brand = getActiveBrand();
+  const brand = useBrandStore((s) => s.getActiveBrand());
+  if (!brand) {
+    return (
+      <div className="flex flex-col justify-center items-center py-20 text-center">
+        <h2 className="font-semibold text-lg">No brand selected</h2>
+        <p className="mt-1 text-muted-foreground text-sm">
+          Select a brand to view AI traffic analytics.
+        </p>
+      </div>
+    );
+  }
+  return <TrafficPageContent key={brand.id} brand={brand} />;
+}
 
-  const [days, setDays] = useState<TimeRangeDays>(7);
+function TrafficPageContent({ brand }: { brand: Brand }) {
+  const [datePreset, setDatePreset] = useState<DatePreset>('7d');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const dateWindow = useMemo(
+    () => getDateRange(datePreset, { from: customFrom, to: customTo }),
+    [datePreset, customFrom, customTo],
+  );
+  const rangeSubLabel = getRangeSubLabel(datePreset, { from: customFrom, to: customTo });
+  const trendTitle = getTrendTitle(datePreset, { from: customFrom, to: customTo });
   const [summary, setSummary] = useState<TrafficSummary | null>(null);
   const [trend, setTrend] = useState<TrafficTrendPoint[]>([]);
   const [logs, setLogs] = useState<TrafficLog[]>([]);
@@ -364,13 +504,6 @@ export default function TrafficPage() {
   const [filters, setFilters] = useState<TrafficFilters>({ platform: '', search: '' });
   const [searchInput, setSearchInput] = useState(filters.search);
   const [page, setPage] = useState(0);
-
-  useEffect(() => {
-    setDays(7);
-    setPage(0);
-    setSearchInput('');
-    setFilters({ platform: '', search: '' });
-  }, [brand?.id]);
 
   useEffect(() => {
     const id = window.setTimeout(() => {
@@ -390,12 +523,11 @@ export default function TrafficPage() {
   }, [searchInput]);
 
   const loadSummary = useCallback(async () => {
-    if (!brand) return;
     setIsLoadingSummary(true);
     try {
       const [s, t] = await Promise.all([
-        getTrafficSummary(brand.id, days),
-        getTrafficTrend(brand.id, days),
+        getTrafficSummary(brand.id, dateWindow),
+        getTrafficTrend(brand.id, dateWindow),
       ]);
       setSummary(s);
       setTrend(t);
@@ -404,10 +536,9 @@ export default function TrafficPage() {
     } finally {
       setIsLoadingSummary(false);
     }
-  }, [brand, days]);
+  }, [brand.id, dateWindow]);
 
   const loadLogs = useCallback(async () => {
-    if (!brand) return;
     setIsLoadingLogs(true);
     try {
       const result = await getTrafficLogs(brand.id, {
@@ -415,7 +546,8 @@ export default function TrafficPage() {
         offset: page * PAGE_SIZE,
         platform: filters.platform || undefined,
         search: filters.search || undefined,
-        days,
+        dateFrom: dateWindow.dateFrom,
+        dateTo: dateWindow.dateTo,
       });
       setLogs(result.logs);
       setLogsTotal(result.total);
@@ -424,40 +556,39 @@ export default function TrafficPage() {
     } finally {
       setIsLoadingLogs(false);
     }
-  }, [brand, page, filters.platform, filters.search, days]);
+  }, [brand.id, page, filters.platform, filters.search, dateWindow]);
 
   const handleFiltersChange = useCallback((patch: Partial<TrafficFilters>) => {
     setPage(0);
     setFilters((f) => ({ ...f, ...patch }));
   }, []);
 
-  const handleDaysChange = useCallback((d: TimeRangeDays) => {
-    setDays(d);
+  const handleDatePresetChange = useCallback((preset: DatePreset) => {
     setPage(0);
+    setDatePreset(preset);
+  }, []);
+
+  const handleCustomFromChange = useCallback((value: string) => {
+    setPage(0);
+    setCustomFrom(value);
+  }, []);
+
+  const handleCustomToChange = useCallback((value: string) => {
+    setPage(0);
+    setCustomTo(value);
   }, []);
 
   useEffect(() => {
-    loadSummary();
-  }, [loadSummary]);
-
-  useEffect(() => {
-    loadLogs();
-  }, [loadLogs]);
-
-  if (!brand) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-center">
-        <h2 className="text-lg font-semibold">No brand selected</h2>
-        <p className="text-muted-foreground text-sm mt-1">
-          Select a brand to view AI traffic analytics.
-        </p>
-      </div>
-    );
-  }
+    const id = window.setTimeout(() => {
+      void loadSummary();
+      void loadLogs();
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [loadSummary, loadLogs]);
 
   const primaryDomain = brand.domains.find((d) => d.isPrimary)?.domain ?? brand.domains[0]?.domain;
 
-  if (isLoadingSummary) {
+  if (isLoadingSummary && summary === null) {
     return (
       <div className="space-y-6">
         <div>
@@ -495,22 +626,14 @@ export default function TrafficPage() {
             {primaryDomain ? `${primaryDomain} · ` : ''}AI-referred visits to your website
           </p>
         </div>
-        <div className="flex rounded-md border p-0.5 self-center">
-          {TIME_RANGE_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              className={cn(
-                'rounded px-3 py-1 text-xs font-medium transition-colors',
-                days === opt.value
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-              onClick={() => handleDaysChange(opt.value)}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+        <DateRangePicker
+          preset={datePreset}
+          customFrom={customFrom}
+          customTo={customTo}
+          onPreset={handleDatePresetChange}
+          onCustomFrom={handleCustomFromChange}
+          onCustomTo={handleCustomToChange}
+        />
       </div>
 
       {/* Snippet Banner */}
@@ -548,7 +671,7 @@ export default function TrafficPage() {
                     {visitsDelta}% vs previous period
                   </>
                 ) : (
-                  `last ${days} days`
+                  rangeSubLabel
                 )
               }
               subPositive={visitsDelta > 0 ? true : visitsDelta < 0 ? false : undefined}
@@ -571,9 +694,7 @@ export default function TrafficPage() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Card className="lg:col-span-2">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">
-                  AI Referral Trend — Last {days} Days
-                </CardTitle>
+                <CardTitle className="font-medium text-sm">{trendTitle}</CardTitle>
               </CardHeader>
               <CardContent>
                 <ReferralTrendChart data={trend} />

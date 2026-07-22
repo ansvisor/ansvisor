@@ -1,6 +1,12 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { expandDateToEndOfDay } from '@/lib/dates';
+
+export interface TrafficDateWindow {
+  dateFrom?: string;
+  dateTo?: string;
+}
 
 export interface TrafficLog {
   id: string;
@@ -40,18 +46,52 @@ function mapLogRow(row: Record<string, unknown>): TrafficLog {
   };
 }
 
-function getDateRange(days: number): {
-  from: string;
-  to: string;
-  prevFrom: string;
-  prevTo: string;
+/** Window of equal length immediately before [from, to]. */
+function previousWindow(from: string, to: string): { from: string; to: string } {
+  const fromMs = new Date(from).getTime();
+  const toMs = new Date(to).getTime();
+  return { from: new Date(fromMs - (toMs - fromMs)).toISOString(), to: from };
+}
+
+function resolveTrafficWindow(window?: TrafficDateWindow): {
+  from?: string;
+  to?: string;
+  prevFrom?: string;
+  prevTo?: string;
 } {
-  const now = new Date();
-  const to = now.toISOString();
-  const from = new Date(now.getTime() - days * 86400000).toISOString();
-  const prevTo = from;
-  const prevFrom = new Date(now.getTime() - days * 2 * 86400000).toISOString();
-  return { from, to, prevFrom, prevTo };
+  if (!window?.dateFrom && !window?.dateTo) {
+    return {};
+  }
+
+  const from = window.dateFrom;
+  const to = expandDateToEndOfDay(window.dateTo) ?? new Date().toISOString();
+
+  if (!from) {
+    return { to };
+  }
+
+  const prev = previousWindow(from, to);
+  return { from, to, prevFrom: prev.from, prevTo: prev.to };
+}
+
+/** Cap daily trend buckets so an "all time" scan stays chart-friendly. */
+const TRAFFIC_TREND_MAX_DAYS = 365;
+
+function listUtcDays(from: string, to: string): string[] {
+  const days: string[] = [];
+  const start = new Date(from);
+  const end = new Date(to);
+  const cursor = new Date(
+    Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()),
+  );
+  const endDay = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()));
+
+  while (cursor <= endDay) {
+    days.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  return days;
 }
 
 /**
@@ -67,7 +107,7 @@ const TRAFFIC_MAX_ROWS = 50_000;
 async function scanTrafficLogs(
   supabase: Awaited<ReturnType<typeof createClient>>,
   brandId: string,
-  window: { columns: string; from: string; to?: string },
+  window: { columns: string; from?: string; to?: string; toInclusive?: boolean },
   onRow: (row: Record<string, unknown>) => void,
 ): Promise<void> {
   for (let start = 0; start < TRAFFIC_MAX_ROWS; start += TRAFFIC_PAGE_SIZE) {
@@ -75,12 +115,16 @@ async function scanTrafficLogs(
       .from('ai_traffic_logs')
       .select(window.columns)
       .eq('brand_id', brandId)
-      .gte('created_at', window.from)
       // Deterministic order so .range() pages don't shuffle between requests.
       .order('created_at', { ascending: true })
       .order('id', { ascending: true })
       .range(start, start + TRAFFIC_PAGE_SIZE - 1);
-    if (window.to) query = query.lt('created_at', window.to);
+    if (window.from) query = query.gte('created_at', window.from);
+    if (window.to) {
+      query = window.toInclusive
+        ? query.lte('created_at', window.to)
+        : query.lt('created_at', window.to);
+    }
 
     const { data, error } = await query;
     if (error) throw new Error(error.message);
@@ -91,18 +135,23 @@ async function scanTrafficLogs(
   }
 }
 
-export async function getTrafficSummary(brandId: string, days = 7): Promise<TrafficSummary> {
+export async function getTrafficSummary(
+  brandId: string,
+  window?: TrafficDateWindow,
+): Promise<TrafficSummary> {
   const supabase = await createClient();
-  const { from, prevFrom, prevTo } = getDateRange(days);
+  const { from, to, prevFrom, prevTo } = resolveTrafficWindow(window);
 
   // Exact totals — count queries transfer no rows and are immune to the cap.
-  const countVisits = async (fromTs: string, toTs?: string) => {
+  const countVisits = async (fromTs?: string, toTs?: string, toInclusive = false) => {
     let query = supabase
       .from('ai_traffic_logs')
       .select('id', { count: 'exact', head: true })
-      .eq('brand_id', brandId)
-      .gte('created_at', fromTs);
-    if (toTs) query = query.lt('created_at', toTs);
+      .eq('brand_id', brandId);
+    if (fromTs) query = query.gte('created_at', fromTs);
+    if (toTs) {
+      query = toInclusive ? query.lte('created_at', toTs) : query.lt('created_at', toTs);
+    }
     const { count, error } = await query;
     if (error) throw new Error(error.message);
     return count ?? 0;
@@ -131,16 +180,24 @@ export async function getTrafficSummary(brandId: string, days = 7): Promise<Traf
   };
 
   const columns = 'source_platform, url, created_at, id';
+  const hasPrev = Boolean(prevFrom && prevTo);
   const [totalVisits, totalVisitsPrev] = await Promise.all([
-    countVisits(from),
-    countVisits(prevFrom, prevTo),
-    scanTrafficLogs(supabase, brandId, { columns, from }, aggregate(platformMap, pageMap)),
+    countVisits(from, to, true),
+    hasPrev ? countVisits(prevFrom, prevTo) : Promise.resolve(0),
     scanTrafficLogs(
       supabase,
       brandId,
-      { columns, from: prevFrom, to: prevTo },
-      aggregate(platformMapPrev, pageMapPrev),
+      { columns, from, to, toInclusive: true },
+      aggregate(platformMap, pageMap),
     ),
+    hasPrev
+      ? scanTrafficLogs(
+          supabase,
+          brandId,
+          { columns, from: prevFrom, to: prevTo },
+          aggregate(platformMapPrev, pageMapPrev),
+        )
+      : Promise.resolve(),
   ]);
 
   const allPlatforms = new Set([...platformMap.keys(), ...platformMapPrev.keys()]);
@@ -169,9 +226,12 @@ export async function getTrafficSummary(brandId: string, days = 7): Promise<Traf
   };
 }
 
-export async function getTrafficTrend(brandId: string, days = 7): Promise<TrafficTrendPoint[]> {
+export async function getTrafficTrend(
+  brandId: string,
+  window?: TrafficDateWindow,
+): Promise<TrafficTrendPoint[]> {
   const supabase = await createClient();
-  const from = new Date(Date.now() - days * 86400000).toISOString();
+  const { from, to } = resolveTrafficWindow(window);
 
   // Group by day + platform, aggregated per batch (#450).
   const dayMap = new Map<string, Map<string, number>>();
@@ -180,7 +240,7 @@ export async function getTrafficTrend(brandId: string, days = 7): Promise<Traffi
   await scanTrafficLogs(
     supabase,
     brandId,
-    { columns: 'source_platform, created_at, id', from },
+    { columns: 'source_platform, created_at, id', from, to, toInclusive: true },
     (r) => {
       const day = (r.created_at as string).slice(0, 10);
       const platform = (r.source_platform as string) || 'unknown';
@@ -192,20 +252,25 @@ export async function getTrafficTrend(brandId: string, days = 7): Promise<Traffi
     },
   );
 
-  // Fill missing days
-  const result: TrafficTrendPoint[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 86400000);
-    const day = d.toISOString().slice(0, 10);
+  let days: string[];
+  if (from && to) {
+    days = listUtcDays(from, to);
+  } else {
+    days = [...dayMap.keys()].sort();
+    if (days.length > TRAFFIC_TREND_MAX_DAYS) {
+      days = days.slice(-TRAFFIC_TREND_MAX_DAYS);
+    }
+    if (days.length === 0) days = [new Date().toISOString().slice(0, 10)];
+  }
+
+  return days.map((day) => {
     const dm = dayMap.get(day);
     const point: TrafficTrendPoint = { date: day };
     for (const p of allPlatforms) {
       point[p] = dm?.get(p) ?? 0;
     }
-    result.push(point);
-  }
-
-  return result;
+    return point;
+  });
 }
 
 export async function getTrafficLogs(
@@ -215,7 +280,8 @@ export async function getTrafficLogs(
     offset?: number;
     platform?: string;
     search?: string;
-    days?: number;
+    dateFrom?: string;
+    dateTo?: string;
   },
 ): Promise<{ logs: TrafficLog[]; total: number }> {
   const supabase = await createClient();
@@ -223,7 +289,10 @@ export async function getTrafficLogs(
   const offset = opts?.offset ?? 0;
   const platform = opts?.platform;
   const search = opts?.search;
-  const days = opts?.days;
+  const { from, to } = resolveTrafficWindow({
+    dateFrom: opts?.dateFrom,
+    dateTo: opts?.dateTo,
+  });
 
   let query = supabase
     .from('ai_traffic_logs')
@@ -241,10 +310,8 @@ export async function getTrafficLogs(
     query = query.ilike('url', `%${escaped}%`);
   }
 
-  if (days) {
-    const from = new Date(Date.now() - days * 86400000).toISOString();
-    query = query.gte('created_at', from);
-  }
+  if (from) query = query.gte('created_at', from);
+  if (to) query = query.lte('created_at', to);
 
   const { data, error, count } = await query
     .order('created_at', { ascending: false })
