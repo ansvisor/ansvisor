@@ -1632,6 +1632,14 @@ export default function PromptsPage() {
 
 // ─── All Prompts Tab ──────────────────────────────────────────────────────────
 
+const WORK_FILTER_LABELS: Record<string, string> = {
+  all: 'All work',
+  todo: 'To do',
+  in_progress: 'In progress',
+  done: 'Done',
+  none: 'No status',
+};
+
 function AllPromptsTab({
   loading,
   prompts,
@@ -1794,7 +1802,9 @@ function AllPromptsTab({
               onValueChange={(v) => setWorkFilter((v as typeof workFilter) ?? 'all')}
             >
               <SelectTrigger className="h-8 w-32 text-xs">
-                <SelectValue placeholder="All work" />
+                <SelectValue placeholder="All work">
+                  {(value) => WORK_FILTER_LABELS[(value as string) ?? 'all'] ?? 'All work'}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All work</SelectItem>
