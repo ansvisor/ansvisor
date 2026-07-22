@@ -77,6 +77,7 @@ import {
   PieChart,
   Users,
   StopCircle,
+  ArrowRight,
   ArrowUpRight,
   Download,
   Layers,
@@ -1424,7 +1425,16 @@ export default function InsightsPage() {
 
                   <Card className="lg:col-span-2">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium">Leaderboard</CardTitle>
+                      <div className="flex items-center justify-between gap-3">
+                        <CardTitle className="text-sm font-medium">Leaderboard</CardTitle>
+                        <Link
+                          href="/dashboard/competitors"
+                          className="flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          Head-to-Head Comparison
+                          <ArrowRight className="h-3 w-3" />
+                        </Link>
+                      </div>
                     </CardHeader>
                     <CardContent>
                       <CompetitorLeaderboard data={competitorData.brands} />

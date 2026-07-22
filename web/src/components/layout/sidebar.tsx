@@ -61,7 +61,6 @@ export function Sidebar() {
     Topics: () => t('topics'),
     'Content Optimization': () => t('content'),
     'Site Audit': () => t('audit'),
-    Competitors: () => t('competitors'),
     Citations: () => t('citations'),
     Shopping: () => t('shopping'),
     Reports: () => t('reports'),

@@ -9,7 +9,6 @@ import {
   ShoppingBag,
   Sparkles,
   Tag,
-  Users,
 } from 'lucide-react';
 import type { Feature } from '@/config/plans';
 
@@ -90,12 +89,6 @@ export const dashboardNav: NavGroup[] = [
         href: '/dashboard/traffic',
         icon: LineChart,
         requiredFeature: 'advanced_analytics',
-      },
-      {
-        title: 'Competitors',
-        href: '/dashboard/competitors',
-        icon: Users,
-        requiredFeature: 'competitor_tracking',
       },
     ],
   },

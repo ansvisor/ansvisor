@@ -48,7 +48,6 @@ export function MobileNav() {
       'AI Traffic Analytics': t('traffic'),
       Prompts: t('prompts'),
       'Content Optimization': t('content'),
-      Competitors: t('competitors'),
       Citations: t('citations'),
       Reports: t('reports'),
       Settings: t('settings'),
