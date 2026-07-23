@@ -224,7 +224,9 @@ function CountDeltaBadge({
 }) {
   if (previous === 0 && current > 0) {
     return (
-      <span className="text-xs font-medium text-green-600 dark:text-green-400">+{current} new</span>
+      <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+        +{current} new
+      </span>
     );
   }
   return <DeltaBadge delta={delta} />;

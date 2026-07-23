@@ -68,18 +68,3 @@ describe('getPromptResultById', () => {
     });
   });
 });
-
-describe('percentageChange', () => {
-  it('returns null when the previous period is zero', async () => {
-    const { percentageChange } = await import('./tracking');
-
-    expect(percentageChange(354, 0)).toBeNull();
-  });
-
-  it('keeps percentage semantics when the current period drops to zero', async () => {
-    const { percentageChange } = await import('./tracking');
-
-    expect(percentageChange(0, 25)).toBe(-100);
-    expect(percentageChange(30, 20)).toBe(50);
-  });
-});

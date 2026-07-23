@@ -23,15 +23,11 @@ import { getOrgPlan } from '@/lib/guards/plan-guard';
 import { getPromptVolumes } from '@/lib/actions/volumes';
 import { getPromptSuggestions } from '@/lib/actions/prompt-suggestions';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
+import { percentageChange } from '@/lib/metrics';
 
 /** Round to one decimal place (keeps sub-1 averages visible instead of flooring to 0). */
 function roundTo1(n: number): number {
   return Math.round(n * 10) / 10;
-}
-
-/** Percentage change with one stable meaning; a zero base has no percentage delta. */
-export function percentageChange(current: number, previous: number): number | null {
-  return previous > 0 ? Math.round(((current - previous) / previous) * 100) : null;
 }
 
 /**
