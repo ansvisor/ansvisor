@@ -90,8 +90,11 @@ function buildRequestBody(promptText, scraperId, region) {
  * Normalize the observed query fan-out from a raw Cloro response into a rich,
  * engine-labelled array: `[{ query, engine?, source_platform }]` (#332).
  *
- * Two provider shapes:
- *  - Perplexity → `search_model_queries: [{ query, engine, limit }]` (keep `engine`)
+ * Provider shapes:
+ *  - Perplexity → `search_model_queries: string[]` since Cloro's 2026-07-23
+ *    update; `[{ query, engine, limit }]` before it (keep `engine`). Both are
+ *    accepted so a potential upstream revert can't silently zero the field
+ *    again.
  *  - Copilot / ChatGPT / Grok / Gemini → `searchQueries: string[]`
  * Anything else (or missing) → `[]`. This is OBSERVED data only — we never
  * synthesize sub-queries.
@@ -102,14 +105,22 @@ function normalizeSearchQueries(result, scraperId) {
   // kept when it's a non-empty string (never a stray non-string value).
   if (Array.isArray(result.search_model_queries)) {
     return result.search_model_queries
-      .filter((q) => typeof q?.query === 'string' && q.query.trim() !== '')
-      .map((q) => ({
-        query: q.query.trim(),
-        ...(typeof q.engine === 'string' && q.engine.trim() !== ''
-          ? { engine: q.engine.trim() }
-          : {}),
-        source_platform: scraperId,
-      }));
+      .map((entry) => {
+        if (typeof entry === 'string') {
+          return { query: entry.trim(), source_platform: scraperId };
+        }
+        if (typeof entry?.query === 'string') {
+          return {
+            query: entry.query.trim(),
+            ...(typeof entry.engine === 'string' && entry.engine.trim() !== ''
+              ? { engine: entry.engine.trim() }
+              : {}),
+            source_platform: scraperId,
+          };
+        }
+        return null;
+      })
+      .filter((item) => item !== null && item.query !== '');
   }
 
   if (Array.isArray(result.searchQueries)) {
