@@ -40,8 +40,11 @@ function formatDate(iso: string) {
   });
 }
 
-/** Signed percentage delta with up/down coloring; renders nothing for null. */
-function Delta({ value }: { value: number | null }) {
+/** Signed percentage delta, or an explicit raw count for a new zero-base metric. */
+function Delta({ value, zeroBaseCount }: { value: number | null; zeroBaseCount?: number }) {
+  if (zeroBaseCount !== undefined) {
+    return <span className="text-xs font-medium text-emerald-600">+{zeroBaseCount} new</span>;
+  }
   if (value === null) return null;
   const up = value >= 0;
   return (
@@ -56,11 +59,13 @@ function KpiCard({
   label,
   value,
   change,
+  zeroBaseCount,
   sub,
 }: {
   label: string;
   value: string;
   change: number | null;
+  zeroBaseCount?: number;
   sub?: string;
 }) {
   return (
@@ -71,7 +76,7 @@ function KpiCard({
         </p>
         <div className="mt-1 flex items-baseline gap-2">
           <span className="text-2xl font-bold">{value}</span>
-          <Delta value={change} />
+          <Delta value={change} zeroBaseCount={zeroBaseCount} />
         </div>
         {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
       </CardContent>
@@ -254,11 +259,25 @@ export default function ReportDetailPage() {
               label={t('kpi.mentions')}
               value={String(payload.insights.totalMentions)}
               change={payload.insights.mentionsChange}
+              zeroBaseCount={
+                Object.hasOwn(payload.insights, 'prevMentions') &&
+                payload.insights.prevMentions === 0 &&
+                payload.insights.totalMentions > 0
+                  ? payload.insights.totalMentions
+                  : undefined
+              }
             />
             <KpiCard
               label={t('kpi.citations')}
               value={String(payload.insights.totalCitations)}
               change={payload.insights.citationsChange}
+              zeroBaseCount={
+                Object.hasOwn(payload.insights, 'prevCitations') &&
+                payload.insights.prevCitations === 0 &&
+                payload.insights.totalCitations > 0
+                  ? payload.insights.totalCitations
+                  : undefined
+              }
             />
             <KpiCard
               label={t('kpi.sentiment')}

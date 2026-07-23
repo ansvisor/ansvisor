@@ -213,6 +213,23 @@ function DeltaBadge({ delta, suffix = '%' }: { delta: number | null; suffix?: st
   );
 }
 
+function CountDeltaBadge({
+  current,
+  previous,
+  delta,
+}: {
+  current: number;
+  previous: number | null;
+  delta: number | null;
+}) {
+  if (previous === 0 && current > 0) {
+    return (
+      <span className="text-xs font-medium text-green-600 dark:text-green-400">+{current} new</span>
+    );
+  }
+  return <DeltaBadge delta={delta} />;
+}
+
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
 function KpiCard({
@@ -1399,7 +1416,13 @@ export default function InsightsPage() {
                   tooltip="How many times your brand was referenced by name in AI-generated responses."
                   icon={Zap}
                   value={summary!.totalMentions}
-                  sub={<DeltaBadge delta={summary!.mentionsChange} />}
+                  sub={
+                    <CountDeltaBadge
+                      current={summary!.totalMentions}
+                      previous={summary!.prevMentions}
+                      delta={summary!.mentionsChange}
+                    />
+                  }
                   subVariant={
                     summary!.mentionsChange !== null && summary!.mentionsChange > 0
                       ? 'positive'
@@ -1412,7 +1435,13 @@ export default function InsightsPage() {
                   tooltip="Times your brand's domain was cited as a source with a direct link in AI responses."
                   icon={Quote}
                   value={summary!.totalCitations}
-                  sub={<DeltaBadge delta={summary!.citationsChange} />}
+                  sub={
+                    <CountDeltaBadge
+                      current={summary!.totalCitations}
+                      previous={summary!.prevCitations}
+                      delta={summary!.citationsChange}
+                    />
+                  }
                   subVariant={
                     summary!.citationsChange !== null && summary!.citationsChange > 0
                       ? 'positive'

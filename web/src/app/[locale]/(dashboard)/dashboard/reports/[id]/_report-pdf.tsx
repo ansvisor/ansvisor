@@ -121,7 +121,10 @@ const styles = StyleSheet.create({
   footerText: { fontSize: 7, color: MUTED },
 });
 
-function DeltaText({ value }: { value: number | null }) {
+function DeltaText({ value, zeroBaseCount }: { value: number | null; zeroBaseCount?: number }) {
+  if (zeroBaseCount !== undefined) {
+    return <Text style={[styles.delta, { color: GREEN }]}>+{zeroBaseCount} new</Text>;
+  }
   if (value === null) return null;
   const up = value >= 0;
   return (
@@ -236,47 +239,64 @@ export function ReportPdfDocument({ report }: { report: Report }) {
   const hasCompetitorTrend = trend.some((d) => d.competitors !== null);
   // Reports generated before #492 have no `visibilityRate` — fall back to
   // the old score-only KPI box so those snapshots keep rendering unchanged.
-  const kpiEntries: { label: string; value: string; change: number | null; sub?: string }[] =
-    payload.insights
-      ? [
-          ...(payload.visibilityRate
-            ? [
-                {
-                  label: 'Visibility Rate',
-                  value: `${payload.visibilityRate.ratePct}%`,
-                  change: null,
-                  sub: `${payload.visibilityRate.visiblePrompts}/${payload.visibilityRate.promptCount} prompts`,
-                },
-                {
-                  label: 'Avg. Score',
-                  value: `${payload.insights.avgVisibilityScore}%`,
-                  change: payload.insights.visibilityChange,
-                },
-              ]
-            : [
-                {
-                  label: 'Visibility',
-                  value: `${payload.insights.avgVisibilityScore}%`,
-                  change: payload.insights.visibilityChange,
-                },
-              ]),
-          {
-            label: 'Mentions',
-            value: String(payload.insights.totalMentions),
-            change: payload.insights.mentionsChange,
-          },
-          {
-            label: 'Brand Citations',
-            value: String(payload.insights.totalCitations),
-            change: payload.insights.citationsChange,
-          },
-          {
-            label: 'Positive Sentiment',
-            value: `${payload.insights.positiveSentimentPct}%`,
-            change: payload.insights.sentimentChange,
-          },
-        ]
-      : [];
+  const kpiEntries: {
+    label: string;
+    value: string;
+    change: number | null;
+    zeroBaseCount?: number;
+    sub?: string;
+  }[] = payload.insights
+    ? [
+        ...(payload.visibilityRate
+          ? [
+              {
+                label: 'Visibility Rate',
+                value: `${payload.visibilityRate.ratePct}%`,
+                change: null,
+                sub: `${payload.visibilityRate.visiblePrompts}/${payload.visibilityRate.promptCount} prompts`,
+              },
+              {
+                label: 'Avg. Score',
+                value: `${payload.insights.avgVisibilityScore}%`,
+                change: payload.insights.visibilityChange,
+              },
+            ]
+          : [
+              {
+                label: 'Visibility',
+                value: `${payload.insights.avgVisibilityScore}%`,
+                change: payload.insights.visibilityChange,
+              },
+            ]),
+        {
+          label: 'Mentions',
+          value: String(payload.insights.totalMentions),
+          change: payload.insights.mentionsChange,
+          zeroBaseCount:
+            Object.hasOwn(payload.insights, 'prevMentions') &&
+            payload.insights.prevMentions === 0 &&
+            payload.insights.totalMentions > 0
+              ? payload.insights.totalMentions
+              : undefined,
+        },
+        {
+          label: 'Brand Citations',
+          value: String(payload.insights.totalCitations),
+          change: payload.insights.citationsChange,
+          zeroBaseCount:
+            Object.hasOwn(payload.insights, 'prevCitations') &&
+            payload.insights.prevCitations === 0 &&
+            payload.insights.totalCitations > 0
+              ? payload.insights.totalCitations
+              : undefined,
+        },
+        {
+          label: 'Positive Sentiment',
+          value: `${payload.insights.positiveSentimentPct}%`,
+          change: payload.insights.sentimentChange,
+        },
+      ]
+    : [];
   // Reports generated before #492 stored competitor entries without these
   // fields even though the type now declares them required — check at
   // runtime rather than trusting the type for immutable, pre-existing data.
@@ -311,7 +331,7 @@ export function ReportPdfDocument({ report }: { report: Report }) {
                 <Text style={styles.kpiLabel}>{entry.label}</Text>
                 <View style={styles.kpiValueRow}>
                   <Text style={styles.kpiValue}>{entry.value}</Text>
-                  <DeltaText value={entry.change} />
+                  <DeltaText value={entry.change} zeroBaseCount={entry.zeroBaseCount} />
                 </View>
                 {entry.sub && <Text style={styles.kpiSub}>{entry.sub}</Text>}
               </View>
