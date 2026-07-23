@@ -73,6 +73,13 @@ export async function POST(req: NextRequest) {
       success_url: `${appUrl}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/dashboard/onboarding`,
       allow_promotion_codes: true,
+      // Collect billing address + VAT/tax ID up front so invoices are
+      // complete; later edits happen in the Customer Portal (/api/stripe/portal).
+      billing_address_collection: 'required',
+      tax_id_collection: { enabled: true },
+      // Required when reusing an existing customer with the two options above:
+      // Stripe needs permission to write the collected fields back onto them.
+      customer_update: { address: 'auto', name: 'auto' },
     });
 
     return NextResponse.json({ url: session.url });

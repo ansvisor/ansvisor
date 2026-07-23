@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Check, ArrowUp, ArrowDown, Mail } from 'lucide-react';
+import { Check, ArrowUp, ArrowDown, Mail, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +37,7 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
   const t = useTranslations('settings');
   const [loading, setLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
   const [changePlanOpen, setChangePlanOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<PlanId | null>(null);
@@ -114,6 +115,23 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
       toast.error(err instanceof Error ? err.message : 'Failed to reactivate');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleOpenPortal() {
+    setPortalLoading(true);
+    try {
+      const res = await fetch('/api/stripe/portal', { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to open billing portal');
+      }
+      const { url } = await res.json();
+      window.location.href = url;
+      // No loading reset — we're navigating away to Stripe.
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to open billing portal');
+      setPortalLoading(false);
     }
   }
 
@@ -252,8 +270,8 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
         </a>
       </div>
 
-      {/* Cancel / Reactivate */}
-      {subscription.cancelAtPeriodEnd ? (
+      {/* Cancel / Reactivate + Stripe billing portal */}
+      {subscription.cancelAtPeriodEnd && (
         <div className="flex items-center justify-between rounded-lg border border-destructive/20 bg-destructive/5 p-4">
           <div>
             <p className="text-sm font-medium">
@@ -272,26 +290,42 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
             {t('reactivate')}
           </Button>
         </div>
-      ) : (
-        <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
-          <DialogTrigger
-            render={<Button variant="ghost" className="text-destructive hover:text-destructive" />}
-          >
-            {t('cancelSubscription')}
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>{t('cancelConfirmTitle')}</DialogTitle>
-              <DialogDescription>{t('cancelConfirmDescription')}</DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="destructive" onClick={handleCancel} disabled={cancelLoading}>
-                {cancelLoading ? t('processing') : t('cancelConfirm')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       )}
+      <div className="flex items-center justify-between gap-4">
+        {subscription.cancelAtPeriodEnd ? (
+          <span />
+        ) : (
+          <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+            <DialogTrigger
+              render={
+                <Button variant="ghost" className="text-destructive hover:text-destructive" />
+              }
+            >
+              {t('cancelSubscription')}
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>{t('cancelConfirmTitle')}</DialogTitle>
+                <DialogDescription>{t('cancelConfirmDescription')}</DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="destructive" onClick={handleCancel} disabled={cancelLoading}>
+                  {cancelLoading ? t('processing') : t('cancelConfirm')}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+        <Button
+          variant="outline"
+          onClick={handleOpenPortal}
+          disabled={portalLoading}
+          title={t('manageBillingHint')}
+        >
+          {portalLoading ? t('processing') : t('manageBilling')}
+          <ExternalLink className="ml-2 h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 }

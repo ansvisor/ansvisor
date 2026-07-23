@@ -634,6 +634,8 @@
     "cancelConfirm": "Yes, Cancel",
     "reactivate": "Reactivate Subscription",
     "subscriptionReactivated": "Subscription reactivated.",
+    "manageBilling": "Manage Billing",
+    "manageBillingHint": "Update your payment method, billing address and tax ID on Stripe",
     "invoices": "Invoice History",
     "invoiceNumber": "Invoice",
     "invoiceDate": "Date",
