@@ -637,7 +637,7 @@ function EmptyState({
       {!isCloud && (
         <Button onClick={onRunPrompts} disabled={isRunning} className="mt-6 gap-2">
           {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-          {t('runPrompts')} Now
+          {t('runPromptsNow')}
         </Button>
       )}
     </div>
@@ -1453,7 +1453,7 @@ export default function InsightsPage() {
                   onClick={() => router.push('/dashboard/citations')}
                 />
                 <KpiCard
-                  title={`${t('positive')} ${t('sentiment')}`}
+                  title={t('positiveSentiment')}
                   tooltip="Percentage of answers that mention your brand and describe it in a positive context."
                   icon={AlertCircle}
                   value={`${summary!.positiveSentimentPct}%`}
@@ -1513,7 +1513,7 @@ export default function InsightsPage() {
                     <CardHeader className="pb-2">
                       <CardTitle className="flex items-center gap-2 text-sm font-medium">
                         <PieChart className="h-4 w-4" />
-                        Share of Voice by {t('platform')}
+                        {t('sovByPlatform')}
                       </CardTitle>
                       {sovData.overallSovChange !== null && sovData.overallSovChange !== 0 && (
                         <DeltaBadge delta={sovData.overallSovChange} suffix=" pts" />
