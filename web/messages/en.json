@@ -133,6 +133,7 @@
     "title": "Answer Engine Insights",
     "description": "Monitor how your brand is represented in AI-generated answers.",
     "runPrompts": "Run Prompts",
+    "runPromptsNow": "Run Prompts Now",
     "promptResults": "Prompt Results",
     "platform": "Platform",
     "mentions": "Mentions",
@@ -140,8 +141,10 @@
     "sentiment": "Sentiment",
     "score": "Score",
     "positive": "Positive",
+    "positiveSentiment": "Positive Sentiment",
     "neutral": "Neutral",
-    "negative": "Negative"
+    "negative": "Negative",
+    "sovByPlatform": "Share of Voice by Platform"
   },
   "content": {
     "title": "Content Opportunities",
