@@ -184,6 +184,19 @@ describe('cloro-scraper – parseScraperResponse', () => {
       ]);
     });
 
+    it('maps the plain-string Perplexity search_model_queries shape (Cloro 2026-07)', () => {
+      const result = {
+        markdown: 'text',
+        sources: [],
+        search_model_queries: ['best laptops 2026', '  laptop reviews  ', '', '   ', 42, null],
+      };
+      const parsed = parseScraperResponse(result, 'perplexity-web');
+      expect(parsed.search_queries).toEqual([
+        { query: 'best laptops 2026', source_platform: 'perplexity-web' },
+        { query: 'laptop reviews', source_platform: 'perplexity-web' },
+      ]);
+    });
+
     it('preserves the per-item engine label from Perplexity search_model_queries', () => {
       const result = {
         markdown: 'text',
