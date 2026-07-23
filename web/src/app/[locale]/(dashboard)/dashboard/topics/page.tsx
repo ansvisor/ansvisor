@@ -8,6 +8,10 @@ import { useUserRole } from '@/hooks/use-user-role';
 import { getTopicsOverview, type TopicOverviewRow } from '@/lib/actions/topic';
 import { TopicSuggestionsCard } from './_suggestions-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { createTopic } from '@/lib/actions/topic';
+import { toast } from 'sonner';
+import { Input } from '@/components/ui/input';
+import { Loader2, Plus } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -16,6 +20,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -160,6 +173,9 @@ export default function TopicsPage() {
   const [topics, setTopics] = useState<TopicOverviewRow[]>([]);
   const [unassignedPromptCount, setUnassignedPromptCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [isAdding, setIsAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [open, setOpen] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!activeBrandId) {
@@ -262,6 +278,27 @@ export default function TopicsPage() {
     );
   }
 
+  const handleAddTopic = async () => {
+    const name = newName.trim();
+    if (!name) return;
+    if (topics.some((t) => t.name.toLowerCase() === name.toLowerCase())) {
+      toast.error('This topic already exists');
+      return;
+    }
+    setIsAdding(true);
+    try {
+      const added = await createTopic(activeBrandId, name);
+      await loadData();
+      setNewName('');
+      setOpen(false);
+      toast.success(`"${added.name}" added. Assign prompts to this topic to start tracking it.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add topic');
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -291,6 +328,55 @@ export default function TopicsPage() {
             <Settings2 className="h-4 w-4" />
             {t('manageTopics')}
           </Link>
+          {canManage && (
+            <>
+              <Button size="sm" onClick={() => setOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Topic
+              </Button>
+              <Dialog
+                open={open}
+                onOpenChange={(value) => {
+                  setOpen(value);
+                  if (!value) {
+                    setNewName('');
+                  }
+                }}
+              >
+                <DialogContent className="sm:max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle>Add Topic</DialogTitle>
+                    <DialogDescription>Create a new topic for this brand.</DialogDescription>
+                  </DialogHeader>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="e.g. Industry, Comparison..."
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && newName.trim() && handleAddTopic()}
+                      className="flex-1"
+                    />
+                  </div>
+                  <DialogFooter>
+                    <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+                    <Button
+                      variant="default"
+                      onClick={handleAddTopic}
+                      disabled={isAdding || !newName.trim()}
+                      className="gap-1.5 shrink-0"
+                    >
+                      {isAdding ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Plus className="h-4 w-4" />
+                      )}
+                      Add Topic
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </>
+          )}
         </div>
       </div>
 
@@ -369,6 +455,12 @@ export default function TopicsPage() {
               <Tag className="mx-auto h-9 w-9 text-muted-foreground/40" />
               <p className="mt-2">{t('emptyTitle')}</p>
               <p className="text-xs">{t('emptyBody')}</p>
+              {canManage && (
+                <Button className="mt-4" onClick={() => setOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Topic
+                </Button>
+              )}
             </div>
           ) : (
             <Table>
