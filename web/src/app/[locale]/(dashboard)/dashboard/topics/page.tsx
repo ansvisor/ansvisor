@@ -165,6 +165,7 @@ function KpiCard({
 
 export default function TopicsPage() {
   const t = useTranslations('topics');
+  const common = useTranslations('common');
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore(
     (s) => s.brands.find((brand) => brand.id === s.activeBrandId) ?? null,
@@ -279,10 +280,11 @@ export default function TopicsPage() {
   }
 
   const handleAddTopic = async () => {
+    if (isAdding) return;
     const name = newName.trim();
     if (!name) return;
     if (topics.some((t) => t.name.toLowerCase() === name.toLowerCase())) {
-      toast.error('This topic already exists');
+      toast.error(t('topicAlreadyExists'));
       return;
     }
     setIsAdding(true);
@@ -291,9 +293,9 @@ export default function TopicsPage() {
       await loadData();
       setNewName('');
       setOpen(false);
-      toast.success(`"${added.name}" added. Assign prompts to this topic to start tracking it.`);
+      toast.success(t('topicAdded', { name: added.name }));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add topic');
+      toast.error(err instanceof Error ? err.message : t('failedToAddTopic'));
     } finally {
       setIsAdding(false);
     }
@@ -332,7 +334,7 @@ export default function TopicsPage() {
             <>
               <Button size="sm" onClick={() => setOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
-                Add Topic
+                {t('addTopic')}
               </Button>
               <Dialog
                 open={open}
@@ -345,8 +347,8 @@ export default function TopicsPage() {
               >
                 <DialogContent className="sm:max-w-sm">
                   <DialogHeader>
-                    <DialogTitle>Add Topic</DialogTitle>
-                    <DialogDescription>Create a new topic for this brand.</DialogDescription>
+                    <DialogTitle>{t('addTopic')}</DialogTitle>
+                    <DialogDescription>{t('addTopicDescription')}</DialogDescription>
                   </DialogHeader>
                   <div className="flex gap-2">
                     <Input
@@ -358,7 +360,9 @@ export default function TopicsPage() {
                     />
                   </div>
                   <DialogFooter>
-                    <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+                    <DialogClose render={<Button variant="outline" />}>
+                      {common('cancel')}
+                    </DialogClose>
                     <Button
                       variant="default"
                       onClick={handleAddTopic}
@@ -370,7 +374,7 @@ export default function TopicsPage() {
                       ) : (
                         <Plus className="h-4 w-4" />
                       )}
-                      Add Topic
+                      {t('addTopic')}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -458,7 +462,7 @@ export default function TopicsPage() {
               {canManage && (
                 <Button className="mt-4" onClick={() => setOpen(true)}>
                   <Plus className="mr-2 h-4 w-4" />
-                  Add Topic
+                  {t('addTopic')}
                 </Button>
               )}
             </div>

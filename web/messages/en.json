@@ -169,6 +169,11 @@
     "negative": "Negative"
   },
   "topics": {
+    "addTopic": "Add Topic",
+    "addTopicDescription": "Create a new topic for this brand.",
+    "topicAlreadyExists": "This topic already exists",
+    "topicAdded": "\"{name}\" added. Assign prompts to this topic to start tracking it.",
+    "failedToAddTopic": "Failed to add topic",
     "noBrandTitle": "No brand selected",
     "noBrandBody": "Select a brand from the top switcher to view topic analytics.",
     "title": "Topics",
