@@ -625,6 +625,7 @@ function EmptyState({
   isRunning: boolean;
   isCloud: boolean;
 }) {
+  const t = useTranslations('insights');
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <BarChart3 className="h-12 w-12 text-muted-foreground/40 mb-4" />
@@ -636,7 +637,7 @@ function EmptyState({
       {!isCloud && (
         <Button onClick={onRunPrompts} disabled={isRunning} className="mt-6 gap-2">
           {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-          Run Prompts Now
+          {t('runPromptsNow')}
         </Button>
       )}
     </div>
@@ -1414,7 +1415,7 @@ export default function InsightsPage() {
                   onClick={() => router.push('/dashboard/prompts')}
                 />
                 <KpiCard
-                  title="Mentions"
+                  title={t('mentions')}
                   tooltip="How many times your brand was referenced by name in AI-generated responses."
                   icon={Zap}
                   value={summary!.totalMentions}
@@ -1433,7 +1434,7 @@ export default function InsightsPage() {
                   onClick={() => setBreakdownMetric('mentions')}
                 />
                 <KpiCard
-                  title="Citations"
+                  title={t('citations')}
                   tooltip="Times your brand's domain was cited as a source with a direct link in AI responses."
                   icon={Quote}
                   value={summary!.totalCitations}
@@ -1452,7 +1453,7 @@ export default function InsightsPage() {
                   onClick={() => router.push('/dashboard/citations')}
                 />
                 <KpiCard
-                  title="Positive Sentiment"
+                  title={t('positiveSentiment')}
                   tooltip="Percentage of AI responses that described your brand in a positive context."
                   icon={AlertCircle}
                   value={`${summary!.positiveSentimentPct}%`}
@@ -1512,7 +1513,7 @@ export default function InsightsPage() {
                     <CardHeader className="pb-2">
                       <CardTitle className="flex items-center gap-2 text-sm font-medium">
                         <PieChart className="h-4 w-4" />
-                        Share of Voice by Platform
+                        {t('sovByPlatform')}
                       </CardTitle>
                       {sovData.overallSovChange !== null && sovData.overallSovChange !== 0 && (
                         <DeltaBadge delta={sovData.overallSovChange} suffix=" pts" />
