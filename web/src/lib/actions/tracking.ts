@@ -162,7 +162,7 @@ function modelFilterArray(model: string | undefined): string[] | null {
   return list.length > 0 ? list : null;
 }
 
-// ── RPC return shapes (mirror supabase/migrations/00006_insights_aggregates.sql) ─
+// ── RPC return shapes (mirror supabase/migrations/00031_insights_sentiment_denominator.sql) ─
 
 interface InsightsAggregates {
   total_results: number;
@@ -170,6 +170,7 @@ interface InsightsAggregates {
   total_mentions: number;
   total_citations: number;
   positive_count: number;
+  mentioning_results: number;
   last_checked_at: string | null;
   by_model: Array<{
     model_used: string;
@@ -1078,7 +1079,14 @@ export async function getInsightsSummary(
   const avgVisibilityScore = roundTo1(cur.sum_visibility / totalResults);
   const totalMentions = cur.total_mentions;
   const totalCitations = cur.total_citations;
-  const positiveSentimentPct = Math.round((cur.positive_count / totalResults) * 100);
+  // Denominator is answers that mention/cite the brand, not all results —
+  // sentiment analysis is skipped entirely for brand-absent answers, so
+  // dividing by totalResults dilutes the score with rows that can never
+  // be positive (#508).
+  const positiveSentimentPct =
+    cur.mentioning_results > 0
+      ? Math.round((cur.positive_count / cur.mentioning_results) * 100)
+      : 0;
   const lastCheckedAt = cur.last_checked_at;
 
   const platformBreakdown = cur.by_model.map((m) => ({
@@ -1139,12 +1147,18 @@ export async function getInsightsSummary(
       const curAvgVis = roundTo1(curWin.sum_visibility / curWin.total_results);
       const curMentions = curWin.total_mentions;
       const curCitations = curWin.total_citations;
-      const curSentimentPct = Math.round((curWin.positive_count / curWin.total_results) * 100);
+      const curSentimentPct =
+        curWin.mentioning_results > 0
+          ? Math.round((curWin.positive_count / curWin.mentioning_results) * 100)
+          : 0;
 
       const prevAvgVis = roundTo1(prevWin.sum_visibility / prevWin.total_results);
       prevMentions = prevWin.total_mentions;
       prevCitations = prevWin.total_citations;
-      const prevSentimentPct = Math.round((prevWin.positive_count / prevWin.total_results) * 100);
+      const prevSentimentPct =
+        prevWin.mentioning_results > 0
+          ? Math.round((prevWin.positive_count / prevWin.mentioning_results) * 100)
+          : 0;
 
       visibilityChange = roundTo1(curAvgVis - prevAvgVis);
       mentionsChange = percentageChange(curMentions, prevMentions);

@@ -1453,7 +1453,7 @@ export default function InsightsPage() {
                 />
                 <KpiCard
                   title="Positive Sentiment"
-                  tooltip="Percentage of AI responses that described your brand in a positive context."
+                  tooltip="Percentage of answers that mention your brand and describe it in a positive context."
                   icon={AlertCircle}
                   value={`${summary!.positiveSentimentPct}%`}
                   sub={<DeltaBadge delta={summary!.sentimentChange} suffix=" pts" />}
