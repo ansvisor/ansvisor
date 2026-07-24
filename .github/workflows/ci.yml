@@ -43,6 +43,15 @@ jobs:
         run: yarn typecheck
       - name: Vitest tests
         run: yarn test
+      - name: Next.js production build
+        run: yarn build
+        env:
+          # next build evaluates modules that initialize Supabase and Stripe
+          # clients; fake values keep CI independent of deployment secrets.
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
+          STRIPE_SECRET_KEY: sk_test_ci_placeholder
   server:
     name: server — lint, format & test
     runs-on: ubuntu-latest
