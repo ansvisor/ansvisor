@@ -165,6 +165,7 @@ export function AIProviderAvatar({
         className,
       )}
     >
+      {/* eslint-disable-next-line @next/next/no-img-element -- AI provider favicon URLs come from arbitrary remote domains; next/image remotePatterns would need an open-ended wildcard */}
       <img src={meta.icon} alt="" className="h-full w-full object-cover" aria-hidden="true" />
     </span>
   );

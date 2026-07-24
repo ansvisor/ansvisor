@@ -44,7 +44,6 @@ export default async function OpengraphImage() {
         }}
       />
 
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={logoSrc} alt="" width={360} height={360} style={{ width: 360, height: 360 }} />
     </div>,
     { ...size },

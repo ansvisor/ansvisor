@@ -135,7 +135,6 @@ function DeltaBadge({ current, previous }: { current: number; previous: number }
 
 function SnippetBanner({ trackingCode }: { trackingCode?: string }) {
   const [copied, setCopied] = useState(false);
-  const isCloud = process.env.NEXT_PUBLIC_IS_CLOUD === 'true';
   const apiUrl = getPublicApiBaseUrl();
   const snippet = `<script src="${apiUrl}/t.js" data-t="${trackingCode || 'YOUR_TRACKING_CODE'}" defer></script>`;
 

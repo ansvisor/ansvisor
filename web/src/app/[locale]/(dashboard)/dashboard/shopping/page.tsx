@@ -690,6 +690,7 @@ function PromptsTabContent({
                             className="flex gap-3 rounded-md border bg-muted/10 p-2 text-xs"
                           >
                             {card.imageUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element -- product images come from arbitrary merchant domains; next/image remotePatterns would need an open-ended wildcard
                               <img
                                 src={card.imageUrl}
                                 alt=""

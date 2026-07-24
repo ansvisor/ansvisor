@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from '@/i18n/navigation';
-import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
@@ -60,7 +59,6 @@ import {
   ShieldAlert,
   ChevronDown,
   Eye,
-  HelpCircle,
 } from 'lucide-react';
 
 // ─── Shared Visual Components (mirroring Insights) ───────────────────────────
@@ -101,76 +99,6 @@ function SentimentBadge({ sentiment }: { sentiment: 'positive' | 'neutral' | 'ne
     >
       {sentiment}
     </Badge>
-  );
-}
-
-function VisibilityBar({ score, max = 100 }: { score: number; max?: number }) {
-  const pct = Math.round((score / max) * 100);
-  return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 w-24 rounded-full bg-muted overflow-hidden">
-        <div
-          className={cn(
-            'h-full rounded-full transition-all',
-            score >= 60 ? 'bg-green-500' : score >= 40 ? 'bg-yellow-500' : 'bg-red-500',
-          )}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <span className="text-sm font-medium tabular-nums">{Math.round(score)}</span>
-    </div>
-  );
-}
-
-function InfoTip({ content }: { content: string }) {
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
-  const ref = useRef<HTMLSpanElement>(null);
-
-  function show() {
-    const r = ref.current?.getBoundingClientRect();
-    if (r) setPos({ x: r.left + r.width / 2, y: r.bottom + 6 });
-  }
-
-  return (
-    <>
-      <span
-        ref={ref}
-        onMouseEnter={show}
-        onMouseLeave={() => setPos(null)}
-        className="inline-flex items-center cursor-help"
-      >
-        <HelpCircle className="h-3 w-3 text-muted-foreground/60 hover:text-muted-foreground transition-colors" />
-      </span>
-      {pos &&
-        createPortal(
-          <div
-            style={{ left: pos.x, top: pos.y, transform: 'translateX(-50%)' }}
-            className="pointer-events-none fixed z-[9999] w-56 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md"
-          >
-            {content}
-          </div>,
-          document.body,
-        )}
-    </>
-  );
-}
-
-function ColHead({
-  children,
-  tooltip,
-  className,
-}: {
-  children: React.ReactNode;
-  tooltip?: string;
-  className?: string;
-}) {
-  return (
-    <TableHead className={className}>
-      <span className="inline-flex items-center gap-1">
-        {children}
-        {tooltip && <InfoTip content={tooltip} />}
-      </span>
-    </TableHead>
   );
 }
 
