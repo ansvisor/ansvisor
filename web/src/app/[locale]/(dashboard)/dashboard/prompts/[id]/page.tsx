@@ -231,8 +231,8 @@ function KpiCard({
   );
 }
 
-function TopSourceDomainsTable({ rows }: { rows: PromptTopSource[] }) {
-  const pager = usePagination(rows.length, rows.length);
+function TopSourceDomainsTable({ rows, filterKey, pageSize }: { rows: PromptTopSource[]; filterKey: string; pageSize?: number }) {
+  const pager = usePagination(rows.length, filterKey, pageSize ?? 10);
   const pageRows = rows.slice(pager.start, pager.end);
 
   return (
@@ -299,8 +299,8 @@ function TopSourceDomainsTable({ rows }: { rows: PromptTopSource[] }) {
   );
 }
 
-function TopSourceUrlsTable({ rows }: { rows: PromptTopSourceUrl[] }) {
-  const pager = usePagination(rows.length, rows.length);
+function TopSourceUrlsTable({ rows, filterKey, pageSize }: { rows: PromptTopSourceUrl[]; filterKey: string; pageSize?: number }) {
+  const pager = usePagination(rows.length, filterKey, pageSize ?? 10);
   const pageRows = rows.slice(pager.start, pager.end);
 
   return (
@@ -376,6 +376,16 @@ function TopSourcesCard({
   sources: PromptTopSource[];
   sourceUrls: PromptTopSourceUrl[];
 }) {
+  const [filter, setFilter] = useState('');
+
+  const q = filter.toLowerCase();
+  const filteredSources = q
+    ? sources.filter((s) => s.domain.toLowerCase().includes(q))
+    : sources;
+  const filteredUrls = q
+    ? sourceUrls.filter((u) => u.url.toLowerCase().includes(q) || (u.title && u.title.toLowerCase().includes(q)))
+    : sourceUrls;
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -385,16 +395,22 @@ function TopSourcesCard({
         </p>
       </CardHeader>
       <CardContent>
+        <Input
+          placeholder="Filter by domain, URL or title..."
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="h-8 text-xs mb-4"
+        />
         <Tabs defaultValue="domains">
           <TabsList>
-            <TabsTrigger value="domains">Domains ({sources.length})</TabsTrigger>
-            <TabsTrigger value="urls">URLs ({sourceUrls.length})</TabsTrigger>
+            <TabsTrigger value="domains">Domains ({filteredSources.length})</TabsTrigger>
+            <TabsTrigger value="urls">URLs ({filteredUrls.length})</TabsTrigger>
           </TabsList>
           <TabsContent value="domains" keepMounted className="mt-4">
-            <TopSourceDomainsTable rows={sources} />
+            <TopSourceDomainsTable rows={filteredSources} filterKey={filter} />
           </TabsContent>
           <TabsContent value="urls" keepMounted className="mt-4">
-            <TopSourceUrlsTable rows={sourceUrls} />
+            <TopSourceUrlsTable rows={filteredUrls} filterKey={filter} />
           </TabsContent>
         </Tabs>
       </CardContent>

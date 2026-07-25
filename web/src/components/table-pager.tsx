@@ -16,7 +16,7 @@ export const PAGE_SIZE = 100;
  * resetKey — pass a JSON.stringify of the active filters so the pager
  * automatically jumps back to page 0 whenever any filter changes.
  */
-export function usePagination(totalRows: number, resetKey: unknown) {
+export function usePagination(totalRows: number, resetKey: unknown, pageSize: number = PAGE_SIZE) {
   const [page, setPage] = useState(0);
 
   // Adjust-state-during-render pattern: jump back to page 0 when the key changes.
@@ -26,15 +26,15 @@ export function usePagination(totalRows: number, resetKey: unknown) {
     setPage(0);
   }
 
-  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const clampedPage = Math.min(page, totalPages - 1);
 
   return {
     page: clampedPage,
     setPage,
     totalPages,
-    start: clampedPage * PAGE_SIZE,
-    end: Math.min((clampedPage + 1) * PAGE_SIZE, totalRows),
+    start: clampedPage * pageSize,
+    end: Math.min((clampedPage + 1) * pageSize, totalRows),
   };
 }
 
