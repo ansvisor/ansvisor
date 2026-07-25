@@ -63,14 +63,14 @@ export const dashboardNav: NavGroup[] = [
         requiredFeature: 'basic_insights',
       },
       {
-        title: 'Topics',
-        href: '/dashboard/topics',
-        icon: Tag,
-      },
-      {
         title: 'Prompts',
         href: '/dashboard/prompts',
         icon: Globe,
+      },
+      {
+        title: 'Topics',
+        href: '/dashboard/topics',
+        icon: Tag,
       },
       {
         title: 'Citations',
