@@ -1309,6 +1309,7 @@ export async function cancelTrackingJob(jobId: string): Promise<void> {
 export interface PromptVisibilitySummary {
   avgVisibility: number;
   totalMentions: number;
+  totalCitations: number;
   runs: number;
   lastRunAt: string;
 }
@@ -1346,6 +1347,7 @@ export async function getPromptVisibilitySummaries(
     result[row.prompt_id] = {
       avgVisibility: row.avg_visibility ?? 0,
       totalMentions: Number(row.total_mentions ?? 0),
+      totalCitations: Number(row.total_citations ?? 0),
       runs: Number(row.runs ?? 0),
       lastRunAt: row.last_run_at,
     };

@@ -1372,6 +1372,7 @@ export type Database = {
           prompt_id: string;
           avg_visibility: number;
           total_mentions: number;
+          total_citations: number;
           runs: number;
           last_run_at: string;
         }[];

@@ -143,9 +143,15 @@ function ColHead({
 
 // ─── Sortable column header (All Prompts) ─────────────────────────────────────
 
-type AllPromptsSortKey = 'visibility' | 'mentions' | 'volume' | 'lastRun';
+type AllPromptsSortKey = 'visibility' | 'mentions' | 'citations' | 'volume' | 'lastRun';
 
-const ALL_PROMPTS_SORT_KEYS: AllPromptsSortKey[] = ['visibility', 'mentions', 'volume', 'lastRun'];
+const ALL_PROMPTS_SORT_KEYS: AllPromptsSortKey[] = [
+  'visibility',
+  'mentions',
+  'citations',
+  'volume',
+  'lastRun',
+];
 
 function isAllPromptsSortKey(value: string | null): value is AllPromptsSortKey {
   return value !== null && (ALL_PROMPTS_SORT_KEYS as string[]).includes(value);
@@ -217,6 +223,7 @@ const PROMPT_EXPORT_HEADERS = [
   'intent',
   'avg_visibility_30d',
   'total_mentions_30d',
+  'total_citations_30d',
   'runs_30d',
   'last_run_at',
 ];
@@ -1120,6 +1127,7 @@ export default function PromptsPage() {
       intent: volumeByPromptId.get(p.id)?.intent ?? '',
       avg_visibility_30d: visibility[p.id]?.avgVisibility ?? '',
       total_mentions_30d: visibility[p.id]?.totalMentions ?? '',
+      total_citations_30d: visibility[p.id]?.totalCitations ?? '',
       runs_30d: visibility[p.id]?.runs ?? '',
       last_run_at: visibility[p.id]?.lastRunAt ?? '',
     }));
@@ -1736,6 +1744,8 @@ function AllPromptsTab({
           return vis ? vis.avgVisibility : null;
         case 'mentions':
           return vis ? vis.totalMentions : null;
+        case 'citations':
+          return vis ? vis.totalCitations : null;
         case 'volume':
           return vol ? vol.estAiVolume : null;
         case 'lastRun':
@@ -1861,6 +1871,16 @@ function AllPromptsTab({
               </SortableHead>
               <SortableHead
                 className="text-right"
+                tooltip="Total times your pages were cited in AI answers for this prompt over the last 30 days."
+                sortKey="citations"
+                activeSort={activeSort}
+                dir={dir}
+                onSort={handleSort}
+              >
+                Citations
+              </SortableHead>
+              <SortableHead
+                className="text-right"
                 tooltip="Estimated monthly AI prompt volume, from keyword analysis. Empty until analysed."
                 sortKey="volume"
                 activeSort={activeSort}
@@ -1971,6 +1991,13 @@ function AllPromptsTab({
                   <TableCell className="text-right tabular-nums text-sm">
                     {vis ? (
                       vis.totalMentions.toLocaleString()
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-sm">
+                    {vis ? (
+                      vis.totalCitations.toLocaleString()
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
