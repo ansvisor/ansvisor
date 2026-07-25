@@ -7,14 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-07-25
+
 ### Added
 
-- Sidebar / Mobile nav: Agent nav item now shows a **"Set up"** badge on cloud when the org has no Anthropic API key saved — clicking still lands on the existing Settings CTA; badge disappears automatically after the key is saved and the page is reloaded; self-host instances are unaffected and make no extra network calls (#456)
+- **Reports: templates with a section picker** — four ready-made templates (Weekly Visibility Summary, Monthly Executive Report, Competitor Benchmark, Citation & Sources Report) pre-select a section set the user can toggle per report; four new modules, previous-period deltas and a change-story executive summary (#419), plus mention & citation evidence sections (#444)
+- **Public metrics API v1** under `/api/v1`, with docs (#422)
+- **Looker Studio Community Connector** (#426)
+- Insights: **Visibility Rate is the headline metric** — the prompt-level rate (appeared in X of Y tracked prompts) leads the KPI header and the competitor leaderboard (#490); period-aware Tracked Prompts KPI card with the plan quota (#471); Topic & Prompt Opportunities teaser cards (#459, #479); a refetch overlay while filter changes reload data (#494); head-to-head links on the leaderboard (#506); a no-competitors teaser pointing to the Competitors page after its sidebar entry was removed (#504, #507, #519)
+- Prompts: **prompt workflow** — a work status (todo / in progress / done), a notes thread, and target URLs with automatic "cited" tracking as new results arrive, surfaced on both the detail page and the All Prompts table (#511); Add Prompt dialog on the All Prompts tab (#483); edit/delete a prompt in place (#484, #487); **Top Sources card** (Domains/URLs tabs) on the prompt detail page (#495) with an Insights-style date-range filter (#496)
+- Topics: **persisted AI topic suggestions** — generated from prompt-data gap signals, stored with accept/dismiss, plan-gated refresh (#463, #497); the overview table, Best/Weakest KPIs and CSV export lead with the prompt-level Visibility Rate (#493, #499); topics can be created directly from the Topics page (#522)
+- Citations: CSV export for Top Domains / Top URLs (#449); Source Types moved into a full-width sources-card tab (#486, #488)
+- Traffic: pagination and filtering for AI referral visits (#454); a 7/30/90-day range picker (#481), upgraded to a full date-range picker (#509)
+- Billing: **Stripe Customer Portal** access from Settings → Billing (update payment method, billing address and VAT/tax ID), and checkout now collects billing address and tax ID up front (#524)
+- MCP: topic suggestion tools — list, accept and dismiss (#513)
+- Plans: Claude tracking is gated to Enterprise per-customer opt-in on cloud (#423)
+- Onboarding: the plan step clarifies that the card is not charged until the trial ends, with a Stripe trust line (#503)
+- Sidebar / Mobile nav: Agent nav item shows a **"Set up"** badge on cloud when the org has no Anthropic API key saved; self-host instances are unaffected (#456, #472)
+
+### Changed
+
+- Models: Claude tracking upgraded to `claude-sonnet-5` (#421); the duplicated model display-name maps were centralized in one config (#501)
+- Prompts: suggestions moved to the All Prompts tab (#466) and collapse to a one-line strip by default — zero suggestion requests until expanded (#470); Query Fan-out opens on the By Prompt view by default (#453)
+- Insights: removed the Prompt Results by Topic tree (#458, #477)
+- Citations: the default date preset is now 24h, with a period-aware empty state (#485, #489)
+- i18n: the Insights (#518), Topics (#517) and Agent (#516) pages are wired to next-intl
 
 ### Fixed
 
-- Prompts / Query Fan-out: the High frequency pager no longer renders one button per page — replaced with a windowed pager (`‹ 1 … n-1 n n+1 … last ›`) that caps at ~9 elements, preventing overflow on brands with hundreds of pages; Previous/Next chevron buttons added, disabled at boundaries; ellipsis shown as a non-interactive span; all page numbers shown without ellipsis when total pages ≤ 7 (#446)
+- Billing: **monthly quotas anchor to the subscription billing period**, not the calendar month — an org renewing mid-month gets its allowance back at renewal (#500)
+- Insights: **Positive Sentiment divides by brand-mentioning answers** — the score is no longer diluted by answers that never mention the brand (#508, #512); zero-base deltas render as "+N new" instead of a meaningless percentage (#520, #521); brand and competitor averages share the same denominator (#478)
+- Tracking: Perplexity query fan-out survives the upstream switch to a plain string-array `search_model_queries` — the parser now accepts both the new string entries and the legacy object shape (#525)
+- Reports: the KPI section leads with the visibility rate, with a fallback for old snapshots (#515); the AI executive summary reads `*Change` fields as percentage deltas and never implies an impossible previous value (#514, #520, #521)
+- Citations: citation counts are hostname-based with an automatic recount when brand domains change (#433); chatgpt-shopping rows are excluded to match the Insights KPIs (#434); overview and gaps scans page past the silent 1000-row cap (#430)
+- Topics: the overview scan paginates and excludes chatgpt-shopping (#465)
+- Traffic: exact visit counts with paginated breakdown/trend scans (#468)
+- Prompts / Query Fan-out: complete aggregation with bounded fetches and real error messages (#428); intents classify progressively — visible page first (#448); the High frequency pager is windowed (`‹ 1 … n-1 n n+1 … last ›`) instead of one button per page (#446, #455); suggestion refresh no longer fails on high-volume estimates (#480); the page's first load is consolidated into one server action (#473); tab/sort URL params update shallowly without a full navigation (#474); loading spinner styles aligned (#482)
+- Onboarding: LLM suggestion calls retry and fall back to manual entry (#443); Back/Continue no longer duplicates brands (#467)
+- Shopping: product prices are rounded and formatted (#418); chatgpt-shopping stays off brands that have Shopping disabled (#432)
+- Content: generated opportunity titles/descriptions no longer leak prompt indexes (#442)
+- i18n: template name lookups are guarded with `t.has()` to prevent MISSING_MESSAGE crashes (#425); the proxy bypasses next-intl for RSC and server-action requests (#475)
+- MCP: prompt-level visibility rate exposed and the competitor average denominator fixed (#491, #502)
+- Web: all outstanding ESLint warnings resolved (#437, #526)
 
+### Docs
+
+- Platform guide for Reports — templates, section picker, PDF export (#438, #527)
+- README: Blog added to Resources; website links cleaned up
 
 ## [0.1.6] - 2026-07-12
 
