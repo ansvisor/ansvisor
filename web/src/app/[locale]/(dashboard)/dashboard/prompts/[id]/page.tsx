@@ -231,7 +231,15 @@ function KpiCard({
   );
 }
 
-function TopSourceDomainsTable({ rows, filterKey, pageSize }: { rows: PromptTopSource[]; filterKey: string; pageSize?: number }) {
+function TopSourceDomainsTable({
+  rows,
+  filterKey,
+  pageSize,
+}: {
+  rows: PromptTopSource[];
+  filterKey: string;
+  pageSize?: number;
+}) {
   const pager = usePagination(rows.length, filterKey, pageSize ?? 10);
   const pageRows = rows.slice(pager.start, pager.end);
 
@@ -299,7 +307,15 @@ function TopSourceDomainsTable({ rows, filterKey, pageSize }: { rows: PromptTopS
   );
 }
 
-function TopSourceUrlsTable({ rows, filterKey, pageSize }: { rows: PromptTopSourceUrl[]; filterKey: string; pageSize?: number }) {
+function TopSourceUrlsTable({
+  rows,
+  filterKey,
+  pageSize,
+}: {
+  rows: PromptTopSourceUrl[];
+  filterKey: string;
+  pageSize?: number;
+}) {
   const pager = usePagination(rows.length, filterKey, pageSize ?? 10);
   const pageRows = rows.slice(pager.start, pager.end);
 
@@ -379,11 +395,11 @@ function TopSourcesCard({
   const [filter, setFilter] = useState('');
 
   const q = filter.toLowerCase();
-  const filteredSources = q
-    ? sources.filter((s) => s.domain.toLowerCase().includes(q))
-    : sources;
+  const filteredSources = q ? sources.filter((s) => s.domain.toLowerCase().includes(q)) : sources;
   const filteredUrls = q
-    ? sourceUrls.filter((u) => u.url.toLowerCase().includes(q) || (u.title && u.title.toLowerCase().includes(q)))
+    ? sourceUrls.filter(
+        (u) => u.url.toLowerCase().includes(q) || (u.title && u.title.toLowerCase().includes(q)),
+      )
     : sourceUrls;
 
   return (
