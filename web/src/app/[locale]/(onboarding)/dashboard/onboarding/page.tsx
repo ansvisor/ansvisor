@@ -1359,10 +1359,7 @@ export default function OnboardingPage() {
 
           <div className="mb-4">
             <p className="text-sm font-medium">Your Prompt List</p>
-            <p className="text-xs text-muted-foreground">
-              {totalPrompts} prompts total
-              {promptLimit !== null ? ` · up to ${promptLimit} included in your plan` : ''}
-            </p>
+            <p className="text-xs text-muted-foreground">{totalPrompts} prompts total</p>
           </div>
 
           <div className="rounded-lg border">
