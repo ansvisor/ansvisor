@@ -1,27 +1,44 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { apiLimiterKey } from './rate-limiter.js';
+import { markTokenVerified, clearVerifiedTokens } from './verified-tokens.js';
 
 function reqWith({ authorization, ip = '203.0.113.7' } = {}) {
   return { headers: authorization ? { authorization } : {}, ip };
 }
 
 describe('rate-limiter – apiLimiterKey', () => {
-  it('buckets authenticated requests by token, not by IP', () => {
-    const sameTokenA = apiLimiterKey(reqWith({ authorization: 'Bearer tok-1', ip: '1.1.1.1' }));
-    const sameTokenB = apiLimiterKey(reqWith({ authorization: 'Bearer tok-1', ip: '2.2.2.2' }));
-    expect(sameTokenA).toBe(sameTokenB);
-    expect(sameTokenA.startsWith('token:')).toBe(true);
+  beforeEach(() => clearVerifiedTokens());
+
+  it('keeps unverified Authorization headers in the caller IP bucket', () => {
+    const forged = apiLimiterKey(reqWith({ authorization: 'Bearer forged-1', ip: '1.1.1.1' }));
+    const forged2 = apiLimiterKey(reqWith({ authorization: 'Bearer forged-2', ip: '1.1.1.1' }));
+    const anonymous = apiLimiterKey(reqWith({ ip: '1.1.1.1' }));
+    expect(forged).toBe(anonymous);
+    expect(forged2).toBe(anonymous);
   });
 
-  it('gives different tokens different buckets even from the same IP', () => {
+  it('buckets verified tokens by user across IPs', () => {
+    markTokenVerified('Bearer tok-1', 'user-a');
+    const a = apiLimiterKey(reqWith({ authorization: 'Bearer tok-1', ip: '1.1.1.1' }));
+    const b = apiLimiterKey(reqWith({ authorization: 'Bearer tok-1', ip: '2.2.2.2' }));
+    expect(a).toBe('user:user-a');
+    expect(b).toBe('user:user-a');
+  });
+
+  it('maps a refreshed token for the same user to the same bucket', () => {
+    markTokenVerified('Bearer tok-old', 'user-a');
+    markTokenVerified('Bearer tok-new', 'user-a');
+    const oldKey = apiLimiterKey(reqWith({ authorization: 'Bearer tok-old' }));
+    const newKey = apiLimiterKey(reqWith({ authorization: 'Bearer tok-new' }));
+    expect(oldKey).toBe(newKey);
+  });
+
+  it('gives different verified users different buckets', () => {
+    markTokenVerified('Bearer tok-1', 'user-a');
+    markTokenVerified('Bearer tok-2', 'user-b');
     const a = apiLimiterKey(reqWith({ authorization: 'Bearer tok-1' }));
     const b = apiLimiterKey(reqWith({ authorization: 'Bearer tok-2' }));
     expect(a).not.toBe(b);
-  });
-
-  it('never stores the raw token in the key', () => {
-    const key = apiLimiterKey(reqWith({ authorization: 'Bearer super-secret-jwt' }));
-    expect(key).not.toContain('super-secret-jwt');
   });
 
   it('falls back to the caller IP for anonymous requests', () => {

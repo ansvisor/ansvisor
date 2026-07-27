@@ -1,5 +1,6 @@
 import supabaseAdmin from '../config/supabase.js';
 import logger from '../lib/logger.js';
+import { markTokenVerified } from './verified-tokens.js';
 
 class Middleware {
   async decodeTokenForSocket(socket, next) {
@@ -44,6 +45,9 @@ class Middleware {
       if (error || !user) {
         return res.status(401).json({ message: 'Unauthorized API Request' });
       }
+
+      // Promote this token to a per-user rate-limit bucket (see rate-limiter.js)
+      markTokenVerified(req.headers.authorization, user.id);
 
       req.user = user;
       return next();

@@ -1,5 +1,5 @@
 import rateLimit from 'express-rate-limit';
-import { createHash } from 'node:crypto';
+import { verifiedUserId } from './verified-tokens.js';
 
 /**
  * Anonymous bucket key. IPv4 (including v4-mapped IPv6) keys on the exact
@@ -19,30 +19,33 @@ export function anonymousIpKey(ip) {
 }
 
 /**
- * Key authenticated dashboard traffic by bearer token, not by IP. The web
- * app's server actions all egress through Vercel's small shared IP pool, so an
+ * Key dashboard traffic by VERIFIED user, falling back to IP. The web app's
+ * server actions all egress through Vercel's small shared IP pool, so a purely
  * IP-keyed limiter lumps every user's server-side traffic (volume analyses,
  * tracking-status polls, page loads…) into a handful of buckets and 429s
- * legitimate users while browser-direct calls sail through. The token is
- * hashed so raw JWTs never sit in the limiter's store, and it doesn't need to
- * be verified here — a forged token just earns its own bucket. Anonymous
- * requests still fall back to the caller IP.
+ * legitimate users while browser-direct calls sail through.
+ *
+ * The per-user bucket is granted only to tokens decodeToken has already
+ * verified (see verified-tokens.js): merely ATTACHING an Authorization header
+ * earns nothing, so an attacker spamming forged tokens stays pinned to their
+ * IP bucket. A legit token's first-ever request counts against the IP bucket
+ * too (it isn't verified yet) — one request per token per half hour, noise.
+ * Rotating IPs to evade the anonymous limit remains an infra-level concern
+ * (WAF/CDN), same as before this limiter existed.
  */
 export function apiLimiterKey(req) {
-  const auth = req.headers.authorization;
-  if (auth) {
-    return 'token:' + createHash('sha256').update(auth).digest('hex').slice(0, 32);
-  }
+  const userId = verifiedUserId(req.headers.authorization);
+  if (userId) return 'user:' + userId;
   return anonymousIpKey(req.ip);
 }
 
-// General API rate limit, per user token (per IP when unauthenticated)
+// General API rate limit, per verified user (per IP otherwise)
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  // Authenticated buckets are per user, so the ceiling only needs to absorb a
-  // single user's own burst (several tabs polling tracking status every 15s
-  // plus normal navigation). Anonymous traffic keeps the tighter IP limit.
-  max: (req) => (req.headers.authorization ? 1000 : 250),
+  // A verified user's bucket only needs to absorb their own burst (several
+  // tabs polling tracking status every 15s plus normal navigation).
+  // Unverified traffic keeps the tighter IP limit.
+  max: (req) => (verifiedUserId(req.headers.authorization) ? 1000 : 250),
   keyGenerator: apiLimiterKey,
   standardHeaders: true,
   legacyHeaders: false,
