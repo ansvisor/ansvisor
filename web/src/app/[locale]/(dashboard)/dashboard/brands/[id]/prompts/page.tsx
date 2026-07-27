@@ -236,7 +236,7 @@ export default function PromptsPage() {
       let targetSetId = promptSets[0]?.id;
 
       if (!targetSetId) {
-        const newSet = await savePromptSet({
+        const result = await savePromptSet({
           brandId,
           name: 'Prompts',
           prompts: activePrompts.map((p) => ({
@@ -246,7 +246,11 @@ export default function PromptsPage() {
             models: defaultModels,
           })),
         });
-        targetSetId = newSet.id;
+        if ('error' in result) {
+          toast.error(result.error);
+          return;
+        }
+        targetSetId = result.promptSet.id;
       } else {
         await Promise.all(
           activePrompts.map((p) =>
@@ -291,11 +295,15 @@ export default function PromptsPage() {
           ...promptData,
         });
       } else {
-        await savePromptSet({
+        const result = await savePromptSet({
           brandId,
           name: `Prompts`,
           prompts: [promptData],
         });
+        if ('error' in result) {
+          toast.error(result.error);
+          return;
+        }
       }
 
       setManualText('');

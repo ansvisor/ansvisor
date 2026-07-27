@@ -721,11 +721,15 @@ export default function OnboardingPage() {
         return;
       }
 
-      await savePromptSet({
+      const result = await savePromptSet({
         brandId: createdBrand.id,
         name: 'Onboarding Prompts',
         prompts: allPrompts,
       });
+      if ('error' in result) {
+        toast.error(result.error);
+        return;
+      }
       track('onboarding_prompts_saved', { count: allPrompts.length });
       track('onboarding_step_completed', {
         step: 4,

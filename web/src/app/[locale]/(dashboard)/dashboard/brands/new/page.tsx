@@ -562,11 +562,15 @@ export default function NewBrandPage() {
         return;
       }
 
-      await savePromptSet({
+      const result = await savePromptSet({
         brandId: createdBrand.id,
         name: 'Brand Setup Prompts',
         prompts: allPrompts,
       });
+      if ('error' in result) {
+        toast.error(result.error);
+        return;
+      }
 
       setStep(5);
       fetchCompetitorSuggestions();
