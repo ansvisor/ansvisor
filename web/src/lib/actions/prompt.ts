@@ -151,7 +151,31 @@ interface SavePromptSetInput {
   }[];
 }
 
-export type SavePromptSetResult = { promptSet: PromptSet } | { error: string };
+export type SavePromptSetResult = { promptSet: PromptSet } | { error: string; code?: 'plan_limit' };
+
+/**
+ * How many prompts a brand's save may total before hitting the org's plan cap.
+ * `used` counts prompts on the org's OTHER brands only — savePromptSet
+ * replaces this brand's own set, so its current prompts don't count against a
+ * re-save. Lets the setup wizards gate the review step inline (counter +
+ * disabled Continue) instead of failing the save after the fact.
+ */
+export async function getPromptCapacity(
+  brandId: string,
+): Promise<{ maxPrompts: number; used: number }> {
+  const supabase = await createClient();
+  const { organizationId: orgId } = await getBrandContext(supabase, brandId);
+  const plan = await getOrgPlan(orgId);
+  const totalOrgPrompts = await getOrgPromptCount(supabase, orgId);
+  const { count: brandPromptCount } = await supabase
+    .from('prompts')
+    .select('id, prompt_sets!inner(brand_id)', { count: 'exact', head: true })
+    .eq('prompt_sets.brand_id', brandId);
+  return {
+    maxPrompts: plan.limits.maxPrompts,
+    used: totalOrgPrompts - (brandPromptCount ?? 0),
+  };
+}
 
 /**
  * User-facing failures (plan limit, empty platform selection, DB errors) come
@@ -187,6 +211,7 @@ export async function savePromptSet(input: SavePromptSetInput): Promise<SaveProm
   const requestedTotal = otherPrompts + input.prompts.length;
   if (maxPrompts !== -1 && requestedTotal > maxPrompts) {
     return {
+      code: 'plan_limit',
       error: `Your ${plan.name} plan allows up to ${maxPrompts} tracked prompts and this would save ${requestedTotal}. Remove ${requestedTotal - maxPrompts} prompt${requestedTotal - maxPrompts === 1 ? '' : 's'} to continue, or upgrade your plan.`,
     };
   }
