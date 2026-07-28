@@ -27,6 +27,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Check, ChevronRight, Plus, Loader2, Search } from 'lucide-react';
+import { TablePager, usePagination } from '@/components/table-pager';
 
 type View = 'frequency' | 'by-prompt';
 
@@ -72,10 +73,10 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
   const [addingKey, setAddingKey] = useState<string | null>(null);
   // Intent is keyed by the lower-cased sub-query (matches the server cache key).
   const [intents, setIntents] = useState<Record<string, string>>({});
-  const [page, setPage] = useState(1);
   const [view, setView] = useState<View>('by-prompt');
   const [searchText, setSearchText] = useState('');
-  const PAGE_SIZE = 10;
+  const FANOUT_PAGE_SIZE = 10;
+  const pager = usePagination(data?.subQueries.length ?? 0, brandId, FANOUT_PAGE_SIZE);
 
   // Mirror of `intents` for the async classification chain (avoids stale
   // closures), plus a run counter so a reload/brand switch/unmount cancels
@@ -143,7 +144,6 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
   }, [load]);
 
   useEffect(() => {
-    setPage(1);
     setSearchText('');
   }, [brandId]);
 
@@ -261,9 +261,7 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
             subQueries={data.subQueries}
             intents={intents}
             addingKey={addingKey}
-            page={page}
-            pageSize={PAGE_SIZE}
-            onPageChange={setPage}
+            pager={pager}
             onTrack={handleTrack}
           />
         ) : (
@@ -295,39 +293,20 @@ function EmptyState() {
   );
 }
 
-function getPagerItems(page: number, totalPages: number): (number | '...')[] {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, i) => i + 1);
-  }
-  const items: (number | '...')[] = [1];
-  if (page > 3) items.push('...');
-  for (let p = Math.max(2, page - 1); p <= Math.min(totalPages - 1, page + 1); p++) {
-    items.push(p);
-  }
-  if (page < totalPages - 2) items.push('...');
-  items.push(totalPages);
-  return items;
-}
-
 function HighFrequencyView({
   subQueries,
   intents,
   addingKey,
-  page,
-  pageSize,
-  onPageChange,
+  pager,
   onTrack,
 }: {
   subQueries: FanoutSubQuery[];
   intents: Record<string, string>;
   addingKey: string | null;
-  page: number;
-  pageSize: number;
-  onPageChange: (p: number) => void;
+  pager: ReturnType<typeof usePagination>;
   onTrack: (query: string) => void;
 }) {
-  const totalPages = Math.ceil(subQueries.length / pageSize);
-  const pageRows = subQueries.slice((page - 1) * pageSize, page * pageSize);
+  const pageRows = subQueries.slice(pager.start, pager.end);
 
   return (
     <>
@@ -366,48 +345,14 @@ function HighFrequencyView({
           })}
         </TableBody>
       </Table>
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-1 pt-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0 text-xs"
-            onClick={() => onPageChange(page - 1)}
-            disabled={page === 1}
-          >
-            ‹
-          </Button>
-          {getPagerItems(page, totalPages).map((item, idx) =>
-            item === '...' ? (
-              <span
-                key={`ellipsis-${idx}`}
-                className="flex h-7 w-7 items-center justify-center text-xs text-muted-foreground"
-              >
-                …
-              </span>
-            ) : (
-              <Button
-                key={item}
-                variant={page === item ? 'default' : 'ghost'}
-                size="sm"
-                className="h-7 w-7 p-0 text-xs"
-                onClick={() => onPageChange(item as number)}
-              >
-                {item}
-              </Button>
-            ),
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0 text-xs"
-            onClick={() => onPageChange(page + 1)}
-            disabled={page === totalPages}
-          >
-            ›
-          </Button>
-        </div>
-      )}
+      <TablePager
+        page={pager.page}
+        totalPages={pager.totalPages}
+        total={subQueries.length}
+        start={pager.start}
+        end={pager.end}
+        onPage={pager.setPage}
+      />
     </>
   );
 }

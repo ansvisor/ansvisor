@@ -43,6 +43,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CompetitionBars } from '@/components/ui/competition-bars';
+import { TablePager, usePagination } from '@/components/table-pager';
 import { WorkStatusBadge } from '@/components/prompts/work-status';
 import { setPromptWorkStatus, type PromptWorkStatus } from '@/lib/actions/prompt-workflow';
 import {
@@ -1756,6 +1757,11 @@ function AllPromptsTab({
     return list.sort((a, b) => compareNullsLast(valueOf(a), valueOf(b), dir));
   }, [prompts, search, workFilter, statusOf, activeSort, dir, visibility, volumeByPromptId]);
 
+  // Pagination — resets to page 0 whenever the search, work filter, or sort changes.
+  const resetKey = JSON.stringify({ search, workFilter, activeSort, dir });
+  const pager = usePagination(filtered.length, resetKey);
+  const pageRows = filtered.slice(pager.start, pager.end);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-10">
@@ -1909,7 +1915,7 @@ function AllPromptsTab({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((p) => {
+            {pageRows.map((p) => {
               const vol = volumeByPromptId.get(p.id);
               const vis = visibility[p.id];
               return (
@@ -2043,6 +2049,14 @@ function AllPromptsTab({
             No prompts match your search.
           </div>
         )}
+        <TablePager
+          page={pager.page}
+          totalPages={pager.totalPages}
+          total={filtered.length}
+          start={pager.start}
+          end={pager.end}
+          onPage={pager.setPage}
+        />
       </CardContent>
     </Card>
   );
