@@ -27,6 +27,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Check, ChevronRight, Plus, Loader2, Search } from 'lucide-react';
+import { usePagination, TablePager } from '@/components/table-pager';
 
 type View = 'frequency' | 'by-prompt';
 
@@ -48,6 +49,8 @@ type QueryFanoutTabProps = {
  * queries ≈ 40s+, aborted, badges never arrived that session).
  */
 const INTENT_CHUNK_SIZE = 20;
+
+const FANOUT_PAGE_SIZE = 10;
 
 /**
  * Server-action failures reach the client with Next's production-masked
@@ -72,16 +75,22 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
   const [addingKey, setAddingKey] = useState<string | null>(null);
   // Intent is keyed by the lower-cased sub-query (matches the server cache key).
   const [intents, setIntents] = useState<Record<string, string>>({});
-  const [page, setPage] = useState(1);
   const [view, setView] = useState<View>('by-prompt');
   const [searchText, setSearchText] = useState('');
-  const PAGE_SIZE = 10;
 
   // Mirror of `intents` for the async classification chain (avoids stale
   // closures), plus a run counter so a reload/brand switch/unmount cancels
   // the previous chain instead of racing it.
   const intentsRef = useRef<Record<string, string>>({});
   const intentRunRef = useRef(0);
+
+  // Shared pager for the HighFrequencyView — reset whenever brandId or view changes.
+  const pager = usePagination(
+    data?.subQueries.length ?? 0,
+    // resetKey: changing brand or switching away from/back to frequency view resets to page 0
+    `${brandId}::${view}`,
+    FANOUT_PAGE_SIZE,
+  );
 
   /**
    * Classify intents progressively (#431): the visible page's queries first
@@ -94,10 +103,11 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
     const pending = queries.filter((q) => !(q.toLowerCase() in intentsRef.current));
     if (pending.length === 0) return;
 
-    const chunks: string[][] = [pending.slice(0, PAGE_SIZE)];
-    for (let i = PAGE_SIZE; i < pending.length; i += INTENT_CHUNK_SIZE) {
+    const chunks: string[][] = [pending.slice(0, FANOUT_PAGE_SIZE)];
+    for (let i = FANOUT_PAGE_SIZE; i < pending.length; i += INTENT_CHUNK_SIZE) {
       chunks.push(pending.slice(i, i + INTENT_CHUNK_SIZE));
     }
+
     for (const chunk of chunks) {
       if (intentRunRef.current !== run) return;
       try {
@@ -134,6 +144,7 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
     },
     [brandId, classifyProgressively],
   );
+
   useEffect(() => {
     load();
     // Cancel the in-flight classification chain on unmount/brand switch.
@@ -143,7 +154,6 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
   }, [load]);
 
   useEffect(() => {
-    setPage(1);
     setSearchText('');
   }, [brandId]);
 
@@ -261,9 +271,7 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
             subQueries={data.subQueries}
             intents={intents}
             addingKey={addingKey}
-            page={page}
-            pageSize={PAGE_SIZE}
-            onPageChange={setPage}
+            pager={pager}
             onTrack={handleTrack}
           />
         ) : (
@@ -295,39 +303,20 @@ function EmptyState() {
   );
 }
 
-function getPagerItems(page: number, totalPages: number): (number | '...')[] {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, i) => i + 1);
-  }
-  const items: (number | '...')[] = [1];
-  if (page > 3) items.push('...');
-  for (let p = Math.max(2, page - 1); p <= Math.min(totalPages - 1, page + 1); p++) {
-    items.push(p);
-  }
-  if (page < totalPages - 2) items.push('...');
-  items.push(totalPages);
-  return items;
-}
-
 function HighFrequencyView({
   subQueries,
   intents,
   addingKey,
-  page,
-  pageSize,
-  onPageChange,
+  pager,
   onTrack,
 }: {
   subQueries: FanoutSubQuery[];
   intents: Record<string, string>;
   addingKey: string | null;
-  page: number;
-  pageSize: number;
-  onPageChange: (p: number) => void;
+  pager: ReturnType<typeof usePagination>;
   onTrack: (query: string) => void;
 }) {
-  const totalPages = Math.ceil(subQueries.length / pageSize);
-  const pageRows = subQueries.slice((page - 1) * pageSize, page * pageSize);
+  const pageRows = subQueries.slice(pager.start, pager.end);
 
   return (
     <>
@@ -366,48 +355,14 @@ function HighFrequencyView({
           })}
         </TableBody>
       </Table>
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-1 pt-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0 text-xs"
-            onClick={() => onPageChange(page - 1)}
-            disabled={page === 1}
-          >
-            ‹
-          </Button>
-          {getPagerItems(page, totalPages).map((item, idx) =>
-            item === '...' ? (
-              <span
-                key={`ellipsis-${idx}`}
-                className="flex h-7 w-7 items-center justify-center text-xs text-muted-foreground"
-              >
-                …
-              </span>
-            ) : (
-              <Button
-                key={item}
-                variant={page === item ? 'default' : 'ghost'}
-                size="sm"
-                className="h-7 w-7 p-0 text-xs"
-                onClick={() => onPageChange(item as number)}
-              >
-                {item}
-              </Button>
-            ),
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0 text-xs"
-            onClick={() => onPageChange(page + 1)}
-            disabled={page === totalPages}
-          >
-            ›
-          </Button>
-        </div>
-      )}
+      <TablePager
+        page={pager.page}
+        totalPages={pager.totalPages}
+        total={subQueries.length}
+        start={pager.start}
+        end={pager.end}
+        onPage={pager.setPage}
+      />
     </>
   );
 }
@@ -449,7 +404,6 @@ function ByPromptView({
           className="pl-8 h-8 text-xs"
         />
       </div>
-
       {groups.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-12 text-center">
           <Search className="h-8 w-8 text-muted-foreground/50" />
@@ -573,6 +527,7 @@ function TrackCell({
       </Badge>
     );
   }
+
   return (
     <Button
       variant="ghost"
@@ -624,6 +579,7 @@ function IntentBadge({ intent }: { intent?: string }) {
   // Intents load on-demand (async, cached server-side); show a placeholder
   // until this row's classification resolves.
   if (!intent) return <span className="text-xs text-muted-foreground">—</span>;
+
   return (
     <Badge
       variant="outline"

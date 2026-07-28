@@ -86,6 +86,7 @@ import { toast } from 'sonner';
 import { toCsv } from '@/lib/csv';
 import { compareNullsLast, type SortDir } from './prompt-sort';
 import { formatCompactNumber } from '@/lib/format';
+import { usePagination, TablePager } from '@/components/table-pager';
 
 // ─── Info Tooltip ─────────────────────────────────────────────────────────────
 
@@ -1756,6 +1757,13 @@ function AllPromptsTab({
     return list.sort((a, b) => compareNullsLast(valueOf(a), valueOf(b), dir));
   }, [prompts, search, workFilter, statusOf, activeSort, dir, visibility, volumeByPromptId]);
 
+  // Pagination for the main prompt list.  resetKey encodes every variable that
+  // changes the visible row set (search text, sort column, sort direction, work
+  // status filter) so usePagination jumps back to page 0 automatically when
+  // any filter or sort changes — satisfying the issue's acceptance criteria.
+  const promptsResetKey = `${search}::${workFilter}::${activeSort ?? ''}::${dir}`;
+  const promptsPager = usePagination(filtered.length, promptsResetKey);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-10">
@@ -1909,7 +1917,7 @@ function AllPromptsTab({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((p) => {
+            {filtered.slice(promptsPager.start, promptsPager.end).map((p) => {
               const vol = volumeByPromptId.get(p.id);
               const vis = visibility[p.id];
               return (
@@ -2038,6 +2046,14 @@ function AllPromptsTab({
             })}
           </TableBody>
         </Table>
+        <TablePager
+          page={promptsPager.page}
+          totalPages={promptsPager.totalPages}
+          total={filtered.length}
+          start={promptsPager.start}
+          end={promptsPager.end}
+          onPage={promptsPager.setPage}
+        />
         {filtered.length === 0 && (
           <div className="py-10 text-center text-sm text-muted-foreground">
             No prompts match your search.
