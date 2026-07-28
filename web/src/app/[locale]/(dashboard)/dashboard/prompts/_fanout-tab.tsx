@@ -10,8 +10,8 @@ import {
   type QueryFanoutData,
   type FanoutSubQuery,
 } from '@/lib/actions/fanout';
-import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { INTENT_LABELS, INTENT_COLORS } from '@/config/intent-labels';
+import { PlatformsCell } from '@/components/citations/source-cells';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,10 +27,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Check, ChevronRight, Plus, Loader2, Search } from 'lucide-react';
-
-function platformLabel(slug: string): string {
-  return PLATFORM_LABELS[slug] ?? slug;
-}
 
 type View = 'frequency' | 'by-prompt';
 
@@ -353,7 +349,7 @@ function HighFrequencyView({
               <TableRow key={key}>
                 <TableCell className="font-medium">{sq.query}</TableCell>
                 <TableCell>
-                  <EngineBadges engines={sq.engines} />
+                  <PlatformsCell models={sq.engines} />
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{sq.timesSearched}</TableCell>
                 <TableCell>
@@ -518,7 +514,7 @@ function ByPromptView({
                                       {sq.query}
                                     </TableCell>
                                     <TableCell className="align-middle">
-                                      <EngineBadges engines={sq.engines} />
+                                      <PlatformsCell models={sq.engines} />
                                     </TableCell>
                                     <TableCell className="align-middle text-right tabular-nums">
                                       {sq.timesSearched}
@@ -548,18 +544,6 @@ function ByPromptView({
           </TableBody>
         </Table>
       )}
-    </div>
-  );
-}
-
-function EngineBadges({ engines }: { engines: string[] }) {
-  return (
-    <div className="flex flex-wrap gap-1">
-      {engines.map((e) => (
-        <Badge key={e} variant="secondary" className="text-[10px]">
-          {platformLabel(e)}
-        </Badge>
-      ))}
     </div>
   );
 }
