@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState, type ComponentType } from 'react';
 import { useParams } from 'next/navigation';
-import { useRouter } from '@/i18n/navigation';
+import { Link, useRouter } from '@/i18n/navigation';
+import { buildCitationDetailHref } from '@/components/citations/filter-bar';
 import {
   getPromptDetail,
   type PromptDetailData,
@@ -342,15 +343,25 @@ function TopSourceUrlsTable({
                 <div className="flex min-w-0 items-start gap-2">
                   <DomainFavicon domain={row.domain} />
                   <div className="flex min-w-0 max-w-[480px] flex-col">
-                    <a
-                      href={row.url}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="truncate text-sm font-medium text-foreground hover:underline"
-                      title={row.title || row.url}
-                    >
-                      {row.title || row.url}
-                    </a>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <Link
+                        href={buildCitationDetailHref(row.url, { datePreset: 'all' })}
+                        className="truncate text-sm font-medium text-foreground hover:underline"
+                        title={row.title || row.url}
+                      >
+                        {row.title || row.url}
+                      </Link>
+                      <a
+                        href={row.url}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="shrink-0 text-muted-foreground hover:text-foreground"
+                        aria-label="Open cited page in a new tab"
+                        title="Open cited page"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
                     <div className="flex items-center gap-1.5 pt-0.5">
                       <span className="truncate text-[11px] text-muted-foreground">
                         {row.domain}

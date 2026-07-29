@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
 const DynamicSourceTypeDonutChart = dynamic(
@@ -18,12 +18,22 @@ import {
   Layers,
   Loader2,
   Info,
-  Plus,
   Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { addCompetitor } from '@/lib/actions/competitor';
+import { Link } from '@/i18n/navigation';
+import { AddCompetitorButton } from '@/components/citations/add-competitor-button';
+import {
+  CitationsFilterBar,
+  DEFAULT_CITATIONS_FILTERS as DEFAULT_FILTERS,
+  buildPlatformOptions,
+  buildCitationDetailHref,
+  getDateRange,
+  type CitationsUIFilters as UIFilters,
+  type PlatformOption,
+  type PromptOption,
+} from '@/components/citations/filter-bar';
 import {
   getCitationsOverview,
   getCitationGaps,
@@ -38,21 +48,9 @@ import {
 } from '@/lib/actions/citations';
 import { getTopics } from '@/lib/actions/topic';
 import { getBrandPrompts } from '@/lib/actions/tracking';
-import {
-  Combobox,
-  ComboboxCollection,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxTrigger,
-  ComboboxValue,
-} from '@/components/ui/combobox';
 import { toCsv } from '@/lib/csv';
 import type { Topic } from '@/types';
 import { SOURCE_CATEGORY_LABELS, type SourceCategory } from '@/lib/citations/classify';
-import { MODEL_PROVIDER_LABELS, PLATFORM_LABELS } from '@/config/platform-labels';
 import {
   CategoryBadge,
   DomainFavicon,
@@ -61,18 +59,8 @@ import {
 } from '@/components/citations/source-cells';
 import { PAGE_SIZE, TablePager, usePagination } from '@/components/table-pager';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -91,11 +79,8 @@ import {
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { getAIProviderDisplayName, resolveAIProvider } from '@/components/ai-provider-avatar';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-
-const DATE_PRESETS: CitationsDatePreset[] = ['24h', '7d', '30d', '90d', 'all', 'custom'];
 
 const CATEGORY_COLORS: Record<SourceCategory, string> = {
   you: '#6366f1',
@@ -108,92 +93,7 @@ const CATEGORY_COLORS: Record<SourceCategory, string> = {
   other: '#94a3b8',
 };
 
-function getPlatformDisplayLabel(slug: string): string {
-  return (
-    MODEL_PROVIDER_LABELS[slug] ??
-    PLATFORM_LABELS[slug] ??
-    getAIProviderDisplayName(resolveAIProvider(slug))
-  );
-}
-
-function getGroupedPlatformLabel(value: string): string {
-  const firstSlug = value
-    .split(',')
-    .map((slug) => slug.trim())
-    .find(Boolean);
-  return firstSlug ? getPlatformDisplayLabel(firstSlug) : value;
-}
-
 // ─── Filter types ─────────────────────────────────────────────────────────────
-
-interface UIFilters {
-  datePreset: CitationsDatePreset;
-  dateFrom: string;
-  dateTo: string;
-  platform: string;
-  region: string;
-  topic: string;
-  prompt: string;
-  excludeOwnDomain: boolean;
-  competitorOnly: boolean;
-  ownOnly: boolean;
-}
-
-interface PromptOption {
-  id: string;
-  text: string;
-}
-
-// base-ui's Combobox auto-uses `label` for display and `value` for selection
-// when items are `{ value, label }` shaped — no extra helpers needed.
-interface PromptComboboxItem {
-  value: string;
-  label: string;
-  /** Untruncated prompt text, shown as a native tooltip on hover (#298). */
-  fullText: string;
-}
-
-interface PlatformOption {
-  value: string;
-  label: string;
-}
-
-const DEFAULT_FILTERS: UIFilters = {
-  datePreset: '24h',
-  dateFrom: '',
-  dateTo: '',
-  platform: '',
-  region: '',
-  topic: '',
-  prompt: '',
-  excludeOwnDomain: false,
-  competitorOnly: false,
-  ownOnly: false,
-};
-
-function buildPlatformOptions(rows: CitationsOverview['rows']): PlatformOption[] {
-  const slugToLabel = new Map<string, string>();
-  for (const row of rows) {
-    for (const slug of row.models) {
-      if (!slug || slugToLabel.has(slug)) continue;
-      slugToLabel.set(slug, getPlatformDisplayLabel(slug));
-    }
-  }
-
-  const familyToSlugs = new Map<string, string[]>();
-  for (const [slug, label] of slugToLabel) {
-    const slugs = familyToSlugs.get(label) ?? [];
-    slugs.push(slug);
-    familyToSlugs.set(label, slugs);
-  }
-
-  return Array.from(familyToSlugs.entries())
-    .map(([label, slugs]) => ({
-      label,
-      value: slugs.sort().join(','),
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label) || a.value.localeCompare(b.value));
-}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -274,243 +174,6 @@ function SourceTypeDonut({
 
 // ─── Filter bar ───────────────────────────────────────────────────────────────
 
-function FilterBar({
-  filters,
-  onChange,
-  topics,
-  prompts,
-  platforms,
-  regions,
-}: {
-  filters: UIFilters;
-  onChange: (patch: Partial<UIFilters>) => void;
-  topics: Topic[];
-  prompts: PromptOption[];
-  platforms: PlatformOption[];
-  regions: string[];
-}) {
-  // base-ui Combobox needs `{ value, label }` shaped items so it can use the
-  // built-in filter and display logic without custom item-to-string helpers.
-  // Truncate long prompt text so the dropdown stays a sensible width.
-  const promptComboboxItems = useMemo<PromptComboboxItem[]>(
-    () =>
-      prompts.map((p) => ({
-        value: p.id,
-        // Let the combobox's CSS `truncate` handle visual overflow; keep the
-        // full text for the hover tooltip instead of slicing it away (#298).
-        label: p.text,
-        fullText: p.text,
-      })),
-    [prompts],
-  );
-
-  return (
-    <div className="flex flex-wrap items-end gap-3">
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Date Range</label>
-        <div className="flex rounded-md border overflow-hidden">
-          {DATE_PRESETS.map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => onChange({ datePreset: p })}
-              className={cn(
-                'px-3 py-1.5 text-xs font-medium transition-colors',
-                filters.datePreset === p
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-card hover:bg-muted text-foreground',
-              )}
-            >
-              {p === 'custom' ? 'Custom' : p === 'all' ? 'All' : p}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {filters.datePreset === 'custom' && (
-        <>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">From</label>
-            <Input
-              type="date"
-              value={filters.dateFrom}
-              onChange={(e) => onChange({ dateFrom: e.target.value })}
-              className="h-8 w-36 text-xs"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">To</label>
-            <Input
-              type="date"
-              value={filters.dateTo}
-              onChange={(e) => onChange({ dateTo: e.target.value })}
-              className="h-8 w-36 text-xs"
-            />
-          </div>
-        </>
-      )}
-
-      {topics.length > 0 && (
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Topic</label>
-          <Select
-            value={filters.topic || null}
-            onValueChange={(v) => onChange({ topic: !v || v === '__all__' ? '' : v })}
-          >
-            <SelectTrigger className="h-8 w-40 text-xs">
-              <SelectValue placeholder="All Topics">
-                {(value) =>
-                  value && value !== '__all__'
-                    ? (topics.find((t) => t.id === value)?.name ?? 'All Topics')
-                    : 'All Topics'
-                }
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All Topics</SelectItem>
-              {topics.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-
-      {prompts.length > 0 && (
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Prompt</label>
-          <Combobox
-            items={promptComboboxItems}
-            value={
-              filters.prompt
-                ? (promptComboboxItems.find((item) => item.value === filters.prompt) ?? null)
-                : null
-            }
-            onValueChange={(item: PromptComboboxItem | null) =>
-              onChange({
-                prompt: !item || item.value === '__all__' ? '' : item.value,
-              })
-            }
-          >
-            <ComboboxTrigger className="h-8 w-56 text-xs">
-              <ComboboxValue placeholder="All Prompts" />
-            </ComboboxTrigger>
-            <ComboboxContent>
-              <ComboboxInput placeholder="Search prompts…" />
-              <ComboboxList>
-                <ComboboxEmpty>No prompts match.</ComboboxEmpty>
-                <ComboboxCollection>
-                  {(item: PromptComboboxItem) => (
-                    <ComboboxItem key={item.value} value={item} title={item.fullText}>
-                      {item.label}
-                    </ComboboxItem>
-                  )}
-                </ComboboxCollection>
-              </ComboboxList>
-            </ComboboxContent>
-          </Combobox>
-        </div>
-      )}
-
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Platform</label>
-        <Select
-          value={filters.platform || null}
-          onValueChange={(v) => onChange({ platform: !v || v === '__all__' ? '' : v })}
-        >
-          <SelectTrigger className="h-8 w-40 text-xs">
-            <SelectValue placeholder="All Platforms">
-              {(value) =>
-                value && value !== '__all__'
-                  ? (platforms.find((platform) => platform.value === value)?.label ??
-                    getGroupedPlatformLabel(value))
-                  : 'All Platforms'
-              }
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">All Platforms</SelectItem>
-            {platforms.map((platform) => (
-              <SelectItem key={platform.value} value={platform.value}>
-                {platform.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Region</label>
-        <Select
-          value={filters.region || null}
-          onValueChange={(v) => onChange({ region: !v || v === '__all__' ? '' : v })}
-        >
-          <SelectTrigger className="h-8 w-32 text-xs">
-            <SelectValue placeholder="All Regions" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">All Regions</SelectItem>
-            {regions.map((r) => (
-              <SelectItem key={r} value={r}>
-                {r}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="flex items-center gap-2 pb-0.5">
-        <Button
-          type="button"
-          variant={filters.excludeOwnDomain ? 'default' : 'outline'}
-          size="sm"
-          className="h-8 text-xs"
-          onClick={() =>
-            onChange({
-              excludeOwnDomain: !filters.excludeOwnDomain,
-              ownOnly: false,
-            })
-          }
-        >
-          Exclude own domain
-        </Button>
-        <Button
-          type="button"
-          variant={filters.competitorOnly ? 'default' : 'outline'}
-          size="sm"
-          className="h-8 text-xs"
-          onClick={() =>
-            onChange({
-              competitorOnly: !filters.competitorOnly,
-              excludeOwnDomain: !filters.competitorOnly ? true : filters.excludeOwnDomain,
-              ownOnly: false,
-            })
-          }
-        >
-          Competitors only
-        </Button>
-        <Button
-          type="button"
-          variant={filters.ownOnly ? 'default' : 'outline'}
-          size="sm"
-          className="h-8 text-xs"
-          onClick={() =>
-            onChange({
-              ownOnly: !filters.ownOnly,
-              excludeOwnDomain: false,
-              competitorOnly: false,
-            })
-          }
-        >
-          Own domain only
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
 function KpiCard({
@@ -541,104 +204,6 @@ function KpiCard({
 }
 
 // ─── Tables ───────────────────────────────────────────────────────────────────
-
-/** Turn a domain into a first-guess competitor name, e.g. caranddriver.com → "Caranddriver". */
-function deriveCompetitorName(domain: string): string {
-  const first = domain
-    .replace(/^www\./, '')
-    .split('.')[0]
-    ?.trim();
-  if (!first) return domain;
-  return first.charAt(0).toUpperCase() + first.slice(1);
-}
-
-/**
- * Inline "+" on a Domains-table row: opens a confirm dialog pre-filled with a
- * name derived from the domain, then adds it as a tracked competitor (#301).
- */
-function AddCompetitorButton({
-  brandId,
-  domain,
-  onAdded,
-}: {
-  brandId: string;
-  domain: string;
-  onAdded: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [saving, setSaving] = useState(false);
-  const nameId = useId();
-
-  function openDialog() {
-    setName(deriveCompetitorName(domain));
-    setOpen(true);
-  }
-
-  async function handleAdd() {
-    const trimmed = name.trim();
-    if (!trimmed || saving) return;
-    setSaving(true);
-    try {
-      await addCompetitor(brandId, { name: trimmed, domain });
-      toast.success(`${domain} added as competitor`);
-      setOpen(false);
-      onAdded();
-    } catch {
-      toast.error('Could not add this domain as a competitor. Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!saving) setOpen(next);
-      }}
-    >
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7"
-        onClick={openDialog}
-        aria-label={`Add ${domain} as competitor`}
-        title="Add as competitor"
-      >
-        <Plus className="h-3.5 w-3.5" />
-      </Button>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add {domain} as competitor?</DialogTitle>
-          <DialogDescription>
-            Track this domain as a competitor. You can edit the name below.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-2">
-          <Label htmlFor={nameId}>Name</Label>
-          <Input
-            id={nameId}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-            placeholder="Competitor name"
-            autoFocus
-          />
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>
-            Cancel
-          </Button>
-          <Button onClick={handleAdd} disabled={!name.trim() || saving} className="gap-2">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            Add
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 const DomainsTable = memo(function DomainsTable({
   rows,
@@ -800,15 +365,25 @@ const UrlsTable = memo(function UrlsTable({
                 <div className="flex items-start gap-2 min-w-0">
                   <DomainFavicon domain={row.domain} />
                   <div className="flex min-w-0 max-w-[480px] flex-col">
-                    <a
-                      href={row.url}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="truncate text-sm font-medium text-foreground hover:underline"
-                      title={row.title || row.url}
-                    >
-                      {row.title || row.url}
-                    </a>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Link
+                        href={buildCitationDetailHref(row.url, filters)}
+                        className="truncate text-sm font-medium text-foreground hover:underline"
+                        title={row.title || row.url}
+                      >
+                        {row.title || row.url}
+                      </Link>
+                      <a
+                        href={row.url}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="shrink-0 text-muted-foreground hover:text-foreground"
+                        aria-label="Open cited page in a new tab"
+                        title="Open cited page"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
                     <div className="flex items-center gap-1.5 pt-0.5">
                       <span className="truncate text-[11px] text-muted-foreground">
                         {row.domain}
@@ -1177,28 +752,6 @@ function CompetitorGapsTab({ loading, gaps }: { loading: boolean; gaps: Citation
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-function getDateRange(
-  preset: CitationsDatePreset,
-  custom: { from: string; to: string },
-): { dateFrom?: string; dateTo?: string } {
-  if (preset === 'all') return {};
-  if (preset === 'custom') {
-    return {
-      dateFrom: custom.from || undefined,
-      dateTo: custom.to ? `${custom.to}T23:59:59.999Z` : undefined,
-    };
-  }
-  if (preset === '24h') {
-    const from = new Date();
-    from.setHours(from.getHours() - 24);
-    return { dateFrom: from.toISOString() };
-  }
-  const days = preset === '7d' ? 7 : preset === '30d' ? 30 : 90;
-  const from = new Date();
-  from.setDate(from.getDate() - days);
-  return { dateFrom: from.toISOString() };
-}
-
 function triggerDownload(csv: string, filename: string) {
   const blob = new Blob([csv], {
     type: 'text/csv;charset=utf-8;',
@@ -1475,7 +1028,7 @@ export default function CitationsPage() {
         </Button>
       </div>
 
-      <FilterBar
+      <CitationsFilterBar
         filters={filters}
         onChange={(patch) => setFilters((f) => ({ ...f, ...patch }))}
         topics={topics}

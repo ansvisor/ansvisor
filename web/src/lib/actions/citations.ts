@@ -78,6 +78,40 @@ export interface CitationsOverview {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/**
+ * Canonical URL key for citation aggregation: strip query/fragment and one
+ * trailing slash. The overview tables, the prompt detail Top Sources card and
+ * the per-URL detail page (#535) must all bucket with this exact rule so
+ * their counts agree for the same URL.
+ */
+function normalizeCitationUrl(raw: string): string {
+  try {
+    const parsed = new URL(raw);
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.toString().replace(/\/$/, '');
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * Looser cross-source match key (host without `www.` + path without trailing
+ * slashes) — mirrors `urlMatchKey` in prompt-workflow.ts / the server's
+ * `normalizeUrlForMatch`, so the owned-URL bridges match targeted URLs and
+ * traffic-log URLs the same way the cited-stats pipeline does.
+ */
+function citationUrlMatchKey(raw: string): string | null {
+  try {
+    const parsed = new URL(raw.trim());
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    const path = parsed.pathname.replace(/\/+$/, '');
+    return `${host}${path}`;
+  } catch {
+    return null;
+  }
+}
+
 function resolveDateRange(filters: CitationsFilters): { from?: string; to?: string } {
   if (filters.datePreset === 'custom') {
     return { from: filters.dateFrom, to: filters.dateTo };
@@ -323,15 +357,7 @@ export async function getCitationsOverview(
       domainMap.set(host, existingDomain);
 
       // URL aggregation (strip query/fragment and trailing slash for dedupe).
-      let normalizedUrl = cite.url;
-      try {
-        const parsed = new URL(cite.url);
-        parsed.search = '';
-        parsed.hash = '';
-        normalizedUrl = parsed.toString().replace(/\/$/, '');
-      } catch {
-        // leave as-is
-      }
+      const normalizedUrl = normalizeCitationUrl(cite.url);
       const existingUrl = urlMap.get(normalizedUrl) ?? {
         url: normalizedUrl,
         domain: host,
@@ -688,4 +714,311 @@ export async function getCitationsTotal(brandId: string): Promise<number> {
     .neq('citations', '[]');
   if (error) throw new Error(error.message);
   return count ?? 0;
+}
+
+// ─── Per-URL detail (#535) ────────────────────────────────────────────────────
+
+/** One answer citing the URL, for the detail page's "Cited in" list. */
+export interface CitationUrlOccurrence {
+  resultId: string;
+  promptId: string;
+  promptText: string;
+  platform: string | null;
+  modelUsed: string | null;
+  region: string | null;
+  createdAt: string;
+  sentiment: string | null;
+  /** Whether the brand was mentioned in the same answer. */
+  brandMentioned: boolean;
+  /** How many times this URL was cited within this one answer. */
+  citationsInAnswer: number;
+  /** 1-based order of the URL's first citation in the answer (by start index). */
+  rank: number;
+  /** Total citations in the answer (the rank's denominator). */
+  totalSources: number;
+}
+
+/** Prompts that trigger this citation, grouped with counts. */
+export interface CitationUrlPromptGroup {
+  promptId: string;
+  promptText: string;
+  answers: number;
+  citations: number;
+  lastSeen: string;
+}
+
+export interface CitationUrlTargetingPrompt {
+  promptId: string;
+  promptText: string;
+  label: string | null;
+  citedCount: number;
+}
+
+export interface CitationUrlDetail {
+  /** The normalized URL the page is keyed by. */
+  url: string;
+  domain: string;
+  category: SourceCategory;
+  title: string;
+  articleType: string | null;
+  totals: {
+    citations: number;
+    answers: number;
+    prompts: number;
+    models: string[];
+    firstSeen: string | null;
+    lastSeen: string | null;
+  };
+  /** Newest first. */
+  occurrences: CitationUrlOccurrence[];
+  promptGroups: CitationUrlPromptGroup[];
+  /** Present only when the URL is on one of the brand's own domains. */
+  owned: {
+    targetingPrompts: CitationUrlTargetingPrompt[];
+    traffic: { totalVisits: number; byPlatform: { platform: string; visits: number }[] };
+  } | null;
+}
+
+/** Escape `\`, `%` and `_` for a PostgREST ilike pattern (mirrors traffic.ts). */
+function escapeIlike(value: string): string {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+const URL_DETAIL_TRAFFIC_MAX_ROWS = 5000;
+
+/**
+ * Everything the per-URL citation detail page needs (#535): a URL-filtered
+ * scan of prompt_results plus, for brand-owned URLs, the targeting and
+ * traffic bridges. Uses the same scan, filters and URL bucketing as
+ * getCitationsOverview so the counts here agree with the overview tables for
+ * the same URL, window and filters.
+ */
+export async function getCitationUrlDetail(
+  brandId: string,
+  rawUrl: string,
+  filters: CitationsFilters,
+): Promise<CitationUrlDetail> {
+  const supabase = await createClient();
+  const targetUrl = normalizeCitationUrl(rawUrl);
+  const targetHost = extractHostname(targetUrl) ?? '';
+  const targetMatchKey = citationUrlMatchKey(targetUrl);
+
+  // Brand + competitor domains → category (same context as the overview).
+  const [{ data: brandDomainRows }, { data: competitorRows }] = await Promise.all([
+    supabase.from('brand_domains').select('domain').eq('brand_id', brandId),
+    supabase.from('competitors').select('domain').eq('brand_id', brandId),
+  ]);
+  const brandDomains = (brandDomainRows ?? [])
+    .map((r) => normalizeDomain((r as { domain: string }).domain))
+    .filter(Boolean);
+  const competitorDomains = (competitorRows ?? [])
+    .map((r) => normalizeDomain((r as { domain: string }).domain))
+    .filter(Boolean);
+  const category = targetHost
+    ? classifyDomain(targetHost, { brandDomains, competitorDomains })
+    : 'other';
+
+  interface DetailResultRow {
+    id: string;
+    prompt_id: string;
+    platform: string | null;
+    model_used: string | null;
+    region: string | null;
+    created_at: string;
+    sentiment: string | null;
+    mention_count: number | null;
+    citations: Citation[] | null;
+  }
+
+  interface RawOccurrence extends Omit<CitationUrlOccurrence, 'promptText'> {
+    promptText: string | null;
+  }
+
+  const occurrences: RawOccurrence[] = [];
+  const models = new Set<string>();
+  let title = '';
+  let totalCitations = 0;
+  let firstSeen: string | null = null;
+  let lastSeen: string | null = null;
+
+  await scanFilteredResults<DetailResultRow>(
+    supabase,
+    brandId,
+    filters,
+    'id, prompt_id, platform, model_used, region, created_at, sentiment, mention_count, citations',
+    (batch) => {
+      for (const result of batch) {
+        const citations = Array.isArray(result.citations) ? result.citations : [];
+        if (citations.length === 0) continue;
+
+        // Rank citations by their position in the answer; find ours.
+        const ordered = [...citations].sort((a, b) => (a.startIndex ?? 0) - (b.startIndex ?? 0));
+        let rank = 0;
+        let citationsInAnswer = 0;
+        for (let i = 0; i < ordered.length; i++) {
+          if (normalizeCitationUrl(ordered[i].url) !== targetUrl) continue;
+          citationsInAnswer += 1;
+          if (rank === 0) rank = i + 1;
+          if (!title && ordered[i].title) title = ordered[i].title;
+        }
+        if (citationsInAnswer === 0) continue;
+
+        totalCitations += citationsInAnswer;
+        const modelKey = result.model_used || result.platform || '';
+        if (modelKey) models.add(modelKey);
+        if (!firstSeen || result.created_at < firstSeen) firstSeen = result.created_at;
+        if (!lastSeen || result.created_at > lastSeen) lastSeen = result.created_at;
+
+        occurrences.push({
+          resultId: result.id,
+          promptId: result.prompt_id,
+          promptText: null,
+          platform: result.platform,
+          modelUsed: result.model_used,
+          region: result.region,
+          createdAt: result.created_at,
+          sentiment: result.sentiment,
+          brandMentioned: (result.mention_count ?? 0) > 0,
+          citationsInAnswer,
+          rank,
+          totalSources: citations.length,
+        });
+      }
+    },
+  );
+
+  occurrences.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+
+  // Resolve prompt texts for everything the scan touched.
+  const promptIds = Array.from(new Set(occurrences.map((o) => o.promptId)));
+  const promptTextById = new Map<string, string>();
+  if (promptIds.length > 0) {
+    const { data: promptRows, error: promptErr } = await supabase
+      .from('prompts')
+      .select('id, text')
+      .in('id', promptIds);
+    if (promptErr) throw new Error(promptErr.message);
+    for (const p of (promptRows ?? []) as { id: string; text: string }[]) {
+      promptTextById.set(p.id, p.text);
+    }
+  }
+  const withText: CitationUrlOccurrence[] = occurrences.map((o) => ({
+    ...o,
+    promptText: o.promptText ?? promptTextById.get(o.promptId) ?? '(deleted prompt)',
+  }));
+
+  // Prompts breakdown — the queries this page is winning.
+  const groupMap = new Map<string, CitationUrlPromptGroup>();
+  for (const o of withText) {
+    const existing = groupMap.get(o.promptId) ?? {
+      promptId: o.promptId,
+      promptText: o.promptText,
+      answers: 0,
+      citations: 0,
+      lastSeen: o.createdAt,
+    };
+    existing.answers += 1;
+    existing.citations += o.citationsInAnswer;
+    if (o.createdAt > existing.lastSeen) existing.lastSeen = o.createdAt;
+    groupMap.set(o.promptId, existing);
+  }
+  const promptGroups = Array.from(groupMap.values()).sort(
+    (a, b) => b.citations - a.citations || b.answers - a.answers,
+  );
+
+  // Owned-URL bridges: targeting + AI-referred traffic, brand-domain URLs only.
+  let owned: CitationUrlDetail['owned'] = null;
+  if (category === 'you' && targetMatchKey) {
+    const { from, to } = resolveDateRange(filters);
+    const expandedTo = expandDateToEndOfDay(to);
+
+    // (a) Prompts targeting this URL, via the workflow's prompt_target_urls.
+    // Scoped to the brand through the prompts → prompt_sets join; matched with
+    // the same loose key the cited-stats pipeline uses.
+    const targetingPromise = supabase
+      .from('prompt_target_urls')
+      .select(
+        'prompt_id, url, label, cited_count, prompts!inner(text, prompt_sets!inner(brand_id))',
+      )
+      .eq('prompts.prompt_sets.brand_id', brandId);
+
+    // (b) AI-referred visits to this page. The ilike narrows server-side; the
+    // exact match happens on the loose key below.
+    const pathForSearch = (() => {
+      try {
+        return new URL(targetUrl).pathname.replace(/\/+$/, '');
+      } catch {
+        return '';
+      }
+    })();
+    let trafficQuery = supabase
+      .from('ai_traffic_logs')
+      .select('url, source_platform, created_at')
+      .eq('brand_id', brandId)
+      .order('created_at', { ascending: false })
+      .range(0, URL_DETAIL_TRAFFIC_MAX_ROWS - 1);
+    if (pathForSearch) trafficQuery = trafficQuery.ilike('url', `%${escapeIlike(pathForSearch)}%`);
+    if (from) trafficQuery = trafficQuery.gte('created_at', from);
+    if (expandedTo) trafficQuery = trafficQuery.lte('created_at', expandedTo);
+
+    const [targetingRes, trafficRes] = await Promise.all([targetingPromise, trafficQuery]);
+    if (targetingRes.error) throw new Error(targetingRes.error.message);
+    if (trafficRes.error) throw new Error(trafficRes.error.message);
+
+    interface TargetRow {
+      prompt_id: string;
+      url: string;
+      label: string | null;
+      cited_count: number;
+      prompts: { text: string } | { text: string }[];
+    }
+    const targetingPrompts: CitationUrlTargetingPrompt[] = [];
+    for (const row of (targetingRes.data ?? []) as unknown as TargetRow[]) {
+      if (citationUrlMatchKey(row.url) !== targetMatchKey) continue;
+      const prompt = Array.isArray(row.prompts) ? row.prompts[0] : row.prompts;
+      targetingPrompts.push({
+        promptId: row.prompt_id,
+        promptText: prompt?.text ?? '(deleted prompt)',
+        label: row.label,
+        citedCount: row.cited_count,
+      });
+    }
+    targetingPrompts.sort((a, b) => b.citedCount - a.citedCount);
+
+    const visitsByPlatform = new Map<string, number>();
+    let totalVisits = 0;
+    for (const row of (trafficRes.data ?? []) as {
+      url: string;
+      source_platform: string | null;
+    }[]) {
+      if (citationUrlMatchKey(row.url) !== targetMatchKey) continue;
+      totalVisits += 1;
+      const platform = row.source_platform || 'unknown';
+      visitsByPlatform.set(platform, (visitsByPlatform.get(platform) ?? 0) + 1);
+    }
+    const byPlatform = Array.from(visitsByPlatform.entries())
+      .map(([platform, visits]) => ({ platform, visits }))
+      .sort((a, b) => b.visits - a.visits);
+
+    owned = { targetingPrompts, traffic: { totalVisits, byPlatform } };
+  }
+
+  return {
+    url: targetUrl,
+    domain: targetHost,
+    category,
+    title,
+    articleType: classifyArticleType(targetUrl, title) ?? null,
+    totals: {
+      citations: totalCitations,
+      answers: withText.length,
+      prompts: promptIds.length,
+      models: Array.from(models).sort(),
+      firstSeen,
+      lastSeen,
+    },
+    occurrences: withText,
+    promptGroups,
+    owned,
+  };
 }
