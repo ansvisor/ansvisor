@@ -72,15 +72,17 @@ function KpiCard({
   value,
   change,
   suffix,
+  hint,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string | number;
   change?: number | null;
   suffix?: string;
+  hint?: string;
 }) {
   return (
-    <Card>
+    <Card title={hint}>
       <CardContent className="pt-6 pb-5">
         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
           <Icon className="h-3.5 w-3.5" />
@@ -213,6 +215,12 @@ export default function TopicDetailPage({ params }: { params: Promise<{ id: stri
   const topPrompts = [...promptList].sort((a, b) => b.avg - a.avg).slice(0, 5);
   const weakPrompts = [...promptList].sort((a, b) => a.avg - b.avg).slice(0, 5);
 
+  // Headline metric (#493): the topic-scoped prompt-level visibility rate.
+  // getCompetitorComparison already computes it under the topic filter with
+  // the same-denominator rule, so the own-brand entry carries rate, X/Y
+  // counts and the rate's point change.
+  const ownBrand = competitors?.brands.find((b) => b.isOwnBrand) ?? null;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -248,10 +256,15 @@ export default function TopicDetailPage({ params }: { params: Promise<{ id: stri
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <KpiCard
             icon={Eye}
-            label="Avg visibility"
-            value={summary.avgVisibilityScore}
-            change={summary.visibilityChange}
+            label="Visibility rate"
+            value={ownBrand?.visibilityRate ?? 0}
+            change={ownBrand?.change ?? null}
             suffix="%"
+            hint={
+              ownBrand
+                ? `Appeared in ${ownBrand.visiblePrompts} of ${ownBrand.promptCount} prompts · avg score ${summary.avgVisibilityScore}%`
+                : undefined
+            }
           />
           <KpiCard
             icon={Zap}
@@ -332,6 +345,7 @@ export default function TopicDetailPage({ params }: { params: Promise<{ id: stri
                       'flex items-center gap-3 py-2',
                       c.isOwnBrand && 'bg-primary/5 -mx-3 px-3 rounded',
                     )}
+                    title={`Appeared in ${c.visiblePrompts} of ${c.promptCount} prompts · avg score ${c.avgVisibilityScore}%`}
                   >
                     <span className="w-5 text-xs text-muted-foreground tabular-nums text-right">
                       {i + 1}
@@ -343,7 +357,7 @@ export default function TopicDetailPage({ params }: { params: Promise<{ id: stri
                       )}
                     </span>
                     <span className="text-sm tabular-nums w-10 text-right">
-                      {c.avgVisibilityScore}%
+                      {c.visibilityRate}%
                     </span>
                     {c.change !== null && (
                       <span

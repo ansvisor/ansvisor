@@ -289,7 +289,14 @@ function CompetitorCard({
   deleting,
 }: {
   competitor: Competitor;
-  stats: { avg: number; mentions: number; citations: number } | null;
+  stats: {
+    rate: number;
+    visiblePrompts: number;
+    promptCount: number;
+    avg: number;
+    mentions: number;
+    citations: number;
+  } | null;
   isSelected: boolean;
   onSelect: () => void;
   onDelete: () => void;
@@ -340,10 +347,13 @@ function CompetitorCard({
 
       <div className="flex items-center gap-3 shrink-0">
         {stats ? (
-          <div className="text-right">
-            <div className="text-sm font-semibold tabular-nums">{stats.avg}%</div>
-            <div className="text-[10px] text-muted-foreground">
-              {stats.mentions}m · {stats.citations}c
+          <div
+            className="text-right"
+            title={`Appeared in ${stats.visiblePrompts} of ${stats.promptCount} prompts · ${stats.mentions} mentions · ${stats.citations} citations · avg score ${stats.avg}%`}
+          >
+            <div className="text-sm font-semibold tabular-nums">{stats.rate}%</div>
+            <div className="text-[10px] text-muted-foreground tabular-nums">
+              {stats.visiblePrompts}/{stats.promptCount} prompts
             </div>
           </div>
         ) : (
@@ -1185,12 +1195,27 @@ export default function CompetitorsPage() {
 
   if (!brand) return <NoBrandSelected />;
 
-  // Build score map from comparison data
-  const scoreMap = new Map<string, { avg: number; mentions: number; citations: number }>();
+  // Build score map from comparison data. The headline number is the
+  // prompt-level visibility rate (#493) — the same metric as the Insights
+  // leaderboard — with the raw score average kept for the tooltip.
+  const scoreMap = new Map<
+    string,
+    {
+      rate: number;
+      visiblePrompts: number;
+      promptCount: number;
+      avg: number;
+      mentions: number;
+      citations: number;
+    }
+  >();
   if (comparisonData) {
     for (const entry of comparisonData.brands) {
       if (!entry.isOwnBrand) {
         scoreMap.set(entry.name, {
+          rate: entry.visibilityRate,
+          visiblePrompts: entry.visiblePrompts,
+          promptCount: entry.promptCount,
           avg: entry.avgVisibilityScore,
           mentions: entry.totalMentions,
           citations: entry.totalCitations,
