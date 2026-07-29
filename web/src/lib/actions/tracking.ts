@@ -24,6 +24,7 @@ import { getPromptVolumes } from '@/lib/actions/volumes';
 import { getPromptSuggestions } from '@/lib/actions/prompt-suggestions';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import { percentageChange } from '@/lib/metrics';
+import { PLATFORM_LABELS } from '@/config/platform-labels';
 
 /** Round to one decimal place (keeps sub-1 averages visible instead of flooring to 0). */
 function roundTo1(n: number): number {
@@ -2121,32 +2122,8 @@ export async function getHeadToHeadComparison(
 
 export type BreakdownMetric = 'mentions' | 'visibility';
 
-/**
- * Human-readable platform/scraper slugs used across the Insights UI.
- * Kept in sync with the mapping in insights/page.tsx so drill-down narratives
- * read like the rest of the dashboard ("Gemini" instead of "gemini-web").
- */
-const BREAKDOWN_PLATFORM_LABELS: Record<string, string> = {
-  chatgpt: 'ChatGPT',
-  'chatgpt-web': 'ChatGPT',
-  gemini: 'Gemini',
-  'gemini-web': 'Google Gemini',
-  perplexity: 'Perplexity',
-  'perplexity-web': 'Perplexity',
-  claude: 'Claude',
-  grok: 'Grok',
-  'grok-web': 'Grok',
-  copilot: 'Copilot',
-  'copilot-web': 'Microsoft Copilot',
-  'meta-ai': 'Meta AI',
-  'google-aio': 'Google AI Overview',
-  'google-ai-overviews': 'Google AI Overview',
-  'google-aimode': 'Google AI Mode',
-  'google-ai-mode': 'Google AI Mode',
-};
-
 function formatPlatformLabel(slug: string): string {
-  return BREAKDOWN_PLATFORM_LABELS[slug] ?? slug;
+  return PLATFORM_LABELS[slug] ?? slug;
 }
 
 export interface BreakdownRow {

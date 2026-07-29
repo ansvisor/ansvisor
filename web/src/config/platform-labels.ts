@@ -16,9 +16,9 @@ export const PLATFORM_LABELS: Record<string, string> = {
   perplexity: 'Perplexity',
   claude: 'Claude',
   grok: 'Grok',
-  copilot: 'Copilot',
+  copilot: 'Microsoft Copilot',
   'meta-ai': 'Meta AI',
-  'google-ai-overviews': 'Google AI',
+  'google-ai-overviews': 'Google AI Overview',
   'google-ai-mode': 'Google AI Mode',
 
   // Tracked scraper platform slugs, as stored in `prompt_results.platform`.
@@ -68,7 +68,7 @@ export const MODEL_PROVIDER_LABELS: Record<string, string> = {
   'google-aimode': 'Google AI Mode',
   'copilot-web': 'Microsoft Copilot',
   'grok-web': 'Grok',
-  'gemini-web': 'Gemini',
+  'gemini-web': 'Google Gemini',
 };
 
 /**
