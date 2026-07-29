@@ -11,6 +11,7 @@ import {
   SOURCE_CATEGORIES,
 } from '@/lib/citations/classify';
 import { classifyArticleType, type ArticleType } from '@/lib/citations/article-type';
+import { citationUrlMatchKey, normalizeCitationUrl } from '@/lib/citations/normalize';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,40 +78,6 @@ export interface CitationsOverview {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Canonical URL key for citation aggregation: strip query/fragment and one
- * trailing slash. The overview tables, the prompt detail Top Sources card and
- * the per-URL detail page (#535) must all bucket with this exact rule so
- * their counts agree for the same URL.
- */
-function normalizeCitationUrl(raw: string): string {
-  try {
-    const parsed = new URL(raw);
-    parsed.search = '';
-    parsed.hash = '';
-    return parsed.toString().replace(/\/$/, '');
-  } catch {
-    return raw;
-  }
-}
-
-/**
- * Looser cross-source match key (host without `www.` + path without trailing
- * slashes) — mirrors `urlMatchKey` in prompt-workflow.ts / the server's
- * `normalizeUrlForMatch`, so the owned-URL bridges match targeted URLs and
- * traffic-log URLs the same way the cited-stats pipeline does.
- */
-function citationUrlMatchKey(raw: string): string | null {
-  try {
-    const parsed = new URL(raw.trim());
-    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
-    const path = parsed.pathname.replace(/\/+$/, '');
-    return `${host}${path}`;
-  } catch {
-    return null;
-  }
-}
 
 function resolveDateRange(filters: CitationsFilters): { from?: string; to?: string } {
   if (filters.datePreset === 'custom') {
@@ -356,7 +323,7 @@ export async function getCitationsOverview(
       }
       domainMap.set(host, existingDomain);
 
-      // URL aggregation (strip query/fragment and trailing slash for dedupe).
+      // URL aggregation (preserve query parameters that identify the page).
       const normalizedUrl = normalizeCitationUrl(cite.url);
       const existingUrl = urlMap.get(normalizedUrl) ?? {
         url: normalizedUrl,

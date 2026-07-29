@@ -18,6 +18,7 @@ import {
   normalizeDomain,
   type SourceCategory,
 } from '@/lib/citations/classify';
+import { normalizeCitationUrl } from '@/lib/citations/normalize';
 import { getTopicById } from '@/lib/actions/topic';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
 import { getPromptVolumes } from '@/lib/actions/volumes';
@@ -940,17 +941,8 @@ export async function getPromptDetail(
       if (modelKey) agg.models.add(modelKey);
       sourceMap.set(host, agg);
 
-      // URL aggregation (strip query/fragment and trailing slash for dedupe,
-      // same as getCitationsOverview).
-      let normalizedUrl = cite.url;
-      try {
-        const parsed = new URL(cite.url);
-        parsed.search = '';
-        parsed.hash = '';
-        normalizedUrl = parsed.toString().replace(/\/$/, '');
-      } catch {
-        // leave as-is
-      }
+      // URL aggregation uses the same host-aware rule as getCitationsOverview.
+      const normalizedUrl = normalizeCitationUrl(cite.url);
       const urlAgg = urlMap.get(normalizedUrl) ?? {
         url: normalizedUrl,
         domain: host,
