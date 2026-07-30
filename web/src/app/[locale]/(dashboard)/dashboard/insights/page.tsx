@@ -60,6 +60,7 @@ import type { Topic } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   BarChart3,
@@ -80,6 +81,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   Download,
+  FileText,
   Layers,
   Lightbulb,
   Sparkles,
@@ -1317,6 +1319,11 @@ export default function InsightsPage() {
             )}
             {isExporting ? 'Exporting...' : 'Export CSV'}
           </Button>
+
+          <Link href="/dashboard/reports" className={cn(buttonVariants(), 'gap-2')}>
+            <FileText className="h-4 w-4" />
+            Reports
+          </Link>
 
           {/* Self-host only */}
           {!isCloud && (
