@@ -143,13 +143,14 @@ function ColHead({
 
 // ─── Sortable column header (All Prompts) ─────────────────────────────────────
 
-type AllPromptsSortKey = 'visibility' | 'mentions' | 'citations' | 'volume' | 'lastRun';
+type AllPromptsSortKey = 'visibility' | 'mentions' | 'citations' | 'volume' | 'runs' | 'lastRun';
 
 const ALL_PROMPTS_SORT_KEYS: AllPromptsSortKey[] = [
   'visibility',
   'mentions',
   'citations',
   'volume',
+  'runs',
   'lastRun',
 ];
 
@@ -1752,6 +1753,8 @@ function AllPromptsTab({
           return vis ? vis.totalCitations : null;
         case 'volume':
           return vol ? vol.estAiVolume : null;
+        case 'runs':
+          return vis ? vis.runs : null;
         case 'lastRun':
           return vis?.lastRunAt ? new Date(vis.lastRunAt).getTime() : null;
       }
@@ -1901,6 +1904,16 @@ function AllPromptsTab({
               </ColHead>
               <SortableHead
                 className="text-right"
+                tooltip="Number of tracking runs for this prompt over the last 30 days (one per platform per day)."
+                sortKey="runs"
+                activeSort={activeSort}
+                dir={dir}
+                onSort={handleSort}
+              >
+                Runs
+              </SortableHead>
+              <SortableHead
+                className="text-right"
                 tooltip="Most recent tracking run for this prompt."
                 sortKey="lastRun"
                 activeSort={activeSort}
@@ -2027,6 +2040,13 @@ function AllPromptsTab({
                         label={vol?.competition ?? null}
                       />
                     </div>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-sm">
+                    {vis ? (
+                      vis.runs.toLocaleString()
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right text-xs text-muted-foreground">
                     {formatRelative(vis?.lastRunAt)}
