@@ -10,7 +10,7 @@ Webhooks are configured per-brand via the `webhook_configs` table. The dashboard
 Required fields:
 - `webhook_url` — your endpoint
 - `webhook_secret` — used to HMAC-sign payloads (recommended)
-- `events` — array of subscribed events (currently: `content_brief.sent`, `opportunity.created`, `opportunity.status_changed`)
+- `events` — array of subscribed events (currently: `content_brief.sent`, `opportunity.created`, `opportunity.status_changed`, `daily_pulse.created`)
 - `is_active` — toggle without deleting
 
 ## Payload format
@@ -82,6 +82,35 @@ Fired when the content optimization worker generates a new opportunity.
 ### `opportunity.status_changed`
 
 Fired when an opportunity moves between statuses (`new` → `sent` → `in_progress` → `done` / `dismissed`).
+
+### `daily_pulse.created`
+
+Fired after a brand's daily tracking run when a Daily Pulse digest is generated. Sent as a flat payload (works on cloud and self-host):
+
+```json
+{
+  "event": "daily_pulse.created",
+  "brand": { "id": "uuid", "name": "Acme Corp" },
+  "pulse": {
+    "date": "2026-07-30",
+    "frequency": "daily",
+    "kpis": {
+      "visibilityRate": 42.5,
+      "visiblePrompts": 17,
+      "promptCount": 40,
+      "weekRate": 44.1,
+      "weekTrend": -1.2,
+      "mentions": 31,
+      "citations": 12,
+      "sentimentPct": 68
+    },
+    "highlights": [{ "type": "first_citation", "url": "https://..." }],
+    "warnings": [{ "type": "competitor_surge", "competitorName": "..." }],
+    "degraded_platforms": [],
+    "insights_url": "https://app.../dashboard/insights"
+  }
+}
+```
 
 ## Retries
 

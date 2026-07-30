@@ -1026,6 +1026,85 @@ export type Database = {
           },
         ];
       };
+      pulse_settings: {
+        Row: {
+          brand_id: string;
+          created_at: string;
+          frequency: string;
+          recipients: string[] | null;
+          updated_at: string;
+        };
+        Insert: {
+          brand_id: string;
+          created_at?: string;
+          frequency?: string;
+          recipients?: string[] | null;
+          updated_at?: string;
+        };
+        Update: {
+          brand_id?: string;
+          created_at?: string;
+          frequency?: string;
+          recipients?: string[] | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'pulse_settings_brand_id_fkey';
+            columns: ['brand_id'];
+            isOneToOne: true;
+            referencedRelation: 'brands';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      sent_pulses: {
+        Row: {
+          brand_id: string;
+          created_at: string;
+          email_recipient_count: number;
+          email_sent: boolean;
+          frequency: string;
+          id: string;
+          payload: Json;
+          pulse_date: string;
+          warning_keys: string[];
+          webhook_sent: boolean;
+        };
+        Insert: {
+          brand_id: string;
+          created_at?: string;
+          email_recipient_count?: number;
+          email_sent?: boolean;
+          frequency: string;
+          id?: string;
+          payload?: Json;
+          pulse_date: string;
+          warning_keys?: string[];
+          webhook_sent?: boolean;
+        };
+        Update: {
+          brand_id?: string;
+          created_at?: string;
+          email_recipient_count?: number;
+          email_sent?: boolean;
+          frequency?: string;
+          id?: string;
+          payload?: Json;
+          pulse_date?: string;
+          warning_keys?: string[];
+          webhook_sent?: boolean;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'sent_pulses_brand_id_fkey';
+            columns: ['brand_id'];
+            isOneToOne: false;
+            referencedRelation: 'brands';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       reports: {
         Row: {
           brand_id: string;

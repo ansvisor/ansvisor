@@ -17,8 +17,17 @@ import { BillingSection } from '@/components/settings/billing-section';
 import { TeamSection } from '@/components/settings/team-section';
 import { ApiKeysSection } from '@/components/settings/api-keys-section';
 import { AgentSection } from '@/components/settings/agent-section';
+import { NotificationsSection } from '@/components/settings/notifications-section';
 
-type Section = 'account' | 'theme' | 'project' | 'team' | 'api-keys' | 'agent' | 'billing';
+type Section =
+  | 'account'
+  | 'theme'
+  | 'project'
+  | 'team'
+  | 'notifications'
+  | 'api-keys'
+  | 'agent'
+  | 'billing';
 
 export default function SettingsPage() {
   const t = useTranslations('settings');
@@ -30,6 +39,8 @@ export default function SettingsPage() {
   const [active, setActive] = useState<Section>(() => {
     if (tabParam === 'billing' && isCloud) return 'billing';
     if (tabParam === 'agent' && isCloud) return 'agent';
+    // Deep-linked from the Daily Pulse email's "manage notifications" footer.
+    if (tabParam === 'notifications') return 'notifications';
     return 'account';
   });
   const [displayName, setDisplayName] = useState('');
@@ -55,6 +66,7 @@ export default function SettingsPage() {
     { id: 'theme', label: t('theme') },
     { id: 'project', label: t('project') },
     { id: 'team', label: t('team') },
+    { id: 'notifications', label: t('notifications') },
     { id: 'api-keys', label: 'API Keys' },
     // Agent BYOK is a cloud-only concern — self-host operators configure
     // ANTHROPIC_API_KEY in their own env, no UI needed.
@@ -171,6 +183,8 @@ export default function SettingsPage() {
 
           {/* Team */}
           {active === 'team' && <TeamSection />}
+
+          {active === 'notifications' && <NotificationsSection />}
 
           {/* API Keys */}
           {active === 'api-keys' && <ApiKeysSection />}

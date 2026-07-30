@@ -15,6 +15,7 @@ import {
 } from './job-manager.js';
 import { processTrackingJob } from '../workers/tracking-worker.js';
 import { processContentJob } from '../workers/content-worker.js';
+import { generatePulseForBrand } from './pulse/engine.js';
 import logger from './logger.js';
 
 // Concurrency counters (matches previous Bull concurrency of 2 per queue)
@@ -66,6 +67,15 @@ export async function runTrackingJob(jobId, io) {
         brandId,
         resultCount: result.resultCount,
         immediate: !!immediate,
+      });
+    }
+
+    // Daily Pulse (#540): fire-and-forget after a full daily run — never
+    // for immediate/manual runs or single-prompt refreshes. The engine is
+    // self-contained: eligibility checks, dedup and error handling inside.
+    if (!immediate && !promptId && !promptIds?.length) {
+      generatePulseForBrand(brandId).catch((err) => {
+        logger.error({ err, brandId }, 'daily pulse trigger failed');
       });
     }
   } catch (err) {

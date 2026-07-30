@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Daily Pulse** — a per-brand digest generated after the daily tracking run: KPI strip (visibility rate, 7-day trend, mentions, citations, sentiment), highlights (first-time citations, top prompt gains, leaderboard overtakes, first appearance on a new engine) and anomaly warnings (sharp visibility drop, competitor surge, high-volume prompt losing citations) with a platform-outage guard and a 7-day warning cooldown. Email via Resend on cloud (active/trialing orgs only), a `daily_pulse.created` webhook event everywhere, and Settings → Notifications for per-brand frequency and recipients (#540)
+
 ## [0.1.7] - 2026-07-25
 
 ### Added

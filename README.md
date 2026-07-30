@@ -174,7 +174,7 @@ What we're planning to build next. React with 👍 on the linked issue (or open 
 - [x] **In-product conversational AI assistant** — chat with your dashboard about visibility trends, competitor moves, and content gaps without leaving the page
 - [ ] **ScrapeLLM integration** — add ScrapeLLM as an alternative scraping backend alongside Cloro for users who prefer it or need a fallback
 - [x] **PostHog integration** — pipe AI-referred sessions and tracking events into PostHog for users already running it as their product analytics layer
-- [ ] **Anomaly alerts** — get an email / Slack ping when a brand's visibility drops sharply, a competitor surges, or a high-volume prompt suddenly stops citing you
+- [x] **Daily Pulse** — a per-brand daily digest email after each tracking run: KPI strip, highlights (first citations, prompt gains, leaderboard overtakes) and anomaly warnings (sharp visibility drops, competitor surges, lost citations), plus a `daily_pulse.created` webhook event for Slack/Notion delivery ([#540](https://github.com/ansvisor/ansvisor/issues/540))
 - [ ] **BYO LLM keys** — bring your own OpenAI / Anthropic / Gemini API key for tracking and content generation, so you control cost and data handling
 - [ ] **Webhook recipe library** — one-click Notion / Linear / Asana / Slack templates so a Content Brief can land in your editorial workflow with zero glue code
 
