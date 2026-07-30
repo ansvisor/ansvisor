@@ -141,6 +141,18 @@ export default function ReportDetailPage() {
     typeof payload.competitors[0].visibilityRate === 'number' &&
     typeof payload.competitors[0].promptCount === 'number',
   );
+  // Same story for prompt/topic performance: reports generated before the
+  // rate switch stored an all-runs average score, which is 0-100 intensity —
+  // not a percentage — so those payloads keep their old (unsuffixed) cells.
+  const hasPromptVisibilityRate = Boolean(
+    payload.promptPerformance &&
+    [...payload.promptPerformance.best, ...payload.promptPerformance.worst].some(
+      (p) => typeof p.visibilityRate === 'number',
+    ),
+  );
+  const hasTopicVisibilityRate = Boolean(
+    payload.topicPerformance?.some((tp) => typeof tp.visibilityRate === 'number'),
+  );
 
   // Render a true vector PDF from the saved payload with @react-pdf/renderer
   // (selectable text, exact layout — no screenshot artifacts). The renderer
@@ -408,7 +420,9 @@ export default function ReportDetailPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t('columns.topic')}</TableHead>
-                    <TableHead className="w-28 text-right">{t('kpi.visibility')}</TableHead>
+                    <TableHead className="w-28 text-right">
+                      {hasTopicVisibilityRate ? t('kpi.visibilityRate') : t('kpi.visibility')}
+                    </TableHead>
                     <TableHead className="w-24 text-right">{t('columns.change')}</TableHead>
                     <TableHead className="w-24 text-right">{t('columns.results')}</TableHead>
                   </TableRow>
@@ -419,7 +433,11 @@ export default function ReportDetailPage() {
                       <TableCell className="max-w-[280px] truncate font-medium">
                         {tp.name}
                       </TableCell>
-                      <TableCell className="text-right">{tp.avgVisibility}%</TableCell>
+                      <TableCell className="text-right">
+                        {typeof tp.visibilityRate === 'number'
+                          ? `${tp.visibilityRate}%`
+                          : `${tp.avgVisibility}/100`}
+                      </TableCell>
                       <TableCell className="text-right">
                         <Delta value={tp.change} />
                       </TableCell>
@@ -456,7 +474,9 @@ export default function ReportDetailPage() {
                             <TableRow>
                               <TableHead>{t('columns.prompt')}</TableHead>
                               <TableHead className="w-24 text-right">
-                                {t('kpi.visibility')}
+                                {hasPromptVisibilityRate
+                                  ? t('kpi.visibilityRate')
+                                  : t('kpi.visibility')}
                               </TableHead>
                               <TableHead className="w-16 text-right">{t('columns.runs')}</TableHead>
                             </TableRow>
@@ -467,7 +487,11 @@ export default function ReportDetailPage() {
                                 <TableCell className="max-w-[280px] truncate font-medium">
                                   {p.text}
                                 </TableCell>
-                                <TableCell className="text-right">{p.avgVisibility}%</TableCell>
+                                <TableCell className="text-right">
+                                  {typeof p.visibilityRate === 'number'
+                                    ? `${p.visibilityRate}%`
+                                    : `${p.avgVisibility}/100`}
+                                </TableCell>
                                 <TableCell className="text-right text-muted-foreground">
                                   {p.runs}
                                 </TableCell>

@@ -48,7 +48,13 @@ export interface ReportTopDomain {
 
 export interface ReportPromptPerf {
   text: string;
+  /** Average 0-100 intensity score over all runs — kept for older payloads. */
   avgVisibility: number;
+  /**
+   * Share of runs where the brand was mentioned or cited, as a percentage
+   * (#562 semantics). Absent on reports generated before this shipped.
+   */
+  visibilityRate?: number;
   totalMentions: number;
   runs: number;
 }
@@ -82,8 +88,19 @@ export interface ReportCitationEvidence {
 
 export interface ReportTopicPerf {
   name: string;
+  /** Average 0-100 intensity score over all runs — kept for older payloads. */
   avgVisibility: number;
-  /** Points change vs the previous window of equal length; null when no prior data. */
+  /**
+   * Share of the topic's runs where the brand was mentioned or cited, as a
+   * percentage (#562 semantics). Absent on reports generated before this
+   * shipped.
+   */
+  visibilityRate?: number;
+  /**
+   * Points change vs the previous window of equal length; null when no prior
+   * data. Visibility-rate points on payloads carrying `visibilityRate`, score
+   * points on older ones.
+   */
   change: number | null;
   results: number;
 }
@@ -200,10 +217,20 @@ const REPORT_TOP_DOMAINS = 10;
 const REPORT_PROMPT_COUNT = 5;
 
 /**
- * Best/worst prompts by average visibility WITHIN the report period.
+ * Every full-window prompt_results scan must page: PostgREST silently caps a
+ * select at 1000 rows, which on busy brands computes a report section from a
+ * truncated window (the #430/#464 defect family).
+ */
+const SCAN_PAGE_SIZE = 1000;
+const SCAN_MAX_ROWS = 50_000;
+
+/**
+ * Best/worst prompts by prompt-level Visibility Rate WITHIN the report period
+ * — the share of runs the brand actually appeared in, not an average score
+ * that zero-visibility runs dilute into misleading single digits (#562).
  * getPromptVisibilitySummaries anchors its window to "now", which lies for
  * custom historical ranges — so reports aggregate over [dateFrom, dateTo]
- * directly (same shape: exclude chatgpt-shopping, average per prompt).
+ * directly (same shape: exclude chatgpt-shopping, one row per run).
  */
 async function getPromptPerformance(
   brandId: string,
@@ -211,24 +238,39 @@ async function getPromptPerformance(
   dateTo: string,
 ): Promise<{ best: ReportPromptPerf[]; worst: ReportPromptPerf[] }> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('prompt_results')
-    .select('prompt_id, visibility_score, mention_count')
-    .eq('brand_id', brandId)
-    .neq('platform', 'chatgpt-shopping')
-    .gte('created_at', dateFrom)
-    .lte('created_at', dateTo);
-  if (error) throw new Error(error.message);
 
-  const acc = new Map<string, { sumVis: number; mentions: number; runs: number }>();
-  for (const r of data ?? []) {
-    const pid = r.prompt_id as string | null;
-    if (!pid) continue;
-    const entry = acc.get(pid) ?? { sumVis: 0, mentions: 0, runs: 0 };
-    entry.sumVis += (r.visibility_score as number) ?? 0;
-    entry.mentions += (r.mention_count as number) ?? 0;
-    entry.runs += 1;
-    acc.set(pid, entry);
+  const acc = new Map<
+    string,
+    { sumVis: number; mentions: number; runs: number; visibleRuns: number }
+  >();
+  for (let offset = 0; offset < SCAN_MAX_ROWS; offset += SCAN_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('prompt_results')
+      .select('prompt_id, visibility_score, mention_count, citation_count')
+      .eq('brand_id', brandId)
+      .neq('platform', 'chatgpt-shopping')
+      .gte('created_at', dateFrom)
+      .lte('created_at', dateTo)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(offset, offset + SCAN_PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+
+    const batch = data ?? [];
+    for (const r of batch) {
+      const pid = r.prompt_id as string | null;
+      if (!pid) continue;
+      const entry = acc.get(pid) ?? { sumVis: 0, mentions: 0, runs: 0, visibleRuns: 0 };
+      const mentions = (r.mention_count as number) ?? 0;
+      const citations = (r.citation_count as number) ?? 0;
+      entry.sumVis += (r.visibility_score as number) ?? 0;
+      entry.mentions += mentions;
+      entry.runs += 1;
+      if (mentions > 0 || citations > 0) entry.visibleRuns += 1;
+      acc.set(pid, entry);
+    }
+
+    if (batch.length < SCAN_PAGE_SIZE) break;
   }
   if (acc.size === 0) return { best: [], worst: [] };
 
@@ -242,11 +284,14 @@ async function getPromptPerformance(
     .map(([pid, v]) => ({
       text: textById.get(pid) ?? '',
       avgVisibility: Math.round((v.sumVis / v.runs) * 10) / 10,
+      // Same rounding as getPromptVisibilitySummaries, so a prompt's rate
+      // reads identically on the All Prompts tab and in a report.
+      visibilityRate: Math.round((v.visibleRuns / v.runs) * 1000) / 10,
       totalMentions: v.mentions,
       runs: v.runs,
     }))
     .filter((p) => p.text)
-    .sort((a, b) => b.avgVisibility - a.avgVisibility);
+    .sort((a, b) => b.visibilityRate - a.visibilityRate || b.totalMentions - a.totalMentions);
 
   const best = ranked.slice(0, REPORT_PROMPT_COUNT);
   // Worst come from the remaining pool so a short prompt list doesn't show
@@ -327,9 +372,11 @@ function previousWindow(dateFrom: string, dateTo: string): { from: string; to: s
 const REPORT_TOPIC_COUNT = 8;
 
 /**
- * Per-topic average visibility WITHIN the report period, with a points delta
- * vs the previous window. Same two-step pattern as getPromptPerformance:
- * one prompt_results scan spanning both windows, then resolve topic names.
+ * Per-topic Visibility Rate WITHIN the report period, with a rate-points delta
+ * vs the previous window (#562 — an all-runs average score lets zero-visibility
+ * runs dilute a well-covered topic). Same two-step pattern as
+ * getPromptPerformance: one paged prompt_results scan spanning both windows,
+ * then resolve topic names.
  */
 async function getTopicPerformance(
   brandId: string,
@@ -339,17 +386,35 @@ async function getTopicPerformance(
   const supabase = await createClient();
   const prev = previousWindow(dateFrom, dateTo);
 
-  const { data, error } = await supabase
-    .from('prompt_results')
-    .select('prompt_id, visibility_score, created_at')
-    .eq('brand_id', brandId)
-    .neq('platform', 'chatgpt-shopping')
-    .gte('created_at', prev.from)
-    .lte('created_at', dateTo);
-  if (error) throw new Error(error.message);
-  if (!data || data.length === 0) return [];
+  // Two windows in one scan hits the 1000-row cap even sooner than the
+  // single-window scans, so page it.
+  const rows: {
+    prompt_id: string | null;
+    visibility_score: number | null;
+    mention_count: number | null;
+    citation_count: number | null;
+    created_at: string;
+  }[] = [];
+  for (let offset = 0; offset < SCAN_MAX_ROWS; offset += SCAN_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('prompt_results')
+      .select('prompt_id, visibility_score, mention_count, citation_count, created_at')
+      .eq('brand_id', brandId)
+      .neq('platform', 'chatgpt-shopping')
+      .gte('created_at', prev.from)
+      .lte('created_at', dateTo)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(offset, offset + SCAN_PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
 
-  const promptIds = [...new Set(data.map((r) => r.prompt_id as string).filter(Boolean))];
+    const batch = data ?? [];
+    rows.push(...batch);
+    if (batch.length < SCAN_PAGE_SIZE) break;
+  }
+  if (rows.length === 0) return [];
+
+  const promptIds = [...new Set(rows.map((r) => r.prompt_id as string).filter(Boolean))];
   const { data: promptRows } = await supabase
     .from('prompts')
     .select('id, topic_id')
@@ -362,21 +427,23 @@ async function getTopicPerformance(
   interface Acc {
     sumVis: number;
     n: number;
-    prevSumVis: number;
+    visible: number;
     prevN: number;
+    prevVisible: number;
   }
   const byTopic = new Map<string, Acc>();
-  for (const r of data) {
+  for (const r of rows) {
     const topicId = topicByPrompt.get(r.prompt_id as string);
     if (!topicId) continue;
-    const acc = byTopic.get(topicId) ?? { sumVis: 0, n: 0, prevSumVis: 0, prevN: 0 };
-    const vis = (r.visibility_score as number) ?? 0;
+    const acc = byTopic.get(topicId) ?? { sumVis: 0, n: 0, visible: 0, prevN: 0, prevVisible: 0 };
+    const isVisible = (r.mention_count ?? 0) > 0 || (r.citation_count ?? 0) > 0;
     if ((r.created_at as string) >= dateFrom) {
-      acc.sumVis += vis;
+      acc.sumVis += r.visibility_score ?? 0;
       acc.n += 1;
+      if (isVisible) acc.visible += 1;
     } else {
-      acc.prevSumVis += vis;
       acc.prevN += 1;
+      if (isVisible) acc.prevVisible += 1;
     }
     byTopic.set(topicId, acc);
   }
@@ -390,16 +457,18 @@ async function getTopicPerformance(
   return [...byTopic.entries()]
     .filter(([id, acc]) => acc.n > 0 && nameById.has(id))
     .map(([id, acc]) => {
-      const avg = round1(acc.sumVis / acc.n);
-      const prevAvg = acc.prevN > 0 ? acc.prevSumVis / acc.prevN : null;
+      // Same rounding as the prompt-level rate (getPromptVisibilitySummaries).
+      const rate = Math.round((acc.visible / acc.n) * 1000) / 10;
+      const prevRate = acc.prevN > 0 ? (acc.prevVisible / acc.prevN) * 100 : null;
       return {
         name: nameById.get(id)!,
-        avgVisibility: avg,
-        change: prevAvg === null ? null : round1(avg - prevAvg),
+        avgVisibility: round1(acc.sumVis / acc.n),
+        visibilityRate: rate,
+        change: prevRate === null ? null : round1(rate - prevRate),
         results: acc.n,
       };
     })
-    .sort((a, b) => b.results - a.results || b.avgVisibility - a.avgVisibility)
+    .sort((a, b) => b.results - a.results || b.visibilityRate - a.visibilityRate)
     .slice(0, REPORT_TOPIC_COUNT);
 }
 
