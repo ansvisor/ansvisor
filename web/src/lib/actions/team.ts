@@ -361,9 +361,7 @@ export async function removeMember(userId: string) {
   revalidatePath('/dashboard/settings');
 }
 
-export type AcceptInvitationResult =
-  | { organizationId: string; role: TeamRole }
-  | { error: string };
+export type AcceptInvitationResult = { organizationId: string; role: TeamRole } | { error: string };
 
 /**
  * User-facing failures (stale/invalid token, expired invite, wrong signed-in
