@@ -156,12 +156,21 @@ export async function listInvitations(): Promise<TeamInvitation[]> {
   }));
 }
 
-export async function inviteMember(email: string, role: TeamRole) {
+export type InviteMemberResult = { inviteLink: string; emailSent: boolean } | { error: string };
+
+/**
+ * User-facing failures (bad email, existing member, duplicate pending invite,
+ * insert errors) come back as a VALUE: production masks every error thrown
+ * from a server action, so the actionable message (e.g. "A pending invitation
+ * already exists for this email") would otherwise reach users as the
+ * meaningless digest string (#550).
+ */
+export async function inviteMember(email: string, role: TeamRole): Promise<InviteMemberResult> {
   const { user, profile } = await requireAdmin();
   const normalizedEmail = email.trim().toLowerCase();
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-    throw new Error('Invalid email address');
+    return { error: 'Invalid email address' };
   }
 
   const [{ count: memberCount }, { count: inviteCount }] = await Promise.all([
@@ -195,7 +204,7 @@ export async function inviteMember(email: string, role: TeamRole) {
         .eq('id', matched.id)
         .maybeSingle();
       if (matchedProfile?.organization_id === profile.organization_id) {
-        throw new Error('This user is already a member of your team');
+        return { error: 'This user is already a member of your team' };
       }
     }
   }
@@ -236,9 +245,9 @@ export async function inviteMember(email: string, role: TeamRole) {
 
   if (insertError) {
     if (insertError.code === '23505') {
-      throw new Error('A pending invitation already exists for this email');
+      return { error: 'A pending invitation already exists for this email' };
     }
-    throw new Error(insertError.message);
+    return { error: insertError.message };
   }
 
   // inviteUserByEmail only emails BRAND-NEW addresses — it errors for an email
@@ -264,7 +273,7 @@ export async function inviteMember(email: string, role: TeamRole) {
   }
 
   revalidatePath('/dashboard/settings');
-  return { invitation, inviteLink: shareLink, emailSent };
+  return { inviteLink: shareLink, emailSent };
 }
 
 export async function revokeInvitation(invitationId: string) {
@@ -352,11 +361,17 @@ export async function removeMember(userId: string) {
   revalidatePath('/dashboard/settings');
 }
 
-export interface AcceptInvitationResult {
-  organizationId: string;
-  role: TeamRole;
-}
+export type AcceptInvitationResult =
+  | { organizationId: string; role: TeamRole }
+  | { error: string };
 
+/**
+ * User-facing failures (stale/invalid token, expired invite, wrong signed-in
+ * account) come back as a VALUE: production masks every error thrown from a
+ * server action, so the most actionable message in this flow — telling the
+ * user which email to sign in with — would otherwise reach them as the
+ * meaningless digest string (#550).
+ */
 export async function acceptInvitation(token: string): Promise<AcceptInvitationResult> {
   const supabase = await createClient();
   const {
@@ -371,22 +386,22 @@ export async function acceptInvitation(token: string): Promise<AcceptInvitationR
     .eq('token', token)
     .maybeSingle();
 
-  if (error || !invitation) throw new Error('Invitation not found');
+  if (error || !invitation) return { error: 'Invitation not found' };
 
   if (invitation.status !== 'pending') {
-    throw new Error('This invitation is no longer valid');
+    return { error: 'This invitation is no longer valid' };
   }
 
   const expiresAt = new Date(invitation.expires_at as string);
   if (expiresAt.getTime() < Date.now()) {
     await supabaseAdmin.from('invitations').update({ status: 'expired' }).eq('id', invitation.id);
-    throw new Error('This invitation has expired');
+    return { error: 'This invitation has expired' };
   }
 
   const inviteEmail = (invitation.email as string).toLowerCase();
   const userEmail = user.email?.toLowerCase() ?? '';
   if (inviteEmail !== userEmail) {
-    throw new Error(`This invitation was sent to ${inviteEmail}. Please sign in with that email.`);
+    return { error: `This invitation was sent to ${inviteEmail}. Please sign in with that email.` };
   }
 
   const { error: profileErr } = await supabaseAdmin
@@ -398,7 +413,7 @@ export async function acceptInvitation(token: string): Promise<AcceptInvitationR
     })
     .eq('id', user.id);
 
-  if (profileErr) throw new Error(profileErr.message);
+  if (profileErr) return { error: profileErr.message };
 
   await supabaseAdmin
     .from('invitations')

@@ -47,9 +47,11 @@ export function AcceptInvitationCard({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isAccepting, setIsAccepting] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
 
   async function handleAccept(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setAcceptError(null);
 
     if (password.length < 8) {
       toast.error('Password must be at least 8 characters');
@@ -77,7 +79,16 @@ export function AcceptInvitationCard({
         throw new Error(updateErr.message);
       }
 
-      await acceptInvitation(token);
+      const result = await acceptInvitation(token);
+      if ('error' in result) {
+        // Inline beats a toast here — this is the message that tells the
+        // user what to do next (e.g. which account to sign in with), and a
+        // toast that auto-dismisses would take that instruction with it.
+        setAcceptError(result.error);
+        setIsAccepting(false);
+        return;
+      }
+
       toast.success(`Welcome to ${organizationName}!`);
       router.push('/dashboard');
       router.refresh();
@@ -142,6 +153,7 @@ export function AcceptInvitationCard({
         </div>
       ) : (
         <form onSubmit={handleAccept} className="mt-6 space-y-4">
+          {acceptError && <p className="text-sm text-destructive">{acceptError}</p>}
           <div className="space-y-2">
             <Label htmlFor="invite-fullname">Full name</Label>
             <Input

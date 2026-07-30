@@ -433,10 +433,14 @@ function InviteDialog({ canInvite, onInvited }: { canInvite: boolean; onInvited:
     }
     setSubmitting(true);
     try {
-      const { inviteLink: link, emailSent: sent } = await inviteMember(email.trim(), role);
-      setInviteLink(link);
-      setEmailSent(sent);
-      toast.success(sent ? 'Invitation sent' : 'Invite created — share the link');
+      const result = await inviteMember(email.trim(), role);
+      if ('error' in result) {
+        toast.error(result.error);
+        return;
+      }
+      setInviteLink(result.inviteLink);
+      setEmailSent(result.emailSent);
+      toast.success(result.emailSent ? 'Invitation sent' : 'Invite created — share the link');
       onInvited();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to send invitation');
