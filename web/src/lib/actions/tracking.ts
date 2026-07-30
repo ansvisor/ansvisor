@@ -115,6 +115,10 @@ export interface PromptDetailData {
   };
   summary: {
     avgVisibilityScore: number;
+    /** visibleResults / totalResults as a percentage, one decimal. */
+    visibilityRate: number;
+    /** Results with >= 1 brand mention/citation. */
+    visibleResults: number;
     totalMentions: number;
     totalCitations: number;
     totalResults: number;
@@ -906,6 +910,13 @@ export async function getPromptDetail(
     totalResults > 0
       ? Math.round(results.reduce((sum, row) => sum + row.visibilityScore, 0) / totalResults)
       : 0;
+  // Prompt-level Visibility Rate — same run-visibility rule as the All
+  // Prompts column and the Insights headline (mention or citation > 0).
+  const visibleResults = results.filter(
+    (row) => row.mentionCount > 0 || row.citationCount > 0,
+  ).length;
+  const visibilityRate =
+    totalResults > 0 ? Math.round((visibleResults / totalResults) * 1000) / 10 : 0;
 
   // Aggregate citations by domain — same shape and rounding as getCitationsOverview,
   // but scoped to this prompt's already-loaded results.
@@ -997,6 +1008,8 @@ export async function getPromptDetail(
     },
     summary: {
       avgVisibilityScore,
+      visibilityRate,
+      visibleResults,
       totalMentions: results.reduce((sum, row) => sum + row.mentionCount, 0),
       totalCitations: results.reduce((sum, row) => sum + row.citationCount, 0),
       totalResults,

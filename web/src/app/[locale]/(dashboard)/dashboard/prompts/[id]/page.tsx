@@ -762,8 +762,8 @@ export default function PromptDetailPage() {
         <div className={cn('space-y-6', isRefetching && 'opacity-60')}>
           <div className="grid gap-4 sm:grid-cols-3">
             <KpiCard
-              title="Visibility Score"
-              value={`${data.summary.avgVisibilityScore}/100`}
+              title={`Visibility Rate — appeared in ${data.summary.visibleResults} of ${data.summary.totalResults} answers`}
+              value={data.summary.visibilityRate}
               icon={Eye}
             />
             <KpiCard

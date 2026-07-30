@@ -1855,7 +1855,7 @@ function AllPromptsTab({
               </ColHead>
               <SortableHead
                 className="text-right"
-                tooltip="Average brand visibility score in AI answers for this prompt over the last 30 days."
+                tooltip="Visibility Rate: the percentage of AI answers for this prompt (last 30 days) that mentioned or cited the brand. Hover a value for run counts and the average score across visible answers."
                 sortKey="visibility"
                 activeSort={activeSort}
                 dir={dir}
@@ -1981,7 +1981,7 @@ function AllPromptsTab({
                             visibilityColorClass(vis.visibilityRate),
                           )}
                         >
-                          {vis.visibilityRate}%
+                          {vis.visibilityRate}
                         </span>
                         <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
                           <div
