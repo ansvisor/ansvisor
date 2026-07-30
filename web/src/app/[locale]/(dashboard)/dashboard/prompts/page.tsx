@@ -221,6 +221,8 @@ const PROMPT_EXPORT_HEADERS = [
   'est_ai_volume',
   'total_google_volume',
   'intent',
+  'visibility_rate_30d',
+  'visible_runs_30d',
   'avg_visibility_30d',
   'total_mentions_30d',
   'total_citations_30d',
@@ -1125,6 +1127,8 @@ export default function PromptsPage() {
       est_ai_volume: volumeByPromptId.get(p.id)?.estAiVolume ?? '',
       total_google_volume: volumeByPromptId.get(p.id)?.totalGoogleVolume ?? '',
       intent: volumeByPromptId.get(p.id)?.intent ?? '',
+      visibility_rate_30d: visibility[p.id]?.visibilityRate ?? '',
+      visible_runs_30d: visibility[p.id]?.visibleRuns ?? '',
       avg_visibility_30d: visibility[p.id]?.avgVisibility ?? '',
       total_mentions_30d: visibility[p.id]?.totalMentions ?? '',
       total_citations_30d: visibility[p.id]?.totalCitations ?? '',
@@ -1741,7 +1745,7 @@ function AllPromptsTab({
       const vol = volumeByPromptId.get(p.id);
       switch (activeSort) {
         case 'visibility':
-          return vis ? vis.avgVisibility : null;
+          return vis ? vis.visibilityRate : null;
         case 'mentions':
           return vis ? vis.totalMentions : null;
         case 'citations':
@@ -1963,23 +1967,30 @@ function AllPromptsTab({
                   </TableCell>
                   <TableCell className="text-right">
                     {vis ? (
-                      <div className="inline-flex items-center gap-2 justify-end min-w-[110px]">
+                      <div
+                        className="inline-flex items-center gap-2 justify-end min-w-[110px]"
+                        title={`Appeared in ${vis.visibleRuns} of ${vis.runs} runs (30d)${
+                          vis.avgVisibilityVisible !== null
+                            ? ` · avg score when visible: ${vis.avgVisibilityVisible.toFixed(0)}`
+                            : ''
+                        }`}
+                      >
                         <span
                           className={cn(
                             'text-sm font-semibold tabular-nums',
-                            visibilityColorClass(vis.avgVisibility),
+                            visibilityColorClass(vis.visibilityRate),
                           )}
                         >
-                          {vis.avgVisibility.toFixed(0)}
+                          {vis.visibilityRate}%
                         </span>
                         <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
                           <div
                             className={cn(
                               'h-full rounded-full',
-                              visibilityBarClass(vis.avgVisibility),
+                              visibilityBarClass(vis.visibilityRate),
                             )}
                             style={{
-                              width: `${Math.min(100, Math.max(0, vis.avgVisibility))}%`,
+                              width: `${Math.min(100, Math.max(0, vis.visibilityRate))}%`,
                             }}
                           />
                         </div>

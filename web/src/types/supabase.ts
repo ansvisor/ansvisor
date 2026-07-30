@@ -1450,9 +1450,11 @@ export type Database = {
         Returns: {
           prompt_id: string;
           avg_visibility: number;
+          avg_visibility_visible: number | null;
           total_mentions: number;
           total_citations: number;
           runs: number;
+          visible_runs: number;
           last_run_at: string;
         }[];
       };

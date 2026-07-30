@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Prompts: the All Prompts **Visibility column now shows the prompt-level Visibility Rate** (share of runs in the last 30 days with a brand mention or citation) instead of the all-runs average score, which runs without any brand presence diluted into misleading single digits — same rate language as the Insights headline and topic pages; the tooltip keeps run counts and the average score across visible runs, and the CSV export gains `visibility_rate_30d` / `visible_runs_30d`
+
 ### Added
 
 - **Daily Pulse** — a per-brand digest generated after the daily tracking run: KPI strip (visibility rate, 7-day trend, mentions, citations, sentiment), highlights (first-time citations, top prompt gains, leaderboard overtakes, first appearance on a new engine) and anomaly warnings (sharp visibility drop, competitor surge, high-volume prompt losing citations) with a platform-outage guard and a 7-day warning cooldown. Email via Resend on cloud (active/trialing orgs only), a `daily_pulse.created` webhook event everywhere, and Settings → Notifications for per-brand frequency and recipients (#540)
