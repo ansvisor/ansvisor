@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Download } from 'lucide-react';
+import { Download, AlertCircle, RotateCw } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -12,6 +12,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface Invoice {
@@ -26,17 +27,32 @@ interface Invoice {
 
 export function InvoiceList() {
   const t = useTranslations('settings');
+  const tCommon = useTranslations('common');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/stripe/invoices');
+      const body = (await res.json().catch(() => ({}))) as Invoice[] | { error?: string };
+      if (!res.ok) {
+        const message = !Array.isArray(body) ? body.error : undefined;
+        throw new Error(message || 'Failed to load invoices');
+      }
+      setInvoices(Array.isArray(body) ? body : []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load invoices');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    fetch('/api/stripe/invoices')
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) setInvoices(data);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+    void load();
+  }, [load]);
 
   if (loading) {
     return (
@@ -44,6 +60,19 @@ export function InvoiceList() {
         {Array.from({ length: 3 }).map((_, i) => (
           <Skeleton key={i} className="h-10 w-full" />
         ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-md border border-destructive/20 bg-destructive/5 p-6 text-center">
+        <AlertCircle className="h-5 w-5 text-destructive" />
+        <p className="text-sm text-muted-foreground">{error}</p>
+        <Button variant="outline" size="sm" onClick={() => void load()}>
+          <RotateCw className="mr-2 h-4 w-4" />
+          {tCommon('retry')}
+        </Button>
       </div>
     );
   }
