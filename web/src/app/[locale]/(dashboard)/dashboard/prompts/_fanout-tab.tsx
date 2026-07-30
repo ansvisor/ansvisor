@@ -95,10 +95,10 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
     const pending = queries.filter((q) => !(q.toLowerCase() in intentsRef.current));
     if (pending.length === 0) return;
 
-    const chunks: string[][] = [pending.slice(0, PAGE_SIZE)];
-    for (let i = PAGE_SIZE; i < pending.length; i += INTENT_CHUNK_SIZE) {
-      chunks.push(pending.slice(i, i + INTENT_CHUNK_SIZE));
-    }
+    const chunks: string[][] = [pending.slice(0, FANOUT_PAGE_SIZE)];
+for (let i = FANOUT_PAGE_SIZE; i < pending.length; i += INTENT_CHUNK_SIZE) {
+  chunks.push(pending.slice(i, i + INTENT_CHUNK_SIZE));
+  }
     for (const chunk of chunks) {
       if (intentRunRef.current !== run) return;
       try {
