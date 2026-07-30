@@ -616,10 +616,17 @@ export function ShareOfVoicePlatformChart({
                   const platformShare =
                     totalVoiceMentions > 0 ? (p.voiceMentions / totalVoiceMentions) * 100 : 0;
                   return (
-                    <div className="rounded-md border bg-popover px-2.5 py-1.5 text-xs shadow-sm">
+                    <div className="rounded-md border bg-popover px-2.5 py-1.5 text-xs shadow-sm max-w-[240px]">
                       <div className="font-medium">{p.provider}</div>
                       <div className="text-muted-foreground">
-                        {p.sov.toFixed(1)}% SoV · {platformShare.toFixed(1)}% of voice
+                        Your share of voice:{' '}
+                        <span className="font-medium text-foreground">{p.sov.toFixed(1)}%</span> —
+                        your brand accounts for {p.brandMentions.toLocaleString()} of the{' '}
+                        {p.voiceMentions.toLocaleString()} brand + competitor mentions here
+                      </div>
+                      <div className="mt-1 text-muted-foreground">
+                        {platformShare.toFixed(1)}% of all tracked mentions happened on {p.provider}{' '}
+                        (slice size)
                       </div>
                     </div>
                   );
