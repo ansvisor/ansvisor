@@ -109,7 +109,7 @@ export function renderPulseEmail({ brandName, metrics, insightsUrl, settingsUrl 
   const windowLabel = windowDays === 7 ? 'last 7 days' : 'last 24 hours';
 
   const trend = kpis.weekTrend;
-  const subject = `${brandName} Daily Pulse — visibility score ${kpis.visibilityRate} (${signed(trend)} pts this week)`;
+  const subject = `${brandName} Daily Pulse — visibility ${kpis.visibilityRate} (${signed(trend)} pts this week)`;
 
   const highlightItems = highlights.map(highlightLine).filter(Boolean).join('');
   const warningItems = warnings.map(warningLine).filter(Boolean).join('');
@@ -126,7 +126,7 @@ export function renderPulseEmail({ brandName, metrics, insightsUrl, settingsUrl 
 
   <table role="presentation" cellspacing="8" style="border-collapse:separate;width:100%;margin-bottom:8px;">
     <tr>
-      ${kpiCell('Visibility rate', String(kpis.visibilityRate), null)}
+      ${kpiCell('Visibility', String(kpis.visibilityRate), null)}
       ${kpiCell('7-day trend', String(kpis.weekRate), kpis.weekTrend)}
     </tr>
     <tr>

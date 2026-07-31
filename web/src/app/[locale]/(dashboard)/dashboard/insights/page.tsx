@@ -1400,7 +1400,7 @@ export default function InsightsPage() {
               own chart section below. */}
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
                 <KpiCard
-                  title="Visibility Rate"
+                  title="Visibility"
                   tooltip="AI Visibility Score (0-100): how often AI answers mention you (60%), cite your site (25%) and how early you're named (15%), under the current filters."
                   icon={Eye}
                   value={headlineScore}

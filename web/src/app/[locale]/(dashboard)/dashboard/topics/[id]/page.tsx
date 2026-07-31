@@ -256,7 +256,7 @@ export default function TopicDetailPage({ params }: { params: Promise<{ id: stri
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <KpiCard
             icon={Eye}
-            label="Visibility rate"
+            label="Visibility"
             value={ownBrand?.score ?? 0}
             change={ownBrand?.scoreChange ?? null}
             hint={
