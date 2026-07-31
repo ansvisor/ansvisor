@@ -394,7 +394,8 @@ function CompetitorTooltip({
 
 // One color per shown competitor (top 5): navy, purple, green, orange, red.
 const RATE_TREND_PALETTE = ['#1e3a8a', '#a855f7', '#22c55e', '#f97316', '#ef4444'];
-const RATE_TREND_MAX_COMPETITORS = 5;
+// 5 lines total, matching the leaderboard: the own brand + top 4 competitors.
+const RATE_TREND_MAX_COMPETITORS = 4;
 const OWN_BRAND_COLOR = '#6366f1';
 
 /** Circle-clipped logo rendered on a line's last data point. */
