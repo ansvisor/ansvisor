@@ -536,9 +536,17 @@ export function VisibilityRateTrendChart({ data }: { data: VisibilityRateTrendDa
                 );
               }}
             />
-            {/* Hovered line renders last so it sits on top of the others. */}
+            {/* Render order = z-order: lines are drawn lowest-rate first so
+                when end-of-line logos overlap, the higher rate sits on top.
+                A hovered line always wins. */}
             {[...shown]
-              .sort((a, b) => (a.key === hoveredKey ? 1 : 0) - (b.key === hoveredKey ? 1 : 0))
+              .sort((a, b) => {
+                if (a.key === hoveredKey) return 1;
+                if (b.key === hoveredKey) return -1;
+                return (
+                  (points[lastIndex]?.values[a.key] ?? 0) - (points[lastIndex]?.values[b.key] ?? 0)
+                );
+              })
               .map((entity) => {
                 const dimmed = hoveredKey !== null && hoveredKey !== entity.key;
                 return (
