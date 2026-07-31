@@ -468,8 +468,16 @@ export function VisibilityRateTrendChart({ data }: { data: VisibilityRateTrendDa
   }));
 
   const chartData = points.map((p) => ({ date: p.date, ...p.values }));
-  const yMax = niceVisibilityYMax(shown.flatMap((e) => points.map((p) => p.values[e.key] ?? 0)));
   const lastIndex = points.length - 1;
+
+  // Y axis ticks run 5, 15, 25, … and the top one sits just above the
+  // highest rate in view (60% peak → axis ends at 65%), so the lines use
+  // the full canvas instead of being squashed under an always-100% scale.
+  const dataMax = Math.max(0, ...shown.flatMap((e) => points.map((p) => p.values[e.key] ?? 0)));
+  let yTop = 5;
+  while (yTop <= dataMax) yTop += 10;
+  const yTicks: number[] = [];
+  for (let tick = 5; tick <= yTop; tick += 10) yTicks.push(tick);
 
   return (
     <div className="flex flex-col gap-3">
@@ -481,7 +489,6 @@ export function VisibilityRateTrendChart({ data }: { data: VisibilityRateTrendDa
             data={chartData}
             margin={{ top: 8, right: 26, left: -24, bottom: 0 }}
           >
-            <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
             <XAxis
               dataKey="date"
               tick={{ fontSize: 11 }}
@@ -490,7 +497,8 @@ export function VisibilityRateTrendChart({ data }: { data: VisibilityRateTrendDa
               className="fill-muted-foreground"
             />
             <YAxis
-              domain={[0, yMax]}
+              domain={[0, yTop]}
+              ticks={yTicks}
               tick={{ fontSize: 11 }}
               tickLine={false}
               axisLine={false}
