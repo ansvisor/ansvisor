@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { expandDateToEndOfDay } from '@/lib/dates';
+import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import type {
   PromptResult,
   AIPlatform,
@@ -115,10 +116,15 @@ export interface PromptDetailData {
   };
   summary: {
     avgVisibilityScore: number;
-    /** visibleResults / totalResults as a percentage, one decimal. */
+    /** visibleResults / totalResults as a percentage, one decimal (coverage). */
     visibilityRate: number;
     /** Results with >= 1 brand mention/citation. */
     visibleResults: number;
+    /** AI Visibility Score (0-100) over this prompt's loaded answers. */
+    score: number | null;
+    mentionAnswers: number;
+    citationAnswers: number;
+    positionFactor: number | null;
     totalMentions: number;
     totalCitations: number;
     totalResults: number;
@@ -918,6 +924,24 @@ export async function getPromptDetail(
   const visibilityRate =
     totalResults > 0 ? Math.round((visibleResults / totalResults) * 1000) / 10 : 0;
 
+  // AI Visibility Score over the same answer set — identical blend to the
+  // All Prompts column and the Insights headline.
+  const mentionAnswers = results.filter((row) => row.mentionCount > 0).length;
+  const citationAnswers = results.filter((row) => row.citationCount > 0).length;
+  const positionValues = rows
+    .map((row) => row.mention_position as number | null)
+    .filter((pos): pos is number => pos !== null && pos !== undefined && pos > 0);
+  const positionFactor =
+    positionValues.length > 0
+      ? positionValues.reduce((sum, pos) => sum + 1 / pos, 0) / positionValues.length
+      : null;
+  const score = computeAiVisibilityScore({
+    answers: totalResults,
+    mentionAnswers,
+    citationAnswers,
+    positionFactor,
+  });
+
   // Aggregate citations by domain — same shape and rounding as getCitationsOverview,
   // but scoped to this prompt's already-loaded results.
   interface SourceAgg {
@@ -1010,6 +1034,10 @@ export async function getPromptDetail(
       avgVisibilityScore,
       visibilityRate,
       visibleResults,
+      score,
+      mentionAnswers,
+      citationAnswers,
+      positionFactor,
       totalMentions: results.reduce((sum, row) => sum + row.mentionCount, 0),
       totalCitations: results.reduce((sum, row) => sum + row.citationCount, 0),
       totalResults,
@@ -1321,8 +1349,16 @@ export interface PromptVisibilitySummary {
   runs: number;
   /** Runs with >= 1 brand mention/citation — numerator of the prompt-level rate. */
   visibleRuns: number;
-  /** visibleRuns / runs as a percentage, one decimal — same rounding as the Insights headline. */
+  /** visibleRuns / runs as a percentage, one decimal (coverage, secondary). */
   visibilityRate: number;
+  /** AI Visibility Score (0-100) over this prompt's answers; null when no runs. */
+  score: number | null;
+  /** Answers mentioning the brand (score component). */
+  mentionAnswers: number;
+  /** Answers citing the brand's domain (score component). */
+  citationAnswers: number;
+  /** Mean of 1/position over mentioning answers; null when never mentioned. */
+  positionFactor: number | null;
   lastRunAt: string;
 }
 
@@ -1358,6 +1394,9 @@ export async function getPromptVisibilitySummaries(
   for (const row of data ?? []) {
     const runs = Number(row.runs ?? 0);
     const visibleRuns = Number(row.visible_runs ?? 0);
+    const mentionAnswers = Number(row.mention_answers ?? 0);
+    const citationAnswers = Number(row.citation_answers ?? 0);
+    const positionFactor = row.position_factor ?? null;
     result[row.prompt_id] = {
       avgVisibility: row.avg_visibility ?? 0,
       avgVisibilityVisible: row.avg_visibility_visible ?? null,
@@ -1366,6 +1405,15 @@ export async function getPromptVisibilitySummaries(
       runs,
       visibleRuns,
       visibilityRate: runs > 0 ? Math.round((visibleRuns / runs) * 1000) / 10 : 0,
+      score: computeAiVisibilityScore({
+        answers: runs,
+        mentionAnswers,
+        citationAnswers,
+        positionFactor,
+      }),
+      mentionAnswers,
+      citationAnswers,
+      positionFactor,
       lastRunAt: row.last_run_at,
     };
   }
@@ -1406,6 +1454,72 @@ export async function getBrandPrompts(
   }));
 }
 
+/** Raw shape of the ai_visibility_aggregates RPC payload (00040). */
+interface AiVisibilityAggregatesRow {
+  answers: number;
+  mention_answers: number;
+  citation_answers: number;
+  position_factor: number | null;
+  by_competitor: {
+    competitor_id: string;
+    name: string | null;
+    mention_answers: number;
+    citation_answers: number;
+    position_factor: number | null;
+  }[];
+}
+
+interface AiVisibilityWindow {
+  answers: number;
+  brandScore: number | null;
+  brandComponents: {
+    mentionAnswers: number;
+    citationAnswers: number;
+    positionFactor: number | null;
+  };
+  compScore: Map<string, number | null>;
+  compComponents: Map<
+    string,
+    { mentionAnswers: number; citationAnswers: number; positionFactor: number | null }
+  >;
+}
+
+/**
+ * Fold an ai_visibility_aggregates payload into per-entity scores. Every
+ * entity divides by the same answer count (the brand's filtered answers),
+ * so brand and competitor scores are directly comparable.
+ */
+function foldAiVisibility(raw: unknown): AiVisibilityWindow {
+  const row = (raw ?? {}) as AiVisibilityAggregatesRow;
+  const answers = Number(row.answers ?? 0);
+  const brandComponents = {
+    mentionAnswers: Number(row.mention_answers ?? 0),
+    citationAnswers: Number(row.citation_answers ?? 0),
+    positionFactor: row.position_factor === null ? null : Number(row.position_factor),
+  };
+  const compScore = new Map<string, number | null>();
+  const compComponents = new Map<
+    string,
+    { mentionAnswers: number; citationAnswers: number; positionFactor: number | null }
+  >();
+  for (const c of row.by_competitor ?? []) {
+    const components = {
+      mentionAnswers: Number(c.mention_answers ?? 0),
+      citationAnswers: Number(c.citation_answers ?? 0),
+      positionFactor: c.position_factor === null ? null : Number(c.position_factor),
+    };
+    compComponents.set(c.competitor_id, components);
+    compScore.set(c.competitor_id, computeAiVisibilityScore({ answers, ...components }));
+  }
+  return {
+    answers,
+    brandScore: computeAiVisibilityScore({ answers, ...brandComponents }),
+    brandComponents,
+    compScore,
+    compComponents,
+  };
+}
+
 export interface CompetitorComparisonEntry {
   name: string;
   avgVisibilityScore: number;
@@ -1425,6 +1539,20 @@ export interface CompetitorComparisonEntry {
    * `null` when there is no comparable previous-period value.
    */
   change: number | null;
+  /**
+   * AI Visibility Score (0-100, one decimal): 0.6×mention rate +
+   * 0.25×citation rate + 0.15×position factor, all over the brand's
+   * filtered answers (shared denominator). Null when the window is empty.
+   */
+  score: number | null;
+  /** Score point change vs the previous comparable window; null without one. */
+  scoreChange: number | null;
+  /** Answers naming this entity (numerator of the mention component). */
+  mentionAnswers: number;
+  /** Answers citing this entity's own domain. */
+  citationAnswers: number;
+  /** Mean of 1/position over answers naming the entity; null when never named. */
+  positionFactor: number | null;
   totalMentions: number;
   totalCitations: number;
   resultCount: number;
@@ -1506,17 +1634,24 @@ export async function getCompetitorComparison(
     p_topic_id: opts?.topicId ?? null,
   };
 
-  // Brand name + the displayed-period aggregate fire in parallel — both
+  // Brand name + the displayed-period aggregates fire in parallel — all
   // are needed before we can shape the response.
-  const [{ data: brand }, { data: aggDisplay, error: aggErr }] = await Promise.all([
+  const [{ data: brand }, { data: aggDisplay, error: aggErr }, visDisplayRes] = await Promise.all([
     supabase.from('brands').select('name').eq('id', brandId).single(),
     supabase.rpc('competitor_aggregates', {
       ...baseArgs,
       p_date_from: opts?.dateFrom ?? null,
       p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? null,
     }),
+    supabase.rpc('ai_visibility_aggregates', {
+      ...baseArgs,
+      p_date_from: opts?.dateFrom ?? null,
+      p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? null,
+    }),
   ]);
   if (aggErr) throw new Error(aggErr.message);
+  if (visDisplayRes.error) throw new Error(visDisplayRes.error.message);
+  const visDisplay = foldAiVisibility(visDisplayRes.data);
 
   const agg = aggDisplay as unknown as CompetitorAggregatesRow;
   if (agg.brand_row_count === 0) return { brands: [], providerRows: [] };
@@ -1541,7 +1676,7 @@ export async function getCompetitorComparison(
   const duration = currentTo.getTime() - currentFrom.getTime();
   const prevFrom = new Date(currentFrom.getTime() - duration);
 
-  const [curRes, prevRes] = await Promise.all([
+  const [curRes, prevRes, visPrevRes] = await Promise.all([
     supabase.rpc('competitor_aggregates', {
       ...baseArgs,
       p_date_from: opts?.dateFrom ?? currentFrom.toISOString(),
@@ -1552,9 +1687,21 @@ export async function getCompetitorComparison(
       p_date_from: prevFrom.toISOString(),
       p_date_to: currentFrom.toISOString(),
     }),
+    supabase.rpc('ai_visibility_aggregates', {
+      ...baseArgs,
+      p_date_from: prevFrom.toISOString(),
+      p_date_to: currentFrom.toISOString(),
+    }),
   ]);
   if (curRes.error) throw new Error(curRes.error.message);
   if (prevRes.error) throw new Error(prevRes.error.message);
+  // Score delta compares the displayed window against the one immediately
+  // before it; a previous-window failure only costs the delta, not the page.
+  const visPrev = visPrevRes.error ? null : foldAiVisibility(visPrevRes.data);
+  const scoreDiff = (cur: number | null, prev: number | null | undefined): number | null => {
+    if (cur === null || prev === null || prev === undefined) return null;
+    return Math.round((cur - prev) * 10) / 10;
+  };
 
   const curWin = curRes.data as unknown as CompetitorAggregatesRow | null;
   const prevWin = prevRes.data as unknown as CompetitorAggregatesRow | null;
@@ -1614,6 +1761,11 @@ export async function getCompetitorComparison(
       visiblePrompts: agg.brand_visible_prompts,
       promptCount: agg.brand_prompt_count,
       change: rateDiff(curBrandRate, prevBrandRate),
+      score: visDisplay.brandScore,
+      scoreChange: scoreDiff(visDisplay.brandScore, visPrev?.brandScore),
+      mentionAnswers: visDisplay.brandComponents.mentionAnswers,
+      citationAnswers: visDisplay.brandComponents.citationAnswers,
+      positionFactor: visDisplay.brandComponents.positionFactor,
       totalMentions: agg.brand_total_mentions,
       totalCitations: agg.brand_total_citations,
       resultCount: agg.brand_row_count,
@@ -1625,6 +1777,7 @@ export async function getCompetitorComparison(
     // Same-denominator rule as the window rates above (agg.brand_row_count
     // is guaranteed > 0 by the early return).
     const avg = Math.round(c.sum_visibility / agg.brand_row_count);
+    const compComponents = visDisplay.compComponents.get(c.competitor_id);
     entries.push({
       name: competitorDisplayName(c.name, c.competitor_id),
       avgVisibilityScore: avg,
@@ -1635,6 +1788,14 @@ export async function getCompetitorComparison(
         curCompRate.get(c.competitor_id) ?? null,
         prevCompRate.get(c.competitor_id) ?? null,
       ),
+      score: visDisplay.compScore.get(c.competitor_id) ?? null,
+      scoreChange: scoreDiff(
+        visDisplay.compScore.get(c.competitor_id) ?? null,
+        visPrev?.compScore.get(c.competitor_id),
+      ),
+      mentionAnswers: compComponents?.mentionAnswers ?? 0,
+      citationAnswers: compComponents?.citationAnswers ?? 0,
+      positionFactor: compComponents?.positionFactor ?? null,
       totalMentions: c.total_mentions,
       totalCitations: c.total_citations,
       resultCount: c.row_count,
@@ -1642,7 +1803,7 @@ export async function getCompetitorComparison(
     });
   }
 
-  entries.sort((a, b) => b.visibilityRate - a.visibilityRate || b.totalMentions - a.totalMentions);
+  entries.sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || b.totalMentions - a.totalMentions);
 
   // --- Per-provider breakdown ---
   // resolveProvider stays in JS so we don't keep a SQL copy of the mapping
@@ -1997,7 +2158,17 @@ interface VisibilityRateTrendRow {
   day: string;
   prompt_count: number;
   visible_prompts: number;
-  competitors: { competitor_id: string; visible_prompts: number }[];
+  answers: number;
+  mention_answers: number;
+  citation_answers: number;
+  position_factor: number | null;
+  competitors: {
+    competitor_id: string;
+    visible_prompts: number;
+    mention_answers: number;
+    citation_answers: number;
+    position_factor: number | null;
+  }[];
 }
 
 /**
@@ -2041,25 +2212,20 @@ export async function getVisibilityRateTrend(
     { data: brandDomains },
     { data: competitors },
     rpcRes,
-    curStats,
-    curTracked,
-    prevStats,
-    prevTracked,
+    visCurRes,
+    visPrevRes,
   ] = await Promise.all([
     supabase.from('brands').select('name, logo_url').eq('id', brandId).single(),
     supabase.from('brand_domains').select('domain, is_primary').eq('brand_id', brandId),
     supabase.from('competitors').select('id, name, domain').eq('brand_id', brandId),
     supabase.rpc('visibility_rate_trend', rateArgs(dateFrom, dateTo)),
-    supabase.rpc('visible_prompt_stats', rateArgs(dateFrom, dateTo)),
-    supabase.rpc('tracked_prompt_count', rateArgs(dateFrom, dateTo)),
-    supabase.rpc('visible_prompt_stats', rateArgs(prevFrom, prevTo)),
-    supabase.rpc('tracked_prompt_count', rateArgs(prevFrom, prevTo)),
+    supabase.rpc('ai_visibility_aggregates', rateArgs(dateFrom, dateTo)),
+    supabase.rpc('ai_visibility_aggregates', rateArgs(prevFrom, prevTo)),
   ]);
   if (rpcRes.error) throw new Error(rpcRes.error.message);
+  if (visCurRes.error) throw new Error(visCurRes.error.message);
 
   const rows = (rpcRes.data ?? []) as unknown as VisibilityRateTrendRow[];
-  const rate = (visible: number, total: number) =>
-    total > 0 ? Math.round((visible / total) * 1000) / 10 : 0;
 
   const primaryDomain =
     (brandDomains ?? []).find((d) => d.is_primary)?.domain ?? brandDomains?.[0]?.domain ?? null;
@@ -2081,13 +2247,28 @@ export async function getVisibilityRateTrend(
     })),
   ];
 
+  // Each day's value is the AI Visibility Score computed over that day's
+  // answers — same blend as every other surface, shared denominator.
   const points: VisibilityRateTrendPoint[] = rows.map((row) => {
     const values: Record<string, number> = {
-      you: rate(row.visible_prompts, row.prompt_count),
+      you:
+        computeAiVisibilityScore({
+          answers: row.answers,
+          mentionAnswers: row.mention_answers,
+          citationAnswers: row.citation_answers,
+          positionFactor: row.position_factor,
+        }) ?? 0,
     };
-    const byId = new Map(row.competitors.map((c) => [c.competitor_id, c.visible_prompts]));
+    const byId = new Map(row.competitors.map((c) => [c.competitor_id, c]));
     for (const c of competitors ?? []) {
-      values[c.id] = rate(byId.get(c.id) ?? 0, row.prompt_count);
+      const entry = byId.get(c.id);
+      values[c.id] =
+        computeAiVisibilityScore({
+          answers: row.answers,
+          mentionAnswers: entry?.mention_answers ?? 0,
+          citationAnswers: entry?.citation_answers ?? 0,
+          positionFactor: entry?.position_factor ?? null,
+        }) ?? 0;
     }
     return {
       date: new Date(row.day + 'T00:00:00').toLocaleDateString('en-US', {
@@ -2098,20 +2279,18 @@ export async function getVisibilityRateTrend(
     };
   });
 
-  // Headline: overall window rate (distinct prompts over the whole window —
-  // not an average of the daily points) plus the delta vs the previous
-  // equal-length window, same RPC pair as the Insights KPI header.
-  const curVisible = (curStats.data as { visible_prompts?: number } | null)?.visible_prompts ?? 0;
-  const curCount = (curTracked.data as number | null) ?? 0;
-  const prevVisible = (prevStats.data as { visible_prompts?: number } | null)?.visible_prompts ?? 0;
-  const prevCount = (prevTracked.data as number | null) ?? 0;
-  const headlineRate = rate(curVisible, curCount);
-  const prevRate = prevCount > 0 ? rate(prevVisible, prevCount) : null;
+  // Headline: overall window score (components over the whole window — not
+  // an average of the daily points) plus the delta vs the previous
+  // equal-length window. Same RPC the leaderboard uses.
+  const visCur = foldAiVisibility(visCurRes.data);
+  const visPrev = visPrevRes.error ? null : foldAiVisibility(visPrevRes.data);
+  const headlineScore = visCur.brandScore ?? 0;
+  const prevScore = visPrev?.brandScore ?? null;
 
   const summary: VisibilityRateTrendSummary = {
-    rate: headlineRate,
-    prevRate,
-    change: prevRate === null ? null : Math.round((headlineRate - prevRate) * 10) / 10,
+    rate: headlineScore,
+    prevRate: prevScore,
+    change: prevScore === null ? null : Math.round((headlineScore - prevScore) * 10) / 10,
     prevFrom,
     prevTo,
   };

@@ -1,4 +1,5 @@
 import supabaseAdmin from '../../config/supabase.js';
+import { computeAiVisibilityScore } from '../../config/visibility-score.js';
 
 /**
  * Daily Pulse metric computation (#540).
@@ -40,12 +41,6 @@ const TRACKED_PLATFORMS = [
   'gemini-web',
 ];
 
-/** Same rounding as the Insights headline: one decimal. */
-function rateOf(visible, prompts) {
-  if (!prompts) return 0;
-  return Math.round((visible / prompts) * 1000) / 10;
-}
-
 function round1(n) {
   return Math.round(n * 10) / 10;
 }
@@ -62,13 +57,23 @@ async function visibilityRate(brandId, from, to) {
     p_date_from: from.toISOString(),
     p_date_to: to.toISOString(),
   };
-  const [stats, tracked] = await Promise.all([
+  const [stats, tracked, vis] = await Promise.all([
     rpc('visible_prompt_stats', params),
     rpc('tracked_prompt_count', params),
+    rpc('ai_visibility_aggregates', params),
   ]);
   const visible = stats?.visible_prompts ?? 0;
   const total = tracked ?? 0;
-  return { visible, total, rate: rateOf(visible, total) };
+  // `rate` carries the AI Visibility Score (0-100) — the same blend every
+  // dashboard surface shows; coverage stays available as visible/total.
+  const score =
+    computeAiVisibilityScore({
+      answers: vis?.answers ?? 0,
+      mentionAnswers: vis?.mention_answers ?? 0,
+      citationAnswers: vis?.citation_answers ?? 0,
+      positionFactor: vis?.position_factor ?? null,
+    }) ?? 0;
+  return { visible, total, rate: score };
 }
 
 async function insightsWindow(brandId, from, to) {
@@ -87,20 +92,32 @@ async function insightsWindow(brandId, from, to) {
 }
 
 async function competitorRates(brandId, from, to) {
-  const agg = await rpc('competitor_aggregates', {
+  const agg = await rpc('ai_visibility_aggregates', {
     p_brand_id: brandId,
     p_date_from: from.toISOString(),
     p_date_to: to.toISOString(),
   });
-  // Shared denominator, same as getCompetitorComparison in the web app.
-  const promptCount = agg?.brand_prompt_count ?? 0;
-  const brandRate = rateOf(agg?.brand_visible_prompts ?? 0, promptCount);
+  // Shared denominator (the brand's answers), same as the web leaderboard.
+  const answers = agg?.answers ?? 0;
+  const brandRate =
+    computeAiVisibilityScore({
+      answers,
+      mentionAnswers: agg?.mention_answers ?? 0,
+      citationAnswers: agg?.citation_answers ?? 0,
+      positionFactor: agg?.position_factor ?? null,
+    }) ?? 0;
   const competitors = new Map();
   for (const c of agg?.by_competitor ?? []) {
     competitors.set(c.competitor_id, {
       id: c.competitor_id,
       name: c.name,
-      rate: rateOf(c.visible_prompts ?? 0, promptCount),
+      rate:
+        computeAiVisibilityScore({
+          answers,
+          mentionAnswers: c.mention_answers ?? 0,
+          citationAnswers: c.citation_answers ?? 0,
+          positionFactor: c.position_factor ?? null,
+        }) ?? 0,
     });
   }
   return { brandRate, competitors };

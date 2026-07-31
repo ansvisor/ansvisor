@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import type { CompetitorMention, Topic } from '@/types';
 
 function mapTopicRow(row: Record<string, unknown>): Topic {
@@ -222,6 +223,21 @@ export async function getTopicsOverview(brandId: string): Promise<TopicOverviewS
     prevVisiblePrompts: Set<string>;
     totalMentions: number;
     totalCitations: number;
+    answers: number;
+    mentionAnswers: number;
+    citationAnswers: number;
+    posSum: number;
+    posN: number;
+    curAnswers: number;
+    curMentionAnswers: number;
+    curCitationAnswers: number;
+    curPosSum: number;
+    curPosN: number;
+    prevAnswers: number;
+    prevMentionAnswers: number;
+    prevCitationAnswers: number;
+    prevPosSum: number;
+    prevPosN: number;
     brandMentions: number;
     compMentions: number;
     lastRunAt: number;
@@ -237,6 +253,21 @@ export async function getTopicsOverview(brandId: string): Promise<TopicOverviewS
     prevVisiblePrompts: new Set(),
     totalMentions: 0,
     totalCitations: 0,
+    answers: 0,
+    mentionAnswers: 0,
+    citationAnswers: 0,
+    posSum: 0,
+    posN: 0,
+    curAnswers: 0,
+    curMentionAnswers: 0,
+    curCitationAnswers: 0,
+    curPosSum: 0,
+    curPosN: 0,
+    prevAnswers: 0,
+    prevMentionAnswers: 0,
+    prevCitationAnswers: 0,
+    prevPosSum: 0,
+    prevPosN: 0,
     brandMentions: 0,
     compMentions: 0,
     lastRunAt: 0,
@@ -282,12 +313,36 @@ export async function getTopicsOverview(brandId: string): Promise<TopicOverviewS
     agg.brandMentions += mentions;
     if (ts > agg.lastRunAt) agg.lastRunAt = ts;
 
+    // AI Visibility Score components (answer-level).
+    const pos = row.mention_position as number | null;
+    agg.answers += 1;
+    if (mentions > 0) agg.mentionAnswers += 1;
+    if (citations > 0) agg.citationAnswers += 1;
+    if (pos !== null && pos !== undefined && pos > 0) {
+      agg.posSum += 1 / pos;
+      agg.posN += 1;
+    }
+
     if (ts >= curFrom) {
       agg.curPrompts.add(promptId);
       if (visible) agg.curVisiblePrompts.add(promptId);
+      agg.curAnswers += 1;
+      if (mentions > 0) agg.curMentionAnswers += 1;
+      if (citations > 0) agg.curCitationAnswers += 1;
+      if (pos !== null && pos !== undefined && pos > 0) {
+        agg.curPosSum += 1 / pos;
+        agg.curPosN += 1;
+      }
     } else if (ts >= prevFrom) {
       agg.prevPrompts.add(promptId);
       if (visible) agg.prevVisiblePrompts.add(promptId);
+      agg.prevAnswers += 1;
+      if (mentions > 0) agg.prevMentionAnswers += 1;
+      if (citations > 0) agg.prevCitationAnswers += 1;
+      if (pos !== null && pos !== undefined && pos > 0) {
+        agg.prevPosSum += 1 / pos;
+        agg.prevPosN += 1;
+      }
     }
 
     const day = createdAt.slice(0, 10);
@@ -320,7 +375,7 @@ export async function getTopicsOverview(brandId: string): Promise<TopicOverviewS
     const { data, error } = await supabase
       .from('prompt_results')
       .select(
-        'prompt_id, created_at, visibility_score, mention_count, citation_count, competitor_mentions',
+        'prompt_id, created_at, visibility_score, mention_count, citation_count, mention_position, competitor_mentions',
       )
       .eq('brand_id', brandId)
       .neq('platform', 'chatgpt-shopping')
@@ -340,14 +395,45 @@ export async function getTopicsOverview(brandId: string): Promise<TopicOverviewS
     const agg = aggByTopic.get(t.id) ?? emptyAgg();
     const promptCount = promptCountByTopic.get(t.id) ?? 0;
 
-    const rateOf = (visible: number, total: number) =>
-      total > 0 ? Math.round((visible / total) * 1000) / 10 : 0;
-    const visibilityRate = rateOf(agg.visiblePrompts.size, agg.allPrompts.size);
+    // Visibility Rate now IS the AI Visibility Score over the topic's
+    // answers — same blend as the Insights headline (see lib/visibility-score).
+    const scoreOf = (
+      answers: number,
+      mention: number,
+      citation: number,
+      posSum: number,
+      posN: number,
+    ) =>
+      computeAiVisibilityScore({
+        answers,
+        mentionAnswers: mention,
+        citationAnswers: citation,
+        positionFactor: posN > 0 ? posSum / posN : null,
+      }) ?? 0;
+    const visibilityRate = scoreOf(
+      agg.answers,
+      agg.mentionAnswers,
+      agg.citationAnswers,
+      agg.posSum,
+      agg.posN,
+    );
     const change =
-      agg.curPrompts.size > 0 && agg.prevPrompts.size > 0
+      agg.curAnswers > 0 && agg.prevAnswers > 0
         ? Math.round(
-            (rateOf(agg.curVisiblePrompts.size, agg.curPrompts.size) -
-              rateOf(agg.prevVisiblePrompts.size, agg.prevPrompts.size)) *
+            (scoreOf(
+              agg.curAnswers,
+              agg.curMentionAnswers,
+              agg.curCitationAnswers,
+              agg.curPosSum,
+              agg.curPosN,
+            ) -
+              scoreOf(
+                agg.prevAnswers,
+                agg.prevMentionAnswers,
+                agg.prevCitationAnswers,
+                agg.prevPosSum,
+                agg.prevPosN,
+              )) *
               10,
           ) / 10
         : null;

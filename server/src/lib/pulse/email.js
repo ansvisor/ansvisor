@@ -67,7 +67,7 @@ function highlightLine(h) {
       );
     case 'competitor_overtaken':
       return listItem(
-        `You overtook <strong>${escapeHtml(h.competitorName)}</strong> on the leaderboard (${escapeHtml(String(h.brandRate))}% vs ${escapeHtml(String(h.competitorRate))}%)`,
+        `You overtook <strong>${escapeHtml(h.competitorName)}</strong> on the leaderboard (${escapeHtml(String(h.brandRate))} vs ${escapeHtml(String(h.competitorRate))})`,
       );
     case 'new_engine':
       return listItem(
@@ -82,15 +82,15 @@ function warningLine(w) {
   switch (w.type) {
     case 'sharp_drop':
       return listItem(
-        `Visibility rate dropped sharply: <strong>${escapeHtml(String(w.from))}% → ${escapeHtml(String(w.to))}%</strong> week-over-week`,
+        `Visibility score dropped sharply: <strong>${escapeHtml(String(w.from))} → ${escapeHtml(String(w.to))}</strong> week-over-week`,
       );
     case 'competitor_surge':
       return listItem(
-        `<strong>${escapeHtml(w.competitorName)}</strong> surged from ${escapeHtml(String(w.from))}% to ${escapeHtml(String(w.to))}% week-over-week`,
+        `<strong>${escapeHtml(w.competitorName)}</strong> surged from ${escapeHtml(String(w.from))} to ${escapeHtml(String(w.to))} week-over-week`,
       );
     case 'competitor_crossed':
       return listItem(
-        `<strong>${escapeHtml(w.competitorName)}</strong> crossed above your visibility rate (${escapeHtml(String(w.competitorRate))}% vs ${escapeHtml(String(w.brandRate))}%)`,
+        `<strong>${escapeHtml(w.competitorName)}</strong> crossed above your visibility score (${escapeHtml(String(w.competitorRate))} vs ${escapeHtml(String(w.brandRate))})`,
       );
     case 'lost_citations':
       return listItem(
@@ -109,7 +109,7 @@ export function renderPulseEmail({ brandName, metrics, insightsUrl, settingsUrl 
   const windowLabel = windowDays === 7 ? 'last 7 days' : 'last 24 hours';
 
   const trend = kpis.weekTrend;
-  const subject = `${brandName} Daily Pulse — visibility ${kpis.visibilityRate}% (${signed(trend)} pts this week)`;
+  const subject = `${brandName} Daily Pulse — visibility score ${kpis.visibilityRate} (${signed(trend)} pts this week)`;
 
   const highlightItems = highlights.map(highlightLine).filter(Boolean).join('');
   const warningItems = warnings.map(warningLine).filter(Boolean).join('');
@@ -126,8 +126,8 @@ export function renderPulseEmail({ brandName, metrics, insightsUrl, settingsUrl 
 
   <table role="presentation" cellspacing="8" style="border-collapse:separate;width:100%;margin-bottom:8px;">
     <tr>
-      ${kpiCell('Visibility rate', `${kpis.visibilityRate}%`, null)}
-      ${kpiCell('7-day trend', `${kpis.weekRate}%`, kpis.weekTrend)}
+      ${kpiCell('Visibility rate', String(kpis.visibilityRate), null)}
+      ${kpiCell('7-day trend', String(kpis.weekRate), kpis.weekTrend)}
     </tr>
     <tr>
       ${kpiCell('Mentions', String(kpis.mentions), kpis.mentionsChange)}

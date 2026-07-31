@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Visibility Rate is now the AI Visibility Score** — a 0-100 blend of how often AI answers mention the brand (60%), cite its site (25%) and how early it's named among tracked brands (15%), computed identically on every surface: Insights KPI header and trend chart, the leaderboard, All Prompts column and prompt detail, Topics overview and detail, Competitors cards, Reports (new reports; older snapshots keep rendering their stored values) and the Daily Pulse email. Coverage (appeared in X of Y prompts) stays visible as a secondary line, and detection remains fully deterministic — no LLM judges
+
+### Changed
+
 - Prompts: the All Prompts **Visibility column now shows the prompt-level Visibility Rate** (share of runs in the last 30 days with a brand mention or citation) instead of the all-runs average score, which runs without any brand presence diluted into misleading single digits — same rate language as the Insights headline and topic pages; the tooltip keeps run counts and the average score across visible runs, and the CSV export gains `visibility_rate_30d` / `visible_runs_30d`
 
 ### Added

@@ -472,8 +472,8 @@ export function VisibilityRateTrendChart({ data }: { data: VisibilityRateTrendDa
   const lastIndex = points.length - 1;
 
   // Y axis ticks run 5, 15, 25, … and the top one sits just above the
-  // highest rate in view (60% peak → axis ends at 65%), so the lines use
-  // the full canvas instead of being squashed under an always-100% scale.
+  // highest score in view (a 60 peak → axis ends at 65), so the lines use
+  // the full canvas instead of being squashed under an always-100 scale.
   const dataMax = Math.max(0, ...shown.flatMap((e) => points.map((p) => p.values[e.key] ?? 0)));
   let yTop = 5;
   while (yTop <= dataMax) yTop += 10;
@@ -503,7 +503,6 @@ export function VisibilityRateTrendChart({ data }: { data: VisibilityRateTrendDa
               tick={{ fontSize: 11 }}
               tickLine={false}
               axisLine={false}
-              tickFormatter={(v: number) => `${v}%`}
               className="fill-muted-foreground"
             />
             <Tooltip
@@ -526,7 +525,7 @@ export function VisibilityRateTrendChart({ data }: { data: VisibilityRateTrendDa
                             style={{ backgroundColor: entity.color }}
                           />
                           <span className="text-muted-foreground">{entity.name}:</span>
-                          <span className="font-medium text-foreground">{entry.value}%</span>
+                          <span className="font-medium text-foreground">{entry.value}</span>
                         </div>
                       );
                     })}
@@ -689,17 +688,24 @@ function LeaderboardEntry({ entry, rank }: { entry: CompetitorComparisonEntry; r
         </div>
       </div>
       <div className="flex flex-col items-end gap-0.5 shrink-0">
-        <span className="text-sm font-semibold tabular-nums">{entry.visibilityRate}%</span>
-        {entry.change !== null && entry.change !== 0 && (
+        <span
+          className="text-sm font-semibold tabular-nums"
+          title={`Mentioned in ${entry.mentionAnswers} answers · cited in ${entry.citationAnswers} · position factor ${
+            entry.positionFactor === null ? '—' : entry.positionFactor.toFixed(2)
+          }`}
+        >
+          {entry.score ?? '—'}
+        </span>
+        {entry.scoreChange !== null && entry.scoreChange !== 0 && (
           <span
             className={`text-[10px] font-medium tabular-nums ${
-              entry.change > 0 ? 'text-green-500' : 'text-red-500'
+              entry.scoreChange > 0 ? 'text-green-500' : 'text-red-500'
             }`}
           >
-            {entry.change > 0 ? '↑' : '↓'} {Math.abs(entry.change).toFixed(1)} pts
+            {entry.scoreChange > 0 ? '↑' : '↓'} {Math.abs(entry.scoreChange).toFixed(1)} pts
           </span>
         )}
-        {entry.change === 0 && (
+        {entry.scoreChange === 0 && (
           <span className="text-[10px] font-medium tabular-nums text-muted-foreground">— 0</span>
         )}
       </div>

@@ -290,10 +290,12 @@ function CompetitorCard({
 }: {
   competitor: Competitor;
   stats: {
-    rate: number;
+    score: number | null;
+    mentionAnswers: number;
+    citationAnswers: number;
+    positionFactor: number | null;
     visiblePrompts: number;
     promptCount: number;
-    avg: number;
     mentions: number;
     citations: number;
   } | null;
@@ -349,9 +351,13 @@ function CompetitorCard({
         {stats ? (
           <div
             className="text-right"
-            title={`Appeared in ${stats.visiblePrompts} of ${stats.promptCount} prompts · ${stats.mentions} mentions · ${stats.citations} citations · avg score ${stats.avg}%`}
+            title={`Mentioned in ${stats.mentionAnswers} answers · cited in ${stats.citationAnswers}${
+              stats.positionFactor !== null
+                ? ` · position factor ${stats.positionFactor.toFixed(2)}`
+                : ''
+            } · ${stats.mentions} mentions · ${stats.citations} citations`}
           >
-            <div className="text-sm font-semibold tabular-nums">{stats.rate}%</div>
+            <div className="text-sm font-semibold tabular-nums">{stats.score ?? '—'}</div>
             <div className="text-[10px] text-muted-foreground tabular-nums">
               {stats.visiblePrompts}/{stats.promptCount} prompts
             </div>
@@ -1195,16 +1201,18 @@ export default function CompetitorsPage() {
 
   if (!brand) return <NoBrandSelected />;
 
-  // Build score map from comparison data. The headline number is the
-  // prompt-level visibility rate (#493) — the same metric as the Insights
-  // leaderboard — with the raw score average kept for the tooltip.
+  // Build score map from comparison data. The headline number is the AI
+  // Visibility Score — the same metric as the Insights leaderboard — with
+  // coverage kept for the sub-line and components in the tooltip.
   const scoreMap = new Map<
     string,
     {
-      rate: number;
+      score: number | null;
+      mentionAnswers: number;
+      citationAnswers: number;
+      positionFactor: number | null;
       visiblePrompts: number;
       promptCount: number;
-      avg: number;
       mentions: number;
       citations: number;
     }
@@ -1213,10 +1221,12 @@ export default function CompetitorsPage() {
     for (const entry of comparisonData.brands) {
       if (!entry.isOwnBrand) {
         scoreMap.set(entry.name, {
-          rate: entry.visibilityRate,
+          score: entry.score,
+          mentionAnswers: entry.mentionAnswers,
+          citationAnswers: entry.citationAnswers,
+          positionFactor: entry.positionFactor,
           visiblePrompts: entry.visiblePrompts,
           promptCount: entry.promptCount,
-          avg: entry.avgVisibilityScore,
           mentions: entry.totalMentions,
           citations: entry.totalCitations,
         });

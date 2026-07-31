@@ -219,9 +219,11 @@ function PromptTable({ title, prompts }: { title: string; prompts: ReportPromptP
         <View key={p.text} style={styles.tableRow}>
           <Text style={[styles.cell, { flex: 1, paddingRight: 8 }]}>{p.text}</Text>
           <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>
-            {typeof p.visibilityRate === 'number'
-              ? `${p.visibilityRate}%`
-              : `${p.avgVisibility}/100`}
+            {typeof p.score === 'number'
+              ? p.score
+              : typeof p.visibilityRate === 'number'
+                ? `${p.visibilityRate}%`
+                : `${p.avgVisibility}/100`}
           </Text>
           <Text style={[styles.cell, { width: 40, textAlign: 'right', color: MUTED }]}>
             {p.runs}
@@ -261,7 +263,10 @@ export function ReportPdfDocument({ report }: { report: Report }) {
           ? [
               {
                 label: 'Visibility Rate',
-                value: `${payload.visibilityRate.ratePct}%`,
+                value:
+                  typeof payload.visibilityRate.score === 'number'
+                    ? String(payload.visibilityRate.score)
+                    : `${payload.visibilityRate.ratePct}%`,
                 change: null,
                 sub: `${payload.visibilityRate.visiblePrompts}/${payload.visibilityRate.promptCount} prompts`,
               },
@@ -475,9 +480,11 @@ export function ReportPdfDocument({ report }: { report: Report }) {
               <View key={tp.name} style={styles.tableRow}>
                 <Text style={[styles.cell, { flex: 1, paddingRight: 8 }]}>{tp.name}</Text>
                 <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>
-                  {typeof tp.visibilityRate === 'number'
-                    ? `${tp.visibilityRate}%`
-                    : `${tp.avgVisibility}/100`}
+                  {typeof tp.score === 'number'
+                    ? tp.score
+                    : typeof tp.visibilityRate === 'number'
+                      ? `${tp.visibilityRate}%`
+                      : `${tp.avgVisibility}/100`}
                 </Text>
                 <View style={{ width: 50, alignItems: 'flex-end' }}>
                   <DeltaText value={tp.change} />

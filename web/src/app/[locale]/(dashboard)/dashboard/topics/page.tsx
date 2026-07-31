@@ -406,14 +406,14 @@ export default function TopicsPage() {
           <KpiCard
             icon={Trophy}
             label={t('kpi.bestPerformer')}
-            value={kpis.best ? `${kpis.best.visibilityRate}%` : '—'}
+            value={kpis.best ? kpis.best.visibilityRate : '—'}
             sub={kpis.best?.name ?? t('kpi.noDataYet')}
             tone="positive"
           />
           <KpiCard
             icon={TrendingDown}
             label={t('kpi.biggestGap')}
-            value={kpis.weakest ? `${kpis.weakest.visibilityRate}%` : '—'}
+            value={kpis.weakest ? kpis.weakest.visibilityRate : '—'}
             sub={kpis.weakest?.name ?? t('kpi.noDataYet')}
             tone="warning"
           />
@@ -508,7 +508,7 @@ export default function TopicsPage() {
                               visibilityTextColor(topic.visibilityRate),
                             )}
                           >
-                            {topic.visibilityRate}%
+                            {topic.visibilityRate}
                           </span>
                           <div className="h-1.5 flex-1 max-w-[90px] rounded-full bg-muted overflow-hidden">
                             <div

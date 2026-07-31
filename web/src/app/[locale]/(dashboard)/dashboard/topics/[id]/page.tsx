@@ -257,12 +257,11 @@ export default function TopicDetailPage({ params }: { params: Promise<{ id: stri
           <KpiCard
             icon={Eye}
             label="Visibility rate"
-            value={ownBrand?.visibilityRate ?? 0}
-            change={ownBrand?.change ?? null}
-            suffix="%"
+            value={ownBrand?.score ?? 0}
+            change={ownBrand?.scoreChange ?? null}
             hint={
               ownBrand
-                ? `Appeared in ${ownBrand.visiblePrompts} of ${ownBrand.promptCount} prompts · avg score ${summary.avgVisibilityScore}%`
+                ? `Mentioned in ${ownBrand.mentionAnswers} answers · cited in ${ownBrand.citationAnswers} · appeared in ${ownBrand.visiblePrompts} of ${ownBrand.promptCount} prompts`
                 : undefined
             }
           />
@@ -356,22 +355,20 @@ export default function TopicDetailPage({ params }: { params: Promise<{ id: stri
                         <span className="ml-1.5 text-[10px] font-medium text-primary">YOU</span>
                       )}
                     </span>
-                    <span className="text-sm tabular-nums w-10 text-right">
-                      {c.visibilityRate}%
-                    </span>
-                    {c.change !== null && (
+                    <span className="text-sm tabular-nums w-10 text-right">{c.score ?? '—'}</span>
+                    {c.scoreChange !== null && (
                       <span
                         className={cn(
                           'text-xs tabular-nums w-12 text-right',
-                          c.change > 0
+                          c.scoreChange > 0
                             ? 'text-emerald-600 dark:text-emerald-400'
-                            : c.change < 0
+                            : c.scoreChange < 0
                               ? 'text-rose-600 dark:text-rose-400'
                               : 'text-muted-foreground',
                         )}
                       >
-                        {c.change > 0 ? '+' : ''}
-                        {c.change}
+                        {c.scoreChange > 0 ? '+' : ''}
+                        {c.scoreChange}
                       </span>
                     )}
                   </li>

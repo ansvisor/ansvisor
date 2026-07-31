@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import type { Json } from '@/types/supabase';
 import { API_BASE_URL } from '@/config/api';
 import {
@@ -55,6 +56,8 @@ export interface ReportPromptPerf {
    * (#562 semantics). Absent on reports generated before this shipped.
    */
   visibilityRate?: number;
+  /** AI Visibility Score (0-100). Absent on reports generated before it shipped. */
+  score?: number;
   totalMentions: number;
   runs: number;
 }
@@ -96,10 +99,12 @@ export interface ReportTopicPerf {
    * shipped.
    */
   visibilityRate?: number;
+  /** AI Visibility Score (0-100). Absent on reports generated before it shipped. */
+  score?: number;
   /**
    * Points change vs the previous window of equal length; null when no prior
-   * data. Visibility-rate points on payloads carrying `visibilityRate`, score
-   * points on older ones.
+   * data. Score points on payloads carrying `score`, visibility-rate points
+   * on `visibilityRate`-era ones, raw-score points on the oldest.
    */
   change: number | null;
   results: number;
@@ -138,8 +143,17 @@ export interface ReportVisibilityRate {
   visiblePrompts: number;
   /** Distinct tracked prompts that produced results in the window (shared denominator). */
   promptCount: number;
-  /** visiblePrompts / promptCount as a percentage, one decimal place. */
+  /** visiblePrompts / promptCount as a percentage, one decimal place (coverage). */
   ratePct: number;
+  /**
+   * AI Visibility Score (0-100): 0.6×mention rate + 0.25×citation rate +
+   * 0.15×position factor over the window's answers. Absent on reports
+   * generated before the score shipped.
+   */
+  score?: number | null;
+  mentionAnswers?: number;
+  citationAnswers?: number;
+  positionFactor?: number | null;
 }
 
 /**
@@ -241,12 +255,21 @@ async function getPromptPerformance(
 
   const acc = new Map<
     string,
-    { sumVis: number; mentions: number; runs: number; visibleRuns: number }
+    {
+      sumVis: number;
+      mentions: number;
+      runs: number;
+      visibleRuns: number;
+      mentionAnswers: number;
+      citationAnswers: number;
+      posSum: number;
+      posN: number;
+    }
   >();
   for (let offset = 0; offset < SCAN_MAX_ROWS; offset += SCAN_PAGE_SIZE) {
     const { data, error } = await supabase
       .from('prompt_results')
-      .select('prompt_id, visibility_score, mention_count, citation_count')
+      .select('prompt_id, visibility_score, mention_count, citation_count, mention_position')
       .eq('brand_id', brandId)
       .neq('platform', 'chatgpt-shopping')
       .gte('created_at', dateFrom)
@@ -260,13 +283,29 @@ async function getPromptPerformance(
     for (const r of batch) {
       const pid = r.prompt_id as string | null;
       if (!pid) continue;
-      const entry = acc.get(pid) ?? { sumVis: 0, mentions: 0, runs: 0, visibleRuns: 0 };
+      const entry = acc.get(pid) ?? {
+        sumVis: 0,
+        mentions: 0,
+        runs: 0,
+        visibleRuns: 0,
+        mentionAnswers: 0,
+        citationAnswers: 0,
+        posSum: 0,
+        posN: 0,
+      };
       const mentions = (r.mention_count as number) ?? 0;
       const citations = (r.citation_count as number) ?? 0;
+      const pos = r.mention_position as number | null;
       entry.sumVis += (r.visibility_score as number) ?? 0;
       entry.mentions += mentions;
       entry.runs += 1;
       if (mentions > 0 || citations > 0) entry.visibleRuns += 1;
+      if (mentions > 0) entry.mentionAnswers += 1;
+      if (citations > 0) entry.citationAnswers += 1;
+      if (pos !== null && pos !== undefined && pos > 0) {
+        entry.posSum += 1 / pos;
+        entry.posN += 1;
+      }
       acc.set(pid, entry);
     }
 
@@ -284,14 +323,21 @@ async function getPromptPerformance(
     .map(([pid, v]) => ({
       text: textById.get(pid) ?? '',
       avgVisibility: Math.round((v.sumVis / v.runs) * 10) / 10,
-      // Same rounding as getPromptVisibilitySummaries, so a prompt's rate
-      // reads identically on the All Prompts tab and in a report.
       visibilityRate: Math.round((v.visibleRuns / v.runs) * 1000) / 10,
+      // AI Visibility Score over this prompt's answers — same blend as the
+      // All Prompts column, so a prompt reads identically in a report.
+      score:
+        computeAiVisibilityScore({
+          answers: v.runs,
+          mentionAnswers: v.mentionAnswers,
+          citationAnswers: v.citationAnswers,
+          positionFactor: v.posN > 0 ? v.posSum / v.posN : null,
+        }) ?? 0,
       totalMentions: v.mentions,
       runs: v.runs,
     }))
     .filter((p) => p.text)
-    .sort((a, b) => b.visibilityRate - a.visibilityRate || b.totalMentions - a.totalMentions);
+    .sort((a, b) => b.score - a.score || b.totalMentions - a.totalMentions);
 
   const best = ranked.slice(0, REPORT_PROMPT_COUNT);
   // Worst come from the remaining pool so a short prompt list doesn't show
@@ -393,12 +439,15 @@ async function getTopicPerformance(
     visibility_score: number | null;
     mention_count: number | null;
     citation_count: number | null;
+    mention_position: number | null;
     created_at: string;
   }[] = [];
   for (let offset = 0; offset < SCAN_MAX_ROWS; offset += SCAN_PAGE_SIZE) {
     const { data, error } = await supabase
       .from('prompt_results')
-      .select('prompt_id, visibility_score, mention_count, citation_count, created_at')
+      .select(
+        'prompt_id, visibility_score, mention_count, citation_count, mention_position, created_at',
+      )
       .eq('brand_id', brandId)
       .neq('platform', 'chatgpt-shopping')
       .gte('created_at', prev.from)
@@ -428,22 +477,59 @@ async function getTopicPerformance(
     sumVis: number;
     n: number;
     visible: number;
+    mentionAnswers: number;
+    citationAnswers: number;
+    posSum: number;
+    posN: number;
     prevN: number;
     prevVisible: number;
+    prevMentionAnswers: number;
+    prevCitationAnswers: number;
+    prevPosSum: number;
+    prevPosN: number;
   }
   const byTopic = new Map<string, Acc>();
   for (const r of rows) {
     const topicId = topicByPrompt.get(r.prompt_id as string);
     if (!topicId) continue;
-    const acc = byTopic.get(topicId) ?? { sumVis: 0, n: 0, visible: 0, prevN: 0, prevVisible: 0 };
-    const isVisible = (r.mention_count ?? 0) > 0 || (r.citation_count ?? 0) > 0;
+    const acc = byTopic.get(topicId) ?? {
+      sumVis: 0,
+      n: 0,
+      visible: 0,
+      mentionAnswers: 0,
+      citationAnswers: 0,
+      posSum: 0,
+      posN: 0,
+      prevN: 0,
+      prevVisible: 0,
+      prevMentionAnswers: 0,
+      prevCitationAnswers: 0,
+      prevPosSum: 0,
+      prevPosN: 0,
+    };
+    const mentions = (r.mention_count as number | null) ?? 0;
+    const citations = (r.citation_count as number | null) ?? 0;
+    const pos = r.mention_position as number | null;
+    const isVisible = mentions > 0 || citations > 0;
     if ((r.created_at as string) >= dateFrom) {
       acc.sumVis += r.visibility_score ?? 0;
       acc.n += 1;
       if (isVisible) acc.visible += 1;
+      if (mentions > 0) acc.mentionAnswers += 1;
+      if (citations > 0) acc.citationAnswers += 1;
+      if (pos !== null && pos !== undefined && pos > 0) {
+        acc.posSum += 1 / pos;
+        acc.posN += 1;
+      }
     } else {
       acc.prevN += 1;
       if (isVisible) acc.prevVisible += 1;
+      if (mentions > 0) acc.prevMentionAnswers += 1;
+      if (citations > 0) acc.prevCitationAnswers += 1;
+      if (pos !== null && pos !== undefined && pos > 0) {
+        acc.prevPosSum += 1 / pos;
+        acc.prevPosN += 1;
+      }
     }
     byTopic.set(topicId, acc);
   }
@@ -457,18 +543,35 @@ async function getTopicPerformance(
   return [...byTopic.entries()]
     .filter(([id, acc]) => acc.n > 0 && nameById.has(id))
     .map(([id, acc]) => {
-      // Same rounding as the prompt-level rate (getPromptVisibilitySummaries).
       const rate = Math.round((acc.visible / acc.n) * 1000) / 10;
-      const prevRate = acc.prevN > 0 ? (acc.prevVisible / acc.prevN) * 100 : null;
+      // AI Visibility Score over the topic's answers, per window — same
+      // blend as the Topics page so the two surfaces agree.
+      const score =
+        computeAiVisibilityScore({
+          answers: acc.n,
+          mentionAnswers: acc.mentionAnswers,
+          citationAnswers: acc.citationAnswers,
+          positionFactor: acc.posN > 0 ? acc.posSum / acc.posN : null,
+        }) ?? 0;
+      const prevScore =
+        acc.prevN > 0
+          ? (computeAiVisibilityScore({
+              answers: acc.prevN,
+              mentionAnswers: acc.prevMentionAnswers,
+              citationAnswers: acc.prevCitationAnswers,
+              positionFactor: acc.prevPosN > 0 ? acc.prevPosSum / acc.prevPosN : null,
+            }) ?? 0)
+          : null;
       return {
         name: nameById.get(id)!,
         avgVisibility: round1(acc.sumVis / acc.n),
         visibilityRate: rate,
-        change: prevRate === null ? null : round1(rate - prevRate),
+        score,
+        change: prevScore === null ? null : round1(score - prevScore),
         results: acc.n,
       };
     })
-    .sort((a, b) => b.results - a.results || b.visibilityRate - a.visibilityRate)
+    .sort((a, b) => b.results - a.results || b.score - a.score)
     .slice(0, REPORT_TOPIC_COUNT);
 }
 
@@ -588,15 +691,40 @@ async function getReportVisibilityRate(
   brandId: string,
   range: { dateFrom: string; dateTo: string },
 ): Promise<ReportVisibilityRate> {
-  const [rate, tracked] = await Promise.all([
+  const supabase = await createClient();
+  const [rate, tracked, visRes] = await Promise.all([
     getVisibilityRateKpi(brandId, range),
     getTrackedPromptsKpi(brandId, range),
+    supabase.rpc('ai_visibility_aggregates', {
+      p_brand_id: brandId,
+      p_platform: null,
+      p_models: null,
+      p_region: null,
+      p_date_from: range.dateFrom,
+      p_date_to: range.dateTo,
+      p_prompt_id: null,
+      p_topic_id: null,
+    }),
   ]);
   const promptCount = tracked.activeInPeriod;
+  const vis = (visRes.data ?? {}) as {
+    answers?: number;
+    mention_answers?: number;
+    citation_answers?: number;
+    position_factor?: number | null;
+  };
+  const answers = Number(vis.answers ?? 0);
+  const mentionAnswers = Number(vis.mention_answers ?? 0);
+  const citationAnswers = Number(vis.citation_answers ?? 0);
+  const positionFactor = vis.position_factor ?? null;
   return {
     visiblePrompts: rate.visiblePrompts,
     promptCount,
     ratePct: promptCount > 0 ? Math.round((rate.visiblePrompts / promptCount) * 1000) / 10 : 0,
+    score: computeAiVisibilityScore({ answers, mentionAnswers, citationAnswers, positionFactor }),
+    mentionAnswers,
+    citationAnswers,
+    positionFactor,
   };
 }
 

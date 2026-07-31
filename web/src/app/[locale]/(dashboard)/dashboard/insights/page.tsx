@@ -1259,10 +1259,13 @@ export default function InsightsPage() {
   // content stays visible under the overlay instead of flashing a skeleton.
   const isRefetching = isLoading && summary !== null;
 
-  // Visibility Rate = prompts the brand appeared in ÷ prompts that produced
-  // results, both under the same filters (the Tracked Prompts KPI is the
-  // denominator on purpose — the two cards must agree).
-  const visibilityRatePct =
+  // Visibility Rate now IS the AI Visibility Score (0-100): 0.6×mention
+  // rate + 0.25×citation rate + 0.15×position factor over the filtered
+  // answers. Sourced from the trend action so this card, the trend card
+  // header and the leaderboard all read the exact same number. Coverage
+  // (appeared in X of Y prompts) survives as the sub-line.
+  const headlineScore = rateTrend?.summary.rate ?? 0;
+  const coveragePct =
     visibilityRate && trackedPrompts && trackedPrompts.activeInPeriod > 0
       ? Math.round((visibilityRate.visiblePrompts / trackedPrompts.activeInPeriod) * 1000) / 10
       : 0;
@@ -1398,10 +1401,17 @@ export default function InsightsPage() {
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
                 <KpiCard
                   title="Visibility Rate"
-                  tooltip="Share of tracked prompts where your brand appeared in at least one AI answer under the current filters."
+                  tooltip="AI Visibility Score (0-100): how often AI answers mention you (60%), cite your site (25%) and how early you're named (15%), under the current filters."
                   icon={Eye}
-                  value={`${visibilityRatePct}%`}
-                  sub={null}
+                  value={headlineScore}
+                  sub={
+                    visibilityRate && trackedPrompts ? (
+                      <span className="tabular-nums">
+                        appeared in {visibilityRate.visiblePrompts}/{trackedPrompts.activeInPeriod}{' '}
+                        prompts ({coveragePct}%)
+                      </span>
+                    ) : null
+                  }
                   onClick={() => setBreakdownMetric('visibility')}
                 />
                 <KpiCard
@@ -1494,7 +1504,7 @@ export default function InsightsPage() {
                       {rateTrend ? (
                         <div>
                           <div className="text-3xl font-bold tabular-nums">
-                            {rateTrend.summary.rate}%
+                            {rateTrend.summary.rate}
                           </div>
                           <div className="mt-1 flex items-center gap-2 text-xs">
                             {rateTrend.summary.change !== null && (

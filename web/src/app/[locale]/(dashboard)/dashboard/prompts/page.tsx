@@ -222,6 +222,7 @@ const PROMPT_EXPORT_HEADERS = [
   'est_ai_volume',
   'total_google_volume',
   'intent',
+  'ai_visibility_score_30d',
   'visibility_rate_30d',
   'visible_runs_30d',
   'avg_visibility_30d',
@@ -1128,6 +1129,7 @@ export default function PromptsPage() {
       est_ai_volume: volumeByPromptId.get(p.id)?.estAiVolume ?? '',
       total_google_volume: volumeByPromptId.get(p.id)?.totalGoogleVolume ?? '',
       intent: volumeByPromptId.get(p.id)?.intent ?? '',
+      ai_visibility_score_30d: visibility[p.id]?.score ?? '',
       visibility_rate_30d: visibility[p.id]?.visibilityRate ?? '',
       visible_runs_30d: visibility[p.id]?.visibleRuns ?? '',
       avg_visibility_30d: visibility[p.id]?.avgVisibility ?? '',
@@ -1746,7 +1748,7 @@ function AllPromptsTab({
       const vol = volumeByPromptId.get(p.id);
       switch (activeSort) {
         case 'visibility':
-          return vis ? vis.visibilityRate : null;
+          return vis ? (vis.score ?? 0) : null;
         case 'mentions':
           return vis ? vis.totalMentions : null;
         case 'citations':
@@ -1858,7 +1860,7 @@ function AllPromptsTab({
               </ColHead>
               <SortableHead
                 className="text-right"
-                tooltip="Visibility Rate: the percentage of AI answers for this prompt (last 30 days) that mentioned or cited the brand. Hover a value for run counts and the average score across visible answers."
+                tooltip="AI Visibility Score (0-100) for this prompt over the last 30 days: how often answers mention the brand (60%), cite its site (25%) and how early it's named (15%). Hover a value for the components."
                 sortKey="visibility"
                 activeSort={activeSort}
                 dir={dir}
@@ -1982,28 +1984,28 @@ function AllPromptsTab({
                     {vis ? (
                       <div
                         className="inline-flex items-center gap-2 justify-end min-w-[110px]"
-                        title={`Appeared in ${vis.visibleRuns} of ${vis.runs} runs (30d)${
-                          vis.avgVisibilityVisible !== null
-                            ? ` · avg score when visible: ${vis.avgVisibilityVisible.toFixed(0)}`
+                        title={`Mentioned in ${vis.mentionAnswers} of ${vis.runs} answers (30d) · cited in ${vis.citationAnswers}${
+                          vis.positionFactor !== null
+                            ? ` · position factor ${vis.positionFactor.toFixed(2)}`
                             : ''
-                        }`}
+                        } · coverage ${vis.visibilityRate}% (${vis.visibleRuns}/${vis.runs} runs)`}
                       >
                         <span
                           className={cn(
                             'text-sm font-semibold tabular-nums',
-                            visibilityColorClass(vis.visibilityRate),
+                            visibilityColorClass(vis.score ?? 0),
                           )}
                         >
-                          {vis.visibilityRate}
+                          {vis.score ?? 0}
                         </span>
                         <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
                           <div
                             className={cn(
                               'h-full rounded-full',
-                              visibilityBarClass(vis.visibilityRate),
+                              visibilityBarClass(vis.score ?? 0),
                             )}
                             style={{
-                              width: `${Math.min(100, Math.max(0, vis.visibilityRate))}%`,
+                              width: `${Math.min(100, Math.max(0, vis.score ?? 0))}%`,
                             }}
                           />
                         </div>
