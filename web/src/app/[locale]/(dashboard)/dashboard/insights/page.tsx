@@ -969,19 +969,15 @@ export default function InsightsPage() {
         // run in a real server-side Promise.all (one round trip instead of
         // five serialized POSTs), and "has any data" comes from a cheap
         // count instead of an unbounded full-table scan.
-        // A one-day window can't draw a trend line — on the default 24h
-        // preset the chart widens to the last 7 days (the action's default
-        // window when no explicit range is passed).
-        const trendOpts =
-          f.datePreset === '24h'
-            ? { ...filterOpts, dateFrom: undefined, dateTo: undefined }
-            : filterOpts;
+        // The trend chart follows the page filters exactly — same window as
+        // every other number on the page, so the headline rate never
+        // contradicts the KPI header.
         const [insights, trend] = await Promise.all([
           getInsightsData(brand.id, {
             ...filterOpts,
             checkUnfiltered: hasFilters,
           }),
-          getVisibilityRateTrend(brand.id, trendOpts).catch(() => null),
+          getVisibilityRateTrend(brand.id, filterOpts).catch(() => null),
         ]);
         setRateTrend(trend && trend.points.length > 0 ? trend : null);
         setSummary(insights.summary);
