@@ -1975,9 +1975,22 @@ export interface VisibilityRateTrendPoint {
   values: Record<string, number>;
 }
 
+export interface VisibilityRateTrendSummary {
+  /** Overall rate for the charted window (distinct prompts, not a daily average). */
+  rate: number;
+  /** Rate over the equal-length window immediately before; null without data. */
+  prevRate: number | null;
+  /** rate − prevRate in points, one decimal; null when prevRate is null. */
+  change: number | null;
+  /** ISO bounds of the previous window, for the "vs <range>" label. */
+  prevFrom: string;
+  prevTo: string;
+}
+
 export interface VisibilityRateTrendData {
   entities: VisibilityRateTrendEntity[];
   points: VisibilityRateTrendPoint[];
+  summary: VisibilityRateTrendSummary;
 }
 
 interface VisibilityRateTrendRow {
@@ -2006,22 +2019,42 @@ export async function getVisibilityRateTrend(
 ): Promise<VisibilityRateTrendData> {
   const supabase = await createClient();
   const dateFrom = opts?.dateFrom ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const dateTo = expandDateToEndOfDay(opts?.dateTo) ?? new Date().toISOString();
 
-  const [{ data: brand }, { data: brandDomains }, { data: competitors }, rpcRes] =
-    await Promise.all([
-      supabase.from('brands').select('name, logo_url').eq('id', brandId).single(),
-      supabase.from('brand_domains').select('domain, is_primary').eq('brand_id', brandId),
-      supabase.from('competitors').select('id, name, domain').eq('brand_id', brandId),
-      supabase.rpc('visibility_rate_trend', {
-        p_brand_id: brandId,
-        p_platform: null,
-        p_models: modelFilterArray(opts?.model),
-        p_region: opts?.region ?? null,
-        p_date_from: dateFrom,
-        p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? null,
-        p_topic_id: opts?.topicId ?? null,
-      }),
-    ]);
+  // Equal-length window immediately before, for the headline delta.
+  const windowMs = new Date(dateTo).getTime() - new Date(dateFrom).getTime();
+  const prevFrom = new Date(new Date(dateFrom).getTime() - windowMs).toISOString();
+  const prevTo = dateFrom;
+
+  const rateArgs = (from: string, to: string) => ({
+    p_brand_id: brandId,
+    p_platform: null as string | null,
+    p_models: modelFilterArray(opts?.model),
+    p_region: opts?.region ?? null,
+    p_date_from: from,
+    p_date_to: to,
+    p_topic_id: opts?.topicId ?? null,
+  });
+
+  const [
+    { data: brand },
+    { data: brandDomains },
+    { data: competitors },
+    rpcRes,
+    curStats,
+    curTracked,
+    prevStats,
+    prevTracked,
+  ] = await Promise.all([
+    supabase.from('brands').select('name, logo_url').eq('id', brandId).single(),
+    supabase.from('brand_domains').select('domain, is_primary').eq('brand_id', brandId),
+    supabase.from('competitors').select('id, name, domain').eq('brand_id', brandId),
+    supabase.rpc('visibility_rate_trend', rateArgs(dateFrom, dateTo)),
+    supabase.rpc('visible_prompt_stats', rateArgs(dateFrom, dateTo)),
+    supabase.rpc('tracked_prompt_count', rateArgs(dateFrom, dateTo)),
+    supabase.rpc('visible_prompt_stats', rateArgs(prevFrom, prevTo)),
+    supabase.rpc('tracked_prompt_count', rateArgs(prevFrom, prevTo)),
+  ]);
   if (rpcRes.error) throw new Error(rpcRes.error.message);
 
   const rows = (rpcRes.data ?? []) as unknown as VisibilityRateTrendRow[];
@@ -2065,7 +2098,25 @@ export async function getVisibilityRateTrend(
     };
   });
 
-  return { entities, points };
+  // Headline: overall window rate (distinct prompts over the whole window —
+  // not an average of the daily points) plus the delta vs the previous
+  // equal-length window, same RPC pair as the Insights KPI header.
+  const curVisible = (curStats.data as { visible_prompts?: number } | null)?.visible_prompts ?? 0;
+  const curCount = (curTracked.data as number | null) ?? 0;
+  const prevVisible = (prevStats.data as { visible_prompts?: number } | null)?.visible_prompts ?? 0;
+  const prevCount = (prevTracked.data as number | null) ?? 0;
+  const headlineRate = rate(curVisible, curCount);
+  const prevRate = prevCount > 0 ? rate(prevVisible, prevCount) : null;
+
+  const summary: VisibilityRateTrendSummary = {
+    rate: headlineRate,
+    prevRate,
+    change: prevRate === null ? null : Math.round((headlineRate - prevRate) * 10) / 10,
+    prevFrom,
+    prevTo,
+  };
+
+  return { entities, points, summary };
 }
 
 // ─── Head-to-Head Competitor Comparison ─────────────────────────────────────

@@ -1495,10 +1495,52 @@ export default function InsightsPage() {
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
                   <Card className="lg:col-span-3">
                     <CardHeader className="pb-2">
-                      <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                        <Users className="h-4 w-4" />
-                        AI Visibility — Brand vs Competitors
-                      </CardTitle>
+                      {rateTrend ? (
+                        <div>
+                          <div className="text-3xl font-bold tabular-nums">
+                            {rateTrend.summary.rate}%
+                          </div>
+                          <div className="mt-1 flex items-center gap-2 text-xs">
+                            {rateTrend.summary.change !== null && (
+                              <span
+                                className={cn(
+                                  'flex items-center gap-0.5 font-medium',
+                                  rateTrend.summary.change >= 0
+                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                    : 'text-red-600 dark:text-red-400',
+                                )}
+                              >
+                                {rateTrend.summary.change >= 0 ? (
+                                  <TrendingUp className="h-3 w-3" />
+                                ) : (
+                                  <TrendingDown className="h-3 w-3" />
+                                )}
+                                {rateTrend.summary.change >= 0 ? '+' : ''}
+                                {rateTrend.summary.change} pts
+                              </span>
+                            )}
+                            <span className="text-muted-foreground">
+                              vs{' '}
+                              {new Date(rateTrend.summary.prevFrom).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: '2-digit',
+                                year: 'numeric',
+                              })}{' '}
+                              –{' '}
+                              {new Date(rateTrend.summary.prevTo).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: '2-digit',
+                                year: 'numeric',
+                              })}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                          <Users className="h-4 w-4" />
+                          AI Visibility — Brand vs Competitors
+                        </CardTitle>
+                      )}
                     </CardHeader>
                     <CardContent>
                       {rateTrend ? (
