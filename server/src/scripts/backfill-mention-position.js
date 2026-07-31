@@ -1,6 +1,9 @@
 /**
- * Backfill mention_position / mentioned_entity_count on historical
- * prompt_results from the stored answer text (00038).
+ * Backfill mention-position signals on historical prompt_results from the
+ * stored answer text (00038):
+ *
+ *   - mention_position / mentioned_entity_count columns (own brand)
+ *   - mention_position inside each competitor_mentions entry (competitors)
  *
  * Run: `node src/scripts/backfill-mention-position.js [--days N] [--brand <id>] [--dry-run]`
  *
@@ -8,9 +11,9 @@
  * (churned orgs' data never surfaces in any dashboard, so recomputing it is
  * wasted work). Narrow further with --brand, or --days to limit history.
  *
- * Idempotent: only rows with `mentioned_entity_count IS NULL` are touched —
- * that column is the "computed" marker (0 = computed, nothing found), so
- * re-running skips everything already processed. Batches are small and
+ * Idempotent: rows whose columns are set AND whose competitor entries all
+ * carry a mention_position key are skipped, so re-running only processes
+ * what's missing. Batches are small, concurrent in bounded chunks, and
  * paced so the shared database stays responsive.
  *
  * Positions are computed against the brand's CURRENT competitor roster —
@@ -23,6 +26,7 @@ import { computeMentionPosition } from '../lib/response-parser.js';
 
 const BATCH_SIZE = 500;
 const BATCH_PAUSE_MS = 250;
+const CONCURRENCY = 20;
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -63,19 +67,28 @@ async function brandContext(brand) {
   };
 }
 
+function rowNeedsWork(row) {
+  if (row.mentioned_entity_count == null) return true;
+  const entries = Array.isArray(row.competitor_mentions) ? row.competitor_mentions : [];
+  return entries.some((entry) => !('mention_position' in entry));
+}
+
 async function backfillBrand(brand) {
   const { brandInfo, competitors } = await brandContext(brand);
   let updated = 0;
+  let skipped = 0;
 
-  for (;;) {
+  // Offset paging over a stable ordering: updates never change which rows
+  // the filter selects, so pages stay consistent across the walk.
+  for (let offset = 0; ; offset += BATCH_SIZE) {
     let query = supabaseAdmin
       .from('prompt_results')
-      .select('id, response')
+      .select('id, response, competitor_mentions, mentioned_entity_count')
       .eq('brand_id', brand.id)
-      .is('mentioned_entity_count', null)
       .not('response', 'is', null)
       .order('created_at', { ascending: false })
-      .limit(BATCH_SIZE);
+      .order('id', { ascending: true })
+      .range(offset, offset + BATCH_SIZE - 1);
     if (daysArg) {
       query = query.gte('created_at', new Date(Date.now() - daysArg * 86_400_000).toISOString());
     }
@@ -84,25 +97,28 @@ async function backfillBrand(brand) {
     if (error) throw new Error(error.message);
     if (!rows?.length) break;
 
-    // Update in small concurrent chunks: one-by-one round-trips would take
-    // hours over the full history, while unbounded concurrency would hammer
-    // the shared database.
-    const CONCURRENCY = 20;
     for (let i = 0; i < rows.length; i += CONCURRENCY) {
       const chunk = rows.slice(i, i + CONCURRENCY);
       await Promise.all(
         chunk.map(async (row) => {
-          const { mentionPosition, mentionedEntityCount } = computeMentionPosition(
-            row.response ?? '',
-            brandInfo,
-            competitors,
-          );
+          if (!rowNeedsWork(row)) {
+            skipped++;
+            return;
+          }
+          const { mentionPosition, mentionedEntityCount, competitorPositions } =
+            computeMentionPosition(row.response ?? '', brandInfo, competitors);
+          const entries = Array.isArray(row.competitor_mentions) ? row.competitor_mentions : [];
+          const annotated = entries.map((entry) => ({
+            ...entry,
+            mention_position: competitorPositions.get(entry.competitor_id) ?? null,
+          }));
           if (!dryRun) {
             const { error: updateErr } = await supabaseAdmin
               .from('prompt_results')
               .update({
                 mention_position: mentionPosition,
                 mentioned_entity_count: mentionedEntityCount,
+                competitor_mentions: annotated,
               })
               .eq('id', row.id);
             if (updateErr) throw new Error(updateErr.message);
@@ -112,8 +128,7 @@ async function backfillBrand(brand) {
       );
     }
 
-    console.log(`  ${brand.name}: ${updated} rows${dryRun ? ' (dry run)' : ''}`);
-    if (dryRun) break; // dry run would loop forever — nothing gets marked
+    console.log(`  ${brand.name}: ${updated} updated, ${skipped} already done`);
     if (rows.length < BATCH_SIZE) break;
     await sleep(BATCH_PAUSE_MS);
   }
@@ -131,5 +146,5 @@ let total = 0;
 for (const brand of brands) {
   total += await backfillBrand(brand);
 }
-console.log(`Done. ${total} row(s) ${dryRun ? 'would be' : ''} updated.`);
+console.log(`Done. ${total} row(s) ${dryRun ? 'would be ' : ''}updated.`);
 process.exit(0);

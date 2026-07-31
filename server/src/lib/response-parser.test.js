@@ -273,7 +273,7 @@ describe('response-parser', () => {
 
     it('ranks the brand first when it is named before every competitor', () => {
       const text = 'Acme leads the market, ahead of Globex and Initech.';
-      expect(computeMentionPosition(text, brand, competitors)).toEqual({
+      expect(computeMentionPosition(text, brand, competitors)).toMatchObject({
         mentionPosition: 1,
         mentionedEntityCount: 3,
       });
@@ -281,7 +281,7 @@ describe('response-parser', () => {
 
     it('ranks the brand by how many competitors are named before it', () => {
       const text = 'Top picks: Globex, Initech, and also Acme as a budget option.';
-      expect(computeMentionPosition(text, brand, competitors)).toEqual({
+      expect(computeMentionPosition(text, brand, competitors)).toMatchObject({
         mentionPosition: 3,
         mentionedEntityCount: 3,
       });
@@ -289,7 +289,7 @@ describe('response-parser', () => {
 
     it('returns a null position when the brand is not mentioned', () => {
       const text = 'Globex and Umbrella dominate this space.';
-      expect(computeMentionPosition(text, brand, competitors)).toEqual({
+      expect(computeMentionPosition(text, brand, competitors)).toMatchObject({
         mentionPosition: null,
         mentionedEntityCount: 2,
       });
@@ -297,7 +297,7 @@ describe('response-parser', () => {
 
     it('counts a domain occurrence as a brand mention for positioning', () => {
       const text = 'Globex is popular, but acme.com has the best docs.';
-      expect(computeMentionPosition(text, brand, competitors)).toEqual({
+      expect(computeMentionPosition(text, brand, competitors)).toMatchObject({
         mentionPosition: 2,
         mentionedEntityCount: 2,
       });
@@ -305,14 +305,14 @@ describe('response-parser', () => {
 
     it('ignores names that only appear inside URLs', () => {
       const text = 'Initech is the leader. See [comparison](https://acme.com/vs) for details.';
-      expect(computeMentionPosition(text, brand, competitors)).toEqual({
+      expect(computeMentionPosition(text, brand, competitors)).toMatchObject({
         mentionPosition: null,
         mentionedEntityCount: 1,
       });
     });
 
     it('reports zero entities for an answer that names nobody', () => {
-      expect(computeMentionPosition('Nothing relevant here.', brand, competitors)).toEqual({
+      expect(computeMentionPosition('Nothing relevant here.', brand, competitors)).toMatchObject({
         mentionPosition: null,
         mentionedEntityCount: 0,
       });
@@ -320,10 +320,46 @@ describe('response-parser', () => {
 
     it("uses each entity's earliest occurrence, not its last", () => {
       const text = 'Globex... later Acme appears. Globex again at the end.';
-      expect(computeMentionPosition(text, brand, competitors)).toEqual({
+      expect(computeMentionPosition(text, brand, competitors)).toMatchObject({
         mentionPosition: 2,
         mentionedEntityCount: 2,
       });
+    });
+
+    it('ranks each mentioned competitor among all mentioned entities', () => {
+      const text = 'Globex leads, then Acme, with Umbrella as a distant third.';
+      const result = computeMentionPosition(text, brand, competitors);
+      expect(result.mentionPosition).toBe(2);
+      expect(result.competitorPositions.get('c1')).toBe(1); // Globex
+      expect(result.competitorPositions.get('c3')).toBe(3); // Umbrella
+      expect(result.competitorPositions.has('c2')).toBe(false); // Initech absent
+    });
+
+    it('ranks competitors even when the brand is not mentioned', () => {
+      const text = 'Initech and Globex dominate here.';
+      const result = computeMentionPosition(text, brand, competitors);
+      expect(result.mentionPosition).toBeNull();
+      expect(result.competitorPositions.get('c2')).toBe(1); // Initech
+      expect(result.competitorPositions.get('c1')).toBe(2); // Globex
+    });
+  });
+
+  describe('competitor mention positions in parseResponse', () => {
+    it('embeds each competitor rank into competitor_mentions entries', () => {
+      const brand = { brandName: 'Acme', domains: ['acme.com'] };
+      const competitors = [
+        { id: 'c1', name: 'Globex', domain: 'globex.com' },
+        { id: 'c2', name: 'Initech', domain: 'initech.com' },
+      ];
+      const response = {
+        text: 'Globex is first here, Acme second, and nobody mentions the rest.',
+        citations: [],
+      };
+      const result = parseResponse(response, brand, 'neutral', competitors);
+      const byId = new Map(result.competitorMentions.map((c) => [c.competitor_id, c]));
+      expect(byId.get('c1').mention_position).toBe(1);
+      expect(byId.get('c2').mention_position).toBeNull();
+      expect(result.mentionPosition).toBe(2);
     });
   });
 });

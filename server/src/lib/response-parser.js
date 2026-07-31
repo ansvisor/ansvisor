@@ -97,16 +97,23 @@ function firstOccurrenceIndex(text, term) {
 }
 
 /**
- * Where the brand lands in the answer's mention order, among the brand and
- * its tracked competitors. Deterministic: earliest word-boundary occurrence
- * of each entity's name/domain in the URL-stripped answer text.
+ * Where each tracked entity (the brand and its competitors) lands in the
+ * answer's mention order. Deterministic: earliest word-boundary occurrence
+ * of each entity's name/domain in the URL-stripped answer text; an entity's
+ * rank is 1 + the number of other mentioned entities named before it.
  *
- * @returns {{ mentionPosition: number | null, mentionedEntityCount: number }}
+ * @returns {{
+ *   mentionPosition: number | null,
+ *   mentionedEntityCount: number,
+ *   competitorPositions: Map<string, number>,
+ * }}
  *   mentionPosition — 1-based rank of the brand's first mention (1 = named
  *   first), null when the brand isn't mentioned at all.
- *   mentionedEntityCount — how many of the tracked entities (brand +
- *   competitors) the answer mentions; 0 marks "computed, nothing found",
- *   while NULL in the database means "not computed yet" (backfill marker).
+ *   mentionedEntityCount — how many of the tracked entities the answer
+ *   mentions; 0 marks "computed, nothing found", while NULL in the database
+ *   means "not computed yet" (backfill marker).
+ *   competitorPositions — competitor id → 1-based rank, only for
+ *   competitors the answer actually mentions.
  */
 export function computeMentionPosition(text, brand, competitors = []) {
   const cleanText = stripUrls(text);
@@ -121,15 +128,24 @@ export function computeMentionPosition(text, brand, competitors = []) {
   };
 
   const brandIndex = entityFirstIndex([brand.brandName, ...(brand.domains || [])]);
-  const competitorIndexes = (competitors || [])
-    .map((comp) => entityFirstIndex([comp.name, ...(comp.domain ? [comp.domain] : [])]))
-    .filter((idx) => idx >= 0);
+  const mentionedCompetitors = (competitors || [])
+    .map((comp) => ({
+      id: comp.id,
+      index: entityFirstIndex([comp.name, ...(comp.domain ? [comp.domain] : [])]),
+    }))
+    .filter((comp) => comp.index >= 0);
 
-  const mentionedEntityCount = competitorIndexes.length + (brandIndex >= 0 ? 1 : 0);
-  if (brandIndex < 0) return { mentionPosition: null, mentionedEntityCount };
+  const allIndexes = [
+    ...mentionedCompetitors.map((comp) => comp.index),
+    ...(brandIndex >= 0 ? [brandIndex] : []),
+  ];
+  const rankOf = (index) => allIndexes.filter((other) => other < index).length + 1;
 
-  const namedBefore = competitorIndexes.filter((idx) => idx < brandIndex).length;
-  return { mentionPosition: namedBefore + 1, mentionedEntityCount };
+  return {
+    mentionPosition: brandIndex >= 0 ? rankOf(brandIndex) : null,
+    mentionedEntityCount: allIndexes.length,
+    competitorPositions: new Map(mentionedCompetitors.map((comp) => [comp.id, rankOf(comp.index)])),
+  };
 }
 
 /**
@@ -162,6 +178,13 @@ export function parseResponse(response, brand, sentiment = 'neutral', competitor
     sentiment,
   });
 
+  // --- Mention order among brand + competitors (position signal) ---
+  const { mentionPosition, mentionedEntityCount, competitorPositions } = computeMentionPosition(
+    text,
+    brand,
+    competitors,
+  );
+
   // --- Competitor mentions (on URL-stripped text) ---
   const competitorMentions = competitors.map((comp) => {
     let compMentions = countOccurrences(cleanText, comp.name);
@@ -193,15 +216,9 @@ export function parseResponse(response, brand, sentiment = 'neutral', competitor
       mention_count: compMentions,
       citation_count: compCitations,
       visibility_score: compScore,
+      mention_position: competitorPositions.get(comp.id) ?? null,
     };
   });
-
-  // --- Mention order among brand + competitors (position signal) ---
-  const { mentionPosition, mentionedEntityCount } = computeMentionPosition(
-    text,
-    brand,
-    competitors,
-  );
 
   return {
     mentionCount,
