@@ -348,6 +348,8 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
               model_used: aiResponse.model,
               region: meta.region,
               competitor_mentions: metrics.competitorMentions,
+              mention_position: metrics.mentionPosition,
+              mentioned_entity_count: metrics.mentionedEntityCount,
               search_queries: Array.isArray(aiResponse.search_queries)
                 ? aiResponse.search_queries
                 : [],
@@ -430,6 +432,8 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
             model_used: aiResponse.model,
             region,
             competitor_mentions: metrics.competitorMentions,
+            mention_position: metrics.mentionPosition,
+            mentioned_entity_count: metrics.mentionedEntityCount,
           });
         } catch (err) {
           logger.error({ err, model: modelName, region }, 'ai model task failed');

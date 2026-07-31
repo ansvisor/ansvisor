@@ -87,13 +87,59 @@ export function countBrandMentions(text, brand) {
 }
 
 /**
+ * First word-boundary occurrence index of a term (case-insensitive), or -1.
+ */
+function firstOccurrenceIndex(text, term) {
+  if (!term) return -1;
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = new RegExp(`\\b${escaped}\\b`, 'i').exec(text);
+  return match ? match.index : -1;
+}
+
+/**
+ * Where the brand lands in the answer's mention order, among the brand and
+ * its tracked competitors. Deterministic: earliest word-boundary occurrence
+ * of each entity's name/domain in the URL-stripped answer text.
+ *
+ * @returns {{ mentionPosition: number | null, mentionedEntityCount: number }}
+ *   mentionPosition — 1-based rank of the brand's first mention (1 = named
+ *   first), null when the brand isn't mentioned at all.
+ *   mentionedEntityCount — how many of the tracked entities (brand +
+ *   competitors) the answer mentions; 0 marks "computed, nothing found",
+ *   while NULL in the database means "not computed yet" (backfill marker).
+ */
+export function computeMentionPosition(text, brand, competitors = []) {
+  const cleanText = stripUrls(text);
+
+  const entityFirstIndex = (names) => {
+    let best = -1;
+    for (const name of names) {
+      const idx = firstOccurrenceIndex(cleanText, name);
+      if (idx >= 0 && (best === -1 || idx < best)) best = idx;
+    }
+    return best;
+  };
+
+  const brandIndex = entityFirstIndex([brand.brandName, ...(brand.domains || [])]);
+  const competitorIndexes = (competitors || [])
+    .map((comp) => entityFirstIndex([comp.name, ...(comp.domain ? [comp.domain] : [])]))
+    .filter((idx) => idx >= 0);
+
+  const mentionedEntityCount = competitorIndexes.length + (brandIndex >= 0 ? 1 : 0);
+  if (brandIndex < 0) return { mentionPosition: null, mentionedEntityCount };
+
+  const namedBefore = competitorIndexes.filter((idx) => idx < brandIndex).length;
+  return { mentionPosition: namedBefore + 1, mentionedEntityCount };
+}
+
+/**
  * Parse the AI response and compute visibility metrics for a brand.
  * Sentiment must be provided externally (from AI analysis).
  * @param {{ text: string, citations: Array<{ url: string, title: string, startIndex: number, endIndex: number }> }} response
  * @param {{ brandName: string, domains: string[] }} brand
  * @param {'positive'|'neutral'|'negative'} sentiment - AI-analyzed sentiment
  * @param {Array<{ id: string, name: string, domain: string }>} [competitors] - Optional competitor list
- * @returns {{ mentionCount: number, citationCount: number, sentiment: string, visibilityScore: number, competitorMentions: Array }}
+ * @returns {{ mentionCount: number, citationCount: number, sentiment: string, visibilityScore: number, competitorMentions: Array, mentionPosition: number | null, mentionedEntityCount: number }}
  */
 export function parseResponse(response, brand, sentiment = 'neutral', competitors = []) {
   const { text, citations } = response;
@@ -150,7 +196,22 @@ export function parseResponse(response, brand, sentiment = 'neutral', competitor
     };
   });
 
-  return { mentionCount, citationCount, sentiment, visibilityScore, competitorMentions };
+  // --- Mention order among brand + competitors (position signal) ---
+  const { mentionPosition, mentionedEntityCount } = computeMentionPosition(
+    text,
+    brand,
+    competitors,
+  );
+
+  return {
+    mentionCount,
+    citationCount,
+    sentiment,
+    visibilityScore,
+    competitorMentions,
+    mentionPosition,
+    mentionedEntityCount,
+  };
 }
 
 /**

@@ -64,6 +64,8 @@ export async function handleScraperResult({
       model_used: aiResponse.model,
       region: region ?? null,
       competitor_mentions: metrics.competitorMentions,
+      mention_position: metrics.mentionPosition,
+      mentioned_entity_count: metrics.mentionedEntityCount,
       shopping_cards: aiResponse.shopping_cards ?? [],
       inline_products: aiResponse.inline_products ?? [],
       search_queries: Array.isArray(aiResponse.search_queries) ? aiResponse.search_queries : [],

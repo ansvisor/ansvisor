@@ -698,6 +698,8 @@ export type Database = {
           id: string;
           inline_products: Json;
           mention_count: number;
+          mention_position: number | null;
+          mentioned_entity_count: number | null;
           model_used: string | null;
           platform: string;
           prompt_id: string;
@@ -717,6 +719,8 @@ export type Database = {
           id?: string;
           inline_products?: Json;
           mention_count?: number;
+          mention_position?: number | null;
+          mentioned_entity_count?: number | null;
           model_used?: string | null;
           platform: string;
           prompt_id: string;
@@ -736,6 +740,8 @@ export type Database = {
           id?: string;
           inline_products?: Json;
           mention_count?: number;
+          mention_position?: number | null;
+          mentioned_entity_count?: number | null;
           model_used?: string | null;
           platform?: string;
           prompt_id?: string;

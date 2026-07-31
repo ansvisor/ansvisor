@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { countBrandMentions, parseResponse } from './response-parser.js';
+import { computeMentionPosition, countBrandMentions, parseResponse } from './response-parser.js';
 
 describe('response-parser', () => {
   describe('countBrandMentions', () => {
@@ -259,6 +259,70 @@ describe('response-parser', () => {
         expect(result.mentionCount).toBe(0);
         expect(result.citationCount).toBe(0);
         expect(result.visibilityScore).toBe(0);
+      });
+    });
+  });
+
+  describe('computeMentionPosition', () => {
+    const brand = { brandName: 'Acme', domains: ['acme.com'] };
+    const competitors = [
+      { id: 'c1', name: 'Globex', domain: 'globex.com' },
+      { id: 'c2', name: 'Initech', domain: 'initech.com' },
+      { id: 'c3', name: 'Umbrella', domain: 'umbrella.com' },
+    ];
+
+    it('ranks the brand first when it is named before every competitor', () => {
+      const text = 'Acme leads the market, ahead of Globex and Initech.';
+      expect(computeMentionPosition(text, brand, competitors)).toEqual({
+        mentionPosition: 1,
+        mentionedEntityCount: 3,
+      });
+    });
+
+    it('ranks the brand by how many competitors are named before it', () => {
+      const text = 'Top picks: Globex, Initech, and also Acme as a budget option.';
+      expect(computeMentionPosition(text, brand, competitors)).toEqual({
+        mentionPosition: 3,
+        mentionedEntityCount: 3,
+      });
+    });
+
+    it('returns a null position when the brand is not mentioned', () => {
+      const text = 'Globex and Umbrella dominate this space.';
+      expect(computeMentionPosition(text, brand, competitors)).toEqual({
+        mentionPosition: null,
+        mentionedEntityCount: 2,
+      });
+    });
+
+    it('counts a domain occurrence as a brand mention for positioning', () => {
+      const text = 'Globex is popular, but acme.com has the best docs.';
+      expect(computeMentionPosition(text, brand, competitors)).toEqual({
+        mentionPosition: 2,
+        mentionedEntityCount: 2,
+      });
+    });
+
+    it('ignores names that only appear inside URLs', () => {
+      const text = 'Initech is the leader. See [comparison](https://acme.com/vs) for details.';
+      expect(computeMentionPosition(text, brand, competitors)).toEqual({
+        mentionPosition: null,
+        mentionedEntityCount: 1,
+      });
+    });
+
+    it('reports zero entities for an answer that names nobody', () => {
+      expect(computeMentionPosition('Nothing relevant here.', brand, competitors)).toEqual({
+        mentionPosition: null,
+        mentionedEntityCount: 0,
+      });
+    });
+
+    it("uses each entity's earliest occurrence, not its last", () => {
+      const text = 'Globex... later Acme appears. Globex again at the end.';
+      expect(computeMentionPosition(text, brand, competitors)).toEqual({
+        mentionPosition: 2,
+        mentionedEntityCount: 2,
       });
     });
   });
