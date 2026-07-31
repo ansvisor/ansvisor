@@ -1461,6 +1461,9 @@ export type Database = {
           total_citations: number;
           runs: number;
           visible_runs: number;
+          mention_answers: number;
+          citation_answers: number;
+          position_factor: number | null;
           last_run_at: string;
         }[];
       };
@@ -1474,6 +1477,19 @@ export type Database = {
         }[];
       };
       competitor_aggregates: {
+        Args: {
+          p_brand_id: string;
+          p_platform?: string | null;
+          p_models?: string[] | null;
+          p_region?: string | null;
+          p_date_from?: string | null;
+          p_date_to?: string | null;
+          p_prompt_id?: string | null;
+          p_topic_id?: string | null;
+        };
+        Returns: Json;
+      };
+      ai_visibility_aggregates: {
         Args: {
           p_brand_id: string;
           p_platform?: string | null;
