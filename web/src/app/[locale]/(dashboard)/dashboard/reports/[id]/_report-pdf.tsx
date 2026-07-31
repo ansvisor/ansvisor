@@ -427,7 +427,9 @@ export function ReportPdfDocument({ report }: { report: Report }) {
                 </Text>
                 <View style={{ width: 60, alignItems: 'flex-end' }}>
                   <Text style={styles.cell}>
-                    {hasCompetitorVisibilityRate ? c.visibilityRate : c.avgVisibilityScore}%
+                    {typeof c.score === 'number'
+                      ? c.score
+                      : `${hasCompetitorVisibilityRate ? c.visibilityRate : c.avgVisibilityScore}%`}
                   </Text>
                   {hasCompetitorVisibilityRate && (
                     <Text style={styles.kpiSub}>

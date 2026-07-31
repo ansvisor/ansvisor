@@ -386,7 +386,17 @@ export default function ReportDetailPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          {hasCompetitorVisibilityRate ? (
+                          {typeof c.score === 'number' ? (
+                            <>
+                              <div>{c.score}</div>
+                              <div className="text-xs font-normal text-muted-foreground">
+                                {t('kpi.visibilityRateSub', {
+                                  visible: c.visiblePrompts,
+                                  total: c.promptCount,
+                                })}
+                              </div>
+                            </>
+                          ) : hasCompetitorVisibilityRate ? (
                             <>
                               <div>{c.visibilityRate}%</div>
                               <div className="text-xs font-normal text-muted-foreground">
