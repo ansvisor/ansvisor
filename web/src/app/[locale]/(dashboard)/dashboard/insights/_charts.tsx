@@ -392,16 +392,8 @@ function CompetitorTooltip({
 
 // ─── Visibility Rate trend (one line per brand, logo at the line's end) ──────
 
-const RATE_TREND_PALETTE = [
-  '#94a3b8',
-  '#8b5cf6',
-  '#3b82f6',
-  '#22c55e',
-  '#f97316',
-  '#06b6d4',
-  '#ec4899',
-  '#f59e0b',
-];
+// One color per shown competitor (top 5): navy, purple, green, orange, red.
+const RATE_TREND_PALETTE = ['#1e3a8a', '#a855f7', '#22c55e', '#f97316', '#ef4444'];
 const RATE_TREND_MAX_COMPETITORS = 5;
 const OWN_BRAND_COLOR = '#6366f1';
 
@@ -466,7 +458,11 @@ export function VisibilityRateTrendChart({ data }: { data: VisibilityRateTrendDa
       .slice(0, RATE_TREND_MAX_COMPETITORS),
   ].map((entity, i) => ({
     ...entity,
-    color: entity.isOwnBrand ? OWN_BRAND_COLOR : RATE_TREND_PALETTE[i % RATE_TREND_PALETTE.length],
+    // Own brand is index 0, so competitor #1 (highest rate) starts the
+    // palette at navy.
+    color: entity.isOwnBrand
+      ? OWN_BRAND_COLOR
+      : RATE_TREND_PALETTE[(i - 1) % RATE_TREND_PALETTE.length],
     logoUrl: entity.logoUrl ?? (entity.domain ? getFaviconUrl(entity.domain, 64) : ''),
   }));
 
