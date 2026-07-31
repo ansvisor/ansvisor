@@ -414,13 +414,14 @@ function LogoDot(props: {
   color: string;
   logoUrl: string;
   entityKey: string;
+  dimmed?: boolean;
 }) {
-  const { cx, cy, index, lastIndex, color, logoUrl, entityKey } = props;
+  const { cx, cy, index, lastIndex, color, logoUrl, entityKey, dimmed } = props;
   if (index !== lastIndex || cx == null || cy == null) return <g />;
   const r = 11;
   const clipId = `rate-trend-logo-${entityKey}`;
   return (
-    <g>
+    <g opacity={dimmed ? 0.25 : 1}>
       <defs>
         <clipPath id={clipId}>
           <circle cx={cx} cy={cy} r={r - 2.5} />
@@ -442,6 +443,8 @@ function LogoDot(props: {
 
 export function VisibilityRateTrendChart({ data }: { data: VisibilityRateTrendData }) {
   const { entities, points } = data;
+  // Hovering a line (or its legend entry) brings it forward and dims the rest.
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
   if (points.length === 0) {
     return (
@@ -533,32 +536,50 @@ export function VisibilityRateTrendChart({ data }: { data: VisibilityRateTrendDa
                 );
               }}
             />
-            {shown.map((entity) => (
-              <Line
-                key={entity.key}
-                type="monotone"
-                dataKey={entity.key}
-                stroke={entity.color}
-                strokeWidth={entity.isOwnBrand ? 2.5 : 1.5}
-                isAnimationActive={false}
-                dot={
-                  <LogoDot
-                    lastIndex={lastIndex}
-                    color={entity.color}
-                    logoUrl={entity.logoUrl}
-                    entityKey={entity.key}
+            {/* Hovered line renders last so it sits on top of the others. */}
+            {[...shown]
+              .sort((a, b) => (a.key === hoveredKey ? 1 : 0) - (b.key === hoveredKey ? 1 : 0))
+              .map((entity) => {
+                const dimmed = hoveredKey !== null && hoveredKey !== entity.key;
+                return (
+                  <Line
+                    key={entity.key}
+                    type="monotone"
+                    dataKey={entity.key}
+                    stroke={entity.color}
+                    strokeOpacity={dimmed ? 0.15 : 1}
+                    strokeWidth={entity.key === hoveredKey ? 3 : entity.isOwnBrand ? 2.5 : 1.5}
+                    isAnimationActive={false}
+                    onMouseEnter={() => setHoveredKey(entity.key)}
+                    onMouseLeave={() => setHoveredKey(null)}
+                    dot={
+                      <LogoDot
+                        lastIndex={lastIndex}
+                        color={entity.color}
+                        logoUrl={entity.logoUrl}
+                        entityKey={entity.key}
+                        dimmed={dimmed}
+                      />
+                    }
+                    activeDot={{ r: 3 }}
                   />
-                }
-                activeDot={{ r: 3 }}
-              />
-            ))}
+                );
+              })}
           </LineChart>
         )}
       </ChartContainer>
 
       <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
         {shown.map((entity) => (
-          <li key={entity.key} className="flex items-center gap-1.5 text-xs">
+          <li
+            key={entity.key}
+            className="flex cursor-default items-center gap-1.5 text-xs transition-opacity"
+            style={{
+              opacity: hoveredKey !== null && hoveredKey !== entity.key ? 0.35 : 1,
+            }}
+            onMouseEnter={() => setHoveredKey(entity.key)}
+            onMouseLeave={() => setHoveredKey(null)}
+          >
             <span
               className="h-2.5 w-2.5 shrink-0 rounded-sm"
               style={{ background: entity.color }}
