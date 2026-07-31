@@ -15,14 +15,18 @@ import {
   Cell,
   BarChart,
   Bar,
+  LineChart,
+  Line,
 } from 'recharts';
 import type {
   CompetitorComparisonEntry,
   ProviderComparisonRow,
   VisibilityTrendPoint,
+  VisibilityRateTrendData,
   SoVByPlatform,
   SoVTrendPoint,
 } from '@/lib/actions/tracking';
+import { getFaviconUrl } from '@/lib/favicon';
 
 // ─── Adaptive Y-axis ─────────────────────────────────────────────────────────
 // Visibility scores are theoretically 0–100 but realistic values for most
@@ -382,6 +386,182 @@ function CompetitorTooltip({
             <span className="font-medium text-foreground">{entry.value}%</span>
           </div>
         ))}
+    </div>
+  );
+}
+
+// ─── Visibility Rate trend (one line per brand, logo at the line's end) ──────
+
+const RATE_TREND_PALETTE = [
+  '#94a3b8',
+  '#8b5cf6',
+  '#3b82f6',
+  '#22c55e',
+  '#f97316',
+  '#06b6d4',
+  '#ec4899',
+  '#f59e0b',
+];
+const RATE_TREND_MAX_COMPETITORS = 5;
+const OWN_BRAND_COLOR = '#6366f1';
+
+/** Circle-clipped logo rendered on a line's last data point. */
+function LogoDot(props: {
+  cx?: number;
+  cy?: number;
+  index?: number;
+  lastIndex: number;
+  color: string;
+  logoUrl: string;
+  entityKey: string;
+}) {
+  const { cx, cy, index, lastIndex, color, logoUrl, entityKey } = props;
+  if (index !== lastIndex || cx == null || cy == null) return <g />;
+  const r = 11;
+  const clipId = `rate-trend-logo-${entityKey}`;
+  return (
+    <g>
+      <defs>
+        <clipPath id={clipId}>
+          <circle cx={cx} cy={cy} r={r - 2.5} />
+        </clipPath>
+      </defs>
+      <circle cx={cx} cy={cy} r={r} fill="#ffffff" stroke={color} strokeWidth={2} />
+      <image
+        href={logoUrl}
+        x={cx - (r - 2.5)}
+        y={cy - (r - 2.5)}
+        width={(r - 2.5) * 2}
+        height={(r - 2.5) * 2}
+        clipPath={`url(#${clipId})`}
+        preserveAspectRatio="xMidYMid slice"
+      />
+    </g>
+  );
+}
+
+export function VisibilityRateTrendChart({ data }: { data: VisibilityRateTrendData }) {
+  const { entities, points } = data;
+
+  if (points.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
+        No visibility data for this period yet
+      </div>
+    );
+  }
+
+  // Own brand always plots; competitors capped by period-average rate so a
+  // long roster doesn't turn the chart into spaghetti.
+  const avgRate = (key: string) =>
+    points.reduce((sum, p) => sum + (p.values[key] ?? 0), 0) / points.length;
+  const shown = [
+    ...entities.filter((e) => e.isOwnBrand),
+    ...entities
+      .filter((e) => !e.isOwnBrand)
+      .sort((a, b) => avgRate(b.key) - avgRate(a.key))
+      .slice(0, RATE_TREND_MAX_COMPETITORS),
+  ].map((entity, i) => ({
+    ...entity,
+    color: entity.isOwnBrand ? OWN_BRAND_COLOR : RATE_TREND_PALETTE[i % RATE_TREND_PALETTE.length],
+    logoUrl: entity.logoUrl ?? (entity.domain ? getFaviconUrl(entity.domain, 64) : ''),
+  }));
+
+  const chartData = points.map((p) => ({ date: p.date, ...p.values }));
+  const yMax = niceVisibilityYMax(shown.flatMap((e) => points.map((p) => p.values[e.key] ?? 0)));
+  const lastIndex = points.length - 1;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <ChartContainer height={240}>
+        {(width) => (
+          <LineChart
+            width={width}
+            height={240}
+            data={chartData}
+            margin={{ top: 8, right: 26, left: -24, bottom: 0 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              className="fill-muted-foreground"
+            />
+            <YAxis
+              domain={[0, yMax]}
+              tick={{ fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(v: number) => `${v}%`}
+              className="fill-muted-foreground"
+            />
+            <Tooltip
+              isAnimationActive={false}
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null;
+                const ordered = [...payload].sort(
+                  (a, b) => ((b.value as number) ?? 0) - ((a.value as number) ?? 0),
+                );
+                return (
+                  <div className="rounded-lg border bg-background px-3 py-2 shadow-md text-xs">
+                    <p className="font-medium text-foreground mb-1">{label}</p>
+                    {ordered.map((entry) => {
+                      const entity = shown.find((e) => e.key === entry.dataKey);
+                      if (!entity) return null;
+                      return (
+                        <div key={entity.key} className="flex items-center gap-2">
+                          <span
+                            className="inline-block h-2 w-2 rounded-full shrink-0"
+                            style={{ backgroundColor: entity.color }}
+                          />
+                          <span className="text-muted-foreground">{entity.name}:</span>
+                          <span className="font-medium text-foreground">{entry.value}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              }}
+            />
+            {shown.map((entity) => (
+              <Line
+                key={entity.key}
+                type="monotone"
+                dataKey={entity.key}
+                stroke={entity.color}
+                strokeWidth={entity.isOwnBrand ? 2.5 : 1.5}
+                isAnimationActive={false}
+                dot={
+                  <LogoDot
+                    lastIndex={lastIndex}
+                    color={entity.color}
+                    logoUrl={entity.logoUrl}
+                    entityKey={entity.key}
+                  />
+                }
+                activeDot={{ r: 3 }}
+              />
+            ))}
+          </LineChart>
+        )}
+      </ChartContainer>
+
+      <ul className="flex flex-wrap gap-x-4 gap-y-1.5">
+        {shown.map((entity) => (
+          <li key={entity.key} className="flex items-center gap-1.5 text-xs">
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-sm"
+              style={{ background: entity.color }}
+              aria-hidden
+            />
+            <span className={entity.isOwnBrand ? 'font-medium' : 'text-muted-foreground'}>
+              {entity.name}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -1955,6 +1955,119 @@ export async function getVisibilityTrend(
   return points;
 }
 
+// ─── Visibility Rate trend (brand + each competitor) ────────────────────────
+
+export interface VisibilityRateTrendEntity {
+  /** 'you' for the own brand, competitor id otherwise. */
+  key: string;
+  name: string;
+  isOwnBrand: boolean;
+  /** Domain used for the favicon fallback at the line's end. */
+  domain: string | null;
+  /** Explicit logo (own brand only); falls back to the domain favicon. */
+  logoUrl: string | null;
+}
+
+export interface VisibilityRateTrendPoint {
+  /** Short label for the X axis, e.g. "Jul 28". */
+  date: string;
+  /** Per-entity rate for the day, keyed by entity key. 0 = tracked but not visible. */
+  values: Record<string, number>;
+}
+
+export interface VisibilityRateTrendData {
+  entities: VisibilityRateTrendEntity[];
+  points: VisibilityRateTrendPoint[];
+}
+
+interface VisibilityRateTrendRow {
+  day: string;
+  prompt_count: number;
+  visible_prompts: number;
+  competitors: { competitor_id: string; visible_prompts: number }[];
+}
+
+/**
+ * Daily Visibility Rate series for the brand and each live competitor
+ * (visibility_rate_trend RPC, migration 00039). Every entity divides by the
+ * brand's per-day prompt count — the shared-denominator rule from
+ * getCompetitorComparison — so the lines are directly comparable.
+ * Defaults to the last 7 days when no explicit range is given.
+ */
+export async function getVisibilityRateTrend(
+  brandId: string,
+  opts?: {
+    model?: string;
+    region?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    topicId?: string;
+  },
+): Promise<VisibilityRateTrendData> {
+  const supabase = await createClient();
+  const dateFrom = opts?.dateFrom ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [{ data: brand }, { data: brandDomains }, { data: competitors }, rpcRes] =
+    await Promise.all([
+      supabase.from('brands').select('name, logo_url').eq('id', brandId).single(),
+      supabase.from('brand_domains').select('domain, is_primary').eq('brand_id', brandId),
+      supabase.from('competitors').select('id, name, domain').eq('brand_id', brandId),
+      supabase.rpc('visibility_rate_trend', {
+        p_brand_id: brandId,
+        p_platform: null,
+        p_models: modelFilterArray(opts?.model),
+        p_region: opts?.region ?? null,
+        p_date_from: dateFrom,
+        p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? null,
+        p_topic_id: opts?.topicId ?? null,
+      }),
+    ]);
+  if (rpcRes.error) throw new Error(rpcRes.error.message);
+
+  const rows = (rpcRes.data ?? []) as unknown as VisibilityRateTrendRow[];
+  const rate = (visible: number, total: number) =>
+    total > 0 ? Math.round((visible / total) * 1000) / 10 : 0;
+
+  const primaryDomain =
+    (brandDomains ?? []).find((d) => d.is_primary)?.domain ?? brandDomains?.[0]?.domain ?? null;
+
+  const entities: VisibilityRateTrendEntity[] = [
+    {
+      key: 'you',
+      name: brand?.name ?? 'You',
+      isOwnBrand: true,
+      domain: primaryDomain,
+      logoUrl: brand?.logo_url ?? null,
+    },
+    ...(competitors ?? []).map((c) => ({
+      key: c.id,
+      name: c.name,
+      isOwnBrand: false,
+      domain: c.domain || null,
+      logoUrl: null,
+    })),
+  ];
+
+  const points: VisibilityRateTrendPoint[] = rows.map((row) => {
+    const values: Record<string, number> = {
+      you: rate(row.visible_prompts, row.prompt_count),
+    };
+    const byId = new Map(row.competitors.map((c) => [c.competitor_id, c.visible_prompts]));
+    for (const c of competitors ?? []) {
+      values[c.id] = rate(byId.get(c.id) ?? 0, row.prompt_count);
+    }
+    return {
+      date: new Date(row.day + 'T00:00:00').toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      }),
+      values,
+    };
+  });
+
+  return { entities, points };
+}
+
 // ─── Head-to-Head Competitor Comparison ─────────────────────────────────────
 
 export interface HeadToHeadPromptRow {

@@ -7,10 +7,13 @@ import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
-const CompetitorChart = dynamic(() => import('./_charts').then((m) => m.CompetitorChart), {
-  ssr: false,
-  loading: () => <Skeleton className="h-64 w-full" />,
-});
+const VisibilityRateTrendChart = dynamic(
+  () => import('./_charts').then((m) => m.VisibilityRateTrendChart),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-64 w-full" />,
+  },
+);
 
 const CompetitorLeaderboard = dynamic(
   () => import('./_charts').then((m) => m.CompetitorLeaderboard),
@@ -39,6 +42,8 @@ import { MetricBreakdownSheet } from './_metric-breakdown-sheet';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
   getInsightsData,
+  getVisibilityRateTrend,
+  type VisibilityRateTrendData,
   triggerTrackingCheck,
   getJobStatus,
   cancelTrackingJob,
@@ -932,6 +937,7 @@ export default function InsightsPage() {
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [availableTopics, setAvailableTopics] = useState<Topic[]>([]);
   const [competitorData, setCompetitorData] = useState<CompetitorComparisonData | null>(null);
+  const [rateTrend, setRateTrend] = useState<VisibilityRateTrendData | null>(null);
   const [sovData, setSovData] = useState<ShareOfVoiceData | null>(null);
   const [recommendations, setRecommendations] = useState<InsightsRecommendations | null>(null);
   const [breakdownMetric, setBreakdownMetric] = useState<BreakdownMetric | null>(null);
@@ -963,10 +969,14 @@ export default function InsightsPage() {
         // run in a real server-side Promise.all (one round trip instead of
         // five serialized POSTs), and "has any data" comes from a cheap
         // count instead of an unbounded full-table scan.
-        const insights = await getInsightsData(brand.id, {
-          ...filterOpts,
-          checkUnfiltered: hasFilters,
-        });
+        const [insights, trend] = await Promise.all([
+          getInsightsData(brand.id, {
+            ...filterOpts,
+            checkUnfiltered: hasFilters,
+          }),
+          getVisibilityRateTrend(brand.id, filterOpts).catch(() => null),
+        ]);
+        setRateTrend(trend && trend.points.length > 0 ? trend : null);
         setSummary(insights.summary);
         setTrackedPrompts(insights.trackedPrompts);
         setVisibilityRate(insights.visibilityRate);
@@ -1484,10 +1494,13 @@ export default function InsightsPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <CompetitorChart
-                        providerRows={competitorData.providerRows}
-                        brands={competitorData.brands}
-                      />
+                      {rateTrend ? (
+                        <VisibilityRateTrendChart data={rateTrend} />
+                      ) : (
+                        <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
+                          No visibility data for this period yet
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
 

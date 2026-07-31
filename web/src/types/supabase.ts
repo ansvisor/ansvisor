@@ -1486,6 +1486,18 @@ export type Database = {
         };
         Returns: Json;
       };
+      visibility_rate_trend: {
+        Args: {
+          p_brand_id: string;
+          p_platform?: string | null;
+          p_models?: string[] | null;
+          p_region?: string | null;
+          p_date_from?: string | null;
+          p_date_to?: string | null;
+          p_topic_id?: string | null;
+        };
+        Returns: Json;
+      };
       visibility_trend_aggregates: {
         Args: {
           p_brand_id: string;
