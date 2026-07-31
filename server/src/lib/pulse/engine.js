@@ -41,6 +41,35 @@ async function resolveRecipients(organizationId, settings) {
   return emails;
 }
 
+// In webhook mode the tracking job can "complete" while Cloro is still
+// delivering results (the worker's drain loop gives up after 10 minutes
+// without progress, but Cloro's real latency is 30-80 minutes) — a pulse
+// computed at that moment emails partial-window numbers that contradict the
+// dashboard. Wait for the brand's pending-task queue to drain first; the
+// cap only exists so an orphaned task row can't block the pulse forever
+// (cleanupStalePendingTasks sweeps those after 2h).
+const DRAIN_POLL_MS = 60_000;
+const DRAIN_MAX_WAIT_MS = 90 * 60_000;
+
+async function waitForCloroDrain(brandId) {
+  const deadline = Date.now() + DRAIN_MAX_WAIT_MS;
+  for (;;) {
+    const { count } = await supabaseAdmin
+      .from('cloro_pending_tasks')
+      .select('task_id', { count: 'exact', head: true })
+      .eq('brand_id', brandId);
+    if (!count) return true;
+    if (Date.now() >= deadline) {
+      logger.warn(
+        { brandId, pending: count },
+        'pulse proceeding although cloro tasks are still pending',
+      );
+      return false;
+    }
+    await new Promise((resolve) => setTimeout(resolve, DRAIN_POLL_MS));
+  }
+}
+
 /** Warning keys already sent for this brand in the last 7 days. */
 async function recentWarningKeys(brandId, now) {
   const since = new Date(now.getTime() - 7 * 86_400_000).toISOString();
@@ -101,8 +130,13 @@ export async function generatePulseForBrand(brandId) {
       .maybeSingle();
     if (existing) return { skipped: 'already_sent' };
 
+    // Don't compute until this brand's Cloro results have actually landed —
+    // the numbers must match what the dashboard will show for the same
+    // window (see waitForCloroDrain).
+    await waitForCloroDrain(brandId);
+
     const windowDays = frequency === 'weekly' ? 7 : 1;
-    const metrics = await computePulseMetrics(brandId, { windowDays, now });
+    const metrics = await computePulseMetrics(brandId, { windowDays, now: new Date() });
 
     // Skip brands with no fresh tracking results in the window.
     if (metrics.kpis.totalResults === 0) return { skipped: 'no_fresh_results' };
