@@ -392,11 +392,12 @@ function CompetitorTooltip({
 
 // ─── Visibility Rate trend (one line per brand, logo at the line's end) ──────
 
-// One color per shown competitor (top 5): navy, purple, green, orange, red.
-const RATE_TREND_PALETTE = ['#1e3a8a', '#a855f7', '#22c55e', '#f97316', '#ef4444'];
 // 5 lines total, matching the leaderboard: the own brand + top 4 competitors.
+// Fixed color order across the five lines: navy (own brand), then purple,
+// green, orange, red for the competitors by rate.
+const RATE_TREND_PALETTE = ['#a855f7', '#22c55e', '#f97316', '#ef4444'];
 const RATE_TREND_MAX_COMPETITORS = 4;
-const OWN_BRAND_COLOR = '#6366f1';
+const OWN_BRAND_COLOR = '#1e3a8a';
 
 /** Circle-clipped logo rendered on a line's last data point. */
 function LogoDot(props: {
