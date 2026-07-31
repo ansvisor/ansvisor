@@ -84,23 +84,32 @@ async function backfillBrand(brand) {
     if (error) throw new Error(error.message);
     if (!rows?.length) break;
 
-    for (const row of rows) {
-      const { mentionPosition, mentionedEntityCount } = computeMentionPosition(
-        row.response ?? '',
-        brandInfo,
-        competitors,
+    // Update in small concurrent chunks: one-by-one round-trips would take
+    // hours over the full history, while unbounded concurrency would hammer
+    // the shared database.
+    const CONCURRENCY = 20;
+    for (let i = 0; i < rows.length; i += CONCURRENCY) {
+      const chunk = rows.slice(i, i + CONCURRENCY);
+      await Promise.all(
+        chunk.map(async (row) => {
+          const { mentionPosition, mentionedEntityCount } = computeMentionPosition(
+            row.response ?? '',
+            brandInfo,
+            competitors,
+          );
+          if (!dryRun) {
+            const { error: updateErr } = await supabaseAdmin
+              .from('prompt_results')
+              .update({
+                mention_position: mentionPosition,
+                mentioned_entity_count: mentionedEntityCount,
+              })
+              .eq('id', row.id);
+            if (updateErr) throw new Error(updateErr.message);
+          }
+          updated++;
+        }),
       );
-      if (!dryRun) {
-        const { error: updateErr } = await supabaseAdmin
-          .from('prompt_results')
-          .update({
-            mention_position: mentionPosition,
-            mentioned_entity_count: mentionedEntityCount,
-          })
-          .eq('id', row.id);
-        if (updateErr) throw new Error(updateErr.message);
-      }
-      updated++;
     }
 
     console.log(`  ${brand.name}: ${updated} rows${dryRun ? ' (dry run)' : ''}`);
