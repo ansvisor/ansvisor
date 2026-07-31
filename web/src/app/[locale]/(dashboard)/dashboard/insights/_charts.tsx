@@ -473,11 +473,11 @@ export function VisibilityRateTrendChart({ data }: { data: VisibilityRateTrendDa
 
   return (
     <div className="flex flex-col gap-3">
-      <ChartContainer height={240}>
+      <ChartContainer height={320}>
         {(width) => (
           <LineChart
             width={width}
-            height={240}
+            height={320}
             data={chartData}
             margin={{ top: 8, right: 26, left: -24, bottom: 0 }}
           >
@@ -548,7 +548,7 @@ export function VisibilityRateTrendChart({ data }: { data: VisibilityRateTrendDa
         )}
       </ChartContainer>
 
-      <ul className="flex flex-wrap gap-x-4 gap-y-1.5">
+      <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
         {shown.map((entity) => (
           <li key={entity.key} className="flex items-center gap-1.5 text-xs">
             <span
