@@ -24,9 +24,22 @@ import 'dotenv/config';
 import supabaseAdmin from '../config/supabase.js';
 import { computeMentionPosition } from '../lib/response-parser.js';
 
-const BATCH_SIZE = 500;
+const BATCH_SIZE = 250;
 const BATCH_PAUSE_MS = 250;
 const CONCURRENCY = 20;
+
+/** Retry transient network failures (connection resets on long walks). */
+async function withRetry(fn, label) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt >= 4) throw err;
+      console.warn(`  retry ${attempt}/3 after error in ${label}: ${err.message}`);
+      await sleep(attempt * 2000);
+    }
+  }
+}
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -81,19 +94,22 @@ async function backfillBrand(brand) {
   // Offset paging over a stable ordering: updates never change which rows
   // the filter selects, so pages stay consistent across the walk.
   for (let offset = 0; ; offset += BATCH_SIZE) {
-    let query = supabaseAdmin
-      .from('prompt_results')
-      .select('id, response, competitor_mentions, mentioned_entity_count')
-      .eq('brand_id', brand.id)
-      .not('response', 'is', null)
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: true })
-      .range(offset, offset + BATCH_SIZE - 1);
-    if (daysArg) {
-      query = query.gte('created_at', new Date(Date.now() - daysArg * 86_400_000).toISOString());
-    }
+    const fetchPage = () => {
+      let query = supabaseAdmin
+        .from('prompt_results')
+        .select('id, response, competitor_mentions, mentioned_entity_count')
+        .eq('brand_id', brand.id)
+        .not('response', 'is', null)
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true })
+        .range(offset, offset + BATCH_SIZE - 1);
+      if (daysArg) {
+        query = query.gte('created_at', new Date(Date.now() - daysArg * 86_400_000).toISOString());
+      }
+      return query;
+    };
 
-    const { data: rows, error } = await query;
+    const { data: rows, error } = await withRetry(fetchPage, 'page fetch');
     if (error) throw new Error(error.message);
     if (!rows?.length) break;
 
@@ -113,14 +129,18 @@ async function backfillBrand(brand) {
             mention_position: competitorPositions.get(entry.competitor_id) ?? null,
           }));
           if (!dryRun) {
-            const { error: updateErr } = await supabaseAdmin
-              .from('prompt_results')
-              .update({
-                mention_position: mentionPosition,
-                mentioned_entity_count: mentionedEntityCount,
-                competitor_mentions: annotated,
-              })
-              .eq('id', row.id);
+            const { error: updateErr } = await withRetry(
+              () =>
+                supabaseAdmin
+                  .from('prompt_results')
+                  .update({
+                    mention_position: mentionPosition,
+                    mentioned_entity_count: mentionedEntityCount,
+                    competitor_mentions: annotated,
+                  })
+                  .eq('id', row.id),
+              'row update',
+            );
             if (updateErr) throw new Error(updateErr.message);
           }
           updated++;
