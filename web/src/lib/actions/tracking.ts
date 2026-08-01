@@ -2162,12 +2162,14 @@ interface VisibilityRateTrendRow {
   mention_answers: number;
   citation_answers: number;
   position_factor: number | null;
+  position_n: number;
   competitors: {
     competitor_id: string;
     visible_prompts: number;
     mention_answers: number;
     citation_answers: number;
     position_factor: number | null;
+    position_n: number;
   }[];
 }
 
@@ -2218,7 +2220,9 @@ export async function getVisibilityRateTrend(
     supabase.from('brands').select('name, logo_url').eq('id', brandId).single(),
     supabase.from('brand_domains').select('domain, is_primary').eq('brand_id', brandId),
     supabase.from('competitors').select('id, name, domain').eq('brand_id', brandId),
-    supabase.rpc('visibility_rate_trend', rateArgs(dateFrom, dateTo)),
+    // The chart plots a rolling window per day, so the earliest displayed
+    // days need trailing data from before the display range.
+    supabase.rpc('visibility_rate_trend', rateArgs(prevFrom, dateTo)),
     supabase.rpc('ai_visibility_aggregates', rateArgs(dateFrom, dateTo)),
     supabase.rpc('ai_visibility_aggregates', rateArgs(prevFrom, prevTo)),
   ]);
@@ -2247,37 +2251,94 @@ export async function getVisibilityRateTrend(
     })),
   ];
 
-  // Each day's value is the AI Visibility Score computed over that day's
-  // answers — same blend as every other surface, shared denominator.
-  const points: VisibilityRateTrendPoint[] = rows.map((row) => {
-    const values: Record<string, number> = {
-      you:
-        computeAiVisibilityScore({
-          answers: row.answers,
-          mentionAnswers: row.mention_answers,
-          citationAnswers: row.citation_answers,
-          positionFactor: row.position_factor,
-        }) ?? 0,
+  // Each day's point is the score over the TRAILING window of the selected
+  // length ending that day (rolling window). This makes the line's last
+  // point equal the headline card exactly — the chart's inside and outside
+  // can never disagree — and every earlier point answers "what would the
+  // headline have shown that day".
+  const windowDays = Math.max(1, Math.round(windowMs / 86_400_000));
+  const dayMs = (day: string) => new Date(day + 'T00:00:00Z').getTime();
+  const displayFromMs = new Date(dateFrom).getTime();
+
+  interface RollingSums {
+    answers: number;
+    mention: number;
+    citation: number;
+    posSum: number;
+    posN: number;
+  }
+  const emptySums = (): RollingSums => ({
+    answers: 0,
+    mention: 0,
+    citation: 0,
+    posSum: 0,
+    posN: 0,
+  });
+  const entityKeys = ['you', ...(competitors ?? []).map((c) => c.id)];
+  const sums = new Map<string, RollingSums>(entityKeys.map((k) => [k, emptySums()]));
+
+  const dayComponents = (row: VisibilityRateTrendRow, key: string): RollingSums => {
+    if (key === 'you') {
+      return {
+        answers: row.answers,
+        mention: row.mention_answers,
+        citation: row.citation_answers,
+        posSum: (row.position_factor ?? 0) * (row.position_n ?? 0),
+        posN: row.position_n ?? 0,
+      };
+    }
+    const entry = row.competitors.find((c) => c.competitor_id === key);
+    return {
+      answers: 0,
+      mention: entry?.mention_answers ?? 0,
+      citation: entry?.citation_answers ?? 0,
+      posSum: (entry?.position_factor ?? 0) * (entry?.position_n ?? 0),
+      posN: entry?.position_n ?? 0,
     };
-    const byId = new Map(row.competitors.map((c) => [c.competitor_id, c]));
-    for (const c of competitors ?? []) {
-      const entry = byId.get(c.id);
-      values[c.id] =
+  };
+  const apply = (key: string, comp: RollingSums, sign: 1 | -1) => {
+    const s = sums.get(key)!;
+    s.answers += sign * comp.answers;
+    s.mention += sign * comp.mention;
+    s.citation += sign * comp.citation;
+    s.posSum += sign * comp.posSum;
+    s.posN += sign * comp.posN;
+  };
+
+  const points: VisibilityRateTrendPoint[] = [];
+  let start = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    for (const key of entityKeys) apply(key, dayComponents(row, key), 1);
+    // Evict day-buckets that fell out of the trailing window.
+    while (dayMs(row.day) - dayMs(rows[start].day) >= windowDays * 86_400_000) {
+      for (const key of entityKeys) apply(key, dayComponents(rows[start], key), -1);
+      start++;
+    }
+    // Only emit points inside the display range; earlier rows exist purely
+    // to warm up the trailing window.
+    if (dayMs(row.day) + 86_400_000 <= displayFromMs) continue;
+
+    const brandSums = sums.get('you')!;
+    const values: Record<string, number> = {};
+    for (const key of entityKeys) {
+      const s = sums.get(key)!;
+      values[key] =
         computeAiVisibilityScore({
-          answers: row.answers,
-          mentionAnswers: entry?.mention_answers ?? 0,
-          citationAnswers: entry?.citation_answers ?? 0,
-          positionFactor: entry?.position_factor ?? null,
+          answers: brandSums.answers,
+          mentionAnswers: s.mention,
+          citationAnswers: s.citation,
+          positionFactor: s.posN > 0 ? s.posSum / s.posN : null,
         }) ?? 0;
     }
-    return {
+    points.push({
       date: new Date(row.day + 'T00:00:00').toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
       }),
       values,
-    };
-  });
+    });
+  }
 
   // Headline: overall window score (components over the whole window — not
   // an average of the daily points) plus the delta vs the previous
