@@ -1525,20 +1525,22 @@ export default function InsightsPage() {
                                 {rateTrend.summary.change} pts
                               </span>
                             )}
-                            <span className="text-muted-foreground">
-                              vs{' '}
-                              {new Date(rateTrend.summary.prevFrom).toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: '2-digit',
-                                year: 'numeric',
-                              })}{' '}
-                              –{' '}
-                              {new Date(rateTrend.summary.prevTo).toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: '2-digit',
-                                year: 'numeric',
-                              })}
-                            </span>
+                            {rateTrend.summary.change !== null && rateTrend.summary.prevFrom && (
+                              <span className="text-muted-foreground">
+                                vs{' '}
+                                {new Date(rateTrend.summary.prevFrom).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: '2-digit',
+                                  year: 'numeric',
+                                })}{' '}
+                                –{' '}
+                                {new Date(rateTrend.summary.prevTo).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: '2-digit',
+                                  year: 'numeric',
+                                })}
+                              </span>
+                            )}
                           </div>
                         </div>
                       ) : (

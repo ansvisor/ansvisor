@@ -2191,15 +2191,24 @@ export async function getVisibilityRateTrend(
   },
 ): Promise<VisibilityRateTrendData> {
   const supabase = await createClient();
-  const dateFrom = opts?.dateFrom ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  // No explicit lower bound = the "All time" preset: the summary covers
+  // everything (matching the leaderboard) and the chart plots an expanding
+  // cumulative window instead of a fixed-length rolling one.
+  const boundedFrom = opts?.dateFrom ?? null;
   const dateTo = expandDateToEndOfDay(opts?.dateTo) ?? new Date().toISOString();
 
-  // Equal-length window immediately before, for the headline delta.
-  const windowMs = new Date(dateTo).getTime() - new Date(dateFrom).getTime();
-  const prevFrom = new Date(new Date(dateFrom).getTime() - windowMs).toISOString();
-  const prevTo = dateFrom;
+  // Equal-length window immediately before, for the headline delta
+  // (undefined for all-time — there is no comparable previous window).
+  const windowMs = boundedFrom
+    ? new Date(dateTo).getTime() - new Date(boundedFrom).getTime()
+    : null;
+  const prevFrom =
+    boundedFrom && windowMs !== null
+      ? new Date(new Date(boundedFrom).getTime() - windowMs).toISOString()
+      : null;
+  const prevTo = boundedFrom;
 
-  const rateArgs = (from: string, to: string) => ({
+  const rateArgs = (from: string | null, to: string) => ({
     p_brand_id: brandId,
     p_platform: null as string | null,
     p_models: modelFilterArray(opts?.model),
@@ -2221,10 +2230,13 @@ export async function getVisibilityRateTrend(
     supabase.from('brand_domains').select('domain, is_primary').eq('brand_id', brandId),
     supabase.from('competitors').select('id, name, domain').eq('brand_id', brandId),
     // The chart plots a rolling window per day, so the earliest displayed
-    // days need trailing data from before the display range.
+    // days need trailing data from before the display range (all-time needs
+    // no warm-up — the window expands from the first row).
     supabase.rpc('visibility_rate_trend', rateArgs(prevFrom, dateTo)),
-    supabase.rpc('ai_visibility_aggregates', rateArgs(dateFrom, dateTo)),
-    supabase.rpc('ai_visibility_aggregates', rateArgs(prevFrom, prevTo)),
+    supabase.rpc('ai_visibility_aggregates', rateArgs(boundedFrom, dateTo)),
+    prevFrom && prevTo
+      ? supabase.rpc('ai_visibility_aggregates', rateArgs(prevFrom, prevTo))
+      : Promise.resolve({ data: null, error: new Error('no previous window') }),
   ]);
   if (rpcRes.error) throw new Error(rpcRes.error.message);
   if (visCurRes.error) throw new Error(visCurRes.error.message);
@@ -2256,9 +2268,9 @@ export async function getVisibilityRateTrend(
   // point equal the headline card exactly — the chart's inside and outside
   // can never disagree — and every earlier point answers "what would the
   // headline have shown that day".
-  const windowDays = Math.max(1, Math.round(windowMs / 86_400_000));
+  const windowDays = windowMs !== null ? Math.max(1, Math.round(windowMs / 86_400_000)) : null;
   const dayMs = (day: string) => new Date(day + 'T00:00:00Z').getTime();
-  const displayFromMs = new Date(dateFrom).getTime();
+  const displayFromMs = boundedFrom ? new Date(boundedFrom).getTime() : Number.NEGATIVE_INFINITY;
 
   interface RollingSums {
     answers: number;
@@ -2310,8 +2322,12 @@ export async function getVisibilityRateTrend(
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     for (const key of entityKeys) apply(key, dayComponents(row, key), 1);
-    // Evict day-buckets that fell out of the trailing window.
-    while (dayMs(row.day) - dayMs(rows[start].day) >= windowDays * 86_400_000) {
+    // Evict day-buckets that fell out of the trailing window (all-time
+    // keeps everything — the window expands cumulatively).
+    while (
+      windowDays !== null &&
+      dayMs(row.day) - dayMs(rows[start].day) >= windowDays * 86_400_000
+    ) {
       for (const key of entityKeys) apply(key, dayComponents(rows[start], key), -1);
       start++;
     }
@@ -2352,8 +2368,8 @@ export async function getVisibilityRateTrend(
     rate: headlineScore,
     prevRate: prevScore,
     change: prevScore === null ? null : Math.round((headlineScore - prevScore) * 10) / 10,
-    prevFrom,
-    prevTo,
+    prevFrom: prevFrom ?? '',
+    prevTo: prevTo ?? '',
   };
 
   return { entities, points, summary };
