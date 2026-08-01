@@ -10,7 +10,7 @@ import { triggerTrackingCheck } from '@/lib/actions/tracking';
 import { addCompetitor, getCompetitors } from '@/lib/actions/competitor';
 import { getFaviconUrl } from '@/lib/favicon';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { REGIONS, LANGUAGES } from '@/config/prompt-options';
+import { REGIONS, US_STATES, LANGUAGES } from '@/config/prompt-options';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
 import { isCloud, PLANS, SUBSCRIBABLE_PLANS, getPlan, type PlanId } from '@/config/plans';
 import { setPersonProperties, track } from '@/lib/analytics';
@@ -237,6 +237,7 @@ export default function OnboardingPage() {
 
   // Step 2
   const [region, setRegion] = useState('US');
+  const [usState, setUsState] = useState('');
   const [language, setLanguage] = useState('en');
 
   // Intermediate state
@@ -411,6 +412,7 @@ export default function OnboardingPage() {
               industry: b.industry ?? undefined,
               description: b.description ?? undefined,
               region: b.region ?? undefined,
+              state: b.state ?? undefined,
               language: b.language ?? undefined,
               shoppingModeEnabled: !!b.shopping_mode_enabled,
               isActive: (b as { is_active?: boolean }).is_active ?? true,
@@ -431,6 +433,7 @@ export default function OnboardingPage() {
             setWebsite(mapped.domains[0]?.domain || '');
             setDescription(mapped.description || '');
             setRegion(mapped.region || 'US');
+            setUsState(mapped.state || '');
             setLanguage(mapped.language || 'en');
 
             const topics = await getTopics(mapped.id);
@@ -554,6 +557,7 @@ export default function OnboardingPage() {
           logoUrl,
           description: description.trim() || undefined,
           region,
+          state: region === 'US' ? usState || undefined : undefined,
           language,
           domains: domain ? [{ domain, isPrimary: true }] : [],
         });
@@ -1086,7 +1090,14 @@ export default function OnboardingPage() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Region</Label>
-              <Select value={region} onValueChange={(v) => v && setRegion(v)}>
+              <Select
+                value={region}
+                onValueChange={(v) => {
+                  if (!v) return;
+                  setRegion(v);
+                  if (v !== 'US') setUsState('');
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -1099,6 +1110,31 @@ export default function OnboardingPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {region === 'US' && (
+              <div className="space-y-2">
+                <Label>State (optional)</Label>
+                <Select
+                  value={usState || 'nationwide'}
+                  onValueChange={(v) => setUsState(!v || v === 'nationwide' ? '' : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="nationwide">Nationwide (no state)</SelectItem>
+                    {US_STATES.map((s) => (
+                      <SelectItem key={s.code} value={s.code}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Localizes AI answers to this state. Leave empty for nationwide results.
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Language</Label>

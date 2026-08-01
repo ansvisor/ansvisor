@@ -27,7 +27,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   // 1. Fetch brand info with domains
   const { data: brand, error: brandErr } = await supabaseAdmin
     .from('brands')
-    .select('id, name, organization_id, shopping_mode_enabled')
+    .select('id, name, organization_id, shopping_mode_enabled, state')
     .eq('id', brandId)
     .single();
   if (brandErr || !brand) throw new Error(`Brand not found: ${brandId}`);
@@ -214,7 +214,10 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     // Submit all tasks concurrently
     const submissions = await Promise.allSettled(
       scraperTasks.map((t) =>
-        submitScraperTask(t.prompt.text, t.scraperId, t.region, { webhookUrl }).then((res) => ({
+        submitScraperTask(t.prompt.text, t.scraperId, t.region, {
+          webhookUrl,
+          state: brand.state,
+        }).then((res) => ({
           ...res,
           meta: t,
         })),

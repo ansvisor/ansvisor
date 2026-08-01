@@ -31,8 +31,14 @@ function getApiKey() {
   return key;
 }
 
-function buildRequestBody(promptText, scraperId, region) {
+export function buildRequestBody(promptText, scraperId, region, state) {
   const country = region || 'US';
+
+  // State-level geo-targeting (#554): the AI endpoints accept a USPS state
+  // code alongside country US and route through an in-state proxy. Google
+  // AIO / AI Mode use location/uule for sub-country targeting instead and
+  // must never receive it — their branches below skip this spread.
+  const stateField = country === 'US' && state ? { state } : {};
 
   if (scraperId === 'chatgpt-shopping') {
     // ChatGPT Shopping uses the same CHATGPT task but flips include.shopping.
@@ -41,6 +47,7 @@ function buildRequestBody(promptText, scraperId, region) {
     return {
       prompt: promptText,
       country,
+      ...stateField,
       include: {
         html: false,
         markdown: true,
@@ -74,6 +81,7 @@ function buildRequestBody(promptText, scraperId, region) {
   return {
     prompt: promptText,
     country,
+    ...stateField,
     include: {
       html: false,
       markdown: true,
@@ -223,16 +231,20 @@ export function parseScraperResponse(result, scraperId) {
  * @param {string} promptText
  * @param {string} scraperId
  * @param {string} [region]
- * @param {{ webhookUrl?: string }} [opts]
+ * @param {{ webhookUrl?: string, state?: string }} [opts] - `state` is the
+ *   brand's optional USPS code (#554); only forwarded on US AI-endpoint tasks.
  * @returns {Promise<{ taskId: string, scraperId: string }>}
  */
 export async function submitScraperTask(promptText, scraperId, region, opts = {}) {
   const taskType = SCRAPER_TASK_TYPES[scraperId];
   if (!taskType) throw new Error(`Unknown scraper: ${scraperId}`);
 
-  const payload = buildRequestBody(promptText, scraperId, region);
+  const payload = buildRequestBody(promptText, scraperId, region, opts.state);
 
-  logger.info({ taskType, scraperId, region: region || 'US' }, 'submitting cloro scraper task');
+  logger.info(
+    { taskType, scraperId, region: region || 'US', state: payload.state },
+    'submitting cloro scraper task',
+  );
 
   const requestBody = { taskType, payload };
   if (opts.webhookUrl) {

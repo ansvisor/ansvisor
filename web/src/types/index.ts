@@ -20,6 +20,8 @@ export interface Brand {
   industry?: string;
   description?: string;
   region?: string;
+  /** Optional US state (USPS code) for state-level geo-targeting; US brands only (#554). */
+  state?: string;
   language?: string;
   trackingCode?: string;
   shoppingModeEnabled: boolean;

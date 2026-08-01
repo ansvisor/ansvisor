@@ -12,7 +12,7 @@ import { triggerTrackingCheck } from '@/lib/actions/tracking';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { getFaviconUrl } from '@/lib/favicon';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { REGIONS, LANGUAGES } from '@/config/prompt-options';
+import { REGIONS, US_STATES, LANGUAGES } from '@/config/prompt-options';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
 import { getPlan, type PlanId } from '@/config/plans';
 import type { Brand } from '@/types';
@@ -228,6 +228,7 @@ export default function NewBrandPage() {
 
   // Step 2
   const [region, setRegion] = useState('US');
+  const [usState, setUsState] = useState('');
   const [language, setLanguage] = useState('en');
 
   // Intermediate state
@@ -382,6 +383,7 @@ export default function NewBrandPage() {
           logoUrl: logoUrl ?? null,
           description: description.trim() || null,
           region,
+          state: region === 'US' ? usState || null : null,
           language,
         });
 
@@ -418,6 +420,7 @@ export default function NewBrandPage() {
           logoUrl,
           description: description.trim() || undefined,
           region,
+          state: region === 'US' ? usState || undefined : undefined,
           language,
           domains: domain ? [{ domain, isPrimary: true }] : [],
         });
@@ -830,7 +833,14 @@ export default function NewBrandPage() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Region</Label>
-              <Select value={region} onValueChange={(v) => v && setRegion(v)}>
+              <Select
+                value={region}
+                onValueChange={(v) => {
+                  if (!v) return;
+                  setRegion(v);
+                  if (v !== 'US') setUsState('');
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -843,6 +853,31 @@ export default function NewBrandPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {region === 'US' && (
+              <div className="space-y-2">
+                <Label>State (optional)</Label>
+                <Select
+                  value={usState || 'nationwide'}
+                  onValueChange={(v) => setUsState(!v || v === 'nationwide' ? '' : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="nationwide">Nationwide (no state)</SelectItem>
+                    {US_STATES.map((s) => (
+                      <SelectItem key={s.code} value={s.code}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Localizes AI answers to this state. Leave empty for nationwide results.
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Language</Label>

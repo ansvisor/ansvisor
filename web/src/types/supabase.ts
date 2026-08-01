@@ -295,6 +295,7 @@ export type Database = {
           region: string | null;
           shopping_mode_enabled: boolean;
           slug: string;
+          state: string | null;
           tracking_code: string;
           updated_at: string;
         };
@@ -311,6 +312,7 @@ export type Database = {
           region?: string | null;
           shopping_mode_enabled?: boolean;
           slug: string;
+          state?: string | null;
           tracking_code?: string;
           updated_at?: string;
         };
@@ -327,6 +329,7 @@ export type Database = {
           region?: string | null;
           shopping_mode_enabled?: boolean;
           slug?: string;
+          state?: string | null;
           tracking_code?: string;
           updated_at?: string;
         };

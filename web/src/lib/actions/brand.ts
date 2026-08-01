@@ -35,6 +35,7 @@ function mapBrandRow(brand: Record<string, unknown>, domains: Record<string, unk
     industry: (brand.industry as string | null) ?? undefined,
     description: (brand.description as string | null) ?? undefined,
     region: (brand.region as string | null) ?? undefined,
+    state: (brand.state as string | null) ?? undefined,
     language: (brand.language as string | null) ?? undefined,
     trackingCode: (brand.tracking_code as string | null) ?? undefined,
     shoppingModeEnabled: !!brand.shopping_mode_enabled,
@@ -85,6 +86,7 @@ interface CreateBrandInput {
   industry?: string;
   description?: string;
   region?: string;
+  state?: string;
   language?: string;
   domains: { domain: string; country?: string; isPrimary: boolean }[];
 }
@@ -111,6 +113,9 @@ export async function createBrand(input: CreateBrandInput): Promise<Brand> {
       industry: input.industry || null,
       description: input.description || null,
       region: input.region || 'US',
+      // State only makes sense for US brands; drop it silently otherwise so
+      // a stale value from a region switch can't leak into the row.
+      state: (input.region || 'US') === 'US' ? input.state || null : null,
       language: input.language || 'en',
     })
     .select()
@@ -147,6 +152,7 @@ interface UpdateBrandInput {
   industry?: string | null;
   description?: string | null;
   region?: string;
+  state?: string | null;
   language?: string;
 }
 
@@ -162,6 +168,9 @@ export async function updateBrand(id: string, updates: UpdateBrandInput): Promis
   if ('industry' in updates) payload.industry = updates.industry ?? null;
   if ('description' in updates) payload.description = updates.description ?? null;
   if (updates.region !== undefined) payload.region = updates.region;
+  if ('state' in updates) payload.state = updates.state ?? null;
+  // A region change away from US invalidates any stored state.
+  if (updates.region !== undefined && updates.region !== 'US') payload.state = null;
   if (updates.language !== undefined) payload.language = updates.language;
 
   const { data, error } = await supabase

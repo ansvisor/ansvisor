@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseScraperResponse } from './cloro-scraper.js';
+import { buildRequestBody, parseScraperResponse } from './cloro-scraper.js';
 
 describe('cloro-scraper – parseScraperResponse', () => {
   describe('chatgpt-shopping', () => {
@@ -274,5 +274,37 @@ describe('cloro-scraper – parseScraperResponse', () => {
         parseScraperResponse({ markdown: 't', sources: [] }, 'gemini-web').search_queries,
       ).toEqual([]);
     });
+  });
+});
+
+describe('cloro-scraper – buildRequestBody state targeting (#554)', () => {
+  const AI_ENDPOINTS = ['chatgpt-web', 'copilot-web', 'grok-web', 'perplexity-web', 'gemini-web'];
+
+  it('includes state on AI-endpoint tasks for US brands', () => {
+    for (const scraperId of AI_ENDPOINTS) {
+      expect(buildRequestBody('p', scraperId, 'US', 'CA').state).toBe('CA');
+    }
+  });
+
+  it('includes state on chatgpt-shopping (same CHATGPT task)', () => {
+    expect(buildRequestBody('p', 'chatgpt-shopping', 'US', 'TX').state).toBe('TX');
+  });
+
+  it('never includes state on Google AIO / AI Mode payloads', () => {
+    expect(buildRequestBody('p', 'google-aio', 'US', 'CA')).not.toHaveProperty('state');
+    expect(buildRequestBody('p', 'google-aimode', 'US', 'CA')).not.toHaveProperty('state');
+  });
+
+  it('drops state when the task country is not US', () => {
+    expect(buildRequestBody('p', 'chatgpt-web', 'DE', 'CA')).not.toHaveProperty('state');
+  });
+
+  it('omits the key entirely when the brand has no state', () => {
+    expect(buildRequestBody('p', 'chatgpt-web', 'US', null)).not.toHaveProperty('state');
+    expect(buildRequestBody('p', 'chatgpt-web', 'US', undefined)).not.toHaveProperty('state');
+  });
+
+  it('defaults the country to US so a stateful brand with a null prompt region still targets', () => {
+    expect(buildRequestBody('p', 'chatgpt-web', null, 'NY').state).toBe('NY');
   });
 });

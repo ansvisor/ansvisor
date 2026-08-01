@@ -15,6 +15,7 @@ import { getCompetitors, addCompetitor, deleteCompetitor } from '@/lib/actions/c
 import { getFaviconUrl } from '@/lib/favicon';
 import type { Competitor } from '@/types';
 import { INDUSTRIES, type Brand, type BrandDomain } from '@/types';
+import { REGIONS, US_STATES } from '@/config/prompt-options';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -148,6 +149,8 @@ function GeneralTab({
   const [name, setName] = useState(brand.name);
   const [industry, setIndustry] = useState(brand.industry ?? '');
   const [description, setDescription] = useState(brand.description ?? '');
+  const [region, setRegion] = useState(brand.region ?? 'US');
+  const [usState, setUsState] = useState(brand.state ?? '');
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
@@ -158,12 +161,16 @@ function GeneralTab({
         name: name.trim(),
         industry: industry || null,
         description: description || null,
+        region,
+        state: region === 'US' ? usState || null : null,
       });
       onUpdate({
         name: updated.name,
         slug: updated.slug,
         industry: updated.industry,
         description: updated.description,
+        region: updated.region,
+        state: updated.state,
         updatedAt: updated.updatedAt,
       });
       toast.success(t('settings.saved'));
@@ -217,6 +224,54 @@ function GeneralTab({
             rows={3}
           />
         </div>
+
+        <div className="space-y-2">
+          <Label>Region</Label>
+          <Select
+            value={region}
+            onValueChange={(v) => {
+              if (!v) return;
+              setRegion(v);
+              if (v !== 'US') setUsState('');
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {REGIONS.map((r) => (
+                <SelectItem key={r.code} value={r.code}>
+                  {r.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {region === 'US' && (
+          <div className="space-y-2">
+            <Label>State (optional)</Label>
+            <Select
+              value={usState || 'nationwide'}
+              onValueChange={(v) => setUsState(!v || v === 'nationwide' ? '' : v)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="nationwide">Nationwide (no state)</SelectItem>
+                {US_STATES.map((s) => (
+                  <SelectItem key={s.code} value={s.code}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Localizes AI answers to this state from the next tracking run onward.
+            </p>
+          </div>
+        )}
 
         <Button onClick={handleSave} disabled={isSaving || !name.trim()} className="gap-2">
           {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
