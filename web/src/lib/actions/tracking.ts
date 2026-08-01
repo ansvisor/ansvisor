@@ -2525,15 +2525,37 @@ export interface InsightsBreakdown {
 function aggregateMetric(
   rows: Array<{
     mention_count: number;
+    citation_count?: number;
     visibility_score: number;
+    mention_position?: number | null;
   }>,
   metric: BreakdownMetric,
 ): { value: number; runs: number } {
   if (metric === 'visibility') {
     if (rows.length === 0) return { value: 0, runs: 0 };
-    const sum = rows.reduce((s, r) => s + (r.visibility_score ?? 0), 0);
+    // AI Visibility Score over the group's answers — the drill-down explains
+    // the same number the KPI card shows, per prompt/platform/topic.
+    let mentionAnswers = 0;
+    let citationAnswers = 0;
+    let posSum = 0;
+    let posN = 0;
+    for (const r of rows) {
+      if ((r.mention_count ?? 0) > 0) mentionAnswers++;
+      if ((r.citation_count ?? 0) > 0) citationAnswers++;
+      const pos = r.mention_position;
+      if (pos !== null && pos !== undefined && pos > 0) {
+        posSum += 1 / pos;
+        posN++;
+      }
+    }
     return {
-      value: Math.round((sum / rows.length) * 10) / 10,
+      value:
+        computeAiVisibilityScore({
+          answers: rows.length,
+          mentionAnswers,
+          citationAnswers,
+          positionFactor: posN > 0 ? posSum / posN : null,
+        }) ?? 0,
       runs: rows.length,
     };
   }
@@ -2616,7 +2638,9 @@ export async function getInsightsBreakdown(
     prompt_id: string;
     platform: string;
     mention_count: number;
+    citation_count: number;
     visibility_score: number;
+    mention_position: number | null;
   };
   const curRows = (curRes.data ?? []) as unknown as Row[];
   const prevRows = (prevRes.data ?? []) as unknown as Row[];

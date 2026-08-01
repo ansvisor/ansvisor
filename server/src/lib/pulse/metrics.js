@@ -123,18 +123,24 @@ async function competitorRates(brandId, from, to) {
   return { brandRate, competitors };
 }
 
-async function promptAverages(brandId, from, to) {
-  const rows = await rpc('prompt_performance_aggregates', {
+/** Per-prompt AI Visibility Score over a window (movers highlight). */
+async function promptScores(brandId, from, to) {
+  const rows = await rpc('prompt_visibility_summaries', {
     p_brand_id: brandId,
     p_date_from: from.toISOString(),
     p_date_to: to.toISOString(),
   });
   const map = new Map();
   for (const row of rows ?? []) {
-    if (!row.result_count) continue;
+    if (!row.runs) continue;
     map.set(row.prompt_id, {
-      text: row.prompt_text,
-      avg: round1((row.sum_visibility ?? 0) / row.result_count),
+      score:
+        computeAiVisibilityScore({
+          answers: Number(row.runs),
+          mentionAnswers: Number(row.mention_answers ?? 0),
+          citationAnswers: Number(row.citation_answers ?? 0),
+          positionFactor: row.position_factor ?? null,
+        }) ?? 0,
     });
   }
   return map;
@@ -331,8 +337,8 @@ export async function computePulseMetrics(brandId, { windowDays = 1, now = new D
     insightsWindow(brandId, prevFrom, curFrom),
     competitorRates(brandId, weekFrom, now),
     competitorRates(brandId, twoWeekFrom, weekFrom),
-    promptAverages(brandId, weekFrom, now),
-    promptAverages(brandId, twoWeekFrom, weekFrom),
+    promptScores(brandId, weekFrom, now),
+    promptScores(brandId, twoWeekFrom, weekFrom),
     firstTimeCitations(promptById, curFrom),
     newEngineAppearances(brandId, curFrom),
     lostCitationPrompts(brandId, promptById, now),
@@ -371,8 +377,10 @@ export async function computePulseMetrics(brandId, { windowDays = 1, now = new D
   for (const [promptId, cur] of weekPromptAvg) {
     const prev = prevWeekPromptAvg.get(promptId);
     if (!prev) continue;
-    const gain = round1(cur.avg - prev.avg);
-    if (gain >= MOVER_MIN_GAIN) movers.push({ promptId, text: cur.text, gain });
+    const gain = round1(cur.score - prev.score);
+    if (gain >= MOVER_MIN_GAIN) {
+      movers.push({ promptId, text: promptById.get(promptId)?.text ?? '', gain });
+    }
   }
   movers.sort((a, b) => b.gain - a.gain);
   for (const mover of movers.slice(0, MOVER_LIMIT)) {

@@ -69,13 +69,15 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       description:
         'Get aggregate visibility metrics for a brand over an optional date range and filter. ' +
-        'The headline metric is visibilityRatePct (totals.visibilityRatePct): the percentage of ' +
-        'tracked prompts the brand appeared in (distinct visible prompts ÷ distinct prompts with ' +
-        'results, shopping excluded). This matches the Insights KPI card — use it when describing ' +
-        'how visible a brand is. Also returns totals.avgVisibility (0-100 intensity score over all ' +
-        'result rows), totals.visiblePrompts, totals.promptCount, total mentions, total citations, ' +
-        'and the top 5 competitors by mention count with avgVisibility divided by the same ' +
-        "denominator as the brand (not just the competitor's own appearances). " +
+        'The HEADLINE metric is totals.aiVisibilityScore (0-100): 0.6 × mention rate + 0.25 × ' +
+        'citation rate + 0.15 × position factor over the filtered answers — the same Visibility ' +
+        'number the dashboard shows everywhere; quote it WITHOUT a % sign. Components are ' +
+        'totals.mentionAnswers, totals.citationAnswers and totals.positionFactor (mean of ' +
+        '1/position over mentioning answers; 1 = always named first). Coverage survives as ' +
+        'totals.visibilityRatePct (visible prompts ÷ tracked prompts, a percentage) with ' +
+        'totals.visiblePrompts / totals.promptCount. totals.avgVisibility and the competitors’ ' +
+        'avgVisibility are DEPRECATED legacy intensity averages — prefer each competitor’s ' +
+        '`score`, which shares the brand’s denominator. ' +
         'Use this for "how is my brand doing" / "what changed" style questions.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),

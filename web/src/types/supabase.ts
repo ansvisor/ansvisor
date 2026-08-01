@@ -1452,6 +1452,7 @@ export type Database = {
         Args: {
           p_brand_id: string;
           p_date_from?: string | null;
+          p_date_to?: string | null;
         };
         Returns: {
           prompt_id: string;

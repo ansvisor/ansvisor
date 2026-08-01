@@ -24,7 +24,7 @@ import { sortBreakdownRowsForDisplay } from './breakdown-display';
 
 const METRIC_TITLE: Record<BreakdownMetric, string> = {
   mentions: 'Mentions',
-  visibility: 'Visibility Score',
+  visibility: 'Visibility',
 };
 
 const METRIC_UNIT: Record<BreakdownMetric, string> = {

@@ -189,6 +189,12 @@ function getFieldsFor(reportType) {
       .setType(types.YEAR_MONTH_DAY);
     fields
       .newMetric()
+      .setId("ai_visibility_score")
+      .setName("Visibility (AI Visibility Score)")
+      .setType(types.NUMBER)
+      .setAggregation(aggregations.AVG);
+    fields
+      .newMetric()
       .setId("avg_visibility_score")
       .setName("Avg Visibility Score")
       .setType(types.NUMBER)
@@ -308,6 +314,7 @@ function fetchRowObjects(reportType, brandId, dateFrom, dateTo) {
     return (trend.buckets || []).map(function (bucket) {
       return {
         date: bucket.date.replace(/-/g, ""),
+        ai_visibility_score: bucket.ai_visibility_score,
         avg_visibility_score: bucket.avg_visibility_score,
         total_mentions: bucket.total_mentions,
         total_citations: bucket.total_citations,

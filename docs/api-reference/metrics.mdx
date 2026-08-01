@@ -68,6 +68,7 @@ Time-bucketed visibility for charting — the endpoint to join against GA4 date 
     {
       "date": "2026-06-01",
       "result_count": 24,
+      "ai_visibility_score": 21.4,
       "avg_visibility_score": 47,
       "total_mentions": 31,
       "total_citations": 12,
@@ -76,6 +77,8 @@ Time-bucketed visibility for charting — the endpoint to join against GA4 date 
   ]
 }
 ```
+
+`ai_visibility_score` is the dashboard's headline Visibility number (0-100): `0.6 × mention rate + 0.25 × citation rate + 0.15 × position factor` over the day's answers. It is only populated for `day` granularity. `avg_visibility_score` and `avg_competitor_score` are legacy intensity averages kept for compatibility — prefer `ai_visibility_score`. The same field also appears on `/api/v1/visibility-summary` (`totals.aiVisibilityScore`, with `mentionAnswers` / `citationAnswers` / `positionFactor` components) and `/api/v1/competitor-comparison` (`ai_visibility_score` on the brand row and every competitor row).
 
 ### Competitor comparison & share of voice
 
