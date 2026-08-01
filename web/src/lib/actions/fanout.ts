@@ -3,7 +3,6 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { addPromptToSet } from '@/lib/actions/prompt';
-import { PlanLimitError } from '@/lib/guards/plan-guard';
 import { API_BASE_URL } from '@/config/api';
 
 /**
@@ -263,19 +262,11 @@ export async function trackFanoutQuery(brandId: string, query: string): Promise<
       : ['chatgpt-web'];
   const models = Array.isArray(defaults?.models) ? (defaults!.models as string[]) : [];
 
-  // User-facing failures (plan limit, invalid input) come back as a VALUE:
-  // production masks every error thrown from a server action, so a thrown
-  // PlanLimitError reached users as the meaningless digest message (#427).
-  let created;
-  try {
-    created = await addPromptToSet({ promptSetId: ps.id as string, text, platforms, models });
-  } catch (err) {
-    if (err instanceof PlanLimitError) return { error: err.message };
-    throw err;
-  }
+  const created = await addPromptToSet({ promptSetId: ps.id as string, text, platforms, models });
+  if ('error' in created) return { error: created.error };
 
   revalidatePath('/dashboard/prompts');
-  return { promptId: created.id };
+  return { promptId: created.prompt.id };
 }
 
 /**

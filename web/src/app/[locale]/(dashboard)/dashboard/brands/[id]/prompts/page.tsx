@@ -252,7 +252,7 @@ export default function PromptsPage() {
         }
         targetSetId = result.promptSet.id;
       } else {
-        await Promise.all(
+        const results = await Promise.all(
           activePrompts.map((p) =>
             addPromptToSet({
               promptSetId: targetSetId,
@@ -263,6 +263,14 @@ export default function PromptsPage() {
             }),
           ),
         );
+        const failed = results.find((r) => 'error' in r);
+        if (failed && 'error' in failed) {
+          toast.error(failed.error);
+          // Some prompts may have saved before the failure — refresh so the
+          // list reflects what actually landed.
+          await loadData();
+          return;
+        }
       }
 
       setSuggestions([]);
@@ -290,10 +298,14 @@ export default function PromptsPage() {
       };
 
       if (existingSet) {
-        await addPromptToSet({
+        const result = await addPromptToSet({
           promptSetId: existingSet.id,
           ...promptData,
         });
+        if ('error' in result) {
+          toast.error(result.error);
+          return;
+        }
       } else {
         const result = await savePromptSet({
           brandId,

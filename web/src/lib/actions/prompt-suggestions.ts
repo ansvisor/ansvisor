@@ -157,13 +157,17 @@ export async function acceptSuggestion(
   const models =
     options?.models ?? (Array.isArray(defaults?.models) ? (defaults!.models as string[]) : []);
 
-  const created = await addPromptToSet({
+  const result = await addPromptToSet({
     promptSetId: ps.id,
     text: row.suggested_text,
     category: row.topic_name ?? undefined,
     platforms,
     models,
   });
+  if ('error' in result) {
+    throw new Error(result.error);
+  }
+  const created = result.prompt;
 
   const ack = await fetch(`${AEO_SERVER_URL}/api/prompts/suggestions/${suggestionId}/accept`, {
     method: 'POST',

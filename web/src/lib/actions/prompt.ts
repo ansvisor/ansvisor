@@ -372,7 +372,15 @@ interface AddPromptInput {
   models?: string[];
 }
 
-export async function addPromptToSet(input: AddPromptInput): Promise<Prompt> {
+export type AddPromptToSetResult = { prompt: Prompt } | { error: string; code?: 'plan_limit' };
+
+/**
+ * User-facing failures (plan limit, empty platform selection, DB errors) come
+ * back as a VALUE: production masks every error thrown from a server action,
+ * so a thrown PlanLimitError would reach users as the meaningless digest
+ * message (#427).
+ */
+export async function addPromptToSet(input: AddPromptInput): Promise<AddPromptToSetResult> {
   const supabase = await createClient();
 
   const { data: ps } = await supabase
@@ -381,19 +389,24 @@ export async function addPromptToSet(input: AddPromptInput): Promise<Prompt> {
     .eq('id', input.promptSetId)
     .single();
 
-  if (!ps?.brand_id) throw new Error('Prompt set not found');
+  if (!ps?.brand_id) return { error: 'Prompt set not found' };
 
   const { organizationId: orgId, region: brandRegion } = await getBrandContext(
     supabase,
     ps.brand_id as string,
   );
   const currentCount = await getOrgPromptCount(supabase, orgId);
-  await enforceLimit(orgId, 'maxPrompts', currentCount);
+  try {
+    await enforceLimit(orgId, 'maxPrompts', currentCount);
+  } catch (err) {
+    if (err instanceof PlanLimitError) return { error: err.message, code: 'plan_limit' };
+    throw err;
+  }
 
   const plan = await getOrgPlan(orgId);
   const filtered = filterByPlan(plan, input.platforms, input.models ?? []);
   if (filtered.platforms.length === 0 && filtered.models.length === 0) {
-    throw new Error('At least one platform or model must be selected.');
+    return { error: 'At least one platform or model must be selected.' };
   }
 
   const topicId = await resolveTopicId(supabase, ps.brand_id as string, input.category);
@@ -411,7 +424,7 @@ export async function addPromptToSet(input: AddPromptInput): Promise<Prompt> {
     ? Array.from(new Set([...filtered.platforms, 'chatgpt-shopping']))
     : stripShoppingWhenDisabled(filtered.platforms, false);
   if (platforms.length === 0 && filtered.models.length === 0) {
-    throw new Error('At least one platform or model must be selected.');
+    return { error: 'At least one platform or model must be selected.' };
   }
 
   const { data, error } = await supabase
@@ -430,11 +443,11 @@ export async function addPromptToSet(input: AddPromptInput): Promise<Prompt> {
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message ?? 'Failed to add prompt');
+    return { error: error?.message ?? 'Failed to add prompt' };
   }
 
   revalidatePath('/dashboard/brands');
-  return mapPromptRow(data as Record<string, unknown>);
+  return { prompt: mapPromptRow(data as Record<string, unknown>) };
 }
 
 export type AddPromptToBrandResult = { prompt: Prompt } | { error: string };
@@ -482,22 +495,17 @@ export async function addPromptToBrand(
     promptSetId = createdSet.id as string;
   }
 
-  let created: Prompt;
-  try {
-    created = await addPromptToSet({
-      promptSetId,
-      text: trimmed,
-      category: input.category,
-      platforms: input.platforms,
-      models: input.models ?? [],
-    });
-  } catch (err) {
-    if (err instanceof PlanLimitError) return { error: err.message };
-    throw err;
-  }
+  const result = await addPromptToSet({
+    promptSetId,
+    text: trimmed,
+    category: input.category,
+    platforms: input.platforms,
+    models: input.models ?? [],
+  });
+  if ('error' in result) return { error: result.error };
 
   revalidatePath('/dashboard/prompts');
-  return { prompt: created };
+  return { prompt: result.prompt };
 }
 
 export async function deletePrompt(id: string): Promise<void> {
