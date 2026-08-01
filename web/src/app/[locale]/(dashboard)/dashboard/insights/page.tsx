@@ -39,6 +39,7 @@ const ShareOfVoiceTrendChart = dynamic(
   },
 );
 import { MetricBreakdownSheet } from './_metric-breakdown-sheet';
+import { FormulaDialog } from './_formula-dialog';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
   getInsightsData,
@@ -1401,6 +1402,8 @@ export default function InsightsPage() {
 
         <div className="flex items-center gap-2 shrink-0">
           {/* Always visible */}
+          <FormulaDialog />
+
           <Button
             variant="outline"
             className="gap-2"
