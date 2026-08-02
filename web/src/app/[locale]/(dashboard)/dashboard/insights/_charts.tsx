@@ -448,15 +448,20 @@ export function VisibilityRateTrendChart({ data }: { data: VisibilityRateTrendDa
     );
   }
 
-  // Own brand always plots; competitors capped by period-average rate so a
-  // long roster doesn't turn the chart into spaghetti.
+  // Own brand always plots; competitors capped so a long roster doesn't turn
+  // the chart into spaghetti. Ranked by the LAST point's value — the rolling
+  // window makes that equal each entity's score over the charted window, i.e.
+  // the exact number the leaderboard sorts by — so the chart always plots the
+  // same brands the leaderboard's top rows show. (Period-averaging the points
+  // here used to pick a different set on short ranges.)
+  const lastRate = (key: string) => points[points.length - 1]?.values[key] ?? 0;
   const avgRate = (key: string) =>
     points.reduce((sum, p) => sum + (p.values[key] ?? 0), 0) / points.length;
   const shown = [
     ...entities.filter((e) => e.isOwnBrand),
     ...entities
       .filter((e) => !e.isOwnBrand)
-      .sort((a, b) => avgRate(b.key) - avgRate(a.key))
+      .sort((a, b) => lastRate(b.key) - lastRate(a.key) || avgRate(b.key) - avgRate(a.key))
       .slice(0, RATE_TREND_MAX_COMPETITORS),
   ].map((entity, i) => ({
     ...entity,
