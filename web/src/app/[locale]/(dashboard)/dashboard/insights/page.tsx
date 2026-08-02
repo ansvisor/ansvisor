@@ -43,6 +43,8 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import {
   getInsightsData,
   getVisibilityRateTrend,
+  getTrackingWindow,
+  type TrackingWindow,
   type VisibilityRateTrendData,
   triggerTrackingCheck,
   getJobStatus,
@@ -887,6 +889,29 @@ function TrackingProgressBanner({
   );
 }
 
+/**
+ * Banner for runs this browser did NOT start (the daily cron, or a teammate's
+ * Run All) — detected from the tracking_runs ledger, not localStorage. The
+ * dashboard keeps showing the last completed run's numbers until the active
+ * run finishes, then swaps in one step.
+ */
+function ServerRunBanner({ run }: { run: TrackingWindow['activeRun'] }) {
+  if (!run) return null;
+  return (
+    <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+      <div className="flex items-center gap-2">
+        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        <span className="text-sm font-medium">
+          {run.source === 'cron' ? 'Daily tracking in progress' : 'Tracking in progress'}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          — showing the latest completed results; the numbers will refresh when this run finishes.
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ─── No Competitors Teaser ────────────────────────────────────────────────────
 
 /**
@@ -942,6 +967,8 @@ export default function InsightsPage() {
   const [recommendations, setRecommendations] = useState<InsightsRecommendations | null>(null);
   const [breakdownMetric, setBreakdownMetric] = useState<BreakdownMetric | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [cronRun, setCronRun] = useState<TrackingWindow['activeRun']>(null);
+  const cronRunRef = useRef<TrackingWindow['activeRun']>(null);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
@@ -951,10 +978,28 @@ export default function InsightsPage() {
       if (!silent) setIsLoading(true);
       try {
         const f = overrideFilters ?? filtersRef.current;
-        const { dateFrom, dateTo } = getDateRange(f.datePreset, {
+        let { dateFrom, dateTo } = getDateRange(f.datePreset, {
           from: f.dateFrom,
           to: f.dateTo,
         });
+
+        // Stable 24h window (00044): anchor to the last COMPLETED tracking
+        // run so the morning refresh can't flash "no results" or shrink the
+        // counts while today's run streams in. Brands with no completed run
+        // yet (fresh onboarding) keep the live rolling window — nothing of
+        // theirs is old enough to age out, so it can't regress.
+        if (f.datePreset === '24h') {
+          const win = await getTrackingWindow(brand.id).catch(() => null);
+          if (win) {
+            cronRunRef.current = win.activeRun;
+            setCronRun(win.activeRun);
+            if (win.anchored) {
+              dateFrom = win.anchored.dateFrom;
+              dateTo = win.anchored.dateTo;
+            }
+          }
+        }
+
         const filterOpts = {
           model: f.model || undefined,
           region: f.region || undefined,
@@ -1053,6 +1098,34 @@ export default function InsightsPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Watch the tracking-run ledger so server-started (cron) runs surface too:
+  // the job banner below only knows about jobs this browser started via
+  // localStorage, which is why users never saw anything during the daily
+  // morning run. When the active run disappears (= completed), silently
+  // reload so the anchored 24h window swaps to the fresh run in one step.
+  useEffect(() => {
+    if (!brand?.id) return;
+    let cancelled = false;
+
+    const tick = async () => {
+      const win = await getTrackingWindow(brand.id).catch(() => null);
+      if (cancelled || !win) return;
+      const wasRunning = cronRunRef.current !== null;
+      cronRunRef.current = win.activeRun;
+      setCronRun(win.activeRun);
+      if (wasRunning && !win.activeRun) {
+        loadData(undefined, { silent: true });
+      }
+    };
+
+    const id = setInterval(tick, 60_000);
+    tick();
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [brand?.id, loadData]);
 
   // Restore active job from localStorage or URL query param (post-payment redirect)
   const searchParams = useSearchParams();
@@ -1271,6 +1344,11 @@ export default function InsightsPage() {
       : 0;
   const trulyEmpty = noResults && !hasAnyData;
 
+  // The localStorage-tracked job banner (with progress + Stop) wins when this
+  // browser started the run; the ledger banner covers everything else.
+  const localJobActive =
+    jobStatus !== null && (jobStatus.status === 'active' || jobStatus.status === 'waiting');
+
   if (trulyEmpty) {
     return (
       <div className="space-y-6">
@@ -1279,6 +1357,7 @@ export default function InsightsPage() {
           <p className="text-muted-foreground text-sm">{brand.name}</p>
         </div>
         <TrackingProgressBanner jobStatus={jobStatus} onStop={handleStopTracking} />
+        {!localJobActive && <ServerRunBanner run={cronRun} />}
         <EmptyState onRunPrompts={handleRunPrompts} isRunning={isRunning} isCloud={isCloud} />
         {!isCloud && (
           <div className="flex justify-center">
@@ -1373,6 +1452,7 @@ export default function InsightsPage() {
 
       {/* Tracking Progress */}
       <TrackingProgressBanner jobStatus={jobStatus} onStop={handleStopTracking} />
+      {!localJobActive && <ServerRunBanner run={cronRun} />}
 
       {/* Refetch overlay: on a filter/date change the previous window's data
           stays mounted (no skeleton — that's first-load only), so without a

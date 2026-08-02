@@ -58,7 +58,13 @@ export async function runTrackingJob(jobId, io) {
     const { brandId, promptId, promptIds, immediate } = jobRow.data;
     const proxy = createJobProxy(jobId, abortController.signal);
 
-    const result = await processTrackingJob({ brandId, promptId, promptIds, job: proxy });
+    const result = await processTrackingJob({
+      brandId,
+      promptId,
+      promptIds,
+      source: immediate ? 'manual' : 'cron',
+      job: proxy,
+    });
 
     await completeJob(jobId, result);
 

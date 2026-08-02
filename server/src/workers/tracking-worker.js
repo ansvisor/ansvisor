@@ -21,9 +21,9 @@ function resolveModelPlatform(model) {
 
 /**
  * Core logic: fetch prompts, run them through specified models, store results.
- * @param {{ brandId: string, promptId?: string, promptIds?: string[], job?: { progress: function, signal?: AbortSignal } }} opts
+ * @param {{ brandId: string, promptId?: string, promptIds?: string[], source?: string, job?: { progress: function, signal?: AbortSignal } }} opts
  */
-export async function processTrackingJob({ brandId, promptId, promptIds, job }) {
+export async function processTrackingJob({ brandId, promptId, promptIds, source, job }) {
   // 1. Fetch brand info with domains
   const { data: brand, error: brandErr } = await supabaseAdmin
     .from('brands')
@@ -72,6 +72,41 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
   if (!prompts || prompts.length === 0) {
     logger.info({ brandId }, 'no active prompts for brand');
     return { resultCount: 0 };
+  }
+
+  // Tracking-run ledger (00044): FULL runs stamp a row so the insights 24h
+  // view can anchor to the last COMPLETED run instead of a wall-clock window
+  // that empties and refills every morning. Single/subset-prompt runs must
+  // NOT stamp — a completed single-prompt "run" would swing the dashboard
+  // window onto one prompt's worth of data.
+  //
+  // By the time this function returns, this run's scraper results are already
+  // inserted (webhook mode drains its own submitted task_ids above; polling
+  // mode is inline), so completion is stamped at the end of this function —
+  // no webhook-side bookkeeping needed. The stall/deadline caps in the drain
+  // loop bound how long a stuck Cloro queue can delay the stamp.
+  const isFullRun = !promptId && (!promptIds || promptIds.length === 0);
+  let trackingRunId = null;
+  if (isFullRun) {
+    // A run that died mid-flight (crash, abort) leaves an uncompleted row;
+    // clear those so at most one in-progress row exists per brand.
+    await supabaseAdmin
+      .from('tracking_runs')
+      .delete()
+      .eq('brand_id', brandId)
+      .is('completed_at', null);
+
+    const { data: runRow, error: runErr } = await supabaseAdmin
+      .from('tracking_runs')
+      .insert({ brand_id: brandId, source: source || 'manual' })
+      .select('id')
+      .single();
+    if (runErr) {
+      // Ledger failure must never block tracking itself.
+      logger.warn({ err: runErr, brandId }, 'failed to create tracking_runs row');
+    } else {
+      trackingRunId = runRow.id;
+    }
   }
 
   // 3. Fetch competitors for this brand
@@ -479,6 +514,24 @@ export async function processTrackingJob({ brandId, promptId, promptIds, job }) 
     }
   } catch (err) {
     logger.error({ err, brandId }, 'failed to check opportunity generation eligibility');
+  }
+
+  // Stamp the ledger row. Zero results (every task failed) deletes the row
+  // instead: completing it would swing the 24h anchor onto an empty window,
+  // and leaving it open would pin the "in progress" banner — the dashboard
+  // keeps showing the previous completed run either way.
+  if (trackingRunId) {
+    if (insertedCount > 0) {
+      const { error: stampErr } = await supabaseAdmin
+        .from('tracking_runs')
+        .update({ completed_at: new Date().toISOString(), result_count: insertedCount })
+        .eq('id', trackingRunId);
+      if (stampErr) {
+        logger.error({ err: stampErr, brandId, trackingRunId }, 'failed to stamp tracking run');
+      }
+    } else {
+      await supabaseAdmin.from('tracking_runs').delete().eq('id', trackingRunId);
+    }
   }
 
   return { resultCount: insertedCount };

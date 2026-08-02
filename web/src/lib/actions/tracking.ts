@@ -599,6 +599,74 @@ export interface InsightsData {
   hasAnyData: boolean;
 }
 
+export interface TrackingWindow {
+  /**
+   * The stable 24h window: (previous completed run, latest completed run].
+   * Null when the brand has no completed run yet (fresh onboarding) — the
+   * caller falls back to the live rolling window, which cannot regress
+   * because a new brand has nothing older than 24h to age out.
+   */
+  anchored: { dateFrom: string; dateTo: string } | null;
+  /** A full run currently in flight (cron or manual), for the progress banner. */
+  activeRun: { startedAt: string; source: string } | null;
+}
+
+/**
+ * Resolve the effective 24h window from the tracking-run ledger (00044).
+ *
+ * The naive `[now - 24h, now]` window empties and refills every morning while
+ * the daily run streams in: old results age out second by second, new ones
+ * arrive over ~an hour, so users watch "no results" flashes and a shrinking
+ * prompt count. Anchoring to the latest COMPLETED run freezes the window
+ * between runs and swaps it atomically when the next run finishes draining.
+ *
+ * The lower bound is capped at the previous run's completion so the window
+ * never bleeds into the prior cycle's drain tail (a run that completes at
+ * 10:15 must not pick up yesterday's 10:20 stragglers).
+ */
+export async function getTrackingWindow(brandId: string): Promise<TrackingWindow> {
+  const supabase = await createClient();
+
+  const [completedResp, activeResp] = await Promise.all([
+    supabase
+      .from('tracking_runs')
+      .select('completed_at')
+      .eq('brand_id', brandId)
+      .not('completed_at', 'is', null)
+      .order('completed_at', { ascending: false })
+      .limit(2),
+    supabase
+      .from('tracking_runs')
+      .select('started_at, source')
+      .eq('brand_id', brandId)
+      .is('completed_at', null)
+      // A run row without a stamp older than the worker's drain ceiling is a
+      // crashed run, not an active one — never pin the banner on it.
+      .gte('started_at', new Date(Date.now() - 2 * 3600_000).toISOString())
+      .order('started_at', { ascending: false })
+      .limit(1),
+  ]);
+
+  const completed = completedResp.data ?? [];
+  const latest = completed[0]?.completed_at as string | undefined;
+
+  let anchored: TrackingWindow['anchored'] = null;
+  if (latest) {
+    const latestMs = new Date(latest).getTime();
+    const prev = completed[1]?.completed_at as string | undefined;
+    const lowerMs = Math.max(latestMs - 24 * 3600_000, prev ? new Date(prev).getTime() + 1 : 0);
+    anchored = { dateFrom: new Date(lowerMs).toISOString(), dateTo: latest };
+  }
+
+  const active = activeResp.data?.[0];
+  return {
+    anchored,
+    activeRun: active
+      ? { startedAt: active.started_at as string, source: (active.source as string) ?? 'manual' }
+      : null,
+  };
+}
+
 /**
  * One consolidated server action for the Insights page's first load (#313).
  *

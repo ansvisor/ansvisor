@@ -1304,6 +1304,44 @@ export type Database = {
           },
         ];
       };
+      tracking_runs: {
+        Row: {
+          brand_id: string;
+          completed_at: string | null;
+          created_at: string;
+          id: string;
+          result_count: number | null;
+          source: string;
+          started_at: string;
+        };
+        Insert: {
+          brand_id: string;
+          completed_at?: string | null;
+          created_at?: string;
+          id?: string;
+          result_count?: number | null;
+          source?: string;
+          started_at?: string;
+        };
+        Update: {
+          brand_id?: string;
+          completed_at?: string | null;
+          created_at?: string;
+          id?: string;
+          result_count?: number | null;
+          source?: string;
+          started_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'tracking_runs_brand_id_fkey';
+            columns: ['brand_id'];
+            isOneToOne: false;
+            referencedRelation: 'brands';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       webhook_configs: {
         Row: {
           brand_id: string;
