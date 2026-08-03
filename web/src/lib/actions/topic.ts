@@ -95,7 +95,7 @@ export async function updateTopic(topicId: string, name: string): Promise<Topic>
   return mapTopicRow(data as Record<string, unknown>);
 }
 
-export async function getPromptCountByTopic(brandId: string, topicName: string): Promise<number> {
+export async function getPromptCountByTopic(brandId: string, topicId: string): Promise<number> {
   const supabase = await createClient();
 
   const { data: sets } = await supabase.from('prompt_sets').select('id').eq('brand_id', brandId);
@@ -107,7 +107,7 @@ export async function getPromptCountByTopic(brandId: string, topicName: string):
     .from('prompts')
     .select('id', { count: 'exact', head: true })
     .in('prompt_set_id', setIds)
-    .eq('category', topicName);
+    .eq('topic_id', topicId);
 
   if (error) throw new Error(error.message);
   return count ?? 0;

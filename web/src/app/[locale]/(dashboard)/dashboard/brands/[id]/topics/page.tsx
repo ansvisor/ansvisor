@@ -54,7 +54,7 @@ export default function BrandTopicsPage({ params }: PageProps) {
         const counts: Record<string, number> = {};
         await Promise.all(
           data.map(async (t) => {
-            counts[t.id] = await getPromptCountByTopic(brandId, t.name);
+            counts[t.id] = await getPromptCountByTopic(brandId, t.id);
           }),
         );
         if (isCancelled?.()) return;
