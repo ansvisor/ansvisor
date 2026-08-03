@@ -583,12 +583,16 @@ export function VisibilityRateTrendChart({ data }: { data: VisibilityRateTrendDa
         {shown.map((entity) => (
           <li
             key={entity.key}
-            className="flex cursor-default items-center gap-1.5 text-xs transition-opacity"
+            tabIndex={0}
+            aria-label={entity.name}
+            className="flex cursor-default items-center gap-1.5 rounded-sm text-xs transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             style={{
               opacity: hoveredKey !== null && hoveredKey !== entity.key ? 0.35 : 1,
             }}
             onMouseEnter={() => setHoveredKey(entity.key)}
             onMouseLeave={() => setHoveredKey(null)}
+            onFocus={() => setHoveredKey(entity.key)}
+            onBlur={() => setHoveredKey(null)}
           >
             <span
               className="h-2.5 w-2.5 shrink-0 rounded-sm"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useId } from 'react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
@@ -170,25 +170,40 @@ function getDateRange(preset: DatePreset, custom: { from: string; to: string }) 
 function InfoTip({ content }: { content: string }) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const ref = useRef<HTMLSpanElement>(null);
+  const tooltipId = useId();
 
   function show() {
     const r = ref.current?.getBoundingClientRect();
     if (r) setPos({ x: r.left + r.width / 2, y: r.bottom + 6 });
   }
 
+  function hide() {
+    setPos(null);
+  }
+
   return (
     <>
       <span
         ref={ref}
+        tabIndex={0}
+        aria-label="More information"
+        aria-describedby={pos ? tooltipId : undefined}
         onMouseEnter={show}
-        onMouseLeave={() => setPos(null)}
-        className="inline-flex items-center cursor-help"
+        onMouseLeave={hide}
+        onFocus={show}
+        onBlur={hide}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') hide();
+        }}
+        className="inline-flex items-center cursor-help rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <HelpCircle className="h-3 w-3 text-muted-foreground/60 hover:text-muted-foreground transition-colors" />
       </span>
       {pos &&
         createPortal(
           <div
+            id={tooltipId}
+            role="tooltip"
             style={{ left: pos.x, top: pos.y, transform: 'translateX(-50%)' }}
             className="pointer-events-none fixed z-[9999] w-56 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md"
           >
