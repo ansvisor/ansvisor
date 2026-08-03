@@ -50,8 +50,11 @@ import {
   Search,
   X,
   Loader2,
+  Download,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { toCsv } from '@/lib/csv';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -63,6 +66,16 @@ import {
 } from '@/components/ui/select';
 
 const PAGE_SIZE = 10;
+
+/**
+ * PostgREST silently caps un-paginated selects at 1000 rows (see the citations
+ * export's note on the same limit) — fetch up to that ceiling in one request
+ * for the export rather than scanning further pages, matching the "high limit"
+ * scope in #607.
+ */
+const TRAFFIC_EXPORT_LIMIT = 1000;
+
+const TRAFFIC_EXPORT_HEADERS = ['timestamp', 'platform', 'page_url', 'referrer'];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -499,6 +512,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   const [logsTotal, setLogsTotal] = useState(0);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const [filters, setFilters] = useState<TrafficFilters>({ platform: '', search: '' });
   const [searchInput, setSearchInput] = useState(filters.search);
@@ -556,6 +570,42 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
       setIsLoadingLogs(false);
     }
   }, [brand.id, page, filters.platform, filters.search, dateWindow]);
+
+  const handleExportCsv = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const result = await getTrafficLogs(brand.id, {
+        limit: TRAFFIC_EXPORT_LIMIT,
+        platform: filters.platform || undefined,
+        search: filters.search || undefined,
+        dateFrom: dateWindow.dateFrom,
+        dateTo: dateWindow.dateTo,
+      });
+
+      const rows = result.logs.map((log) => ({
+        timestamp: log.createdAt,
+        platform: log.sourcePlatform ? getPlatformName(log.sourcePlatform) : '',
+        page_url: log.url,
+        referrer: log.referrer ?? '',
+      }));
+
+      const csv = toCsv(rows, TRAFFIC_EXPORT_HEADERS);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const date = new Date().toISOString().slice(0, 10);
+
+      link.href = url;
+      link.download = `ansvisor_${brand.slug}_traffic_${date}.csv`;
+      link.click();
+
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to export CSV');
+    } finally {
+      setIsExporting(false);
+    }
+  }, [brand.id, brand.slug, filters.platform, filters.search, dateWindow]);
 
   const handleFiltersChange = useCallback((patch: Partial<TrafficFilters>) => {
     setPage(0);
@@ -625,14 +675,29 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
             {primaryDomain ? `${primaryDomain} · ` : ''}AI-referred visits to your website
           </p>
         </div>
-        <DateRangePicker
-          preset={datePreset}
-          customFrom={customFrom}
-          customTo={customTo}
-          onPreset={handleDatePresetChange}
-          onCustomFrom={handleCustomFromChange}
-          onCustomTo={handleCustomToChange}
-        />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => void handleExportCsv()}
+            disabled={isExporting || isEmpty}
+          >
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            {isExporting ? 'Exporting...' : 'Export CSV'}
+          </Button>
+          <DateRangePicker
+            preset={datePreset}
+            customFrom={customFrom}
+            customTo={customTo}
+            onPreset={handleDatePresetChange}
+            onCustomFrom={handleCustomFromChange}
+            onCustomTo={handleCustomToChange}
+          />
+        </div>
       </div>
 
       {/* Snippet Banner */}
