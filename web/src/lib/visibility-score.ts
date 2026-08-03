@@ -32,9 +32,13 @@ export const VISIBILITY_SCORE_WEIGHTS = {
  * position term needs a body of mentions before it pays out. Without this, a
  * competitor named first in 6 of 16k answers scored a flat 15-point position
  * floor and ranked above one named in 500+. High-volume entities are
- * untouched (3892/3902 ≈ 1); only thin samples are damped.
+ * untouched; only thin samples are damped.
+ *
+ * Calibrated at 20 (half strength at 20 mentioned answers): at 10, a perfect
+ * position over ~6 answers still edged out an entity mentioned 4× more often
+ * in mid positions — presence should win that comparison.
  */
-export const POSITION_SUPPORT_ANSWERS = 10;
+export const POSITION_SUPPORT_ANSWERS = 20;
 
 export interface VisibilityScoreComponents {
   /** Total answers in the scope (the shared denominator). */

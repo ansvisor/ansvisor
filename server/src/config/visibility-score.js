@@ -21,8 +21,11 @@ export const VISIBILITY_SCORE_WEIGHTS = {
  * position term needs a body of mentions before it pays out — a perfect
  * average over a handful of answers must not outrank entities that actually
  * show up. High-volume entities are untouched; only thin samples are damped.
+ *
+ * Calibrated at 20 (half strength at 20 mentioned answers) — see the web
+ * mirror for the rationale.
  */
-export const POSITION_SUPPORT_ANSWERS = 10;
+export const POSITION_SUPPORT_ANSWERS = 20;
 
 /**
  * 0-100 score, one decimal. Returns null when the scope has no answers.

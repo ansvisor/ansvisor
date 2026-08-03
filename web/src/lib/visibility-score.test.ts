@@ -7,8 +7,8 @@ import {
 
 describe('computeAiVisibilityScore', () => {
   it('blends the three components with the canonical weights', () => {
-    // position support: 5/(5+10) = 1/3 → effective pf = 0.8/3 = 0.2667
-    // 100 × (0.6×0.5 + 0.25×0.2 + 0.15×0.2667) = 30 + 5 + 4 = 39
+    // position support: 5/(5+20) = 0.2 → effective pf = 0.8×0.2 = 0.16
+    // 100 × (0.6×0.5 + 0.25×0.2 + 0.15×0.16) = 30 + 5 + 2.4 = 37.4
     expect(
       computeAiVisibilityScore({
         answers: 10,
@@ -16,7 +16,7 @@ describe('computeAiVisibilityScore', () => {
         citationAnswers: 2,
         positionFactor: 0.8,
       }),
-    ).toBe(39);
+    ).toBe(37.4);
   });
 
   it('treats a null position factor as zero contribution', () => {
@@ -52,7 +52,7 @@ describe('computeAiVisibilityScore', () => {
       }),
     ).toBe(100);
     // Small perfect scope: the position term is still earning trust.
-    // 100 × (0.6 + 0.25 + 0.15 × 7/17) = 91.2
+    // 100 × (0.6 + 0.25 + 0.15 × 7/27) = 88.9
     expect(
       computeAiVisibilityScore({
         answers: 7,
@@ -60,14 +60,15 @@ describe('computeAiVisibilityScore', () => {
         citationAnswers: 7,
         positionFactor: 1,
       }),
-    ).toBe(91.2);
+    ).toBe(88.9);
   });
 
   it('damps a perfect position average built on a thin sample', () => {
     // A competitor named first in 6 of 16k answers used to score a flat
-    // 15-point position floor and outrank one named in 500+. Support 6/16
-    // caps its position term at 5.6 points (5.7 total with the tiny
-    // mention/citation contributions).
+    // 15-point position floor and outrank one named in 500+. Support 6/26
+    // caps its position term at 3.5 points — below entities that are
+    // actually present (an entity mentioned 25× in mid positions now ranks
+    // above this one, which K=10 still got backwards).
     expect(
       computeAiVisibilityScore({
         answers: 16_332,
@@ -75,7 +76,7 @@ describe('computeAiVisibilityScore', () => {
         citationAnswers: 4,
         positionFactor: 1,
       }),
-    ).toBe(5.7);
+    ).toBe(3.5);
     // A high-volume competitor is effectively untouched by the shrinkage:
     // support 3892/3902 ≈ 0.997.
     expect(
