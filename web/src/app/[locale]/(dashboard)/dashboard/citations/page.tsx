@@ -11,6 +11,7 @@ const DynamicSourceTypeDonutChart = dynamic(
   },
 );
 import {
+  AlertCircle,
   Quote,
   Globe,
   ExternalLink,
@@ -19,6 +20,7 @@ import {
   Loader2,
   Info,
   Download,
+  RotateCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -214,6 +216,8 @@ const DomainsTable = memo(function DomainsTable({
   filters,
   onResetFilters,
   hasAnyCitations,
+  loadFailed,
+  onRetry,
 }: {
   rows: CitationDomainRow[];
   brandId: string;
@@ -223,6 +227,8 @@ const DomainsTable = memo(function DomainsTable({
   filters: UIFilters;
   onResetFilters: () => void;
   hasAnyCitations: boolean | null;
+  loadFailed: boolean;
+  onRetry: () => void;
 }) {
   if (rows.length === 0)
     return (
@@ -231,6 +237,8 @@ const DomainsTable = memo(function DomainsTable({
         datePreset={filters.datePreset}
         onShowAll={onResetFilters}
         hasAnyCitations={hasAnyCitations}
+        loadFailed={loadFailed}
+        onRetry={onRetry}
       />
     );
 
@@ -319,6 +327,8 @@ const UrlsTable = memo(function UrlsTable({
   filters,
   onResetFilters,
   hasAnyCitations,
+  loadFailed,
+  onRetry,
 }: {
   rows: CitationUrlRow[];
   page: number;
@@ -326,6 +336,8 @@ const UrlsTable = memo(function UrlsTable({
   filters: UIFilters;
   onResetFilters: () => void;
   hasAnyCitations: boolean | null;
+  loadFailed: boolean;
+  onRetry: () => void;
 }) {
   if (rows.length === 0)
     return (
@@ -334,6 +346,8 @@ const UrlsTable = memo(function UrlsTable({
         datePreset={filters.datePreset}
         onShowAll={onResetFilters}
         hasAnyCitations={hasAnyCitations}
+        loadFailed={loadFailed}
+        onRetry={onRetry}
       />
     );
 
@@ -438,12 +452,31 @@ function EmptyRows({
   datePreset = 'all',
   onShowAll = () => {},
   hasAnyCitations = null,
+  loadFailed = false,
+  onRetry = () => {},
 }: {
   isFiltered?: boolean;
   datePreset?: CitationsDatePreset;
   onShowAll?: () => void;
   hasAnyCitations?: boolean | null;
+  loadFailed?: boolean;
+  onRetry?: () => void;
 }) {
+  // ── 0. Load failed — never falls through to the endless "Checking…" spinner (#599) ──
+  if (loadFailed) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <AlertCircle className="h-8 w-8 text-destructive/60 mb-3" />
+        <p className="text-sm font-medium">Couldn&apos;t load citation data</p>
+        <p className="mt-1 text-xs text-muted-foreground">Please try again.</p>
+        <Button variant="outline" size="sm" className="mt-4 gap-2 text-xs" onClick={onRetry}>
+          <RotateCw className="h-3.5 w-3.5" />
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
   // ── 1. Checking ──────────────────────────────────────────────────────────────
   if (hasAnyCitations === null) {
     return (
@@ -776,6 +809,7 @@ export default function CitationsPage() {
   const [filters, setFilters] = useState<UIFilters>(DEFAULT_FILTERS);
   const [data, setData] = useState<CitationsOverview | null>(null);
   const [hasAnyCitations, setHasAnyCitations] = useState<boolean | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   // Pagination — resets to page 0 whenever any filter changes
   const filterKey = JSON.stringify(filters);
@@ -847,6 +881,7 @@ export default function CitationsPage() {
       return;
     }
     setIsLoading(true);
+    setLoadFailed(false);
     try {
       const [overview, total] = await Promise.all([
         getCitationsOverview(activeBrandId, apiFilters),
@@ -870,8 +905,10 @@ export default function CitationsPage() {
           Array.from(new Set([...prev, ...regions])).sort((a, b) => a.localeCompare(b)),
         );
       }
-    } catch {
-      // swallow — user will see empty state / can retry
+    } catch (err) {
+      console.error('[citations] load failed', err);
+      setLoadFailed(true);
+      toast.error('Failed to load citation data');
     } finally {
       setIsLoading(false);
     }
@@ -1079,6 +1116,8 @@ export default function CitationsPage() {
                     filters={filters}
                     onResetFilters={() => setFilters({ ...DEFAULT_FILTERS, datePreset: 'all' })}
                     hasAnyCitations={hasAnyCitations}
+                    loadFailed={loadFailed}
+                    onRetry={loadData}
                   />
                 </TabsContent>
                 <TabsContent value="urls" keepMounted className="mt-4">
@@ -1089,6 +1128,8 @@ export default function CitationsPage() {
                     filters={filters}
                     onResetFilters={() => setFilters({ ...DEFAULT_FILTERS, datePreset: 'all' })}
                     hasAnyCitations={hasAnyCitations}
+                    loadFailed={loadFailed}
+                    onRetry={loadData}
                   />
                 </TabsContent>
                 <TabsContent value="gaps" className="mt-4">
