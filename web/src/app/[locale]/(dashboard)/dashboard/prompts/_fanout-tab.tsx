@@ -84,11 +84,18 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
   const intentsRef = useRef<Record<string, string>>({});
   const intentRunRef = useRef(0);
 
-  // Shared pager for the HighFrequencyView — reset whenever brandId or view changes.
+  const filteredSubQueries = useMemo<FanoutSubQuery[]>(() => {
+    if (!data) return [];
+    if (!searchText) return data.subQueries;
+    const lower = searchText.toLowerCase();
+    return data.subQueries.filter((sq) => sq.query.toLowerCase().includes(lower));
+  }, [data, searchText]);
+
+  // Shared pager for the HighFrequencyView — reset whenever brandId, view, or the search term changes.
   const pager = usePagination(
-    data?.subQueries.length ?? 0,
-    // resetKey: changing brand or switching away from/back to frequency view resets to page 0
-    `${brandId}::${view}`,
+    filteredSubQueries.length,
+    // resetKey: changing brand, switching away from/back to frequency view, or typing a search term resets to page 0
+    `${brandId}::${view}::${searchText}`,
     FANOUT_PAGE_SIZE,
   );
 
@@ -268,11 +275,13 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
           <EmptyState />
         ) : view === 'frequency' ? (
           <HighFrequencyView
-            subQueries={data.subQueries}
+            subQueries={filteredSubQueries}
             intents={intents}
             addingKey={addingKey}
             pager={pager}
             onTrack={handleTrack}
+            searchText={searchText}
+            onSearchChange={setSearchText}
           />
         ) : (
           <ByPromptView
@@ -309,61 +318,101 @@ function HighFrequencyView({
   addingKey,
   pager,
   onTrack,
+  searchText,
+  onSearchChange,
 }: {
   subQueries: FanoutSubQuery[];
   intents: Record<string, string>;
   addingKey: string | null;
   pager: ReturnType<typeof usePagination>;
   onTrack: (query: string) => void;
+  searchText: string;
+  onSearchChange: (text: string) => void;
 }) {
   const pageRows = subQueries.slice(pager.start, pager.end);
 
   return (
-    <>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Sub-query</TableHead>
-            <TableHead className="w-[160px]">Engine</TableHead>
-            <TableHead className="w-[120px] text-right">Times searched</TableHead>
-            <TableHead className="w-[220px]">Sourced prompts</TableHead>
-            <TableHead className="w-[130px]">Intent</TableHead>
-            <TableHead className="w-[64px] text-right">Track</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {pageRows.map((sq) => {
-            const key = sq.query.toLowerCase();
-            return (
-              <TableRow key={key}>
-                <TableCell className="font-medium">{sq.query}</TableCell>
-                <TableCell>
-                  <PlatformsCell models={sq.engines} />
-                </TableCell>
-                <TableCell className="text-right tabular-nums">{sq.timesSearched}</TableCell>
-                <TableCell>
-                  <SourcedPrompts prompts={sq.sourcedPrompts} />
-                </TableCell>
-                <TableCell>
-                  <IntentBadge intent={intents[key]} />
-                </TableCell>
-                <TableCell className="text-right">
-                  <TrackCell sq={sq} adding={addingKey === key} onTrack={onTrack} />
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-      <TablePager
-        page={pager.page}
-        totalPages={pager.totalPages}
-        total={subQueries.length}
-        start={pager.start}
-        end={pager.end}
-        onPage={pager.setPage}
+    <div className="space-y-4">
+      <FanoutSearchInput
+        value={searchText}
+        onChange={onSearchChange}
+        placeholder="Search sub-queries…"
       />
-    </>
+      {subQueries.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-12 text-center">
+          <Search className="h-8 w-8 text-muted-foreground/50" />
+          <p className="text-sm font-medium">No sub-queries match your search</p>
+        </div>
+      ) : (
+        <>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Sub-query</TableHead>
+                <TableHead className="w-[160px]">Engine</TableHead>
+                <TableHead className="w-[120px] text-right">Times searched</TableHead>
+                <TableHead className="w-[220px]">Sourced prompts</TableHead>
+                <TableHead className="w-[130px]">Intent</TableHead>
+                <TableHead className="w-[64px] text-right">Track</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pageRows.map((sq) => {
+                const key = sq.query.toLowerCase();
+                return (
+                  <TableRow key={key}>
+                    <TableCell className="font-medium">{sq.query}</TableCell>
+                    <TableCell>
+                      <PlatformsCell models={sq.engines} />
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{sq.timesSearched}</TableCell>
+                    <TableCell>
+                      <SourcedPrompts prompts={sq.sourcedPrompts} />
+                    </TableCell>
+                    <TableCell>
+                      <IntentBadge intent={intents[key]} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <TrackCell sq={sq} adding={addingKey === key} onTrack={onTrack} />
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+          <TablePager
+            page={pager.page}
+            totalPages={pager.totalPages}
+            total={subQueries.length}
+            start={pager.start}
+            end={pager.end}
+            onPage={pager.setPage}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+function FanoutSearchInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (text: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="relative w-60">
+      <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+      <Input
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="pl-8 h-8 text-xs"
+      />
+    </div>
   );
 }
 
@@ -395,15 +444,11 @@ function ByPromptView({
 
   return (
     <div className="space-y-4">
-      <div className="relative w-60">
-        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-        <Input
-          placeholder="Search prompts…"
-          value={searchText}
-          onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-8 h-8 text-xs"
-        />
-      </div>
+      <FanoutSearchInput
+        value={searchText}
+        onChange={onSearchChange}
+        placeholder="Search prompts…"
+      />
       {groups.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-12 text-center">
           <Search className="h-8 w-8 text-muted-foreground/50" />
