@@ -161,6 +161,11 @@ export default function CitationUrlDetailPage() {
   const activeBrandId = brand?.id ?? null;
   const filterKey = JSON.stringify(filters);
   const citedInPager = usePagination(data?.occurrences.length ?? 0, filterKey, CITED_IN_PAGE_SIZE);
+  const promptGroupsPager = usePagination(
+    data?.promptGroups.length ?? 0,
+    filterKey,
+    CITED_IN_PAGE_SIZE,
+  );
 
   const apiFilters = useMemo<CitationsFilters>(() => {
     const { dateFrom, dateTo } = getDateRange(filters.datePreset, {
@@ -203,6 +208,8 @@ export default function CitationUrlDetailPage() {
   );
 
   const pageOccurrences = data?.occurrences.slice(citedInPager.start, citedInPager.end) ?? [];
+  const pagePromptGroups =
+    data?.promptGroups.slice(promptGroupsPager.start, promptGroupsPager.end) ?? [];
 
   if (!targetUrl) {
     return (
@@ -499,38 +506,56 @@ export default function CitationUrlDetailPage() {
               </p>
             </CardHeader>
             <CardContent className="px-0 pb-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="pl-6 text-xs">Prompt</TableHead>
-                    <TableHead className="text-right text-xs">Answers</TableHead>
-                    <TableHead className="text-right text-xs">Citations</TableHead>
-                    <TableHead className="pr-6 text-right text-xs">Last seen</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.promptGroups.map((g) => (
-                    <TableRow key={g.promptId}>
-                      <TableCell className="pl-6 max-w-[520px]">
-                        <Link
-                          href={`/dashboard/prompts/${g.promptId}`}
-                          className="block truncate text-sm hover:underline"
-                          title={g.promptText}
-                        >
-                          {g.promptText}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-right text-xs tabular-nums">{g.answers}</TableCell>
-                      <TableCell className="text-right text-xs tabular-nums">
-                        {g.citations}
-                      </TableCell>
-                      <TableCell className="pr-6 text-right text-xs tabular-nums whitespace-nowrap">
-                        {formatDate(g.lastSeen)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              {data.promptGroups.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  No prompts recorded for this URL in the selected window.
+                </p>
+              ) : (
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="pl-6 text-xs">Prompt</TableHead>
+                        <TableHead className="text-right text-xs">Answers</TableHead>
+                        <TableHead className="text-right text-xs">Citations</TableHead>
+                        <TableHead className="pr-6 text-right text-xs">Last seen</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pagePromptGroups.map((g) => (
+                        <TableRow key={g.promptId}>
+                          <TableCell className="pl-6 max-w-[520px]">
+                            <Link
+                              href={`/dashboard/prompts/${g.promptId}`}
+                              className="block truncate text-sm hover:underline"
+                              title={g.promptText}
+                            >
+                              {g.promptText}
+                            </Link>
+                          </TableCell>
+                          <TableCell className="text-right text-xs tabular-nums">
+                            {g.answers}
+                          </TableCell>
+                          <TableCell className="text-right text-xs tabular-nums">
+                            {g.citations}
+                          </TableCell>
+                          <TableCell className="pr-6 text-right text-xs tabular-nums whitespace-nowrap">
+                            {formatDate(g.lastSeen)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <TablePager
+                    page={promptGroupsPager.page}
+                    totalPages={promptGroupsPager.totalPages}
+                    total={data.promptGroups.length}
+                    start={promptGroupsPager.start}
+                    end={promptGroupsPager.end}
+                    onPage={promptGroupsPager.setPage}
+                  />
+                </>
+              )}
             </CardContent>
           </Card>
         </>
