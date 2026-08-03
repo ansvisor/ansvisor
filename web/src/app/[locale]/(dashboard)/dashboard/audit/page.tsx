@@ -3,11 +3,21 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Search, Loader2, Trash2, Sparkles, TrendingUp, TrendingDown } from 'lucide-react';
+import {
+  Search,
+  Loader2,
+  Trash2,
+  Sparkles,
+  TrendingUp,
+  TrendingDown,
+  AlertCircle,
+  RefreshCw,
+} from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
   runAudit,
@@ -46,6 +56,9 @@ export default function SiteAuditPage() {
     return primary?.domain ? `https://${primary.domain.replace(/^https?:\/\//, '')}` : '';
   });
   const [running, setRunning] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [history, setHistory] = useState<AuditSummary[]>([]);
   const [quota, setQuota] = useState<AuditQuota | null>(null);
   const [trend, setTrend] = useState<AuditTrend | null>(null);
@@ -53,10 +66,14 @@ export default function SiteAuditPage() {
   // Capture "now" once (impure call belongs in a lazy initializer, not render).
   const [nowMs] = useState(() => Date.now());
 
+  const refetch = () => setRefreshKey((k: number) => k + 1);
+
   // Load recent audits + the monthly quota + the primary-domain trend.
   useEffect(() => {
     if (!activeBrandId) return;
     let cancelled = false;
+    setLoading(true);
+    setError(null);
     (async () => {
       try {
         const [data, q, tr] = await Promise.all([
@@ -71,12 +88,21 @@ export default function SiteAuditPage() {
         }
       } catch (err) {
         console.error('Failed to load audit hub data:', err);
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : t('failed');
+          setError(msg);
+          toast.error(msg);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId]);
+  }, [activeBrandId, refreshKey, t]);
 
   const quotaExhausted = quota !== null && quota.limit !== -1 && quota.remaining <= 0;
 
@@ -145,6 +171,14 @@ export default function SiteAuditPage() {
       toast.error(err instanceof Error ? err.message : t('failed'));
     }
   };
+
+  if (!activeBrandId) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <p className="text-muted-foreground">Select a brand to view site audits.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -294,7 +328,36 @@ export default function SiteAuditPage() {
         </CardContent>
       </Card>
 
-      {history.length === 0 ? (
+      {loading ? (
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-5 w-32" />
+          </CardHeader>
+          <CardContent className="space-y-3 pt-0">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between border-b py-2.5 last:border-b-0"
+              >
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : error ? (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
+            <AlertCircle className="h-8 w-8 text-destructive" />
+            <div className="text-base font-semibold">{t('failed')}</div>
+            <p className="max-w-md text-sm text-muted-foreground">{error}</p>
+            <Button variant="outline" size="sm" onClick={refetch}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      ) : history.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
             <Sparkles className="h-7 w-7 text-primary" />
