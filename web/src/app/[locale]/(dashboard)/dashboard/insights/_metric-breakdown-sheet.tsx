@@ -95,7 +95,7 @@ export function MetricBreakdownSheet({ brandId, metric, onOpenChange, filters }:
           <SheetTitle className="text-base">{title} Breakdown</SheetTitle>
           <SheetDescription className="text-xs">
             {data
-              ? `Last ${data.windowDays} days vs previous ${data.windowDays} days`
+              ? `Last ${data.windowDays} day${data.windowDays !== 1 ? 's' : ''} vs previous ${data.windowDays} day${data.windowDays !== 1 ? 's' : ''}`
               : 'Comparing the selected window with the previous equal-length window.'}
           </SheetDescription>
         </SheetHeader>
@@ -367,7 +367,7 @@ function formatContribution(row: BreakdownRow, metric: BreakdownMetric): string 
   }
 
   const verb = isLoss ? 'lost' : 'gained';
-  const core = `${verb} ${abs.toLocaleString()} mentions`;
+  const core = `${verb} ${abs.toLocaleString()} mention${abs !== 1 ? 's' : ''}`;
   if (row.deltaPct === null) return core;
   const sign = row.deltaPct < 0 ? '−' : '+';
   return `${core} (${sign}${Math.abs(row.deltaPct)}%)`;
