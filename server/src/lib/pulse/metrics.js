@@ -298,6 +298,22 @@ async function degradedPlatforms(now) {
 }
 
 /**
+ * The last completed tracking runs' stamps, newest first (00044 ledger).
+ * Empty when the brand has never completed a full run.
+ */
+async function latestCompletedRunTimes(brandId, limit = 3) {
+  const { data, error } = await supabaseAdmin
+    .from('tracking_runs')
+    .select('completed_at')
+    .eq('brand_id', brandId)
+    .not('completed_at', 'is', null)
+    .order('completed_at', { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  return (data ?? []).map((r) => new Date(r.completed_at));
+}
+
+/**
  * Compute the full pulse payload for a brand.
  *
  * @param {string} brandId
@@ -307,8 +323,30 @@ async function degradedPlatforms(now) {
  *   history) stay fixed per the issue spec.
  */
 export async function computePulseMetrics(brandId, { windowDays = 1, now = new Date() } = {}) {
-  const curFrom = new Date(now.getTime() - windowDays * DAY_MS);
-  const prevFrom = new Date(now.getTime() - 2 * windowDays * DAY_MS);
+  // Daily KPI windows anchor to the tracking-run ledger — the exact same
+  // windows the Insights 24h view resolves (getTrackingWindow) — so the
+  // email can never disagree with the dashboard. A wall-clock [now-24h]
+  // window double-counts whenever two runs land within 24h of each other
+  // (e.g. the day the cron time moved earlier). Weekly pulses and the
+  // detector windows below stay clock-based per the issue spec; brands
+  // with no completed run yet fall back to the clock window.
+  let curTo = now;
+  let curFrom = new Date(now.getTime() - windowDays * DAY_MS);
+  let prevTo = curFrom;
+  let prevFrom = new Date(now.getTime() - 2 * windowDays * DAY_MS);
+
+  if (windowDays === 1) {
+    const [latest, prev, prevPrev] = await latestCompletedRunTimes(brandId, 3);
+    if (latest) {
+      curTo = latest;
+      curFrom = new Date(Math.max(latest.getTime() - DAY_MS, prev ? prev.getTime() + 1 : 0));
+      prevTo = prev ?? curFrom;
+      prevFrom = prev
+        ? new Date(Math.max(prev.getTime() - DAY_MS, prevPrev ? prevPrev.getTime() + 1 : 0))
+        : new Date(curFrom.getTime() - DAY_MS);
+    }
+  }
+
   const weekFrom = new Date(now.getTime() - 7 * DAY_MS);
   const twoWeekFrom = new Date(now.getTime() - 14 * DAY_MS);
 
@@ -330,11 +368,11 @@ export async function computePulseMetrics(brandId, { windowDays = 1, now = new D
     lostCitations,
     degraded,
   ] = await Promise.all([
-    visibilityRate(brandId, curFrom, now),
+    visibilityRate(brandId, curFrom, curTo),
     visibilityRate(brandId, weekFrom, now),
     visibilityRate(brandId, twoWeekFrom, weekFrom),
-    insightsWindow(brandId, curFrom, now),
-    insightsWindow(brandId, prevFrom, curFrom),
+    insightsWindow(brandId, curFrom, curTo),
+    insightsWindow(brandId, prevFrom, prevTo),
     competitorRates(brandId, weekFrom, now),
     competitorRates(brandId, twoWeekFrom, weekFrom),
     promptScores(brandId, weekFrom, now),
