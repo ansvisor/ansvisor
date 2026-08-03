@@ -186,7 +186,7 @@
     "manageTopics": "Manage topics",
     "kpi": {
       "trackedTopics": "Tracked topics",
-      "unassignedPrompts": "{count} prompts without a topic",
+      "unassignedPrompts": "{count, plural, one {# prompt without a topic} other {# prompts without a topic}}",
       "allCategorised": "All prompts categorised",
       "bestPerformer": "Best performer",
       "biggestGap": "Biggest gap",
@@ -210,7 +210,7 @@
       "topCompetitor": "Top competitor",
       "lastRun": "Last run"
     },
-    "appearedIn": "Appeared in {visible} of {active} prompts",
+    "appearedIn": "Appeared in {visible} of {active, plural, one {# prompt} other {# prompts}}",
     "openDetails": "Open topic details",
     "relative": {
       "justNow": "just now",

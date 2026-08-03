@@ -423,7 +423,7 @@ export default function TopicsPage() {
             value={
               kpis.gainer && kpis.gainer.visibilityChange !== null
                 ? t('ptsChange', {
-                    value: `${kpis.gainer.visibilityChange > 0 ? '+' : ''}${kpis.gainer.visibilityChange}`,
+                    value: `${kpis.gainer.visibilityChange > 0 ? '+' : ''}${kpis.gainer.visibilityChange.toFixed(1)}`,
                   })
                 : '—'
             }
