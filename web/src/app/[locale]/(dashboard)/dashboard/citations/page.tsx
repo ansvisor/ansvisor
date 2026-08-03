@@ -933,7 +933,7 @@ export default function CitationsPage() {
   );
 
   const handleExportCsv = useCallback(() => {
-    if (!brand || !data) return;
+    if (!brand) return;
 
     setIsExporting(true);
 
@@ -941,7 +941,7 @@ export default function CitationsPage() {
       const date = new Date().toISOString().slice(0, 10);
       const slug = brand.slug ?? 'brand';
 
-      if (sourceTab === 'domains') {
+      if (sourceTab === 'domains' && data) {
         const DOMAIN_HEADERS = [
           'domain',
           'category',
@@ -963,7 +963,7 @@ export default function CitationsPage() {
         const csv = toCsv(rows, DOMAIN_HEADERS);
 
         triggerDownload(csv, `ansvisor_${slug}_citations_domains_${date}.csv`);
-      } else if (sourceTab === 'urls') {
+      } else if (sourceTab === 'urls' && data) {
         const URL_HEADERS = [
           'url',
           'domain',
@@ -987,13 +987,33 @@ export default function CitationsPage() {
         const csv = toCsv(rows, URL_HEADERS);
 
         triggerDownload(csv, `ansvisor_${slug}_citations_urls_${date}.csv`);
+      } else if (sourceTab === 'gaps' && gaps) {
+        const GAP_HEADERS = ['domain', 'category', 'competitor_answers', 'competitors', 'strength'];
+
+        const rows = gaps.gapDomains.map((g) => ({
+          domain: g.domain,
+          category: g.category,
+          competitor_answers: g.competitorAnswers,
+          competitors: g.competitors.join('; '),
+          strength: g.strength,
+        }));
+
+        const csv = toCsv(rows, GAP_HEADERS);
+
+        triggerDownload(csv, `ansvisor_${slug}_citations_gaps_${date}.csv`);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to export CSV');
     } finally {
       setIsExporting(false);
     }
-  }, [brand, data, sourceTab]);
+  }, [brand, data, gaps, sourceTab]);
+
+  const exportDisabled =
+    isExporting ||
+    isLoading ||
+    sourceTab === 'types' ||
+    (sourceTab === 'gaps' && (gapsLoading || !gaps));
 
   if (!brand) {
     return (
@@ -1012,20 +1032,28 @@ export default function CitationsPage() {
           <h1 className="text-2xl font-bold">{t('title')}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{t('description')}</p>
         </div>
-        <Button
-          variant="outline"
-          className="gap-2"
-          onClick={handleExportCsv}
-          disabled={isExporting || sourceTab === 'gaps' || sourceTab === 'types' || isLoading}
+        <span
+          title={
+            sourceTab === 'types'
+              ? 'Source Types is a chart breakdown, not exportable — switch to Domains, URLs, or Competitor Gaps to export.'
+              : undefined
+          }
         >
-          {isExporting ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Download className="h-4 w-4" />
-          )}
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={handleExportCsv}
+            disabled={exportDisabled}
+          >
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
 
-          {isExporting ? 'Exporting...' : 'Export CSV'}
-        </Button>
+            {isExporting ? 'Exporting...' : 'Export CSV'}
+          </Button>
+        </span>
       </div>
 
       <CitationsFilterBar
