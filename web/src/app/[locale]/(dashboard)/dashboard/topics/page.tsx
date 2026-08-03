@@ -34,6 +34,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
   ArrowRight,
+  ChevronDown,
+  ChevronUp,
   Download,
   Flame,
   Layers,
@@ -46,6 +48,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toCsv } from '@/lib/csv';
+import { compareNullsLast, type SortDir } from '../prompts/prompt-sort';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -161,6 +164,56 @@ function KpiCard({
   );
 }
 
+// ─── Sortable leaderboard columns ─────────────────────────────────────────
+
+type TopicSortKey = 'prompts' | 'visibility' | 'sov' | 'mentions' | 'citations' | 'lastRun';
+
+/**
+ * Clickable header that toggles asc⇄desc for its column and marks the active
+ * sort with a chevron. Mirrors the Prompts page's SortableHead (#597).
+ */
+function SortableHead({
+  children,
+  className,
+  sortKey,
+  activeSort,
+  dir,
+  onSort,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  sortKey: TopicSortKey;
+  activeSort: TopicSortKey;
+  dir: SortDir;
+  onSort: (key: TopicSortKey) => void;
+}) {
+  const active = activeSort === sortKey;
+  return (
+    <TableHead
+      className={className}
+      aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        aria-label={`Sort by ${typeof children === 'string' ? children : sortKey}`}
+        className={cn(
+          'inline-flex items-center gap-1 transition-colors hover:text-foreground',
+          active ? 'text-foreground' : 'text-muted-foreground',
+        )}
+      >
+        {children}
+        {active &&
+          (dir === 'asc' ? (
+            <ChevronUp className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5" />
+          ))}
+      </button>
+    </TableHead>
+  );
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────
 
 export default function TopicsPage() {
@@ -177,6 +230,17 @@ export default function TopicsPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [open, setOpen] = useState(false);
+  // Default matches the previous hard-coded order (#597): visibility descending.
+  const [sortKey, setSortKey] = useState<TopicSortKey>('visibility');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  const handleSort = useCallback(
+    (key: TopicSortKey) => {
+      setSortDir((prevDir) => (sortKey === key && prevDir === 'desc' ? 'asc' : 'desc'));
+      setSortKey(key);
+    },
+    [sortKey],
+  );
 
   const loadData = useCallback(async () => {
     if (!activeBrandId) {
@@ -200,10 +264,25 @@ export default function TopicsPage() {
     loadData();
   }, [loadData]);
 
-  const sortedByVisibility = useMemo(
-    () => [...topics].sort((a, b) => b.visibilityRate - a.visibilityRate),
-    [topics],
-  );
+  const sortedTopics = useMemo(() => {
+    const valueOf = (row: TopicOverviewRow): number | null => {
+      switch (sortKey) {
+        case 'prompts':
+          return row.promptCount;
+        case 'visibility':
+          return row.visibilityRate;
+        case 'sov':
+          return row.shareOfVoice;
+        case 'mentions':
+          return row.totalMentions;
+        case 'citations':
+          return row.totalCitations;
+        case 'lastRun':
+          return row.lastRunAt ? new Date(row.lastRunAt).getTime() : null;
+      }
+    };
+    return [...topics].sort((a, b) => compareNullsLast(valueOf(a), valueOf(b), sortDir));
+  }, [topics, sortKey, sortDir]);
 
   const kpis = useMemo(() => {
     if (topics.length === 0) return null;
@@ -471,19 +550,66 @@ export default function TopicsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="pl-6">{t('columns.topic')}</TableHead>
-                  <TableHead className="text-right">{t('columns.prompts')}</TableHead>
-                  <TableHead>{t('columns.visibility')}</TableHead>
-                  <TableHead className="text-right">{t('columns.sov')}</TableHead>
-                  <TableHead className="text-right">{t('columns.mentions')}</TableHead>
-                  <TableHead className="text-right">{t('columns.citations')}</TableHead>
+                  <SortableHead
+                    className="text-right"
+                    sortKey="prompts"
+                    activeSort={sortKey}
+                    dir={sortDir}
+                    onSort={handleSort}
+                  >
+                    {t('columns.prompts')}
+                  </SortableHead>
+                  <SortableHead
+                    sortKey="visibility"
+                    activeSort={sortKey}
+                    dir={sortDir}
+                    onSort={handleSort}
+                  >
+                    {t('columns.visibility')}
+                  </SortableHead>
+                  <SortableHead
+                    className="text-right"
+                    sortKey="sov"
+                    activeSort={sortKey}
+                    dir={sortDir}
+                    onSort={handleSort}
+                  >
+                    {t('columns.sov')}
+                  </SortableHead>
+                  <SortableHead
+                    className="text-right"
+                    sortKey="mentions"
+                    activeSort={sortKey}
+                    dir={sortDir}
+                    onSort={handleSort}
+                  >
+                    {t('columns.mentions')}
+                  </SortableHead>
+                  <SortableHead
+                    className="text-right"
+                    sortKey="citations"
+                    activeSort={sortKey}
+                    dir={sortDir}
+                    onSort={handleSort}
+                  >
+                    {t('columns.citations')}
+                  </SortableHead>
                   <TableHead>{t('columns.trend')}</TableHead>
                   <TableHead>{t('columns.topCompetitor')}</TableHead>
-                  <TableHead className="text-right">{t('columns.lastRun')}</TableHead>
+                  <SortableHead
+                    className="text-right"
+                    sortKey="lastRun"
+                    activeSort={sortKey}
+                    dir={sortDir}
+                    onSort={handleSort}
+                  >
+                    {t('columns.lastRun')}
+                  </SortableHead>
                   <TableHead className="pr-6 text-right w-[40px]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedByVisibility.map((topic) => (
+                {sortedTopics.map((topic) => (
                   <TableRow key={topic.id} className="group hover:bg-muted/50">
                     <TableCell className="pl-6 font-medium text-sm">
                       <Link href={`/dashboard/topics/${topic.id}`} className="hover:underline">
