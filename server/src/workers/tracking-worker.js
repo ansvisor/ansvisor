@@ -87,6 +87,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   // loop bound how long a stuck Cloro queue can delay the stamp.
   const isFullRun = !promptId && (!promptIds || promptIds.length === 0);
   let trackingRunId = null;
+  let trackingRunStartedAt = null;
   if (isFullRun) {
     // A run that died mid-flight (crash, abort) leaves an uncompleted row;
     // clear those so at most one in-progress row exists per brand.
@@ -99,13 +100,14 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     const { data: runRow, error: runErr } = await supabaseAdmin
       .from('tracking_runs')
       .insert({ brand_id: brandId, source: source || 'manual' })
-      .select('id')
+      .select('id, started_at')
       .single();
     if (runErr) {
       // Ledger failure must never block tracking itself.
       logger.warn({ err: runErr, brandId }, 'failed to create tracking_runs row');
     } else {
       trackingRunId = runRow.id;
+      trackingRunStartedAt = runRow.started_at;
     }
   }
 
@@ -519,20 +521,37 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     logger.error({ err, brandId }, 'failed to check opportunity generation eligibility');
   }
 
-  // Stamp the ledger row. Zero results (every task failed) deletes the row
-  // instead: completing it would swing the 24h anchor onto an empty window,
-  // and leaving it open would pin the "in progress" banner — the dashboard
-  // keeps showing the previous completed run either way.
+  // Stamp the ledger row. The run's result count MUST come from the DB, not
+  // from `insertedCount`: in webhook mode the scraper results are inserted by
+  // the /cloro/callback handler, so the worker's own counter only sees the
+  // API-model phase — on scraper-only brands it stays 0 even after a fully
+  // successful run, and the first deploy of this ledger deleted every real
+  // run's row because of it. Zero results in the DB (every task genuinely
+  // failed) still deletes the row: completing it would swing the 24h anchor
+  // onto an empty window. On a count error we leave the row uncompleted —
+  // the dashboard keeps the previous completed run and the next run clears
+  // the dangling row.
   if (trackingRunId) {
-    if (insertedCount > 0) {
+    const { count: runResultCount, error: countErr } = await supabaseAdmin
+      .from('prompt_results')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand_id', brandId)
+      .gte('created_at', trackingRunStartedAt);
+
+    if (countErr) {
+      logger.error({ err: countErr, brandId, trackingRunId }, 'failed to count run results');
+    } else if ((runResultCount ?? 0) > 0) {
       const { error: stampErr } = await supabaseAdmin
         .from('tracking_runs')
-        .update({ completed_at: new Date().toISOString(), result_count: insertedCount })
+        .update({ completed_at: new Date().toISOString(), result_count: runResultCount })
         .eq('id', trackingRunId);
       if (stampErr) {
         logger.error({ err: stampErr, brandId, trackingRunId }, 'failed to stamp tracking run');
+      } else {
+        logger.info({ brandId, trackingRunId, runResultCount }, 'tracking run stamped');
       }
     } else {
+      logger.warn({ brandId, trackingRunId }, 'tracking run produced no results — row removed');
       await supabaseAdmin.from('tracking_runs').delete().eq('id', trackingRunId);
     }
   }
