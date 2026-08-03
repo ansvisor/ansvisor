@@ -15,6 +15,7 @@ import {
   Info,
   ChevronDown,
   ChevronRight,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -37,6 +38,7 @@ export function SuggestionsCard({ brandId, onAccepted }: Props) {
   const [suggestions, setSuggestions] = useState<PromptSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   // Collapsed by default so the card is a one-line strip and the prompt table
@@ -74,12 +76,15 @@ export function SuggestionsCard({ brandId, onAccepted }: Props) {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const { suggestions: s } = await getPromptSuggestions(brandId);
       setSuggestions(s);
       setLoaded(true);
     } catch (err) {
       console.error('Failed to load suggestions:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load suggestions');
+      toast.error('Failed to load suggestions');
     } finally {
       setLoading(false);
     }
@@ -94,6 +99,7 @@ export function SuggestionsCard({ brandId, onAccepted }: Props) {
   useEffect(() => {
     setLoaded(false);
     setSuggestions([]);
+    setError(null);
   }, [brandId]);
 
   useEffect(() => {
@@ -109,6 +115,7 @@ export function SuggestionsCard({ brandId, onAccepted }: Props) {
       const fresh = await refreshPromptSuggestions(brandId);
       setSuggestions(fresh);
       setLoaded(true);
+      setError(null);
       toast.success('Suggestions refreshed');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Refresh failed');
@@ -210,6 +217,22 @@ export function SuggestionsCard({ brandId, onAccepted }: Props) {
           {loading ? (
             <div className="flex items-center justify-center py-10">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <AlertTriangle className="h-8 w-8 text-destructive/60 mb-2" />
+              <p className="text-sm font-medium mb-1">Couldn&apos;t load suggestions</p>
+              <p className="text-xs text-muted-foreground mb-3 max-w-sm">{error}</p>
+              <Button
+                onClick={load}
+                disabled={loading}
+                size="sm"
+                variant="outline"
+                className="gap-2"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Retry
+              </Button>
             </div>
           ) : suggestions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
