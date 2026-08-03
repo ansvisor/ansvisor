@@ -235,7 +235,7 @@ function CountDeltaBadge({
   if (previous === 0 && current > 0) {
     return (
       <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-        +{current} new
+        +{current.toLocaleString()} new
       </span>
     );
   }
@@ -1531,7 +1531,7 @@ export default function InsightsPage() {
                   title={t('mentions')}
                   tooltip="How many times your brand was referenced by name in AI-generated responses."
                   icon={Zap}
-                  value={summary!.totalMentions}
+                  value={summary!.totalMentions.toLocaleString()}
                   sub={
                     <CountDeltaBadge
                       current={summary!.totalMentions}
@@ -1550,7 +1550,7 @@ export default function InsightsPage() {
                   title={t('citations')}
                   tooltip="Times your brand's domain was cited as a source with a direct link in AI responses."
                   icon={Quote}
-                  value={summary!.totalCitations}
+                  value={summary!.totalCitations.toLocaleString()}
                   sub={
                     <CountDeltaBadge
                       current={summary!.totalCitations}
