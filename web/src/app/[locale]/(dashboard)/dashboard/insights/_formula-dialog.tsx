@@ -79,7 +79,9 @@ export function FormulaDialog() {
                     Position factor ({PCT.position}%)
                   </span>{' '}
                   — how early you&apos;re named in the answers that mention you: named first = 1,
-                  second = 0.5, third = 0.33, and so on, averaged.
+                  second = 0.5, third = 0.33, and so on, averaged. This term is weighted by how many
+                  answers actually mention the brand, so a perfect position in a handful of answers
+                  can&apos;t outrank brands that consistently show up.
                 </li>
               </ul>
               <p>
