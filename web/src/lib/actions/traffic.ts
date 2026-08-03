@@ -207,6 +207,7 @@ export async function getTrafficSummary(
       visits: platformMap.get(platform) ?? 0,
       visitsPrev: platformMapPrev.get(platform) ?? 0,
     }))
+    .filter((p) => p.visits > 0)
     .sort((a, b) => b.visits - a.visits);
 
   const topPages = Array.from(pageMap.entries())
