@@ -857,7 +857,6 @@ export default function CitationsPage() {
 
       // Surface filter options from the observed models/regions.
       const platformOptions = buildPlatformOptions(overview.rows);
-      const regions = new Set<string>();
       setAvailablePlatforms((prev) =>
         Array.from(
           new Map(
@@ -865,9 +864,11 @@ export default function CitationsPage() {
           ).values(),
         ).sort((a, b) => a.label.localeCompare(b.label) || a.value.localeCompare(b.value)),
       );
-      if (regions.size > 0) {
+      if (overview.availableRegions.length > 0) {
         setAvailableRegions((prev) =>
-          Array.from(new Set([...prev, ...regions])).sort((a, b) => a.localeCompare(b)),
+          Array.from(new Set([...prev, ...overview.availableRegions])).sort((a, b) =>
+            a.localeCompare(b),
+          ),
         );
       }
     } catch {

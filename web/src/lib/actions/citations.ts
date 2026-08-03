@@ -75,6 +75,8 @@ export interface CitationsOverview {
     avgCitationsPerResult: number;
   };
   sourceTypeBreakdown: CitationsSourceBreakdown[];
+  /** Distinct regions observed on results in the scanned (filtered) window (#598). */
+  availableRegions: string[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -273,6 +275,7 @@ export async function getCitationsOverview(
   const articleTypeCache = new Map<string, ArticleType | null>();
 
   let totalCitations = 0;
+  const regionsSeen = new Set<string>();
 
   const aggregateResult = (result: OverviewResultRow) => {
     const citations = Array.isArray(result.citations) ? result.citations : [];
@@ -349,7 +352,10 @@ export async function getCitationsOverview(
     filters,
     'id, prompt_id, platform, model_used, region, created_at, citations, citation_count',
     (batch) => {
-      for (const result of batch) aggregateResult(result);
+      for (const result of batch) {
+        if (result.region) regionsSeen.add(result.region);
+        aggregateResult(result);
+      }
     },
   );
 
@@ -419,6 +425,7 @@ export async function getCitationsOverview(
         totalResults > 0 ? Math.round((totalCitations / totalResults) * 10) / 10 : 0,
     },
     sourceTypeBreakdown,
+    availableRegions: Array.from(regionsSeen).sort(),
   };
 }
 
