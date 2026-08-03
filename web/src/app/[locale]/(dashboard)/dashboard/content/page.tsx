@@ -51,6 +51,7 @@ import type { ContentOpportunity, ContentOpportunityStatus } from '@/types';
 import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
 import { WebhookSettingsDialog } from './_webhook-settings';
+import { PAGE_SIZE, TablePager, usePagination } from '@/components/table-pager';
 
 const GENERATION_STORAGE_KEY = 'aeo:content-generation';
 const GENERATION_TIMEOUT_MS = 3 * 60 * 1000;
@@ -151,6 +152,11 @@ export default function ContentPage() {
   const [webhookOpen, setWebhookOpen] = useState(false);
   const pollRef = useRef(false);
 
+  // Server-side paging (#610) — the list can hold far more than one page's
+  // worth of opportunities, so `total` (the exact server count) drives the
+  // pager instead of the length of whatever page happens to be loaded.
+  const pager = usePagination(total, `${statusFilter}|${impactFilter}|${typeFilter}`);
+
   const loadData = useCallback(
     async (silent = false) => {
       if (!activeBrandId) {
@@ -170,7 +176,8 @@ export default function ContentPage() {
 
         const data = await getOpportunities(activeBrandId, {
           ...filters,
-          limit: 100,
+          limit: PAGE_SIZE,
+          offset: pager.start,
           sort: 'score',
         });
         setOpportunities(data.opportunities);
@@ -184,7 +191,7 @@ export default function ContentPage() {
         setLoading(false);
       }
     },
-    [activeBrandId, statusFilter, impactFilter, typeFilter],
+    [activeBrandId, statusFilter, impactFilter, typeFilter, pager.start],
   );
 
   useEffect(() => {
@@ -698,6 +705,14 @@ export default function ContentPage() {
                   No opportunities match your filters.
                 </div>
               )}
+              <TablePager
+                page={pager.page}
+                totalPages={pager.totalPages}
+                total={total}
+                start={pager.start}
+                end={pager.end}
+                onPage={pager.setPage}
+              />
             </CardContent>
           </Card>
         </>
