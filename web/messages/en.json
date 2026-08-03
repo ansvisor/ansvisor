@@ -199,6 +199,7 @@
     "leaderboardHint": "Click a topic to drill into detailed analytics",
     "emptyTitle": "No topics defined yet.",
     "emptyBody": "Add topics from brand settings to enable topic-based analytics.",
+    "loadError": "Failed to load topics",
     "columns": {
       "topic": "Topic",
       "prompts": "Prompts",

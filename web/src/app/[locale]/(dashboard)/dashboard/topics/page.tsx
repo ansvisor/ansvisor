@@ -33,11 +33,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
+  AlertCircle,
   ArrowRight,
   Download,
   Flame,
   Layers,
   Minus,
+  RotateCw,
   Settings2,
   Tag,
   TrendingDown,
@@ -174,6 +176,7 @@ export default function TopicsPage() {
   const [topics, setTopics] = useState<TopicOverviewRow[]>([]);
   const [unassignedPromptCount, setUnassignedPromptCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [open, setOpen] = useState(false);
@@ -185,16 +188,19 @@ export default function TopicsPage() {
       return;
     }
     setLoading(true);
+    setError(null);
     try {
       const data = await getTopicsOverview(activeBrandId);
       setTopics(data.topics);
       setUnassignedPromptCount(data.unassignedPromptCount);
     } catch (err) {
       console.error('Failed to load topics overview', err);
+      setError(err instanceof Error ? err.message : t('loadError'));
+      toast.error(t('loadError'));
     } finally {
       setLoading(false);
     }
-  }, [activeBrandId]);
+  }, [activeBrandId, t]);
 
   useEffect(() => {
     loadData();
@@ -453,6 +459,20 @@ export default function TopicsPage() {
               {Array.from({ length: 5 }).map((_, i) => (
                 <Skeleton key={i} className="h-12" />
               ))}
+            </div>
+          ) : error ? (
+            <div className="py-14 text-center text-sm">
+              <AlertCircle className="mx-auto h-9 w-9 text-destructive/60" />
+              <p className="mt-2 font-medium">{t('loadError')}</p>
+              <Button
+                className="mt-4 gap-2"
+                size="sm"
+                variant="outline"
+                onClick={() => void loadData()}
+              >
+                <RotateCw className="h-4 w-4" />
+                {common('retry')}
+              </Button>
             </div>
           ) : topics.length === 0 ? (
             <div className="py-14 text-center text-sm text-muted-foreground">

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, use } from 'react';
+import { toast } from 'sonner';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
@@ -17,10 +18,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  AlertCircle,
   ArrowLeft,
   BarChart3,
   Eye,
   Quote,
+  RotateCw,
   TrendingDown,
   TrendingUp,
   Zap,
@@ -153,10 +156,12 @@ export default function TopicDetailPage({ params }: { params: Promise<{ id: stri
   const [competitors, setCompetitors] = useState<CompetitorComparisonData | null>(null);
   const [results, setResults] = useState<PromptResultWithText[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     if (!activeBrandId || !topicId) return;
     setLoading(true);
+    setError(null);
     try {
       // One server action (#312): Next.js runs server actions sequentially, so
       // the old six-call Promise.all paid the sum of all six. This is one round
@@ -170,6 +175,8 @@ export default function TopicDetailPage({ params }: { params: Promise<{ id: stri
       setResults(detail.results);
     } catch (err) {
       console.error('Failed to load topic detail', err);
+      setError(err instanceof Error ? err.message : 'Failed to load this topic');
+      toast.error('Failed to load this topic');
     } finally {
       setLoading(false);
     }
@@ -188,6 +195,24 @@ export default function TopicDetailPage({ params }: { params: Promise<{ id: stri
             <p className="mt-1 text-sm text-muted-foreground">
               Select a brand from the top switcher first.
             </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <Card className="max-w-md">
+          <CardContent className="pt-6 text-center">
+            <AlertCircle className="mx-auto h-9 w-9 text-destructive/60" />
+            <h2 className="mt-3 text-base font-semibold">Couldn&apos;t load this topic</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{error}</p>
+            <Button onClick={loadData} className="mt-4 gap-2" size="sm" variant="outline">
+              <RotateCw className="h-3.5 w-3.5" />
+              Retry
+            </Button>
           </CardContent>
         </Card>
       </div>
