@@ -25,6 +25,7 @@ export interface TrafficSummary {
   totalVisitsPrev: number;
   platformBreakdown: { platform: string; visits: number; visitsPrev: number }[];
   topPages: { url: string; visits: number; visitsPrev: number }[];
+  hasAnyData: boolean;
 }
 
 export interface TrafficTrendPoint {
@@ -181,7 +182,11 @@ export async function getTrafficSummary(
 
   const columns = 'source_platform, url, created_at, id';
   const hasPrev = Boolean(prevFrom && prevTo);
-  const [totalVisits, totalVisitsPrev] = await Promise.all([
+  // The window is already the full lifetime when neither bound is set, so
+  // totalVisits doubles as the lifetime check — only worth a second cheap
+  // count query when the window actually narrows the result.
+  const hasWindow = Boolean(from || to);
+  const [totalVisits, totalVisitsPrev, , , lifetimeVisits] = await Promise.all([
     countVisits(from, to, true),
     hasPrev ? countVisits(prevFrom, prevTo) : Promise.resolve(0),
     scanTrafficLogs(
@@ -198,7 +203,10 @@ export async function getTrafficSummary(
           aggregate(platformMapPrev, pageMapPrev),
         )
       : Promise.resolve(),
+    hasWindow ? countVisits() : Promise.resolve(null),
   ]);
+
+  const hasAnyData = hasWindow ? (lifetimeVisits as number) > 0 : totalVisits > 0;
 
   const allPlatforms = new Set([...platformMap.keys(), ...platformMapPrev.keys()]);
   const platformBreakdown = Array.from(allPlatforms)
@@ -224,6 +232,7 @@ export async function getTrafficSummary(
     totalVisitsPrev,
     platformBreakdown,
     topPages,
+    hasAnyData,
   };
 }
 

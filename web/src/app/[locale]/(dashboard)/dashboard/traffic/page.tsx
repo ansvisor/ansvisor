@@ -51,6 +51,7 @@ import {
   X,
   Loader2,
   Download,
+  CalendarX2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -351,6 +352,23 @@ function EmptyLogsState({ hasFilters }: { hasFilters: boolean }) {
       </div>
     );
   }
+}
+
+function NoTrafficForPeriod({ rangeLabel, onReset }: { rangeLabel: string; onReset: () => void }) {
+  return (
+    <Card>
+      <CardContent className="py-16 text-center">
+        <CalendarX2 className="h-10 w-10 mx-auto text-muted-foreground/50" />
+        <h3 className="text-lg font-semibold mt-4">No traffic in this period</h3>
+        <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+          No AI-referred visits in the {rangeLabel}. There is traffic data in other time periods.
+        </p>
+        <Button variant="outline" size="sm" className="mt-4" onClick={onReset}>
+          Show all data
+        </Button>
+      </CardContent>
+    </Card>
+  );
 }
 
 // ─── Date range ─────────────
@@ -664,6 +682,8 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   const topPlatform = summary?.platformBreakdown[0];
 
   const isEmpty = totalVisits === 0 && logs.length === 0;
+  const hasAnyData = summary?.hasAnyData ?? false;
+  const trulyEmpty = isEmpty && !hasAnyData;
 
   return (
     <div className="space-y-6">
@@ -703,7 +723,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
       {/* Snippet Banner */}
       <SnippetBanner trackingCode={brand.trackingCode} />
 
-      {isEmpty ? (
+      {trulyEmpty ? (
         <Card>
           <CardContent className="py-16 text-center">
             <Globe className="h-10 w-10 mx-auto text-muted-foreground/50" />
@@ -715,6 +735,11 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
             </p>
           </CardContent>
         </Card>
+      ) : isEmpty ? (
+        <NoTrafficForPeriod
+          rangeLabel={rangeSubLabel}
+          onReset={() => handleDatePresetChange('all')}
+        />
       ) : (
         <>
           {/* KPI Cards */}
