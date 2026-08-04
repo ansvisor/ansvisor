@@ -20,8 +20,23 @@ import { renderPulseEmail, sendPulseEmail } from './email.js';
 
 const WEEKLY_SEND_UTC_DAY = 1; // Monday
 
+let warnedAppUrlPath = false;
+
 function appUrl() {
-  return (process.env.PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+  const raw = process.env.PUBLIC_APP_URL || 'http://localhost:3000';
+  try {
+    const url = new URL(raw);
+    if (url.pathname !== '/' && url.pathname !== '' && !warnedAppUrlPath) {
+      warnedAppUrlPath = true;
+      logger.warn(
+        { PUBLIC_APP_URL: raw },
+        '[pulse] PUBLIC_APP_URL includes a path; using the origin only. Set it to the bare origin (e.g. https://app.example.com) to silence this warning.',
+      );
+    }
+    return url.origin;
+  } catch {
+    return raw.replace(/\/$/, '');
+  }
 }
 
 /** Recipient emails: explicit list from settings, else every org member. */
