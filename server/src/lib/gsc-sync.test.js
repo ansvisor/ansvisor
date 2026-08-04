@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// gsc-sync imports the supabase admin client, whose config module hard-exits
+// when SUPABASE_* env is absent (as in CI) — stub it before the import chain.
+vi.mock('../config/supabase.js', () => ({ default: {} }));
+
 import { mapAnalyticsRows } from './gsc-sync.js';
 
 describe('mapAnalyticsRows', () => {
