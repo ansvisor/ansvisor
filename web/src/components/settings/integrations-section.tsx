@@ -16,13 +16,26 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Loader2, Search, Unplug } from 'lucide-react';
 import {
   getGscStatus,
   connectGsc,
   disconnectGsc,
+  getGscProperties,
+  getGscBrandMappings,
+  setBrandGscProperty,
   type GscStatus,
+  type GscProperty,
+  type GscBrandMapping,
 } from '@/lib/actions/integrations';
+import { matchGscProperty } from '@/lib/gsc';
 
 /**
  * Settings → Integrations (#577). One card per integration — only Google
@@ -212,7 +225,152 @@ export function IntegrationsSection() {
             environment to enable integrations.
           </p>
         )}
+
+        {status === 'connected' && <GscPropertyMapping />}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Brand → property mapping (#642). The connection is org-level; each brand
+ * picks exactly one Search Console property. Brands whose domain matches a
+ * property unambiguously are premapped automatically.
+ */
+const NONE_VALUE = '__none__';
+
+function GscPropertyMapping() {
+  const [properties, setProperties] = useState<GscProperty[] | null>(null);
+  const [mappings, setMappings] = useState<GscBrandMapping[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState<string | null>(null);
+  const [savingBrandId, setSavingBrandId] = useState<string | null>(null);
+  const autoMatched = useRef(false);
+
+  const load = useCallback(async () => {
+    setLoadFailed(null);
+    try {
+      const [props, brands] = await Promise.all([getGscProperties(), getGscBrandMappings()]);
+      setProperties(props);
+      setMappings(brands);
+    } catch (err) {
+      setLoadFailed(err instanceof Error ? err.message : 'Failed to load properties');
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Auto-match: premap unmapped brands whose domains match exactly one
+  // property. Runs once per mount; a failed save (e.g. member role) just
+  // leaves the brand unmapped for a manual pick by an admin.
+  useEffect(() => {
+    if (!properties || !mappings || autoMatched.current) return;
+    autoMatched.current = true;
+    const propertyUrls = properties.map((p) => p.siteUrl);
+    (async () => {
+      for (const m of mappings) {
+        if (m.gscProperty) continue;
+        const match = matchGscProperty(propertyUrls, m.domains);
+        if (!match) continue;
+        try {
+          await setBrandGscProperty(m.brandId, match);
+          setMappings((prev) =>
+            (prev ?? []).map((row) =>
+              row.brandId === m.brandId ? { ...row, gscProperty: match } : row,
+            ),
+          );
+        } catch (err) {
+          console.error('GSC auto-map failed:', err);
+          return; // likely a permissions error — no point retrying the rest
+        }
+      }
+    })();
+  }, [properties, mappings]);
+
+  const handlePick = async (brandId: string, value: string) => {
+    const property = value === NONE_VALUE ? null : value;
+    const previous = mappings;
+    setSavingBrandId(brandId);
+    setMappings((prev) =>
+      (prev ?? []).map((row) =>
+        row.brandId === brandId ? { ...row, gscProperty: property } : row,
+      ),
+    );
+    try {
+      await setBrandGscProperty(brandId, property);
+    } catch (err) {
+      setMappings(previous);
+      toast.error(err instanceof Error ? err.message : 'Failed to save property');
+    } finally {
+      setSavingBrandId(null);
+    }
+  };
+
+  if (loadFailed) {
+    return (
+      <div className="rounded-lg border p-4 text-sm">
+        <p className="text-muted-foreground">Couldn&apos;t load Search Console properties.</p>
+        <p className="mt-1 text-xs text-muted-foreground">{loadFailed}</p>
+        <Button variant="outline" size="sm" className="mt-3" onClick={load}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  if (!properties || !mappings) {
+    return <Skeleton className="h-24 w-full" />;
+  }
+
+  const mappedCount = mappings.filter((m) => m.gscProperty).length;
+
+  return (
+    <div className="rounded-lg border p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium">Property mapping</p>
+        <span className="text-xs text-muted-foreground">
+          {mappedCount} of {mappings.length} brand{mappings.length !== 1 ? 's' : ''} mapped
+        </span>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Pick which Search Console property each brand&apos;s data comes from. Brands matching a
+        property by domain are mapped automatically.
+      </p>
+      <div className="space-y-2">
+        {mappings.map((m) => (
+          <div key={m.brandId} className="flex items-center justify-between gap-3">
+            <span className="truncate text-sm">{m.brandName}</span>
+            <div className="flex items-center gap-2">
+              {savingBrandId === m.brandId && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              )}
+              <Select
+                value={m.gscProperty ?? null}
+                onValueChange={(v) => handlePick(m.brandId, v ?? NONE_VALUE)}
+              >
+                <SelectTrigger className="h-8 w-64 text-xs">
+                  <SelectValue placeholder="Select a property" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_VALUE}>Not mapped</SelectItem>
+                  {properties.map((p) => (
+                    <SelectItem key={p.siteUrl} value={p.siteUrl}>
+                      {p.siteUrl}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        ))}
+      </div>
+      {properties.length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          The connected account has no Search Console properties. Add your site in Search Console
+          first, then retry.
+        </p>
+      )}
+    </div>
   );
 }

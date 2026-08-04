@@ -5,6 +5,7 @@ import {
   initiateGscConnection,
   getActiveGscConnection,
   deleteGscConnection,
+  listGscSites,
 } from '../lib/composio.js';
 
 const router = Router();
@@ -89,6 +90,33 @@ router.get('/google-search-console/status', async (req, res) => {
     return res.json({ configured: true, status: 'not_connected' });
   } catch (err) {
     req.log.error({ err }, 'integrations status error');
+    return res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/integrations/google-search-console/properties
+ * Properties visible to the org's connected account (#642). Member-readable —
+ * the mapping UI is shown to the whole org; writes stay role-gated elsewhere.
+ */
+router.get('/google-search-console/properties', async (req, res) => {
+  try {
+    if (!isComposioConfigured()) {
+      return res.status(503).json({ error: 'Search Console integration is not configured.' });
+    }
+
+    const profile = await getProfile(req.user.id);
+    const entityId = entityIdFor(profile.organization_id);
+
+    const active = await getActiveGscConnection(entityId);
+    if (!active) {
+      return res.status(409).json({ error: 'Google Search Console is not connected.' });
+    }
+
+    const properties = await listGscSites(entityId);
+    return res.json({ properties });
+  } catch (err) {
+    req.log.error({ err }, 'integrations properties error');
     return res.status(err.status || 500).json({ error: err.message });
   }
 });

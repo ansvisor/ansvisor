@@ -53,3 +53,31 @@ export async function getActiveGscConnection(entityId) {
 export async function deleteGscConnection(connectedAccountId) {
   await getClient().connectedAccounts.delete(connectedAccountId);
 }
+
+/**
+ * Composio requires a pinned toolkit version for manual tool execution
+ * ("latest" is rejected). Bump deliberately after checking the changelog;
+ * override per-deploy via env if a hotpin is ever needed.
+ */
+const GSC_TOOLKIT_VERSION = process.env.COMPOSIO_GSC_TOOLKIT_VERSION || '20260721_00';
+
+/**
+ * Properties visible to the entity's connected account (#642).
+ * Returns [{ siteUrl, permissionLevel }]. Requires the API key to have
+ * tool-execution permission (the connect flow only needs connected_accounts).
+ */
+export async function listGscSites(entityId) {
+  const result = await getClient().tools.execute('GOOGLE_SEARCH_CONSOLE_LIST_SITES', {
+    userId: entityId,
+    arguments: {},
+    version: GSC_TOOLKIT_VERSION,
+  });
+  if (result?.successful === false) {
+    throw new Error(result?.error || 'Failed to list Search Console properties');
+  }
+  const entries = result?.data?.siteEntry ?? result?.data?.sites ?? [];
+  return entries.map((e) => ({
+    siteUrl: e.siteUrl,
+    permissionLevel: e.permissionLevel ?? null,
+  }));
+}

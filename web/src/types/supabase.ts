@@ -286,6 +286,7 @@ export type Database = {
           created_at: string;
           description: string | null;
           id: string;
+          gsc_property: string | null;
           industry: string | null;
           is_active: boolean;
           language: string | null;
@@ -303,6 +304,7 @@ export type Database = {
           created_at?: string;
           description?: string | null;
           id?: string;
+          gsc_property?: string | null;
           industry?: string | null;
           is_active?: boolean;
           language?: string | null;
@@ -320,6 +322,7 @@ export type Database = {
           created_at?: string;
           description?: string | null;
           id?: string;
+          gsc_property?: string | null;
           industry?: string | null;
           is_active?: boolean;
           language?: string | null;
