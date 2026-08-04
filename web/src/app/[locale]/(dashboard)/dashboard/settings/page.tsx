@@ -18,6 +18,7 @@ import { TeamSection } from '@/components/settings/team-section';
 import { ApiKeysSection } from '@/components/settings/api-keys-section';
 import { AgentSection } from '@/components/settings/agent-section';
 import { NotificationsSection } from '@/components/settings/notifications-section';
+import { IntegrationsSection } from '@/components/settings/integrations-section';
 
 type Section =
   | 'account'
@@ -25,6 +26,7 @@ type Section =
   | 'project'
   | 'team'
   | 'notifications'
+  | 'integrations'
   | 'api-keys'
   | 'agent'
   | 'billing';
@@ -41,6 +43,8 @@ export default function SettingsPage() {
     if (tabParam === 'agent' && isCloud) return 'agent';
     // Deep-linked from the Daily Pulse email's "manage notifications" footer.
     if (tabParam === 'notifications') return 'notifications';
+    // OAuth popups land back here after the Composio consent flow (#577).
+    if (tabParam === 'integrations') return 'integrations';
     return 'account';
   });
   const [displayName, setDisplayName] = useState('');
@@ -67,6 +71,7 @@ export default function SettingsPage() {
     { id: 'project', label: t('project') },
     { id: 'team', label: t('team') },
     { id: 'notifications', label: t('notifications') },
+    { id: 'integrations', label: 'Integrations' },
     { id: 'api-keys', label: 'API Keys' },
     // Agent BYOK is a cloud-only concern — self-host operators configure
     // ANTHROPIC_API_KEY in their own env, no UI needed.
@@ -185,6 +190,8 @@ export default function SettingsPage() {
           {active === 'team' && <TeamSection />}
 
           {active === 'notifications' && <NotificationsSection />}
+
+          {active === 'integrations' && <IntegrationsSection />}
 
           {/* API Keys */}
           {active === 'api-keys' && <ApiKeysSection />}

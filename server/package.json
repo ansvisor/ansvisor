@@ -27,6 +27,7 @@
     "@ai-sdk/google": "^3.0.43",
     "@ai-sdk/openai": "^3.0.41",
     "@anthropic-ai/sdk": "^0.78.0",
+    "@composio/core": "^0.14.1",
     "@supabase/supabase-js": "^2.49.1",
     "ai": "^6.0.116",
     "body-parser": "^1.20.2",

@@ -441,6 +441,57 @@ export type Database = {
           },
         ];
       };
+      integration_connections: {
+        Row: {
+          composio_account_id: string | null;
+          composio_entity_id: string;
+          connected_by: string | null;
+          created_at: string;
+          id: string;
+          organization_id: string;
+          provider: string;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          composio_account_id?: string | null;
+          composio_entity_id: string;
+          connected_by?: string | null;
+          created_at?: string;
+          id?: string;
+          organization_id: string;
+          provider: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          composio_account_id?: string | null;
+          composio_entity_id?: string;
+          connected_by?: string | null;
+          created_at?: string;
+          id?: string;
+          organization_id?: string;
+          provider?: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'integration_connections_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'integration_connections_connected_by_fkey';
+            columns: ['connected_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       invitations: {
         Row: {
           accepted_at: string | null;
