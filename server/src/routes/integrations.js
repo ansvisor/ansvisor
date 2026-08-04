@@ -7,6 +7,7 @@ import {
   deleteGscConnection,
   listGscSites,
 } from '../lib/composio.js';
+import { runGscSync } from '../lib/gsc-sync.js';
 
 const router = Router();
 
@@ -167,6 +168,30 @@ router.post('/google-search-console/connect', async (req, res) => {
     return res.json({ redirectUrl });
   } catch (err) {
     req.log.error({ err }, 'integrations connect error');
+    return res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/integrations/google-search-console/sync
+ * Runs the query-stats sync for the caller's org immediately (#644) —
+ * testing and first-time backfill; the daily cycle runs the same sync.
+ */
+router.post('/google-search-console/sync', async (req, res) => {
+  try {
+    if (!isComposioConfigured()) {
+      return res.status(503).json({ error: 'Search Console integration is not configured.' });
+    }
+
+    const profile = await getProfile(req.user.id);
+    if (!WRITE_ROLES.includes(profile.role)) {
+      return res.status(403).json({ error: 'Only admins and managers can trigger a sync.' });
+    }
+
+    const result = await runGscSync({ organizationId: profile.organization_id });
+    return res.json(result);
+  } catch (err) {
+    req.log.error({ err }, 'integrations sync error');
     return res.status(err.status || 500).json({ error: err.message });
   }
 });

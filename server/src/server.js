@@ -30,6 +30,7 @@ import { recountBrandCitations } from './lib/citation-recount.js';
 import supabaseAdmin from './config/supabase.js';
 import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/plans.js';
 import { analyzeBrandVolumes } from './lib/volume-analysis.js';
+import { runGscSync } from './lib/gsc-sync.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -170,6 +171,13 @@ async function runDailyTracking() {
   }
 
   logger.info({ triggered, total: brands.length }, 'daily tracking triggered');
+
+  // Search Console sync (#644) — independent follow-up step; never blocks or
+  // fails the tracking run. No-ops when Composio isn't configured.
+  runGscSync().catch((err) => {
+    logger.error({ err }, '[gsc-sync] daily run failed');
+  });
+
   return { triggered, total: brands.length };
 }
 

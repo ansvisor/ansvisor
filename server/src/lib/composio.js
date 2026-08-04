@@ -81,3 +81,20 @@ export async function listGscSites(entityId) {
     permissionLevel: e.permissionLevel ?? null,
   }));
 }
+
+/**
+ * Search analytics rows for a property (#644). Parameters are deterministic —
+ * built by the caller, never by an LLM. Returns the raw GSC rows:
+ * [{ keys: [query, date], clicks, impressions, ctr, position }].
+ */
+export async function queryGscSearchAnalytics(entityId, args) {
+  const result = await getClient().tools.execute('GOOGLE_SEARCH_CONSOLE_SEARCH_ANALYTICS_QUERY', {
+    userId: entityId,
+    arguments: args,
+    version: GSC_TOOLKIT_VERSION,
+  });
+  if (result?.successful === false) {
+    throw new Error(result?.error || 'Search analytics query failed');
+  }
+  return result?.data?.rows ?? [];
+}
