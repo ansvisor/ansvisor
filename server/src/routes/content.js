@@ -11,6 +11,7 @@ import {
 import { createJob, getJob } from '../lib/job-manager.js';
 import { runContentJob } from '../lib/job-runner.js';
 import { resolveModel } from '../lib/ai-provider.js';
+import { getLanguageName } from '../lib/languages.js';
 import supabaseAdmin from '../config/supabase.js';
 import {
   assertBrandAccess,
@@ -601,9 +602,11 @@ export async function generateBriefForOpportunity(opportunityId, { force = false
 
   const { data: brand } = await supabaseAdmin
     .from('brands')
-    .select('name, industry, description, organization_id')
+    .select('name, industry, description, organization_id, language')
     .eq('id', opportunity.brand_id)
     .single();
+
+  const langName = getLanguageName(brand?.language);
 
   // Quota is charged to the opportunity's org, and enforced here in the
   // shared core so the dashboard route and the internal MCP route draw
@@ -673,7 +676,9 @@ Competitors Cited: ${(sourceData.competitorsCited || []).join(', ') || 'none'}
 Latest Results Summary:
 ${latestResults.map((r) => `- ${r.platform}: visibility ${r.visibility_score}%, mentions: ${r.mention_count}, citations: ${r.citation_count}, sentiment: ${r.sentiment}`).join('\n') || 'No results yet'}
 
-Generate a detailed content brief for this opportunity.`;
+Generate a detailed content brief for this opportunity.
+
+IMPORTANT: Write every brief field in ${langName}.`;
 
   const aiModel = resolveModel(model);
 

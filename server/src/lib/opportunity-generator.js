@@ -6,6 +6,7 @@
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import { resolveModel } from './ai-provider.js';
+import { getLanguageName } from './languages.js';
 import supabaseAdmin from '../config/supabase.js';
 import { logger } from './logger.js';
 
@@ -64,10 +65,12 @@ export async function generateContentOpportunities(brandId) {
 
   const { data: brand } = await supabaseAdmin
     .from('brands')
-    .select('id, name, description, industry')
+    .select('id, name, description, industry, language')
     .eq('id', brandId)
     .single();
   if (!brand) return;
+
+  const langName = getLanguageName(brand.language);
 
   const { data: domains } = await supabaseAdmin
     .from('brand_domains')
@@ -161,7 +164,9 @@ Competitors: ${(compRes.data || []).map((c) => c.name).join(', ') || 'None'}
 Prompt Data:
 ${scored.map((p, i) => `[${i}] "${p.text}" | Intent: ${p.intent} | AI Vol: ${p.estAiVolume}/mo | Vis: ${p.avgVisibility}% | Gap: ${p.competitorGap}%`).join('\n')}
 
-Generate actionable content opportunities.`;
+Generate actionable content opportunities.
+
+IMPORTANT: Write every opportunity title and description in ${langName}.`;
 
   const { object } = await generateObject({
     model: resolveModel(),
