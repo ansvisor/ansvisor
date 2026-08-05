@@ -93,11 +93,19 @@ export function classifyCandidate(c) {
 
 /**
  * Coverage-filter and slice the aggregated rows: top head demand plus
- * long-tail quick wins, capped at MAX_CANDIDATES.
+ * long-tail quick wins, capped at MAX_CANDIDATES. `excludedQueries` holds
+ * normalized queries the user recently dismissed — GSC candidates are
+ * deterministic, so without this a dismissed suggestion would resurrect on
+ * every refresh.
  */
-export function composeCandidates(rows, existingPromptTexts) {
+export function composeCandidates(rows, existingPromptTexts, excludedQueries = new Set()) {
   const open = (rows || [])
-    .filter((r) => r.query && !isCoveredByPrompts(r.query, existingPromptTexts))
+    .filter(
+      (r) =>
+        r.query &&
+        !excludedQueries.has(r.query.trim().toLowerCase()) &&
+        !isCoveredByPrompts(r.query, existingPromptTexts),
+    )
     .map((r) => ({
       query: r.query,
       impressions: Number(r.impressions) || 0,
@@ -188,7 +196,23 @@ export async function getGscSuggestionCandidates(brandId, brand, existingPromptT
     if (error) throw new Error(error.message);
     if (!rows || rows.length === 0) return [];
 
-    const composed = composeCandidates(rows, existingPromptTexts);
+    // Queries behind recently dismissed GSC suggestions stay off the table.
+    const dismissedCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: dismissed } = await supabaseAdmin
+      .from('prompt_suggestions')
+      .select('source_data')
+      .eq('brand_id', brandId)
+      .eq('source', 'gsc')
+      .eq('status', 'dismissed')
+      .gte('updated_at', dismissedCutoff);
+    const excludedQueries = new Set(
+      (dismissed || [])
+        .map((d) => d.source_data?.query)
+        .filter(Boolean)
+        .map((q) => q.trim().toLowerCase()),
+    );
+
+    const composed = composeCandidates(rows, existingPromptTexts, excludedQueries);
     if (composed.length === 0) return [];
 
     try {

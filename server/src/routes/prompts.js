@@ -297,14 +297,19 @@ router.post(
       const expiresAt = new Date(Date.now() + SUGGESTION_TTL_HOURS * 60 * 60 * 1000).toISOString();
 
       // Provenance: a suggestion is 'gsc' only when its sourceQuery matches a
-      // provided candidate verbatim — a hallucinated sourceQuery degrades to
-      // a plain 'llm' row instead of carrying fabricated metrics.
-      const candidateByQuery = new Map(gscCandidates.map((c) => [c.query, c]));
+      // provided candidate — a hallucinated sourceQuery degrades to a plain
+      // 'llm' row instead of carrying fabricated metrics. Matching is
+      // case/whitespace-normalized so a cosmetic LLM rewrite doesn't silently
+      // drop real provenance.
+      const normalizeQuery = (q) => q.trim().toLowerCase();
+      const candidateByQuery = new Map(gscCandidates.map((c) => [normalizeQuery(c.query), c]));
 
       const rows = [];
       for (const s of suggestions) {
         const topicId = await findOrCreateTopic(req.params.brandId, s.topic);
-        const candidate = s.sourceQuery ? candidateByQuery.get(s.sourceQuery) : undefined;
+        const candidate = s.sourceQuery
+          ? candidateByQuery.get(normalizeQuery(s.sourceQuery))
+          : undefined;
         rows.push({
           brand_id: req.params.brandId,
           suggested_text: s.text,

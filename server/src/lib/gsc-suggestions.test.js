@@ -84,6 +84,16 @@ describe('composeCandidates', () => {
     expect(out[0].avgPosition).toBe(12.3);
   });
 
+  it('excludes recently dismissed queries (normalized) so they cannot resurrect', () => {
+    const rows = [row('answer engine optimization guide', 800), row('llm monitoring pricing', 300)];
+    const excluded = new Set(['answer engine optimization guide']);
+    const out = composeCandidates(rows, [], excluded);
+    expect(out.map((c) => c.query)).toEqual(['llm monitoring pricing']);
+    // Matching is case/whitespace-insensitive on the candidate side too.
+    const out2 = composeCandidates([row('  Answer Engine Optimization Guide ', 800)], [], excluded);
+    expect(out2).toEqual([]);
+  });
+
   it('adds a long-tail slice beyond the head without duplicates', () => {
     const rows = [];
     for (let i = 0; i < 12; i++) rows.push(row(`headterm${i} tools`, 1000 - i));

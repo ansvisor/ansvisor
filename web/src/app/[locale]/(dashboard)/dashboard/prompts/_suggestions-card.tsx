@@ -281,7 +281,9 @@ export function SuggestionsCard({ brandId, onAccepted }: Props) {
                             {s.topicName}
                           </Badge>
                         )}
-                        {s.estVolume != null && s.estVolume > 0 && (
+                        {/* GSC rows carry real impressions — showing the modeled
+                            estimate next to measured data reads as a contradiction. */}
+                        {s.estVolume != null && s.estVolume > 0 && s.source !== 'gsc' && (
                           <Badge variant="outline" className="gap-1 text-xs tabular-nums">
                             <TrendingUp className="h-3 w-3" />~{s.estVolume.toLocaleString()}/mo
                           </Badge>
