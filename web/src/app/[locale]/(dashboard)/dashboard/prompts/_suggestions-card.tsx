@@ -28,10 +28,22 @@ import {
   type GscSuggestionBadge,
 } from '@/lib/actions/prompt-suggestions';
 
-const GSC_BADGE_LABELS: Record<GscSuggestionBadge, string> = {
-  protect_traffic: 'Protect traffic',
-  capture_demand: 'Capture demand',
-  low_competition: 'Low competition',
+const GSC_BADGES: Record<GscSuggestionBadge, { label: string; tooltip: string }> = {
+  protect_traffic: {
+    label: 'Protect traffic',
+    tooltip:
+      'This query drives real clicks to your site today. People increasingly ask AI assistants the same questions — track it so AI answers don\u2019t erode traffic you already earn.',
+  },
+  capture_demand: {
+    label: 'Capture demand',
+    tooltip:
+      'People search this heavily on Google and you appear in results, but almost nobody clicks through. Being cited in AI answers is a second chance to capture this proven demand.',
+  },
+  low_competition: {
+    label: 'Low competition',
+    tooltip:
+      'Advertiser competition on this term is low \u2014 becoming the answer AI assistants cite is a cheap win here.',
+  },
 };
 
 interface Props {
@@ -293,14 +305,18 @@ export function SuggestionsCard({ brandId, onAccepted }: Props) {
                             <Badge
                               variant="outline"
                               className="gap-1 text-xs border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                              title={`Google query: "${s.sourceData.query}"`}
+                              title={`From your Google Search Console data \u2014 the query "${s.sourceData.query}" got ${s.sourceData.impressions.toLocaleString()} impressions in the last 28 days.`}
                             >
                               <SearchCheck className="h-3 w-3" />
                               Search Console · {s.sourceData.impressions.toLocaleString()} impr/mo
                             </Badge>
                             {s.sourceData.badge && (
-                              <Badge variant="outline" className="text-xs">
-                                {GSC_BADGE_LABELS[s.sourceData.badge]}
+                              <Badge
+                                variant="outline"
+                                className="text-xs cursor-help"
+                                title={GSC_BADGES[s.sourceData.badge].tooltip}
+                              >
+                                {GSC_BADGES[s.sourceData.badge].label}
                               </Badge>
                             )}
                           </>
