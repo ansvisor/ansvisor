@@ -7,6 +7,17 @@ import { API_BASE_URL } from '@/config/api';
 
 const AEO_SERVER_URL = API_BASE_URL;
 
+export type GscSuggestionBadge = 'protect_traffic' | 'capture_demand' | 'low_competition';
+
+export interface GscSuggestionSourceData {
+  query: string;
+  impressions: number;
+  clicks: number;
+  avgPosition: number | null;
+  badge: GscSuggestionBadge | null;
+  competitionIndex: number | null;
+}
+
 export interface PromptSuggestion {
   id: string;
   brandId: string;
@@ -15,7 +26,8 @@ export interface PromptSuggestion {
   topicId: string | null;
   reason: string | null;
   estVolume: number | null;
-  source: 'llm' | 'heuristic';
+  source: 'llm' | 'heuristic' | 'gsc';
+  sourceData: GscSuggestionSourceData | null;
   status: 'new' | 'added' | 'dismissed';
   generatedAt: string;
   expiresAt: string;
@@ -29,7 +41,8 @@ interface SuggestionRow {
   topic_id: string | null;
   reason: string | null;
   est_volume: number | null;
-  source: 'llm' | 'heuristic';
+  source: 'llm' | 'heuristic' | 'gsc';
+  source_data: GscSuggestionSourceData | null;
   status: 'new' | 'added' | 'dismissed';
   generated_at: string;
   expires_at: string;
@@ -45,6 +58,7 @@ function mapRow(row: SuggestionRow): PromptSuggestion {
     reason: row.reason,
     estVolume: row.est_volume,
     source: row.source,
+    sourceData: row.source_data ?? null,
     status: row.status,
     generatedAt: row.generated_at,
     expiresAt: row.expires_at,

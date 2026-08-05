@@ -7,6 +7,7 @@ import { classifyPromptIntent } from '../lib/intent-extraction.js';
 import { getLanguageName } from '../lib/languages.js';
 import { requireFeature } from '../lib/plan-guard.js';
 import { withRetry } from '../lib/retry.js';
+import { getGscSuggestionCandidates } from '../lib/gsc-suggestions.js';
 
 const router = Router();
 
@@ -41,7 +42,11 @@ async function loadSuggestionContext(brandId) {
     { data: existingTopics },
     { data: recentResults },
   ] = await Promise.all([
-    supabaseAdmin.from('brands').select('name, description, language').eq('id', brandId).single(),
+    supabaseAdmin
+      .from('brands')
+      .select('name, description, language, region')
+      .eq('id', brandId)
+      .single(),
     supabaseAdmin
       .from('prompts')
       .select('id, text, prompt_sets!inner(brand_id), prompt_volumes(est_ai_volume, intent)')
@@ -149,6 +154,13 @@ const newSuggestionSchema = z.object({
         // and retrying can't help. Out-of-range protection is a clamp at the
         // insert site instead.
         estVolume: z.number().int().min(0).describe('Estimated monthly AI search volume (rough)'),
+        sourceQuery: z
+          .string()
+          .max(200)
+          .optional()
+          .describe(
+            'ONLY when this suggestion was derived from one of the provided Search Console queries: the EXACT original query string, verbatim. Omit for all other suggestions.',
+          ),
       }),
     )
     .min(6)
@@ -162,6 +174,14 @@ async function generateSuggestions(brandId) {
   const langName = getLanguageName(ctx.brand.language);
   const currentYear = new Date().getFullYear();
 
+  // Real Search Console demand (#648) — [] for brands without GSC, which
+  // keeps every prompt block below byte-identical to the pre-GSC behavior.
+  const gscCandidates = await getGscSuggestionCandidates(
+    brandId,
+    ctx.brand,
+    ctx.existingPromptTexts,
+  );
+
   const system = `You are an AEO (Answer Engine Optimization) strategist. You suggest NEW search prompts a brand should track in AI engines (ChatGPT, Perplexity, Gemini, Claude). Current year: ${currentYear}.
 
 RULES:
@@ -172,7 +192,12 @@ RULES:
 - Volume bias: prioritize prompt ideas that resemble (in topic and intent) the HIGH-volume prompts already tracked. Avoid suggesting prompts close in topic to LOW-volume ones unless there is a strong competitor gap.
 - estVolume must be a realistic monthly AI search volume; calibrate it against the volume samples shown — do not output flat round numbers like 1000 for everything.
 - Reasons must be concrete: cite the gap, the trend, or the competitor activity. Avoid generic platitudes.
-- Diversity: mix comparison, how-to, best-of, recommendation, and problem-solving intents.`;
+- Diversity: mix comparison, how-to, best-of, recommendation, and problem-solving intents.${
+    gscCandidates.length
+      ? `
+- REAL SEARCH DEMAND: a list of actual Google Search Console queries for this brand is provided — proven demand the brand does not track yet. Derive at least ${Math.min(4, gscCandidates.length)} suggestions from those queries: rephrase each raw query as a natural question a user would ask an AI assistant, preserving its intent exactly (never invent a different topic). For each such suggestion set sourceQuery to the EXACT original query string, verbatim. Never set sourceQuery on suggestions that did not come from that list.`
+      : ''
+  }`;
 
   const v = ctx.volume;
   const volumeBlock =
@@ -199,7 +224,19 @@ ${ctx.existingTopicNames.length ? ctx.existingTopicNames.join(', ') : '(none)'}
 Top competitors currently cited in this brand's tracked AI responses:
 ${ctx.topCompetitors.length ? ctx.topCompetitors.join(', ') : '(no data yet)'}
 
-${volumeBlock}
+${volumeBlock}${
+    gscCandidates.length
+      ? `
+
+Real Google Search Console queries for this brand (last 28 days, NOT tracked yet — proven demand):
+${gscCandidates
+  .map(
+    (c) =>
+      `  • "${c.query}" — ${c.impressions.toLocaleString('en-US')} impressions, ${c.clicks.toLocaleString('en-US')} clicks${c.avgPosition != null ? `, avg position ${c.avgPosition}` : ''}`,
+  )
+  .join('\n')}`
+      : ''
+  }
 
 Suggest the next 8 prompts this brand should start tracking, with topic, reason and a calibrated monthly AI search volume (estVolume).`;
 
@@ -221,7 +258,7 @@ Suggest the next 8 prompts this brand should start tracking, with topic, reason 
     { attempts: 3, baseDelayMs: 500, label: 'suggestion-refresh' },
   );
 
-  return object.suggestions;
+  return { suggestions: object.suggestions, gscCandidates };
 }
 
 async function findOrCreateTopic(brandId, topicName) {
@@ -249,7 +286,7 @@ router.post(
   async (req, res) => {
     try {
       await assertBrandAccess(req.params.brandId, req.user.id);
-      const suggestions = await generateSuggestions(req.params.brandId);
+      const { suggestions, gscCandidates } = await generateSuggestions(req.params.brandId);
 
       await supabaseAdmin
         .from('prompt_suggestions')
@@ -259,9 +296,15 @@ router.post(
 
       const expiresAt = new Date(Date.now() + SUGGESTION_TTL_HOURS * 60 * 60 * 1000).toISOString();
 
+      // Provenance: a suggestion is 'gsc' only when its sourceQuery matches a
+      // provided candidate verbatim — a hallucinated sourceQuery degrades to
+      // a plain 'llm' row instead of carrying fabricated metrics.
+      const candidateByQuery = new Map(gscCandidates.map((c) => [c.query, c]));
+
       const rows = [];
       for (const s of suggestions) {
         const topicId = await findOrCreateTopic(req.params.brandId, s.topic);
+        const candidate = s.sourceQuery ? candidateByQuery.get(s.sourceQuery) : undefined;
         rows.push({
           brand_id: req.params.brandId,
           suggested_text: s.text,
@@ -271,7 +314,17 @@ router.post(
           // Sanity clamp replacing the removed schema ceiling — one absurd
           // estimate must cap out, not reject the whole generated batch.
           est_volume: Math.min(s.estVolume, 10_000_000),
-          source: 'llm',
+          source: candidate ? 'gsc' : 'llm',
+          source_data: candidate
+            ? {
+                query: candidate.query,
+                impressions: candidate.impressions,
+                clicks: candidate.clicks,
+                avgPosition: candidate.avgPosition,
+                badge: candidate.badge,
+                competitionIndex: candidate.competitionIndex ?? null,
+              }
+            : null,
           status: 'new',
           expires_at: expiresAt,
         });

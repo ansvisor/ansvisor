@@ -127,6 +127,16 @@ export async function runGscSync({ organizationId } = {}) {
     }
   }
 
+  // Retention (#648): the suggestion pipeline reads a 28-day window; 90 days
+  // keeps room for trend features without unbounded growth.
+  const { error: pruneError } = await supabaseAdmin
+    .from('gsc_query_stats')
+    .delete()
+    .lt('date', utcDateString(90));
+  if (pruneError) {
+    logger.warn({ err: pruneError }, '[gsc-sync] retention prune failed');
+  }
+
   logger.info({ synced, skipped, total: (brands || []).length }, '[gsc-sync] completed');
   return { synced, skipped, results };
 }

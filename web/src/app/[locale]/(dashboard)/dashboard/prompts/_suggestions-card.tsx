@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronRight,
   AlertTriangle,
+  SearchCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -24,7 +25,14 @@ import {
   acceptSuggestion,
   dismissSuggestion,
   type PromptSuggestion,
+  type GscSuggestionBadge,
 } from '@/lib/actions/prompt-suggestions';
+
+const GSC_BADGE_LABELS: Record<GscSuggestionBadge, string> = {
+  protect_traffic: 'Protect traffic',
+  capture_demand: 'Capture demand',
+  low_competition: 'Low competition',
+};
 
 interface Props {
   brandId: string;
@@ -277,6 +285,23 @@ export function SuggestionsCard({ brandId, onAccepted }: Props) {
                           <Badge variant="outline" className="gap-1 text-xs tabular-nums">
                             <TrendingUp className="h-3 w-3" />~{s.estVolume.toLocaleString()}/mo
                           </Badge>
+                        )}
+                        {s.source === 'gsc' && s.sourceData && (
+                          <>
+                            <Badge
+                              variant="outline"
+                              className="gap-1 text-xs border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                              title={`Google query: "${s.sourceData.query}"`}
+                            >
+                              <SearchCheck className="h-3 w-3" />
+                              Search Console · {s.sourceData.impressions.toLocaleString()} impr/mo
+                            </Badge>
+                            {s.sourceData.badge && (
+                              <Badge variant="outline" className="text-xs">
+                                {GSC_BADGE_LABELS[s.sourceData.badge]}
+                              </Badge>
+                            )}
+                          </>
                         )}
                       </div>
                       {s.reason && (

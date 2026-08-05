@@ -444,6 +444,33 @@ export type Database = {
           },
         ];
       };
+      dataforseo_competition_cache: {
+        Row: {
+          competition: string | null;
+          competition_index: number | null;
+          fetched_at: string;
+          keyword: string;
+          language_code: string;
+          location_code: number;
+        };
+        Insert: {
+          competition?: string | null;
+          competition_index?: number | null;
+          fetched_at?: string;
+          keyword: string;
+          language_code?: string;
+          location_code?: number;
+        };
+        Update: {
+          competition?: string | null;
+          competition_index?: number | null;
+          fetched_at?: string;
+          keyword?: string;
+          language_code?: string;
+          location_code?: number;
+        };
+        Relationships: [];
+      };
       gsc_query_stats: {
         Row: {
           brand_id: string;
@@ -913,6 +940,7 @@ export type Database = {
           id: string;
           reason: string | null;
           source: string;
+          source_data: Json | null;
           status: string;
           suggested_text: string;
           topic_id: string | null;
@@ -929,6 +957,7 @@ export type Database = {
           id?: string;
           reason?: string | null;
           source?: string;
+          source_data?: Json | null;
           status?: string;
           suggested_text: string;
           topic_id?: string | null;
@@ -945,6 +974,7 @@ export type Database = {
           id?: string;
           reason?: string | null;
           source?: string;
+          source_data?: Json | null;
           status?: string;
           suggested_text?: string;
           topic_id?: string | null;
