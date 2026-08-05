@@ -32,10 +32,36 @@ export interface FanoutSubQuery {
   trackedPromptId: string | null;
 }
 
+export interface FanoutPromptCoverage {
+  id: string;
+  text: string;
+  /** All tracked answers for this prompt inside the fetched window. */
+  totalRuns: number;
+  /** Of those, how many contained at least one observed sub-query. */
+  runsWithFanout: number;
+}
+
 export interface QueryFanoutData {
   subQueries: FanoutSubQuery[];
   /** Total distinct observed sub-queries in the window. */
   totalObserved: number;
+  /**
+   * Per-prompt fan-out coverage over the same fetched window as `subQueries`,
+   * including prompts whose answers triggered no search at all (0 / N) — the
+   * denominator that tells "engines never search for this" apart from "we
+   * barely track it". Empty for the single-prompt variant.
+   *
+   * Unordered: the caller owns display ranking (see the By-prompt view, which
+   * ranks by sub-query count). Only a stable baseline sort is applied here.
+   */
+  promptCoverage: FanoutPromptCoverage[];
+  /**
+   * True when the window held more answers than `FANOUT_MAX_ROWS` and the read
+   * stopped early. Rows come back oldest-first, so it's the MOST RECENT answers
+   * that are missing — counts under-report and coverage ratios are only
+   * approximate. The UI says so rather than presenting a confident wrong ratio.
+   */
+  truncated: boolean;
 }
 
 interface RawSearchQueryItem {
@@ -56,6 +82,21 @@ const MAX_FANOUT_DAYS = 90;
 const FANOUT_PAGE_SIZE = 1000;
 const FANOUT_MAX_ROWS = 50_000;
 
+/**
+ * Chunk size for the residual `.in('id', …)` prompt-text lookup. The binding
+ * constraint is URL length, not the row cap: PostgREST takes the id list in the
+ * query string, and 100 UUIDs is already ~3.7KB against the ~8KB request line
+ * most proxies allow, which the base URL and auth params also draw on.
+ */
+const PROMPT_TEXT_CHUNK_SIZE = 100;
+
+/**
+ * Ceiling on the brand's prompt roster read (see fetchBrandPromptRoster), in the
+ * same spirit as FANOUT_MAX_ROWS: plan limits put real rosters orders of
+ * magnitude below this.
+ */
+const PROMPT_ROSTER_MAX_ROWS = 20_000;
+
 /** How long the intent-classification round-trip may take before we abort (#427). */
 const FANOUT_INTENT_FETCH_TIMEOUT_MS = 20_000;
 
@@ -70,7 +111,7 @@ async function fetchFanoutRows(
   brandId: string,
   since: string,
   promptId?: string,
-): Promise<FanoutResultRow[]> {
+): Promise<{ rows: FanoutResultRow[]; truncated: boolean }> {
   const rows: FanoutResultRow[] = [];
   for (let from = 0; from < FANOUT_MAX_ROWS; from += FANOUT_PAGE_SIZE) {
     let query = supabase
@@ -89,9 +130,57 @@ async function fetchFanoutRows(
 
     const batch = (data ?? []) as FanoutResultRow[];
     rows.push(...batch);
+    // A short page means we reached the end of the window — the only exit that
+    // guarantees a complete read.
+    if (batch.length < FANOUT_PAGE_SIZE) return { rows, truncated: false };
+  }
+  return { rows, truncated: true };
+}
+
+interface RosterPrompt {
+  id: string;
+  text: string;
+  is_active: boolean;
+}
+
+/**
+ * Every prompt belonging to the brand, paused ones included. One read serves
+ * both jobs downstream: resolving prompt text for coverage / sourced-prompt rows,
+ * and the "is this sub-query already tracked?" comparison — which used to be two
+ * queries over almost exactly the same rows.
+ *
+ * Paged for the same reason the result fetch is (#427/#428): an un-paginated
+ * select is silently capped at 1000 rows by PostgREST, which quietly truncated
+ * the tracked-prompt map on brands with the largest prompt sets.
+ */
+async function fetchBrandPromptRoster(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+): Promise<RosterPrompt[]> {
+  const { data: brandSets, error: setsError } = await supabase
+    .from('prompt_sets')
+    .select('id')
+    .eq('brand_id', brandId);
+  if (setsError) throw new Error(setsError.message);
+
+  const setIds = (brandSets ?? []).map((s) => s.id as string);
+  if (setIds.length === 0) return [];
+
+  const prompts: RosterPrompt[] = [];
+  for (let from = 0; from < PROMPT_ROSTER_MAX_ROWS; from += FANOUT_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('prompts')
+      .select('id, text, is_active')
+      .in('prompt_set_id', setIds)
+      .order('id', { ascending: true })
+      .range(from, from + FANOUT_PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+
+    const batch = (data ?? []) as RosterPrompt[];
+    prompts.push(...batch);
     if (batch.length < FANOUT_PAGE_SIZE) break;
   }
-  return rows;
+  return prompts;
 }
 
 /**
@@ -124,8 +213,9 @@ export async function getQueryFanout(
 
   // No server-side "non-empty" filter: comparing a jsonb column to '[]' through
   // PostgREST is unreliable, and rows with an empty fan-out contribute nothing
-  // to the aggregation below anyway (the item loop skips them).
-  const rows = await fetchFanoutRows(supabase, brandId, since);
+  // to the sub-query aggregation below (the item loop skips them) — but they do
+  // count toward coverage, which is the whole point of the denominator.
+  const { rows, truncated } = await fetchFanoutRows(supabase, brandId, since);
 
   interface Acc {
     display: string;
@@ -135,7 +225,29 @@ export async function getQueryFanout(
   }
   const byQuery = new Map<string, Acc>();
 
-  for (const row of rows ?? []) {
+  /**
+   * Fan-out coverage per prompt, from the exact same fetched rows: how many of
+   * a prompt's tracked answers triggered a live search at all. Without this
+   * denominator "8 sub-queries" reads the same whether it came from 10 answers
+   * or 500 — and a prompt the engines never search for is invisible entirely.
+   */
+  interface CoverageAcc {
+    totalRuns: number;
+    runsWithFanout: number;
+  }
+  const coverageByPrompt = new Map<string, CoverageAcc>();
+
+  for (const row of rows) {
+    let coverage: CoverageAcc | undefined;
+    if (row.prompt_id) {
+      coverage = coverageByPrompt.get(row.prompt_id);
+      if (!coverage) {
+        coverage = { totalRuns: 0, runsWithFanout: 0 };
+        coverageByPrompt.set(row.prompt_id, coverage);
+      }
+      coverage.totalRuns += 1;
+    }
+
     const items = Array.isArray(row.search_queries)
       ? (row.search_queries as RawSearchQueryItem[])
       : [];
@@ -165,40 +277,43 @@ export async function getQueryFanout(
         seenInRow.add(key);
       }
     }
+    // `seenInRow` is only written to past the validity guard above, so a
+    // non-empty set means this answer contributed at least one real sub-query.
+    if (coverage && seenInRow.size > 0) coverage.runsWithFanout += 1;
   }
 
-  if (byQuery.size === 0) return { subQueries: [], totalObserved: 0 };
+  if (byQuery.size === 0 && coverageByPrompt.size === 0) {
+    return { subQueries: [], totalObserved: 0, promptCoverage: [], truncated };
+  }
 
-  // Resolve the sourced prompts' text (the prompts whose answers produced the
-  // fan-out) so the UI can link back to them.
-  const allPromptIds = [...new Set([...byQuery.values()].flatMap((a) => [...a.promptIds]))];
+  const roster = await fetchBrandPromptRoster(supabase, brandId);
+
+  // Prompt text for every prompt with a run in the window — a superset of the
+  // fan-out-sourced prompts, since coverage reports the zero rows too. Paused
+  // prompts are included: they did run in the window, so their answers count.
   const promptTextById = new Map<string, string>();
-  if (allPromptIds.length > 0) {
-    const { data: promptRows } = await supabase
+  // Which sub-queries are already tracked as prompts for THIS brand? Compare
+  // against the brand's ACTIVE prompt texts so the row shows Tracked ✓ vs +.
+  const trackedByText = new Map<string, string>();
+  for (const p of roster) {
+    promptTextById.set(p.id, p.text);
+    if (p.is_active) trackedByText.set(normalizeQuery(p.text).toLowerCase(), p.id);
+  }
+
+  // Whatever the roster didn't cover — a prompt moved to another set, or removed
+  // mid-window — still needs its text, or its coverage row silently disappears.
+  const missingIds = [...coverageByPrompt.keys()].filter((id) => !promptTextById.has(id));
+  for (let i = 0; i < missingIds.length; i += PROMPT_TEXT_CHUNK_SIZE) {
+    const { data: promptRows, error } = await supabase
       .from('prompts')
       .select('id, text')
-      .in('id', allPromptIds);
+      .in('id', missingIds.slice(i, i + PROMPT_TEXT_CHUNK_SIZE));
+    // A dropped chunk deletes whole rows from both views (text is the filter
+    // below), and an under-reported table looks exactly like a correct smaller
+    // one — so fail loudly instead of degrading invisibly.
+    if (error) throw new Error(error.message);
     for (const p of promptRows ?? []) {
       promptTextById.set(p.id as string, p.text as string);
-    }
-  }
-
-  // Which sub-queries are already tracked as prompts for THIS brand? Compare
-  // against the brand's active prompt texts so the row shows Tracked ✓ vs +.
-  const { data: brandSets } = await supabase
-    .from('prompt_sets')
-    .select('id')
-    .eq('brand_id', brandId);
-  const setIds = (brandSets ?? []).map((s) => s.id as string);
-  const trackedByText = new Map<string, string>();
-  if (setIds.length > 0) {
-    const { data: existing } = await supabase
-      .from('prompts')
-      .select('id, text')
-      .in('prompt_set_id', setIds)
-      .eq('is_active', true);
-    for (const p of existing ?? []) {
-      trackedByText.set(normalizeQuery(p.text as string).toLowerCase(), p.id as string);
     }
   }
 
@@ -220,7 +335,21 @@ export async function getQueryFanout(
     })
     .sort((a, b) => b.timesSearched - a.timesSearched || a.query.localeCompare(b.query));
 
-  return { subQueries, totalObserved: subQueries.length };
+  // Prompts whose text no longer resolves (hard-deleted) are dropped, matching
+  // how `sourcedPrompts` already treats them. Sorted by text only: a stable,
+  // deterministic baseline. Display ranking belongs to the caller, which ranks
+  // by sub-query count — duplicating that here would just be discarded work.
+  const promptCoverage: FanoutPromptCoverage[] = [...coverageByPrompt.entries()]
+    .map(([id, acc]) => ({
+      id,
+      text: promptTextById.get(id) ?? '',
+      totalRuns: acc.totalRuns,
+      runsWithFanout: acc.runsWithFanout,
+    }))
+    .filter((p) => p.text)
+    .sort((a, b) => a.text.localeCompare(b.text));
+
+  return { subQueries, totalObserved: subQueries.length, promptCoverage, truncated };
 }
 
 /**
@@ -319,7 +448,7 @@ export async function getPromptFanout(
   const days = Math.min(Math.max(Math.trunc(opts?.days ?? 30) || 30, 1), MAX_FANOUT_DAYS);
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
 
-  const rows = await fetchFanoutRows(supabase, brandId, since, promptId);
+  const { rows, truncated } = await fetchFanoutRows(supabase, brandId, since, promptId);
 
   interface Acc {
     display: string;
@@ -328,7 +457,7 @@ export async function getPromptFanout(
   }
   const byQuery = new Map<string, Acc>();
 
-  for (const row of rows ?? []) {
+  for (const row of rows) {
     const items = Array.isArray(row.search_queries)
       ? (row.search_queries as RawSearchQueryItem[])
       : [];
@@ -357,7 +486,11 @@ export async function getPromptFanout(
     }
   }
 
-  if (byQuery.size === 0) return { subQueries: [], totalObserved: 0 };
+  // `promptCoverage` stays empty here: this variant answers for a single prompt
+  // and has no prompt roster to report coverage over.
+  if (byQuery.size === 0) {
+    return { subQueries: [], totalObserved: 0, promptCoverage: [], truncated };
+  }
 
   const subQueries: FanoutSubQuery[] = [...byQuery.entries()]
     .map(([, acc]) => ({
@@ -370,5 +503,5 @@ export async function getPromptFanout(
     }))
     .sort((a, b) => b.timesSearched - a.timesSearched || a.query.localeCompare(b.query));
 
-  return { subQueries, totalObserved: subQueries.length };
+  return { subQueries, totalObserved: subQueries.length, promptCoverage: [], truncated };
 }
