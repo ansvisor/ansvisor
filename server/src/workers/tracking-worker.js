@@ -291,9 +291,12 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
         const drainDeadline = Date.now() + 60 * 60 * 1000;
         const drainPollMs = 15_000;
         // Give up early if delivery stalls — no new result for this many
-        // consecutive polls (~10 min) means the rest were almost certainly
-        // dropped, so don't hold the bar (and a concurrency slot) for an hour.
-        const stallPollLimit = 40;
+        // consecutive polls. Cloro delivers in bursts with quiet gaps: a real
+        // run went silent for 10+ minutes after the first ~600 results and
+        // then delivered the remaining ~1000, so the old ~10-min limit cut a
+        // healthy run in half. ~25 min tolerates those gaps while the 60-min
+        // drain deadline stays the hard cap on a truly stuck queue.
+        const stallPollLimit = Number(process.env.CLORO_STALL_POLL_LIMIT) || 100;
 
         let lastPending = expectedSubmitted;
         let stalledPolls = 0;
@@ -538,9 +541,21 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
       .eq('brand_id', brandId)
       .gte('created_at', trackingRunStartedAt);
 
+    // Partial-run guard: a run that produced far fewer results than it
+    // planned tasks (Cloro delivered late/never) must not become the 24h
+    // anchor — a half-empty window reads as a visibility crash in the
+    // dashboard and the pulse mail. The ratio compares against THIS run's
+    // own planned task count, never against history, so a brand that
+    // legitimately shrinks its prompt set can't wedge the guard. Late
+    // results that land after the previous anchor stay visible in the next
+    // stamped window — nothing is lost, the anchor just refuses to move
+    // onto partial data.
+    const MIN_STAMP_RATIO = 0.5;
+    const isPartial = totalTasks > 0 && (runResultCount ?? 0) < totalTasks * MIN_STAMP_RATIO;
+
     if (countErr) {
       logger.error({ err: countErr, brandId, trackingRunId }, 'failed to count run results');
-    } else if ((runResultCount ?? 0) > 0) {
+    } else if ((runResultCount ?? 0) > 0 && !isPartial) {
       const { error: stampErr } = await supabaseAdmin
         .from('tracking_runs')
         .update({ completed_at: new Date().toISOString(), result_count: runResultCount })
@@ -550,6 +565,12 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
       } else {
         logger.info({ brandId, trackingRunId, runResultCount }, 'tracking run stamped');
       }
+    } else if ((runResultCount ?? 0) > 0) {
+      logger.warn(
+        { brandId, trackingRunId, runResultCount, totalTasks },
+        'tracking run partial — below stamp ratio, row removed; window stays on previous run',
+      );
+      await supabaseAdmin.from('tracking_runs').delete().eq('id', trackingRunId);
     } else {
       logger.warn({ brandId, trackingRunId }, 'tracking run produced no results — row removed');
       await supabaseAdmin.from('tracking_runs').delete().eq('id', trackingRunId);
