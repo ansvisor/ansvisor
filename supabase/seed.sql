@@ -177,6 +177,15 @@ INSERT INTO public.prompts (
    'Manual vs automatic espresso machine for home use',
    ARRAY['chatgpt-web','claude','copilot-web','gemini-web','grok-web'],
    ARRAY['US','TR','DE'],
+   ARRAY['claude-sonnet-4-6'], true),
+  -- Tracked ONLY on engines that never fan out, and factual enough that they
+  -- answer it from parametric knowledge. It is the Query Fan-out tab's
+  -- zero-coverage case: many tracked answers, not one live search. See the
+  -- "Zero fan-out coverage" block at the end of this file.
+  ('88888888-8888-8888-8888-888888888807', '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777702',
+   'How much caffeine is in a double espresso?',
+   ARRAY['chatgpt-web','claude'],
+   ARRAY['US','GB','DE','FR','TR'],
    ARRAY['claude-sonnet-4-6'], true)
 ON CONFLICT (id) DO NOTHING;
 
@@ -610,4 +619,25 @@ SET search_queries = '[
   {"query": "home espresso machine comparison 2026", "source_platform": "copilot-web"}
 ]'::jsonb
 WHERE prompt_id = '88888888-8888-8888-8888-888888888806' AND platform = 'copilot-web';
+
+-- ─── Zero fan-out coverage (prompt 807) ──────────────────────────────────────
+-- Deliberately NOT given any search_queries: prompt 807 is tracked only on
+-- chatgpt-web and claude, which answer a factual question from what they
+-- already know instead of searching. It is the case the By-prompt view's
+-- coverage column exists for — the prompt reads as "0 / 15 · 0%", which the
+-- sub-query → prompt inversion alone could never produce, since a prompt with
+-- no observed sub-queries has nothing to hang a row on.
+--
+-- The results themselves come from the generator above, which spreads
+-- created_at at 6h intervals ordered by prompt id — so the last prompts in the
+-- set land months back, outside every window the UI offers. Pull 807's rows
+-- into the recent past so the zero-coverage row is actually visible.
+UPDATE public.prompt_results pr
+SET created_at = now() - (ordered.k * interval '5 hours')
+FROM (
+  SELECT id, row_number() OVER (ORDER BY platform, model_used, region) AS k
+  FROM public.prompt_results
+  WHERE prompt_id = '88888888-8888-8888-8888-888888888807'
+) AS ordered
+WHERE pr.id = ordered.id;
 
