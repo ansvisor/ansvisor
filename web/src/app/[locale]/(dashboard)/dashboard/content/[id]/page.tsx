@@ -143,9 +143,22 @@ export default function ContentDetailPage() {
   const handleDismiss = async () => {
     try {
       await updateOpportunityStatus(id, 'dismissed');
-      toast.success('Opportunity dismissed');
       const updated = await getOpportunity(id);
       setOpportunity(updated);
+      toast.success(t('dismissedToast'), {
+        action: {
+          label: t('undo'),
+          onClick: async () => {
+            try {
+              await updateOpportunityStatus(id, 'new');
+              const restored = await getOpportunity(id);
+              setOpportunity(restored);
+            } catch {
+              toast.error(t('undoFailed'));
+            }
+          },
+        },
+      });
     } catch {
       toast.error('Failed to dismiss');
     }

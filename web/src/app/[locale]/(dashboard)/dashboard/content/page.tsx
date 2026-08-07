@@ -15,6 +15,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
   Table,
   TableBody,
   TableCell,
@@ -292,8 +302,20 @@ export default function ContentPage() {
   const handleDismiss = async (id: string) => {
     try {
       await updateOpportunityStatus(id, 'dismissed');
-      toast.success('Opportunity dismissed');
       await loadData(true);
+      toast.success(t('dismissedToast'), {
+        action: {
+          label: t('undo'),
+          onClick: async () => {
+            try {
+              await updateOpportunityStatus(id, 'new');
+              await loadData(true);
+            } catch {
+              toast.error(t('undoFailed'));
+            }
+          },
+        },
+      });
     } catch (err) {
       console.error('Dismiss failed:', err);
       toast.error('Failed to dismiss');
@@ -566,16 +588,39 @@ export default function ContentPage() {
                     Done
                   </Button>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs gap-1.5 text-muted-foreground"
-                    onClick={handleBulkDismiss}
-                    disabled={bulkSending}
-                  >
-                    <X className="h-3 w-3" />
-                    {t('bulk.dismissAll')}
-                  </Button>
+                  <Dialog>
+                    <DialogTrigger
+                      render={
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1.5 text-muted-foreground"
+                          disabled={bulkSending}
+                        />
+                      }
+                    >
+                      <X className="h-3 w-3" />
+                      {t('bulk.dismissAll')}
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-sm">
+                      <DialogHeader>
+                        <DialogTitle>{t('bulk.dismissAllTitle')}</DialogTitle>
+                        <DialogDescription>
+                          {t('bulk.dismissAllConfirm', { count: selectedIds.size })}
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <DialogClose render={<Button variant="outline" />}>
+                          {t('cancel')}
+                        </DialogClose>
+                        <DialogClose
+                          render={<Button variant="destructive" onClick={handleBulkDismiss} />}
+                        >
+                          {t('bulk.dismissAll')}
+                        </DialogClose>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
             )}

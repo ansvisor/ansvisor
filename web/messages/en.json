@@ -232,6 +232,10 @@
     "sendToWorkflow": "Send to Workflow",
     "sending": "Sending...",
     "dismiss": "Dismiss",
+    "dismissedToast": "Opportunity dismissed",
+    "undo": "Undo",
+    "undoFailed": "Failed to undo",
+    "cancel": "Cancel",
     "viewDetails": "View Details",
     "configureWebhook": "Configure Webhook",
     "noOpportunities": "No content opportunities yet",
@@ -268,7 +272,9 @@
     "bulk": {
       "selected": "{count} selected",
       "sendAll": "Send All",
-      "dismissAll": "Dismiss All"
+      "dismissAll": "Dismiss All",
+      "dismissAllTitle": "Dismiss opportunities?",
+      "dismissAllConfirm": "{count, plural, one {This will dismiss # opportunity.} other {This will dismiss # opportunities.}} You can restore them individually afterward."
     },
     "table": {
       "action": "Action",
