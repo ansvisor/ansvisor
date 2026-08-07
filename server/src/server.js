@@ -31,6 +31,7 @@ import supabaseAdmin from './config/supabase.js';
 import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/plans.js';
 import { analyzeBrandVolumes } from './lib/volume-analysis.js';
 import { runGscSync } from './lib/gsc-sync.js';
+import { runPulseCatchUp } from './lib/pulse/engine.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -111,6 +112,13 @@ async function runDailyTracking() {
   // Sweep orphaned Cloro pending tasks daily (runs in both cloud and
   // self-hosted, since both paths funnel through here).
   await cleanupStalePendingTasks();
+
+  // Recover pulses whose fire-and-forget trigger died with the process
+  // (OOM, deploy, crash) after the run had already stamped. Non-blocking —
+  // today's runs and their own pulses are independent of this sweep.
+  runPulseCatchUp().catch((err) => {
+    logger.error({ err }, '[pulse] catch-up sweep crashed');
+  });
 
   // Skip paused brands (is_active = false): the user has explicitly suspended
   // tracking for them, so they should not spend Cloro / LLM credits daily.

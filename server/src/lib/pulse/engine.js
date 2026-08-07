@@ -100,10 +100,13 @@ async function recentWarningKeys(brandId, now) {
   return keys;
 }
 
-export async function generatePulseForBrand(brandId) {
+export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverride } = {}) {
   try {
     const now = new Date();
-    const pulseDate = now.toISOString().slice(0, 10);
+    // The catch-up sweep passes the missed run's completion date so a
+    // recovered pulse claims THAT day's dedupe slot — today's real pulse
+    // (fired when today's run completes) keeps its own date.
+    const pulseDate = pulseDateOverride ?? now.toISOString().slice(0, 10);
 
     const { data: brand } = await supabaseAdmin
       .from('brands')
@@ -236,6 +239,62 @@ export async function generatePulseForBrand(brandId) {
     return { generated: true, emailSent, webhooksSent: sent };
   } catch (err) {
     logger.error({ err, brandId }, 'daily pulse generation failed');
+    return { error: true };
+  }
+}
+
+/**
+ * Catch-up sweep (#missed-pulse incident): the per-brand pulse trigger is
+ * fire-and-forget at the end of a tracking job — a process death, deploy, or
+ * OOM in that window silently eats the mail while the run's stamp survives.
+ * This sweep runs at the start of the daily cycle: any brand whose latest
+ * completed run (last 36h) has no pulse row created after it gets a recovery
+ * pulse, dated to that run's completion day so today's real pulse keeps its
+ * own dedupe slot. The sent_pulses unique key makes double-sends impossible.
+ */
+export async function runPulseCatchUp() {
+  try {
+    const since = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
+    const { data: runs, error } = await supabaseAdmin
+      .from('tracking_runs')
+      .select('brand_id, completed_at')
+      .not('completed_at', 'is', null)
+      .gte('completed_at', since)
+      .order('completed_at', { ascending: false });
+    if (error) throw new Error(error.message);
+
+    const latestByBrand = new Map();
+    for (const r of runs || []) {
+      if (!latestByBrand.has(r.brand_id)) latestByBrand.set(r.brand_id, r.completed_at);
+    }
+
+    let sent = 0;
+    let skipped = 0;
+    for (const [brandId, completedAt] of latestByBrand) {
+      const { count, error: countErr } = await supabaseAdmin
+        .from('sent_pulses')
+        .select('*', { count: 'exact', head: true })
+        .eq('brand_id', brandId)
+        .gte('created_at', completedAt);
+      if (countErr || (count ?? 0) > 0) continue; // run already pulsed (or unknowable)
+
+      const result = await generatePulseForBrand(brandId, {
+        pulseDate: completedAt.slice(0, 10),
+      });
+      if (result?.generated) {
+        logger.info({ brandId, runCompletedAt: completedAt }, '[pulse] catch-up pulse sent');
+        sent++;
+      } else {
+        skipped++;
+      }
+    }
+
+    if (sent > 0 || skipped > 0) {
+      logger.info({ sent, skipped }, '[pulse] catch-up sweep completed');
+    }
+    return { sent, skipped };
+  } catch (err) {
+    logger.error({ err }, '[pulse] catch-up sweep failed');
     return { error: true };
   }
 }
