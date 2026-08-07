@@ -470,20 +470,25 @@ export default function ContentPage() {
               title={t('kpi.total')}
               icon={Lightbulb}
               value={total}
-              sub={`${filtered.length} shown`}
+              sub={t('kpi.shownSub', { count: filtered.length })}
             />
             <KpiCard
               title={t('kpi.highImpact')}
               icon={Zap}
               value={highImpact}
-              sub="opportunities"
+              sub={t('kpi.opportunitiesUnit')}
             />
-            <KpiCard title={t('kpi.avgScore')} icon={BarChart3} value={avgScore} sub="out of 100" />
+            <KpiCard
+              title={t('kpi.avgScore')}
+              icon={BarChart3}
+              value={avgScore}
+              sub={t('kpi.outOf100')}
+            />
             <KpiCard
               title={t('kpi.sentToWorkflow')}
               icon={Send}
               value={sentCount}
-              sub="sent or in progress"
+              sub={t('kpi.sentOrInProgress')}
             />
           </div>
 
@@ -496,14 +501,15 @@ export default function ContentPage() {
                     variant="outline"
                     className="text-xs border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                   >
-                    {total} Available
+                    {t('available', { count: total })}
                   </Badge>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="relative w-48">
                     <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                     <Input
-                      placeholder="Search..."
+                      aria-label={t('search')}
+                      placeholder={t('search')}
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       className="pl-8 h-8 text-xs"
@@ -585,7 +591,7 @@ export default function ContentPage() {
                     disabled={bulkSending}
                   >
                     <Check className="h-3 w-3" />
-                    Done
+                    {t('bulk.markDone')}
                   </Button>
 
                   <Dialog>
@@ -722,20 +728,26 @@ export default function ContentPage() {
                                 ) : (
                                   <Send className="h-3 w-3" />
                                 )}
-                                Send
+                                {t('send')}
                               </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 px-2 text-xs text-muted-foreground"
                                 onClick={() => handleDismiss(opp.id)}
+                                aria-label={t('dismiss')}
                               >
                                 <X className="h-3 w-3" />
                               </Button>
                             </>
                           )}
                           <Link href={`/dashboard/content/${opp.id}`}>
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              aria-label={t('viewDetails')}
+                            >
                               <ExternalLink className="h-3 w-3" />
                             </Button>
                           </Link>
@@ -747,7 +759,7 @@ export default function ContentPage() {
               </Table>
               {filtered.length === 0 && (
                 <div className="py-10 text-center text-sm text-muted-foreground">
-                  No opportunities match your filters.
+                  {t('noResults')}
                 </div>
               )}
               <TablePager

@@ -260,6 +260,9 @@
     "noOpportunitiesHint": "Generate opportunities to get AI-powered content recommendations based on your prompt data.",
     "noPromptsHint": "Add prompts and run volume analysis first to generate content opportunities.",
     "available": "{count} Available",
+    "search": "Search opportunities...",
+    "send": "Send",
+    "noResults": "No opportunities match your filters.",
     "status": {
       "new": "New",
       "sent": "Sent to Workflow",
@@ -280,7 +283,11 @@
       "total": "Total Opportunities",
       "highImpact": "High Impact",
       "sentToWorkflow": "Sent to Workflow",
-      "avgScore": "Avg. Score"
+      "avgScore": "Avg. Score",
+      "shownSub": "{count} shown",
+      "opportunitiesUnit": "opportunities",
+      "outOf100": "out of 100",
+      "sentOrInProgress": "sent or in progress"
     },
     "filters": {
       "allStatuses": "All Statuses",
@@ -290,9 +297,10 @@
     "bulk": {
       "selected": "{count} selected",
       "sendAll": "Send All",
+      "markDone": "Done",
       "dismissAll": "Dismiss All",
       "dismissAllTitle": "Dismiss opportunities?",
-     "dismissAllConfirm": "{count, plural, one {This will dismiss # opportunity.} other {This will dismiss # opportunities.}} This can't be undone."
+      "dismissAllConfirm": "{count, plural, one {This will dismiss # opportunity.} other {This will dismiss # opportunities.}} This can't be undone."
     },
     "table": {
       "action": "Action",
