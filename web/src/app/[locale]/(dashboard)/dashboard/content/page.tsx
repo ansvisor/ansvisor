@@ -424,23 +424,172 @@ export default function ContentPage() {
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : opportunities.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
-            <Lightbulb className="h-12 w-12 text-muted-foreground/40" />
-            <div className="text-center space-y-1">
-              <p className="text-sm font-medium">{t('noOpportunities')}</p>
-              <p className="text-xs text-muted-foreground">{t('noOpportunitiesHint')}</p>
-            </div>
-            <Button onClick={handleGenerate} disabled={generating} size="sm" className="gap-2">
-              {generating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Lightbulb className="h-4 w-4" />
-              )}
-              {generating ? t('generating') : t('generate')}
-            </Button>
-          </CardContent>
-        </Card>
+        // Show the filter bar even when there are no results, so the user can
+        // clear their filters without reloading the page. The empty-state card
+        // is only appropriate when there are genuinely no opportunities (no
+        // active filters).
+        (() => {
+          const hasActiveFilters =
+            search !== '' ||
+            statusFilter !== 'all' ||
+            impactFilter !== 'all' ||
+            typeFilter !== 'all';
+
+          if (hasActiveFilters) {
+            return (
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-sm font-medium">
+                        {t('opportunities')}
+                      </CardTitle>
+                      <Badge
+                        variant="outline"
+                        className="text-xs border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                      >
+                        {total} Available
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="relative w-48">
+                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                          placeholder="Search..."
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                          className="pl-8 h-8 text-xs"
+                        />
+                      </div>
+                      <Select
+                        value={statusFilter}
+                        onValueChange={(v) => v && setStatusFilter(v)}
+                      >
+                        <SelectTrigger className="h-8 w-[130px] text-xs">
+                          <SelectValue>
+                            {(value) =>
+                              value === 'all'
+                                ? t('filters.allStatuses')
+                                : t(`status.${value}`)
+                            }
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">
+                            {t('filters.allStatuses')}
+                          </SelectItem>
+                          <SelectItem value="new">
+                            {t('status.new')}
+                          </SelectItem>
+                          <SelectItem value="sent">
+                            {t('status.sent')}
+                          </SelectItem>
+                          <SelectItem value="in_progress">
+                            {t('status.in_progress')}
+                          </SelectItem>
+                          <SelectItem value="done">
+                            {t('status.done')}
+                          </SelectItem>
+                          <SelectItem value="dismissed">
+                            {t('status.dismissed')}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={impactFilter}
+                        onValueChange={(v) => v && setImpactFilter(v)}
+                      >
+                        <SelectTrigger className="h-8 w-[120px] text-xs">
+                          <SelectValue>
+                            {(value) =>
+                              value === 'all'
+                                ? t('filters.allImpacts')
+                                : t(`impact.${value}`)
+                            }
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">
+                            {t('filters.allImpacts')}
+                          </SelectItem>
+                          <SelectItem value="high">
+                            {t('impact.high')}
+                          </SelectItem>
+                          <SelectItem value="medium">
+                            {t('impact.medium')}
+                          </SelectItem>
+                          <SelectItem value="low">
+                            {t('impact.low')}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={typeFilter}
+                        onValueChange={(v) => v && setTypeFilter(v)}
+                      >
+                        <SelectTrigger className="h-8 w-[110px] text-xs">
+                          <SelectValue>
+                            {(value) =>
+                              value === 'all'
+                                ? t('filters.allTypes')
+                                : t(`type.${value}`)
+                            }
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">
+                            {t('filters.allTypes')}
+                          </SelectItem>
+                          <SelectItem value="owned">
+                            {t('type.owned')}
+                          </SelectItem>
+                          <SelectItem value="earned">
+                            {t('type.earned')}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="py-10 text-center text-sm text-muted-foreground">
+                    No opportunities match your filters.
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          }
+
+          // Genuinely no opportunities — show the generate empty state
+          return (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
+                <Lightbulb className="h-12 w-12 text-muted-foreground/40" />
+                <div className="text-center space-y-1">
+                  <p className="text-sm font-medium">
+                    {t('noOpportunities')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('noOpportunitiesHint')}
+                  </p>
+                </div>
+                <Button
+                  onClick={handleGenerate}
+                  disabled={generating}
+                  size="sm"
+                  className="gap-2"
+                >
+                  {generating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Lightbulb className="h-4 w-4" />
+                  )}
+                  {generating ? t('generating') : t('generate')}
+                </Button>
+              </CardContent>
+            </Card>
+          );
+        })()
       ) : (
         <>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
