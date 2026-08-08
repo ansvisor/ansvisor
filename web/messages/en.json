@@ -61,7 +61,9 @@
     "runAudit": "Run Audit",
     "running": "Auditing…",
     "recent": "Recent Audits",
+    "retry": "Retry",
     "deleteAudit": "Delete audit",
+    "loadFailed": "Couldn't load this audit",
     "reaudit": "Re-run audit",
     "deleteConfirm": "This permanently deletes this audit and its results. This can't be undone.",
     "cancel": "Cancel",
@@ -91,7 +93,6 @@
       "failed": "Failed"
     },
     "all": "All",
-    "retry": "Retry",
     "na": "n/a",
     "copied": "Copied",
     "copyFailed": "Copy failed",

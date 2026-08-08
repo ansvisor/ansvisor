@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Loader2, ArrowLeft, Trash2, RefreshCw } from 'lucide-react';
+import { Loader2, ArrowLeft, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,10 +35,14 @@ export default function AuditDetailPage() {
   const genRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [rerunning, setRerunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const loadAndPoll = useCallback(async () => {
     const gen = ++genRef.current;
     const cancelled = () => genRef.current !== gen;
+    setError(null);
+    setLoading(true);
+
     try {
       setTimedOut(false);
 
@@ -75,8 +79,11 @@ export default function AuditDetailPage() {
     } catch (err) {
       if (cancelled()) return;
 
+      const message = err instanceof Error ? err.message : tFailed;
+
+      setError(message);
       setLoading(false);
-      toast.error(err instanceof Error ? err.message : tFailed);
+      toast.error(message);
     }
   }, [id, tFailed]);
 
@@ -191,12 +198,23 @@ export default function AuditDetailPage() {
             <div className="text-xs text-muted-foreground">~30s</div>
           </CardContent>
         </Card>
+      ) : error ? (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
+            <AlertCircle className="h-8 w-8 text-destructive" />
+            <div className="text-base font-semibold">{t('loadFailed')}</div>
+            <p className="max-w-md text-sm text-muted-foreground">{error}</p>
+            <Button variant="outline" size="sm" onClick={() => void loadAndPoll()}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              {t('retry')}
+            </Button>
+          </CardContent>
+        </Card>
       ) : audit && audit.status === 'running' && timedOut ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <div className="text-sm font-medium">{t('takingLongerThanExpected')}</div>
-
-            <Button onClick={loadAndPoll}>{t('checkAgain')}</Button>
+            <Button onClick={() => void loadAndPoll()}>{t('checkAgain')}</Button>
           </CardContent>
         </Card>
       ) : audit && audit.status === 'running' ? (
