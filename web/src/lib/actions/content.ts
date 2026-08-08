@@ -81,6 +81,7 @@ export async function getOpportunities(
   filters?: {
     status?: string;
     impact?: string;
+    q?: string;
     type?: string;
     limit?: number;
     offset?: number;
@@ -92,6 +93,7 @@ export async function getOpportunities(
   const params = new URLSearchParams();
   if (filters?.status) params.set('status', filters.status);
   if (filters?.impact) params.set('impact', filters.impact);
+  if (filters?.q) params.set('q', filters.q);
   if (filters?.type) params.set('type', filters.type);
   if (filters?.limit) params.set('limit', String(filters.limit));
   if (filters?.offset) params.set('offset', String(filters.offset));

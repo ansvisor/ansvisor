@@ -129,7 +129,7 @@ router.get('/job/:jobId', async (req, res) => {
 router.get('/brand/:brandId', async (req, res) => {
   try {
     const { brandId } = req.params;
-    const { status, impact, type, limit = 50, offset = 0, sort = 'score' } = req.query;
+    const { status, impact, type, q, limit = 50, offset = 0, sort = 'score' } = req.query;
 
     let query = supabaseAdmin
       .from('content_opportunities')
@@ -139,6 +139,11 @@ router.get('/brand/:brandId', async (req, res) => {
     if (status) query = query.eq('status', status);
     if (impact) query = query.eq('impact', impact);
     if (type) query = query.eq('type', type);
+
+    if (q) {
+      const search = String(q).replace(/[,()]/g, ' ');
+      query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
+    }
 
     if (sort === 'score') {
       query = query.order('opportunity_score', { ascending: false });

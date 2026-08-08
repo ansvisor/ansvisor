@@ -162,11 +162,15 @@ export default function ContentPage() {
 
   const [webhookOpen, setWebhookOpen] = useState(false);
   const pollRef = useRef(false);
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
 
   // Server-side paging (#610) — the list can hold far more than one page's
   // worth of opportunities, so `total` (the exact server count) drives the
   // pager instead of the length of whatever page happens to be loaded.
-  const pager = usePagination(total, `${statusFilter}|${impactFilter}|${typeFilter}`);
+  const pager = usePagination(
+    total,
+    `${statusFilter}|${impactFilter}|${typeFilter}|${debouncedSearch}`,
+  );
 
   const loadData = useCallback(
     async (silent = false, isCancelled?: () => boolean) => {
@@ -184,6 +188,9 @@ export default function ContentPage() {
         if (statusFilter !== 'all') filters.status = statusFilter;
         if (impactFilter !== 'all') filters.impact = impactFilter;
         if (typeFilter !== 'all') filters.type = typeFilter;
+        if (debouncedSearch.trim()) {
+          filters.q = debouncedSearch.trim();
+        }
 
         const data = await getOpportunities(activeBrandId, {
           ...filters,
@@ -205,8 +212,16 @@ export default function ContentPage() {
         }
       }
     },
-    [activeBrandId, statusFilter, impactFilter, typeFilter, pager.start],
+    [activeBrandId, statusFilter, impactFilter, typeFilter, pager.start, debouncedSearch],
   );
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     let cancelled = false;
