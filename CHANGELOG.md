@@ -7,17 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- **Visibility Rate is now the AI Visibility Score** — a 0-100 blend of how often AI answers mention the brand (60%), cite its site (25%) and how early it's named among tracked brands (15%), computed identically on every surface: Insights KPI header and trend chart, the leaderboard, All Prompts column and prompt detail, Topics overview and detail, Competitors cards, Reports (new reports; older snapshots keep rendering their stored values) and the Daily Pulse email. Coverage (appeared in X of Y prompts) stays visible as a secondary line, and detection remains fully deterministic — no LLM judges
-
-### Changed
-
-- Prompts: the All Prompts **Visibility column now shows the prompt-level Visibility Rate** (share of runs in the last 30 days with a brand mention or citation) instead of the all-runs average score, which runs without any brand presence diluted into misleading single digits — same rate language as the Insights headline and topic pages; the tooltip keeps run counts and the average score across visible runs, and the CSV export gains `visibility_rate_30d` / `visible_runs_30d`
+## [0.2.0] - 2026-08-09
 
 ### Added
 
-- **Daily Pulse** — a per-brand digest generated after the daily tracking run: KPI strip (visibility rate, 7-day trend, mentions, citations, sentiment), highlights (first-time citations, top prompt gains, leaderboard overtakes, first appearance on a new engine) and anomaly warnings (sharp visibility drop, competitor surge, high-volume prompt losing citations) with a platform-outage guard and a 7-day warning cooldown. Email via Resend on cloud (active/trialing orgs only), a `daily_pulse.created` webhook event everywhere, and Settings → Notifications for per-brand frequency and recipients (#540)
+- **Daily Pulse** — a per-brand digest generated after the daily tracking run: KPI strip (visibility rate, 7-day trend, mentions, citations, sentiment), highlights (first-time citations, top prompt gains, leaderboard overtakes, first appearance on a new engine) and anomaly warnings (sharp visibility drop, competitor surge, high-volume prompt losing citations) with a platform-outage guard and a 7-day warning cooldown. Email via Resend on cloud (active/trialing orgs only), a `daily_pulse.created` webhook event everywhere, and Settings → Notifications for per-brand frequency and recipients (#540, #561)
+- **Google Search Console integration** — connect a Search Console account from Settings → Integrations via Composio managed auth, map each brand to one of its properties (unambiguous domain matches are premapped automatically), and sync 28 days of query stats daily with 90-day retention (#577, #642, #643, #644, #647). Prompt suggestions are then **fed by real search demand**: queries the brand actually ranks for but doesn't track yet, filtered for coverage, split into head and long-tail, badged by click behaviour (protect traffic / capture demand / low competition) and enriched with cached competition data — GSC-sourced suggestions carry their source query, impressions and clicks (#648, #650). Brands without a connection keep the existing suggestion flow byte for byte, and instances without Composio credentials degrade to a safe no-op
+- **Citations: per-URL detail page** — every cited URL opens onto the answers that cited it, the prompt breakdown behind it, and for brand-owned URLs a bridge to its targeting and traffic (#535, #556), with a paginated prompt breakdown table (#600, #628)
+- Prompts: **fan-out coverage in the By-prompt view** — each prompt now shows how many of its tracked answers triggered a live search (`12 / 500 · 2%`) alongside the sub-query count, so prompts the engines never search for finally appear as `0 / N` instead of vanishing from the table (#543, #651)
+- Insights: **visibility rate trend chart** with a line per tracked brand and end-of-line logos (#571); a **Formulas dialog** in the header explaining every metric (#581); a Reports shortcut next to Export CSV (#567)
+- Tracking: **optional US state-level geo-targeting** for prompts (#579), and brand/competitor **mention positions** are recorded on every result to power the position component of the visibility score (#569, #572)
+- Topics: sortable leaderboard columns (#620)
+- Exports: CSV for the AI Traffic visit log (#607, #630) and for Competitor Gaps, with an explanation for the intentionally disabled Source Types export (#601, #629)
+- Prompts: a citations column on the All Prompts table (#534), engine icons in the fan-out queries table (#542), a search box on the fan-out High frequency view (#593, #615), and pagination plus search on Top Sources (#530, #533)
+- Content Optimization: server-side pagination on the opportunities list (#610, #633)
+- Billing: prompt volume analysis is triggered automatically after checkout (#582)
+
+### Changed
+
+- **Visibility Rate is now the AI Visibility Score** — a 0-100 blend of how often AI answers mention the brand (60%), cite its site (25%) and how early it's named among tracked brands (15%), computed identically on every surface: Insights KPI header and trend chart, the leaderboard, All Prompts column and prompt detail, Topics overview and detail, Competitors cards, Reports (new reports; older snapshots keep rendering their stored values), the Daily Pulse email, MCP, the public API and the Looker connector (#573, #574, #575). Coverage (appeared in X of Y prompts) stays visible as a secondary line, and detection remains fully deterministic — no LLM judges
+- Prompts: the All Prompts **Visibility column now shows the prompt-level Visibility Rate** (share of runs in the last 30 days with a brand mention or citation) instead of the all-runs average score, which runs without any brand presence diluted into misleading single digits — same rate language as the Insights headline and topic pages; the tooltip keeps run counts and the average score across visible runs, and the CSV export gains `visibility_rate_30d` / `visible_runs_30d` (#562)
+- Insights: the **24h view anchors to the last completed tracking run** instead of a wall-clock window, so the KPI header, the dashboard and the Pulse email always describe the same slice (#578); the trend chart plots the rolling selected window so it can never disagree with the headline (#576)
+- Reports: prompt and topic performance ranks by visibility rate rather than the diluted average (#568)
+- Metrics: the position factor is shrunk by mention evidence and its full support raised to 20 mentioned answers, so a single lucky first mention no longer reads as dominance (#584, #585)
+- Competitors and topic detail surface the prompt-level visibility rate (#493, #555)
+- Platform display labels are resolved from one shared map instead of per-page copies (#553)
+- Prompts: pagination unified with the shared `TablePager` (#544, #546)
+- Ops: the cloud daily-tracking cron moved to 02:00 UTC (05:00 TR) — self-host schedules are unchanged and stay configurable through `DAILY_CRON_SCHEDULE`; the server image defaults `NODE_ENV` to production, and CI now runs a full Next.js production build (#528)
+- Insights: unused chart components removed (#589, #625)
+
+### Fixed
+
+- **Tracking runs tolerate delivery gaps and refuse to stamp partial runs** — the stall window is configurable (`CLORO_STALL_POLL_LIMIT`) and a run that produced far fewer results than it planned no longer becomes the 24h anchor, which previously let a half-delivered night rewrite the dashboard and the Pulse email with numbers nobody could reproduce (#649). Run result counts are read back from the database when stamping, so scraper-only brands no longer stamp zero (#583)
+- **Pulses lost to process death are recovered** by a daily catch-up sweep: any brand whose latest completed run never produced a pulse gets one dated to that run's day, with double-sends made impossible by the existing unique key (#654). The pulse also waits for the brand's scraper queue to drain before computing, so the email can't report a partially-delivered window (#570), and `PUBLIC_APP_URL` is normalized to an origin so email links stop pointing at doubled paths (#639, #641)
+- Content Optimization: opportunities and briefs are generated **in the brand's language** instead of always English (#638, #640); dismiss actions are gated behind a confirmation dialog for bulk and an undo toast for single rows (#611, #653); stale responses can no longer overwrite the list on rapid filter changes (#663, #682)
+- Site Audit: a persistent error card with retry replaces the blank page on load failures (#666, #678); re-run is guarded against double clicks that started two audits and spent two units of quota (#667, #677); the trend chart groups by local day so timezone-shifted audits stop producing duplicate labels (#668, #675); deleting an audit refreshes the trend card and quota (#669, #674); polling timeouts render a real state (#612, #632)
+- Error states with retry replace silent failures or misleading empty states across Citations (#599, #623), Topics (#595, #618), prompt detail (#591, #627), prompt suggestions (#609), invoices (#559), agent actions (#551, #646), prompt workflow validation (#549, #645), invites (#566), `savePromptSet` (#536) and `addPromptToSet` (#580)
+- Citations: the Region filter is populated from observed data (#598, #622) and YouTube video IDs survive URL normalization (#558)
+- Topics: renaming a topic no longer zeroes its prompt count — prompts are counted by `topic_id` instead of category name (#594, #617); the CSV export writes the real `topic_id` instead of an always-empty column (#590, #626); KPI strings are pluralized with aligned decimal formatting (#619)
+- AI Traffic: chart date labels are correct across timezones (#605, #621), platforms with zero visits are filtered out of the breakdown (#616), and the empty state is period-specific (#608, #631)
+- Site Audit hub: the empty state no longer flashes while loading, and failures or a missing brand no longer render as "no audits yet" (#613, #624)
+- Accessibility: insights tooltips and legends are keyboard/screen-reader reachable (#588, #604); the audit range toggles, URL input and signal panels expose their state (#671, #672); Content row actions and the search input have accessible names (#665, #679)
+- i18n: the audit hub and report render from message keys instead of hardcoded strings, including status labels that previously leaked raw enum values (#670, #673)
+- Formatting: mention/citation counts use thousands separators (#603) and the metric breakdown sheet pluralizes day and mention counts (#602)
+- Insights: the Share of Voice pie tooltip explains both of its numbers (#565)
+- Competitor aggregates drop rows for deleted competitors (#560)
+- Agent: max output tokens raised so long answers stop truncating (#563)
+- API: the rate limiter keys on the auth token instead of the client IP, so users behind a shared NAT stop throttling each other (#537)
+
+### Docs
+
+- A custom `robots.txt` with explicit AI-crawler allowances and a sitemap reference (#634)
+
+### Contributors
+
+Huge thanks to everyone who shipped code in this release — and a special welcome to our **first-time contributors**: @arambu1a, @Adarshhic, @Pavel-glitch-ui, @marceli1404, @Jesulac, @MFA-G and @abdulm5 🎉
+
+Thanks as well to our returning contributors @d180, @BharadwajKanneveti, @abdullah91111 and @Maqbool61 for coming back with more! 🙌
 
 ## [0.1.7] - 2026-07-25
 
