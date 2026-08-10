@@ -3,11 +3,14 @@
 import { createClient } from '@/lib/supabase/server';
 import { API_BASE_URL } from '@/config/api';
 
-export type GscStatus = 'not_configured' | 'not_connected' | 'connected';
+/** Providers that expose the shared connect / status / disconnect flow. */
+export type IntegrationProvider = 'google-search-console' | 'google-analytics';
 
-export interface GscStatusResult {
+export type IntegrationStatus = 'not_configured' | 'not_connected' | 'connected';
+
+export interface IntegrationStatusResult {
   configured: boolean;
-  status: GscStatus;
+  status: IntegrationStatus;
   accountId?: string;
 }
 
@@ -23,18 +26,23 @@ async function authHeaders(): Promise<Record<string, string>> {
   };
 }
 
-export async function getGscStatus(): Promise<GscStatusResult> {
-  const res = await fetch(`${API_BASE_URL}/api/integrations/google-search-console/status`, {
+export async function getIntegrationStatus(
+  provider: IntegrationProvider,
+): Promise<IntegrationStatusResult> {
+  const res = await fetch(`${API_BASE_URL}/api/integrations/${provider}/status`, {
     headers: await authHeaders(),
     cache: 'no-store',
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || `Server error: ${res.status}`);
-  return body as GscStatusResult;
+  return body as IntegrationStatusResult;
 }
 
-export async function connectGsc(callbackUrl: string): Promise<{ redirectUrl: string }> {
-  const res = await fetch(`${API_BASE_URL}/api/integrations/google-search-console/connect`, {
+export async function connectIntegration(
+  provider: IntegrationProvider,
+  callbackUrl: string,
+): Promise<{ redirectUrl: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/integrations/${provider}/connect`, {
     method: 'POST',
     headers: await authHeaders(),
     body: JSON.stringify({ callbackUrl }),
@@ -44,8 +52,8 @@ export async function connectGsc(callbackUrl: string): Promise<{ redirectUrl: st
   return body as { redirectUrl: string };
 }
 
-export async function disconnectGsc(): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/api/integrations/google-search-console`, {
+export async function disconnectIntegration(provider: IntegrationProvider): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/integrations/${provider}`, {
     method: 'DELETE',
     headers: await authHeaders(),
   });

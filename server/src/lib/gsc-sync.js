@@ -89,7 +89,7 @@ async function syncBrand(brand) {
  * manual trigger). Returns per-brand counts.
  */
 export async function runGscSync({ organizationId } = {}) {
-  if (!isComposioConfigured()) return { synced: 0, skipped: 0, results: [] };
+  if (!isComposioConfigured('google-search-console')) return { synced: 0, skipped: 0, results: [] };
 
   // Orgs with a live connection…
   let connQuery = supabaseAdmin

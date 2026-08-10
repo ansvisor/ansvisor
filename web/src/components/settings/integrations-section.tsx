@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,46 +23,99 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Search, Unplug } from 'lucide-react';
+import { BarChart3, Loader2, Search, Unplug } from 'lucide-react';
 import {
-  getGscStatus,
-  connectGsc,
-  disconnectGsc,
+  getIntegrationStatus,
+  connectIntegration,
+  disconnectIntegration,
   getGscProperties,
   getGscBrandMappings,
   setBrandGscProperty,
-  type GscStatus,
+  type IntegrationProvider,
+  type IntegrationStatus,
   type GscProperty,
   type GscBrandMapping,
 } from '@/lib/actions/integrations';
 import { matchGscProperty } from '@/lib/gsc';
 
 /**
- * Settings → Integrations (#577). One card per integration — only Google
- * Search Console for now; the list layout takes more cards as they land.
- * Card states: not configured (self-host without Composio env) → not
- * connected → connecting (OAuth popup open, polling) → connected.
+ * Settings → Integrations (#577, Google Analytics added in #658).
+ *
+ * Every OAuth provider shares the same lifecycle — not configured (self-host
+ * without Composio env) → not connected → connecting (OAuth popup open,
+ * polling) → connected — so the card and its state live in one place and each
+ * provider only supplies its labels and any post-connection UI of its own.
  */
 export function IntegrationsSection() {
-  const [status, setStatus] = useState<GscStatus | null>(null);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Integrations</CardTitle>
+        <CardDescription>
+          Connect external data sources. Connections are shared with your whole organization.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <IntegrationCard
+          provider="google-search-console"
+          label="Google Search Console"
+          description="Real search queries and impressions for your site — powers prompt suggestions and search-vs-AI insights."
+          icon={<Search className="h-5 w-5 text-muted-foreground" />}
+          authConfigEnv="COMPOSIO_GSC_AUTH_CONFIG_ID"
+        >
+          <GscPropertyMapping />
+        </IntegrationCard>
+
+        <IntegrationCard
+          provider="google-analytics"
+          label="Google Analytics"
+          description="Sessions and conversions from your GA4 property — the basis for AI traffic history without installing the tracking snippet."
+          icon={<BarChart3 className="h-5 w-5 text-muted-foreground" />}
+          authConfigEnv="COMPOSIO_GA_AUTH_CONFIG_ID"
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * One integration row: status badge, Connect / Disconnect, and whatever the
+ * provider wants to render once connected (`children`).
+ */
+function IntegrationCard({
+  provider,
+  label,
+  description,
+  icon,
+  authConfigEnv,
+  children,
+}: {
+  provider: IntegrationProvider;
+  label: string;
+  description: string;
+  icon: ReactNode;
+  authConfigEnv: string;
+  children?: ReactNode;
+}) {
+  const [status, setStatus] = useState<IntegrationStatus | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const pollGen = useRef(0);
 
   const load = useCallback(async () => {
     try {
-      const result = await getGscStatus();
+      const result = await getIntegrationStatus(provider);
       setStatus(result.status);
     } catch (err) {
-      console.error('Failed to load integration status:', err);
+      console.error(`Failed to load ${provider} status:`, err);
       toast.error('Failed to load integration status');
       setStatus('not_connected');
     }
-  }, []);
+  }, [provider]);
 
   useEffect(() => {
     load();
-    // Stop any in-flight poll when the section unmounts.
+    // Stop any in-flight poll when the card unmounts.
     const gen = pollGen.current;
     return () => {
       if (pollGen.current === gen) pollGen.current++;
@@ -74,9 +127,9 @@ export function IntegrationsSection() {
     const gen = ++pollGen.current;
     try {
       const callbackUrl = `${window.location.origin}/dashboard/settings?tab=integrations`;
-      const { redirectUrl } = await connectGsc(callbackUrl);
+      const { redirectUrl } = await connectIntegration(provider, callbackUrl);
 
-      const popup = window.open(redirectUrl, 'gsc-oauth', 'width=560,height=720');
+      const popup = window.open(redirectUrl, `${provider}-oauth`, 'width=560,height=720');
       if (!popup) {
         // Popup blocked — same-tab fallback; status resolves on return.
         window.location.href = redirectUrl;
@@ -89,10 +142,10 @@ export function IntegrationsSection() {
         await new Promise((r) => setTimeout(r, 3000));
         if (pollGen.current !== gen) return;
         try {
-          const result = await getGscStatus();
+          const result = await getIntegrationStatus(provider);
           if (result.status === 'connected') {
             setStatus('connected');
-            toast.success('Google Search Console connected');
+            toast.success(`${label} connected`);
             popup.close();
             return;
           }
@@ -101,11 +154,11 @@ export function IntegrationsSection() {
         }
         if (popup.closed) {
           // User closed the window — one final check, then give up quietly.
-          const result = await getGscStatus().catch(() => null);
+          const result = await getIntegrationStatus(provider).catch(() => null);
           if (pollGen.current !== gen) return;
           setStatus(result?.status ?? 'not_connected');
           if (result?.status === 'connected') {
-            toast.success('Google Search Console connected');
+            toast.success(`${label} connected`);
           }
           return;
         }
@@ -123,9 +176,9 @@ export function IntegrationsSection() {
   const handleDisconnect = async () => {
     setDisconnecting(true);
     try {
-      await disconnectGsc();
+      await disconnectIntegration(provider);
       setStatus('not_connected');
-      toast.success('Google Search Console disconnected');
+      toast.success(`${label} disconnected`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to disconnect');
     } finally {
@@ -134,101 +187,90 @@ export function IntegrationsSection() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Integrations</CardTitle>
-        <CardDescription>
-          Connect external data sources. Connections are shared with your whole organization.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-muted/50">
-              <Search className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium">Google Search Console</p>
-                {status === 'connected' && (
-                  <Badge
-                    variant="outline"
-                    className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                  >
-                    Connected
-                  </Badge>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground truncate">
-                Real search queries and impressions for your site — powers upcoming prompt
-                suggestions and search-vs-AI insights.
-              </p>
-            </div>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-muted/50">
+            {icon}
           </div>
-
-          {status === null ? (
-            <Skeleton className="h-8 w-24" />
-          ) : status === 'not_configured' ? (
-            <Badge variant="outline" className="text-muted-foreground shrink-0">
-              Not configured
-            </Badge>
-          ) : status === 'connected' ? (
-            <Dialog>
-              <DialogTrigger
-                render={<Button variant="outline" size="sm" className="gap-2 shrink-0" />}
-              >
-                <Unplug className="h-3.5 w-3.5" />
-                Disconnect
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-sm">
-                <DialogHeader>
-                  <DialogTitle>Disconnect Google Search Console</DialogTitle>
-                  <DialogDescription>
-                    The stored connection is removed for the whole organization. You can reconnect
-                    at any time.
-                  </DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                  <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-                  <DialogClose
-                    render={
-                      <Button
-                        variant="destructive"
-                        onClick={handleDisconnect}
-                        disabled={disconnecting}
-                      />
-                    }
-                  >
-                    Disconnect
-                  </DialogClose>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          ) : (
-            <Button
-              size="sm"
-              className="gap-2 shrink-0"
-              onClick={handleConnect}
-              disabled={connecting}
-            >
-              {connecting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              {connecting ? 'Connecting…' : 'Connect'}
-            </Button>
-          )}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-medium">{label}</p>
+              {status === 'connected' && (
+                <Badge
+                  variant="outline"
+                  className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                >
+                  Connected
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground truncate">{description}</p>
+          </div>
         </div>
 
-        {status === 'not_configured' && (
-          <p className="text-xs text-muted-foreground">
-            This server has no Composio credentials configured. Set{' '}
-            <code className="rounded bg-muted px-1">COMPOSIO_API_KEY</code> and{' '}
-            <code className="rounded bg-muted px-1">COMPOSIO_GSC_AUTH_CONFIG_ID</code> in the server
-            environment to enable integrations.
-          </p>
+        {status === null ? (
+          <Skeleton className="h-8 w-24" />
+        ) : status === 'not_configured' ? (
+          <Badge variant="outline" className="text-muted-foreground shrink-0">
+            Not configured
+          </Badge>
+        ) : status === 'connected' ? (
+          <Dialog>
+            <DialogTrigger
+              render={<Button variant="outline" size="sm" className="gap-2 shrink-0" />}
+            >
+              <Unplug className="h-3.5 w-3.5" />
+              Disconnect
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Disconnect {label}</DialogTitle>
+                <DialogDescription>
+                  The stored connection is removed for the whole organization. You can reconnect at
+                  any time.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+                <DialogClose
+                  render={
+                    <Button
+                      variant="destructive"
+                      onClick={handleDisconnect}
+                      disabled={disconnecting}
+                    />
+                  }
+                >
+                  Disconnect
+                </DialogClose>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        ) : (
+          <Button
+            size="sm"
+            className="gap-2 shrink-0"
+            onClick={handleConnect}
+            disabled={connecting}
+          >
+            {connecting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {connecting ? 'Connecting…' : 'Connect'}
+          </Button>
         )}
+      </div>
 
-        {status === 'connected' && <GscPropertyMapping />}
-      </CardContent>
-    </Card>
+      {status === 'not_configured' && (
+        <p className="text-xs text-muted-foreground">
+          This server has no Composio credentials for {label}. Set{' '}
+          <code className="rounded bg-muted px-1">COMPOSIO_API_KEY</code> and{' '}
+          <code className="rounded bg-muted px-1">{authConfigEnv}</code> in the server environment
+          to enable it.
+        </p>
+      )}
+
+      {status === 'connected' && children}
+    </div>
   );
 }
 
