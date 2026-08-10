@@ -20,6 +20,23 @@ function resolveModelPlatform(model) {
 }
 
 /**
+ * True when every still-pending task was submitted longer ago than `maxAgeMs`.
+ *
+ * Such tasks can no longer be in flight: Cloro accepted them and never called
+ * back (google-aio does this whenever a query has no AI Overview). Combined
+ * with "no new result for a while", this is what separates a ghost tail from
+ * a normal quiet gap mid-burst, where fresh tasks are still outstanding.
+ *
+ * Deliberately false for an empty list — no pending tasks is a completed
+ * drain, handled by the caller before this is consulted.
+ */
+export function allTasksAreStale(rows, maxAgeMs, now = Date.now()) {
+  if (!rows || rows.length === 0) return false;
+  const cutoff = now - maxAgeMs;
+  return rows.every((r) => r.submitted_at && new Date(r.submitted_at).getTime() < cutoff);
+}
+
+/**
  * Core logic: fetch prompts, run them through specified models, store results.
  * @param {{ brandId: string, promptId?: string, promptIds?: string[], source?: string, job?: { progress: function, signal?: AbortSignal } }} opts
  */
@@ -297,6 +314,15 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
         // healthy run in half. ~25 min tolerates those gaps while the 60-min
         // drain deadline stays the hard cap on a truly stuck queue.
         const stallPollLimit = Number(process.env.CLORO_STALL_POLL_LIMIT) || 100;
+        // Ghost tasks — accepted by Cloro, never called back (google-aio does
+        // this whenever a query has no AI Overview) — used to burn the whole
+        // stall window on every run. Once delivery has gone quiet AND every
+        // remaining task is old enough that it can no longer be in flight,
+        // there is nothing left to wait for. Both conditions are required: a
+        // quiet gap alone is normal mid-burst, and old tasks alone are fine as
+        // long as results are still landing.
+        const ghostStallPolls = Number(process.env.CLORO_GHOST_STALL_POLLS) || 60;
+        const ghostTaskAgeMs = 30 * 60 * 1000;
 
         let lastPending = expectedSubmitted;
         let stalledPolls = 0;
@@ -306,7 +332,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
           // with our own task_ids — avoids a giant `.in(...)` URL.
           const { data: rows, error: drainErr } = await supabaseAdmin
             .from('cloro_pending_tasks')
-            .select('task_id')
+            .select('task_id, submitted_at')
             .eq('brand_id', brandId);
 
           // A transient read failure must NOT be read as "0 pending" — that would
@@ -318,8 +344,10 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
             continue;
           }
 
-          const pending = (rows || []).filter((r) => submittedTaskIds.has(r.task_id)).length;
+          const ourRows = (rows || []).filter((r) => submittedTaskIds.has(r.task_id));
+          const pending = ourRows.length;
           const processed = expectedSubmitted - pending;
+          const allPendingAreOld = allTasksAreStale(ourRows, ghostTaskAgeMs);
 
           if (job) {
             job.progress({
@@ -339,6 +367,12 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
           if (pending < lastPending) {
             lastPending = pending;
             stalledPolls = 0;
+          } else if (allPendingAreOld && stalledPolls + 1 >= ghostStallPolls) {
+            logger.warn(
+              { brandId, pending, expected: expectedSubmitted, stalledPolls: stalledPolls + 1 },
+              'cloro tasks are ghosts — delivery quiet and every remaining task is stale; continuing',
+            );
+            break;
           } else if (++stalledPolls >= stallPollLimit) {
             logger.warn(
               { brandId, pending, expected: expectedSubmitted },

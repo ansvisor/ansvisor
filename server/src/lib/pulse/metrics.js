@@ -1,5 +1,6 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { computeAiVisibilityScore } from '../../config/visibility-score.js';
+import { logger } from '../logger.js';
 
 /**
  * Daily Pulse metric computation (#540).
@@ -45,9 +46,46 @@ function round1(n) {
   return Math.round(n * 10) / 10;
 }
 
-async function rpc(name, params) {
+/**
+ * Run thunks one at a time and collect their results, `Promise.all`-style.
+ *
+ * The pulse is a background job that nobody waits on interactively, so
+ * running its dozen aggregate queries concurrently buys no wall-clock the
+ * user perceives — it only multiplies the peak load a single brand puts on
+ * the database. That mattered in production: whole waves of brands woke from
+ * the drain wait in the same second, each firing its queries in parallel, and
+ * the largest brand's statements crossed the 8s timeout and its digest was
+ * dropped. Sequential keeps one brand's footprint to a couple of statements.
+ */
+export async function series(thunks) {
+  const results = [];
+  for (const thunk of thunks) results.push(await thunk());
+  return results;
+}
+
+// The aggregate RPCs are heavy on large brands (ai_visibility_aggregates
+// touches ~1GB and spills to disk), and PostgREST's role carries an 8s
+// statement_timeout. Under load one of them can cross that line — which used
+// to throw away the entire pulse for the biggest brand on the instance. A
+// timeout is transient by nature, so retry it a couple of times with a short
+// backoff before giving up.
+const RPC_RETRIES = 2;
+const RPC_RETRY_DELAY_MS = 3_000;
+
+export function isTransientDbError(message) {
+  return /statement timeout|canceling statement|deadlock detected/i.test(message || '');
+}
+
+async function rpc(name, params, attempt = 0) {
   const { data, error } = await supabaseAdmin.rpc(name, params);
-  if (error) throw new Error(`${name} failed: ${error.message}`);
+  if (error) {
+    if (attempt < RPC_RETRIES && isTransientDbError(error.message)) {
+      logger.warn({ rpc: name, attempt: attempt + 1 }, 'pulse rpc timed out, retrying');
+      await new Promise((r) => setTimeout(r, RPC_RETRY_DELAY_MS * (attempt + 1)));
+      return rpc(name, params, attempt + 1);
+    }
+    throw new Error(`${name} failed: ${error.message}`);
+  }
   return data;
 }
 
@@ -367,20 +405,20 @@ export async function computePulseMetrics(brandId, { windowDays = 1, now = new D
     newEngines,
     lostCitations,
     degraded,
-  ] = await Promise.all([
-    visibilityRate(brandId, curFrom, curTo),
-    visibilityRate(brandId, weekFrom, now),
-    visibilityRate(brandId, twoWeekFrom, weekFrom),
-    insightsWindow(brandId, curFrom, curTo),
-    insightsWindow(brandId, prevFrom, prevTo),
-    competitorRates(brandId, weekFrom, now),
-    competitorRates(brandId, twoWeekFrom, weekFrom),
-    promptScores(brandId, weekFrom, now),
-    promptScores(brandId, twoWeekFrom, weekFrom),
-    firstTimeCitations(promptById, curFrom),
-    newEngineAppearances(brandId, curFrom),
-    lostCitationPrompts(brandId, promptById, now),
-    degradedPlatforms(now),
+  ] = await series([
+    () => visibilityRate(brandId, curFrom, curTo),
+    () => visibilityRate(brandId, weekFrom, now),
+    () => visibilityRate(brandId, twoWeekFrom, weekFrom),
+    () => insightsWindow(brandId, curFrom, curTo),
+    () => insightsWindow(brandId, prevFrom, prevTo),
+    () => competitorRates(brandId, weekFrom, now),
+    () => competitorRates(brandId, twoWeekFrom, weekFrom),
+    () => promptScores(brandId, weekFrom, now),
+    () => promptScores(brandId, twoWeekFrom, weekFrom),
+    () => firstTimeCitations(promptById, curFrom),
+    () => newEngineAppearances(brandId, curFrom),
+    () => lostCitationPrompts(brandId, promptById, now),
+    () => degradedPlatforms(now),
   ]);
 
   const kpis = {

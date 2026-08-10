@@ -65,15 +65,31 @@ async function resolveRecipients(organizationId, settings) {
 // (cleanupStalePendingTasks sweeps those after 2h).
 const DRAIN_POLL_MS = 60_000;
 const DRAIN_MAX_WAIT_MS = 90 * 60_000;
+// Tasks older than this are ghosts: Cloro accepted them and never called back
+// (google-aio does this routinely when a query has no AI Overview). Waiting on
+// them is pure cost — they are already past any plausible delivery latency and
+// cleanupStalePendingTasks removes them on the next cycle. Counting them kept
+// every brand parked for the full 90-minute cap, which also synchronised the
+// wake-ups: whole waves of brands started computing metrics in the same second
+// and the heaviest one hit the database statement timeout and lost its pulse.
+const GHOST_TASK_AGE_MS = 45 * 60_000;
 
 async function waitForCloroDrain(brandId) {
   const deadline = Date.now() + DRAIN_MAX_WAIT_MS;
   for (;;) {
-    const { count } = await supabaseAdmin
+    const freshSince = new Date(Date.now() - GHOST_TASK_AGE_MS).toISOString();
+    const { count, error } = await supabaseAdmin
       .from('cloro_pending_tasks')
       .select('task_id', { count: 'exact', head: true })
-      .eq('brand_id', brandId);
-    if (!count) return true;
+      .eq('brand_id', brandId)
+      .gte('submitted_at', freshSince);
+    // A failed read must not be mistaken for "nothing pending" — retry on the
+    // next tick rather than computing the pulse on a half-delivered window.
+    if (error) {
+      logger.warn({ err: error, brandId }, 'pulse drain poll failed, retrying');
+    } else if (!count) {
+      return true;
+    }
     if (Date.now() >= deadline) {
       logger.warn(
         { brandId, pending: count },
