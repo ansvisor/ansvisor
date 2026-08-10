@@ -317,9 +317,7 @@ export async function getPromptResults(
   const limit = opts?.limit ?? 50;
   const offset = opts?.offset ?? 0;
 
-  const { supabase, query } = await buildResultsQuery(brandId, opts, {
-    count: 'exact',
-  });
+  const { supabase, query } = await buildResultsQuery(brandId, opts, { count: 'exact' });
 
   // One round trip: fetch only the requested page via SQL `.range()` and read
   // the full match count from the same query, instead of materializing every
@@ -410,13 +408,7 @@ export interface VisibilityRateKpi {
  */
 export async function getVisibilityRateKpi(
   brandId: string,
-  opts?: {
-    model?: string;
-    region?: string;
-    dateFrom?: string;
-    dateTo?: string;
-    topicId?: string;
-  },
+  opts?: { model?: string; region?: string; dateFrom?: string; dateTo?: string; topicId?: string },
 ): Promise<VisibilityRateKpi> {
   const supabase = await createClient();
 
@@ -456,13 +448,7 @@ export async function getVisibilityRateKpi(
  */
 export async function getTrackedPromptsKpi(
   brandId: string,
-  opts?: {
-    model?: string;
-    region?: string;
-    dateFrom?: string;
-    dateTo?: string;
-    topicId?: string;
-  },
+  opts?: { model?: string; region?: string; dateFrom?: string; dateTo?: string; topicId?: string },
 ): Promise<TrackedPromptsKpi> {
   const supabase = await createClient();
 
@@ -523,9 +509,7 @@ export interface InsightsFilterOptions {
  */
 async function getInsightsFilterOptions(brandId: string): Promise<InsightsFilterOptions> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc('insights_filter_options', {
-    p_brand_id: brandId,
-  });
+  const { data, error } = await supabase.rpc('insights_filter_options', { p_brand_id: brandId });
   if (error) throw new Error(error.message);
   const row = (data as { regions: string[] | null; models: string[] | null }[] | null)?.[0];
   return {
@@ -678,10 +662,7 @@ export async function getTrackingWindow(brandId: string): Promise<TrackingWindow
   return {
     anchored,
     activeRun: active
-      ? {
-          startedAt: active.started_at as string,
-          source: (active.source as string) ?? 'manual',
-        }
+      ? { startedAt: active.started_at as string, source: (active.source as string) ?? 'manual' }
       : null,
   };
 }
@@ -1567,11 +1548,7 @@ interface AiVisibilityWindow {
   compScore: Map<string, number | null>;
   compComponents: Map<
     string,
-    {
-      mentionAnswers: number;
-      citationAnswers: number;
-      positionFactor: number | null;
-    }
+    { mentionAnswers: number; citationAnswers: number; positionFactor: number | null }
   >;
 }
 
@@ -1591,11 +1568,7 @@ function foldAiVisibility(raw: unknown): AiVisibilityWindow {
   const compScore = new Map<string, number | null>();
   const compComponents = new Map<
     string,
-    {
-      mentionAnswers: number;
-      citationAnswers: number;
-      positionFactor: number | null;
-    }
+    { mentionAnswers: number; citationAnswers: number; positionFactor: number | null }
   >();
   for (const c of row.by_competitor ?? []) {
     const components = {
@@ -1911,10 +1884,7 @@ export async function getCompetitorComparison(
   const brandByProvider = new Map<string, Agg>();
   for (const bp of agg.by_brand_provider) {
     const provider = resolveProvider(bp.model_used, bp.platform);
-    const ex = brandByProvider.get(provider) ?? {
-      visiblePrompts: 0,
-      promptCount: 0,
-    };
+    const ex = brandByProvider.get(provider) ?? { visiblePrompts: 0, promptCount: 0 };
     ex.visiblePrompts += bp.visible_prompts;
     ex.promptCount += bp.prompt_count;
     brandByProvider.set(provider, ex);
@@ -2054,10 +2024,7 @@ export async function getShareOfVoiceData(
   const providerMap = new Map<string, ProviderAgg>();
   for (const bp of cur.by_platform) {
     const provider = resolveProvider(bp.model_used, bp.platform);
-    const ex = providerMap.get(provider) ?? {
-      brandMentions: 0,
-      competitorMentions: 0,
-    };
+    const ex = providerMap.get(provider) ?? { brandMentions: 0, competitorMentions: 0 };
     ex.brandMentions += Number(bp.brand_mentions);
     ex.competitorMentions += Number(bp.competitor_mentions);
     providerMap.set(provider, ex);
@@ -2118,104 +2085,6 @@ export interface VisibilityTrendPoint {
  * Fetch daily visibility score trend for a brand (and avg competitor score).
  * Queries ALL prompt_results (not deduplicated) to build a time-series.
  */
-export async function getVisibilityTrend(
-  brandId: string,
-  opts?: {
-    model?: string;
-    region?: string;
-    dateFrom?: string;
-    dateTo?: string;
-    topicId?: string;
-  },
-): Promise<VisibilityTrendPoint[]> {
-  const supabase = await createClient();
-
-  // #155 — visibility trend; exclude chatgpt-shopping to match the
-  // aggregate RPCs. (The RPC variant in 00012_shopping_mode.sql is what
-  // most callers hit; this JS path is used by the older codepath.)
-  let query = supabase
-    .from('prompt_results')
-    .select('created_at, visibility_score, competitor_mentions')
-    .eq('brand_id', brandId)
-    .neq('platform', 'chatgpt-shopping')
-    .order('created_at', { ascending: true });
-
-  query = applyModelFilter(query, opts?.model);
-  if (opts?.region) query = query.eq('region', opts.region);
-  if (opts?.dateFrom) query = query.gte('created_at', opts.dateFrom);
-  const expandedDateTo = expandDateToEndOfDay(opts?.dateTo);
-  if (expandedDateTo) query = query.lte('created_at', expandedDateTo);
-
-  if (opts?.topicId) {
-    const { data: topicPrompts } = await supabase
-      .from('prompts')
-      .select('id')
-      .eq('topic_id', opts.topicId);
-    const ids = ((topicPrompts ?? []) as { id: string }[]).map((p) => p.id);
-    query = query.in('prompt_id', ids.length > 0 ? ids : ['00000000-0000-0000-0000-000000000000']);
-  }
-
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  if (!data || data.length === 0) return [];
-
-  const rows = data as Record<string, unknown>[];
-
-  // Group by day (YYYY-MM-DD)
-  const dayMap = new Map<
-    string,
-    {
-      totalScore: number;
-      count: number;
-      compTotalScore: number;
-      compCount: number;
-    }
-  >();
-
-  for (const row of rows) {
-    const day = (row.created_at as string).slice(0, 10);
-    const entry = dayMap.get(day) ?? {
-      totalScore: 0,
-      count: 0,
-      compTotalScore: 0,
-      compCount: 0,
-    };
-    entry.totalScore += row.visibility_score as number;
-    entry.count += 1;
-
-    const mentions = (row.competitor_mentions as CompetitorMention[] | null) ?? [];
-    for (const cm of mentions) {
-      entry.compTotalScore += cm.visibility_score;
-      entry.compCount += 1;
-    }
-
-    dayMap.set(day, entry);
-  }
-
-  const points: VisibilityTrendPoint[] = [];
-  const sortedDays = [...dayMap.keys()].sort();
-
-  for (const day of sortedDays) {
-    const d = dayMap.get(day)!;
-    const dateObj = new Date(day + 'T00:00:00');
-    const label = dateObj.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-    });
-
-    points.push({
-      date: label,
-      // One decimal, not integer rounding: realistic daily averages for a
-      // low-visibility brand sit in the 0.3–1.5 band (see the sub-1 note on
-      // getInsightsSummary), and Math.round crushed the whole window into a
-      // flat "1" line on the chart.
-      score: roundTo1(d.totalScore / d.count),
-      competitors: d.compCount > 0 ? roundTo1(d.compTotalScore / d.compCount) : null,
-    });
-  }
-
-  return points;
-}
 
 // ─── Visibility Rate trend (brand + each competitor) ────────────────────────
 
@@ -3064,23 +2933,18 @@ export async function getTopicDetail(brandId: string, topicId: string): Promise<
   const [topic, summary, rateTrend, sov, competitors, results] = await Promise.all([
     getTopicById(brandId, topicId),
     getInsightsSummary(brandId, { topicId }),
-    // #685 — use the new-formula RPC (visibility_rate_trend, migration 00039)
-    // so the trend line sits on the same 0-100 AI Visibility Score scale as
-    // the headline score. getVisibilityTrend averaged raw visibility_score
-    // over ALL answers (including 0-scored absent-brand rows) which produced
-    // a completely different scale (typical: 0.3–1.5 vs headline ~12).
+    // #685 — use the new-formula RPC so the trend sits on the same 0-100 scale
+    // as the headline AI Visibility Score. getVisibilityTrend averaged raw
+    // visibility_score over all answers (incl. 0-scored absent-brand rows).
     getVisibilityRateTrend(brandId, { topicId }),
     getShareOfVoiceData(brandId, { topicId }),
     getCompetitorComparison(brandId, { topicId }),
     getPromptResults(brandId, { topicId, limit: 50 }),
   ]);
 
-  // Adapt VisibilityRateTrendData → VisibilityTrendPoint[] so the existing
-  // chart component (topic_charts.tsx) can consume it without modification.
-  // Each day's brand score maps to `score`; the average of all competitor
-  // scores for that day maps to `competitors` (null when no competitors).
+  // Adapt VisibilityRateTrendData → VisibilityTrendPoint[] so topic_charts.tsx
+  // keeps its existing VisibilityTrendPoint shape without modification.
   const competitorKeys = rateTrend.entities.filter((e) => !e.isOwnBrand).map((e) => e.key);
-
   const trend: VisibilityTrendPoint[] = rateTrend.points.map((pt) => {
     const compScores = competitorKeys
       .map((k) => pt.values[k])

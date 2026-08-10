@@ -401,11 +401,7 @@ async function getFanoutSnapshot(
   return [...byQuery.values()]
     .sort((a, b) => b.count - a.count || a.display.localeCompare(b.display))
     .slice(0, REPORT_FANOUT_COUNT)
-    .map((a) => ({
-      query: a.display,
-      engines: [...a.engines].sort(),
-      timesSearched: a.count,
-    }));
+    .map((a) => ({ query: a.display, engines: [...a.engines].sort(), timesSearched: a.count }));
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -645,11 +641,7 @@ async function getShoppingSnapshot(
   const prev = previousWindow(dateFrom, dateTo);
   const [cur, prior] = await Promise.all([
     getShoppingKpis(brandId, { datePreset: 'all', dateFrom, dateTo }),
-    getShoppingKpis(brandId, {
-      datePreset: 'all',
-      dateFrom: prev.from,
-      dateTo: prev.to,
-    }),
+    getShoppingKpis(brandId, { datePreset: 'all', dateFrom: prev.from, dateTo: prev.to }),
   ]);
 
   const sovPct = round1(cur.shoppingSov * 100);
@@ -729,12 +721,7 @@ async function getReportVisibilityRate(
     visiblePrompts: rate.visiblePrompts,
     promptCount,
     ratePct: promptCount > 0 ? Math.round((rate.visiblePrompts / promptCount) * 1000) / 10 : 0,
-    score: computeAiVisibilityScore({
-      answers,
-      mentionAnswers,
-      citationAnswers,
-      positionFactor,
-    }),
+    score: computeAiVisibilityScore({ answers, mentionAnswers, citationAnswers, positionFactor }),
     mentionAnswers,
     citationAnswers,
     positionFactor,
@@ -999,11 +986,7 @@ export async function createReport(
     has('shareOfVoice') ? getShareOfVoiceData(brandId, range) : null,
     has('competitors') ? getCompetitorComparison(brandId, range) : null,
     has('citations')
-      ? getCitationsOverview(brandId, {
-          datePreset: 'custom',
-          dateFrom,
-          dateTo,
-        })
+      ? getCitationsOverview(brandId, { datePreset: 'custom', dateFrom, dateTo })
       : null,
     has('trend') ? getVisibilityRateTrend(brandId, range) : null,
     has('promptPerformance') ? getPromptPerformance(brandId, dateFrom, dateTo) : null,
@@ -1017,10 +1000,8 @@ export async function createReport(
   ]);
 
   // Adapt VisibilityRateTrendData → VisibilityTrendPoint[] so the report
-  // payload's visibilityTrend field stays array-shaped (same contract as
-  // getTopicDetail in tracking.ts). Each day's brand score maps to `score`;
-  // the average of all competitor scores for that day maps to `competitors`
-  // (null when no competitors are tracked).
+  // payload's visibilityTrend field stays array-shaped. Existing report
+  // snapshots are immutable, so only new reports use the new formula.
   const visibilityTrend: VisibilityTrendPoint[] | null = trend
     ? (() => {
         const competitorKeys = trend.entities.filter((e) => !e.isOwnBrand).map((e) => e.key);
@@ -1088,13 +1069,7 @@ export async function createReport(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({
-      brandId,
-      snapshot,
-      dateFrom,
-      dateTo,
-      template: template.id,
-    }),
+    body: JSON.stringify({ brandId, snapshot, dateFrom, dateTo, template: template.id }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
