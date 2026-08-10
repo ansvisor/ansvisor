@@ -875,11 +875,19 @@ export default function CitationsPage() {
       .catch(() => {});
   }, [activeBrandId]);
 
+  // Each load claims a generation. The effect's cleanup bumps the counter, so
+  // a response arriving after the filters changed — or after the user left the
+  // page — can recognise itself as stale instead of writing state or toasting.
+  const loadGen = useRef(0);
+
   const loadData = useCallback(async () => {
     if (!activeBrandId) {
       setIsLoading(false);
       return;
     }
+    const gen = ++loadGen.current;
+    const stale = () => loadGen.current !== gen;
+
     setIsLoading(true);
     setLoadFailed(false);
     try {
@@ -887,6 +895,7 @@ export default function CitationsPage() {
         getCitationsOverview(activeBrandId, apiFilters),
         getCitationsTotal(activeBrandId),
       ]);
+      if (stale()) return;
       setData(overview);
       setHasAnyCitations(total > 0);
 
@@ -907,16 +916,31 @@ export default function CitationsPage() {
         );
       }
     } catch (err) {
+      // Leaving the page aborts the in-flight request. That rejection is not a
+      // failure worth reporting — and the toast is global, so it would surface
+      // on whichever page the user navigated to.
+      if (stale()) return;
       console.error('[citations] load failed', err);
       setLoadFailed(true);
       toast.error('Failed to load citation data');
     } finally {
-      setIsLoading(false);
+      if (!stale()) setIsLoading(false);
     }
   }, [activeBrandId, apiFilters]);
 
   useEffect(() => {
     loadData();
+    // Invalidate whatever is in flight when the filters change or the page
+    // unmounts, so a slow earlier response can't overwrite newer data.
+    //
+    // The exhaustive-deps warning about reading a ref in cleanup doesn't apply
+    // here: this ref is a counter, not a node, and a value that moved on since
+    // the effect ran is exactly what we want to invalidate — incrementing is
+    // correct whether the last load came from this effect or from a Retry.
+    return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      loadGen.current++;
+    };
   }, [loadData]);
 
   // Lazy-load Competitor Gaps only when its tab is active; re-fetch when the
