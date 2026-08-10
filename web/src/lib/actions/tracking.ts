@@ -317,7 +317,9 @@ export async function getPromptResults(
   const limit = opts?.limit ?? 50;
   const offset = opts?.offset ?? 0;
 
-  const { supabase, query } = await buildResultsQuery(brandId, opts, { count: 'exact' });
+  const { supabase, query } = await buildResultsQuery(brandId, opts, {
+    count: 'exact',
+  });
 
   // One round trip: fetch only the requested page via SQL `.range()` and read
   // the full match count from the same query, instead of materializing every
@@ -408,7 +410,13 @@ export interface VisibilityRateKpi {
  */
 export async function getVisibilityRateKpi(
   brandId: string,
-  opts?: { model?: string; region?: string; dateFrom?: string; dateTo?: string; topicId?: string },
+  opts?: {
+    model?: string;
+    region?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    topicId?: string;
+  },
 ): Promise<VisibilityRateKpi> {
   const supabase = await createClient();
 
@@ -448,7 +456,13 @@ export async function getVisibilityRateKpi(
  */
 export async function getTrackedPromptsKpi(
   brandId: string,
-  opts?: { model?: string; region?: string; dateFrom?: string; dateTo?: string; topicId?: string },
+  opts?: {
+    model?: string;
+    region?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    topicId?: string;
+  },
 ): Promise<TrackedPromptsKpi> {
   const supabase = await createClient();
 
@@ -509,7 +523,9 @@ export interface InsightsFilterOptions {
  */
 async function getInsightsFilterOptions(brandId: string): Promise<InsightsFilterOptions> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc('insights_filter_options', { p_brand_id: brandId });
+  const { data, error } = await supabase.rpc('insights_filter_options', {
+    p_brand_id: brandId,
+  });
   if (error) throw new Error(error.message);
   const row = (data as { regions: string[] | null; models: string[] | null }[] | null)?.[0];
   return {
@@ -662,7 +678,10 @@ export async function getTrackingWindow(brandId: string): Promise<TrackingWindow
   return {
     anchored,
     activeRun: active
-      ? { startedAt: active.started_at as string, source: (active.source as string) ?? 'manual' }
+      ? {
+          startedAt: active.started_at as string,
+          source: (active.source as string) ?? 'manual',
+        }
       : null,
   };
 }
@@ -1548,7 +1567,11 @@ interface AiVisibilityWindow {
   compScore: Map<string, number | null>;
   compComponents: Map<
     string,
-    { mentionAnswers: number; citationAnswers: number; positionFactor: number | null }
+    {
+      mentionAnswers: number;
+      citationAnswers: number;
+      positionFactor: number | null;
+    }
   >;
 }
 
@@ -1568,7 +1591,11 @@ function foldAiVisibility(raw: unknown): AiVisibilityWindow {
   const compScore = new Map<string, number | null>();
   const compComponents = new Map<
     string,
-    { mentionAnswers: number; citationAnswers: number; positionFactor: number | null }
+    {
+      mentionAnswers: number;
+      citationAnswers: number;
+      positionFactor: number | null;
+    }
   >();
   for (const c of row.by_competitor ?? []) {
     const components = {
@@ -1884,7 +1911,10 @@ export async function getCompetitorComparison(
   const brandByProvider = new Map<string, Agg>();
   for (const bp of agg.by_brand_provider) {
     const provider = resolveProvider(bp.model_used, bp.platform);
-    const ex = brandByProvider.get(provider) ?? { visiblePrompts: 0, promptCount: 0 };
+    const ex = brandByProvider.get(provider) ?? {
+      visiblePrompts: 0,
+      promptCount: 0,
+    };
     ex.visiblePrompts += bp.visible_prompts;
     ex.promptCount += bp.prompt_count;
     brandByProvider.set(provider, ex);
@@ -2024,7 +2054,10 @@ export async function getShareOfVoiceData(
   const providerMap = new Map<string, ProviderAgg>();
   for (const bp of cur.by_platform) {
     const provider = resolveProvider(bp.model_used, bp.platform);
-    const ex = providerMap.get(provider) ?? { brandMentions: 0, competitorMentions: 0 };
+    const ex = providerMap.get(provider) ?? {
+      brandMentions: 0,
+      competitorMentions: 0,
+    };
     ex.brandMentions += Number(bp.brand_mentions);
     ex.competitorMentions += Number(bp.competitor_mentions);
     providerMap.set(provider, ex);
@@ -3028,14 +3061,39 @@ export interface TopicDetailData {
  * Output is identical to the old per-call results — this is a perf refactor.
  */
 export async function getTopicDetail(brandId: string, topicId: string): Promise<TopicDetailData> {
-  const [topic, summary, trend, sov, competitors, results] = await Promise.all([
+  const [topic, summary, rateTrend, sov, competitors, results] = await Promise.all([
     getTopicById(brandId, topicId),
     getInsightsSummary(brandId, { topicId }),
-    getVisibilityTrend(brandId, { topicId }),
+    // #685 — use the new-formula RPC (visibility_rate_trend, migration 00039)
+    // so the trend line sits on the same 0-100 AI Visibility Score scale as
+    // the headline score. getVisibilityTrend averaged raw visibility_score
+    // over ALL answers (including 0-scored absent-brand rows) which produced
+    // a completely different scale (typical: 0.3–1.5 vs headline ~12).
+    getVisibilityRateTrend(brandId, { topicId }),
     getShareOfVoiceData(brandId, { topicId }),
     getCompetitorComparison(brandId, { topicId }),
     getPromptResults(brandId, { topicId, limit: 50 }),
   ]);
+
+  // Adapt VisibilityRateTrendData → VisibilityTrendPoint[] so the existing
+  // chart component (topic_charts.tsx) can consume it without modification.
+  // Each day's brand score maps to `score`; the average of all competitor
+  // scores for that day maps to `competitors` (null when no competitors).
+  const competitorKeys = rateTrend.entities.filter((e) => !e.isOwnBrand).map((e) => e.key);
+
+  const trend: VisibilityTrendPoint[] = rateTrend.points.map((pt) => {
+    const compScores = competitorKeys
+      .map((k) => pt.values[k])
+      .filter((v): v is number => v !== undefined);
+    return {
+      date: pt.date,
+      score: pt.values['you'] ?? 0,
+      competitors:
+        compScores.length > 0
+          ? roundTo1(compScores.reduce((a, b) => a + b, 0) / compScores.length)
+          : null,
+    };
+  });
 
   return { topic, summary, trend, sov, competitors, results: results.results };
 }
