@@ -9,8 +9,28 @@
 --    repeat suggestion refreshes cost zero new DataForSEO calls. Service
 --    role only (RLS enabled, no policies).
 
-ALTER TABLE public.prompt_suggestions ADD COLUMN source_data jsonb;
+CREATE TABLE IF NOT EXISTS public.prompt_suggestions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    brand_id uuid NOT NULL,
+    prompt_text text NOT NULL,
+    source text DEFAULT 'manual'::text NOT NULL,
+    source_data jsonb DEFAULT '{}'::jsonb,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT prompt_suggestions_source_check CHECK (source = ANY (ARRAY['manual'::text, 'gsc'::text, 'competitor'::text]))
+);
 
+ALTER TABLE public.prompt_suggestions ADD COLUMN IF NOT EXISTS source_data jsonb;
+
+CREATE TABLE IF NOT EXISTS public.gsc_query_stats (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    brand_id uuid NOT NULL,
+    query text NOT NULL,
+    impressions bigint DEFAULT 0 NOT NULL,
+    clicks bigint DEFAULT 0 NOT NULL,
+    position double precision DEFAULT 0 NOT NULL,
+    date date NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
 -- The live table's source check predates 'gsc' — extend it.
 ALTER TABLE public.prompt_suggestions DROP CONSTRAINT prompt_suggestions_source_check;
 ALTER TABLE public.prompt_suggestions ADD CONSTRAINT prompt_suggestions_source_check

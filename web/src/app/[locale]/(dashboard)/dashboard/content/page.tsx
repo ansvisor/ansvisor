@@ -75,7 +75,7 @@ interface GenerationJob {
 function saveGenerationJob(job: GenerationJob) {
   try {
     localStorage.setItem(GENERATION_STORAGE_KEY, JSON.stringify(job));
-  } catch {}
+  } catch { }
 }
 
 function loadGenerationJob(): GenerationJob | null {
@@ -96,7 +96,7 @@ function loadGenerationJob(): GenerationJob | null {
 function clearGenerationJob() {
   try {
     localStorage.removeItem(GENERATION_STORAGE_KEY);
-  } catch {}
+  } catch { }
 }
 
 const IMPACT_COLORS: Record<string, string> = {
@@ -419,7 +419,7 @@ export default function ContentPage() {
 
   if (!activeBrandId) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex items-center justify-center min-h-100">
         <p className="text-muted-foreground">Select a brand to view content opportunities.</p>
       </div>
     );
@@ -467,7 +467,7 @@ export default function ContentPage() {
       </div>
 
       {loading && opportunities.length === 0 ? (
-        <div className="flex items-center justify-center min-h-[300px]">
+        <div className="flex items-center justify-center min-h-75">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : opportunities.length === 0 ? (
@@ -478,14 +478,20 @@ export default function ContentPage() {
               <p className="text-sm font-medium">{t('noOpportunities')}</p>
               <p className="text-xs text-muted-foreground">{t('noOpportunitiesHint')}</p>
             </div>
-            <Button onClick={handleGenerate} disabled={generating} size="sm" className="gap-2">
-              {generating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Lightbulb className="h-4 w-4" />
-              )}
-              {generating ? t('generating') : t('generate')}
-            </Button>
+            {!isCloud ? (
+              <Button onClick={handleGenerate} disabled={generating} size="sm" className="gap-2">
+                {generating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Lightbulb className="h-4 w-4" />
+                )}
+                {generating ? t('generating') : t('generate')}
+              </Button>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Opportunities are generated automatically as your tracking data comes in.
+              </p>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -541,7 +547,7 @@ export default function ContentPage() {
                     />
                   </div>
                   <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
-                    <SelectTrigger className="h-8 w-[130px] text-xs">
+                    <SelectTrigger className="h-8 w-32.5 text-xs">
                       <SelectValue>
                         {(value) =>
                           value === 'all' ? t('filters.allStatuses') : t(`status.${value}`)
@@ -558,7 +564,7 @@ export default function ContentPage() {
                     </SelectContent>
                   </Select>
                   <Select value={impactFilter} onValueChange={(v) => v && setImpactFilter(v)}>
-                    <SelectTrigger className="h-8 w-[120px] text-xs">
+                    <SelectTrigger className="h-8 w-30 text-xs">
                       <SelectValue>
                         {(value) =>
                           value === 'all' ? t('filters.allImpacts') : t(`impact.${value}`)
@@ -573,7 +579,7 @@ export default function ContentPage() {
                     </SelectContent>
                   </Select>
                   <Select value={typeFilter} onValueChange={(v) => v && setTypeFilter(v)}>
-                    <SelectTrigger className="h-8 w-[110px] text-xs">
+                    <SelectTrigger className="h-8 w-27.5 text-xs">
                       <SelectValue>
                         {(value) => (value === 'all' ? t('filters.allTypes') : t(`type.${value}`))}
                       </SelectValue>
@@ -718,9 +724,9 @@ export default function ContentPage() {
                         >
                           {t(
                             `impact.${opp.impact}` as
-                              | 'impact.high'
-                              | 'impact.medium'
-                              | 'impact.low',
+                            | 'impact.high'
+                            | 'impact.medium'
+                            | 'impact.low',
                           )}
                         </Badge>
                       </TableCell>
