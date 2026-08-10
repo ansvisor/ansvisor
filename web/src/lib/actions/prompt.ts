@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import type { PromptSet, Prompt, AIPlatform, PromptVolume } from '@/types';
 import { enforceLimit, getOrgPlan, PlanLimitError } from '@/lib/guards/plan-guard';
-import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
+import { ALL_MODELS, ALL_SCRAPERS, DEFAULT_PROMPT_RANGE_DAYS } from '@/config/prompt-options';
 import type { Plan } from '@/config/plans';
 import { getPromptVolumes, type VolumeQuota } from '@/lib/actions/volumes';
 import { getPromptVisibilitySummaries, type PromptVisibilitySummary } from '@/lib/actions/tracking';
@@ -547,10 +547,17 @@ export interface PromptsPageData {
  * their failure degrades to an empty list instead of blanking the prompt
  * table — the page's core content must never be hostage to the volumes API.
  */
-export async function getPromptsPageData(brandId: string): Promise<PromptsPageData> {
+export async function getPromptsPageData(
+  brandId: string,
+  opts?: { days?: number },
+): Promise<PromptsPageData> {
+  // Only the visibility summaries are window-scoped. Prompt sets are the
+  // roster itself, and volumes are keyword-level estimates with no date
+  // dimension, so neither changes with the selected range.
+  const days = opts?.days ?? DEFAULT_PROMPT_RANGE_DAYS;
   const [promptSets, visibility, volumesResult] = await Promise.all([
     getPromptSets(brandId),
-    getPromptVisibilitySummaries(brandId, { days: 30 }),
+    getPromptVisibilitySummaries(brandId, { days }),
     getPromptVolumes(brandId).then(
       (r) => ({ volumes: r.volumes, quota: r.quota ?? null, degraded: false }),
       (err) => {

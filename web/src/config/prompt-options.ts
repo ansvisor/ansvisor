@@ -131,3 +131,21 @@ export const SCRAPER_GROUPS = [
 export const ALL_SCRAPERS = SCRAPER_GROUPS.flatMap((g) =>
   g.scrapers.map((s) => ({ ...s, provider: g.provider })),
 );
+
+/**
+ * Date-range presets for the Prompts page (#686).
+ *
+ * No 24h option: a single day gives one or two runs per prompt, so the scores
+ * would be noise and most of the table would read zero. No "all time" either —
+ * the visibility summaries scan every result row in the window, so an
+ * unbounded range has unbounded cost, and 90 days matches the fan-out cap.
+ */
+export const PROMPT_RANGE_DAYS = [7, 30, 90] as const;
+
+export type PromptRangeDays = (typeof PROMPT_RANGE_DAYS)[number];
+
+export const DEFAULT_PROMPT_RANGE_DAYS: PromptRangeDays = 30;
+
+export function isPromptRangeDays(value: unknown): value is PromptRangeDays {
+  return PROMPT_RANGE_DAYS.includes(Number(value) as PromptRangeDays);
+}

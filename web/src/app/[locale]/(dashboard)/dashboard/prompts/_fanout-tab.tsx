@@ -11,6 +11,7 @@ import {
   type FanoutSubQuery,
 } from '@/lib/actions/fanout';
 import { INTENT_LABELS, INTENT_COLORS } from '@/config/intent-labels';
+import type { PromptRangeDays } from '@/config/prompt-options';
 import { PlatformsCell } from '@/components/citations/source-cells';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -42,6 +43,8 @@ interface PromptGroup {
 
 type QueryFanoutTabProps = {
   brandId: string;
+  /** Window shared with the rest of the Prompts page (#686). */
+  days: PromptRangeDays;
   onTracked?: () => void | Promise<void>;
 };
 
@@ -73,7 +76,7 @@ function userErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
-export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
+export function QueryFanoutTab({ brandId, days, onTracked }: QueryFanoutTabProps) {
   const [data, setData] = useState<QueryFanoutData | null>(null);
   const [loading, setLoading] = useState(true);
   const [addingKey, setAddingKey] = useState<string | null>(null);
@@ -140,7 +143,7 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
         setLoading(true);
       }
       try {
-        const result = await getQueryFanout(brandId, { days: 30 });
+        const result = await getQueryFanout(brandId, { days });
         setData(result);
         void classifyProgressively(result.subQueries.map((s) => s.query));
       } catch (err) {
@@ -153,7 +156,7 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
         }
       }
     },
-    [brandId, classifyProgressively],
+    [brandId, days, classifyProgressively],
   );
 
   useEffect(() => {
@@ -166,7 +169,7 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
 
   useEffect(() => {
     setSearchText('');
-  }, [brandId]);
+  }, [brandId, days]);
 
   useEffect(() => {
     setSearchText('');
@@ -297,7 +300,7 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
         <p className="text-xs text-muted-foreground">
           {view === 'by-prompt'
             ? 'Your tracked prompts grouped by the sub-queries their answers actually triggered — expand a prompt to see its observed fan-out. "Answers with fan-out" is how many of that prompt’s tracked answers ran a live search at all.'
-            : 'The sub-queries answer engines actually ran while building your answers (last 30 days) — observed, never predicted. Sorted by how often they were searched. Track any of them with the + to measure its own visibility.'}
+            : `The sub-queries answer engines actually ran while building your answers (last ${days} days) — observed, never predicted. Sorted by how often they were searched. Track any of them with the + to measure its own visibility.`}
         </p>
       </CardHeader>
       <CardContent>
@@ -325,6 +328,7 @@ export function QueryFanoutTab({ brandId, onTracked }: QueryFanoutTabProps) {
             intents={intents}
             addingKey={addingKey}
             pager={byPromptPager}
+            days={days}
             onTrack={handleTrack}
             searchText={searchText}
             onSearchChange={setSearchText}
@@ -477,6 +481,7 @@ function ByPromptView({
   intents,
   addingKey,
   pager,
+  days,
   onTrack,
   searchText,
   onSearchChange,
@@ -485,6 +490,7 @@ function ByPromptView({
   intents: Record<string, string>;
   addingKey: string | null;
   pager: ReturnType<typeof usePagination>;
+  days: PromptRangeDays;
   onTrack: (query: string) => void;
   searchText: string;
   onSearchChange: (text: string) => void;
@@ -512,7 +518,7 @@ function ByPromptView({
         searchText ? (
           <NoMatches label="No prompts match your search" />
         ) : (
-          <NoMatches label="No tracked answers in the last 30 days" />
+          <NoMatches label={`No tracked answers in the last ${days} days`} />
         )
       ) : (
         <>

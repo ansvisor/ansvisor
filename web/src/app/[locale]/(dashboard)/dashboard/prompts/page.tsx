@@ -76,7 +76,16 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUserRole } from '@/hooks/use-user-role';
 import { usePlanContext } from '@/components/providers/plan-provider';
-import { MODEL_GROUPS, ALL_MODELS, SCRAPER_GROUPS, ALL_SCRAPERS } from '@/config/prompt-options';
+import {
+  MODEL_GROUPS,
+  ALL_MODELS,
+  SCRAPER_GROUPS,
+  ALL_SCRAPERS,
+  PROMPT_RANGE_DAYS,
+  DEFAULT_PROMPT_RANGE_DAYS,
+  isPromptRangeDays,
+  type PromptRangeDays,
+} from '@/config/prompt-options';
 import { PLANS } from '@/config/plans';
 import { getTopics } from '@/lib/actions/topic';
 import { type PromptVisibilitySummary } from '@/lib/actions/tracking';
@@ -211,7 +220,13 @@ function SortableHead({
   );
 }
 
-const PROMPT_EXPORT_HEADERS = [
+/**
+ * CSV headers. The window-scoped columns carry the selected range in their
+ * name (`runs_7d`, `runs_90d`, …) rather than a hardcoded `_30d`, so an export
+ * taken at a different range can't be misread as 30-day data. At the default
+ * range the header row is byte-identical to what it has always been.
+ */
+const promptExportHeaders = (days: number) => [
   'text',
   'topic_id',
   'category',
@@ -223,13 +238,13 @@ const PROMPT_EXPORT_HEADERS = [
   'est_ai_volume',
   'total_google_volume',
   'intent',
-  'ai_visibility_score_30d',
-  'visibility_rate_30d',
-  'visible_runs_30d',
-  'avg_visibility_30d',
-  'total_mentions_30d',
-  'total_citations_30d',
-  'runs_30d',
+  `ai_visibility_score_${days}d`,
+  `visibility_rate_${days}d`,
+  `visible_runs_${days}d`,
+  `avg_visibility_${days}d`,
+  `total_mentions_${days}d`,
+  `total_citations_${days}d`,
+  `runs_${days}d`,
   'last_run_at',
 ];
 
@@ -905,6 +920,12 @@ export default function PromptsPage() {
   })();
   const [tab, setTab] = useState<TabId>(initialTab);
 
+  const initialRange: PromptRangeDays = (() => {
+    const raw = searchParams.get('range');
+    return isPromptRangeDays(raw) ? (Number(raw) as PromptRangeDays) : DEFAULT_PROMPT_RANGE_DAYS;
+  })();
+  const [rangeDays, setRangeDays] = useState<PromptRangeDays>(initialRange);
+
   // Keep the URL in sync with the active tab so deep links / refreshes land
   // back on the same view. Shallow history update on purpose: the tab is pure
   // client state, and `router.replace` here fired an RSC round-trip whose
@@ -913,14 +934,20 @@ export default function PromptsPage() {
   // dispatched (the "prompts table spins forever" bug). replaceState updates
   // the URL with no server request; Next's router syncs with the History API.
   useEffect(() => {
-    const current = searchParams.get('tab');
-    if (current === tab) return;
+    const currentTab = searchParams.get('tab');
+    const currentRange = searchParams.get('range');
+    // The default range stays out of the URL so shared links keep their
+    // existing shape unless the user actually picked a different window.
+    const wantRange = rangeDays === DEFAULT_PROMPT_RANGE_DAYS ? null : String(rangeDays);
+    if (currentTab === tab && currentRange === wantRange) return;
     const params = new URLSearchParams(Array.from(searchParams.entries()));
     params.set('tab', tab);
+    if (wantRange) params.set('range', wantRange);
+    else params.delete('range');
     // Keep the hash: deep links like #prompt-opportunities arrive without a
     // tab param, and this sync must not strip their anchor from the URL.
     window.history.replaceState(null, '', `?${params.toString()}${window.location.hash}`);
-  }, [tab, searchParams]);
+  }, [tab, rangeDays, searchParams]);
 
   // Deep link from the Insights Recommendations row (#459): the target card
   // only exists once the Insights tab's volume data has rendered, so a bare
@@ -948,7 +975,7 @@ export default function PromptsPage() {
         // One consolidated server action: Next.js queues client-fired server
         // actions sequentially, so the old three separate calls cost their
         // SUM on a cold load — the main culprit behind the slow first paint.
-        const page = await getPromptsPageData(activeBrandId);
+        const page = await getPromptsPageData(activeBrandId, { days: rangeDays });
         if (isCancelled?.()) return;
         setVolumes(page.volumes);
         if (page.quota) setQuota(page.quota);
@@ -966,7 +993,7 @@ export default function PromptsPage() {
         if (!isCancelled?.()) setLoading(false);
       }
     },
-    [activeBrandId],
+    [activeBrandId, rangeDays],
   );
 
   useEffect(() => {
@@ -1130,17 +1157,17 @@ export default function PromptsPage() {
       est_ai_volume: volumeByPromptId.get(p.id)?.estAiVolume ?? '',
       total_google_volume: volumeByPromptId.get(p.id)?.totalGoogleVolume ?? '',
       intent: volumeByPromptId.get(p.id)?.intent ?? '',
-      ai_visibility_score_30d: visibility[p.id]?.score ?? '',
-      visibility_rate_30d: visibility[p.id]?.visibilityRate ?? '',
-      visible_runs_30d: visibility[p.id]?.visibleRuns ?? '',
-      avg_visibility_30d: visibility[p.id]?.avgVisibility ?? '',
-      total_mentions_30d: visibility[p.id]?.totalMentions ?? '',
-      total_citations_30d: visibility[p.id]?.totalCitations ?? '',
-      runs_30d: visibility[p.id]?.runs ?? '',
+      [`ai_visibility_score_${rangeDays}d`]: visibility[p.id]?.score ?? '',
+      [`visibility_rate_${rangeDays}d`]: visibility[p.id]?.visibilityRate ?? '',
+      [`visible_runs_${rangeDays}d`]: visibility[p.id]?.visibleRuns ?? '',
+      [`avg_visibility_${rangeDays}d`]: visibility[p.id]?.avgVisibility ?? '',
+      [`total_mentions_${rangeDays}d`]: visibility[p.id]?.totalMentions ?? '',
+      [`total_citations_${rangeDays}d`]: visibility[p.id]?.totalCitations ?? '',
+      [`runs_${rangeDays}d`]: visibility[p.id]?.runs ?? '',
       last_run_at: visibility[p.id]?.lastRunAt ?? '',
     }));
 
-    const csv = toCsv(rows, PROMPT_EXPORT_HEADERS);
+    const csv = toCsv(rows, promptExportHeaders(rangeDays));
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1152,7 +1179,7 @@ export default function PromptsPage() {
     link.click();
 
     URL.revokeObjectURL(url);
-  }, [activeBrand?.slug, canExport, allPrompts, visibility, volumeByPromptId]);
+  }, [activeBrand?.slug, canExport, allPrompts, visibility, volumeByPromptId, rangeDays]);
 
   if (!activeBrandId) {
     return (
@@ -1186,6 +1213,29 @@ export default function PromptsPage() {
             <TabsTrigger value="insights">Insights</TabsTrigger>
           </TabsList>
           <div className="flex items-center gap-2">
+            {/* Hidden on Insights: that tab shows keyword volume estimates,
+                which carry no date dimension, so a range there would be a
+                control that changes nothing. */}
+            {tab !== 'insights' && (
+              <div className="flex items-center rounded-md border p-0.5" role="group">
+                {PROMPT_RANGE_DAYS.map((days) => (
+                  <button
+                    key={days}
+                    type="button"
+                    onClick={() => setRangeDays(days)}
+                    aria-pressed={rangeDays === days}
+                    className={cn(
+                      'rounded-sm px-2.5 py-1 text-xs font-medium transition-colors',
+                      rangeDays === days
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {days}d
+                  </button>
+                ))}
+              </div>
+            )}
             {tab === 'all' && canManage && (
               <Button
                 type="button"
@@ -1269,6 +1319,7 @@ export default function PromptsPage() {
             activeBrandId={activeBrandId}
             volumeByPromptId={volumeByPromptId}
             visibility={visibility}
+            days={rangeDays}
             onAddPrompt={canManage ? () => setAddPromptOpen(true) : undefined}
             onEditPrompt={canManage ? setEditingPrompt : undefined}
           />
@@ -1276,7 +1327,9 @@ export default function PromptsPage() {
 
         {/* ─── Query Fan-out tab ───────────────────────────────────────── */}
         <TabsContent value="fanout" className="mt-4">
-          {activeBrandId && <QueryFanoutTab brandId={activeBrandId} onTracked={loadData} />}
+          {activeBrandId && (
+            <QueryFanoutTab brandId={activeBrandId} days={rangeDays} onTracked={loadData} />
+          )}
         </TabsContent>
 
         {/* ─── Insights tab ────────────────────────────────────────────── */}
@@ -1662,6 +1715,7 @@ function AllPromptsTab({
   activeBrandId,
   volumeByPromptId,
   visibility,
+  days,
   onAddPrompt,
   onEditPrompt,
 }: {
@@ -1670,6 +1724,8 @@ function AllPromptsTab({
   activeBrandId: string;
   volumeByPromptId: Map<string, PromptVolume>;
   visibility: Record<string, PromptVisibilitySummary>;
+  /** Selected window, so the column tooltips describe the data on screen. */
+  days: PromptRangeDays;
   /** Opens the Add Prompt dialog; undefined when the user can't write (member role). */
   onAddPrompt?: () => void;
   /** Opens the Edit Prompt dialog for a row; undefined hides the pencil (member role). */
@@ -1868,7 +1924,7 @@ function AllPromptsTab({
               </ColHead>
               <SortableHead
                 className="text-right"
-                tooltip="AI Visibility Score (0-100) for this prompt over the last 30 days: how often answers mention the brand (60%), cite its site (25%) and how early it's named (15%). Hover a value for the components."
+                tooltip={`AI Visibility Score (0-100) for this prompt over the last ${days} days: how often answers mention the brand (60%), cite its site (25%) and how early it's named (15%). Hover a value for the components.`}
                 sortKey="visibility"
                 activeSort={activeSort}
                 dir={dir}
@@ -1878,7 +1934,7 @@ function AllPromptsTab({
               </SortableHead>
               <SortableHead
                 className="text-right"
-                tooltip="Total times the brand was mentioned across AI answers for this prompt over the last 30 days."
+                tooltip={`Total times the brand was mentioned across AI answers for this prompt over the last ${days} days.`}
                 sortKey="mentions"
                 activeSort={activeSort}
                 dir={dir}
@@ -1888,7 +1944,7 @@ function AllPromptsTab({
               </SortableHead>
               <SortableHead
                 className="text-right"
-                tooltip="Total times your pages were cited in AI answers for this prompt over the last 30 days."
+                tooltip={`Total times your pages were cited in AI answers for this prompt over the last ${days} days.`}
                 sortKey="citations"
                 activeSort={activeSort}
                 dir={dir}
@@ -1914,7 +1970,7 @@ function AllPromptsTab({
               </ColHead>
               <SortableHead
                 className="text-right"
-                tooltip="Number of tracking runs for this prompt over the last 30 days (one per platform per day)."
+                tooltip={`Number of tracking runs for this prompt over the last ${days} days (one per platform per day).`}
                 sortKey="runs"
                 activeSort={activeSort}
                 dir={dir}
@@ -1992,7 +2048,7 @@ function AllPromptsTab({
                     {vis ? (
                       <div
                         className="inline-flex items-center gap-2 justify-end min-w-[110px]"
-                        title={`Mentioned in ${vis.mentionAnswers} of ${vis.runs} answers (30d) · cited in ${vis.citationAnswers}${
+                        title={`Mentioned in ${vis.mentionAnswers} of ${vis.runs} answers (${days}d) · cited in ${vis.citationAnswers}${
                           vis.positionFactor !== null
                             ? ` · position factor ${vis.positionFactor.toFixed(2)}`
                             : ''
