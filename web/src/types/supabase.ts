@@ -346,6 +346,48 @@ export type Database = {
           },
         ];
       };
+      cloro_pending_tasks: {
+        Row: {
+          brand_id: string;
+          prompt_id: string;
+          region: string | null;
+          scraper_id: string;
+          submitted_at: string;
+          task_id: string;
+        };
+        Insert: {
+          brand_id: string;
+          prompt_id: string;
+          region?: string | null;
+          scraper_id: string;
+          submitted_at?: string;
+          task_id: string;
+        };
+        Update: {
+          brand_id?: string;
+          prompt_id?: string;
+          region?: string | null;
+          scraper_id?: string;
+          submitted_at?: string;
+          task_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'cloro_pending_tasks_brand_id_fkey';
+            columns: ['brand_id'];
+            isOneToOne: false;
+            referencedRelation: 'brands';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'cloro_pending_tasks_prompt_id_fkey';
+            columns: ['prompt_id'];
+            isOneToOne: false;
+            referencedRelation: 'prompts';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       competitors: {
         Row: {
           brand_id: string;
