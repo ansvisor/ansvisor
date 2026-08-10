@@ -299,7 +299,7 @@
       "sendAll": "Send All",
       "dismissAll": "Dismiss All",
       "dismissAllTitle": "Dismiss opportunities?",
-     "dismissAllConfirm": "{count, plural, one {This will dismiss # opportunity.} other {This will dismiss # opportunities.}} This can't be undone."
+      "dismissAllConfirm": "{count, plural, one {This will dismiss # opportunity.} other {This will dismiss # opportunities.}} This can't be undone."
     },
     "table": {
       "action": "Action",

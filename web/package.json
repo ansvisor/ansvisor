@@ -15,8 +15,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"messages/**/*.json\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"messages/**/*.json\"",
     "test": "vitest run",
     "test:watch": "vitest"
   },
