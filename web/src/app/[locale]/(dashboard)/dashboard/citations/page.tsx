@@ -39,7 +39,7 @@ import {
 import {
   getCitationsOverview,
   getCitationGaps,
-  getCitationsTotal,
+  brandHasCitations,
   type CitationsFilters,
   type CitationsOverview,
   type CitationDomainRow,
@@ -435,7 +435,7 @@ const UrlsTable = memo(function UrlsTable({
 /**
  * Period-aware empty state for the Domains / URLs tables (#485).
  *
- * hasAnyCitations is fetched once in loadData (via getCitationsTotal) and
+ * hasAnyCitations is fetched once in loadData (via brandHasCitations) and
  * passed down, so both keepMounted panels share a single server call instead
  * of each firing their own (#313 action queue note).
  *
@@ -891,13 +891,13 @@ export default function CitationsPage() {
     setIsLoading(true);
     setLoadFailed(false);
     try {
-      const [overview, total] = await Promise.all([
+      const [overview, hasAny] = await Promise.all([
         getCitationsOverview(activeBrandId, apiFilters),
-        getCitationsTotal(activeBrandId),
+        brandHasCitations(activeBrandId),
       ]);
       if (stale()) return;
       setData(overview);
-      setHasAnyCitations(total > 0);
+      setHasAnyCitations(hasAny);
 
       // Surface filter options from the observed models/regions.
       const platformOptions = buildPlatformOptions(overview.rows);

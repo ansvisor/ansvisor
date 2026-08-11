@@ -671,23 +671,38 @@ export async function getCitationGaps(
 // ─── Existence check (#485) ───────────────────────────────────────────────────
 
 /**
- * Cheap unfiltered existence check — counts prompt_results rows for a brand
- * with no date/filter constraints, so the Citations page can distinguish
- * "no data in this window" from "no data at all".
+ * Unfiltered existence check — does this brand have any cited answer at all,
+ * ignoring the page's date and filter selection? Lets the Citations page
+ * distinguish "no data in this window" from "no data at all".
  *
- * Mirrors getBrandResultsTotal in tracking.ts (used by the Insights page).
- * Uses `head: true` so Supabase returns only the count, not any rows.
+ * Deliberately not a count (#706). `citations <> '[]'` can't use an index, so
+ * an exact count made Postgres read and detoast every citation payload the
+ * brand has ever produced — ~1.8s and 780 MB of buffers on a large brand with
+ * a warm cache, and past the 8s statement timeout once the nightly run had
+ * churned the cache, which failed the whole page load. Only the yes/no answer
+ * was ever used. Stopping at the first match answers it in ~0.1ms.
+ *
+ * The ordering is load-bearing: without it the planner picks a sequential scan
+ * over the entire table, which is unbounded for a brand whose answers never
+ * cite anything. Ordering by created_at keeps the scan on this brand's rows
+ * via idx_prompt_results_brand_created.
+ *
+ * Note that prompt_results.citation_count is NOT a substitute for the
+ * `citations <> '[]'` predicate — it counts something narrower, and disagrees
+ * on the overwhelming majority of rows.
  */
-export async function getCitationsTotal(brandId: string): Promise<number> {
+export async function brandHasCitations(brandId: string): Promise<boolean> {
   const supabase = await createClient();
-  const { count, error } = await supabase
+  const { data, error } = await supabase
     .from('prompt_results')
-    .select('id', { count: 'exact', head: true })
+    .select('id')
     .eq('brand_id', brandId)
     .neq('platform', 'chatgpt-shopping')
-    .neq('citations', '[]');
+    .neq('citations', '[]')
+    .order('created_at', { ascending: false })
+    .limit(1);
   if (error) throw new Error(error.message);
-  return count ?? 0;
+  return (data ?? []).length > 0;
 }
 
 // ─── Per-URL detail (#535) ────────────────────────────────────────────────────
