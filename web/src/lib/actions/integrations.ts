@@ -110,3 +110,60 @@ export async function setBrandGscProperty(brandId: string, property: string | nu
     .eq('id', brandId);
   if (error) throw new Error(error.message);
 }
+
+// ─── Google Analytics property mapping (#694) ────────────────────────────────
+
+export interface GaProperty {
+  /** Bare GA4 numeric id — the "properties/" prefix is added by the API layer. */
+  propertyId: string;
+  displayName: string;
+  accountName: string | null;
+  /** Site URLs from the property's web data streams; empty for app-only ones. */
+  siteUrls: string[];
+}
+
+export async function getGaProperties(): Promise<GaProperty[]> {
+  const res = await fetch(`${API_BASE_URL}/api/integrations/google-analytics/properties`, {
+    headers: await authHeaders(),
+    cache: 'no-store',
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `Server error: ${res.status}`);
+  return (body.properties ?? []) as GaProperty[];
+}
+
+export interface GaBrandMapping {
+  brandId: string;
+  brandName: string;
+  gaPropertyId: string | null;
+  domains: string[];
+}
+
+/** Org brands with their domains and current GA property picks (RLS-scoped). */
+export async function getGaBrandMappings(): Promise<GaBrandMapping[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('brands')
+    .select('id, name, ga_property_id, brand_domains(domain)')
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((b) => ({
+    brandId: b.id,
+    brandName: b.name,
+    gaPropertyId: b.ga_property_id,
+    domains: (b.brand_domains ?? []).map((d) => d.domain),
+  }));
+}
+
+/** Persist a brand's GA property pick (null clears it). RLS: admin/manager. */
+export async function setBrandGaProperty(
+  brandId: string,
+  propertyId: string | null,
+): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('brands')
+    .update({ ga_property_id: propertyId })
+    .eq('id', brandId);
+  if (error) throw new Error(error.message);
+}

@@ -8,12 +8,14 @@ import {
   getActiveConnection,
   deleteConnection,
   listGscSites,
+  listGaProperties,
 } from '../lib/composio.js';
 import { runGscSync } from '../lib/gsc-sync.js';
 
 const router = Router();
 
 const GSC = 'google-search-console';
+const GA = 'google-analytics';
 const WRITE_ROLES = ['admin', 'manager'];
 
 /** Entity id: one connection per organization per provider (#577). */
@@ -216,10 +218,10 @@ router.delete('/:provider', async (req, res) => {
   }
 });
 
-// ─── Search Console specific ─────────────────────────────────────────────────
-// Property listing and the query-stats sync have no Analytics equivalent yet
-// (that arrives with the GA data phase), so they stay on explicit paths
-// rather than under :provider.
+// ─── Provider specific ───────────────────────────────────────────────────────
+// Property listing differs per provider (a GSC property is a URL, a GA4
+// property is a numeric id), and the query-stats sync has no Analytics
+// equivalent yet, so these stay on explicit paths rather than under :provider.
 
 /**
  * GET /api/integrations/google-search-console/properties
@@ -264,6 +266,31 @@ router.post('/google-search-console/sync', async (req, res) => {
     return res.json(result);
   } catch (err) {
     req.log.error({ err }, 'integrations sync error');
+    return res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/integrations/google-analytics/properties
+ * GA4 properties visible to the org's connected account (#694). Member-
+ * readable, like the Search Console listing above.
+ */
+router.get('/google-analytics/properties', async (req, res) => {
+  try {
+    if (!isComposioConfigured(GA)) return notConfigured(res, GA);
+
+    const profile = await getProfile(req.user.id);
+    const entityId = entityIdFor(profile.organization_id);
+
+    const active = await getActiveConnection(GA, entityId);
+    if (!active) {
+      return res.status(409).json({ error: 'Google Analytics is not connected.' });
+    }
+
+    const properties = await listGaProperties(entityId);
+    return res.json({ properties });
+  } catch (err) {
+    req.log.error({ err }, 'integrations GA properties error');
     return res.status(err.status || 500).json({ error: err.message });
   }
 });

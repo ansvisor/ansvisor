@@ -131,3 +131,106 @@ export async function queryGscSearchAnalytics(entityId, args) {
   }
   return result?.data?.rows ?? [];
 }
+
+// ─── Google Analytics ────────────────────────────────────────────────────────
+
+/**
+ * Same pinning rule as Search Console — manual tool execution rejects
+ * "latest". Kept separate so the two toolkits can be bumped independently.
+ */
+const GA_TOOLKIT_VERSION = process.env.COMPOSIO_GA_TOOLKIT_VERSION || '20260721_00';
+
+/** Hard ceiling on how many properties the picker lists. */
+const GA_MAX_PROPERTIES = Number(process.env.COMPOSIO_GA_MAX_PROPERTIES) || 500;
+/**
+ * Properties we resolve data streams for. Listing them is a couple of calls
+ * regardless of size, but streams are one call per property (~1s each), so
+ * this bounds how long the mapping UI waits. Properties past the limit are
+ * still listed and still selectable by hand — they just don't take part in
+ * the domain auto-match.
+ */
+const GA_STREAM_LOOKUP_LIMIT = Number(process.env.COMPOSIO_GA_STREAM_LOOKUPS) || 100;
+/** Stream lookups in flight at once. */
+const GA_STREAM_CONCURRENCY = 8;
+
+async function executeGaTool(slug, entityId, args) {
+  const result = await getClient().tools.execute(slug, {
+    userId: entityId,
+    arguments: args,
+    version: GA_TOOLKIT_VERSION,
+  });
+  if (result?.successful === false) {
+    throw new Error(result?.error || `${slug} failed`);
+  }
+  return result?.data ?? {};
+}
+
+/** Site URLs served by a property's web data streams (app streams have none). */
+async function gaPropertySiteUrls(entityId, propertyId) {
+  const data = await executeGaTool('GOOGLE_ANALYTICS_LIST_DATA_STREAMS', entityId, {
+    parent: `properties/${propertyId}`,
+    pageSize: 200,
+  });
+  return (data.dataStreams ?? [])
+    .map((stream) => stream.webStreamData?.defaultUri)
+    .filter((uri) => typeof uri === 'string' && uri.length > 0);
+}
+
+/**
+ * GA4 properties visible to the entity's connected account (#694).
+ *
+ * `LIST_ACCOUNT_SUMMARIES` returns every account with its properties, but a
+ * GA4 property is a numeric id plus a free-text display name — nothing a brand
+ * domain can be matched against. The site URL lives on the property's web data
+ * streams, so those are resolved too (bounded concurrency and count, best
+ * effort): a property whose streams fail to load, or that falls past the
+ * lookup limit, simply arrives with no site URLs and stays manually
+ * selectable.
+ *
+ * Returns [{ propertyId, displayName, accountName, siteUrls }].
+ */
+export async function listGaProperties(entityId) {
+  const properties = [];
+  let pageToken = null;
+
+  do {
+    const args = { pageSize: 200 };
+    if (pageToken) args.pageToken = pageToken;
+    const data = await executeGaTool('GOOGLE_ANALYTICS_LIST_ACCOUNT_SUMMARIES', entityId, args);
+
+    for (const account of data.accountSummaries ?? []) {
+      for (const summary of account.propertySummaries ?? []) {
+        // "properties/365372770" → "365372770"; the prefix is constant and is
+        // added back by the callers that hit the Admin / Data APIs.
+        const propertyId = String(summary.property ?? '').split('/')[1];
+        if (!propertyId) continue;
+        properties.push({
+          propertyId,
+          displayName: summary.displayName ?? propertyId,
+          accountName: account.displayName ?? null,
+          siteUrls: [],
+        });
+      }
+    }
+
+    pageToken = data.nextPageToken ?? null;
+  } while (pageToken && properties.length < GA_MAX_PROPERTIES);
+
+  const capped = properties.slice(0, GA_MAX_PROPERTIES);
+  const withStreams = capped.slice(0, GA_STREAM_LOOKUP_LIMIT);
+
+  for (let i = 0; i < withStreams.length; i += GA_STREAM_CONCURRENCY) {
+    const batch = withStreams.slice(i, i + GA_STREAM_CONCURRENCY);
+    await Promise.all(
+      batch.map(async (property) => {
+        try {
+          property.siteUrls = await gaPropertySiteUrls(entityId, property.propertyId);
+        } catch {
+          // Best effort — the property stays listed, just without auto-match.
+        }
+      }),
+    );
+  }
+
+  return capped;
+}

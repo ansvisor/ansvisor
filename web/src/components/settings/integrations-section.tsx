@@ -31,12 +31,13 @@ import {
   getGscProperties,
   getGscBrandMappings,
   setBrandGscProperty,
+  getGaProperties,
+  getGaBrandMappings,
+  setBrandGaProperty,
   type IntegrationProvider,
   type IntegrationStatus,
-  type GscProperty,
-  type GscBrandMapping,
 } from '@/lib/actions/integrations';
-import { matchGscProperty } from '@/lib/gsc';
+import { matchProperty } from '@/lib/property-match';
 
 /**
  * Settings → Integrations (#577, Google Analytics added in #658).
@@ -72,7 +73,9 @@ export function IntegrationsSection() {
           description="Sessions and conversions from your GA4 property — the basis for AI traffic history without installing the tracking snippet."
           icon={<BarChart3 className="h-5 w-5 text-muted-foreground" />}
           authConfigEnv="COMPOSIO_GA_AUTH_CONFIG_ID"
-        />
+        >
+          <GaPropertyMapping />
+        </IntegrationCard>
       </CardContent>
     </Card>
   );
@@ -275,15 +278,50 @@ function IntegrationCard({
 }
 
 /**
- * Brand → property mapping (#642). The connection is org-level; each brand
- * picks exactly one Search Console property. Brands whose domain matches a
- * property unambiguously are premapped automatically.
+ * Brand → property mapping (#642, generalised for Analytics in #694).
+ *
+ * The connection is org-level; each brand picks exactly one property from it.
+ * Search Console and Analytics differ only in where a property's site URLs
+ * come from — a GSC property *is* a URL, a GA4 property is a numeric id whose
+ * URLs live on its web data streams — so both providers render this component
+ * and supply their own loaders. Brands whose domain matches exactly one
+ * property are premapped automatically; the picker always overrides.
  */
 const NONE_VALUE = '__none__';
 
-function GscPropertyMapping() {
-  const [properties, setProperties] = useState<GscProperty[] | null>(null);
-  const [mappings, setMappings] = useState<GscBrandMapping[] | null>(null);
+interface PropertyOption {
+  /** Value persisted on the brand row. */
+  value: string;
+  /** Plain-text label — the trigger renders the selected item's text. */
+  label: string;
+  /** URLs this property covers, used for the domain auto-match. */
+  siteUrls: string[];
+}
+
+interface BrandPropertyRow {
+  brandId: string;
+  brandName: string;
+  value: string | null;
+  domains: string[];
+}
+
+function PropertyMapping({
+  sourceName,
+  description,
+  emptyMessage,
+  loadOptions,
+  loadRows,
+  save,
+}: {
+  sourceName: string;
+  description: string;
+  emptyMessage: string;
+  loadOptions: () => Promise<PropertyOption[]>;
+  loadRows: () => Promise<BrandPropertyRow[]>;
+  save: (brandId: string, value: string | null) => Promise<void>;
+}) {
+  const [options, setOptions] = useState<PropertyOption[] | null>(null);
+  const [rows, setRows] = useState<BrandPropertyRow[] | null>(null);
   const [loadFailed, setLoadFailed] = useState<string | null>(null);
   const [savingBrandId, setSavingBrandId] = useState<string | null>(null);
   const autoMatched = useRef(false);
@@ -291,13 +329,13 @@ function GscPropertyMapping() {
   const load = useCallback(async () => {
     setLoadFailed(null);
     try {
-      const [props, brands] = await Promise.all([getGscProperties(), getGscBrandMappings()]);
-      setProperties(props);
-      setMappings(brands);
+      const [properties, brands] = await Promise.all([loadOptions(), loadRows()]);
+      setOptions(properties);
+      setRows(brands);
     } catch (err) {
       setLoadFailed(err instanceof Error ? err.message : 'Failed to load properties');
     }
-  }, []);
+  }, [loadOptions, loadRows]);
 
   useEffect(() => {
     load();
@@ -307,42 +345,35 @@ function GscPropertyMapping() {
   // property. Runs once per mount; a failed save (e.g. member role) just
   // leaves the brand unmapped for a manual pick by an admin.
   useEffect(() => {
-    if (!properties || !mappings || autoMatched.current) return;
+    if (!options || !rows || autoMatched.current) return;
     autoMatched.current = true;
-    const propertyUrls = properties.map((p) => p.siteUrl);
     (async () => {
-      for (const m of mappings) {
-        if (m.gscProperty) continue;
-        const match = matchGscProperty(propertyUrls, m.domains);
+      for (const row of rows) {
+        if (row.value) continue;
+        const match = matchProperty(options, row.domains);
         if (!match) continue;
         try {
-          await setBrandGscProperty(m.brandId, match);
-          setMappings((prev) =>
-            (prev ?? []).map((row) =>
-              row.brandId === m.brandId ? { ...row, gscProperty: match } : row,
-            ),
+          await save(row.brandId, match);
+          setRows((prev) =>
+            (prev ?? []).map((r) => (r.brandId === row.brandId ? { ...r, value: match } : r)),
           );
         } catch (err) {
-          console.error('GSC auto-map failed:', err);
+          console.error(`${sourceName} auto-map failed:`, err);
           return; // likely a permissions error — no point retrying the rest
         }
       }
     })();
-  }, [properties, mappings]);
+  }, [options, rows, save, sourceName]);
 
-  const handlePick = async (brandId: string, value: string) => {
-    const property = value === NONE_VALUE ? null : value;
-    const previous = mappings;
+  const handlePick = async (brandId: string, picked: string) => {
+    const value = picked === NONE_VALUE ? null : picked;
+    const previous = rows;
     setSavingBrandId(brandId);
-    setMappings((prev) =>
-      (prev ?? []).map((row) =>
-        row.brandId === brandId ? { ...row, gscProperty: property } : row,
-      ),
-    );
+    setRows((prev) => (prev ?? []).map((r) => (r.brandId === brandId ? { ...r, value } : r)));
     try {
-      await setBrandGscProperty(brandId, property);
+      await save(brandId, value);
     } catch (err) {
-      setMappings(previous);
+      setRows(previous);
       toast.error(err instanceof Error ? err.message : 'Failed to save property');
     } finally {
       setSavingBrandId(null);
@@ -352,7 +383,7 @@ function GscPropertyMapping() {
   if (loadFailed) {
     return (
       <div className="rounded-lg border p-4 text-sm">
-        <p className="text-muted-foreground">Couldn&apos;t load Search Console properties.</p>
+        <p className="text-muted-foreground">Couldn&apos;t load {sourceName} properties.</p>
         <p className="mt-1 text-xs text-muted-foreground">{loadFailed}</p>
         <Button variant="outline" size="sm" className="mt-3" onClick={load}>
           Retry
@@ -361,44 +392,49 @@ function GscPropertyMapping() {
     );
   }
 
-  if (!properties || !mappings) {
+  if (!options || !rows) {
     return <Skeleton className="h-24 w-full" />;
   }
 
-  const mappedCount = mappings.filter((m) => m.gscProperty).length;
+  const mappedCount = rows.filter((r) => r.value).length;
+  // The trigger renders the *value* unless the Select knows the value → label
+  // mapping. Search Console values are the label (a URL), but a GA4 value is a
+  // numeric id, which would otherwise show as a bare number once picked.
+  const selectItems = [
+    { value: NONE_VALUE, label: 'Not mapped' },
+    ...options.map((option) => ({ value: option.value, label: option.label })),
+  ];
 
   return (
     <div className="rounded-lg border p-4 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium">Property mapping</p>
         <span className="text-xs text-muted-foreground">
-          {mappedCount} of {mappings.length} brand{mappings.length !== 1 ? 's' : ''} mapped
+          {mappedCount} of {rows.length} brand{rows.length !== 1 ? 's' : ''} mapped
         </span>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Pick which Search Console property each brand&apos;s data comes from. Brands matching a
-        property by domain are mapped automatically.
-      </p>
+      <p className="text-xs text-muted-foreground">{description}</p>
       <div className="space-y-2">
-        {mappings.map((m) => (
-          <div key={m.brandId} className="flex items-center justify-between gap-3">
-            <span className="truncate text-sm">{m.brandName}</span>
+        {rows.map((row) => (
+          <div key={row.brandId} className="flex items-center justify-between gap-3">
+            <span className="truncate text-sm">{row.brandName}</span>
             <div className="flex items-center gap-2">
-              {savingBrandId === m.brandId && (
+              {savingBrandId === row.brandId && (
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
               )}
               <Select
-                value={m.gscProperty ?? null}
-                onValueChange={(v) => handlePick(m.brandId, v ?? NONE_VALUE)}
+                items={selectItems}
+                value={row.value ?? null}
+                onValueChange={(v) => handlePick(row.brandId, v ?? NONE_VALUE)}
               >
                 <SelectTrigger className="h-8 w-64 text-xs">
                   <SelectValue placeholder="Select a property" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE_VALUE}>Not mapped</SelectItem>
-                  {properties.map((p) => (
-                    <SelectItem key={p.siteUrl} value={p.siteUrl}>
-                      {p.siteUrl}
+                  {options.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -407,12 +443,73 @@ function GscPropertyMapping() {
           </div>
         ))}
       </div>
-      {properties.length === 0 && (
-        <p className="text-xs text-muted-foreground">
-          The connected account has no Search Console properties. Add your site in Search Console
-          first, then retry.
-        </p>
-      )}
+      {options.length === 0 && <p className="text-xs text-muted-foreground">{emptyMessage}</p>}
     </div>
+  );
+}
+
+// Loaders live at module scope so their identity is stable across renders —
+// PropertyMapping's effects depend on them.
+
+async function loadGscOptions(): Promise<PropertyOption[]> {
+  const properties = await getGscProperties();
+  return properties.map((p) => ({ value: p.siteUrl, label: p.siteUrl, siteUrls: [p.siteUrl] }));
+}
+
+async function loadGscRows(): Promise<BrandPropertyRow[]> {
+  const mappings = await getGscBrandMappings();
+  return mappings.map((m) => ({
+    brandId: m.brandId,
+    brandName: m.brandName,
+    value: m.gscProperty,
+    domains: m.domains,
+  }));
+}
+
+function GscPropertyMapping() {
+  return (
+    <PropertyMapping
+      sourceName="Search Console"
+      description="Pick which Search Console property each brand's data comes from. Brands matching a property by domain are mapped automatically."
+      emptyMessage="The connected account has no Search Console properties. Add your site in Search Console first, then retry."
+      loadOptions={loadGscOptions}
+      loadRows={loadGscRows}
+      save={setBrandGscProperty}
+    />
+  );
+}
+
+async function loadGaOptions(): Promise<PropertyOption[]> {
+  const properties = await getGaProperties();
+  return properties.map((p) => ({
+    value: p.propertyId,
+    // Display names repeat across accounts ("GA4"), so the id disambiguates.
+    label: p.accountName
+      ? `${p.displayName} · ${p.accountName} (${p.propertyId})`
+      : `${p.displayName} (${p.propertyId})`,
+    siteUrls: p.siteUrls,
+  }));
+}
+
+async function loadGaRows(): Promise<BrandPropertyRow[]> {
+  const mappings = await getGaBrandMappings();
+  return mappings.map((m) => ({
+    brandId: m.brandId,
+    brandName: m.brandName,
+    value: m.gaPropertyId,
+    domains: m.domains,
+  }));
+}
+
+function GaPropertyMapping() {
+  return (
+    <PropertyMapping
+      sourceName="Analytics"
+      description="Pick which GA4 property each brand's data comes from. Brands whose domain matches a property's web data stream are mapped automatically."
+      emptyMessage="The connected account has no GA4 properties. Create one in Google Analytics first, then retry."
+      loadOptions={loadGaOptions}
+      loadRows={loadGaRows}
+      save={setBrandGaProperty}
+    />
   );
 }
