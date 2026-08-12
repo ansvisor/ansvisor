@@ -24,11 +24,22 @@ const DEFAULT_SENTIMENT_MODEL = 'openai/gpt-5-mini';
 /** Longest response slice sent for analysis — unchanged from the original. */
 const MAX_RESPONSE_CHARS = 3000;
 
+// `confidence` carries no min/max: Anthropic rejects `minimum`/`maximum` on
+// numeric properties in strict structured-output mode ("For 'number' type,
+// properties maximum, minimum are not supported"), and OpenRouter surfaces that
+// 400 from every backing provider — Anthropic, Azure and Bedrock alike. The
+// range is enforced in code below instead, as the original implementation did.
 export const sentimentSchema = z.object({
   sentiment: z.enum(['positive', 'neutral', 'negative']),
-  confidence: z.number().min(0).max(1),
+  confidence: z.number(),
   reason: z.string(),
 });
+
+/** Clamp to [0,1] — the schema cannot express it portably. */
+function clampConfidence(value) {
+  if (typeof value !== 'number' || Number.isNaN(value)) return 0.5;
+  return Math.max(0, Math.min(1, value));
+}
 
 export const SENTIMENT_SYSTEM_PROMPT =
   'You are a brand sentiment analyzer. Given an AI-generated response and a brand name, determine the sentiment toward that brand. Base the verdict only on how the response portrays that specific brand, not on its overall tone.';
@@ -54,7 +65,7 @@ export async function analyzeSentimentAI(responseText, brandName) {
       prompt: `Brand: "${brandName}"\n\nAI Response:\n${responseText.slice(0, MAX_RESPONSE_CHARS)}`,
     });
 
-    return object;
+    return { ...object, confidence: clampConfidence(object.confidence) };
   } catch (err) {
     logger.error({ err }, '[sentiment-ai] failed, falling back to neutral');
     return { sentiment: 'neutral', confidence: 0, reason: 'Analysis failed' };

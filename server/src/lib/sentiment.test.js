@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { z } from 'zod';
 
 const generateObject = vi.fn();
 const resolveModel = vi.fn();
@@ -95,8 +96,35 @@ describe('analyzeSentimentAI', () => {
     expect(
       sentimentSchema.safeParse({ sentiment: 'mixed', confidence: 0.5, reason: 'x' }).success,
     ).toBe(false);
-    expect(
-      sentimentSchema.safeParse({ sentiment: 'positive', confidence: 1.5, reason: 'x' }).success,
-    ).toBe(false);
+  });
+
+  it('keeps confidence free of min/max so Anthropic accepts the schema', () => {
+    // Anthropic rejects `minimum`/`maximum` on numbers in strict structured
+    // output, and OpenRouter surfaces that 400 from every backing provider.
+    // Verified against the live endpoint, not just in principle.
+    const json = z.toJSONSchema(sentimentSchema);
+
+    expect(json.properties.confidence.minimum).toBeUndefined();
+    expect(json.properties.confidence.maximum).toBeUndefined();
+  });
+
+  it('clamps out-of-range confidence in code instead', async () => {
+    generateObject.mockResolvedValue({
+      object: { sentiment: 'positive', confidence: 1.5, reason: 'over-confident model' },
+    });
+    expect((await analyzeSentimentAI('great', 'Acme')).confidence).toBe(1);
+
+    generateObject.mockResolvedValue({
+      object: { sentiment: 'negative', confidence: -0.2, reason: 'negative number' },
+    });
+    expect((await analyzeSentimentAI('bad', 'Acme')).confidence).toBe(0);
+  });
+
+  it('falls back to 0.5 when the model omits a usable confidence', async () => {
+    generateObject.mockResolvedValue({
+      object: { sentiment: 'neutral', confidence: Number.NaN, reason: 'unparseable' },
+    });
+
+    expect((await analyzeSentimentAI('meh', 'Acme')).confidence).toBe(0.5);
   });
 });
