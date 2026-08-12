@@ -20,6 +20,30 @@ function resolveModelPlatform(model) {
 }
 
 /**
+ * Which drain time budget, if any, has run out (#702).
+ *
+ * Two budgets rather than one cap measured from submission. Before anything
+ * has come back there is nothing to reason about — the stall and ghost exits
+ * both compare successive pending counts — so that phase gets its own, longer
+ * allowance. Once delivery starts, the tail is measured from the first result,
+ * so a slow queue start no longer consumes the time the tail needs.
+ *
+ * Returns 'no_first_result', 'tail_deadline', or null while within budget.
+ */
+export function drainBudgetExceeded({
+  now,
+  drainStartedAt,
+  firstResultAt,
+  firstResultWaitMs,
+  drainTailMs,
+}) {
+  if (firstResultAt === null || firstResultAt === undefined) {
+    return now - drainStartedAt >= firstResultWaitMs ? 'no_first_result' : null;
+  }
+  return now - firstResultAt >= drainTailMs ? 'tail_deadline' : null;
+}
+
+/**
  * True when every still-pending task was submitted longer ago than `maxAgeMs`.
  *
  * Such tasks can no longer be in flight: Cloro accepted them and never called
@@ -304,15 +328,34 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
       const expectedSubmitted = submittedTaskIds.size;
 
       if (expectedSubmitted > 0) {
-        // Hard cap so a stuck Cloro queue can't keep a worker alive forever.
-        const drainDeadline = Date.now() + 60 * 60 * 1000;
         const drainPollMs = 15_000;
+        // Two separate budgets, because "nothing has come back yet" and "the
+        // tail is taking a while" are different situations (#702).
+        //
+        // A single 60-minute cap measured from submission discarded healthy
+        // runs: on the largest brand the first callback landed 62-65 minutes
+        // after submission three nights running, so the worker gave up two to
+        // five minutes before the delivery it was waiting for. The run then
+        // produced zero results at stamp time, the ledger row was deleted, and
+        // the dashboard and pulse stayed anchored to the previous day even
+        // though ~1800 results landed minutes later.
+        //
+        // Before the first result there is nothing to measure: the stall and
+        // ghost exits below both reason about *changes* in the pending set, so
+        // they are meaningless until at least one task has come back. That
+        // phase gets its own generous budget.
+        const firstResultWaitMs = (Number(process.env.CLORO_FIRST_RESULT_WAIT_MIN) || 90) * 60_000;
+        // Once delivery has started, this bounds the tail. Measured from the
+        // first result rather than from submission, so a slow queue start no
+        // longer eats the time the tail needs.
+        const drainTailMs = (Number(process.env.CLORO_DRAIN_TAIL_MIN) || 60) * 60_000;
         // Give up early if delivery stalls — no new result for this many
         // consecutive polls. Cloro delivers in bursts with quiet gaps: a real
         // run went silent for 10+ minutes after the first ~600 results and
         // then delivered the remaining ~1000, so the old ~10-min limit cut a
-        // healthy run in half. ~25 min tolerates those gaps while the 60-min
-        // drain deadline stays the hard cap on a truly stuck queue.
+        // healthy run in half. ~25 min tolerates those gaps while the tail
+        // budget above stays the hard cap on a queue that dies mid-delivery.
+        // Only counted once the first result has arrived.
         const stallPollLimit = Number(process.env.CLORO_STALL_POLL_LIMIT) || 100;
         // Ghost tasks — accepted by Cloro, never called back (google-aio does
         // this whenever a query has no AI Overview) — used to burn the whole
@@ -326,8 +369,25 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
 
         let lastPending = expectedSubmitted;
         let stalledPolls = 0;
+        const drainStartedAt = Date.now();
+        let firstResultAt = null;
+        let exitReason = 'drained';
 
-        while (Date.now() < drainDeadline) {
+        for (;;) {
+          // Budget first, so it also bounds a poll that keeps failing — the
+          // retry path below skips the rest of the iteration.
+          const budgetExit = drainBudgetExceeded({
+            now: Date.now(),
+            drainStartedAt,
+            firstResultAt,
+            firstResultWaitMs,
+            drainTailMs,
+          });
+          if (budgetExit) {
+            exitReason = budgetExit;
+            break;
+          }
+
           // Brand-scoped read (a handful of rows at most), intersected in memory
           // with our own task_ids — avoids a giant `.in(...)` URL.
           const { data: rows, error: drainErr } = await supabaseAdmin
@@ -349,6 +409,14 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
           const processed = expectedSubmitted - pending;
           const allPendingAreOld = allTasksAreStale(ourRows, ghostTaskAgeMs);
 
+          if (processed > 0 && firstResultAt === null) {
+            firstResultAt = Date.now();
+            logger.info(
+              { brandId, waitedMs: firstResultAt - drainStartedAt, expected: expectedSubmitted },
+              'cloro delivery started',
+            );
+          }
+
           if (job) {
             job.progress({
               current: completedTasks + processed,
@@ -364,25 +432,43 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
 
           if (pending === 0) break;
 
+          // Stall and ghost detection reason about changes in the pending set,
+          // so they only mean anything once something has come back.
+          if (firstResultAt === null) {
+            await new Promise((r) => setTimeout(r, drainPollMs));
+            continue;
+          }
+
           if (pending < lastPending) {
             lastPending = pending;
             stalledPolls = 0;
           } else if (allPendingAreOld && stalledPolls + 1 >= ghostStallPolls) {
-            logger.warn(
-              { brandId, pending, expected: expectedSubmitted, stalledPolls: stalledPolls + 1 },
-              'cloro tasks are ghosts — delivery quiet and every remaining task is stale; continuing',
-            );
+            stalledPolls += 1;
+            exitReason = 'ghosts';
             break;
           } else if (++stalledPolls >= stallPollLimit) {
-            logger.warn(
-              { brandId, pending, expected: expectedSubmitted },
-              'cloro delivery stalled — some tasks never returned; continuing',
-            );
+            exitReason = 'stalled';
             break;
           }
 
           await new Promise((r) => setTimeout(r, drainPollMs));
         }
+
+        // Always log how the drain ended. Reconstructing this from the database
+        // the morning after — which is how #702 was diagnosed — is guesswork,
+        // because the timed-out path used to fall out of the loop silently.
+        const log = exitReason === 'drained' ? logger.info : logger.warn;
+        log.call(
+          logger,
+          {
+            brandId,
+            exitReason,
+            expected: expectedSubmitted,
+            elapsedMs: Date.now() - drainStartedAt,
+            firstResultAfterMs: firstResultAt ? firstResultAt - drainStartedAt : null,
+          },
+          `cloro drain finished (${exitReason})`,
+        );
       }
 
       completedTasks += expectedSubmitted;
@@ -568,6 +654,8 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   // onto an empty window. On a count error we leave the row uncompleted —
   // the dashboard keeps the previous completed run and the next run clears
   // the dangling row.
+  let runStamped = false;
+
   if (trackingRunId) {
     const { count: runResultCount, error: countErr } = await supabaseAdmin
       .from('prompt_results')
@@ -597,6 +685,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
       if (stampErr) {
         logger.error({ err: stampErr, brandId, trackingRunId }, 'failed to stamp tracking run');
       } else {
+        runStamped = true;
         logger.info({ brandId, trackingRunId, runResultCount }, 'tracking run stamped');
       }
     } else if ((runResultCount ?? 0) > 0) {
@@ -611,5 +700,8 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     }
   }
 
-  return { resultCount: insertedCount };
+  // `stamped` gates the Daily Pulse (#702): a run whose ledger row was
+  // refused never moved the 24h anchor, so its pulse would recompute the
+  // previous run's window and mail numbers the recipient already has.
+  return { resultCount: insertedCount, stamped: runStamped };
 }
