@@ -34,6 +34,32 @@ if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
   providers.google = googleProvider;
 }
 
+// OpenRouter exposes an OpenAI-compatible endpoint, so the OpenAI SDK talks to
+// it unchanged. Model ids keep their upstream namespace after the provider
+// prefix: "openrouter/anthropic/claude-haiku-4.5" resolves to the OpenRouter
+// model "anthropic/claude-haiku-4.5" — resolveModel() splits on the first
+// slash only, so nested ids survive.
+//
+// Analysis tasks only (suggestions, audit signals, sentiment). Prompt tracking
+// stays on the first-party SDKs: it depends on provider-hosted web search
+// (OpenAI `web_search`, Anthropic `web_search_20250305`), which OpenRouter does
+// not relay.
+if (process.env.OPENROUTER_API_KEY) {
+  const openrouter = createOpenAI({
+    apiKey: process.env.OPENROUTER_API_KEY,
+    baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+    headers: {
+      'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://ansvisor.com',
+      'X-Title': process.env.OPENROUTER_SITE_NAME || 'Ansvisor',
+    },
+  });
+
+  // .chat() rather than the provider's default call: @ai-sdk/openai defaults to
+  // OpenAI's Responses API, which OpenRouter does not implement — every request
+  // would 404 on /responses. OpenRouter is Chat Completions compatible.
+  providers.openrouter = (modelId, options) => openrouter.chat(modelId, options);
+}
+
 /**
  * Resolve a "provider/model" string into a Vercel AI SDK model instance
  * @param {string} modelString - e.g. "openai/gpt-4o-mini", "anthropic/claude-sonnet-4-20250514", "google/gemini-pro"
