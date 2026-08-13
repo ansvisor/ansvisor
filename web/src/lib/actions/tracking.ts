@@ -1440,11 +1440,13 @@ export interface PromptVisibilitySummary {
  */
 export async function getPromptVisibilitySummaries(
   brandId: string,
-  opts?: { days?: number },
+  opts?: { days?: number; from?: string; to?: string },
 ): Promise<Record<string, PromptVisibilitySummary>> {
   const supabase = await createClient();
+  // `from`/`to` win when given (the custom range, #713); otherwise the day
+  // count keeps every existing caller on its previous behaviour.
   const days = opts?.days ?? 30;
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const since = opts?.from ?? new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
   // One GROUP BY in Postgres (migration 00025) instead of pulling the raw
   // result window into JS: the old un-paginated select silently capped at
@@ -1454,6 +1456,7 @@ export async function getPromptVisibilitySummaries(
   const { data, error } = await supabase.rpc('prompt_visibility_summaries', {
     p_brand_id: brandId,
     p_date_from: since,
+    p_date_to: opts?.to ?? null,
   });
 
   if (error) throw new Error(error.message);

@@ -111,6 +111,7 @@ async function fetchFanoutRows(
   brandId: string,
   since: string,
   promptId?: string,
+  until?: string,
 ): Promise<{ rows: FanoutResultRow[]; truncated: boolean }> {
   const rows: FanoutResultRow[] = [];
   for (let from = 0; from < FANOUT_MAX_ROWS; from += FANOUT_PAGE_SIZE) {
@@ -123,6 +124,7 @@ async function fetchFanoutRows(
       .order('created_at', { ascending: true })
       .order('id', { ascending: true })
       .range(from, from + FANOUT_PAGE_SIZE - 1);
+    if (until) query = query.lte('created_at', until);
     if (promptId) query = query.eq('prompt_id', promptId);
 
     const { data, error } = await query;
@@ -203,19 +205,25 @@ function normalizeQuery(raw: string): string {
  */
 export async function getQueryFanout(
   brandId: string,
-  opts?: { days?: number },
+  opts?: { days?: number; from?: string; to?: string },
 ): Promise<QueryFanoutData> {
   const supabase = await createClient();
   // Clamp the window to a sane range so a crafted call can't force an
-  // unbounded prompt_results scan + in-memory aggregation.
+  // unbounded prompt_results scan + in-memory aggregation. The custom range
+  // (#713) is clamped by the caller to the same ceiling, and re-clamped here
+  // because this action is reachable on its own.
   const days = Math.min(Math.max(Math.trunc(opts?.days ?? 30) || 30, 1), MAX_FANOUT_DAYS);
-  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  const earliest = Date.now() - MAX_FANOUT_DAYS * 86_400_000;
+  const requested = opts?.from ? Date.parse(opts.from) : NaN;
+  const since = Number.isFinite(requested)
+    ? new Date(Math.max(requested, earliest)).toISOString()
+    : new Date(Date.now() - days * 86_400_000).toISOString();
 
   // No server-side "non-empty" filter: comparing a jsonb column to '[]' through
   // PostgREST is unreliable, and rows with an empty fan-out contribute nothing
   // to the sub-query aggregation below (the item loop skips them) — but they do
   // count toward coverage, which is the whole point of the denominator.
-  const { rows, truncated } = await fetchFanoutRows(supabase, brandId, since);
+  const { rows, truncated } = await fetchFanoutRows(supabase, brandId, since, undefined, opts?.to);
 
   interface Acc {
     display: string;

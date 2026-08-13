@@ -133,41 +133,79 @@ export const ALL_SCRAPERS = SCRAPER_GROUPS.flatMap((g) =>
 );
 
 /**
- * Date-range presets for the Prompts page (#686).
- *
- * No 24h option: a single day gives one or two runs per prompt, so the scores
- * would be noise and most of the table would read zero. No "all time" either —
- * the visibility summaries scan every result row in the window, so an
- * unbounded range has unbounded cost, and 90 days matches the fan-out cap.
+ * Fallback window for `getPromptsPageData` when a caller passes no range at
+ * all. The page always passes one; this only covers direct calls.
  */
-export const PROMPT_RANGE_DAYS = [7, 30, 90] as const;
+export const DEFAULT_PROMPT_RANGE_DAYS = 30;
 
-export type PromptRangeDays = (typeof PROMPT_RANGE_DAYS)[number];
+/**
+ * The windows the Prompts page offers, in the shared date-range control's
+ * vocabulary (#713).
+ *
+ * Matches Visibility and Citations except for `all`, which is deliberately
+ * absent: the Query Fan-out tab aggregates raw rows in the client and is hard
+ * capped at 90 days and 50,000 rows, so an unbounded option would silently
+ * mean "90 days" there — the same silent truncation filed as #721. A custom
+ * range is clamped to the same 90 days for the same reason, so both tabs
+ * always describe the window they actually read.
+ */
+export const PROMPT_RANGE_PRESETS = ['24h', '7d', '30d', '90d', 'custom'] as const;
 
-export const DEFAULT_PROMPT_RANGE_DAYS: PromptRangeDays = 30;
+export type PromptRangePreset = (typeof PROMPT_RANGE_PRESETS)[number];
 
-export function isPromptRangeDays(value: unknown): value is PromptRangeDays {
-  return PROMPT_RANGE_DAYS.includes(Number(value) as PromptRangeDays);
+/** Matches Visibility and Citations, which both open on 24h. */
+export const DEFAULT_PROMPT_RANGE_PRESET: PromptRangePreset = '24h';
+
+/** The furthest back either tab can honestly report. */
+export const PROMPT_RANGE_MAX_DAYS = 90;
+
+export function isPromptRangePreset(value: unknown): value is PromptRangePreset {
+  return PROMPT_RANGE_PRESETS.includes(value as PromptRangePreset);
+}
+
+export interface PromptRange {
+  /** ISO lower bound. */
+  from: string;
+  /** ISO upper bound, or undefined for "up to now". */
+  to?: string;
+  /** Whole days the window spans — the fan-out path still thinks in days. */
+  days: number;
 }
 
 /**
- * The same windows spoken in the shared date-range control's vocabulary
- * (#713). Derived from the day counts above rather than written out again, so
- * adding a window is still a one-line change in one place.
- *
- * The page's data path takes a day count; the control takes a preset id. These
- * two helpers are the whole translation.
+ * Resolve a preset (plus the custom inputs) into the bounds both data paths
+ * take. A custom range is clamped to PROMPT_RANGE_MAX_DAYS and never extends
+ * into the future, so the two tabs cannot disagree about what they read.
  */
-export type PromptRangePreset = `${PromptRangeDays}d`;
+export function resolvePromptRange(
+  preset: PromptRangePreset,
+  custom?: { from?: string; to?: string },
+): PromptRange {
+  const now = Date.now();
+  const dayMs = 86_400_000;
 
-export const PROMPT_RANGE_PRESETS = PROMPT_RANGE_DAYS.map(
-  (days) => `${days}d`,
-) as readonly PromptRangePreset[];
+  if (preset === 'custom') {
+    const parsedTo = custom?.to ? Date.parse(`${custom.to}T23:59:59.999Z`) : NaN;
+    const parsedFrom = custom?.from ? Date.parse(custom.from) : NaN;
+    const to = Number.isFinite(parsedTo) ? Math.min(parsedTo, now) : now;
+    const earliest = to - PROMPT_RANGE_MAX_DAYS * dayMs;
+    const from = Number.isFinite(parsedFrom)
+      ? Math.min(Math.max(parsedFrom, earliest), to)
+      : earliest;
+    return {
+      from: new Date(from).toISOString(),
+      to: new Date(to).toISOString(),
+      days: Math.max(1, Math.ceil((to - from) / dayMs)),
+    };
+  }
 
-export function promptRangePresetOf(days: PromptRangeDays): PromptRangePreset {
-  return `${days}d`;
+  const days = preset === '24h' ? 1 : Number(preset.slice(0, -1));
+  return { from: new Date(now - days * dayMs).toISOString(), days };
 }
 
-export function promptRangeDaysOf(preset: PromptRangePreset): PromptRangeDays {
-  return Number(preset.slice(0, -1)) as PromptRangeDays;
+/** Human label for the resolved window, used in table tooltips and exports. */
+export function promptRangeLabel(preset: PromptRangePreset): string {
+  if (preset === '24h') return 'last 24 hours';
+  if (preset === 'custom') return 'the selected range';
+  return `last ${preset.slice(0, -1)} days`;
 }

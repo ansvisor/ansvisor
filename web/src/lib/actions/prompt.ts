@@ -549,7 +549,7 @@ export interface PromptsPageData {
  */
 export async function getPromptsPageData(
   brandId: string,
-  opts?: { days?: number },
+  opts?: { days?: number; from?: string; to?: string },
 ): Promise<PromptsPageData> {
   // Only the visibility summaries are window-scoped. Prompt sets are the
   // roster itself, and volumes are keyword-level estimates with no date
@@ -557,7 +557,7 @@ export async function getPromptsPageData(
   const days = opts?.days ?? DEFAULT_PROMPT_RANGE_DAYS;
   const [promptSets, visibility, volumesResult] = await Promise.all([
     getPromptSets(brandId),
-    getPromptVisibilitySummaries(brandId, { days }),
+    getPromptVisibilitySummaries(brandId, { days, from: opts?.from, to: opts?.to }),
     getPromptVolumes(brandId).then(
       (r) => ({ volumes: r.volumes, quota: r.quota ?? null, degraded: false }),
       (err) => {

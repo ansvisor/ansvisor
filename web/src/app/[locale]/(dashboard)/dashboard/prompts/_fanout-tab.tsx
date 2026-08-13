@@ -11,7 +11,7 @@ import {
   type FanoutSubQuery,
 } from '@/lib/actions/fanout';
 import { INTENT_LABELS, INTENT_COLORS } from '@/config/intent-labels';
-import type { PromptRangeDays } from '@/config/prompt-options';
+import type { PromptRange } from '@/config/prompt-options';
 import { PlatformsCell } from '@/components/citations/source-cells';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,7 +44,8 @@ interface PromptGroup {
 type QueryFanoutTabProps = {
   brandId: string;
   /** Window shared with the rest of the Prompts page (#686). */
-  days: PromptRangeDays;
+  range: PromptRange | null;
+  rangeLabel: string;
   onTracked?: () => void | Promise<void>;
 };
 
@@ -76,7 +77,7 @@ function userErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
-export function QueryFanoutTab({ brandId, days, onTracked }: QueryFanoutTabProps) {
+export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryFanoutTabProps) {
   const [data, setData] = useState<QueryFanoutData | null>(null);
   const [loading, setLoading] = useState(true);
   const [addingKey, setAddingKey] = useState<string | null>(null);
@@ -143,7 +144,11 @@ export function QueryFanoutTab({ brandId, days, onTracked }: QueryFanoutTabProps
         setLoading(true);
       }
       try {
-        const result = await getQueryFanout(brandId, { days });
+        const result = await getQueryFanout(brandId, {
+          days: range?.days,
+          from: range?.from,
+          to: range?.to,
+        });
         setData(result);
         void classifyProgressively(result.subQueries.map((s) => s.query));
       } catch (err) {
@@ -156,7 +161,7 @@ export function QueryFanoutTab({ brandId, days, onTracked }: QueryFanoutTabProps
         }
       }
     },
-    [brandId, days, classifyProgressively],
+    [brandId, range, classifyProgressively],
   );
 
   useEffect(() => {
@@ -169,7 +174,7 @@ export function QueryFanoutTab({ brandId, days, onTracked }: QueryFanoutTabProps
 
   useEffect(() => {
     setSearchText('');
-  }, [brandId, days]);
+  }, [brandId, range]);
 
   useEffect(() => {
     setSearchText('');
@@ -300,7 +305,7 @@ export function QueryFanoutTab({ brandId, days, onTracked }: QueryFanoutTabProps
         <p className="text-xs text-muted-foreground">
           {view === 'by-prompt'
             ? 'Your tracked prompts grouped by the sub-queries their answers actually triggered — expand a prompt to see its observed fan-out. "Answers with fan-out" is how many of that prompt’s tracked answers ran a live search at all.'
-            : `The sub-queries answer engines actually ran while building your answers (last ${days} days) — observed, never predicted. Sorted by how often they were searched. Track any of them with the + to measure its own visibility.`}
+            : `The sub-queries answer engines actually ran while building your answers (${rangeLabel}) — observed, never predicted. Sorted by how often they were searched. Track any of them with the + to measure its own visibility.`}
         </p>
       </CardHeader>
       <CardContent>
@@ -328,7 +333,7 @@ export function QueryFanoutTab({ brandId, days, onTracked }: QueryFanoutTabProps
             intents={intents}
             addingKey={addingKey}
             pager={byPromptPager}
-            days={days}
+            rangeLabel={rangeLabel}
             onTrack={handleTrack}
             searchText={searchText}
             onSearchChange={setSearchText}
@@ -481,7 +486,7 @@ function ByPromptView({
   intents,
   addingKey,
   pager,
-  days,
+  rangeLabel,
   onTrack,
   searchText,
   onSearchChange,
@@ -490,7 +495,7 @@ function ByPromptView({
   intents: Record<string, string>;
   addingKey: string | null;
   pager: ReturnType<typeof usePagination>;
-  days: PromptRangeDays;
+  rangeLabel: string;
   onTrack: (query: string) => void;
   searchText: string;
   onSearchChange: (text: string) => void;
@@ -518,7 +523,7 @@ function ByPromptView({
         searchText ? (
           <NoMatches label="No prompts match your search" />
         ) : (
-          <NoMatches label={`No tracked answers in the last ${days} days`} />
+          <NoMatches label={`No tracked answers in the ${rangeLabel}`} />
         )
       ) : (
         <>
