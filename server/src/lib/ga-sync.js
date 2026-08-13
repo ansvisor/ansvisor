@@ -38,9 +38,9 @@ const RETENTION_DAYS = 400;
  * almost all of it single-session noise that no ranking of commercial value
  * would surface. The ordering below makes the cut safe rather than arbitrary.
  */
-const PAGE_DAILY_LIMIT = Number(process.env.GA_PAGE_DAILY_LIMIT) || 5000;
+const PAGE_DAILY_LIMIT = 5000;
 /** Same reasoning for a catalogue with tens of thousands of SKUs. */
-const ITEM_DAILY_LIMIT = Number(process.env.GA_ITEM_DAILY_LIMIT) || 5000;
+const ITEM_DAILY_LIMIT = 5000;
 /** Days fetched at once during a backfill. GA4 allows 10 concurrent requests. */
 const DAY_CONCURRENCY = 4;
 

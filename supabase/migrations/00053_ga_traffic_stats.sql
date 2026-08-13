@@ -65,8 +65,8 @@ CREATE INDEX ga_ai_traffic_stats_brand_date_idx
 -- This is the table that grows: one row per page per day, and a large shop
 -- can have tens of thousands of pages taking traffic on any given day. Two
 -- things bound it — the path without its query string, and a per-day ceiling
--- on how many pages are kept (see GA_PAGE_DAILY_LIMIT). Pages are ordered so
--- that anything converting survives the cut regardless of its session count;
+-- on how many pages are kept (PAGE_DAILY_LIMIT in ga-sync.js). Pages are
+-- ordered so anything converting survives the cut whatever its session count;
 -- what gets dropped is the one-session tail, which no ranking of commercial
 -- value would have surfaced anyway.
 CREATE TABLE public.ga_page_stats (
