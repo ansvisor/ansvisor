@@ -18,6 +18,8 @@ import {
   ChevronRight,
   AlertTriangle,
   SearchCheck,
+  BarChart3,
+  Sparkle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -25,9 +27,35 @@ import {
   refreshPromptSuggestions,
   acceptSuggestion,
   dismissSuggestion,
+  gaSourceData,
+  gscSourceData,
+  type GaSuggestionSourceData,
   type PromptSuggestion,
   type GscSuggestionBadge,
 } from '@/lib/actions/prompt-suggestions';
+
+/**
+ * Analytics evidence, in the customer's own numbers (#705). A blind spot is
+ * argued from money, momentum from the engines already sending visitors —
+ * showing the wrong one would make a true statement about the wrong thing.
+ */
+function gaEvidence(d: GaSuggestionSourceData): { label: string; tooltip: string } {
+  if (d.kind === 'ai_momentum') {
+    const engines = d.aiPlatforms.length ? d.aiPlatforms.join(', ') : 'AI assistants';
+    return {
+      label: `AI traffic · ${d.aiSessions.toLocaleString()} sessions`,
+      tooltip: `${engines} already sent ${d.aiSessions.toLocaleString()} visits to ${d.landingPage} in the last 28 days. That topic is demonstrably answerable by an AI engine and you are already a candidate source for it — tracking a prompt around it turns an accident into a measured position.`,
+    };
+  }
+  const earns =
+    d.revenue > 0
+      ? `${d.revenue.toLocaleString()} in revenue`
+      : `${d.keyEvents.toLocaleString()} conversions`;
+  return {
+    label: `#${d.rank} by ${d.revenue > 0 ? 'revenue' : 'conversions'}`,
+    tooltip: `${d.landingPage} produced ${earns} from ${d.sessions.toLocaleString()} sessions in the last 28 days, and nothing you track would surface it in an AI answer. Anyone asking an assistant about this has no way to find you.`,
+  };
+}
 
 const GSC_BADGES: Record<GscSuggestionBadge, { label: string; tooltip: string }> = {
   protect_traffic: {
@@ -325,6 +353,11 @@ export function SuggestionsCard({ brandId, onAccepted }: Props) {
             <ul className="space-y-2">
               {suggestions.map((s) => {
                 const busy = pendingId === s.id;
+                // Narrow the evidence payload to the shape its source promises,
+                // so a row whose `source` and payload disagree renders as a
+                // plain suggestion instead of reading fields that are not there.
+                const gsc = gscSourceData(s);
+                const ga = gaSourceData(s);
                 return (
                   <li
                     key={s.id}
@@ -341,31 +374,55 @@ export function SuggestionsCard({ brandId, onAccepted }: Props) {
                         )}
                         {/* GSC rows carry real impressions — showing the modeled
                             estimate next to measured data reads as a contradiction. */}
-                        {s.estVolume != null && s.estVolume > 0 && s.source !== 'gsc' && (
+                        {s.estVolume != null && s.estVolume > 0 && !gsc && !ga && (
                           <Badge variant="outline" className="gap-1 text-xs tabular-nums">
                             <TrendingUp className="h-3 w-3" />~{s.estVolume.toLocaleString()}/mo
                           </Badge>
                         )}
-                        {s.source === 'gsc' && s.sourceData && (
+                        {gsc && (
                           <>
                             <HoverTip
-                              content={`From your Google Search Console data \u2014 the query "${s.sourceData.query}" got ${s.sourceData.impressions.toLocaleString()} impressions in the last 28 days.`}
+                              content={`From your Google Search Console data \u2014 the query "${gsc.query}" got ${gsc.impressions.toLocaleString()} impressions in the last 28 days.`}
                             >
                               <Badge
                                 variant="outline"
                                 className="gap-1 text-xs border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400"
                               >
                                 <SearchCheck className="h-3 w-3" />
-                                Search Console · {s.sourceData.impressions.toLocaleString()} impr/mo
+                                Search Console · {gsc.impressions.toLocaleString()} impr/mo
                               </Badge>
                             </HoverTip>
-                            {s.sourceData.badge && (
-                              <HoverTip content={GSC_BADGES[s.sourceData.badge].tooltip}>
+                            {gsc.badge && (
+                              <HoverTip content={GSC_BADGES[gsc.badge].tooltip}>
                                 <Badge variant="outline" className="text-xs">
-                                  {GSC_BADGES[s.sourceData.badge].label}
+                                  {GSC_BADGES[gsc.badge].label}
                                 </Badge>
                               </HoverTip>
                             )}
+                          </>
+                        )}
+                        {ga && (
+                          <>
+                            <HoverTip
+                              content={`From your Google Analytics — derived from ${ga.pageTitle ? `"${ga.pageTitle}" (${ga.landingPage})` : ga.landingPage}, read from the page itself rather than from its URL or product name.`}
+                            >
+                              <Badge
+                                variant="outline"
+                                className="gap-1 text-xs border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                              >
+                                {ga.kind === 'ai_momentum' ? (
+                                  <Sparkle className="h-3 w-3" />
+                                ) : (
+                                  <BarChart3 className="h-3 w-3" />
+                                )}
+                                Analytics · {ga.landingPage}
+                              </Badge>
+                            </HoverTip>
+                            <HoverTip content={gaEvidence(ga).tooltip}>
+                              <Badge variant="outline" className="text-xs tabular-nums">
+                                {gaEvidence(ga).label}
+                              </Badge>
+                            </HoverTip>
                           </>
                         )}
                       </div>

@@ -18,6 +18,27 @@ export interface GscSuggestionSourceData {
   competitionIndex: number | null;
 }
 
+/**
+ * Evidence behind an Analytics-derived suggestion (#705): either a page that
+ * earns and has no prompt coverage, or one an AI engine already refers to.
+ */
+export interface GaSuggestionSourceData {
+  landingPage: string;
+  kind: 'revenue_blind_spot' | 'ai_momentum';
+  rank: number;
+  sessions: number;
+  keyEvents: number;
+  transactions: number;
+  revenue: number;
+  aiSessions: number;
+  aiPlatforms: string[];
+  pageTitle: string | null;
+}
+
+export type SuggestionSourceData = GscSuggestionSourceData | GaSuggestionSourceData;
+
+export type PromptSuggestionSource = 'llm' | 'heuristic' | 'gsc' | 'ga';
+
 export interface PromptSuggestion {
   id: string;
   brandId: string;
@@ -26,11 +47,27 @@ export interface PromptSuggestion {
   topicId: string | null;
   reason: string | null;
   estVolume: number | null;
-  source: 'llm' | 'heuristic' | 'gsc';
-  sourceData: GscSuggestionSourceData | null;
+  source: PromptSuggestionSource;
+  sourceData: SuggestionSourceData | null;
   status: 'new' | 'added' | 'dismissed';
   generatedAt: string;
   expiresAt: string;
+}
+
+/**
+ * Narrow `sourceData` to the shape its source promises.
+ *
+ * The `source` column and the payload shape are written together but read
+ * apart, so these check both. A row whose source says one thing and whose
+ * payload says another renders as a plain suggestion instead of reading
+ * fields that are not there.
+ */
+export function gscSourceData(s: PromptSuggestion): GscSuggestionSourceData | null {
+  return s.source === 'gsc' && s.sourceData && 'query' in s.sourceData ? s.sourceData : null;
+}
+
+export function gaSourceData(s: PromptSuggestion): GaSuggestionSourceData | null {
+  return s.source === 'ga' && s.sourceData && 'landingPage' in s.sourceData ? s.sourceData : null;
 }
 
 interface SuggestionRow {
@@ -41,8 +78,8 @@ interface SuggestionRow {
   topic_id: string | null;
   reason: string | null;
   est_volume: number | null;
-  source: 'llm' | 'heuristic' | 'gsc';
-  source_data: GscSuggestionSourceData | null;
+  source: PromptSuggestionSource;
+  source_data: SuggestionSourceData | null;
   status: 'new' | 'added' | 'dismissed';
   generated_at: string;
   expires_at: string;

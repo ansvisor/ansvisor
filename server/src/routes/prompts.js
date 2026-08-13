@@ -8,6 +8,7 @@ import { getLanguageName } from '../lib/languages.js';
 import { requireFeature } from '../lib/plan-guard.js';
 import { withRetry } from '../lib/retry.js';
 import { getGscSuggestionCandidates } from '../lib/gsc-suggestions.js';
+import { getGaSuggestionCandidates } from '../lib/ga-suggestions.js';
 
 const router = Router();
 
@@ -161,6 +162,13 @@ const newSuggestionSchema = z.object({
           .describe(
             'ONLY when this suggestion was derived from one of the provided Search Console queries: the EXACT original query string, verbatim. Omit for all other suggestions.',
           ),
+        sourcePage: z
+          .string()
+          .max(500)
+          .optional()
+          .describe(
+            'ONLY when this suggestion was derived from one of the provided Analytics pages: the EXACT landing page path, verbatim. Omit for all other suggestions.',
+          ),
       }),
     )
     .min(6)
@@ -182,6 +190,11 @@ async function generateSuggestions(brandId) {
     ctx.existingPromptTexts,
   );
 
+  // The brand's own analytics (#705) — [] without a mapped GA4 property or
+  // synced traffic, which keeps every prompt block below unchanged for
+  // brands that have neither.
+  const gaCandidates = await getGaSuggestionCandidates(brandId, ctx.existingPromptTexts);
+
   const system = `You are an AEO (Answer Engine Optimization) strategist. You suggest NEW search prompts a brand should track in AI engines (ChatGPT, Perplexity, Gemini, Claude). Current year: ${currentYear}.
 
 RULES:
@@ -196,6 +209,11 @@ RULES:
     gscCandidates.length
       ? `
 - REAL SEARCH DEMAND: a list of actual Google Search Console queries for this brand is provided — proven demand the brand does not track yet. Derive at least ${Math.min(4, gscCandidates.length)} suggestions from those queries: rephrase each raw query as a natural question a user would ask an AI assistant, preserving its intent exactly (never invent a different topic). For each such suggestion set sourceQuery to the EXACT original query string, verbatim. Never set sourceQuery on suggestions that did not come from that list.`
+      : ''
+  }${
+    gaCandidates.length
+      ? `
+- THE BRAND'S OWN ANALYTICS: a list of pages from this brand's Google Analytics is provided, each with what the page itself says it is about. Derive at least ${Math.min(3, gaCandidates.length)} suggestions from those pages. Write the prompt at the level of the need the page serves, NOT the page's product name or URL — a model number nobody types into an AI assistant becomes the category question that leads to it ("best noise-cancelling headphones", not "ANS-2400 Pro Black"). For each such suggestion set sourcePage to the EXACT landing page path, verbatim. Never set sourcePage on suggestions that did not come from that list, and never set both sourceQuery and sourcePage on the same suggestion.`
       : ''
   }`;
 
@@ -236,6 +254,21 @@ ${gscCandidates
   )
   .join('\n')}`
       : ''
+  }${
+    gaCandidates.length
+      ? `
+
+Pages from this brand's own Google Analytics (last 28 days, none covered by a tracked prompt):
+${gaCandidates
+  .map((c) => {
+    const evidence =
+      c.kind === 'revenue_blind_spot'
+        ? `#${c.rank} by ${c.revenue > 0 ? 'revenue' : 'conversions'} (${c.revenue > 0 ? `${c.revenue.toLocaleString('en-US')} revenue, ` : ''}${c.transactions || c.keyEvents} conversions, ${c.sessions.toLocaleString('en-US')} sessions)`
+        : `${c.aiSessions.toLocaleString('en-US')} AI-referred sessions${c.aiPlatforms.length ? ` from ${c.aiPlatforms.join(', ')}` : ''}`;
+    return `  • ${c.landingPage} — ${evidence}\n    the page says: ${c.pageText.slice(0, 300)}`;
+  })
+  .join('\n')}`
+      : ''
   }
 
 Suggest the next 8 prompts this brand should start tracking, with topic, reason and a calibrated monthly AI search volume (estVolume).`;
@@ -258,7 +291,7 @@ Suggest the next 8 prompts this brand should start tracking, with topic, reason 
     { attempts: 3, baseDelayMs: 500, label: 'suggestion-refresh' },
   );
 
-  return { suggestions: object.suggestions, gscCandidates };
+  return { suggestions: object.suggestions, gscCandidates, gaCandidates };
 }
 
 async function findOrCreateTopic(brandId, topicName) {
@@ -286,7 +319,9 @@ router.post(
   async (req, res) => {
     try {
       await assertBrandAccess(req.params.brandId, req.user.id);
-      const { suggestions, gscCandidates } = await generateSuggestions(req.params.brandId);
+      const { suggestions, gscCandidates, gaCandidates } = await generateSuggestions(
+        req.params.brandId,
+      );
 
       await supabaseAdmin
         .from('prompt_suggestions')
@@ -303,6 +338,7 @@ router.post(
       // drop real provenance.
       const normalizeQuery = (q) => q.trim().toLowerCase();
       const candidateByQuery = new Map(gscCandidates.map((c) => [normalizeQuery(c.query), c]));
+      const candidateByPage = new Map(gaCandidates.map((c) => [normalizeQuery(c.landingPage), c]));
 
       const rows = [];
       for (const s of suggestions) {
@@ -310,6 +346,13 @@ router.post(
         const candidate = s.sourceQuery
           ? candidateByQuery.get(normalizeQuery(s.sourceQuery))
           : undefined;
+        // Search Console wins a tie: it is proven demand for a phrasing, while
+        // the page is an inference about what would lead there. A suggestion
+        // claiming both is claiming something the generators never offered.
+        const gaCandidate =
+          !candidate && s.sourcePage
+            ? candidateByPage.get(normalizeQuery(s.sourcePage))
+            : undefined;
         rows.push({
           brand_id: req.params.brandId,
           suggested_text: s.text,
@@ -319,7 +362,7 @@ router.post(
           // Sanity clamp replacing the removed schema ceiling — one absurd
           // estimate must cap out, not reject the whole generated batch.
           est_volume: Math.min(s.estVolume, 10_000_000),
-          source: candidate ? 'gsc' : 'llm',
+          source: candidate ? 'gsc' : gaCandidate ? 'ga' : 'llm',
           source_data: candidate
             ? {
                 query: candidate.query,
@@ -329,7 +372,20 @@ router.post(
                 badge: candidate.badge,
                 competitionIndex: candidate.competitionIndex ?? null,
               }
-            : null,
+            : gaCandidate
+              ? {
+                  landingPage: gaCandidate.landingPage,
+                  kind: gaCandidate.kind,
+                  rank: gaCandidate.rank,
+                  sessions: gaCandidate.sessions,
+                  keyEvents: gaCandidate.keyEvents,
+                  transactions: gaCandidate.transactions,
+                  revenue: gaCandidate.revenue,
+                  aiSessions: gaCandidate.aiSessions,
+                  aiPlatforms: gaCandidate.aiPlatforms,
+                  pageTitle: gaCandidate.page?.title ?? null,
+                }
+              : null,
           status: 'new',
           expires_at: expiresAt,
         });
