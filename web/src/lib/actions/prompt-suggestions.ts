@@ -4,40 +4,11 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { addPromptToSet } from '@/lib/actions/prompt';
 import { API_BASE_URL } from '@/config/api';
+// Types only — this file is `'use server'`, so the guards that go with them
+// live in a plain module (every runtime export here must be a server action).
+import type { PromptSuggestionSource, SuggestionSourceData } from '@/lib/prompt-suggestion-source';
 
 const AEO_SERVER_URL = API_BASE_URL;
-
-export type GscSuggestionBadge = 'protect_traffic' | 'capture_demand' | 'low_competition';
-
-export interface GscSuggestionSourceData {
-  query: string;
-  impressions: number;
-  clicks: number;
-  avgPosition: number | null;
-  badge: GscSuggestionBadge | null;
-  competitionIndex: number | null;
-}
-
-/**
- * Evidence behind an Analytics-derived suggestion (#705): either a page that
- * earns and has no prompt coverage, or one an AI engine already refers to.
- */
-export interface GaSuggestionSourceData {
-  landingPage: string;
-  kind: 'revenue_blind_spot' | 'ai_momentum';
-  rank: number;
-  sessions: number;
-  keyEvents: number;
-  transactions: number;
-  revenue: number;
-  aiSessions: number;
-  aiPlatforms: string[];
-  pageTitle: string | null;
-}
-
-export type SuggestionSourceData = GscSuggestionSourceData | GaSuggestionSourceData;
-
-export type PromptSuggestionSource = 'llm' | 'heuristic' | 'gsc' | 'ga';
 
 export interface PromptSuggestion {
   id: string;
@@ -52,22 +23,6 @@ export interface PromptSuggestion {
   status: 'new' | 'added' | 'dismissed';
   generatedAt: string;
   expiresAt: string;
-}
-
-/**
- * Narrow `sourceData` to the shape its source promises.
- *
- * The `source` column and the payload shape are written together but read
- * apart, so these check both. A row whose source says one thing and whose
- * payload says another renders as a plain suggestion instead of reading
- * fields that are not there.
- */
-export function gscSourceData(s: PromptSuggestion): GscSuggestionSourceData | null {
-  return s.source === 'gsc' && s.sourceData && 'query' in s.sourceData ? s.sourceData : null;
-}
-
-export function gaSourceData(s: PromptSuggestion): GaSuggestionSourceData | null {
-  return s.source === 'ga' && s.sourceData && 'landingPage' in s.sourceData ? s.sourceData : null;
 }
 
 interface SuggestionRow {

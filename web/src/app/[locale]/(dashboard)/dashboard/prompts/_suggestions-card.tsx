@@ -27,12 +27,14 @@ import {
   refreshPromptSuggestions,
   acceptSuggestion,
   dismissSuggestion,
+  type PromptSuggestion,
+} from '@/lib/actions/prompt-suggestions';
+import {
   gaSourceData,
   gscSourceData,
   type GaSuggestionSourceData,
-  type PromptSuggestion,
   type GscSuggestionBadge,
-} from '@/lib/actions/prompt-suggestions';
+} from '@/lib/prompt-suggestion-source';
 
 /**
  * Analytics evidence, in the customer's own numbers (#705). A blind spot is
