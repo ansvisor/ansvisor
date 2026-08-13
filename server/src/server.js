@@ -31,6 +31,7 @@ import supabaseAdmin from './config/supabase.js';
 import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/plans.js';
 import { analyzeBrandVolumes } from './lib/volume-analysis.js';
 import { runGscSync } from './lib/gsc-sync.js';
+import { runGaSync } from './lib/ga-sync.js';
 import { runPulseCatchUp } from './lib/pulse/engine.js';
 
 const app = express();
@@ -184,6 +185,13 @@ async function runDailyTracking() {
   // fails the tracking run. No-ops when Composio isn't configured.
   runGscSync().catch((err) => {
     logger.error({ err }, '[gsc-sync] daily run failed');
+  });
+
+  // Google Analytics sync (#704) — same contract as the Search Console sync
+  // above: independent, never blocks or fails the tracking run, no-ops when
+  // Composio or the Analytics auth config isn't set.
+  runGaSync().catch((err) => {
+    logger.error({ err }, '[ga-sync] daily run failed');
   });
 
   return { triggered, total: brands.length };

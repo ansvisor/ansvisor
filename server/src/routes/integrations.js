@@ -11,6 +11,7 @@ import {
   listGaProperties,
 } from '../lib/composio.js';
 import { runGscSync } from '../lib/gsc-sync.js';
+import { runGaSync } from '../lib/ga-sync.js';
 
 const router = Router();
 
@@ -291,6 +292,28 @@ router.get('/google-analytics/properties', async (req, res) => {
     return res.json({ properties });
   } catch (err) {
     req.log.error({ err }, 'integrations GA properties error');
+    return res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/integrations/google-analytics/sync
+ * Runs the traffic sync for the caller's org immediately (#704) — testing and
+ * first-time backfill; the daily cycle runs the same sync.
+ */
+router.post('/google-analytics/sync', async (req, res) => {
+  try {
+    if (!isComposioConfigured(GA)) return notConfigured(res, GA);
+
+    const profile = await getProfile(req.user.id);
+    if (!WRITE_ROLES.includes(profile.role)) {
+      return res.status(403).json({ error: 'Only admins and managers can trigger a sync.' });
+    }
+
+    const result = await runGaSync({ organizationId: profile.organization_id });
+    return res.json(result);
+  } catch (err) {
+    req.log.error({ err }, 'integrations GA sync error');
     return res.status(err.status || 500).json({ error: err.message });
   }
 });

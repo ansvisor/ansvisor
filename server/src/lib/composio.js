@@ -234,3 +234,18 @@ export async function listGaProperties(entityId) {
 
   return capped;
 }
+
+/**
+ * Run a GA4 Data API report for a property (#704).
+ *
+ * `body` is a runReport request minus `property`, built by the caller — the
+ * dimensions, metrics and filters are deterministic, never model-generated.
+ * Returns the report as GA4 shapes it (`dimensionHeaders`, `metricHeaders`,
+ * `rows`, `rowCount`); parsing rows into storage is the sync's job.
+ */
+export async function runGaReport(entityId, propertyId, body) {
+  return executeGaTool('GOOGLE_ANALYTICS_RUN_REPORT', entityId, {
+    property: `properties/${propertyId}`,
+    ...body,
+  });
+}
