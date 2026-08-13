@@ -20,6 +20,29 @@ function resolveModelPlatform(model) {
 }
 
 /**
+ * PostgREST silently caps an un-paginated select at 1000 rows, so reading a
+ * brand's pending tasks in one request under-reports any run that submitted
+ * more than that (#714). Page through instead.
+ *
+ * Exported for the test that pins the paging behaviour; `fetchPage(offset)`
+ * resolves to `{ data, error }` exactly as a PostgREST range query does.
+ */
+export const PENDING_PAGE_SIZE = 1000;
+
+export async function fetchAllPendingRows(fetchPage, pageSize = PENDING_PAGE_SIZE) {
+  const rows = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await fetchPage(offset);
+    // A partial read is worse than no read: it looks like progress that never
+    // happened. Surface the error and let the caller retry the whole poll.
+    if (error) return { rows: null, error };
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < pageSize) return { rows, error: null };
+  }
+}
+
+/**
  * Which drain time budget, if any, has run out (#702).
  *
  * Two budgets rather than one cap measured from submission. Before anything
@@ -365,11 +388,17 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
         // quiet gap alone is normal mid-burst, and old tasks alone are fine as
         // long as results are still landing.
         const ghostStallPolls = Number(process.env.CLORO_GHOST_STALL_POLLS) || 60;
-        const ghostTaskAgeMs = 30 * 60 * 1000;
+        // How old a still-pending task has to be before it counts as a ghost.
+        // Configurable because the safe value tracks Cloro's delivery latency,
+        // which moves: one brand's first result has arrived 34 minutes after
+        // submission, and another's at 29.7 — seconds under this threshold.
+        // Raise it if healthy runs start exiting as 'ghosts'.
+        const ghostTaskAgeMs = (Number(process.env.CLORO_GHOST_TASK_AGE_MIN) || 30) * 60_000;
 
         let lastPending = expectedSubmitted;
         let stalledPolls = 0;
         const drainStartedAt = Date.now();
+        const drainStartedIso = new Date(drainStartedAt).toISOString();
         let firstResultAt = null;
         let exitReason = 'drained';
 
@@ -388,12 +417,19 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
             break;
           }
 
-          // Brand-scoped read (a handful of rows at most), intersected in memory
-          // with our own task_ids — avoids a giant `.in(...)` URL.
-          const { data: rows, error: drainErr } = await supabaseAdmin
-            .from('cloro_pending_tasks')
-            .select('task_id, submitted_at')
-            .eq('brand_id', brandId);
+          // Brand-scoped read, intersected in memory with our own task_ids —
+          // avoids a giant `.in(...)` URL. Paged, because PostgREST caps an
+          // un-paginated select at 1000 rows: a run that submitted more than
+          // that saw a pending count frozen at 1000, which read as "1130 tasks
+          // already finished" on the first poll and as "nothing is moving" on
+          // every poll after it (#714).
+          const { rows, error: drainErr } = await fetchAllPendingRows((offset) =>
+            supabaseAdmin
+              .from('cloro_pending_tasks')
+              .select('task_id, submitted_at')
+              .eq('brand_id', brandId)
+              .range(offset, offset + PENDING_PAGE_SIZE - 1),
+          );
 
           // A transient read failure must NOT be read as "0 pending" — that would
           // break the loop early and report the run as finished while tasks are
@@ -409,12 +445,27 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
           const processed = expectedSubmitted - pending;
           const allPendingAreOld = allTasksAreStale(ourRows, ghostTaskAgeMs);
 
+          // "Delivery started" has to mean a result actually landed, not just
+          // that a pending row went away. The callback handler also deletes
+          // rows for FAILED tasks, for a COMPLETED task with no response body,
+          // and when the brand lookup fails — none of which produce a result.
+          // A shrinking pending set is therefore not proof that anything
+          // arrived, and treating it as proof starts the stall clock against a
+          // run that has received nothing (#714).
           if (processed > 0 && firstResultAt === null) {
-            firstResultAt = Date.now();
-            logger.info(
-              { brandId, waitedMs: firstResultAt - drainStartedAt, expected: expectedSubmitted },
-              'cloro delivery started',
-            );
+            const { data: firstRows, error: firstErr } = await supabaseAdmin
+              .from('prompt_results')
+              .select('id')
+              .eq('brand_id', brandId)
+              .gte('created_at', drainStartedIso)
+              .limit(1);
+            if (!firstErr && (firstRows ?? []).length > 0) {
+              firstResultAt = Date.now();
+              logger.info(
+                { brandId, waitedMs: firstResultAt - drainStartedAt, expected: expectedSubmitted },
+                'cloro delivery started',
+              );
+            }
           }
 
           if (job) {

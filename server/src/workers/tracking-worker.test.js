@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 // SUPABASE_* env is absent (as in CI) — stub it before the import chain.
 vi.mock('../config/supabase.js', () => ({ default: {} }));
 
-import { allTasksAreStale, drainBudgetExceeded } from './tracking-worker.js';
+import { allTasksAreStale, drainBudgetExceeded, fetchAllPendingRows } from './tracking-worker.js';
 
 /**
  * Ghost detection for the Cloro drain loop (#687).
@@ -121,5 +121,86 @@ describe('drainBudgetExceeded', () => {
     expect(budget({ now: NOW + 95 * MINUTE, drainStartedAt: NOW, firstResultAt: undefined })).toBe(
       'no_first_result',
     );
+  });
+});
+
+/**
+ * Paged pending-task reads (#714).
+ *
+ * The drain read was un-paginated, and PostgREST silently caps those at 1000
+ * rows. The largest brand submits ~2130 tasks, so every poll reported exactly
+ * 1000 pending: on the first poll that read as "1130 tasks already finished"
+ * — starting the stall clock against a run that had received nothing — and on
+ * every poll after it as "nothing is moving", because the number never
+ * changed. Fifteen minutes of that plus tasks crossing the ghost age exited
+ * the run four seconds after the threshold, four minutes before its first
+ * result arrived. Three nights of the brand's dashboard froze on it.
+ *
+ * It only ever bit the one brand over 1000 tasks, which is why it looked like
+ * a brand-specific problem rather than a query bug.
+ */
+describe('fetchAllPendingRows', () => {
+  const pageOf = (n, from = 0) =>
+    Array.from({ length: n }, (_, i) => ({ task_id: `t${from + i}`, submitted_at: null }));
+
+  it('returns every row when the set spans several pages', async () => {
+    // 2130 rows: what the largest brand actually submits.
+    const all = pageOf(2130);
+    const fetchPage = async (offset) => ({
+      data: all.slice(offset, offset + 1000),
+      error: null,
+    });
+
+    const { rows, error } = await fetchAllPendingRows(fetchPage);
+
+    expect(error).toBeNull();
+    expect(rows).toHaveLength(2130);
+  });
+
+  it('stops after one request when the set fits in a page', async () => {
+    const calls = [];
+    const fetchPage = async (offset) => {
+      calls.push(offset);
+      return { data: pageOf(840), error: null };
+    };
+
+    const { rows } = await fetchAllPendingRows(fetchPage);
+
+    expect(rows).toHaveLength(840);
+    expect(calls).toEqual([0]);
+  });
+
+  it('asks for one more page when a page comes back exactly full', async () => {
+    const calls = [];
+    const fetchPage = async (offset) => {
+      calls.push(offset);
+      return { data: offset === 0 ? pageOf(1000) : [], error: null };
+    };
+
+    const { rows } = await fetchAllPendingRows(fetchPage);
+
+    expect(rows).toHaveLength(1000);
+    expect(calls).toEqual([0, 1000]);
+  });
+
+  it('reports an error rather than returning a partial set', async () => {
+    // A half-read pending set looks like progress that never happened, which
+    // is precisely the failure this whole change exists to prevent.
+    const fetchPage = async (offset) =>
+      offset === 0
+        ? { data: pageOf(1000), error: null }
+        : { data: null, error: { message: 'boom' } };
+
+    const { rows, error } = await fetchAllPendingRows(fetchPage);
+
+    expect(rows).toBeNull();
+    expect(error).toEqual({ message: 'boom' });
+  });
+
+  it('handles an empty pending set', async () => {
+    const { rows, error } = await fetchAllPendingRows(async () => ({ data: [], error: null }));
+
+    expect(rows).toEqual([]);
+    expect(error).toBeNull();
   });
 });
