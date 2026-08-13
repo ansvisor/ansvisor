@@ -149,3 +149,25 @@ export const DEFAULT_PROMPT_RANGE_DAYS: PromptRangeDays = 30;
 export function isPromptRangeDays(value: unknown): value is PromptRangeDays {
   return PROMPT_RANGE_DAYS.includes(Number(value) as PromptRangeDays);
 }
+
+/**
+ * The same windows spoken in the shared date-range control's vocabulary
+ * (#713). Derived from the day counts above rather than written out again, so
+ * adding a window is still a one-line change in one place.
+ *
+ * The page's data path takes a day count; the control takes a preset id. These
+ * two helpers are the whole translation.
+ */
+export type PromptRangePreset = `${PromptRangeDays}d`;
+
+export const PROMPT_RANGE_PRESETS = PROMPT_RANGE_DAYS.map(
+  (days) => `${days}d`,
+) as readonly PromptRangePreset[];
+
+export function promptRangePresetOf(days: PromptRangeDays): PromptRangePreset {
+  return `${days}d`;
+}
+
+export function promptRangeDaysOf(preset: PromptRangePreset): PromptRangeDays {
+  return Number(preset.slice(0, -1)) as PromptRangeDays;
+}

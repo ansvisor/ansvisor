@@ -81,11 +81,14 @@ import {
   ALL_MODELS,
   SCRAPER_GROUPS,
   ALL_SCRAPERS,
-  PROMPT_RANGE_DAYS,
+  PROMPT_RANGE_PRESETS,
   DEFAULT_PROMPT_RANGE_DAYS,
   isPromptRangeDays,
+  promptRangeDaysOf,
+  promptRangePresetOf,
   type PromptRangeDays,
 } from '@/config/prompt-options';
+import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { PLANS } from '@/config/plans';
 import { getTopics } from '@/lib/actions/topic';
 import { type PromptVisibilitySummary } from '@/lib/actions/tracking';
@@ -1213,29 +1216,6 @@ export default function PromptsPage() {
             <TabsTrigger value="insights">Insights</TabsTrigger>
           </TabsList>
           <div className="flex items-center gap-2">
-            {/* Hidden on Insights: that tab shows keyword volume estimates,
-                which carry no date dimension, so a range there would be a
-                control that changes nothing. */}
-            {tab !== 'insights' && (
-              <div className="flex items-center rounded-md border p-0.5" role="group">
-                {PROMPT_RANGE_DAYS.map((days) => (
-                  <button
-                    key={days}
-                    type="button"
-                    onClick={() => setRangeDays(days)}
-                    aria-pressed={rangeDays === days}
-                    className={cn(
-                      'rounded-sm px-2.5 py-1 text-xs font-medium transition-colors',
-                      rangeDays === days
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:text-foreground',
-                    )}
-                  >
-                    {days}d
-                  </button>
-                ))}
-              </div>
-            )}
             {tab === 'all' && canManage && (
               <Button
                 type="button"
@@ -1272,6 +1252,21 @@ export default function PromptsPage() {
             </Link>
           </div>
         </div>
+
+        {/* Filter bar — same shape and position as Visibility and Citations
+            (#713). Hidden on Insights: that tab shows keyword volume
+            estimates, which carry no date dimension, so a range there would be
+            a control that changes nothing. It sits outside the tab panels
+            because the range governs both All Prompts and Query Fan-out. */}
+        {tab !== 'insights' && (
+          <div className="mt-4 flex flex-wrap items-end gap-3">
+            <DateRangeFilter
+              value={promptRangePresetOf(rangeDays)}
+              presets={PROMPT_RANGE_PRESETS}
+              onChange={(preset) => setRangeDays(promptRangeDaysOf(preset))}
+            />
+          </div>
+        )}
 
         {/* ─── All Prompts tab ─────────────────────────────────────────── */}
         <TabsContent value="all" className="mt-4 space-y-4">
