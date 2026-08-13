@@ -1761,7 +1761,7 @@ function AllPromptsTab({
   );
 
   const rawSort = searchParams.get('sort');
-  const activeSort: AllPromptsSortKey | null = isAllPromptsSortKey(rawSort) ? rawSort : null;
+  const activeSort: AllPromptsSortKey = isAllPromptsSortKey(rawSort) ? rawSort : 'visibility';
   const dir: SortDir = searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
 
   // Click a header to sort: a new column starts at desc ("show me the extremes");
@@ -1795,11 +1795,6 @@ function AllPromptsTab({
       );
     }
 
-    if (!activeSort) {
-      // Default ordering: newest first.
-      return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }
-
     const valueOf = (p: Prompt): number | null => {
       const vis = visibility[p.id];
       const vol = volumeByPromptId.get(p.id);
@@ -1826,7 +1821,7 @@ function AllPromptsTab({
   // changes the visible row set (search text, sort column, sort direction, work
   // status filter) so usePagination jumps back to page 0 automatically when
   // any filter or sort changes — satisfying the issue's acceptance criteria.
-  const promptsResetKey = `${search}::${workFilter}::${activeSort ?? ''}::${dir}`;
+  const promptsResetKey = `${search}::${workFilter}::${activeSort}::${dir}`;
   const promptsPager = usePagination(filtered.length, promptsResetKey);
 
   if (loading) {
