@@ -334,3 +334,63 @@ export async function getTrafficLogs(
     total: count ?? 0,
   };
 }
+
+/**
+ * Pages that carry commercial weight and get nothing from AI engines (#719).
+ *
+ * Read straight from the detection engine's table — the ranking, the signal
+ * and the evidence were all decided server-side during the nightly run, so
+ * this reads them rather than recomputing anything.
+ *
+ * Deliberately unfiltered by the page's date range: the findings describe the
+ * engine's own 28-day window, and re-scoping them to an arbitrary range would
+ * mean showing a ranking that was never computed for it.
+ */
+export interface PageOpportunity {
+  landingPage: string;
+  /** Which metric ranked this page — never present it as anything else. */
+  valueSignal: 'revenue' | 'transactions' | 'key_events' | 'engagement';
+  valuePercentile: number;
+  valueRank: number;
+  sessions: number;
+  engagedSessions: number;
+  keyEvents: number;
+  transactions: number;
+  revenue: number;
+  engagementSeconds: number;
+  windowDays: number;
+  firstDetectedAt: string;
+}
+
+export async function getPageOpportunities(
+  brandId: string,
+  opts?: { limit?: number },
+): Promise<PageOpportunity[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('page_opportunities')
+    .select(
+      'landing_page, value_signal, value_percentile, value_rank, sessions, engaged_sessions, key_events, transactions, revenue, engagement_seconds, window_days, first_detected_at',
+    )
+    .eq('brand_id', brandId)
+    .is('resolved_at', null)
+    .order('value_percentile', { ascending: false })
+    .limit(opts?.limit ?? 10);
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row) => ({
+    landingPage: row.landing_page as string,
+    valueSignal: row.value_signal as PageOpportunity['valueSignal'],
+    valuePercentile: Number(row.value_percentile) || 0,
+    valueRank: Number(row.value_rank) || 0,
+    sessions: Number(row.sessions) || 0,
+    engagedSessions: Number(row.engaged_sessions) || 0,
+    keyEvents: Number(row.key_events) || 0,
+    transactions: Number(row.transactions) || 0,
+    revenue: Number(row.revenue) || 0,
+    engagementSeconds: Number(row.engagement_seconds) || 0,
+    windowDays: Number(row.window_days) || 0,
+    firstDetectedAt: row.first_detected_at as string,
+  }));
+}

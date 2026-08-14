@@ -33,6 +33,7 @@ import {
   DateRangeFilter,
   type DateRangePreset,
 } from '@/components/filters/date-range-filter';
+import { PageOpportunitiesCard } from './_opportunities-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -823,6 +824,13 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
               </CardContent>
             </Card>
           </div>
+
+          {/* Findings from the Analytics connection (#719). Renders nothing
+              for brands without a mapped property, so the page is unchanged
+              for everyone who has not connected one. Kept visually distinct
+              from the tables above, which count the tracking snippet's own
+              visits — the two origins are never summed. */}
+          <PageOpportunitiesCard brandId={brand.id} />
 
           {/* Recent Visit Log with filtering and pagination*/}
           <Card>
