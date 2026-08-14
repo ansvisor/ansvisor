@@ -9,7 +9,6 @@ import {
   aiPlatformsByPage,
   composeGaCandidates,
   extractPageSummary,
-  isTransactionalPath,
   summaryText,
   toAbsoluteUrl,
 } from './ga-suggestions.js';
@@ -22,44 +21,6 @@ import {
  * plausible and are grounded in nothing — the failure mode a customer notices
  * once and never trusts again.
  */
-
-describe('isTransactionalPath', () => {
-  it('excludes the pages that carry revenue but answer no question', () => {
-    // A GA4 purchase fires on the confirmation page, so without this the
-    // top-revenue "page" in most shops is the checkout.
-    for (const path of [
-      '/checkout',
-      '/cart/',
-      '/en/order-confirmation',
-      '/thank-you',
-      '/account/orders',
-      '/login',
-      '/tr/sepet/../cart',
-    ]) {
-      expect(isTransactionalPath(path), path).toBe(true);
-    }
-  });
-
-  it('matches whole path segments, not substrings', () => {
-    // /cartography-guides is a content page that a naive `includes('cart')`
-    // would silently delete from the candidate pool.
-    expect(isTransactionalPath('/cartography-guides')).toBe(false);
-    expect(isTransactionalPath('/blog/accountability-in-ai')).toBe(false);
-    expect(isTransactionalPath('/products/searchlight-3000')).toBe(false);
-  });
-
-  it('excludes GA placeholders and blanks, which are not pages at all', () => {
-    expect(isTransactionalPath('')).toBe(true);
-    expect(isTransactionalPath('(not set)')).toBe(true);
-    expect(isTransactionalPath(undefined)).toBe(true);
-  });
-
-  it('keeps ordinary content and category pages', () => {
-    expect(isTransactionalPath('/')).toBe(false);
-    expect(isTransactionalPath('/pricing')).toBe(false);
-    expect(isTransactionalPath('/collections/headphones')).toBe(false);
-  });
-});
 
 describe('aggregateByPage', () => {
   it('sums the per-day rows of one page', () => {

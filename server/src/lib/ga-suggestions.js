@@ -9,7 +9,7 @@
  *
  * The first finds what is missing, the second finds what is already working.
  * Everything up to the LLM handoff is deterministic: SQL aggregation →
- * transactional-page exclusion → ranking → page read → coverage filter. Any
+ * page-scope exclusion → ranking → page read → coverage filter. Any
  * failure returns [] so the base suggestion flow never degrades, and brands
  * without synced traffic short-circuit on the first (empty) query.
  */
@@ -18,6 +18,7 @@ import * as cheerio from 'cheerio';
 import supabaseAdmin from '../config/supabase.js';
 import { fetchViaScrapeDo } from './audit/fetcher.js';
 import { isCoveredByPrompts } from './gsc-suggestions.js';
+import { isExcludedPath } from './page-paths.js';
 import { logger } from './logger.js';
 
 const WINDOW_DAYS = 28;
@@ -35,72 +36,12 @@ const READ_CONCURRENCY = 4;
 const MIN_SESSIONS = 5;
 const MIN_AI_SESSIONS = 3;
 
-/**
- * Paths that produce revenue attribution but no answerable question.
- *
- * A GA4 purchase event fires on the confirmation page, so without this the
- * highest-revenue "page" in most shops is the checkout — and no prompt exists
- * that a person would ask an AI to arrive there. Matched on path segments so
- * `/cart` and `/en/cart/` hit while `/cartography-guides` does not.
- */
-const TRANSACTIONAL_SEGMENTS = new Set([
-  'checkout',
-  'cart',
-  'basket',
-  'order',
-  'orders',
-  'order-confirmation',
-  'confirmation',
-  'thank-you',
-  'thanks',
-  'payment',
-  'pay',
-  'login',
-  'signin',
-  'sign-in',
-  'signup',
-  'sign-up',
-  'register',
-  'logout',
-  'account',
-  'my-account',
-  'profile',
-  'dashboard',
-  'admin',
-  'wishlist',
-  'favorites',
-  'search',
-  'cookie-policy',
-  'privacy',
-  'privacy-policy',
-  'terms',
-  'terms-of-service',
-  'legal',
-  'unsubscribe',
-]);
-
-/**
- * True for a page that cannot yield a sensible prompt.
- *
- * Also excludes GA4's own placeholders: a blank or "(not set)" landing page is
- * an unattributed session, not a page anyone can be sent to.
- */
-export function isTransactionalPath(path) {
-  const raw = String(path ?? '').trim();
-  if (!raw || raw === '(not set)' || raw === '(other)') return true;
-  const withoutQuery = raw.split(/[?#]/)[0];
-  return withoutQuery
-    .split('/')
-    .filter(Boolean)
-    .some((segment) => TRANSACTIONAL_SEGMENTS.has(segment.toLowerCase()));
-}
-
 /** Sum the per-day rows of one table into one row per landing page. */
 export function aggregateByPage(rows, fields) {
   const byPage = new Map();
   for (const row of rows || []) {
     const page = row.landing_page ?? '';
-    if (isTransactionalPath(page)) continue;
+    if (isExcludedPath(page)) continue;
     const acc = byPage.get(page) ?? { landing_page: page };
     for (const field of fields) acc[field] = (acc[field] ?? 0) + (Number(row[field]) || 0);
     byPage.set(page, acc);
