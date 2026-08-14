@@ -5454,27 +5454,21 @@ ALTER TABLE public.prompt_suggestions ADD CONSTRAINT prompt_suggestions_source_c
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00055_prompt_visibility_summaries_date_to.sql
 -- ─────────────────────────────────────────────────────────────────────────
--- prompt_visibility_summaries gains an upper bound (#713).
+-- prompt_visibility_summaries — redundant re-declaration (#713).
 --
--- The Prompts page previously offered only whole-window presets (7/30/90
--- days), so a start date was the entire filter. Matching the date range
--- control the other surfaces use means supporting a custom from/to range,
--- which needs an end bound the function never had.
+-- This migration adds nothing. Migration 00041 already gave the function its
+-- p_date_to bound, for the Daily Pulse movers highlight, and the body below
+-- is byte-identical to the one 00041 installs.
 --
--- Dropped and recreated rather than overloaded: an added parameter with a
--- default makes the two-argument call ambiguous, and Postgres rejects it as
--- "function is not unique". Migrations 00034 and 00040 replaced this same
--- function the same way.
+-- It was written on the mistaken belief that the hosted database carried a
+-- three-argument version no migration produced. It did carry one — from
+-- 00041, which a truncated search had hidden. There was no drift, and nothing
+-- here repairs anything.
 --
--- Both bounds stay optional and NULL keeps meaning "unbounded on that side",
--- so every existing caller behaves exactly as before.
---
--- Both signatures are dropped conditionally rather than the two-argument one
--- unconditionally: the hosted database already carries a three-argument
--- version that no migration in this repo produced, so a plain DROP of the
--- two-argument form fails there while succeeding on a fresh install. This
--- also makes the file the single definition of the function again — the
--- drift is what it exists to close.
+-- Kept rather than deleted: it is already applied to the hosted database and
+-- recorded in schema_migrations, and removing an applied migration is a worse
+-- problem than an inert one. Both signatures are dropped conditionally, so it
+-- is a no-op wherever it runs. Do not copy this file as a pattern.
 
 DROP FUNCTION IF EXISTS public.prompt_visibility_summaries(uuid, timestamptz);
 DROP FUNCTION IF EXISTS public.prompt_visibility_summaries(uuid, timestamptz, timestamptz);
