@@ -2291,6 +2291,35 @@ export type Database = {
         }
         Returns: Json
       }
+      topics_overview_aggregates: {
+        Args: { p_brand_id: string }
+        Returns: {
+          active_prompts: number
+          answers: number
+          citation_answers: number
+          comp_mentions: number
+          competitors: Json
+          cur_answers: number
+          cur_citation_answers: number
+          cur_mention_answers: number
+          cur_pos_n: number
+          cur_pos_sum: number
+          daily: Json
+          last_run_at: string
+          mention_answers: number
+          pos_n: number
+          pos_sum: number
+          prev_answers: number
+          prev_citation_answers: number
+          prev_mention_answers: number
+          prev_pos_n: number
+          prev_pos_sum: number
+          topic_id: string
+          total_citations: number
+          total_mentions: number
+          visible_prompts: number
+        }[]
+      }
       tracked_prompt_count: {
         Args: {
           p_brand_id: string
