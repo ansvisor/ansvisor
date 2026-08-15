@@ -89,6 +89,7 @@ import {
   type PromptRangePreset,
 } from '@/config/prompt-options';
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
+import { DataSourcesPanel } from './_data-sources-panel';
 import { PLANS } from '@/config/plans';
 import { getTopics } from '@/lib/actions/topic';
 import { type PromptVisibilitySummary } from '@/lib/actions/tracking';
@@ -256,7 +257,7 @@ const PROMPT_EXPORT_HINT = 'No prompts yet - add prompts first.';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const VALID_TABS = ['all', 'fanout', 'insights'] as const;
+const VALID_TABS = ['all', 'suggestions', 'fanout', 'insights'] as const;
 type TabId = (typeof VALID_TABS)[number];
 
 function formatRelative(iso?: string): string {
@@ -920,7 +921,14 @@ export default function PromptsPage() {
 
   const initialTab: TabId = (() => {
     const raw = searchParams.get('tab');
-    return (VALID_TABS as readonly string[]).includes(raw ?? '') ? (raw as TabId) : 'all';
+    if ((VALID_TABS as readonly string[]).includes(raw ?? '')) return raw as TabId;
+    // Links written before suggestions had their own tab point at the card's
+    // anchor. They still mean "show me the suggestions", so honour them
+    // rather than dropping the reader on All Prompts with nothing to scroll to.
+    if (typeof window !== 'undefined' && window.location.hash === '#prompt-opportunities') {
+      return 'suggestions';
+    }
+    return 'all';
   })();
   const [tab, setTab] = useState<TabId>(initialTab);
 
@@ -1249,6 +1257,7 @@ export default function PromptsPage() {
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <TabsList>
             <TabsTrigger value="all">All Prompts</TabsTrigger>
+            <TabsTrigger value="suggestions">Suggestions</TabsTrigger>
             <TabsTrigger value="fanout">Query Fan-out</TabsTrigger>
             <TabsTrigger value="insights">Insights</TabsTrigger>
           </TabsList>
@@ -1291,11 +1300,13 @@ export default function PromptsPage() {
         </div>
 
         {/* Filter bar — same shape and position as Visibility and Citations
-            (#713). Hidden on Insights: that tab shows keyword volume
-            estimates, which carry no date dimension, so a range there would be
-            a control that changes nothing. It sits outside the tab panels
-            because the range governs both All Prompts and Query Fan-out. */}
-        {tab !== 'insights' && (
+            (#713). It sits outside the tab panels because the range governs
+            both All Prompts and Query Fan-out.
+            Hidden on the two tabs it cannot scope: Insights shows keyword
+            volume estimates and Suggestions are regenerated on demand with a
+            48h life, so neither carries a date dimension and a range there
+            would be a control that changes nothing. */}
+        {tab !== 'insights' && tab !== 'suggestions' && (
           <div className="mt-4 flex flex-wrap items-end gap-3">
             <DateRangeFilter
               value={rangePreset}
@@ -1311,8 +1322,6 @@ export default function PromptsPage() {
 
         {/* ─── All Prompts tab ─────────────────────────────────────────── */}
         <TabsContent value="all" className="mt-4 space-y-4">
-          {activeBrandId && <SuggestionsCard brandId={activeBrandId} onAccepted={loadData} />}
-
           {!loading && unanalyzedCount > 0 && (
             <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/50 dark:bg-amber-950/30">
               <div className="flex items-start gap-2.5">
@@ -1359,6 +1368,16 @@ export default function PromptsPage() {
             onAddPrompt={canManage ? () => setAddPromptOpen(true) : undefined}
             onEditPrompt={canManage ? setEditingPrompt : undefined}
           />
+        </TabsContent>
+
+        {/* ─── Suggestions tab ─────────────────────────────────────────── */}
+        <TabsContent value="suggestions" className="mt-4 space-y-4">
+          {activeBrandId && (
+            <>
+              <DataSourcesPanel brandId={activeBrandId} />
+              <SuggestionsCard brandId={activeBrandId} onAccepted={loadData} />
+            </>
+          )}
         </TabsContent>
 
         {/* ─── Query Fan-out tab ───────────────────────────────────────── */}
