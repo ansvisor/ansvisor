@@ -39,21 +39,63 @@ export async function getIntegrationStatus(
 }
 
 /**
- * Whether this deployment has DataForSEO credentials (#659).
+ * Everything the suggestion-sources panel needs, in two round trips (#659).
  *
- * Not a customer connection — our own key, used to enrich Search Console
- * candidates with competition and volume data. There is nothing to connect,
- * only something to report, and a surface that says "enabled" should be able
- * to check rather than assume.
+ * Deliberately does NOT call `getIntegrationStatus`. That resolves the live
+ * state against Composio and re-syncs our row, which costs ~450ms per
+ * provider — measured — and made the panel appear well after the suggestions
+ * it sits above. This reads the row Composio's own status check maintains,
+ * plus the brand's property mapping, in a single query.
+ *
+ * The trade-off is that a connection revoked on Google's side still reads as
+ * connected here until Settings runs its authoritative check and rewrites the
+ * row. For a panel that describes what feeds suggestions, a stale "connected"
+ * for a few minutes is a better failure than a second of blank space on every
+ * visit.
  */
-export async function getDataForSeoStatus(): Promise<{ configured: boolean }> {
-  const res = await fetch(`${API_BASE_URL}/api/integrations/dataforseo/status`, {
-    headers: await authHeaders(),
-    cache: 'no-store',
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || `Server error: ${res.status}`);
-  return { configured: Boolean(body.configured) };
+export interface SuggestionSourceStates {
+  gsc: { configured: boolean; connected: boolean; mapped: boolean };
+  ga: { configured: boolean; connected: boolean; mapped: boolean };
+  dataForSeo: { configured: boolean };
+}
+
+export async function getSuggestionSourceStates(brandId: string): Promise<SuggestionSourceStates> {
+  const supabase = await createClient();
+
+  interface ConfigBody {
+    googleSearchConsole?: boolean;
+    googleAnalytics?: boolean;
+    dataForSeo?: boolean;
+  }
+
+  const [configRes, brandRes, connRes] = await Promise.all([
+    fetch(`${API_BASE_URL}/api/integrations/config`, {
+      headers: await authHeaders(),
+      cache: 'no-store',
+    })
+      .then((r) => (r.ok ? (r.json() as Promise<ConfigBody>) : ({} as ConfigBody)))
+      .catch(() => ({}) as ConfigBody),
+    supabase.from('brands').select('gsc_property, ga_property_id').eq('id', brandId).maybeSingle(),
+    supabase.from('integration_connections').select('provider, status'),
+  ]);
+
+  const connected = new Set(
+    (connRes.data ?? []).filter((r) => r.status === 'connected').map((r) => r.provider),
+  );
+
+  return {
+    gsc: {
+      configured: Boolean(configRes.googleSearchConsole),
+      connected: connected.has('google-search-console'),
+      mapped: Boolean(brandRes.data?.gsc_property),
+    },
+    ga: {
+      configured: Boolean(configRes.googleAnalytics),
+      connected: connected.has('google-analytics'),
+      mapped: Boolean(brandRes.data?.ga_property_id),
+    },
+    dataForSeo: { configured: Boolean(configRes.dataForSeo) },
+  };
 }
 
 export async function connectIntegration(

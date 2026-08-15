@@ -72,21 +72,24 @@ function notConfigured(res, provider) {
 }
 
 /**
- * GET /api/integrations/dataforseo/status
+ * GET /api/integrations/config
+ *
+ * Which integrations this deployment has credentials for. Env only — no
+ * Composio round trip — so a surface can decide what to offer without paying
+ * ~450ms per provider to ask whether a flow even exists.
  *
  * Declared before the `:provider` routes below, which would otherwise claim
- * this path and reject "dataforseo" as an unknown provider — it is not a
- * Composio provider and has no connect flow.
- *
- * DataForSEO is not a customer connection — it is our own key, used to enrich
- * Search Console candidates with competition and volume data. It has no
- * connect flow, so this only answers whether the deployment has credentials
- * for it, which is what lets a surface say "enabled" truthfully instead of
- * decoratively. Member-readable: it exposes a boolean, never the credentials.
+ * this path. DataForSEO is included although it is not a Composio provider
+ * and has no connect flow: it is our own key, enriching Search Console
+ * candidates with competition and volume data, and a surface saying "enabled"
+ * should be able to check rather than assume. Booleans only, never the
+ * credentials themselves.
  */
-router.get('/dataforseo/status', async (_req, res) => {
+router.get('/config', async (_req, res) => {
   return res.json({
-    configured: Boolean(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD),
+    googleSearchConsole: isComposioConfigured(GSC),
+    googleAnalytics: isComposioConfigured(GA),
+    dataForSeo: Boolean(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD),
   });
 });
 

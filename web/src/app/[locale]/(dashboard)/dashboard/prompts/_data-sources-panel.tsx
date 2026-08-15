@@ -4,13 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from '@/i18n/navigation';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { BarChart3, Check, ExternalLink, Lock, Radar, Search, Sparkles, X } from 'lucide-react';
-import {
-  getDataForSeoStatus,
-  getGaBrandMappings,
-  getGscBrandMappings,
-  getIntegrationStatus,
-  type IntegrationProvider,
-} from '@/lib/actions/integrations';
+import { getSuggestionSourceStates } from '@/lib/actions/integrations';
 
 /**
  * What feeds this brand's suggestions, and what could (#659).
@@ -48,19 +42,6 @@ const SETTINGS_HREF = '/dashboard/settings?tab=integrations';
 
 /** Remembered across visits: a dismissed panel should stay dismissed. */
 const DISMISSED_KEY = 'aeo:suggestion-sources-dismissed';
-
-async function resolveState(provider: IntegrationProvider, brandId: string): Promise<SourceState> {
-  const status = await getIntegrationStatus(provider);
-  if (!status.configured) return 'not_configured';
-  if (status.status !== 'connected') return 'not_connected';
-
-  const mappings =
-    provider === 'google-search-console'
-      ? (await getGscBrandMappings()).map((m) => ({ brandId: m.brandId, mapped: !!m.gscProperty }))
-      : (await getGaBrandMappings()).map((m) => ({ brandId: m.brandId, mapped: !!m.gaPropertyId }));
-
-  return mappings.find((m) => m.brandId === brandId)?.mapped ? 'feeding' : 'connected_unmapped';
-}
 
 /**
  * The provider's own mark, falling back to a generic icon.
@@ -103,15 +84,20 @@ export function DataSourcesPanel({ brandId }: { brandId: string }) {
   useEffect(() => {
     let cancelled = false;
 
-    Promise.all([
-      resolveState('google-search-console', brandId),
-      resolveState('google-analytics', brandId),
-      getDataForSeoStatus()
-        .then((r) => r.configured)
-        .catch(() => false),
-    ])
-      .then(([gsc, ga, dataForSeo]) => {
+    getSuggestionSourceStates(brandId)
+      .then((states) => {
         if (cancelled) return;
+        const stateOf = (s: { configured: boolean; connected: boolean; mapped: boolean }) =>
+          !s.configured
+            ? ('not_configured' as const)
+            : !s.connected
+              ? ('not_connected' as const)
+              : s.mapped
+                ? ('feeding' as const)
+                : ('connected_unmapped' as const);
+        const gsc = stateOf(states.gsc);
+        const ga = stateOf(states.ga);
+        const dataForSeo = states.dataForSeo.configured;
         setSources([
           {
             key: 'gsc',
