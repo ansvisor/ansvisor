@@ -63,6 +63,8 @@ import {
   ChevronDown,
   Trash2,
   X,
+  ListChecks,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -257,8 +259,11 @@ const PROMPT_EXPORT_HINT = 'No prompts yet - add prompts first.';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const VALID_TABS = ['all', 'suggestions', 'fanout', 'insights'] as const;
+const VALID_TABS = ['all', 'fanout', 'insights'] as const;
 type TabId = (typeof VALID_TABS)[number];
+
+const PROMPT_VIEWS = ['tracked', 'suggestions'] as const;
+type PromptsView = (typeof PROMPT_VIEWS)[number];
 
 function formatRelative(iso?: string): string {
   if (!iso) return '—';
@@ -922,15 +927,23 @@ export default function PromptsPage() {
   const initialTab: TabId = (() => {
     const raw = searchParams.get('tab');
     if ((VALID_TABS as readonly string[]).includes(raw ?? '')) return raw as TabId;
-    // Links written before suggestions had their own tab point at the card's
-    // anchor. They still mean "show me the suggestions", so honour them
-    // rather than dropping the reader on All Prompts with nothing to scroll to.
-    if (typeof window !== 'undefined' && window.location.hash === '#prompt-opportunities') {
-      return 'suggestions';
-    }
     return 'all';
   })();
   const [tab, setTab] = useState<TabId>(initialTab);
+
+  // The Prompts tab holds two views of the same roster: what is tracked, and
+  // what could be. A sub-tab rather than a fourth top-level tab, because the
+  // date range, the Add prompt action and the export all belong to both.
+  const initialView: PromptsView = (() => {
+    const raw = searchParams.get('view');
+    if ((PROMPT_VIEWS as readonly string[]).includes(raw ?? '')) return raw as PromptsView;
+    // Links written before the split point at the suggestions card's anchor.
+    if (typeof window !== 'undefined' && window.location.hash === '#prompt-opportunities') {
+      return 'suggestions';
+    }
+    return 'tracked';
+  })();
+  const [view, setView] = useState<PromptsView>(initialView);
 
   const initialRange: PromptRangePreset = (() => {
     const raw = searchParams.get('range');
@@ -969,10 +982,12 @@ export default function PromptsPage() {
     // The default range stays out of the URL so shared links keep their
     // existing shape unless the user actually picked a different window.
     const wantRange = rangePreset === DEFAULT_PROMPT_RANGE_PRESET ? null : rangePreset;
+    const wantView = view === 'tracked' ? null : view;
     const wantFrom = rangePreset === 'custom' && customFrom ? customFrom : null;
     const wantTo = rangePreset === 'custom' && customTo ? customTo : null;
     if (
       currentTab === tab &&
+      searchParams.get('view') === wantView &&
       currentRange === wantRange &&
       searchParams.get('from') === wantFrom &&
       searchParams.get('to') === wantTo
@@ -981,6 +996,8 @@ export default function PromptsPage() {
     }
     const params = new URLSearchParams(Array.from(searchParams.entries()));
     params.set('tab', tab);
+    if (wantView) params.set('view', wantView);
+    else params.delete('view');
     if (wantRange) params.set('range', wantRange);
     else params.delete('range');
     if (wantFrom) params.set('from', wantFrom);
@@ -990,7 +1007,7 @@ export default function PromptsPage() {
     // Keep the hash: deep links like #prompt-opportunities arrive without a
     // tab param, and this sync must not strip their anchor from the URL.
     window.history.replaceState(null, '', `?${params.toString()}${window.location.hash}`);
-  }, [tab, rangePreset, customFrom, customTo, searchParams]);
+  }, [tab, view, rangePreset, customFrom, customTo, searchParams]);
 
   // Deep link from the Insights Recommendations row (#459): the target card
   // only exists once the Insights tab's volume data has rendered, so a bare
@@ -1256,8 +1273,7 @@ export default function PromptsPage() {
       <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)}>
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <TabsList>
-            <TabsTrigger value="all">All Prompts</TabsTrigger>
-            <TabsTrigger value="suggestions">Suggestions</TabsTrigger>
+            <TabsTrigger value="all">Prompts</TabsTrigger>
             <TabsTrigger value="fanout">Query Fan-out</TabsTrigger>
             <TabsTrigger value="insights">Insights</TabsTrigger>
           </TabsList>
@@ -1302,11 +1318,10 @@ export default function PromptsPage() {
         {/* Filter bar — same shape and position as Visibility and Citations
             (#713). It sits outside the tab panels because the range governs
             both All Prompts and Query Fan-out.
-            Hidden on the two tabs it cannot scope: Insights shows keyword
-            volume estimates and Suggestions are regenerated on demand with a
-            48h life, so neither carries a date dimension and a range there
-            would be a control that changes nothing. */}
-        {tab !== 'insights' && tab !== 'suggestions' && (
+            Hidden on Insights: that tab shows keyword volume estimates, which
+            carry no date dimension, so a range there would be a control that
+            changes nothing. */}
+        {tab !== 'insights' && (
           <div className="mt-4 flex flex-wrap items-end gap-3">
             <DateRangeFilter
               value={rangePreset}
@@ -1322,60 +1337,94 @@ export default function PromptsPage() {
 
         {/* ─── All Prompts tab ─────────────────────────────────────────── */}
         <TabsContent value="all" className="mt-4 space-y-4">
-          {!loading && unanalyzedCount > 0 && (
-            <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/50 dark:bg-amber-950/30">
-              <div className="flex items-start gap-2.5">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
-                <div className="text-sm">
-                  <p className="font-medium text-amber-900 dark:text-amber-200">
-                    {unanalyzedCount} prompt{unanalyzedCount === 1 ? '' : 's'} haven&apos;t been
-                    analyzed yet
-                  </p>
-                  <p className="text-amber-800/80 dark:text-amber-300/80">
-                    {quotaExhausted
-                      ? 'Their Volume & Competition stay empty until analyzed — but your monthly volume analysis limit is reached. Upgrade your plan to analyze more.'
-                      : 'Run volume analysis to fill in their Volume & Competition.'}
-                  </p>
-                </div>
-              </div>
-              <Button
-                size="sm"
-                className="shrink-0"
-                onClick={handleAnalyzeNew}
-                disabled={analyzing || quotaExhausted}
-              >
-                {analyzing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <BarChart3 className="mr-2 h-4 w-4" />
-                    Analyze {unanalyzedCount} prompt{unanalyzedCount === 1 ? '' : 's'}
-                  </>
+          {/* Tracked vs suggested: two views of the same roster. A segmented
+              control rather than a second Tabs, so it reads as a filter on
+              this panel and not as another level of page navigation. */}
+          <div
+            className="inline-flex rounded-lg border p-1"
+            role="tablist"
+            aria-label="Prompt view"
+          >
+            {(
+              [
+                { id: 'tracked' as const, label: 'Tracked Prompts', Icon: ListChecks },
+                { id: 'suggestions' as const, label: 'Prompt Suggestions', Icon: Sparkles },
+              ] satisfies { id: PromptsView; label: string; Icon: typeof ListChecks }[]
+            ).map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={view === id}
+                onClick={() => setView(id)}
+                className={cn(
+                  'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                  view === id
+                    ? 'bg-muted text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
-              </Button>
-            </div>
-          )}
-          <AllPromptsTab
-            loading={loading}
-            prompts={allPrompts}
-            activeBrandId={activeBrandId}
-            volumeByPromptId={volumeByPromptId}
-            visibility={visibility}
-            rangeLabel={rangeLabel}
-            onAddPrompt={canManage ? () => setAddPromptOpen(true) : undefined}
-            onEditPrompt={canManage ? setEditingPrompt : undefined}
-          />
-        </TabsContent>
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            ))}
+          </div>
 
-        {/* ─── Suggestions tab ─────────────────────────────────────────── */}
-        <TabsContent value="suggestions" className="mt-4 space-y-4">
-          {activeBrandId && (
+          {view === 'suggestions' ? (
+            activeBrandId && (
+              <>
+                <DataSourcesPanel brandId={activeBrandId} />
+                <SuggestionsCard brandId={activeBrandId} onAccepted={loadData} />
+              </>
+            )
+          ) : (
             <>
-              <DataSourcesPanel brandId={activeBrandId} />
-              <SuggestionsCard brandId={activeBrandId} onAccepted={loadData} />
+              {!loading && unanalyzedCount > 0 && (
+                <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/50 dark:bg-amber-950/30">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
+                    <div className="text-sm">
+                      <p className="font-medium text-amber-900 dark:text-amber-200">
+                        {unanalyzedCount} prompt{unanalyzedCount === 1 ? '' : 's'} haven&apos;t been
+                        analyzed yet
+                      </p>
+                      <p className="text-amber-800/80 dark:text-amber-300/80">
+                        {quotaExhausted
+                          ? 'Their Volume & Competition stay empty until analyzed — but your monthly volume analysis limit is reached. Upgrade your plan to analyze more.'
+                          : 'Run volume analysis to fill in their Volume & Competition.'}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="shrink-0"
+                    onClick={handleAnalyzeNew}
+                    disabled={analyzing || quotaExhausted}
+                  >
+                    {analyzing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <BarChart3 className="mr-2 h-4 w-4" />
+                        Analyze {unanalyzedCount} prompt{unanalyzedCount === 1 ? '' : 's'}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+              <AllPromptsTab
+                loading={loading}
+                prompts={allPrompts}
+                activeBrandId={activeBrandId}
+                volumeByPromptId={volumeByPromptId}
+                visibility={visibility}
+                rangeLabel={rangeLabel}
+                onAddPrompt={canManage ? () => setAddPromptOpen(true) : undefined}
+                onEditPrompt={canManage ? setEditingPrompt : undefined}
+              />
             </>
           )}
         </TabsContent>
