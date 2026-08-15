@@ -31,6 +31,8 @@ interface Source {
   key: string;
   name: string;
   blurb: string;
+  /** Official mark under web/public. Falls back to `icon` when absent. */
+  logo: string;
   icon: typeof Search;
   iconClass: string;
   state: SourceState;
@@ -58,6 +60,30 @@ async function resolveState(provider: IntegrationProvider, brandId: string): Pro
       : (await getGaBrandMappings()).map((m) => ({ brandId: m.brandId, mapped: !!m.gaPropertyId }));
 
   return mappings.find((m) => m.brandId === brandId)?.mapped ? 'feeding' : 'connected_unmapped';
+}
+
+/**
+ * The provider's own mark, falling back to a generic icon.
+ *
+ * Rendered as an <img> against web/public rather than inlined, matching how
+ * platform logos already work here — and the fallback means a deployment
+ * missing the asset shows a sensible icon instead of a broken image.
+ */
+function SourceMark({ source }: { source: Source }) {
+  const [failed, setFailed] = useState(false);
+  const Icon = source.icon;
+
+  if (failed) return <Icon className={`h-4 w-4 shrink-0 ${source.iconClass}`} />;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={source.logo}
+      alt=""
+      aria-hidden="true"
+      className="h-4 w-4 shrink-0 object-contain"
+      onError={() => setFailed(true)}
+    />
+  );
 }
 
 export function DataSourcesPanel({ brandId }: { brandId: string }) {
@@ -91,6 +117,7 @@ export function DataSourcesPanel({ brandId }: { brandId: string }) {
             key: 'gsc',
             name: 'Google Search Console',
             blurb: 'See query and impression data to find high-opportunity prompts.',
+            logo: '/google-search-console.svg',
             icon: Search,
             iconClass: 'text-blue-500',
             state: gsc,
@@ -100,6 +127,7 @@ export function DataSourcesPanel({ brandId }: { brandId: string }) {
             key: 'ga',
             name: 'Google Analytics (GA4)',
             blurb: 'Understand user intent and behaviour to uncover relevant prompts.',
+            logo: '/google-analytics.svg',
             icon: BarChart3,
             iconClass: 'text-amber-500',
             state: ga,
@@ -109,6 +137,7 @@ export function DataSourcesPanel({ brandId }: { brandId: string }) {
             key: 'dataforseo',
             name: 'DataForSEO',
             blurb: 'Uncover keyword and SERP data to find content gaps.',
+            logo: '/dataforseo.svg',
             icon: Radar,
             iconClass: 'text-violet-500',
             state: dataForSeo ? 'feeding' : 'not_configured',
@@ -181,34 +210,29 @@ export function DataSourcesPanel({ brandId }: { brandId: string }) {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {visible.map((source) => {
-            const Icon = source.icon;
-            return (
-              <div key={source.key} className="flex flex-col gap-2 rounded-lg border bg-card p-3">
-                <div className="flex items-center gap-2">
-                  <Icon className={`h-4 w-4 shrink-0 ${source.iconClass}`} />
-                  <span className="text-sm font-medium">{source.name}</span>
-                </div>
-                <p className="flex-1 text-xs text-muted-foreground leading-relaxed">
-                  {source.blurb}
-                </p>
-                {source.state === 'feeding' ? (
-                  <span className="flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400">
-                    <Check className="h-3.5 w-3.5" />
-                    {source.connectable ? 'Connected' : 'Enabled'}
-                  </span>
-                ) : !source.connectable ? null : (
-                  <Link
-                    href={SETTINGS_HREF}
-                    className={`${buttonVariants({ variant: 'outline', size: 'sm' })} gap-1.5`}
-                  >
-                    {source.state === 'connected_unmapped' ? 'Map property' : 'Connect'}
-                    <ExternalLink className="h-3 w-3" />
-                  </Link>
-                )}
+          {visible.map((source) => (
+            <div key={source.key} className="flex flex-col gap-2 rounded-lg border bg-card p-3">
+              <div className="flex items-center gap-2">
+                <SourceMark source={source} />
+                <span className="text-sm font-medium">{source.name}</span>
               </div>
-            );
-          })}
+              <p className="flex-1 text-xs text-muted-foreground leading-relaxed">{source.blurb}</p>
+              {source.state === 'feeding' ? (
+                <span className="flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400">
+                  <Check className="h-3.5 w-3.5" />
+                  {source.connectable ? 'Connected' : 'Enabled'}
+                </span>
+              ) : !source.connectable ? null : (
+                <Link
+                  href={SETTINGS_HREF}
+                  className={`${buttonVariants({ variant: 'outline', size: 'sm' })} gap-1.5`}
+                >
+                  {source.state === 'connected_unmapped' ? 'Map property' : 'Connect'}
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
+              )}
+            </div>
+          ))}
         </div>
       </div>
     </div>
