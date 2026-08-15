@@ -168,7 +168,9 @@ export default function ContentPage() {
     highImpactCount: 0,
     sentCount: 0,
   });
-
+// Server-side paging (#610) — the list can hold far more than one page's
+// worth of opportunities, so `total` (the exact server count) drives the
+// pager instead of the length of whatever page happens to be loaded.
   const pager = usePagination(
     total,
     `${statusFilter}|${impactFilter}|${typeFilter}|${debouncedSearch}`,
@@ -293,7 +295,7 @@ export default function ContentPage() {
     },
     [loadData],
   );
-
+ // Restore generation state from localStorage on mount
   useEffect(() => {
     if (!activeBrandId) return;
     const saved = loadGenerationJob();
