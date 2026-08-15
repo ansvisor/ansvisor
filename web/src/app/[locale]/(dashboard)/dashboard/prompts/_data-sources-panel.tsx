@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from '@/i18n/navigation';
 import { buttonVariants } from '@/components/ui/button-variants';
-import { BarChart3, Check, ExternalLink, Lock, Search, Sparkles, X } from 'lucide-react';
+import { BarChart3, Check, ExternalLink, Lock, Radar, Search, Sparkles, X } from 'lucide-react';
 import {
+  getDataForSeoStatus,
   getGaBrandMappings,
   getGscBrandMappings,
   getIntegrationStatus,
@@ -33,6 +34,12 @@ interface Source {
   icon: typeof Search;
   iconClass: string;
   state: SourceState;
+  /**
+   * False for sources the customer does not connect themselves. DataForSEO is
+   * our own key — it powers keyword and competition data for everyone on the
+   * plan, so it has a state to report but nothing to click.
+   */
+  connectable: boolean;
 }
 
 const SETTINGS_HREF = '/dashboard/settings?tab=integrations';
@@ -73,8 +80,11 @@ export function DataSourcesPanel({ brandId }: { brandId: string }) {
     Promise.all([
       resolveState('google-search-console', brandId),
       resolveState('google-analytics', brandId),
+      getDataForSeoStatus()
+        .then((r) => r.configured)
+        .catch(() => false),
     ])
-      .then(([gsc, ga]) => {
+      .then(([gsc, ga, dataForSeo]) => {
         if (cancelled) return;
         setSources([
           {
@@ -84,6 +94,7 @@ export function DataSourcesPanel({ brandId }: { brandId: string }) {
             icon: Search,
             iconClass: 'text-blue-500',
             state: gsc,
+            connectable: true,
           },
           {
             key: 'ga',
@@ -92,6 +103,16 @@ export function DataSourcesPanel({ brandId }: { brandId: string }) {
             icon: BarChart3,
             iconClass: 'text-amber-500',
             state: ga,
+            connectable: true,
+          },
+          {
+            key: 'dataforseo',
+            name: 'DataForSEO',
+            blurb: 'Uncover keyword and SERP data to find content gaps.',
+            icon: Radar,
+            iconClass: 'text-violet-500',
+            state: dataForSeo ? 'feeding' : 'not_configured',
+            connectable: false,
           },
         ]);
       })
@@ -117,14 +138,16 @@ export function DataSourcesPanel({ brandId }: { brandId: string }) {
 
   if (dismissed || sources === null) return null;
 
-  // Nothing to advertise: a self-host without Composio credentials cannot
-  // complete either flow, so offering it would be a dead end.
-  const offerable = sources.filter((s) => s.state !== 'not_configured');
-  if (offerable.length === 0) return null;
+  // A source the deployment has no credentials for is dropped rather than
+  // shown as unavailable: on a self-host without them there is no flow to
+  // complete, and offering one would be a dead end.
+  const visible = sources.filter((s) => s.state !== 'not_configured');
+  if (visible.length === 0) return null;
 
-  // Everything already feeding — the suggestion rows carry their own source
-  // badges, so a panel repeating that is noise.
-  if (offerable.every((s) => s.state === 'feeding')) return null;
+  // The panel stays put once everything is connected. It is the standing
+  // answer to "what is behind these suggestions", not a prompt to act, and a
+  // reader who connected a source last month should still be able to see that
+  // it is the one doing the work. Dismissing it is the way to hide it.
 
   return (
     <div className="relative rounded-lg border bg-muted/20 p-4">
@@ -157,8 +180,8 @@ export function DataSourcesPanel({ brandId }: { brandId: string }) {
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          {offerable.map((source) => {
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {visible.map((source) => {
             const Icon = source.icon;
             return (
               <div key={source.key} className="flex flex-col gap-2 rounded-lg border bg-card p-3">
@@ -172,9 +195,9 @@ export function DataSourcesPanel({ brandId }: { brandId: string }) {
                 {source.state === 'feeding' ? (
                   <span className="flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400">
                     <Check className="h-3.5 w-3.5" />
-                    Connected
+                    {source.connectable ? 'Connected' : 'Enabled'}
                   </span>
-                ) : (
+                ) : !source.connectable ? null : (
                   <Link
                     href={SETTINGS_HREF}
                     className={`${buttonVariants({ variant: 'outline', size: 'sm' })} gap-1.5`}

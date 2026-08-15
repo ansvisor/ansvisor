@@ -38,6 +38,24 @@ export async function getIntegrationStatus(
   return body as IntegrationStatusResult;
 }
 
+/**
+ * Whether this deployment has DataForSEO credentials (#659).
+ *
+ * Not a customer connection — our own key, used to enrich Search Console
+ * candidates with competition and volume data. There is nothing to connect,
+ * only something to report, and a surface that says "enabled" should be able
+ * to check rather than assume.
+ */
+export async function getDataForSeoStatus(): Promise<{ configured: boolean }> {
+  const res = await fetch(`${API_BASE_URL}/api/integrations/dataforseo/status`, {
+    headers: await authHeaders(),
+    cache: 'no-store',
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `Server error: ${res.status}`);
+  return { configured: Boolean(body.configured) };
+}
+
 export async function connectIntegration(
   provider: IntegrationProvider,
   callbackUrl: string,

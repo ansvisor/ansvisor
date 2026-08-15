@@ -71,6 +71,25 @@ function notConfigured(res, provider) {
     .json({ error: `${PROVIDERS[provider].label} integration is not configured.` });
 }
 
+/**
+ * GET /api/integrations/dataforseo/status
+ *
+ * Declared before the `:provider` routes below, which would otherwise claim
+ * this path and reject "dataforseo" as an unknown provider — it is not a
+ * Composio provider and has no connect flow.
+ *
+ * DataForSEO is not a customer connection — it is our own key, used to enrich
+ * Search Console candidates with competition and volume data. It has no
+ * connect flow, so this only answers whether the deployment has credentials
+ * for it, which is what lets a surface say "enabled" truthfully instead of
+ * decoratively. Member-readable: it exposes a boolean, never the credentials.
+ */
+router.get('/dataforseo/status', async (_req, res) => {
+  return res.json({
+    configured: Boolean(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD),
+  });
+});
+
 // ─── Shared connect / status / disconnect ────────────────────────────────────
 // Identical for every OAuth provider; only the auth config differs, which
 // lives in the PROVIDERS map.

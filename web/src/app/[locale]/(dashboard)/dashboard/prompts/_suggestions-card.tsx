@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   SearchCheck,
   Shield,
+  Radar,
   Search as SearchIcon,
   Trash2,
   BarChart3,
@@ -152,6 +153,19 @@ function SourceBadges({ suggestion }: { suggestion: PromptSuggestion }) {
           <Badge variant="outline" className="gap-1.5 bg-card text-xs font-normal">
             <SearchCheck className="h-3.5 w-3.5 text-blue-500" />
             Google Search Console
+          </Badge>
+        </HoverTip>
+      )}
+      {/* Only when the row actually carries DataForSEO's contribution: the
+          competition index it returned for that query. A badge on a row it
+          never touched would be decoration claiming to be provenance. */}
+      {gsc?.competitionIndex != null && (
+        <HoverTip
+          content={`DataForSEO scored advertiser competition for this query at ${gsc.competitionIndex}/100.`}
+        >
+          <Badge variant="outline" className="gap-1.5 bg-card text-xs font-normal">
+            <Radar className="h-3.5 w-3.5 text-violet-500" />
+            DataForSEO
           </Badge>
         </HoverTip>
       )}
