@@ -87,7 +87,15 @@ export async function getOpportunities(
     offset?: number;
     sort?: string;
   },
-): Promise<{ opportunities: ContentOpportunity[]; total: number }> {
+): Promise<{
+  opportunities: ContentOpportunity[];
+  total: number;
+  aggregates: {
+    avgScore: number;
+    highImpactCount: number;
+    sentCount: number;
+  };
+}> {
   const session = await getSession();
 
   const params = new URLSearchParams();

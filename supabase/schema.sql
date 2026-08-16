@@ -5021,6 +5021,96 @@ GRANT SELECT ON public.gsc_query_stats TO authenticated;
 --    repeat suggestion refreshes cost zero new DataForSEO calls. Service
 --    role only (RLS enabled, no policies).
 
+-- ── Recovered table definition (#709) ────────────────────────────────────────
+--
+-- prompt_suggestions was created directly against the hosted database and
+-- never written back into a migration, so the ALTERs below had nothing to
+-- alter on a clean one: `supabase db reset` failed here with 42P01, and
+-- schema.sql inherited the same gap. Every documented fresh-install path was
+-- broken from the moment this migration shipped.
+--
+-- The definition belongs *here* rather than in a later numbered file, because
+-- the very next statement alters this table — a migration appended at the end
+-- would never be reached. Editing a shipped migration is normally off-limits;
+-- this one is safe because every clause is idempotent and any database that
+-- already ran 00048 will not run it again.
+--
+-- Deliberately the table as it was BEFORE the ALTERs below: no source_data
+-- column, and the two-value source check. Transcribing a live database's
+-- current shape instead would leave a fresh install failing one line later on
+-- "column source_data already exists".
+CREATE TABLE IF NOT EXISTS "public"."prompt_suggestions" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "brand_id" "uuid" NOT NULL,
+    "suggested_text" "text" NOT NULL,
+    "topic_name" "text",
+    "topic_id" "uuid",
+    "reason" "text",
+    "est_volume" integer,
+    "source" "text" DEFAULT 'llm'::"text" NOT NULL,
+    "status" "text" DEFAULT 'new'::"text" NOT NULL,
+    "added_prompt_id" "uuid",
+    "generated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "expires_at" timestamp with time zone DEFAULT ("now"() + '48:00:00'::interval) NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "prompt_suggestions_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "prompt_suggestions_source_check" CHECK (
+        "source" = ANY (ARRAY['llm'::"text", 'heuristic'::"text"])
+    ),
+    CONSTRAINT "prompt_suggestions_status_check" CHECK (
+        "status" = ANY (ARRAY['new'::"text", 'added'::"text", 'dismissed'::"text"])
+    ),
+    CONSTRAINT "prompt_suggestions_brand_id_fkey" FOREIGN KEY ("brand_id")
+        REFERENCES "public"."brands"("id") ON DELETE CASCADE,
+    CONSTRAINT "prompt_suggestions_topic_id_fkey" FOREIGN KEY ("topic_id")
+        REFERENCES "public"."topics"("id") ON DELETE SET NULL,
+    CONSTRAINT "prompt_suggestions_added_prompt_id_fkey" FOREIGN KEY ("added_prompt_id")
+        REFERENCES "public"."prompts"("id") ON DELETE SET NULL
+);
+
+ALTER TABLE "public"."prompt_suggestions" OWNER TO "postgres";
+
+CREATE INDEX IF NOT EXISTS "idx_prompt_suggestions_brand_status"
+    ON "public"."prompt_suggestions" ("brand_id", "status", "generated_at" DESC);
+
+-- One live suggestion per brand per text, case-insensitively. Partial on
+-- 'new' so an accepted or dismissed suggestion never blocks a later one.
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_prompt_suggestions_brand_text_active"
+    ON "public"."prompt_suggestions" ("brand_id", "lower"("suggested_text"))
+    WHERE ("status" = 'new'::"text");
+
+ALTER TABLE "public"."prompt_suggestions" ENABLE ROW LEVEL SECURITY;
+
+-- Writes go through the Express server's service-role client; these cover the
+-- web app's direct reads and the accept/dismiss updates it performs.
+CREATE POLICY "prompt_suggestions: member select" ON "public"."prompt_suggestions"
+    FOR SELECT USING (
+        "brand_id" IN (
+            SELECT "b"."id"
+            FROM "public"."brands" "b"
+            JOIN "public"."profiles" "p" ON "p"."organization_id" = "b"."organization_id"
+            WHERE "p"."id" = "auth"."uid"()
+        )
+    );
+
+CREATE POLICY "prompt_suggestions: admin/manager/analyst update" ON "public"."prompt_suggestions"
+    FOR UPDATE USING (
+        "brand_id" IN (
+            SELECT "b"."id"
+            FROM "public"."brands" "b"
+            JOIN "public"."profiles" "p" ON "p"."organization_id" = "b"."organization_id"
+            WHERE "p"."id" = "auth"."uid"()
+              AND "p"."role" = ANY (ARRAY['admin'::"public"."user_role", 'manager'::"public"."user_role", 'analyst'::"public"."user_role"])
+        )
+    );
+
+GRANT ALL ON TABLE "public"."prompt_suggestions" TO "anon";
+GRANT ALL ON TABLE "public"."prompt_suggestions" TO "authenticated";
+GRANT ALL ON TABLE "public"."prompt_suggestions" TO "service_role";
+
+-- ─────────────────────────────────────────────────────────────────────────────
+
 ALTER TABLE public.prompt_suggestions ADD COLUMN source_data jsonb;
 
 -- The live table's source check predates 'gsc' — extend it.
@@ -5100,4 +5190,615 @@ CREATE INDEX IF NOT EXISTS idx_cloro_pending_tasks_submitted_at
 -- bypasses RLS. Anything reaching it through an anon/authenticated key gets
 -- nothing, which is the intent — task ids are provider-side handles.
 ALTER TABLE public.cloro_pending_tasks ENABLE ROW LEVEL SECURITY;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00050_content_opportunity_aggregates.sql
+-- ─────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.content_opportunity_aggregates(
+  p_brand_id uuid,
+  p_status text DEFAULT NULL,
+  p_impact text DEFAULT NULL,
+  p_type text DEFAULT NULL,
+  p_q text DEFAULT NULL
+)
+RETURNS TABLE (
+  avg_score numeric,
+  high_impact_count bigint,
+  sent_count bigint
+)
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = public
+AS $$
+  SELECT
+    COALESCE(AVG(co.opportunity_score), 0) AS avg_score,
+    COUNT(*) FILTER (
+      WHERE co.impact = 'high'
+    ) AS high_impact_count,
+    COUNT(*) FILTER (
+      WHERE co.status IN ('sent', 'in_progress', 'done')
+    ) AS sent_count
+  FROM public.content_opportunities co
+  WHERE co.brand_id = p_brand_id
+    AND (p_status IS NULL OR co.status = p_status)
+    AND (p_impact IS NULL OR co.impact = p_impact)
+    AND (p_type IS NULL OR co.type = p_type)
+    AND (
+      p_q IS NULL
+      OR co.title ILIKE '%' || p_q || '%'
+      OR co.description ILIKE '%' || p_q || '%'
+    );
+$$;
+
+GRANT EXECUTE ON FUNCTION public.content_opportunity_aggregates(
+  uuid,
+  text,
+  text,
+  text,
+  text
+) TO authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00051_brand_ga_property.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Brand → Google Analytics property mapping (#694).
+--
+-- Mirrors gsc_property (00046): the Analytics connection is org-level
+-- (integration_connections), the property choice is brand-level, and exactly
+-- one property per brand means a column beats a mapping table. Values are the
+-- bare GA4 numeric property id ("365372770") rather than the API's
+-- "properties/365372770" resource name — the prefix is constant and is added
+-- back when calling the Admin/Data APIs. Kept on disconnect so reconnecting
+-- restores functionality without re-picking.
+
+ALTER TABLE public.brands ADD COLUMN ga_property_id text;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00052_sent_pulses_window_dedupe.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- One Daily Pulse per brand per tracking window (#701).
+--
+-- sent_pulses already has a unique (brand_id, pulse_date) key, but the daily
+-- KPI window is anchored to the tracking-run ledger rather than to the
+-- calendar: two pulses filed under different dates repeat each other verbatim
+-- whenever the anchor has not moved between them. That is how the catch-up
+-- sweep's recovery mail and the brand's own end-of-run mail went out an hour
+-- apart with identical numbers, and how a brand whose runs stopped stamping
+-- received the same figures again on each following day.
+--
+-- The engine checks for a matching window before it computes, so this index is
+-- the race guard rather than the primary mechanism — same role the date key
+-- plays for same-day double-fires.
+--
+-- Partial on the extracted path so rows written before this migration — which
+-- carry no payload->window at all — are excluded instead of colliding on NULL.
+-- Weekly digests and brands with no completed run are indexed but can never
+-- conflict: their window ends at the wall clock, which differs on every call.
+CREATE UNIQUE INDEX IF NOT EXISTS sent_pulses_brand_window_key
+    ON public.sent_pulses (brand_id, ((payload -> 'window' ->> 'to')))
+    WHERE (payload -> 'window' ->> 'to') IS NOT NULL;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00053_ga_traffic_stats.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Google Analytics traffic sync (#704) — daily GA4 rows pulled through the
+-- Composio connection for every brand mapped to a property (#694).
+--
+-- Three tables rather than one, because they answer different questions and
+-- must never be added together:
+--
+--   ga_ai_traffic_stats  what AI sources brought, per landing page
+--   ga_page_stats        what a landing page is worth in total, all sources
+--   ga_item_stats        what actually sold, product-scoped
+--
+-- The first two overlap by design: the AI table is a slice of the same
+-- traffic the page table totals. Summing them double-counts, which is the
+-- same trap this integration already avoids with ai_traffic_logs (our own
+-- snippet counts these visits a second time). Nothing in the pipeline joins
+-- or sums across origins; how the numbers are presented together is a
+-- decision for the surface phase.
+--
+-- Writes are service-role upserts keyed on the natural grain, so re-running a
+-- day rewrites it instead of duplicating. Org members read.
+
+-- ── AI-sourced traffic, by landing page ─────────────────────────────────────
+--
+-- `source` keeps GA4's raw sessionSource string and `platform` the normalised
+-- name. The raw value is not redundant: one engine arrives under several
+-- source strings, and keeping what was actually observed is what lets the
+-- classification list be extended from real data instead of guesswork.
+--
+-- Two page columns on purpose. `landing_page_query` is the full entry URL,
+-- which is what attribution needs — this table is small enough to afford the
+-- cardinality (a live property produced 96 rows over 90 days). `landing_page`
+-- drops the query string so it joins the page totals below, which cannot
+-- afford it: on the same property the query string multiplied distinct pages
+-- by 8.8, and a shop with faceted filters is far worse.
+CREATE TABLE public.ga_ai_traffic_stats (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    brand_id uuid NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
+    date date NOT NULL,
+    source text NOT NULL,
+    platform text,
+    landing_page text NOT NULL DEFAULT '',
+    landing_page_query text NOT NULL DEFAULT '',
+    sessions integer NOT NULL DEFAULT 0,
+    engaged_sessions integer NOT NULL DEFAULT 0,
+    key_events integer NOT NULL DEFAULT 0,
+    total_users integer NOT NULL DEFAULT 0,
+    transactions integer NOT NULL DEFAULT 0,
+    purchase_revenue double precision NOT NULL DEFAULT 0,
+    engagement_duration_seconds integer NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (brand_id, date, source, landing_page_query)
+);
+
+CREATE INDEX ga_ai_traffic_stats_brand_page_idx
+    ON public.ga_ai_traffic_stats (brand_id, landing_page);
+
+CREATE INDEX ga_ai_traffic_stats_brand_date_idx
+    ON public.ga_ai_traffic_stats (brand_id, date DESC);
+
+-- ── Landing-page totals, every source ───────────────────────────────────────
+--
+-- "How much is this page worth to the business" cannot be answered from the
+-- AI slice: a page that converts well overall is the interesting one when its
+-- AI visibility is weak, and that comparison needs the page's full figures.
+--
+-- This is the table that grows: one row per page per day, and a large shop
+-- can have tens of thousands of pages taking traffic on any given day. Two
+-- things bound it — the path without its query string, and a per-day ceiling
+-- on how many pages are kept (PAGE_DAILY_LIMIT in ga-sync.js). Pages are
+-- ordered so anything converting survives the cut whatever its session count;
+-- what gets dropped is the one-session tail, which no ranking of commercial
+-- value would have surfaced anyway.
+CREATE TABLE public.ga_page_stats (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    brand_id uuid NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
+    date date NOT NULL,
+    landing_page text NOT NULL DEFAULT '',
+    sessions integer NOT NULL DEFAULT 0,
+    engaged_sessions integer NOT NULL DEFAULT 0,
+    key_events integer NOT NULL DEFAULT 0,
+    total_users integer NOT NULL DEFAULT 0,
+    transactions integer NOT NULL DEFAULT 0,
+    purchase_revenue double precision NOT NULL DEFAULT 0,
+    engagement_duration_seconds integer NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (brand_id, date, landing_page)
+);
+
+CREATE INDEX ga_page_stats_brand_date_idx
+    ON public.ga_page_stats (brand_id, date DESC);
+
+-- ── Product rows ────────────────────────────────────────────────────────────
+--
+-- Item-scoped and deliberately not joined to a page: a GA4 purchase fires on
+-- the checkout page, so pairing item metrics with a page dimension would
+-- attribute every sale to /checkout. Which entry page produced sales lives in
+-- the two tables above; what sold lives here.
+--
+-- Absent ecommerce tracking is normal, not an error — properties without it
+-- simply return no rows.
+CREATE TABLE public.ga_item_stats (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    brand_id uuid NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
+    date date NOT NULL,
+    item_id text NOT NULL DEFAULT '',
+    item_name text NOT NULL DEFAULT '',
+    item_category text NOT NULL DEFAULT '',
+    items_viewed integer NOT NULL DEFAULT 0,
+    items_added_to_cart integer NOT NULL DEFAULT 0,
+    items_purchased integer NOT NULL DEFAULT 0,
+    item_revenue double precision NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (brand_id, date, item_id, item_name)
+);
+
+CREATE INDEX ga_item_stats_brand_date_idx
+    ON public.ga_item_stats (brand_id, date DESC);
+
+-- ── RLS ─────────────────────────────────────────────────────────────────────
+
+ALTER TABLE public.ga_ai_traffic_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ga_page_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ga_item_stats ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "ga_ai_traffic_stats: member select" ON public.ga_ai_traffic_stats
+    FOR SELECT USING (
+        brand_id IN (
+            SELECT b.id
+            FROM public.brands b
+            JOIN public.profiles p ON p.organization_id = b.organization_id
+            WHERE p.id = auth.uid()
+        )
+    );
+
+CREATE POLICY "ga_page_stats: member select" ON public.ga_page_stats
+    FOR SELECT USING (
+        brand_id IN (
+            SELECT b.id
+            FROM public.brands b
+            JOIN public.profiles p ON p.organization_id = b.organization_id
+            WHERE p.id = auth.uid()
+        )
+    );
+
+CREATE POLICY "ga_item_stats: member select" ON public.ga_item_stats
+    FOR SELECT USING (
+        brand_id IN (
+            SELECT b.id
+            FROM public.brands b
+            JOIN public.profiles p ON p.organization_id = b.organization_id
+            WHERE p.id = auth.uid()
+        )
+    );
+
+GRANT SELECT ON public.ga_ai_traffic_stats TO authenticated;
+GRANT SELECT ON public.ga_page_stats TO authenticated;
+GRANT SELECT ON public.ga_item_stats TO authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00054_prompt_suggestions_ga_source.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Google Analytics as a prompt-suggestion source (#705).
+--
+-- The check constraint predates the Analytics pipeline; without 'ga' the
+-- suggestion insert fails outright rather than degrading, so this has to land
+-- with the generator that produces those rows.
+ALTER TABLE public.prompt_suggestions DROP CONSTRAINT prompt_suggestions_source_check;
+ALTER TABLE public.prompt_suggestions ADD CONSTRAINT prompt_suggestions_source_check
+    CHECK (source = ANY (ARRAY['llm'::text, 'heuristic'::text, 'gsc'::text, 'ga'::text]));
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00055_prompt_visibility_summaries_date_to.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- prompt_visibility_summaries — redundant re-declaration (#713).
+--
+-- This migration adds nothing. Migration 00041 already gave the function its
+-- p_date_to bound, for the Daily Pulse movers highlight, and the body below
+-- is byte-identical to the one 00041 installs.
+--
+-- It was written on the mistaken belief that the hosted database carried a
+-- three-argument version no migration produced. It did carry one — from
+-- 00041, which a truncated search had hidden. There was no drift, and nothing
+-- here repairs anything.
+--
+-- Kept rather than deleted: it is already applied to the hosted database and
+-- recorded in schema_migrations, and removing an applied migration is a worse
+-- problem than an inert one. Both signatures are dropped conditionally, so it
+-- is a no-op wherever it runs. Do not copy this file as a pattern.
+
+DROP FUNCTION IF EXISTS public.prompt_visibility_summaries(uuid, timestamptz);
+DROP FUNCTION IF EXISTS public.prompt_visibility_summaries(uuid, timestamptz, timestamptz);
+
+CREATE FUNCTION public.prompt_visibility_summaries(
+  p_brand_id  uuid,
+  p_date_from timestamptz DEFAULT NULL,
+  p_date_to   timestamptz DEFAULT NULL
+)
+RETURNS TABLE (
+  prompt_id              uuid,
+  avg_visibility         double precision,
+  avg_visibility_visible double precision,
+  total_mentions         bigint,
+  total_citations        bigint,
+  runs                   bigint,
+  visible_runs           bigint,
+  mention_answers        bigint,
+  citation_answers       bigint,
+  position_factor        double precision,
+  last_run_at            timestamptz
+)
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = public
+AS $$
+  SELECT pr.prompt_id,
+         AVG(COALESCE(pr.visibility_score, 0))::double precision AS avg_visibility,
+         AVG(COALESCE(pr.visibility_score, 0))
+           FILTER (WHERE pr.mention_count > 0 OR pr.citation_count > 0)
+           ::double precision                                    AS avg_visibility_visible,
+         COALESCE(SUM(pr.mention_count), 0)::bigint              AS total_mentions,
+         COALESCE(SUM(pr.citation_count), 0)::bigint             AS total_citations,
+         COUNT(*)::bigint                                        AS runs,
+         COUNT(*) FILTER (WHERE pr.mention_count > 0 OR pr.citation_count > 0)::bigint
+                                                                 AS visible_runs,
+         COUNT(*) FILTER (WHERE pr.mention_count > 0)::bigint    AS mention_answers,
+         COUNT(*) FILTER (WHERE pr.citation_count > 0)::bigint   AS citation_answers,
+         AVG(1.0 / pr.mention_position)
+           FILTER (WHERE pr.mention_position IS NOT NULL)
+           ::double precision                                    AS position_factor,
+         MAX(pr.created_at)                                      AS last_run_at
+  FROM public.prompt_results pr
+  WHERE pr.brand_id = p_brand_id
+    AND pr.prompt_id IS NOT NULL
+    AND pr.platform <> 'chatgpt-shopping'  -- #155 - isolate from analytics
+    AND (p_date_from IS NULL OR pr.created_at >= p_date_from)
+    AND (p_date_to   IS NULL OR pr.created_at <= p_date_to)
+  GROUP BY pr.prompt_id
+$$;
+
+GRANT EXECUTE ON FUNCTION public.prompt_visibility_summaries(uuid, timestamptz, timestamptz)
+  TO authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00056_page_opportunities.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Page opportunities: valuable pages AI engines are not sending traffic to
+-- (#719, Phase 5 detection).
+--
+-- Named for its key, not just its subject, because content_opportunities
+-- already exists and means something different. That table is prompt-keyed
+-- and LLM-written: "what content should I make, given prompts where I am
+-- weak". This one is page-keyed and deterministic: "which of my pages earn,
+-- and get nothing from AI". A reader can tell them apart by the key in the
+-- name, and a surface can show them together later without either having to
+-- pretend to be the other.
+--
+-- Detection is pure SQL and JavaScript arithmetic — no model runs in this
+-- path. Enrichment, clustering and the full lifecycle are deliberately not
+-- here; they need volume this has not produced yet.
+--
+-- One row per (brand, page, kind), upserted daily. A finding that stops
+-- qualifying is stamped resolved_at rather than deleted, so the list can show
+-- that something improved instead of silently shrinking.
+
+CREATE TABLE public.page_opportunities (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    brand_id uuid NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
+    landing_page text NOT NULL,
+    kind text NOT NULL,
+
+    -- Which signal ranked this page, and where it ranked. Stored rather than
+    -- inferred because the answer differs per property: a shop is ranked on
+    -- money, a site with no ecommerce and no conversion events on engagement.
+    -- Every surface must say which one it used — calling an engagement rank
+    -- "your most valuable page" would be a true sentence about the wrong
+    -- thing.
+    value_signal text NOT NULL,
+    value_percentile numeric NOT NULL,
+    value_rank integer NOT NULL,
+
+    -- The figures the finding was raised from, so it can be explained and
+    -- audited without recomputing the window.
+    sessions integer NOT NULL DEFAULT 0,
+    engaged_sessions integer NOT NULL DEFAULT 0,
+    key_events integer NOT NULL DEFAULT 0,
+    transactions integer NOT NULL DEFAULT 0,
+    revenue double precision NOT NULL DEFAULT 0,
+    engagement_seconds integer NOT NULL DEFAULT 0,
+    ai_sessions integer NOT NULL DEFAULT 0,
+    ai_platforms text[] NOT NULL DEFAULT '{}',
+
+    window_days integer NOT NULL,
+    first_detected_at timestamptz NOT NULL DEFAULT now(),
+    last_detected_at timestamptz NOT NULL DEFAULT now(),
+    resolved_at timestamptz,
+
+    CONSTRAINT page_opportunities_kind_check
+        CHECK (kind = ANY (ARRAY['no_ai_traffic'::text])),
+    CONSTRAINT page_opportunities_signal_check
+        CHECK (value_signal = ANY (ARRAY[
+            'revenue'::text, 'transactions'::text, 'key_events'::text, 'engagement'::text
+        ])),
+    UNIQUE (brand_id, landing_page, kind)
+);
+
+-- The list surface reads open findings for one brand, worst gap first.
+CREATE INDEX page_opportunities_brand_open_idx
+    ON public.page_opportunities (brand_id, value_percentile DESC)
+    WHERE resolved_at IS NULL;
+
+ALTER TABLE public.page_opportunities ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "page_opportunities: member select" ON public.page_opportunities
+    FOR SELECT USING (
+        brand_id IN (
+            SELECT b.id
+            FROM public.brands b
+            JOIN public.profiles p ON p.organization_id = b.organization_id
+            WHERE p.id = auth.uid()
+        )
+    );
+
+GRANT SELECT ON public.page_opportunities TO authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00057_topics_overview_aggregates.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Topics overview, aggregated in Postgres (#721).
+--
+-- The page downloaded the brand's entire 30-day result set to compute twenty
+-- table rows: 33 sequential requests, 73 MB of JSON, ~19 s on the largest
+-- brand. Two thirds of that was one column — competitor_mentions, averaging
+-- eleven entries per row — fetched to derive a single top competitor per
+-- topic. The rest was pagination: .range() becomes LIMIT/OFFSET, so page k
+-- re-walked k×1000 rows, ~563k buffer touches to read 32k rows once.
+--
+-- Everything below is what the client was doing in JavaScript, moved to where
+-- the data already is. The AI Visibility Score itself stays in JS
+-- (lib/visibility-score) over ~20 rows, so the Topics page and the Insights
+-- headline keep computing it from one implementation.
+--
+-- Windows are resolved from now() inside the function rather than passed in:
+-- the caller's clock and the database's would otherwise disagree about which
+-- answers fall in "the last 7 days", and the page has no reason to care.
+
+CREATE FUNCTION public.topics_overview_aggregates(p_brand_id uuid)
+RETURNS TABLE (
+  topic_id             uuid,
+  answers              bigint,
+  mention_answers      bigint,
+  citation_answers     bigint,
+  pos_sum              double precision,
+  pos_n                bigint,
+  cur_answers          bigint,
+  cur_mention_answers  bigint,
+  cur_citation_answers bigint,
+  cur_pos_sum          double precision,
+  cur_pos_n            bigint,
+  prev_answers         bigint,
+  prev_mention_answers bigint,
+  prev_citation_answers bigint,
+  prev_pos_sum         double precision,
+  prev_pos_n           bigint,
+  total_mentions       bigint,
+  total_citations      bigint,
+  comp_mentions        bigint,
+  active_prompts       bigint,
+  visible_prompts      bigint,
+  last_run_at          timestamptz,
+  competitors          jsonb,
+  daily                jsonb
+)
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = public
+AS $$
+WITH bounds AS (
+  SELECT now() - interval '30 days' AS since_30d,
+         now() - interval '7 days'  AS cur_from,
+         now() - interval '14 days' AS prev_from,
+         -- Start of the 14th day back in UTC, so the earliest bucket the page
+         -- draws is complete rather than clipped at the current time of day.
+         date_trunc('day', (now() AT TIME ZONE 'UTC') - interval '13 days')
+           AT TIME ZONE 'UTC' AS spark_from
+),
+-- Answers in the window, carrying the topic their prompt belongs to. The
+-- prompt_sets join is what scopes prompts to this brand; prompt_results is
+-- filtered on brand_id as well, matching what the page did client-side.
+rows AS (
+  SELECT p.topic_id,
+         pr.prompt_id,
+         pr.created_at,
+         COALESCE(pr.mention_count, 0)  AS mentions,
+         COALESCE(pr.citation_count, 0) AS citations,
+         pr.mention_position,
+         (COALESCE(pr.mention_count, 0) > 0 OR COALESCE(pr.citation_count, 0) > 0) AS visible
+  FROM public.prompt_results pr
+  JOIN public.prompts p        ON p.id = pr.prompt_id
+  JOIN public.prompt_sets ps   ON ps.id = p.prompt_set_id
+  CROSS JOIN bounds b
+  WHERE pr.brand_id = p_brand_id
+    AND ps.brand_id = p_brand_id
+    AND p.topic_id IS NOT NULL
+    AND pr.platform <> 'chatgpt-shopping'  -- #155 - isolate from analytics
+    AND pr.created_at >= b.since_30d
+),
+-- Competitor share per topic. Summed straight from the array: the client
+-- folded duplicates within a row before adding them up, which reaches the
+-- same total.
+--
+-- Scans prompt_results again rather than reusing `rows`. `rows` is referenced
+-- several times so Postgres materialises it, and carrying competitor_mentions
+-- through that materialisation spills 32k detoasted jsonb values to temp
+-- files — 4.5 s and 7,500 temp blocks, measured. Reading the column only
+-- where it is needed keeps the shared CTE lean.
+comps AS (
+  SELECT p.topic_id,
+         cm.value ->> 'competitor_id' AS competitor_id,
+         MIN(cm.value ->> 'name')     AS name,
+         SUM(COALESCE((cm.value ->> 'mention_count')::bigint, 0)) AS mentions
+  FROM public.prompt_results pr
+  JOIN public.prompts p      ON p.id = pr.prompt_id
+  JOIN public.prompt_sets ps ON ps.id = p.prompt_set_id
+  CROSS JOIN bounds b
+  CROSS JOIN LATERAL jsonb_array_elements(COALESCE(pr.competitor_mentions, '[]'::jsonb)) cm
+  WHERE pr.brand_id = p_brand_id
+    AND ps.brand_id = p_brand_id
+    AND p.topic_id IS NOT NULL
+    AND pr.platform <> 'chatgpt-shopping'
+    AND pr.created_at >= b.since_30d
+  GROUP BY p.topic_id, cm.value ->> 'competitor_id'
+),
+comp_totals AS (
+  SELECT topic_id,
+         SUM(mentions) AS comp_mentions,
+         jsonb_object_agg(competitor_id, jsonb_build_object('name', name, 'sov', mentions)) AS competitors
+  FROM comps
+  GROUP BY topic_id
+),
+-- Fourteen daily buckets for the sparkline. Only the days the page draws.
+--
+-- Keyed in UTC, because the client builds the same keys from
+-- `Date.toISOString()` — reading them in the database's session timezone
+-- would shift every bucket by the offset and silently redraw the trend.
+daily AS (
+  SELECT d.topic_id,
+         jsonb_object_agg(d.day, jsonb_build_object('visible', d.visible, 'count', d.count)) AS daily
+  FROM (
+    SELECT r2.topic_id,
+           to_char(r2.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
+           COUNT(*) FILTER (WHERE r2.visible) AS visible,
+           COUNT(*) AS count
+    FROM rows r2
+    CROSS JOIN bounds b
+    WHERE r2.created_at >= b.spark_from
+    GROUP BY r2.topic_id, to_char(r2.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')
+  ) d
+  GROUP BY d.topic_id
+),
+main AS (
+  SELECT r.topic_id,
+         COUNT(*)::bigint                                          AS answers,
+         COUNT(*) FILTER (WHERE r.mentions > 0)::bigint            AS mention_answers,
+         COUNT(*) FILTER (WHERE r.citations > 0)::bigint           AS citation_answers,
+         COALESCE(SUM(1.0 / r.mention_position)
+           FILTER (WHERE r.mention_position > 0), 0)::double precision AS pos_sum,
+         COUNT(*) FILTER (WHERE r.mention_position > 0)::bigint    AS pos_n,
+
+         COUNT(*) FILTER (WHERE r.created_at >= b.cur_from)::bigint AS cur_answers,
+         COUNT(*) FILTER (WHERE r.created_at >= b.cur_from AND r.mentions > 0)::bigint
+                                                                    AS cur_mention_answers,
+         COUNT(*) FILTER (WHERE r.created_at >= b.cur_from AND r.citations > 0)::bigint
+                                                                    AS cur_citation_answers,
+         COALESCE(SUM(1.0 / r.mention_position)
+           FILTER (WHERE r.created_at >= b.cur_from AND r.mention_position > 0), 0)::double precision
+                                                                    AS cur_pos_sum,
+         COUNT(*) FILTER (WHERE r.created_at >= b.cur_from AND r.mention_position > 0)::bigint
+                                                                    AS cur_pos_n,
+
+         COUNT(*) FILTER (WHERE r.created_at < b.cur_from AND r.created_at >= b.prev_from)::bigint
+                                                                    AS prev_answers,
+         COUNT(*) FILTER (WHERE r.created_at < b.cur_from AND r.created_at >= b.prev_from
+           AND r.mentions > 0)::bigint                              AS prev_mention_answers,
+         COUNT(*) FILTER (WHERE r.created_at < b.cur_from AND r.created_at >= b.prev_from
+           AND r.citations > 0)::bigint                             AS prev_citation_answers,
+         COALESCE(SUM(1.0 / r.mention_position)
+           FILTER (WHERE r.created_at < b.cur_from AND r.created_at >= b.prev_from
+             AND r.mention_position > 0), 0)::double precision      AS prev_pos_sum,
+         COUNT(*) FILTER (WHERE r.created_at < b.cur_from AND r.created_at >= b.prev_from
+           AND r.mention_position > 0)::bigint                      AS prev_pos_n,
+
+         COALESCE(SUM(r.mentions), 0)::bigint                       AS total_mentions,
+         COALESCE(SUM(r.citations), 0)::bigint                      AS total_citations,
+         COUNT(DISTINCT r.prompt_id)::bigint                        AS active_prompts,
+         COUNT(DISTINCT r.prompt_id) FILTER (WHERE r.visible)::bigint AS visible_prompts,
+         MAX(r.created_at)                                          AS last_run_at
+  FROM rows r
+  CROSS JOIN bounds b
+  GROUP BY r.topic_id
+)
+-- The two jsonb rollups join on at the end rather than riding through the
+-- GROUP BY: Postgres has no max(jsonb), and carrying them through an
+-- aggregate would need a wrapper that buys nothing here.
+SELECT m.topic_id,
+       m.answers, m.mention_answers, m.citation_answers, m.pos_sum, m.pos_n,
+       m.cur_answers, m.cur_mention_answers, m.cur_citation_answers, m.cur_pos_sum, m.cur_pos_n,
+       m.prev_answers, m.prev_mention_answers, m.prev_citation_answers, m.prev_pos_sum, m.prev_pos_n,
+       m.total_mentions, m.total_citations,
+       COALESCE(ct.comp_mentions, 0)::bigint,
+       m.active_prompts, m.visible_prompts, m.last_run_at,
+       COALESCE(ct.competitors, '{}'::jsonb),
+       COALESCE(dl.daily, '{}'::jsonb)
+FROM main m
+LEFT JOIN comp_totals ct ON ct.topic_id = m.topic_id
+LEFT JOIN daily dl       ON dl.topic_id = m.topic_id
+$$;
+
+GRANT EXECUTE ON FUNCTION public.topics_overview_aggregates(uuid) TO authenticated;
 

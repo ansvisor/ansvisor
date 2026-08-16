@@ -83,10 +83,23 @@ export async function runTrackingJob(jobId, io) {
     // Daily Pulse (#540): fire-and-forget after a full daily run — never
     // for immediate/manual runs or single-prompt refreshes. The engine is
     // self-contained: eligibility checks, dedup and error handling inside.
+    //
+    // Skipped when the run wasn't stamped (#702). An unstamped run left the
+    // 24h anchor on the previous run, so the pulse would recompute that same
+    // window and mail figures the recipient already received — which is
+    // exactly what happened for three days on the largest brand. The catch-up
+    // sweep picks the day back up once a run does stamp.
     if (!immediate && !promptId && !promptIds?.length) {
-      generatePulseForBrand(brandId).catch((err) => {
-        logger.error({ err, brandId }, 'daily pulse trigger failed');
-      });
+      if (result?.stamped) {
+        generatePulseForBrand(brandId).catch((err) => {
+          logger.error({ err, brandId }, 'daily pulse trigger failed');
+        });
+      } else {
+        logger.warn(
+          { brandId, resultCount: result?.resultCount },
+          'skipping daily pulse — tracking run was not stamped, window would be stale',
+        );
+      }
     }
   } catch (err) {
     if (abortController.signal.aborted) {

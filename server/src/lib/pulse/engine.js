@@ -101,6 +101,29 @@ async function waitForCloroDrain(brandId) {
   }
 }
 
+/**
+ * The dedupe key for a computed digest: the end of the window it describes
+ * (#701).
+ *
+ * `pulse_date` alone cannot express "these two mails say the same thing".
+ * The daily KPI window is anchored to the tracking-run ledger, so two pulses
+ * fired on different calendar days repeat each other verbatim whenever the
+ * anchor has not moved between them — which is exactly what happened when the
+ * catch-up sweep recovered a missed day at the start of a cycle and the
+ * brand's own run pulsed an hour later, and again on every following day for a
+ * brand whose runs had stopped stamping.
+ *
+ * Returns null for windows that are not run-anchored (weekly digests, and
+ * brands with no completed run yet). Their `to` is the wall clock, which is
+ * different on every call and would make this check a no-op anyway — better to
+ * say so than to compare values that can never match.
+ */
+export function pulseWindowKey(metrics) {
+  const window = metrics?.window;
+  if (!window?.runAnchored) return null;
+  return window.to ?? null;
+}
+
 /** Warning keys already sent for this brand in the last 7 days. */
 async function recentWarningKeys(brandId, now) {
   const since = new Date(now.getTime() - 7 * 86_400_000).toISOString();
@@ -175,6 +198,32 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
     // Skip brands with no fresh tracking results in the window.
     if (metrics.kpis.totalResults === 0) return { skipped: 'no_fresh_results' };
 
+    // Never mail the same window twice, whichever path fired (#701). The
+    // pulse_date slot claimed above cannot see this: a recovery pulse dated to
+    // the missed day and today's own pulse hold different dates while
+    // describing the identical tracking run.
+    const windowKey = pulseWindowKey(metrics);
+    if (windowKey) {
+      const { data: samePulse, error: sameErr } = await supabaseAdmin
+        .from('sent_pulses')
+        .select('id, pulse_date')
+        .eq('brand_id', brandId)
+        .eq('payload->window->>to', windowKey)
+        .limit(1)
+        .maybeSingle();
+      // A failed read must not suppress a pulse — the insert below still has
+      // the unique index as the final guard.
+      if (sameErr) {
+        logger.warn({ err: sameErr, brandId, windowKey }, 'pulse window lookup failed');
+      } else if (samePulse) {
+        logger.info(
+          { brandId, windowKey, alreadySentFor: samePulse.pulse_date },
+          'skipping daily pulse — this window was already sent',
+        );
+        return { skipped: 'window_already_sent' };
+      }
+    }
+
     // Warning cooldown: don't repeat the same warning for the same subject
     // within 7 days.
     const cooldown = await recentWarningKeys(brandId, now);
@@ -198,8 +247,9 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
       .select('id')
       .single();
     if (insertError) {
-      // 23505 = another worker claimed today's pulse between our check and
-      // this insert.
+      // 23505 = another worker claimed this pulse between our checks and the
+      // insert — either today's date slot or, via the window index, the same
+      // tracking window under a different date.
       if (insertError.code === '23505') return { skipped: 'already_sent' };
       throw new Error(insertError.message);
     }
@@ -266,7 +316,12 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
  * This sweep runs at the start of the daily cycle: any brand whose latest
  * completed run (last 36h) has no pulse row created after it gets a recovery
  * pulse, dated to that run's completion day so today's real pulse keeps its
- * own dedupe slot. The sent_pulses unique key makes double-sends impossible.
+ * own dedupe slot.
+ *
+ * Two guards keep that from turning into a duplicate mail: the sent_pulses
+ * (brand_id, pulse_date) key stops the same day being sent twice, and the
+ * window key (#701) stops the recovery pulse repeating a run that today's own
+ * pulse is about to report — the two dates disagree, the data does not.
  */
 export async function runPulseCatchUp() {
   try {

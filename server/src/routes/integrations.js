@@ -8,12 +8,15 @@ import {
   getActiveConnection,
   deleteConnection,
   listGscSites,
+  listGaProperties,
 } from '../lib/composio.js';
 import { runGscSync } from '../lib/gsc-sync.js';
+import { runGaSync } from '../lib/ga-sync.js';
 
 const router = Router();
 
 const GSC = 'google-search-console';
+const GA = 'google-analytics';
 const WRITE_ROLES = ['admin', 'manager'];
 
 /** Entity id: one connection per organization per provider (#577). */
@@ -67,6 +70,28 @@ function notConfigured(res, provider) {
     .status(503)
     .json({ error: `${PROVIDERS[provider].label} integration is not configured.` });
 }
+
+/**
+ * GET /api/integrations/config
+ *
+ * Which integrations this deployment has credentials for. Env only — no
+ * Composio round trip — so a surface can decide what to offer without paying
+ * ~450ms per provider to ask whether a flow even exists.
+ *
+ * Declared before the `:provider` routes below, which would otherwise claim
+ * this path. DataForSEO is included although it is not a Composio provider
+ * and has no connect flow: it is our own key, enriching Search Console
+ * candidates with competition and volume data, and a surface saying "enabled"
+ * should be able to check rather than assume. Booleans only, never the
+ * credentials themselves.
+ */
+router.get('/config', async (_req, res) => {
+  return res.json({
+    googleSearchConsole: isComposioConfigured(GSC),
+    googleAnalytics: isComposioConfigured(GA),
+    dataForSeo: Boolean(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD),
+  });
+});
 
 // ─── Shared connect / status / disconnect ────────────────────────────────────
 // Identical for every OAuth provider; only the auth config differs, which
@@ -216,10 +241,10 @@ router.delete('/:provider', async (req, res) => {
   }
 });
 
-// ─── Search Console specific ─────────────────────────────────────────────────
-// Property listing and the query-stats sync have no Analytics equivalent yet
-// (that arrives with the GA data phase), so they stay on explicit paths
-// rather than under :provider.
+// ─── Provider specific ───────────────────────────────────────────────────────
+// Property listing differs per provider (a GSC property is a URL, a GA4
+// property is a numeric id), and the query-stats sync has no Analytics
+// equivalent yet, so these stay on explicit paths rather than under :provider.
 
 /**
  * GET /api/integrations/google-search-console/properties
@@ -264,6 +289,53 @@ router.post('/google-search-console/sync', async (req, res) => {
     return res.json(result);
   } catch (err) {
     req.log.error({ err }, 'integrations sync error');
+    return res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/integrations/google-analytics/properties
+ * GA4 properties visible to the org's connected account (#694). Member-
+ * readable, like the Search Console listing above.
+ */
+router.get('/google-analytics/properties', async (req, res) => {
+  try {
+    if (!isComposioConfigured(GA)) return notConfigured(res, GA);
+
+    const profile = await getProfile(req.user.id);
+    const entityId = entityIdFor(profile.organization_id);
+
+    const active = await getActiveConnection(GA, entityId);
+    if (!active) {
+      return res.status(409).json({ error: 'Google Analytics is not connected.' });
+    }
+
+    const properties = await listGaProperties(entityId);
+    return res.json({ properties });
+  } catch (err) {
+    req.log.error({ err }, 'integrations GA properties error');
+    return res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/integrations/google-analytics/sync
+ * Runs the traffic sync for the caller's org immediately (#704) — testing and
+ * first-time backfill; the daily cycle runs the same sync.
+ */
+router.post('/google-analytics/sync', async (req, res) => {
+  try {
+    if (!isComposioConfigured(GA)) return notConfigured(res, GA);
+
+    const profile = await getProfile(req.user.id);
+    if (!WRITE_ROLES.includes(profile.role)) {
+      return res.status(403).json({ error: 'Only admins and managers can trigger a sync.' });
+    }
+
+    const result = await runGaSync({ organizationId: profile.organization_id });
+    return res.json(result);
+  } catch (err) {
+    req.log.error({ err }, 'integrations GA sync error');
     return res.status(err.status || 500).json({ error: err.message });
   }
 });

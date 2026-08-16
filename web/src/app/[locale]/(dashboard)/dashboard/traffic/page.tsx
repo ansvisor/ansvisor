@@ -28,6 +28,12 @@ import {
   type TrafficLog,
   type TrafficDateWindow,
 } from '@/lib/actions/traffic';
+import {
+  ALL_DATE_PRESETS,
+  DateRangeFilter,
+  type DateRangePreset,
+} from '@/components/filters/date-range-filter';
+import { PageOpportunitiesCard } from './_opportunities-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -373,9 +379,10 @@ function NoTrafficForPeriod({ rangeLabel, onReset }: { rangeLabel: string; onRes
 
 // ─── Date range ─────────────
 
-type DatePreset = '24h' | '7d' | '30d' | '90d' | 'all' | 'custom';
+// The preset vocabulary is shared with the control that renders it (#713).
+type DatePreset = DateRangePreset;
 
-const DATE_PRESETS: DatePreset[] = ['24h', '7d', '30d', '90d', 'all', 'custom'];
+const DATE_PRESETS = ALL_DATE_PRESETS;
 
 function getDateRange(preset: DatePreset, custom: { from: string; to: string }): TrafficDateWindow {
   if (preset === 'all') return {};
@@ -432,69 +439,6 @@ function getTrendTitle(preset: DatePreset, custom: { from: string; to: string })
       if (custom.from && custom.to) return `AI Referral Trend — ${custom.from} – ${custom.to}`;
       return 'AI Referral Trend';
   }
-}
-
-function DateRangePicker({
-  preset,
-  customFrom,
-  customTo,
-  onPreset,
-  onCustomFrom,
-  onCustomTo,
-}: {
-  preset: DatePreset;
-  customFrom: string;
-  customTo: string;
-  onPreset: (p: DatePreset) => void;
-  onCustomFrom: (v: string) => void;
-  onCustomTo: (v: string) => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-end gap-3">
-      <div>
-        <label className="block mb-1.5 font-medium text-muted-foreground text-xs">Date Range</label>
-        <div className="flex border rounded-md overflow-hidden">
-          {DATE_PRESETS.map((p) => (
-            <button
-              key={p}
-              type="button"
-              className={cn(
-                'px-3 py-1.5 font-medium text-xs transition-colors',
-                preset === p
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-card hover:bg-muted text-foreground',
-              )}
-              onClick={() => onPreset(p)}
-            >
-              {p === 'custom' ? 'Custom' : p === 'all' ? 'All' : p}
-            </button>
-          ))}
-        </div>
-      </div>
-      {preset === 'custom' && (
-        <>
-          <div>
-            <label className="block mb-1.5 font-medium text-muted-foreground text-xs">From</label>
-            <Input
-              type="date"
-              value={customFrom}
-              onChange={(e) => onCustomFrom(e.target.value)}
-              className="w-36 h-8 text-xs"
-            />
-          </div>
-          <div>
-            <label className="block mb-1.5 font-medium text-muted-foreground text-xs">To</label>
-            <Input
-              type="date"
-              value={customTo}
-              onChange={(e) => onCustomTo(e.target.value)}
-              className="w-36 h-8 text-xs"
-            />
-          </div>
-        </>
-      )}
-    </div>
-  );
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
@@ -695,7 +639,19 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
             {primaryDomain ? `${primaryDomain} · ` : ''}AI-referred visits to your website
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* items-end, not items-center: the range control is two rows tall
+            (its label sits above the buttons), so centring left the Export
+            button floating above the segmented control's baseline. */}
+        <div className="flex flex-wrap items-end gap-3">
+          <DateRangeFilter
+            value={datePreset}
+            presets={DATE_PRESETS}
+            onChange={handleDatePresetChange}
+            from={customFrom}
+            to={customTo}
+            onFromChange={handleCustomFromChange}
+            onToChange={handleCustomToChange}
+          />
           <Button
             variant="outline"
             className="gap-2"
@@ -709,14 +665,6 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
             )}
             {isExporting ? 'Exporting...' : 'Export CSV'}
           </Button>
-          <DateRangePicker
-            preset={datePreset}
-            customFrom={customFrom}
-            customTo={customTo}
-            onPreset={handleDatePresetChange}
-            onCustomFrom={handleCustomFromChange}
-            onCustomTo={handleCustomToChange}
-          />
         </div>
       </div>
 
@@ -876,6 +824,13 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
               </CardContent>
             </Card>
           </div>
+
+          {/* Findings from the Analytics connection (#719). Renders nothing
+              for brands without a mapped property, so the page is unchanged
+              for everyone who has not connected one. Kept visually distinct
+              from the tables above, which count the tracking snippet's own
+              visits — the two origins are never summed. */}
+          <PageOpportunitiesCard brandId={brand.id} />
 
           {/* Recent Visit Log with filtering and pagination*/}
           <Card>

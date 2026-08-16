@@ -372,10 +372,12 @@ export async function computePulseMetrics(brandId, { windowDays = 1, now = new D
   let curFrom = new Date(now.getTime() - windowDays * DAY_MS);
   let prevTo = curFrom;
   let prevFrom = new Date(now.getTime() - 2 * windowDays * DAY_MS);
+  let runAnchored = false;
 
   if (windowDays === 1) {
     const [latest, prev, prevPrev] = await latestCompletedRunTimes(brandId, 3);
     if (latest) {
+      runAnchored = true;
       curTo = latest;
       curFrom = new Date(Math.max(latest.getTime() - DAY_MS, prev ? prev.getTime() + 1 : 0));
       prevTo = prev ?? curFrom;
@@ -543,6 +545,15 @@ export async function computePulseMetrics(brandId, { windowDays = 1, now = new D
   return {
     windowDays,
     computedAt: now.toISOString(),
+    // The window these numbers describe, recorded so a second pulse can tell
+    // that it would repeat an already-sent one (#701). `runAnchored` marks the
+    // case where `to` is a tracking-run stamp rather than the wall clock —
+    // only then is the value stable enough to dedupe on.
+    window: {
+      from: curFrom.toISOString(),
+      to: curTo.toISOString(),
+      runAnchored,
+    },
     kpis,
     highlights,
     warnings,

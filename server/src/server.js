@@ -31,6 +31,8 @@ import supabaseAdmin from './config/supabase.js';
 import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/plans.js';
 import { analyzeBrandVolumes } from './lib/volume-analysis.js';
 import { runGscSync } from './lib/gsc-sync.js';
+import { runGaSync } from './lib/ga-sync.js';
+import { runPageOpportunityDetection } from './lib/page-opportunities.js';
 import { runPulseCatchUp } from './lib/pulse/engine.js';
 
 const app = express();
@@ -185,6 +187,24 @@ async function runDailyTracking() {
   runGscSync().catch((err) => {
     logger.error({ err }, '[gsc-sync] daily run failed');
   });
+
+  // Google Analytics sync (#704) — same contract as the Search Console sync
+  // above: independent, never blocks or fails the tracking run, no-ops when
+  // Composio or the Analytics auth config isn't set.
+  //
+  // Page opportunity detection (#719) is chained onto it rather than fired
+  // alongside: it reads the tables the sync writes, so running the two
+  // concurrently would score yesterday's window. A sync failure skips
+  // detection instead of letting it publish findings from stale data.
+  runGaSync()
+    .then(() =>
+      runPageOpportunityDetection().catch((err) => {
+        logger.error({ err }, '[page-opportunities] daily run failed');
+      }),
+    )
+    .catch((err) => {
+      logger.error({ err }, '[ga-sync] daily run failed');
+    });
 
   return { triggered, total: brands.length };
 }

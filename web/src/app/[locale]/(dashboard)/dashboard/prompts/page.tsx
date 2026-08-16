@@ -63,6 +63,8 @@ import {
   ChevronDown,
   Trash2,
   X,
+  ListChecks,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -81,11 +83,15 @@ import {
   ALL_MODELS,
   SCRAPER_GROUPS,
   ALL_SCRAPERS,
-  PROMPT_RANGE_DAYS,
-  DEFAULT_PROMPT_RANGE_DAYS,
-  isPromptRangeDays,
-  type PromptRangeDays,
+  PROMPT_RANGE_PRESETS,
+  DEFAULT_PROMPT_RANGE_PRESET,
+  isPromptRangePreset,
+  promptRangeLabel,
+  resolvePromptRange,
+  type PromptRangePreset,
 } from '@/config/prompt-options';
+import { DateRangeFilter } from '@/components/filters/date-range-filter';
+import { DataSourcesPanel } from './_data-sources-panel';
 import { PLANS } from '@/config/plans';
 import { getTopics } from '@/lib/actions/topic';
 import { type PromptVisibilitySummary } from '@/lib/actions/tracking';
@@ -222,11 +228,12 @@ function SortableHead({
 
 /**
  * CSV headers. The window-scoped columns carry the selected range in their
- * name (`runs_7d`, `runs_90d`, …) rather than a hardcoded `_30d`, so an export
- * taken at a different range can't be misread as 30-day data. At the default
- * range the header row is byte-identical to what it has always been.
+ * name (`runs_7d`, `runs_90d`, `runs_24h`, `runs_custom`) rather than a
+ * hardcoded `_30d`, so an export taken at a different range can't be misread
+ * as 30-day data. At the default range the header row is byte-identical to
+ * what it has always been.
  */
-const promptExportHeaders = (days: number) => [
+const promptExportHeaders = (suffix: string) => [
   'text',
   'topic_id',
   'category',
@@ -238,13 +245,13 @@ const promptExportHeaders = (days: number) => [
   'est_ai_volume',
   'total_google_volume',
   'intent',
-  `ai_visibility_score_${days}d`,
-  `visibility_rate_${days}d`,
-  `visible_runs_${days}d`,
-  `avg_visibility_${days}d`,
-  `total_mentions_${days}d`,
-  `total_citations_${days}d`,
-  `runs_${days}d`,
+  `ai_visibility_score_${suffix}`,
+  `visibility_rate_${suffix}`,
+  `visible_runs_${suffix}`,
+  `avg_visibility_${suffix}`,
+  `total_mentions_${suffix}`,
+  `total_citations_${suffix}`,
+  `runs_${suffix}`,
   'last_run_at',
 ];
 
@@ -254,6 +261,9 @@ const PROMPT_EXPORT_HINT = 'No prompts yet - add prompts first.';
 
 const VALID_TABS = ['all', 'fanout', 'insights'] as const;
 type TabId = (typeof VALID_TABS)[number];
+
+const PROMPT_VIEWS = ['tracked', 'suggestions'] as const;
+type PromptsView = (typeof PROMPT_VIEWS)[number];
 
 function formatRelative(iso?: string): string {
   if (!iso) return '—';
@@ -916,15 +926,48 @@ export default function PromptsPage() {
 
   const initialTab: TabId = (() => {
     const raw = searchParams.get('tab');
-    return (VALID_TABS as readonly string[]).includes(raw ?? '') ? (raw as TabId) : 'all';
+    if ((VALID_TABS as readonly string[]).includes(raw ?? '')) return raw as TabId;
+    return 'all';
   })();
   const [tab, setTab] = useState<TabId>(initialTab);
 
-  const initialRange: PromptRangeDays = (() => {
-    const raw = searchParams.get('range');
-    return isPromptRangeDays(raw) ? (Number(raw) as PromptRangeDays) : DEFAULT_PROMPT_RANGE_DAYS;
+  // The Prompts tab holds two views of the same roster: what is tracked, and
+  // what could be. A sub-tab rather than a fourth top-level tab, because the
+  // date range, the Add prompt action and the export all belong to both.
+  const initialView: PromptsView = (() => {
+    const raw = searchParams.get('view');
+    if ((PROMPT_VIEWS as readonly string[]).includes(raw ?? '')) return raw as PromptsView;
+    // Links written before the split point at the suggestions card's anchor.
+    if (typeof window !== 'undefined' && window.location.hash === '#prompt-opportunities') {
+      return 'suggestions';
+    }
+    return 'tracked';
   })();
-  const [rangeDays, setRangeDays] = useState<PromptRangeDays>(initialRange);
+  const [view, setView] = useState<PromptsView>(initialView);
+
+  const initialRange: PromptRangePreset = (() => {
+    const raw = searchParams.get('range');
+    // Older links carry a bare day count (`range=7`); keep them working rather
+    // than silently dropping them back to the default.
+    if (isPromptRangePreset(raw)) return raw;
+    if (raw && isPromptRangePreset(`${raw}d`)) return `${raw}d` as PromptRangePreset;
+    return DEFAULT_PROMPT_RANGE_PRESET;
+  })();
+  const [rangePreset, setRangePreset] = useState<PromptRangePreset>(initialRange);
+  const [customFrom, setCustomFrom] = useState(() => searchParams.get('from') ?? '');
+  const [customTo, setCustomTo] = useState(() => searchParams.get('to') ?? '');
+
+  // A custom range only becomes a real window once a bound is entered; until
+  // then the resolver's clamp would silently mean "the last 90 days", which is
+  // not what an empty form is asking for.
+  const range = useMemo(
+    () =>
+      rangePreset === 'custom' && !customFrom && !customTo
+        ? null
+        : resolvePromptRange(rangePreset, { from: customFrom, to: customTo }),
+    [rangePreset, customFrom, customTo],
+  );
+  const rangeLabel = promptRangeLabel(rangePreset);
 
   // Keep the URL in sync with the active tab so deep links / refreshes land
   // back on the same view. Shallow history update on purpose: the tab is pure
@@ -938,16 +981,33 @@ export default function PromptsPage() {
     const currentRange = searchParams.get('range');
     // The default range stays out of the URL so shared links keep their
     // existing shape unless the user actually picked a different window.
-    const wantRange = rangeDays === DEFAULT_PROMPT_RANGE_DAYS ? null : String(rangeDays);
-    if (currentTab === tab && currentRange === wantRange) return;
+    const wantRange = rangePreset === DEFAULT_PROMPT_RANGE_PRESET ? null : rangePreset;
+    const wantView = view === 'tracked' ? null : view;
+    const wantFrom = rangePreset === 'custom' && customFrom ? customFrom : null;
+    const wantTo = rangePreset === 'custom' && customTo ? customTo : null;
+    if (
+      currentTab === tab &&
+      searchParams.get('view') === wantView &&
+      currentRange === wantRange &&
+      searchParams.get('from') === wantFrom &&
+      searchParams.get('to') === wantTo
+    ) {
+      return;
+    }
     const params = new URLSearchParams(Array.from(searchParams.entries()));
     params.set('tab', tab);
+    if (wantView) params.set('view', wantView);
+    else params.delete('view');
     if (wantRange) params.set('range', wantRange);
     else params.delete('range');
+    if (wantFrom) params.set('from', wantFrom);
+    else params.delete('from');
+    if (wantTo) params.set('to', wantTo);
+    else params.delete('to');
     // Keep the hash: deep links like #prompt-opportunities arrive without a
     // tab param, and this sync must not strip their anchor from the URL.
     window.history.replaceState(null, '', `?${params.toString()}${window.location.hash}`);
-  }, [tab, rangeDays, searchParams]);
+  }, [tab, view, rangePreset, customFrom, customTo, searchParams]);
 
   // Deep link from the Insights Recommendations row (#459): the target card
   // only exists once the Insights tab's volume data has rendered, so a bare
@@ -975,7 +1035,11 @@ export default function PromptsPage() {
         // One consolidated server action: Next.js queues client-fired server
         // actions sequentially, so the old three separate calls cost their
         // SUM on a cold load — the main culprit behind the slow first paint.
-        const page = await getPromptsPageData(activeBrandId, { days: rangeDays });
+        const page = await getPromptsPageData(activeBrandId, {
+          days: range?.days,
+          from: range?.from,
+          to: range?.to,
+        });
         if (isCancelled?.()) return;
         setVolumes(page.volumes);
         if (page.quota) setQuota(page.quota);
@@ -993,7 +1057,7 @@ export default function PromptsPage() {
         if (!isCancelled?.()) setLoading(false);
       }
     },
-    [activeBrandId, rangeDays],
+    [activeBrandId, range],
   );
 
   useEffect(() => {
@@ -1145,6 +1209,7 @@ export default function PromptsPage() {
   const handleExportCsv = useCallback(() => {
     if (!canExport) return;
 
+    const rangeSuffix = rangePreset;
     const rows = allPrompts.map((p) => ({
       text: p.text,
       topic_id: p.topicId ?? '',
@@ -1157,17 +1222,17 @@ export default function PromptsPage() {
       est_ai_volume: volumeByPromptId.get(p.id)?.estAiVolume ?? '',
       total_google_volume: volumeByPromptId.get(p.id)?.totalGoogleVolume ?? '',
       intent: volumeByPromptId.get(p.id)?.intent ?? '',
-      [`ai_visibility_score_${rangeDays}d`]: visibility[p.id]?.score ?? '',
-      [`visibility_rate_${rangeDays}d`]: visibility[p.id]?.visibilityRate ?? '',
-      [`visible_runs_${rangeDays}d`]: visibility[p.id]?.visibleRuns ?? '',
-      [`avg_visibility_${rangeDays}d`]: visibility[p.id]?.avgVisibility ?? '',
-      [`total_mentions_${rangeDays}d`]: visibility[p.id]?.totalMentions ?? '',
-      [`total_citations_${rangeDays}d`]: visibility[p.id]?.totalCitations ?? '',
-      [`runs_${rangeDays}d`]: visibility[p.id]?.runs ?? '',
+      [`ai_visibility_score_${rangeSuffix}`]: visibility[p.id]?.score ?? '',
+      [`visibility_rate_${rangeSuffix}`]: visibility[p.id]?.visibilityRate ?? '',
+      [`visible_runs_${rangeSuffix}`]: visibility[p.id]?.visibleRuns ?? '',
+      [`avg_visibility_${rangeSuffix}`]: visibility[p.id]?.avgVisibility ?? '',
+      [`total_mentions_${rangeSuffix}`]: visibility[p.id]?.totalMentions ?? '',
+      [`total_citations_${rangeSuffix}`]: visibility[p.id]?.totalCitations ?? '',
+      [`runs_${rangeSuffix}`]: visibility[p.id]?.runs ?? '',
       last_run_at: visibility[p.id]?.lastRunAt ?? '',
     }));
 
-    const csv = toCsv(rows, promptExportHeaders(rangeDays));
+    const csv = toCsv(rows, promptExportHeaders(rangeSuffix));
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1179,7 +1244,7 @@ export default function PromptsPage() {
     link.click();
 
     URL.revokeObjectURL(url);
-  }, [activeBrand?.slug, canExport, allPrompts, visibility, volumeByPromptId, rangeDays]);
+  }, [activeBrand?.slug, canExport, allPrompts, visibility, volumeByPromptId, rangePreset]);
 
   if (!activeBrandId) {
     return (
@@ -1208,34 +1273,11 @@ export default function PromptsPage() {
       <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)}>
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <TabsList>
-            <TabsTrigger value="all">All Prompts</TabsTrigger>
+            <TabsTrigger value="all">Prompts</TabsTrigger>
             <TabsTrigger value="fanout">Query Fan-out</TabsTrigger>
             <TabsTrigger value="insights">Insights</TabsTrigger>
           </TabsList>
           <div className="flex items-center gap-2">
-            {/* Hidden on Insights: that tab shows keyword volume estimates,
-                which carry no date dimension, so a range there would be a
-                control that changes nothing. */}
-            {tab !== 'insights' && (
-              <div className="flex items-center rounded-md border p-0.5" role="group">
-                {PROMPT_RANGE_DAYS.map((days) => (
-                  <button
-                    key={days}
-                    type="button"
-                    onClick={() => setRangeDays(days)}
-                    aria-pressed={rangeDays === days}
-                    className={cn(
-                      'rounded-sm px-2.5 py-1 text-xs font-medium transition-colors',
-                      rangeDays === days
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:text-foreground',
-                    )}
-                  >
-                    {days}d
-                  </button>
-                ))}
-              </div>
-            )}
             {tab === 'all' && canManage && (
               <Button
                 type="button"
@@ -1273,62 +1315,129 @@ export default function PromptsPage() {
           </div>
         </div>
 
+        {/* Filter bar — same shape and position as Visibility and Citations
+            (#713). It sits outside the tab panels because the range governs
+            both All Prompts and Query Fan-out.
+            Hidden on Insights: that tab shows keyword volume estimates, which
+            carry no date dimension, so a range there would be a control that
+            changes nothing. */}
+        {tab !== 'insights' && (
+          <div className="mt-4 flex flex-wrap items-end gap-3">
+            <DateRangeFilter
+              value={rangePreset}
+              presets={PROMPT_RANGE_PRESETS}
+              onChange={setRangePreset}
+              from={customFrom}
+              to={customTo}
+              onFromChange={setCustomFrom}
+              onToChange={setCustomTo}
+            />
+          </div>
+        )}
+
         {/* ─── All Prompts tab ─────────────────────────────────────────── */}
         <TabsContent value="all" className="mt-4 space-y-4">
-          {activeBrandId && <SuggestionsCard brandId={activeBrandId} onAccepted={loadData} />}
-
-          {!loading && unanalyzedCount > 0 && (
-            <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/50 dark:bg-amber-950/30">
-              <div className="flex items-start gap-2.5">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
-                <div className="text-sm">
-                  <p className="font-medium text-amber-900 dark:text-amber-200">
-                    {unanalyzedCount} prompt{unanalyzedCount === 1 ? '' : 's'} haven&apos;t been
-                    analyzed yet
-                  </p>
-                  <p className="text-amber-800/80 dark:text-amber-300/80">
-                    {quotaExhausted
-                      ? 'Their Volume & Competition stay empty until analyzed — but your monthly volume analysis limit is reached. Upgrade your plan to analyze more.'
-                      : 'Run volume analysis to fill in their Volume & Competition.'}
-                  </p>
-                </div>
-              </div>
-              <Button
-                size="sm"
-                className="shrink-0"
-                onClick={handleAnalyzeNew}
-                disabled={analyzing || quotaExhausted}
-              >
-                {analyzing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <BarChart3 className="mr-2 h-4 w-4" />
-                    Analyze {unanalyzedCount} prompt{unanalyzedCount === 1 ? '' : 's'}
-                  </>
+          {/* Tracked vs suggested: two views of the same roster. A segmented
+              control rather than a second Tabs, so it reads as a filter on
+              this panel and not as another level of page navigation. */}
+          <div
+            className="inline-flex rounded-lg border p-1"
+            role="tablist"
+            aria-label="Prompt view"
+          >
+            {(
+              [
+                { id: 'tracked' as const, label: 'Tracked Prompts', Icon: ListChecks },
+                { id: 'suggestions' as const, label: 'Prompt Suggestions', Icon: Sparkles },
+              ] satisfies { id: PromptsView; label: string; Icon: typeof ListChecks }[]
+            ).map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={view === id}
+                onClick={() => setView(id)}
+                className={cn(
+                  'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                  view === id
+                    ? 'bg-muted text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
-              </Button>
-            </div>
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {view === 'suggestions' ? (
+            activeBrandId && (
+              <>
+                <DataSourcesPanel brandId={activeBrandId} />
+                <SuggestionsCard brandId={activeBrandId} onAccepted={loadData} />
+              </>
+            )
+          ) : (
+            <>
+              {!loading && unanalyzedCount > 0 && (
+                <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/50 dark:bg-amber-950/30">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
+                    <div className="text-sm">
+                      <p className="font-medium text-amber-900 dark:text-amber-200">
+                        {unanalyzedCount} prompt{unanalyzedCount === 1 ? '' : 's'} haven&apos;t been
+                        analyzed yet
+                      </p>
+                      <p className="text-amber-800/80 dark:text-amber-300/80">
+                        {quotaExhausted
+                          ? 'Their Volume & Competition stay empty until analyzed — but your monthly volume analysis limit is reached. Upgrade your plan to analyze more.'
+                          : 'Run volume analysis to fill in their Volume & Competition.'}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="shrink-0"
+                    onClick={handleAnalyzeNew}
+                    disabled={analyzing || quotaExhausted}
+                  >
+                    {analyzing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <BarChart3 className="mr-2 h-4 w-4" />
+                        Analyze {unanalyzedCount} prompt{unanalyzedCount === 1 ? '' : 's'}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+              <AllPromptsTab
+                loading={loading}
+                prompts={allPrompts}
+                activeBrandId={activeBrandId}
+                volumeByPromptId={volumeByPromptId}
+                visibility={visibility}
+                rangeLabel={rangeLabel}
+                onAddPrompt={canManage ? () => setAddPromptOpen(true) : undefined}
+                onEditPrompt={canManage ? setEditingPrompt : undefined}
+              />
+            </>
           )}
-          <AllPromptsTab
-            loading={loading}
-            prompts={allPrompts}
-            activeBrandId={activeBrandId}
-            volumeByPromptId={volumeByPromptId}
-            visibility={visibility}
-            days={rangeDays}
-            onAddPrompt={canManage ? () => setAddPromptOpen(true) : undefined}
-            onEditPrompt={canManage ? setEditingPrompt : undefined}
-          />
         </TabsContent>
 
         {/* ─── Query Fan-out tab ───────────────────────────────────────── */}
         <TabsContent value="fanout" className="mt-4">
           {activeBrandId && (
-            <QueryFanoutTab brandId={activeBrandId} days={rangeDays} onTracked={loadData} />
+            <QueryFanoutTab
+              brandId={activeBrandId}
+              range={range}
+              rangeLabel={rangeLabel}
+              onTracked={loadData}
+            />
           )}
         </TabsContent>
 
@@ -1715,7 +1824,7 @@ function AllPromptsTab({
   activeBrandId,
   volumeByPromptId,
   visibility,
-  days,
+  rangeLabel,
   onAddPrompt,
   onEditPrompt,
 }: {
@@ -1725,7 +1834,7 @@ function AllPromptsTab({
   volumeByPromptId: Map<string, PromptVolume>;
   visibility: Record<string, PromptVisibilitySummary>;
   /** Selected window, so the column tooltips describe the data on screen. */
-  days: PromptRangeDays;
+  rangeLabel: string;
   /** Opens the Add Prompt dialog; undefined when the user can't write (member role). */
   onAddPrompt?: () => void;
   /** Opens the Edit Prompt dialog for a row; undefined hides the pencil (member role). */
@@ -1761,7 +1870,7 @@ function AllPromptsTab({
   );
 
   const rawSort = searchParams.get('sort');
-  const activeSort: AllPromptsSortKey | null = isAllPromptsSortKey(rawSort) ? rawSort : null;
+  const activeSort: AllPromptsSortKey = isAllPromptsSortKey(rawSort) ? rawSort : 'visibility';
   const dir: SortDir = searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
 
   // Click a header to sort: a new column starts at desc ("show me the extremes");
@@ -1795,11 +1904,6 @@ function AllPromptsTab({
       );
     }
 
-    if (!activeSort) {
-      // Default ordering: newest first.
-      return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }
-
     const valueOf = (p: Prompt): number | null => {
       const vis = visibility[p.id];
       const vol = volumeByPromptId.get(p.id);
@@ -1826,7 +1930,7 @@ function AllPromptsTab({
   // changes the visible row set (search text, sort column, sort direction, work
   // status filter) so usePagination jumps back to page 0 automatically when
   // any filter or sort changes — satisfying the issue's acceptance criteria.
-  const promptsResetKey = `${search}::${workFilter}::${activeSort ?? ''}::${dir}`;
+  const promptsResetKey = `${search}::${workFilter}::${activeSort}::${dir}`;
   const promptsPager = usePagination(filtered.length, promptsResetKey);
 
   if (loading) {
@@ -1924,7 +2028,7 @@ function AllPromptsTab({
               </ColHead>
               <SortableHead
                 className="text-right"
-                tooltip={`AI Visibility Score (0-100) for this prompt over the last ${days} days: how often answers mention the brand (60%), cite its site (25%) and how early it's named (15%). Hover a value for the components.`}
+                tooltip={`AI Visibility Score (0-100) for this prompt over the ${rangeLabel}: how often answers mention the brand (60%), cite its site (25%) and how early it's named (15%). Hover a value for the components.`}
                 sortKey="visibility"
                 activeSort={activeSort}
                 dir={dir}
@@ -1934,7 +2038,7 @@ function AllPromptsTab({
               </SortableHead>
               <SortableHead
                 className="text-right"
-                tooltip={`Total times the brand was mentioned across AI answers for this prompt over the last ${days} days.`}
+                tooltip={`Total times the brand was mentioned across AI answers for this prompt over the ${rangeLabel}.`}
                 sortKey="mentions"
                 activeSort={activeSort}
                 dir={dir}
@@ -1944,7 +2048,7 @@ function AllPromptsTab({
               </SortableHead>
               <SortableHead
                 className="text-right"
-                tooltip={`Total times your pages were cited in AI answers for this prompt over the last ${days} days.`}
+                tooltip={`Total times your pages were cited in AI answers for this prompt over the ${rangeLabel}.`}
                 sortKey="citations"
                 activeSort={activeSort}
                 dir={dir}
@@ -1970,7 +2074,7 @@ function AllPromptsTab({
               </ColHead>
               <SortableHead
                 className="text-right"
-                tooltip={`Number of tracking runs for this prompt over the last ${days} days (one per platform per day).`}
+                tooltip={`Number of tracking runs for this prompt over the ${rangeLabel} (one per platform per day).`}
                 sortKey="runs"
                 activeSort={activeSort}
                 dir={dir}
@@ -2048,7 +2152,7 @@ function AllPromptsTab({
                     {vis ? (
                       <div
                         className="inline-flex items-center gap-2 justify-end min-w-[110px]"
-                        title={`Mentioned in ${vis.mentionAnswers} of ${vis.runs} answers (${days}d) · cited in ${vis.citationAnswers}${
+                        title={`Mentioned in ${vis.mentionAnswers} of ${vis.runs} answers (${rangeLabel}) · cited in ${vis.citationAnswers}${
                           vis.positionFactor !== null
                             ? ` · position factor ${vis.positionFactor.toFixed(2)}`
                             : ''

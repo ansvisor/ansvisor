@@ -131,38 +131,84 @@ router.get('/brand/:brandId', async (req, res) => {
     const { brandId } = req.params;
     const { status, impact, type, q, limit = 50, offset = 0, sort = 'score' } = req.query;
 
-    let query = supabaseAdmin
-      .from('content_opportunities')
-      .select('*', { count: 'exact' })
-      .eq('brand_id', brandId);
+    const search = q ? String(q).replace(/[,()]/g, ' ') : null;
+    const applyFilters = (query) => {
+      let filteredQuery = query.eq('brand_id', brandId);
 
-    if (status) query = query.eq('status', status);
-    if (impact) query = query.eq('impact', impact);
-    if (type) query = query.eq('type', type);
+      if (status) {
+        filteredQuery = filteredQuery.eq('status', status);
+      }
 
-    if (q) {
-      const search = String(q).replace(/[,()]/g, ' ');
-      query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
-    }
+      if (impact) {
+        filteredQuery = filteredQuery.eq('impact', impact);
+      }
+
+      if (type) {
+        filteredQuery = filteredQuery.eq('type', type);
+      }
+
+      if (q) {
+        filteredQuery = filteredQuery.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
+      }
+
+      return filteredQuery;
+    };
+
+    let dataQuery = supabaseAdmin.from('content_opportunities').select('*', { count: 'exact' });
+
+    dataQuery = applyFilters(dataQuery);
 
     if (sort === 'score') {
-      query = query.order('opportunity_score', { ascending: false });
+      dataQuery = dataQuery.order('opportunity_score', {
+        ascending: false,
+      });
     } else if (sort === 'newest') {
-      query = query.order('created_at', { ascending: false });
+      dataQuery = dataQuery.order('created_at', {
+        ascending: false,
+      });
     }
 
-    query = query.range(Number(offset), Number(offset) + Number(limit) - 1);
+    dataQuery = dataQuery.range(Number(offset), Number(offset) + Number(limit) - 1);
 
-    const { data, error, count } = await query;
+    const aggregateQuery = supabaseAdmin.rpc('content_opportunity_aggregates', {
+      p_brand_id: brandId,
+      p_status: status ? String(status) : null,
+      p_impact: impact ? String(impact) : null,
+      p_type: type ? String(type) : null,
+      p_q: search,
+    });
 
-    if (error) throw new Error(error.message);
+    const [{ data, error: dataError, count }, { data: aggregateData, error: aggregateError }] =
+      await Promise.all([dataQuery, aggregateQuery]);
+
+    if (dataError) {
+      throw new Error(dataError.message);
+    }
+
+    if (aggregateError) {
+      throw new Error(aggregateError.message);
+    }
+
+    const aggregates = aggregateData?.[0] ?? {
+      avg_score: 0,
+      high_impact_count: 0,
+      sent_count: 0,
+    };
 
     return res.json({
       opportunities: (data || []).map(mapOpportunityRow),
+
       total: count || 0,
+
+      aggregates: {
+        avgScore: Math.round(Number(aggregates.avg_score) || 0),
+        highImpactCount: Number(aggregates.high_impact_count) || 0,
+        sentCount: Number(aggregates.sent_count) || 0,
+      },
     });
   } catch (error) {
     req.log.error({ err: error }, 'list opportunities error');
+
     return res.status(500).json({
       error: 'Failed to list opportunities',
       details: error.message,

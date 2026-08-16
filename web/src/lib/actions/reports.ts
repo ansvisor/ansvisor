@@ -697,13 +697,13 @@ async function getReportVisibilityRate(
     getTrackedPromptsKpi(brandId, range),
     supabase.rpc('ai_visibility_aggregates', {
       p_brand_id: brandId,
-      p_platform: null,
-      p_models: null,
-      p_region: null,
+      p_platform: undefined,
+      p_models: undefined,
+      p_region: undefined,
       p_date_from: range.dateFrom,
       p_date_to: range.dateTo,
-      p_prompt_id: null,
-      p_topic_id: null,
+      p_prompt_id: undefined,
+      p_topic_id: undefined,
     }),
   ]);
   const promptCount = tracked.activeInPeriod;

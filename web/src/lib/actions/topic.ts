@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
-import type { CompetitorMention, Topic } from '@/types';
+import type { Topic } from '@/types';
 
 function mapTopicRow(row: Record<string, unknown>): Topic {
   return {
@@ -152,22 +152,23 @@ export interface TopicOverviewSummary {
  * agree with the Insights KPIs on the same 30d window (#464).
  */
 /**
- * PostgREST silently caps un-paginated selects at 1000 rows, which sampled the
- * topic aggregation on exactly the brands with the most data (#464) — page
- * through the window instead, with a hard ceiling so a pathological brand
- * can't pin the server action. Mirrors the citations scans (#430).
+ * The roster read still pages: PostgREST silently caps an un-paginated select
+ * at 1000 rows, and a brand can hold more prompts than that (#464).
+ *
+ * The result window no longer has a ceiling. It used to stop at 50,000 rows —
+ * the largest brand was already at 32,607, and crossing it would have
+ * truncated the scan silently, understating every figure on the page (#721).
+ * Aggregating in Postgres removes the cliff rather than raising it.
  */
 const TOPIC_RESULTS_PAGE_SIZE = 1000;
-const TOPIC_RESULTS_MAX_ROWS = 50_000;
 const TOPIC_PROMPTS_MAX_ROWS = 10_000;
 
 export async function getTopicsOverview(brandId: string): Promise<TopicOverviewSummary> {
   const supabase = await createClient();
 
+  // Only the sparkline's day keys are built here now; every window boundary
+  // is resolved inside the aggregate, from the database's clock.
   const now = Date.now();
-  const since30d = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const curFrom = new Date(now - 7 * 24 * 60 * 60 * 1000).getTime();
-  const prevFrom = new Date(now - 14 * 24 * 60 * 60 * 1000).getTime();
 
   const [topicsRes, setsRes] = await Promise.all([
     supabase
@@ -209,243 +210,134 @@ export async function getTopicsOverview(brandId: string): Promise<TopicOverviewS
     }
   }
 
-  const promptTopicMap = new Map<string, string | null>();
-  for (const p of prompts) promptTopicMap.set(p.id, p.topic_id);
-
-  interface Agg {
-    // Prompt-level visibility (#490): distinct prompts with results vs
-    // distinct prompts where the brand appeared, per window.
-    allPrompts: Set<string>;
-    visiblePrompts: Set<string>;
-    curPrompts: Set<string>;
-    curVisiblePrompts: Set<string>;
-    prevPrompts: Set<string>;
-    prevVisiblePrompts: Set<string>;
-    totalMentions: number;
-    totalCitations: number;
-    answers: number;
-    mentionAnswers: number;
-    citationAnswers: number;
-    posSum: number;
-    posN: number;
-    curAnswers: number;
-    curMentionAnswers: number;
-    curCitationAnswers: number;
-    curPosSum: number;
-    curPosN: number;
-    prevAnswers: number;
-    prevMentionAnswers: number;
-    prevCitationAnswers: number;
-    prevPosSum: number;
-    prevPosN: number;
-    brandMentions: number;
-    compMentions: number;
-    lastRunAt: number;
-    competitors: Map<string, { name: string; sov: number }>;
-    daily: Map<string, { visible: number; count: number }>;
-  }
-  const emptyAgg = (): Agg => ({
-    allPrompts: new Set(),
-    visiblePrompts: new Set(),
-    curPrompts: new Set(),
-    curVisiblePrompts: new Set(),
-    prevPrompts: new Set(),
-    prevVisiblePrompts: new Set(),
-    totalMentions: 0,
-    totalCitations: 0,
-    answers: 0,
-    mentionAnswers: 0,
-    citationAnswers: 0,
-    posSum: 0,
-    posN: 0,
-    curAnswers: 0,
-    curMentionAnswers: 0,
-    curCitationAnswers: 0,
-    curPosSum: 0,
-    curPosN: 0,
-    prevAnswers: 0,
-    prevMentionAnswers: 0,
-    prevCitationAnswers: 0,
-    prevPosSum: 0,
-    prevPosN: 0,
-    brandMentions: 0,
-    compMentions: 0,
-    lastRunAt: 0,
-    competitors: new Map(),
-    daily: new Map(),
-  });
-
-  const aggByTopic = new Map<string, Agg>();
   let unassignedPromptCount = 0;
+  const promptCountByTopic = new Map<string, number>();
   for (const p of prompts) {
     if (!p.topic_id) {
       unassignedPromptCount += 1;
       continue;
     }
-    if (!aggByTopic.has(p.topic_id)) aggByTopic.set(p.topic_id, emptyAgg());
-  }
-
-  const promptCountByTopic = new Map<string, number>();
-  for (const p of prompts) {
-    if (!p.topic_id) continue;
     promptCountByTopic.set(p.topic_id, (promptCountByTopic.get(p.topic_id) ?? 0) + 1);
   }
 
-  const processRow = (row: Record<string, unknown>) => {
-    const promptId = row.prompt_id as string;
-    const topicId = promptTopicMap.get(promptId);
-    if (!topicId) return;
+  // One aggregate per brand instead of downloading the window (#721). The page
+  // used to page through every result row — 33 requests and 73 MB on the
+  // largest brand — to compute twenty table rows in JavaScript. The arithmetic
+  // now runs where the data is; only the AI Visibility Score stays here, over
+  // ~20 rows, so this page and the Insights headline keep one implementation.
+  const { data: aggRows, error: aggError } = await supabase.rpc('topics_overview_aggregates', {
+    p_brand_id: brandId,
+  });
+  if (aggError) throw new Error(aggError.message);
 
-    const agg = aggByTopic.get(topicId);
-    if (!agg) return;
-
-    const createdAt = row.created_at as string;
-    const ts = new Date(createdAt).getTime();
-    const mentions = (row.mention_count as number) ?? 0;
-    const citations = (row.citation_count as number) ?? 0;
-    // Same "appeared" rule as the Insights rate (#490).
-    const visible = mentions > 0 || citations > 0;
-
-    agg.allPrompts.add(promptId);
-    if (visible) agg.visiblePrompts.add(promptId);
-    agg.totalMentions += mentions;
-    agg.totalCitations += citations;
-    agg.brandMentions += mentions;
-    if (ts > agg.lastRunAt) agg.lastRunAt = ts;
-
-    // AI Visibility Score components (answer-level).
-    const pos = row.mention_position as number | null;
-    agg.answers += 1;
-    if (mentions > 0) agg.mentionAnswers += 1;
-    if (citations > 0) agg.citationAnswers += 1;
-    if (pos !== null && pos !== undefined && pos > 0) {
-      agg.posSum += 1 / pos;
-      agg.posN += 1;
-    }
-
-    if (ts >= curFrom) {
-      agg.curPrompts.add(promptId);
-      if (visible) agg.curVisiblePrompts.add(promptId);
-      agg.curAnswers += 1;
-      if (mentions > 0) agg.curMentionAnswers += 1;
-      if (citations > 0) agg.curCitationAnswers += 1;
-      if (pos !== null && pos !== undefined && pos > 0) {
-        agg.curPosSum += 1 / pos;
-        agg.curPosN += 1;
-      }
-    } else if (ts >= prevFrom) {
-      agg.prevPrompts.add(promptId);
-      if (visible) agg.prevVisiblePrompts.add(promptId);
-      agg.prevAnswers += 1;
-      if (mentions > 0) agg.prevMentionAnswers += 1;
-      if (citations > 0) agg.prevCitationAnswers += 1;
-      if (pos !== null && pos !== undefined && pos > 0) {
-        agg.prevPosSum += 1 / pos;
-        agg.prevPosN += 1;
-      }
-    }
-
-    const day = createdAt.slice(0, 10);
-    const d = agg.daily.get(day) ?? { visible: 0, count: 0 };
-    if (visible) d.visible += 1;
-    d.count += 1;
-    agg.daily.set(day, d);
-
-    const compMentions = (row.competitor_mentions as CompetitorMention[] | null) ?? [];
-    const compTotalsForRow = new Map<string, { name: string; mentions: number }>();
-    for (const cm of compMentions) {
-      agg.compMentions += cm.mention_count;
-      const existing = compTotalsForRow.get(cm.competitor_id) ?? {
-        name: cm.name,
-        mentions: 0,
-      };
-      existing.mentions += cm.mention_count;
-      compTotalsForRow.set(cm.competitor_id, existing);
-    }
-    for (const [compId, info] of compTotalsForRow) {
-      const ec = agg.competitors.get(compId) ?? { name: info.name, sov: 0 };
-      ec.sov += info.mentions;
-      agg.competitors.set(compId, ec);
-    }
-  };
-
-  // Paged scan over the 30-day window, aggregated per batch. Excludes
-  // chatgpt-shopping so the totals match the Insights aggregates (#155/#464).
-  for (let from = 0; from < TOPIC_RESULTS_MAX_ROWS; from += TOPIC_RESULTS_PAGE_SIZE) {
-    const { data, error } = await supabase
-      .from('prompt_results')
-      .select(
-        'prompt_id, created_at, visibility_score, mention_count, citation_count, mention_position, competitor_mentions',
-      )
-      .eq('brand_id', brandId)
-      .neq('platform', 'chatgpt-shopping')
-      .gte('created_at', since30d)
-      // Deterministic order so .range() pages don't shuffle between requests.
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-      .range(from, from + TOPIC_RESULTS_PAGE_SIZE - 1);
-    if (error) throw new Error(error.message);
-
-    const batch = (data ?? []) as Record<string, unknown>[];
-    for (const row of batch) processRow(row);
-    if (batch.length < TOPIC_RESULTS_PAGE_SIZE) break;
+  interface TopicAggRow {
+    topic_id: string;
+    answers: number;
+    mention_answers: number;
+    citation_answers: number;
+    pos_sum: number;
+    pos_n: number;
+    cur_answers: number;
+    cur_mention_answers: number;
+    cur_citation_answers: number;
+    cur_pos_sum: number;
+    cur_pos_n: number;
+    prev_answers: number;
+    prev_mention_answers: number;
+    prev_citation_answers: number;
+    prev_pos_sum: number;
+    prev_pos_n: number;
+    total_mentions: number;
+    total_citations: number;
+    comp_mentions: number;
+    active_prompts: number;
+    visible_prompts: number;
+    last_run_at: string | null;
+    competitors: Record<string, { name: string; sov: number }>;
+    daily: Record<string, { visible: number; count: number }>;
   }
 
+  const aggByTopic = new Map<string, TopicAggRow>(
+    ((aggRows ?? []) as unknown as TopicAggRow[]).map((row) => [row.topic_id, row]),
+  );
+
+  const scoreOf = (
+    answers: number,
+    mention: number,
+    citation: number,
+    posSum: number,
+    posN: number,
+  ) =>
+    computeAiVisibilityScore({
+      answers,
+      mentionAnswers: mention,
+      citationAnswers: citation,
+      positionFactor: posN > 0 ? posSum / posN : null,
+    }) ?? 0;
+
   const rows: TopicOverviewRow[] = topics.map((t) => {
-    const agg = aggByTopic.get(t.id) ?? emptyAgg();
+    const agg = aggByTopic.get(t.id);
     const promptCount = promptCountByTopic.get(t.id) ?? 0;
 
-    // Visibility Rate now IS the AI Visibility Score over the topic's
-    // answers — same blend as the Insights headline (see lib/visibility-score).
-    const scoreOf = (
-      answers: number,
-      mention: number,
-      citation: number,
-      posSum: number,
-      posN: number,
-    ) =>
-      computeAiVisibilityScore({
-        answers,
-        mentionAnswers: mention,
-        citationAnswers: citation,
-        positionFactor: posN > 0 ? posSum / posN : null,
-      }) ?? 0;
+    if (!agg) {
+      // A topic with prompts but no answers in the window still belongs in the
+      // table — dropping it would make the roster disagree with itself.
+      return {
+        id: t.id,
+        name: t.name,
+        promptCount,
+        visibilityRate: 0,
+        visiblePrompts: 0,
+        activePrompts: 0,
+        visibilityChange: null,
+        totalMentions: 0,
+        totalCitations: 0,
+        shareOfVoice: 0,
+        topCompetitor: null,
+        lastRunAt: null,
+        trendSparkline: Array.from({ length: 14 }, () => 0),
+      };
+    }
+
+    // Visibility Rate IS the AI Visibility Score over the topic's answers —
+    // same blend as the Insights headline (see lib/visibility-score).
     const visibilityRate = scoreOf(
       agg.answers,
-      agg.mentionAnswers,
-      agg.citationAnswers,
-      agg.posSum,
-      agg.posN,
+      agg.mention_answers,
+      agg.citation_answers,
+      agg.pos_sum,
+      agg.pos_n,
     );
     const change =
-      agg.curAnswers > 0 && agg.prevAnswers > 0
+      agg.cur_answers > 0 && agg.prev_answers > 0
         ? Math.round(
             (scoreOf(
-              agg.curAnswers,
-              agg.curMentionAnswers,
-              agg.curCitationAnswers,
-              agg.curPosSum,
-              agg.curPosN,
+              agg.cur_answers,
+              agg.cur_mention_answers,
+              agg.cur_citation_answers,
+              agg.cur_pos_sum,
+              agg.cur_pos_n,
             ) -
               scoreOf(
-                agg.prevAnswers,
-                agg.prevMentionAnswers,
-                agg.prevCitationAnswers,
-                agg.prevPosSum,
-                agg.prevPosN,
+                agg.prev_answers,
+                agg.prev_mention_answers,
+                agg.prev_citation_answers,
+                agg.prev_pos_sum,
+                agg.prev_pos_n,
               )) *
               10,
           ) / 10
         : null;
 
-    const totalForSov = agg.brandMentions + agg.compMentions;
+    // The brand's own mentions are the same total the table shows.
+    const totalForSov = agg.total_mentions + agg.comp_mentions;
     const shareOfVoice =
-      totalForSov > 0 ? Math.round((agg.brandMentions / totalForSov) * 1000) / 10 : 0;
+      totalForSov > 0 ? Math.round((agg.total_mentions / totalForSov) * 1000) / 10 : 0;
 
     let topCompetitor: TopicOverviewRow['topCompetitor'] = null;
-    if (totalForSov > 0 && agg.competitors.size > 0) {
+    if (totalForSov > 0) {
       let best: { name: string; sov: number } | null = null;
-      for (const c of agg.competitors.values()) {
+      for (const c of Object.values(agg.competitors ?? {})) {
         const pct = Math.round((c.sov / totalForSov) * 1000) / 10;
         if (!best || pct > best.sov) best = { name: c.name, sov: pct };
       }
@@ -453,13 +345,11 @@ export async function getTopicsOverview(brandId: string): Promise<TopicOverviewS
     }
 
     // Daily visible-answer share (result-level) — a trend proxy for the
-    // prompt-level headline rate; sparklines have no axis, only shape matters.
+    // headline rate; sparklines have no axis, only shape matters.
     const sparklineDays: number[] = [];
-    const todayMs = now;
     for (let i = 13; i >= 0; i--) {
-      const d = new Date(todayMs - i * 24 * 60 * 60 * 1000);
-      const key = d.toISOString().slice(0, 10);
-      const bucket = agg.daily.get(key);
+      const key = new Date(now - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const bucket = agg.daily?.[key];
       sparklineDays.push(
         bucket && bucket.count > 0 ? Math.round((bucket.visible / bucket.count) * 100) : 0,
       );
@@ -470,14 +360,14 @@ export async function getTopicsOverview(brandId: string): Promise<TopicOverviewS
       name: t.name,
       promptCount,
       visibilityRate,
-      visiblePrompts: agg.visiblePrompts.size,
-      activePrompts: agg.allPrompts.size,
+      visiblePrompts: agg.visible_prompts,
+      activePrompts: agg.active_prompts,
       visibilityChange: change,
-      totalMentions: agg.totalMentions,
-      totalCitations: agg.totalCitations,
+      totalMentions: agg.total_mentions,
+      totalCitations: agg.total_citations,
       shareOfVoice,
       topCompetitor,
-      lastRunAt: agg.lastRunAt > 0 ? new Date(agg.lastRunAt).toISOString() : null,
+      lastRunAt: agg.last_run_at,
       trendSparkline: sparklineDays,
     };
   });

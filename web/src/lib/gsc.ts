@@ -5,38 +5,22 @@
  * domain property ("sc-domain:example.com"). A brand knows its domains
  * (brand_domains). Auto-mapping picks the property that matches a brand
  * domain — and only auto-applies when the match is unambiguous.
+ *
+ * The matching itself is shared with the Google Analytics mapping (#694);
+ * this module only adapts GSC's "the property is the URL" shape to it.
  */
 
-function normalizeHost(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .replace(/\/.*$/, '')
-    .replace(/^www\./, '');
-}
+import { matchProperty } from './property-match';
 
-/** True when the property covers the given (normalized) brand domain. */
-export function propertyMatchesDomain(siteUrl: string, domain: string): boolean {
-  const host = normalizeHost(domain);
-  if (!host) return false;
-
-  if (siteUrl.startsWith('sc-domain:')) {
-    // Domain properties cover the apex and every subdomain.
-    const apex = siteUrl.slice('sc-domain:'.length).trim().toLowerCase();
-    return host === apex || host.endsWith(`.${apex}`);
-  }
-
-  return normalizeHost(siteUrl) === host;
-}
+export { propertyMatchesDomain } from './property-match';
 
 /**
  * The single property matching any of the brand's domains, or null when
  * none or several match (ambiguity needs a human pick).
  */
 export function matchGscProperty(propertyUrls: string[], brandDomains: string[]): string | null {
-  const matches = propertyUrls.filter((siteUrl) =>
-    brandDomains.some((domain) => propertyMatchesDomain(siteUrl, domain)),
+  return matchProperty(
+    propertyUrls.map((siteUrl) => ({ value: siteUrl, siteUrls: [siteUrl] })),
+    brandDomains,
   );
-  return matches.length === 1 ? matches[0] : null;
 }

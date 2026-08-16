@@ -65,6 +65,11 @@ import { getTopics } from '@/lib/actions/topic';
 import { MODEL_PROVIDER_LABELS, PLATFORM_LABELS } from '@/config/platform-labels';
 import { formatRegionDisplay } from '@/lib/region';
 import type { Topic } from '@/types';
+import {
+  ALL_DATE_PRESETS,
+  DateRangeFilter,
+  type DateRangePreset,
+} from '@/components/filters/date-range-filter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -102,7 +107,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { getAIProviderDisplayName, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { usePlanContext } from '@/components/providers/plan-provider';
@@ -111,7 +115,9 @@ import { toast } from 'sonner';
 
 // ─── Filter Types ─────────────────────────────────────────────────────────────
 
-type DatePreset = '24h' | '7d' | '30d' | '90d' | 'all' | 'custom';
+// The preset vocabulary is shared with the control that renders it (#713), so
+// a page cannot drift from the options it actually offers.
+type DatePreset = DateRangePreset;
 
 interface InsightsFilters {
   datePreset: DatePreset;
@@ -467,51 +473,15 @@ function FilterBar({
 
   return (
     <div className="flex flex-wrap items-end gap-3">
-      {/* Date presets */}
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Date Range</label>
-        <div className="flex rounded-md border overflow-hidden">
-          {(['24h', '7d', '30d', '90d', 'all', 'custom'] as DatePreset[]).map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => set({ datePreset: p })}
-              className={cn(
-                'px-3 py-1.5 text-xs font-medium transition-colors',
-                filters.datePreset === p
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-card hover:bg-muted text-foreground',
-              )}
-            >
-              {p === 'custom' ? 'Custom' : p === 'all' ? 'All' : p}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Custom date inputs */}
-      {filters.datePreset === 'custom' && (
-        <>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">From</label>
-            <Input
-              type="date"
-              value={filters.dateFrom}
-              onChange={(e) => set({ dateFrom: e.target.value })}
-              className="h-8 w-36 text-xs"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">To</label>
-            <Input
-              type="date"
-              value={filters.dateTo}
-              onChange={(e) => set({ dateTo: e.target.value })}
-              className="h-8 w-36 text-xs"
-            />
-          </div>
-        </>
-      )}
+      <DateRangeFilter
+        value={filters.datePreset}
+        presets={ALL_DATE_PRESETS as readonly DatePreset[]}
+        onChange={(datePreset) => set({ datePreset })}
+        from={filters.dateFrom}
+        to={filters.dateTo}
+        onFromChange={(dateFrom) => set({ dateFrom })}
+        onToChange={(dateTo) => set({ dateTo })}
+      />
 
       {/* Topic filter */}
       {availableTopics.length > 0 && (
@@ -699,7 +669,7 @@ function NoDataForPeriod({ datePreset, onReset }: { datePreset: DatePreset; onRe
  *  card expands + scrolls itself for this hash; the prompt-suggestions card
  *  lives on the Prompts page's default All Prompts tab and does the same. */
 const TOPIC_OPPORTUNITIES_HREF = '/dashboard/topics#topic-opportunities';
-const PROMPT_OPPORTUNITIES_HREF = '/dashboard/prompts#prompt-opportunities';
+const PROMPT_OPPORTUNITIES_HREF = '/dashboard/prompts?tab=suggestions';
 
 function RecommendationCard({
   title,

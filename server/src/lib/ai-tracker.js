@@ -26,4 +26,7 @@ export async function runPrompt(promptText, model, region) {
   return runPromptOpenAI(promptText, model, region);
 }
 
-export { analyzeSentimentAI } from './openai-tracker.js';
+// Sentiment is provider-agnostic (see sentiment.js) — unlike prompt tracking
+// above, it needs no provider-hosted web search, so it follows SENTIMENT_MODEL
+// instead of being pinned to OpenAI.
+export { analyzeSentimentAI } from './sentiment.js';

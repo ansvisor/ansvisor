@@ -165,13 +165,13 @@ export interface InsightsSummary {
  * applyModelFilter does for the buildResultsQuery path so the two callers
  * stay equivalent.
  */
-function modelFilterArray(model: string | undefined): string[] | null {
-  if (!model) return null;
+function modelFilterArray(model: string | undefined): string[] | undefined {
+  if (!model) return undefined;
   const list = model
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  return list.length > 0 ? list : null;
+  return list.length > 0 ? list : undefined;
 }
 
 // ── RPC return shapes (mirror supabase/migrations/00031_insights_sentiment_denominator.sql) ─
@@ -414,12 +414,12 @@ export async function getVisibilityRateKpi(
 
   const { data, error } = await supabase.rpc('visible_prompt_stats', {
     p_brand_id: brandId,
-    p_platform: null,
+    p_platform: undefined,
     p_models: modelFilterArray(opts?.model),
-    p_region: opts?.region ?? null,
-    p_date_from: opts?.dateFrom ?? null,
-    p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? null,
-    p_topic_id: opts?.topicId ?? null,
+    p_region: opts?.region ?? undefined,
+    p_date_from: opts?.dateFrom ?? undefined,
+    p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
+    p_topic_id: opts?.topicId ?? undefined,
   });
   if (error) throw new Error(error.message);
 
@@ -474,12 +474,12 @@ export async function getTrackedPromptsKpi(
   const [rpcResult, plan, quotaUsed] = await Promise.all([
     supabase.rpc('tracked_prompt_count', {
       p_brand_id: brandId,
-      p_platform: null,
+      p_platform: undefined,
       p_models: modelFilterArray(opts?.model),
-      p_region: opts?.region ?? null,
-      p_date_from: opts?.dateFrom ?? null,
-      p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? null,
-      p_topic_id: opts?.topicId ?? null,
+      p_region: opts?.region ?? undefined,
+      p_date_from: opts?.dateFrom ?? undefined,
+      p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
+      p_topic_id: opts?.topicId ?? undefined,
     }),
     orgId ? getOrgPlan(orgId) : Promise.resolve(null),
     countOrgPrompts(),
@@ -1138,17 +1138,17 @@ export async function getInsightsSummary(
   // reducer math exactly (verified by the parity test in 00006).
   const baseArgs = {
     p_brand_id: brandId,
-    p_platform: null as string | null,
+    p_platform: undefined as string | undefined,
     p_models,
-    p_region: opts?.region ?? null,
-    p_prompt_id: null as string | null,
-    p_topic_id: opts?.topicId ?? null,
+    p_region: opts?.region ?? undefined,
+    p_prompt_id: undefined as string | undefined,
+    p_topic_id: opts?.topicId ?? undefined,
   };
 
   const { data: curData, error } = await supabase.rpc('insights_aggregates', {
     ...baseArgs,
-    p_date_from: opts?.dateFrom ?? null,
-    p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? null,
+    p_date_from: opts?.dateFrom ?? undefined,
+    p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
   });
   if (error) throw new Error(error.message);
 
@@ -1229,7 +1229,7 @@ export async function getInsightsSummary(
       supabase.rpc('insights_aggregates', {
         ...baseArgs,
         p_date_from: opts?.dateFrom ?? currentFrom.toISOString(),
-        p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? null,
+        p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
       }),
       supabase.rpc('insights_aggregates', {
         ...baseArgs,
@@ -1440,11 +1440,13 @@ export interface PromptVisibilitySummary {
  */
 export async function getPromptVisibilitySummaries(
   brandId: string,
-  opts?: { days?: number },
+  opts?: { days?: number; from?: string; to?: string },
 ): Promise<Record<string, PromptVisibilitySummary>> {
   const supabase = await createClient();
+  // `from`/`to` win when given (the custom range, #713); otherwise the day
+  // count keeps every existing caller on its previous behaviour.
   const days = opts?.days ?? 30;
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const since = opts?.from ?? new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
   // One GROUP BY in Postgres (migration 00025) instead of pulling the raw
   // result window into JS: the old un-paginated select silently capped at
@@ -1454,6 +1456,7 @@ export async function getPromptVisibilitySummaries(
   const { data, error } = await supabase.rpc('prompt_visibility_summaries', {
     p_brand_id: brandId,
     p_date_from: since,
+    p_date_to: opts?.to ?? undefined,
   });
 
   if (error) throw new Error(error.message);
@@ -1695,11 +1698,11 @@ export async function getCompetitorComparison(
 
   const baseArgs = {
     p_brand_id: brandId,
-    p_platform: null as string | null,
+    p_platform: undefined as string | undefined,
     p_models,
-    p_region: opts?.region ?? null,
-    p_prompt_id: null as string | null,
-    p_topic_id: opts?.topicId ?? null,
+    p_region: opts?.region ?? undefined,
+    p_prompt_id: undefined as string | undefined,
+    p_topic_id: opts?.topicId ?? undefined,
   };
 
   // Brand name + the displayed-period aggregates fire in parallel — all
@@ -1708,13 +1711,13 @@ export async function getCompetitorComparison(
     supabase.from('brands').select('name').eq('id', brandId).single(),
     supabase.rpc('competitor_aggregates', {
       ...baseArgs,
-      p_date_from: opts?.dateFrom ?? null,
-      p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? null,
+      p_date_from: opts?.dateFrom ?? undefined,
+      p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
     }),
     supabase.rpc('ai_visibility_aggregates', {
       ...baseArgs,
-      p_date_from: opts?.dateFrom ?? null,
-      p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? null,
+      p_date_from: opts?.dateFrom ?? undefined,
+      p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
     }),
   ]);
   if (aggErr) throw new Error(aggErr.message);
@@ -1748,7 +1751,7 @@ export async function getCompetitorComparison(
     supabase.rpc('competitor_aggregates', {
       ...baseArgs,
       p_date_from: opts?.dateFrom ?? currentFrom.toISOString(),
-      p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? null,
+      p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
     }),
     supabase.rpc('competitor_aggregates', {
       ...baseArgs,
@@ -1965,11 +1968,11 @@ export async function getShareOfVoiceData(
 
   const baseArgs = {
     p_brand_id: brandId,
-    p_platform: null as string | null,
+    p_platform: undefined as string | undefined,
     p_models,
-    p_region: opts?.region ?? null,
-    p_prompt_id: null as string | null,
-    p_topic_id: opts?.topicId ?? null,
+    p_region: opts?.region ?? undefined,
+    p_prompt_id: undefined as string | undefined,
+    p_topic_id: opts?.topicId ?? undefined,
   };
 
   // Current-period aggregate + previous-period aggregate run in parallel —
@@ -1992,8 +1995,8 @@ export async function getShareOfVoiceData(
   const [{ data: curData, error: curErr }, { data: prevData, error: prevErr }] = await Promise.all([
     supabase.rpc('share_of_voice_aggregates', {
       ...baseArgs,
-      p_date_from: opts?.dateFrom ?? null,
-      p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? null,
+      p_date_from: opts?.dateFrom ?? undefined,
+      p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
     }),
     supabase.rpc('share_of_voice_aggregates', {
       ...baseArgs,
@@ -2164,7 +2167,10 @@ export async function getVisibilityRateTrend(
   // No explicit lower bound = the "All time" preset: the summary covers
   // everything (matching the leaderboard) and the chart plots an expanding
   // cumulative window instead of a fixed-length rolling one.
-  const boundedFrom = opts?.dateFrom ?? null;
+  // undefined rather than null: these flow straight into RPC arguments, where
+  // an omitted key takes the function's own DEFAULT NULL. "All time" is the
+  // absence of a bound, and undefined is how that is spelled at this boundary.
+  const boundedFrom = opts?.dateFrom ?? undefined;
   const dateTo = expandDateToEndOfDay(opts?.dateTo) ?? new Date().toISOString();
 
   // Equal-length window immediately before, for the headline delta
@@ -2175,17 +2181,17 @@ export async function getVisibilityRateTrend(
   const prevFrom =
     boundedFrom && windowMs !== null
       ? new Date(new Date(boundedFrom).getTime() - windowMs).toISOString()
-      : null;
+      : undefined;
   const prevTo = boundedFrom;
 
-  const rateArgs = (from: string | null, to: string) => ({
+  const rateArgs = (from: string | undefined, to: string) => ({
     p_brand_id: brandId,
-    p_platform: null as string | null,
+    p_platform: undefined as string | undefined,
     p_models: modelFilterArray(opts?.model),
-    p_region: opts?.region ?? null,
+    p_region: opts?.region ?? undefined,
     p_date_from: from,
     p_date_to: to,
-    p_topic_id: opts?.topicId ?? null,
+    p_topic_id: opts?.topicId ?? undefined,
   });
 
   const [

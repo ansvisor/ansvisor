@@ -8,13 +8,12 @@
  */
 
 import { useMemo } from 'react';
-import { cn } from '@/lib/utils';
 import type { Topic } from '@/types';
 import type { CitationsDatePreset } from '@/lib/actions/citations';
 import { MODEL_PROVIDER_LABELS, PLATFORM_LABELS } from '@/config/platform-labels';
 import { getAIProviderDisplayName, resolveAIProvider } from '@/components/ai-provider-avatar';
+import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -204,49 +203,15 @@ export function CitationsFilterBar({
 
   return (
     <div className="flex flex-wrap items-end gap-3">
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Date Range</label>
-        <div className="flex rounded-md border overflow-hidden">
-          {DATE_PRESETS.map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => onChange({ datePreset: p })}
-              className={cn(
-                'px-3 py-1.5 text-xs font-medium transition-colors',
-                filters.datePreset === p
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-card hover:bg-muted text-foreground',
-              )}
-            >
-              {p === 'custom' ? 'Custom' : p === 'all' ? 'All' : p}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {filters.datePreset === 'custom' && (
-        <>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">From</label>
-            <Input
-              type="date"
-              value={filters.dateFrom}
-              onChange={(e) => onChange({ dateFrom: e.target.value })}
-              className="h-8 w-36 text-xs"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">To</label>
-            <Input
-              type="date"
-              value={filters.dateTo}
-              onChange={(e) => onChange({ dateTo: e.target.value })}
-              className="h-8 w-36 text-xs"
-            />
-          </div>
-        </>
-      )}
+      <DateRangeFilter
+        value={filters.datePreset}
+        presets={DATE_PRESETS}
+        onChange={(datePreset) => onChange({ datePreset })}
+        from={filters.dateFrom}
+        to={filters.dateTo}
+        onFromChange={(dateFrom) => onChange({ dateFrom })}
+        onToChange={(dateTo) => onChange({ dateTo })}
+      />
 
       {topics.length > 0 && (
         <div>
