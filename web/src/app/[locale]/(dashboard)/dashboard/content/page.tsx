@@ -296,7 +296,7 @@ export default function ContentPage() {
     },
     [loadData],
   );
- // Restore generation state from localStorage on mount
+  // Restore generation state from localStorage on mount
   useEffect(() => {
     if (!activeBrandId) return;
     const saved = loadGenerationJob();
