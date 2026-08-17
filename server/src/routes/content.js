@@ -256,6 +256,46 @@ router.post('/bulk/status', async (req, res) => {
 });
 
 /**
+ * POST /api/content/bulk/delete
+ *
+ * Permanently remove opportunities (#731). Dismissing only hides a row behind
+ * a status filter, which is no help to a brand carrying hundreds of stale
+ * suggestions — this is the way to actually clear them.
+ *
+ * The generated brief lives on the opportunity row, so deleting takes it with
+ * it. `brief_usage.opportunity_id` is ON DELETE SET NULL, so the metered usage
+ * record survives and quota already spent stays spent — deleting must not hand
+ * back a brief allowance.
+ */
+router.post('/bulk/delete', async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids must be a non-empty array' });
+    }
+
+    await assertOpportunitiesAccess(ids, req.user.id);
+
+    const { data, error } = await supabaseAdmin
+      .from('content_opportunities')
+      .delete()
+      .in('id', ids)
+      .select('id');
+
+    if (error) throw new Error(error.message);
+
+    return res.json({ deleted: data?.length || 0 });
+  } catch (error) {
+    req.log.error({ err: error }, 'bulk delete error');
+    return res.status(error.status || 500).json({
+      error: 'Failed to delete opportunities',
+      details: error.message,
+    });
+  }
+});
+
+/**
  * POST /api/content/bulk/send-webhook
  * Send multiple opportunities to webhook.
  */

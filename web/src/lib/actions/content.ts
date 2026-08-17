@@ -285,6 +285,33 @@ export async function bulkUpdateStatus(
   return res.json();
 }
 
+/**
+ * Permanently delete opportunities (#731).
+ *
+ * Distinct from `bulkUpdateStatus(ids, 'dismissed')`, which only moves a row
+ * behind a status filter. Anything deleted here is gone, including any brief
+ * generated for it.
+ */
+export async function bulkDeleteOpportunities(ids: string[]): Promise<{ deleted: number }> {
+  const session = await getSession();
+
+  const res = await fetch(`${AEO_SERVER_URL}/api/content/bulk/delete`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ ids }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error: ${res.status}`);
+  }
+
+  return res.json();
+}
+
 export type BulkSendResult =
   | {
       success: true;

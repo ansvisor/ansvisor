@@ -44,6 +44,7 @@ import {
   ExternalLink,
   X,
   Settings2,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -56,6 +57,7 @@ import {
   sendToWebhook,
   bulkSendToWebhook,
   bulkUpdateStatus,
+  bulkDeleteOpportunities,
 } from '@/lib/actions/content';
 import type { ContentOpportunity, ContentOpportunityStatus } from '@/types';
 import { toast } from 'sonner';
@@ -419,11 +421,52 @@ export default function ContentPage() {
     }
   };
 
+  const handleBulkDelete = async () => {
+    setBulkSending(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const result = await bulkDeleteOpportunities(ids);
+      toast.success(t('bulk.deletedToast', { count: result.deleted }));
+      setSelectedIds(new Set());
+      // No page reset needed: `usePagination` clamps to the last page that
+      // still exists, and the narrowed `start` refetches on its own. Resetting
+      // here as well would fire a second, competing load.
+      await loadData(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Bulk delete failed');
+    } finally {
+      setBulkSending(false);
+    }
+  };
+
   const filtered = opportunities.filter(
     (o) =>
       o.title.toLowerCase().includes(search.toLowerCase()) ||
       (o.description || '').toLowerCase().includes(search.toLowerCase()),
   );
+
+  /** How many of the selected rows would lose a generated brief (#731). */
+  const selectedWithBrief = opportunities.filter(
+    (o) => selectedIds.has(o.id) && Boolean(o.brief),
+  ).length;
+
+  // "The brand has nothing" and "this filter matched nothing" are different
+  // states with different remedies, and the page used to answer both with the
+  // Generate card — which hid the very controls needed to undo the filter
+  // (#660). The unfiltered view is the only one whose emptiness means the
+  // brand truly has no opportunities.
+  const hasActiveFilters =
+    statusFilter !== 'all' ||
+    impactFilter !== 'all' ||
+    typeFilter !== 'all' ||
+    search.trim() !== '';
+
+  const clearFilters = () => {
+    setStatusFilter('all');
+    setImpactFilter('all');
+    setTypeFilter('all');
+    setSearch('');
+  };
 
   if (!activeBrandId) {
     return (
@@ -478,7 +521,7 @@ export default function ContentPage() {
         <div className="flex items-center justify-center min-h-[300px]">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      ) : opportunities.length === 0 ? (
+      ) : opportunities.length === 0 && !hasActiveFilters ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
             <Lightbulb className="h-12 w-12 text-muted-foreground/40" />
@@ -660,6 +703,47 @@ export default function ContentPage() {
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
+
+                  {/* Last in the row, and the only destructive-styled trigger:
+                      this one does not move a row, it removes it. */}
+                  <Dialog>
+                    <DialogTrigger
+                      render={
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1.5 text-destructive hover:text-destructive"
+                          disabled={bulkSending}
+                        />
+                      }
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      {t('bulk.deleteAll')}
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-sm">
+                      <DialogHeader>
+                        <DialogTitle>{t('bulk.deleteAllTitle')}</DialogTitle>
+                        <DialogDescription>
+                          {t('bulk.deleteAllConfirm', { count: selectedIds.size })}
+                          {selectedWithBrief > 0 && (
+                            <span className="mt-2 block font-medium text-foreground">
+                              {t('bulk.deleteAllBriefWarning', { count: selectedWithBrief })}
+                            </span>
+                          )}
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <DialogClose render={<Button variant="outline" />}>
+                          {t('cancel')}
+                        </DialogClose>
+                        <DialogClose
+                          render={<Button variant="destructive" onClick={handleBulkDelete} />}
+                        >
+                          {t('bulk.deleteAll')}
+                        </DialogClose>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
             )}
@@ -791,8 +875,14 @@ export default function ContentPage() {
                 </TableBody>
               </Table>
               {filtered.length === 0 && (
-                <div className="py-10 text-center text-sm text-muted-foreground">
-                  {t('noResults')}
+                <div className="flex flex-col items-center gap-3 py-10 text-center">
+                  <p className="text-sm text-muted-foreground">{t('noResults')}</p>
+                  {hasActiveFilters && (
+                    <Button variant="outline" size="sm" className="gap-1.5" onClick={clearFilters}>
+                      <X className="h-3.5 w-3.5" />
+                      {t('clearFilters')}
+                    </Button>
+                  )}
                 </div>
               )}
               <TablePager

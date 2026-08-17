@@ -252,6 +252,7 @@
     "sendToWorkflow": "Send to Workflow",
     "sending": "Sending...",
     "noResults": "No opportunities match your filters.",
+    "clearFilters": "Clear filters",
     "dismiss": "Dismiss",
     "dismissedToast": "Opportunity dismissed",
     "undo": "Undo",
@@ -299,7 +300,12 @@
       "sendAll": "Send All",
       "dismissAll": "Dismiss All",
       "dismissAllTitle": "Dismiss opportunities?",
-      "dismissAllConfirm": "{count, plural, one {This will dismiss # opportunity.} other {This will dismiss # opportunities.}} This can't be undone."
+      "dismissAllConfirm": "{count, plural, one {This will dismiss # opportunity.} other {This will dismiss # opportunities.}} This can't be undone.",
+      "deleteAll": "Delete",
+      "deleteAllTitle": "Delete opportunities?",
+      "deleteAllConfirm": "{count, plural, one {This permanently deletes # opportunity.} other {This permanently deletes # opportunities.}} Dismissing instead keeps them out of your way without removing them.",
+      "deleteAllBriefWarning": "{count, plural, one {# of them has a generated brief, which is deleted too and does not return your monthly brief allowance.} other {# of them have generated briefs, which are deleted too and do not return your monthly brief allowance.}}",
+      "deletedToast": "{count, plural, one {Deleted # opportunity} other {Deleted # opportunities}}"
     },
     "table": {
       "action": "Action",
