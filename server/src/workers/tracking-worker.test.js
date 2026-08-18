@@ -4,7 +4,13 @@ import { describe, expect, it, vi } from 'vitest';
 // SUPABASE_* env is absent (as in CI) — stub it before the import chain.
 vi.mock('../config/supabase.js', () => ({ default: {} }));
 
-import { allTasksAreStale, drainBudgetExceeded, fetchAllPendingRows } from './tracking-worker.js';
+import {
+  allTasksAreStale,
+  drainBudgetExceeded,
+  fetchAllPendingRows,
+  runnablePlatforms,
+  UNAVAILABLE_PLATFORMS,
+} from './tracking-worker.js';
 
 /**
  * Ghost detection for the Cloro drain loop (#687).
@@ -202,5 +208,47 @@ describe('fetchAllPendingRows', () => {
 
     expect(rows).toEqual([]);
     expect(error).toBeNull();
+  });
+});
+
+/**
+ * What a run is allowed to submit (#731 follow-up).
+ *
+ * Every id that survives this filter becomes a paid Cloro task, so the two
+ * reasons to drop one — the brand turned Shopping off, the platform is down —
+ * both have to hold at run time, not at the moment the prompt was saved.
+ */
+describe('runnablePlatforms', () => {
+  it('drops a platform that is currently unavailable', () => {
+    expect(
+      runnablePlatforms(['chatgpt-web', 'grok-web', 'perplexity-web'], { shoppingEnabled: true }),
+    ).toEqual(['chatgpt-web', 'perplexity-web']);
+  });
+
+  it('drops shopping unless the brand has it enabled', () => {
+    expect(
+      runnablePlatforms(['chatgpt-web', 'chatgpt-shopping'], { shoppingEnabled: false }),
+    ).toEqual(['chatgpt-web']);
+    expect(
+      runnablePlatforms(['chatgpt-web', 'chatgpt-shopping'], { shoppingEnabled: true }),
+    ).toEqual(['chatgpt-web', 'chatgpt-shopping']);
+  });
+
+  it('applies both reasons at once', () => {
+    expect(
+      runnablePlatforms(['grok-web', 'chatgpt-shopping', 'gemini-web'], { shoppingEnabled: false }),
+    ).toEqual(['gemini-web']);
+  });
+
+  it('returns an empty list for a prompt with no platforms', () => {
+    expect(runnablePlatforms([], { shoppingEnabled: true })).toEqual([]);
+    expect(runnablePlatforms(null, { shoppingEnabled: true })).toEqual([]);
+    expect(runnablePlatforms(undefined, { shoppingEnabled: true })).toEqual([]);
+  });
+
+  // A prompt that lists only the unavailable platform must submit nothing at
+  // all, rather than falling back to "no filter means run everything".
+  it('leaves nothing to run when every platform is unavailable', () => {
+    expect(runnablePlatforms([...UNAVAILABLE_PLATFORMS], { shoppingEnabled: true })).toEqual([]);
   });
 });
