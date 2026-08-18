@@ -25,6 +25,10 @@ on:
 
 permissions:
   contents: read
+  # Labels on a pull request are managed through the issues API, and creating a
+  # repo label needs `issues: write` specifically — `pull-requests: write`
+  # alone is enough to attach an existing label but not to create a missing one.
+  issues: write
   pull-requests: write
 
 jobs:
@@ -90,7 +94,12 @@ jobs:
                 description: 'Adds or edits a migration — apply it to the hosted database',
               });
             } catch (err) {
-              if (err.status !== 422) throw err; // 422 = already exists
+              // Already exists (422) is the normal case once the first PR has
+              // run. Anything else is logged rather than thrown: attaching the
+              // label is the job, and failing the run over the setup step for
+              // it would put a red mark on the PR while telling nobody
+              // anything useful.
+              core.info(`createLabel: ${err.status} ${err.message}`);
             }
 
             await github.rest.issues.addLabels({
