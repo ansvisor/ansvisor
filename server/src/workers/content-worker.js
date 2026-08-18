@@ -9,6 +9,7 @@ import { resolveModel } from '../lib/ai-provider.js';
 import { getLanguageName } from '../lib/languages.js';
 import supabaseAdmin from '../config/supabase.js';
 import logger from '../lib/logger.js';
+import { OPPORTUNITIES_PER_RUN, OPPORTUNITY_COUNT_RULE } from '../lib/opportunity-limits.js';
 
 const opportunitySchema = z.object({
   opportunities: z
@@ -38,7 +39,7 @@ const opportunitySchema = z.object({
       }),
     )
     .min(1)
-    .max(20),
+    .max(OPPORTUNITIES_PER_RUN),
 });
 
 const OPPORTUNITY_SYSTEM_PROMPT = `You are an AEO (Answer Engine Optimization) content strategist. Given a brand's AI visibility data — including prompt tracking results, search volumes, and competitor mentions — generate specific, actionable content recommendations.
@@ -49,7 +50,7 @@ Rules:
 - Focus on content that will improve the brand's visibility in AI-generated answers.
 - Categorize as "owned" (blog posts, landing pages, FAQ pages the brand controls) or "earned" (guest posts, PR, review sites).
 - Set impact based on: volume × (100 - current visibility) × competitor gap.
-- Generate between 5 and 15 opportunities depending on data richness.
+${OPPORTUNITY_COUNT_RULE}
 - Do NOT repeat the same recommendation in different wording.
 - The bracketed [N] indexes in the prompt data exist ONLY for the relatedPromptIndex field. NEVER mention an index like "[0]" or "Prompt 3" in titles or descriptions — refer to the prompt by quoting or paraphrasing its actual text/topic instead.`;
 
