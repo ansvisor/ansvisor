@@ -11,6 +11,7 @@ import { hasFeature, getPlan, isCloud } from '../config/plans.js';
 import { applyPlanOverrides } from '../lib/plan-guard.js';
 import { generateContentOpportunities } from '../lib/opportunity-generator.js';
 import { updateTargetUrlStats } from '../lib/target-url-stats.js';
+import { persistCitationRows } from '../lib/citation-rows.js';
 import logger from '../lib/logger.js';
 
 function resolveModelPlatform(model) {
@@ -262,7 +263,14 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   let completedTasks = 0;
 
   async function insertResult(row) {
-    const { error } = await supabaseAdmin.from('prompt_results').insert(row);
+    // `created_at` comes back from the insert rather than being stamped here:
+    // the citation rows copy it, and a value computed in app code would drift
+    // from the column default by the round trip.
+    const { data: inserted, error } = await supabaseAdmin
+      .from('prompt_results')
+      .insert(row)
+      .select('id, created_at')
+      .single();
     if (error) {
       logger.error({ err: error, brandId }, 'failed to insert tracking result');
       throw error;
@@ -270,6 +278,15 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     insertedCount++;
     // Best-effort: mark target URLs cited by this answer (00032).
     await updateTargetUrlStats(row.prompt_id, row.citations, new Date().toISOString());
+    // Best-effort: expand the citation array into rows (#732). The jsonb
+    // column still holds the same data, so anything missed here is recoverable
+    // with the backfill rather than lost.
+    await persistCitationRows({
+      promptResultId: inserted.id,
+      brandId: row.brand_id,
+      createdAt: inserted.created_at,
+      citations: row.citations,
+    });
   }
 
   // 6. Phase 1: Collect & run all scraper (platform) tasks first

@@ -18,6 +18,7 @@ import { analyzeSentimentAI } from './ai-tracker.js';
 import { parseResponse, countBrandMentions } from './response-parser.js';
 import { normalizeShoppingCards, matchCardBrand } from './shopping-cards.js';
 import { updateTargetUrlStats } from './target-url-stats.js';
+import { persistCitationRows } from './citation-rows.js';
 import { logger } from './logger.js';
 
 /**
@@ -70,7 +71,7 @@ export async function handleScraperResult({
       inline_products: aiResponse.inline_products ?? [],
       search_queries: Array.isArray(aiResponse.search_queries) ? aiResponse.search_queries : [],
     })
-    .select('id')
+    .select('id, created_at')
     .single();
 
   if (error) {
@@ -80,6 +81,17 @@ export async function handleScraperResult({
 
   // Best-effort: mark target URLs cited by this answer (00032).
   await updateTargetUrlStats(promptId, aiResponse.citations, new Date().toISOString());
+
+  // Expand the citation array into rows (#732). Best-effort for the same
+  // reason as the line above: the answer is already stored, and the jsonb
+  // column still holds this data, so a failure here costs a backfill and
+  // nothing else.
+  await persistCitationRows({
+    promptResultId: inserted.id,
+    brandId,
+    createdAt: inserted.created_at,
+    citations: aiResponse.citations,
+  });
 
   // Best-effort normalization of any shopping cards on this result.
   // Failures here must not abort the result insert — the raw cards are
