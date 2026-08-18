@@ -151,14 +151,41 @@ We follow [GitHub Flow](https://docs.github.com/en/get-started/using-github/gith
    npm run version:check
    ```
 
-4. Push and open a pull request against `main`.
+4. If you added or edited a file under `supabase/migrations/`, regenerate the
+   consolidated schema and commit the result — CI fails if it is out of date:
 
-5. In your PR description, include:
+   ```bash
+   bash supabase/build-schema.sh
+   ```
+
+   Your PR will be labelled `needs-migration` automatically. That label is a
+   reminder for the maintainer merging it: the file is only half of a
+   migration, and the other half is applying it to the hosted database. You do
+   not need to do anything about the label yourself.
+
+5. Push and open a pull request against `main`.
+
+6. In your PR description, include:
    - **What** changed and **why**
    - **How to test** the change
    - Screenshots if there are UI changes
 
-6. Wait for review, address feedback, and your PR will be merged.
+7. Wait for review, address feedback, and your PR will be merged.
+
+### Checking for schema drift
+
+A migration that was committed but never applied leaves the database missing
+something the code calls, which surfaces as a runtime error rather than a
+failing build. To check a database against what this repo expects:
+
+```bash
+bash supabase/check-drift.sh          # prints SQL; paste it into the SQL Editor
+```
+
+It reads the repo and writes a read-only query — no credentials, no
+connection, nothing written. An empty result means no drift; any row is
+something the code expects and that database does not have. Worth running
+after applying a migration, and after pulling a batch of merged changes.
 
 ## Commit Messages
 

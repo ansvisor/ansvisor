@@ -1,0 +1,101 @@
+name: Migration guard
+
+# A migration file is only half of a migration. The other half — applying it
+# to the hosted database — happens by hand after merge, and nothing in the
+# process carried that reminder across a merge. It has been missed twice
+# (#709, and 00050 in #700), both times on a contributor PR, and both times
+# the gap surfaced as a customer-visible error rather than as something we
+# caught ourselves.
+#
+# This marks such pull requests with a label instead of failing a check. A
+# hard failure would block a PR for something that is not wrong with the code,
+# and a plain annotation scrolls away — which is precisely how this was missed.
+# A label is visible in the PR list, survives on the merged PR, and can be
+# searched for later (`is:merged label:needs-migration`).
+#
+# Triggers `pull_request_target` rather than `pull_request` so the workflow
+# runs in the base repo's context and holds the write permission needed to
+# label a PR opened from a fork — which is where both incidents came from.
+# It never checks out or executes the PR's code: the file list comes from the
+# API, so there is nothing here for an untrusted branch to influence.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    name: flag migrations that still need applying
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const LABEL = 'needs-migration';
+            const PREFIX = 'supabase/migrations/';
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              per_page: 100,
+            });
+
+            // `removed` files need no apply step, but a renamed or modified
+            // migration does — an edited migration is as unapplied as a new one.
+            const touched = files
+              .filter((f) => f.filename.startsWith(PREFIX) && f.status !== 'removed')
+              .map((f) => f.filename)
+              .sort();
+
+            const labelled = context.payload.pull_request.labels.some((l) => l.name === LABEL);
+
+            if (touched.length === 0) {
+              // Migrations can be dropped from a branch after review. Clearing
+              // the label keeps it meaning "this still needs applying" rather
+              // than "this once contained a migration".
+              if (labelled) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  name: LABEL,
+                });
+                core.info(`No migrations left in this PR — removed the ${LABEL} label.`);
+              }
+              return;
+            }
+
+            core.warning(
+              `This PR changes ${touched.length} migration file(s). Apply them to the hosted ` +
+                `database before or immediately after merge, or the merged code will call ` +
+                `objects that do not exist:\n${touched.join('\n')}`,
+            );
+
+            if (labelled) return;
+
+            // Create on demand rather than assuming a repo-level setup step:
+            // a fork or a self-hosted copy of this repo has no such label, and
+            // a missing one must not fail the run.
+            try {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: LABEL,
+                color: 'B60205',
+                description: 'Adds or edits a migration — apply it to the hosted database',
+              });
+            } catch (err) {
+              if (err.status !== 422) throw err; // 422 = already exists
+            }
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              labels: [LABEL],
+            });
