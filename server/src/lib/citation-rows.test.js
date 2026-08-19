@@ -110,57 +110,38 @@ describe('normalizeCitations', () => {
 });
 
 /**
- * URL lookups are chunked because a PostgREST `.in()` filter travels in the
- * query string (#732).
+ * URLs are resolved through the request body, not the query string (#732).
  *
- * The first production backfill lost 228 of 174,466 answers to this — the ones
- * carrying the most citations, averaging 16 KB of URL text against 1.2 KB for
- * the answers that succeeded. The failure was logged and the answer skipped,
- * so the totals looked healthy. These tests pin the batching rather than the
- * limit, since the limit is the server's to enforce.
+ * Two versions of this failed before: an unbounded `.in()` filter, then a
+ * chunked one. Both put the URLs in the URI, and both lost exactly the answers
+ * carrying the most citations — the last of them 182 of 174,466. These tests
+ * pin the shape that removed the class rather than a chunk size, which was
+ * only ever a guess at someone else's limit.
  */
-describe('persistCitationRows url lookups', () => {
-  /** Records every `.in()` batch so the test can assert on their sizes. */
-  function makeClient({ existing = new Map() } = {}) {
-    const batches = [];
-    let nextId = existing.size + 1;
-
+describe('persistCitationRows url resolution', () => {
+  /** Records the arguments every rpc call was made with. */
+  function makeClient({ ids = null } = {}) {
+    const calls = [];
     const client = {
-      from(table) {
-        if (table === 'citation_urls') {
-          return {
-            select: () => ({
-              in: (_col, urls) => {
-                batches.push(urls.length);
-                return Promise.resolve({
-                  data: urls
-                    .filter((u) => existing.has(u))
-                    .map((u) => ({ id: existing.get(u), url: u })),
-                  error: null,
-                });
-              },
-            }),
-            upsert: (rows) => {
-              for (const row of rows) if (!existing.has(row.url)) existing.set(row.url, nextId++);
-              return Promise.resolve({ error: null });
-            },
-          };
-        }
-        // prompt_result_citations: `.upsert().select()` returns the rows that
-        // were actually inserted, which is what persistCitationRows counts.
-        return {
-          upsert: (rows) => ({
-            select: () =>
-              Promise.resolve({ data: rows.map((r) => ({ position: r.position })), error: null }),
-          }),
-        };
+      rpc: (fn, args) => {
+        calls.push({ fn, args });
+        const rows = args.p_urls.map((u, i) => ({
+          url: u.url,
+          id: ids ? ids.get(u.url) : i + 1,
+        }));
+        return Promise.resolve({ data: rows, error: null });
       },
+      from: () => ({
+        upsert: (rows) => ({
+          select: () => Promise.resolve({ data: rows, error: null }),
+        }),
+      }),
     };
-    return { client, batches };
+    return { client, calls };
   }
 
   async function run(citations, opts) {
-    const { client, batches } = makeClient(opts);
+    const { client, calls } = makeClient(opts);
     vi.resetModules();
     vi.doMock('../config/supabase.js', () => ({ default: client }));
     const { persistCitationRows } = await import('./citation-rows.js');
@@ -170,33 +151,49 @@ describe('persistCitationRows url lookups', () => {
       createdAt: '2026-08-19T00:00:00Z',
       citations,
     });
-    return { written, batches };
+    return { written, calls };
   }
 
-  it('splits a large URL set into bounded batches', async () => {
+  it('resolves every URL in a single call, however many there are', async () => {
     const citations = Array.from({ length: 250 }, (_, i) => ({ url: `https://a.com/${i}` }));
-    const { written, batches } = await run(citations);
+    const { written, calls } = await run(citations);
 
     expect(written).toBe(250);
-    // 250 unknown URLs: three batches to look them up, three to read them back.
-    expect(batches).toEqual([100, 100, 50, 100, 100, 50]);
-    expect(Math.max(...batches)).toBeLessThanOrEqual(100);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].fn).toBe('citation_url_ids');
+    expect(calls[0].args.p_urls).toHaveLength(250);
   });
 
-  it('stores every citation of an answer far larger than one batch', async () => {
-    // The largest answer in production carries 191 citations.
+  it('stores every citation of an answer far larger than typical', async () => {
+    // The largest answer in production carries 191 citations; the answers that
+    // used to fail carried 22 to 51.
     const citations = Array.from({ length: 191 }, (_, i) => ({ url: `https://b.com/${i}` }));
     const { written } = await run(citations);
     expect(written).toBe(191);
   });
 
-  it('makes no second round trip when every URL is already known', async () => {
-    const existing = new Map(Array.from({ length: 120 }, (_, i) => [`https://c.com/${i}`, i + 1]));
-    const citations = Array.from({ length: 120 }, (_, i) => ({ url: `https://c.com/${i}` }));
-    const { written, batches } = await run(citations, { existing });
+  it('sends each distinct URL once, with the fields the dictionary stores', async () => {
+    const { calls } = await run([
+      { url: 'https://a.com/x', title: 'X' },
+      { url: 'https://a.com/x', title: 'X again' },
+      { url: 'https://b.com/y' },
+    ]);
 
-    expect(written).toBe(120);
-    expect(batches).toEqual([100, 20]); // lookup only — nothing to insert
+    expect(calls[0].args.p_urls).toEqual([
+      { url: 'https://a.com/x', domain: 'a.com', title: 'X' },
+      { url: 'https://b.com/y', domain: 'b.com', title: null },
+    ]);
+  });
+
+  // A citation whose URL the function did not return an id for is dropped
+  // rather than sent with url_id undefined, which the insert would reject and
+  // take the answer's other citations down with it.
+  it('keeps the citations it can resolve when one id is missing', async () => {
+    const ids = new Map([['https://a.com/1', 7]]);
+    const { written } = await run([{ url: 'https://a.com/1' }, { url: 'https://a.com/2' }], {
+      ids,
+    });
+    expect(written).toBe(1);
   });
 });
 
@@ -221,21 +218,19 @@ describe('persistCitationRows return contract', () => {
     });
   }
 
-  const urlTable = (inserted) => ({
-    select: () => ({
-      in: (_c, urls) =>
-        Promise.resolve({ data: urls.map((u, i) => ({ id: i + 1, url: u })), error: null }),
-    }),
-    upsert: () => Promise.resolve({ error: null }),
-    _inserted: inserted,
-  });
+  /** Every URL resolves to an id, so the outcome depends only on the insert. */
+  const resolvesAll = (_fn, args) =>
+    Promise.resolve({
+      data: args.p_urls.map((u, i) => ({ url: u.url, id: i + 1 })),
+      error: null,
+    });
 
   it('reports how many rows were actually inserted', async () => {
     const client = {
-      from: (t) =>
-        t === 'citation_urls'
-          ? urlTable()
-          : { upsert: (rows) => ({ select: () => Promise.resolve({ data: rows, error: null }) }) },
+      rpc: resolvesAll,
+      from: () => ({
+        upsert: (rows) => ({ select: () => Promise.resolve({ data: rows, error: null }) }),
+      }),
     };
     expect(await withClient(client, [{ url: 'https://a.com/1' }, { url: 'https://a.com/2' }])).toBe(
       2,
@@ -244,39 +239,38 @@ describe('persistCitationRows return contract', () => {
 
   it('returns 0 — not a failure — when every row was already present', async () => {
     const client = {
-      from: (t) =>
-        t === 'citation_urls'
-          ? urlTable()
-          : { upsert: () => ({ select: () => Promise.resolve({ data: [], error: null }) }) },
+      rpc: resolvesAll,
+      from: () => ({
+        upsert: () => ({ select: () => Promise.resolve({ data: [], error: null }) }),
+      }),
     };
     expect(await withClient(client, [{ url: 'https://a.com/1' }])).toBe(0);
   });
 
   it('returns null when the write fails', async () => {
     const client = {
-      from: (t) =>
-        t === 'citation_urls'
-          ? urlTable()
-          : {
-              upsert: () => ({
-                select: () => Promise.resolve({ data: null, error: { message: 'boom' } }),
-              }),
-            },
+      rpc: resolvesAll,
+      from: () => ({
+        upsert: () => ({
+          select: () => Promise.resolve({ data: null, error: { message: 'boom' } }),
+        }),
+      }),
     };
     expect(await withClient(client, [{ url: 'https://a.com/1' }])).toBeNull();
   });
 
-  it('returns null when the URL lookup fails', async () => {
+  it('returns null when URL resolution fails', async () => {
     const client = {
+      rpc: () => Promise.resolve({ data: null, error: { message: 'boom' } }),
       from: () => ({
-        select: () => ({ in: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }),
+        upsert: () => ({ select: () => Promise.resolve({ data: [], error: null }) }),
       }),
     };
     expect(await withClient(client, [{ url: 'https://a.com/1' }])).toBeNull();
   });
 
   it('returns 0 for an answer with no storable citations', async () => {
-    const client = { from: () => ({}) };
+    const client = { rpc: resolvesAll, from: () => ({}) };
     expect(await withClient(client, [{ url: '/relative' }])).toBe(0);
   });
 });
