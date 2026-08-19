@@ -45,6 +45,12 @@ const FORCE = process.argv.includes('--force');
  */
 const DONE_LOOKUP_CHUNK = 200;
 
+/**
+ * PostgREST's own default page size. Reading in exactly this size means a
+ * short page is an unambiguous end-of-results signal.
+ */
+const PAGE_LIMIT = 1000;
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
@@ -88,8 +94,16 @@ async function fetchBatch(cursor) {
  * The upsert makes re-running safe but not cheap: it skips the write and still
  * pays for resolving every URL of every answer first. On the full history that
  * is ~18 answers a second, so a re-run to repair a few hundred answers costs
- * most of three hours. One extra query per page — ids only, no jsonb — turns
- * that into minutes.
+ * most of three hours. One lookup per page — ids only, no jsonb — turns that
+ * into minutes.
+ *
+ * Paginated, because the answer is one row per *citation* rather than per
+ * answer: 200 answers matched 1,591 rows in production, and PostgREST caps an
+ * un-paginated select at 1,000. The first version read only that first page,
+ * so every answer past it looked unstored and was reprocessed — the upsert
+ * then discarded the writes as duplicates, and the run reported thousands of
+ * citations written while the table did not move at all. Same trap as #714
+ * and #716.
  */
 async function alreadyStored(ids) {
   if (ids.length === 0) return new Set();
@@ -97,12 +111,20 @@ async function alreadyStored(ids) {
   const done = new Set();
   for (let i = 0; i < ids.length; i += DONE_LOOKUP_CHUNK) {
     const slice = ids.slice(i, i + DONE_LOOKUP_CHUNK);
-    const { data, error } = await supabaseAdmin
-      .from('prompt_result_citations')
-      .select('prompt_result_id')
-      .in('prompt_result_id', slice);
-    if (error) throw new Error(`stored lookup: ${error.message}`);
-    for (const row of data ?? []) done.add(row.prompt_result_id);
+
+    for (let offset = 0; ; offset += PAGE_LIMIT) {
+      const { data, error } = await supabaseAdmin
+        .from('prompt_result_citations')
+        .select('prompt_result_id')
+        .in('prompt_result_id', slice)
+        .order('prompt_result_id', { ascending: true })
+        .order('position', { ascending: true })
+        .range(offset, offset + PAGE_LIMIT - 1);
+      if (error) throw new Error(`stored lookup: ${error.message}`);
+
+      for (const row of data ?? []) done.add(row.prompt_result_id);
+      if ((data ?? []).length < PAGE_LIMIT) break;
+    }
   }
   return done;
 }
@@ -159,14 +181,14 @@ async function main() {
         citations: raw,
       });
       answers += 1;
-      citations += written;
+      citations += written ?? 0;
+      // Three outcomes, kept apart on purpose. No storable citations is normal.
+      // A failure is not, and it is reported by returning null rather than 0 —
+      // 0 legitimately means "every row was already there", which is what
+      // `--force` produces on every answer it revisits. The first production
+      // run lost 228 answers to a fault the totals alone made look healthy.
       if (expected === 0) empty += 1;
-      // An answer that had citations and stored none wrote nothing at all:
-      // persistCitationRows is best-effort and reports failure by returning 0.
-      // Counting those separately is what makes a systematic fault visible —
-      // the first production run lost 228 answers this way and the totals
-      // alone looked healthy.
-      else if (written === 0) failed.push(row.id);
+      else if (written === null) failed.push(row.id);
     }
 
     const last = batch[batch.length - 1];

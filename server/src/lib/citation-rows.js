@@ -159,7 +159,10 @@ async function resolveUrlIds(entries) {
  * so anything missed is recoverable by re-running the backfill over the
  * affected window.
  *
- * @returns {Promise<number>} rows written (0 when there is nothing to write, or on failure)
+ * @returns {Promise<number|null>} rows actually inserted, or null if the write
+ *   failed. Zero and null are deliberately different answers: zero means every
+ *   row was already there, null means nothing was stored and the caller should
+ *   retry. Conflating them is how a broken run reads as a quiet one.
  */
 export async function persistCitationRows({ promptResultId, brandId, createdAt, citations }) {
   const entries = normalizeCitations(citations);
@@ -183,17 +186,23 @@ export async function persistCitationRows({ promptResultId, brandId, createdAt, 
     // Idempotent on (prompt_result_id, position): a retried insert, a
     // re-delivered webhook, or a re-run of the backfill over the same answer
     // adds nothing and errors on nothing.
-    const { error } = await supabaseAdmin
+    //
+    // `.select()` so the return value is what was actually inserted rather
+    // than what was attempted. The difference matters: a backfill run once
+    // reported thousands of citations written while the table did not move,
+    // because every one of them was silently discarded as a duplicate.
+    const { data, error } = await supabaseAdmin
       .from('prompt_result_citations')
-      .upsert(rows, { onConflict: 'prompt_result_id,position', ignoreDuplicates: true });
+      .upsert(rows, { onConflict: 'prompt_result_id,position', ignoreDuplicates: true })
+      .select('position');
     if (error) throw new Error(error.message);
 
-    return rows.length;
+    return (data ?? []).length;
   } catch (err) {
     logger.error(
       { err, promptResultId, brandId, citationCount: entries.length },
       '[citations] failed to persist citation rows',
     );
-    return 0;
+    return null;
   }
 }

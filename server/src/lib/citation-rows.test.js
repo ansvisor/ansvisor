@@ -146,7 +146,14 @@ describe('persistCitationRows url lookups', () => {
             },
           };
         }
-        return { upsert: () => Promise.resolve({ error: null }) };
+        // prompt_result_citations: `.upsert().select()` returns the rows that
+        // were actually inserted, which is what persistCitationRows counts.
+        return {
+          upsert: (rows) => ({
+            select: () =>
+              Promise.resolve({ data: rows.map((r) => ({ position: r.position })), error: null }),
+          }),
+        };
       },
     };
     return { client, batches };
@@ -190,5 +197,86 @@ describe('persistCitationRows url lookups', () => {
 
     expect(written).toBe(120);
     expect(batches).toEqual([100, 20]); // lookup only — nothing to insert
+  });
+});
+
+/**
+ * Zero and null are different answers (#732).
+ *
+ * A backfill run once reported thousands of citations written while the table
+ * did not move, because every row was discarded as a duplicate and the count
+ * reported what had been attempted. The caller has to be able to tell "already
+ * there" from "nothing stored, retry".
+ */
+describe('persistCitationRows return contract', () => {
+  async function withClient(client, citations) {
+    vi.resetModules();
+    vi.doMock('../config/supabase.js', () => ({ default: client }));
+    const { persistCitationRows } = await import('./citation-rows.js');
+    return persistCitationRows({
+      promptResultId: 'r1',
+      brandId: 'b1',
+      createdAt: '2026-08-19T00:00:00Z',
+      citations,
+    });
+  }
+
+  const urlTable = (inserted) => ({
+    select: () => ({
+      in: (_c, urls) =>
+        Promise.resolve({ data: urls.map((u, i) => ({ id: i + 1, url: u })), error: null }),
+    }),
+    upsert: () => Promise.resolve({ error: null }),
+    _inserted: inserted,
+  });
+
+  it('reports how many rows were actually inserted', async () => {
+    const client = {
+      from: (t) =>
+        t === 'citation_urls'
+          ? urlTable()
+          : { upsert: (rows) => ({ select: () => Promise.resolve({ data: rows, error: null }) }) },
+    };
+    expect(await withClient(client, [{ url: 'https://a.com/1' }, { url: 'https://a.com/2' }])).toBe(
+      2,
+    );
+  });
+
+  it('returns 0 — not a failure — when every row was already present', async () => {
+    const client = {
+      from: (t) =>
+        t === 'citation_urls'
+          ? urlTable()
+          : { upsert: () => ({ select: () => Promise.resolve({ data: [], error: null }) }) },
+    };
+    expect(await withClient(client, [{ url: 'https://a.com/1' }])).toBe(0);
+  });
+
+  it('returns null when the write fails', async () => {
+    const client = {
+      from: (t) =>
+        t === 'citation_urls'
+          ? urlTable()
+          : {
+              upsert: () => ({
+                select: () => Promise.resolve({ data: null, error: { message: 'boom' } }),
+              }),
+            },
+    };
+    expect(await withClient(client, [{ url: 'https://a.com/1' }])).toBeNull();
+  });
+
+  it('returns null when the URL lookup fails', async () => {
+    const client = {
+      from: () => ({
+        select: () => ({ in: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }),
+      }),
+    };
+    expect(await withClient(client, [{ url: 'https://a.com/1' }])).toBeNull();
+  });
+
+  it('returns 0 for an answer with no storable citations', async () => {
+    const client = { from: () => ({}) };
+    expect(await withClient(client, [{ url: '/relative' }])).toBe(0);
   });
 });
