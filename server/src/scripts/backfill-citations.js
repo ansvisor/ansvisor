@@ -10,6 +10,11 @@
  *   - CITATIONS_BACKFILL_PAUSE   milliseconds to wait between batches
  *                                (default 100)
  *
+ * Pass `--force` to reprocess answers that already have rows. Only needed when
+ * the stored rows are wrong rather than missing — a changed normalization rule,
+ * say. Without it, answers already covered are skipped without resolving their
+ * URLs, which is what makes a repair run take minutes instead of hours.
+ *
  * Idempotent and restartable. `persistCitationRows` upserts on
  * `(prompt_result_id, position)` with `ignoreDuplicates`, so re-running skips
  * what is already there, and the walk is keyset-based on `(created_at, id)`
@@ -31,6 +36,14 @@ const PAUSE_MS = Number.parseInt(process.env.CITATIONS_BACKFILL_PAUSE ?? '100', 
 const DAYS = process.env.CITATIONS_BACKFILL_DAYS
   ? Number.parseInt(process.env.CITATIONS_BACKFILL_DAYS, 10)
   : null;
+const FORCE = process.argv.includes('--force');
+
+/**
+ * A `.in()` filter travels in the query string, so this is chunked for the
+ * same reason the URL lookups in citation-rows.js are — uuids are a fixed 36
+ * characters, so 200 of them is a comfortable 8 KB.
+ */
+const DONE_LOOKUP_CHUNK = 200;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -44,7 +57,10 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function fetchBatch(cursor) {
   let query = supabaseAdmin
     .from('prompt_results')
-    .select('id, brand_id, created_at, citations')
+    // Deliberately without `citations`: the jsonb is the expensive half of the
+    // row, and on a repair run almost every answer in the page is skipped. It
+    // is fetched afterwards, only for the answers that still need writing.
+    .select('id, brand_id, created_at')
     .not('citations', 'is', null)
     .order('created_at', { ascending: true })
     .order('id', { ascending: true })
@@ -66,12 +82,53 @@ async function fetchBatch(cursor) {
   return data ?? [];
 }
 
+/**
+ * Which of these answers already have citation rows.
+ *
+ * The upsert makes re-running safe but not cheap: it skips the write and still
+ * pays for resolving every URL of every answer first. On the full history that
+ * is ~18 answers a second, so a re-run to repair a few hundred answers costs
+ * most of three hours. One extra query per page — ids only, no jsonb — turns
+ * that into minutes.
+ */
+async function alreadyStored(ids) {
+  if (ids.length === 0) return new Set();
+
+  const done = new Set();
+  for (let i = 0; i < ids.length; i += DONE_LOOKUP_CHUNK) {
+    const slice = ids.slice(i, i + DONE_LOOKUP_CHUNK);
+    const { data, error } = await supabaseAdmin
+      .from('prompt_result_citations')
+      .select('prompt_result_id')
+      .in('prompt_result_id', slice);
+    if (error) throw new Error(`stored lookup: ${error.message}`);
+    for (const row of data ?? []) done.add(row.prompt_result_id);
+  }
+  return done;
+}
+
+/** The citation arrays for a specific set of answers, keyed by answer id. */
+async function fetchCitations(ids) {
+  const byId = new Map();
+  for (let i = 0; i < ids.length; i += DONE_LOOKUP_CHUNK) {
+    const slice = ids.slice(i, i + DONE_LOOKUP_CHUNK);
+    const { data, error } = await supabaseAdmin
+      .from('prompt_results')
+      .select('id, citations')
+      .in('id', slice);
+    if (error) throw new Error(`citations fetch: ${error.message}`);
+    for (const row of data ?? []) byId.set(row.id, row.citations);
+  }
+  return byId;
+}
+
 async function main() {
   const startedAt = Date.now();
   let cursor = null;
   let answers = 0;
   let citations = 0;
   let empty = 0;
+  let skipped = 0;
   const failed = [];
 
   console.log(
@@ -83,13 +140,23 @@ async function main() {
     const batch = await fetchBatch(cursor);
     if (batch.length === 0) break;
 
-    for (const row of batch) {
-      const expected = Array.isArray(row.citations) ? row.citations.length : 0;
+    // `--force` exists for the case where the rows are present but wrong — a
+    // changed normalization rule, say — and every answer has to be rewritten.
+    const skip = FORCE ? new Set() : await alreadyStored(batch.map((row) => row.id));
+    const todo = batch.filter((row) => !skip.has(row.id));
+    skipped += batch.length - todo.length;
+    answers += batch.length - todo.length;
+
+    const citationsById = await fetchCitations(todo.map((row) => row.id));
+
+    for (const row of todo) {
+      const raw = citationsById.get(row.id);
+      const expected = Array.isArray(raw) ? raw.length : 0;
       const written = await persistCitationRows({
         promptResultId: row.id,
         brandId: row.brand_id,
         createdAt: row.created_at,
-        citations: row.citations,
+        citations: raw,
       });
       answers += 1;
       citations += written;
@@ -107,8 +174,8 @@ async function main() {
 
     const elapsed = Math.round((Date.now() - startedAt) / 1000);
     console.log(
-      `  ${answers} answers · ${citations} citations · ${empty} with none · ` +
-        `${failed.length} failed · ${elapsed}s · at ${last.created_at}`,
+      `  ${answers} answers · ${skipped} already stored · ${citations} citations · ` +
+        `${empty} with none · ${failed.length} failed · ${elapsed}s · at ${last.created_at}`,
     );
 
     if (batch.length < BATCH) break;
@@ -117,8 +184,8 @@ async function main() {
 
   const elapsed = Math.round((Date.now() - startedAt) / 1000);
   console.log(
-    `\nDone. ${answers} answers scanned, ${citations} citation rows written, ` +
-      `${empty} answers had none, ${elapsed}s.`,
+    `\nDone. ${answers} answers scanned, ${skipped} already stored, ` +
+      `${citations} citation rows written, ${empty} answers had none, ${elapsed}s.`,
   );
 
   if (failed.length > 0) {
