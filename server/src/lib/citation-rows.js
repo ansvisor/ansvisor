@@ -74,6 +74,43 @@ export function normalizeCitations(rawCitations) {
 }
 
 /**
+ * URLs looked up per request.
+ *
+ * A PostgREST `.in()` filter is spelled out in the query string, so the whole
+ * list travels in the request line — which has a length limit that a plain
+ * insert does not. The first version sent every URL of an answer at once and
+ * silently lost the answers that most needed storing: 228 of 174,466 in the
+ * first production backfill, averaging 45 citations and 16 KB of URL text
+ * each, against 12 citations and 1.2 KB for the ones that succeeded. The
+ * failure surfaced as a logged error and a skipped answer, not as a crash.
+ *
+ * Sized so that even pathological URLs stay well inside the limit: 100 URLs
+ * at the observed 2,048-character ceiling is roughly 200 KB, and the longest
+ * single answer seen carries 191 citations.
+ */
+const URL_LOOKUP_CHUNK = 100;
+
+function chunk(items, size) {
+  const out = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/** `select id, url where url in (...)`, split across as many requests as it takes. */
+async function selectUrlIds(urls, label) {
+  const ids = new Map();
+  for (const batch of chunk(urls, URL_LOOKUP_CHUNK)) {
+    const { data, error } = await supabaseAdmin
+      .from('citation_urls')
+      .select('id, url')
+      .in('url', batch);
+    if (error) throw new Error(`citation url ${label}: ${error.message}`);
+    for (const row of data ?? []) ids.set(row.url, row.id);
+  }
+  return ids;
+}
+
+/**
  * Resolve URLs to dictionary ids, inserting the ones not seen before.
  *
  * Two steps rather than one upsert-returning: `ignoreDuplicates` does not
@@ -93,16 +130,12 @@ async function resolveUrlIds(entries) {
   const urls = [...byUrl.keys()];
   if (urls.length === 0) return new Map();
 
-  const { data: known, error: knownErr } = await supabaseAdmin
-    .from('citation_urls')
-    .select('id, url')
-    .in('url', urls);
-  if (knownErr) throw new Error(`citation url lookup: ${knownErr.message}`);
-
-  const ids = new Map((known ?? []).map((row) => [row.url, row.id]));
+  const ids = await selectUrlIds(urls, 'lookup');
   const missing = urls.filter((url) => !ids.has(url));
 
   if (missing.length > 0) {
+    // The insert itself carries its payload in the body, not the query string,
+    // so it needs no chunking — only the `.in()` reads around it do.
     const { error: insertErr } = await supabaseAdmin.from('citation_urls').upsert(
       missing.map((url) => {
         const entry = byUrl.get(url);
@@ -112,12 +145,7 @@ async function resolveUrlIds(entries) {
     );
     if (insertErr) throw new Error(`citation url insert: ${insertErr.message}`);
 
-    const { data: added, error: addedErr } = await supabaseAdmin
-      .from('citation_urls')
-      .select('id, url')
-      .in('url', missing);
-    if (addedErr) throw new Error(`citation url re-read: ${addedErr.message}`);
-    for (const row of added ?? []) ids.set(row.url, row.id);
+    for (const [url, id] of await selectUrlIds(missing, 're-read')) ids.set(url, id);
   }
 
   return ids;

@@ -72,6 +72,7 @@ async function main() {
   let answers = 0;
   let citations = 0;
   let empty = 0;
+  const failed = [];
 
   console.log(
     `Backfilling citations — batch ${BATCH}, pause ${PAUSE_MS}ms` +
@@ -83,6 +84,7 @@ async function main() {
     if (batch.length === 0) break;
 
     for (const row of batch) {
+      const expected = Array.isArray(row.citations) ? row.citations.length : 0;
       const written = await persistCitationRows({
         promptResultId: row.id,
         brandId: row.brand_id,
@@ -91,7 +93,13 @@ async function main() {
       });
       answers += 1;
       citations += written;
-      if (written === 0) empty += 1;
+      if (expected === 0) empty += 1;
+      // An answer that had citations and stored none wrote nothing at all:
+      // persistCitationRows is best-effort and reports failure by returning 0.
+      // Counting those separately is what makes a systematic fault visible —
+      // the first production run lost 228 answers this way and the totals
+      // alone looked healthy.
+      else if (written === 0) failed.push(row.id);
     }
 
     const last = batch[batch.length - 1];
@@ -99,7 +107,8 @@ async function main() {
 
     const elapsed = Math.round((Date.now() - startedAt) / 1000);
     console.log(
-      `  ${answers} answers · ${citations} citations · ${empty} with none · ${elapsed}s · at ${last.created_at}`,
+      `  ${answers} answers · ${citations} citations · ${empty} with none · ` +
+        `${failed.length} failed · ${elapsed}s · at ${last.created_at}`,
     );
 
     if (batch.length < BATCH) break;
@@ -111,6 +120,17 @@ async function main() {
     `\nDone. ${answers} answers scanned, ${citations} citation rows written, ` +
       `${empty} answers had none, ${elapsed}s.`,
   );
+
+  if (failed.length > 0) {
+    // Loud on purpose. These answers have citations and stored none, so the
+    // table is short by however many they carried — and re-running the script
+    // is the fix, since everything else is skipped as already present.
+    console.error(
+      `\n${failed.length} answer(s) had citations but stored none. Re-run to retry them.`,
+    );
+    console.error(`First few: ${failed.slice(0, 10).join(', ')}`);
+    process.exitCode = 1;
+  }
 }
 
 main().catch((err) => {
