@@ -288,7 +288,6 @@ export default function CitationUrlDetailPage() {
         onChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
         platforms={platformOptions}
         regions={[]}
-        showCategoryToggles={false}
       />
 
       {loading ? (

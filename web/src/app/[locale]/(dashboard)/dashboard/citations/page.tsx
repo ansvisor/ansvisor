@@ -28,6 +28,7 @@ import { Link } from '@/i18n/navigation';
 import { AddCompetitorButton } from '@/components/citations/add-competitor-button';
 import {
   CitationsFilterBar,
+  SourceScopeFilter,
   DEFAULT_CITATIONS_FILTERS as DEFAULT_FILTERS,
   buildPlatformOptions,
   buildCitationDetailHref,
@@ -1166,6 +1167,17 @@ export default function CitationsPage() {
               <CardTitle className="text-base">{t('sourcesTitle')}</CardTitle>
             </CardHeader>
             <CardContent>
+              {/* Only Domains and URLs are scoped by it — Competitor Gaps and
+                  Source Types read the same data whatever it says — so it
+                  appears with those two rather than standing over all four
+                  claiming to narrow them. */}
+              {(sourceTab === 'domains' || sourceTab === 'urls') && (
+                <SourceScopeFilter
+                  value={filters.sourceScope}
+                  onChange={(sourceScope) => setFilters((f) => ({ ...f, sourceScope }))}
+                  className="mb-4"
+                />
+              )}
               <Tabs
                 value={sourceTab}
                 onValueChange={(v) => setSourceTab(v as 'domains' | 'urls' | 'gaps' | 'types')}

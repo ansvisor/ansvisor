@@ -9,11 +9,11 @@
 
 import { useMemo } from 'react';
 import type { Topic } from '@/types';
+import { cn } from '@/lib/utils';
 import type { CitationsDatePreset } from '@/lib/actions/citations';
 import { MODEL_PROVIDER_LABELS, PLATFORM_LABELS } from '@/config/platform-labels';
 import { getAIProviderDisplayName, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
-import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -56,6 +56,59 @@ export const DEFAULT_CITATIONS_FILTERS: CitationsUIFilters = {
   prompt: '',
   sourceScope: 'all',
 };
+
+export type SourceScope = CitationsUIFilters['sourceScope'];
+
+const SOURCE_SCOPES: { value: SourceScope; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'own', label: 'Brand' },
+  { value: 'competitors', label: 'Competitors' },
+  { value: 'third_party', label: 'Third-Party' },
+];
+
+/**
+ * Which sources the table below covers.
+ *
+ * It belongs with the table rather than in the filter bar, because it scopes
+ * only that table: the KPIs above count every citation whatever this says, and
+ * Competitor Gaps and Source Types ignore it outright. Sitting among the
+ * page-wide filters it read as another one of them, and as a dropdown whose
+ * value defaulted to "All" the trigger was the only label on screen — the word
+ * "All" with nothing saying all of what.
+ *
+ * Shaped like the date-range control it now sits near, so the two read as the
+ * same kind of choice.
+ */
+export function SourceScopeFilter({
+  value,
+  onChange,
+  className,
+}: {
+  value: SourceScope;
+  onChange: (scope: SourceScope) => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn('flex flex-wrap gap-2', className)} role="group" aria-label="Sources">
+      {SOURCE_SCOPES.map((scope) => (
+        <button
+          key={scope.value}
+          type="button"
+          onClick={() => onChange(scope.value)}
+          aria-pressed={value === scope.value}
+          className={cn(
+            'rounded-md border px-3 py-1.5 text-xs font-medium transition-colors',
+            value === scope.value
+              ? 'border-primary bg-primary text-primary-foreground'
+              : 'bg-card text-foreground hover:bg-muted',
+          )}
+        >
+          {scope.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export interface PromptOption {
   id: string;
@@ -171,7 +224,6 @@ export function CitationsFilterBar({
   prompts = [],
   platforms,
   regions,
-  showCategoryToggles = true,
 }: {
   filters: CitationsUIFilters;
   onChange: (patch: Partial<CitationsUIFilters>) => void;
@@ -179,8 +231,6 @@ export function CitationsFilterBar({
   prompts?: PromptOption[];
   platforms: PlatformOption[];
   regions: string[];
-  /** Hide the own/competitor domain toggles (meaningless on a single URL). */
-  showCategoryToggles?: boolean;
 }) {
   // base-ui Combobox needs `{ value, label }` shaped items so it can use the
   // built-in filter and display logic without custom item-to-string helpers.
@@ -319,26 +369,6 @@ export function CitationsFilterBar({
           </SelectContent>
         </Select>
       </div>
-
-      {showCategoryToggles && (
-        <div className="flex items-center gap-2 pb-0.5">
-          <Select
-            value={filters.sourceScope}
-            onValueChange={(value) => onChange({ sourceScope: value ?? 'all' })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Sources" />
-            </SelectTrigger>
-
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="own">Brand</SelectItem>
-              <SelectItem value="competitors">Competitors</SelectItem>
-              <SelectItem value="third_party">Third-party</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      )}
     </div>
   );
 }
