@@ -10,9 +10,37 @@ import {
 import supabaseAdmin from '../config/supabase.js';
 import { assertBrandAccess, assertPromptAccess } from '../lib/access.js';
 import { extractIntentKeywords } from '../lib/intent-extraction.js';
-import { mapVolumeRow, fetchAndSaveVolumes, analyzeBrandVolumes } from '../lib/volume-analysis.js';
+import {
+  mapVolumeRow,
+  fetchAndSaveVolumes,
+  analyzeBrandVolumes,
+  getVolumeProgress,
+} from '../lib/volume-analysis.js';
+import logger from '../lib/logger.js';
 
 const router = Router();
+
+/**
+ * Brands with a volume analysis in flight in this process. The work outlives
+ * the request that starts it, so nothing else would stop a double-click from
+ * starting a second pass over the same prompts.
+ */
+const runningBrands = new Set();
+
+/**
+ * Claim the brand, or report that someone already holds it. Claiming and
+ * testing are one step on purpose: a check followed by an await leaves a gap
+ * two clicks can both pass through.
+ */
+function claimVolumeAnalysis(brandId) {
+  if (runningBrands.has(brandId)) return false;
+  runningBrands.add(brandId);
+  return true;
+}
+
+function releaseVolumeAnalysis(brandId) {
+  runningBrands.delete(brandId);
+}
 
 /**
  * POST /api/volumes/analyze
@@ -110,61 +138,80 @@ router.post('/analyze', requireFeature('prompt_volumes'), async (req, res) => {
 
 /**
  * POST /api/volumes/analyze-batch
- * Batch analysis. Uses saved keywords when available, calls LLM only for new prompts.
- * Pass force=true to re-generate all keywords via LLM.
+ * Body: { brandId, force? }
+ *
+ * Analysing a brand takes far longer than a request should be held open: each
+ * prompt costs an LLM call plus a DataForSEO call and they run in order, which
+ * measures at a 6.4s median — roughly eleven minutes for a 100-prompt brand.
+ * So this starts the work and returns 202 immediately; the client follows
+ * GET /status/:brandId. The previous shape took the prompts inline and refused
+ * more than 50 of them, which made the Prompts page offer a button that a
+ * brand of that size could never complete.
+ *
+ * force=true re-generates keywords for every active prompt; the default only
+ * fills in prompts that have no volumes yet.
  */
 router.post('/analyze-batch', requireFeature('prompt_volumes'), async (req, res) => {
   try {
     const { remaining, orgId } = await enforceVolumeQuota(req.user.id);
 
-    const { prompts, locationCode, languageCode, force } = req.body;
-
-    if (!Array.isArray(prompts) || prompts.length === 0) {
-      return res.status(400).json({ error: 'prompts array is required and must not be empty' });
-    }
-
-    if (prompts.length > 50) {
-      return res.status(400).json({ error: 'Maximum 50 prompts per batch' });
-    }
-
-    const promptIds = prompts.map((p) => p.promptId);
-
-    await assertPromptAccess(promptIds, req.user.id);
-
-    const { data: brandRow, error: brandError } = await supabaseAdmin
-      .from('prompts')
-      .select('prompt_sets!inner(brands!inner(id))')
-      .in('id', promptIds)
-      .limit(1)
-      .maybeSingle();
-
-    if (brandError) {
-      throw new Error(`Failed to resolve brand: ${brandError.message}`);
-    }
-    const brandId = brandRow?.prompt_sets?.brands?.id;
+    const { brandId, locationCode, languageCode, force } = req.body;
 
     if (!brandId) {
-      return res.status(400).json({
-        error: 'Unable to resolve brand from prompts',
-      });
+      return res.status(400).json({ error: 'brandId is required' });
     }
 
-    const results = await analyzeBrandVolumes(brandId, {
-      promptIds,
+    await assertBrandAccess(brandId, req.user.id);
+
+    // A second click while the first run is still going would analyse every
+    // prompt twice and bill the quota twice.
+    if (!claimVolumeAnalysis(brandId)) {
+      return res.status(202).json({ started: 0, running: true, remaining });
+    }
+
+    let started;
+    try {
+      const { total, analyzed } = await getVolumeProgress(brandId);
+      started = force ? total : total - analyzed;
+    } catch (err) {
+      releaseVolumeAnalysis(brandId);
+      throw err;
+    }
+
+    if (started <= 0) {
+      releaseVolumeAnalysis(brandId);
+      return res.json({ started: 0, running: false, remaining });
+    }
+
+    analyzeBrandVolumes(brandId, {
       locationCode,
       languageCode,
       force,
-    });
-    const successCount = results.filter((r) => !r.error).length;
-    if (successCount > 0 && orgId) {
-      await supabaseAdmin.from('volume_usage').insert({
-        organization_id: orgId,
-        action: 'analyze-batch',
-        prompt_count: successCount,
-      });
-    }
+      onlyMissing: !force,
+    })
+      .then(async (results) => {
+        // Quota counts runs, not prompts, so this stays one row per click
+        // however many prompts the run covered.
+        const successCount = results.filter((r) => !r.error).length;
+        if (successCount > 0 && orgId) {
+          await supabaseAdmin.from('volume_usage').insert({
+            organization_id: orgId,
+            action: 'analyze-batch',
+            prompt_count: successCount,
+          });
+        }
+        logger.info({ brandId, analyzed: successCount, of: results.length }, 'volume run finished');
+      })
+      .catch((err) => {
+        logger.error({ err, brandId }, 'batch volume analysis failed');
+      })
+      .finally(() => releaseVolumeAnalysis(brandId));
 
-    return res.json({ results, remaining: remaining === -1 ? -1 : remaining - 1 });
+    return res.status(202).json({
+      started,
+      running: true,
+      remaining: remaining === -1 ? -1 : remaining - 1,
+    });
   } catch (error) {
     if (error instanceof PlanLimitError) {
       return res.status(error.statusCode).json({
@@ -173,11 +220,41 @@ router.post('/analyze-batch', requireFeature('prompt_volumes'), async (req, res)
         message: error.message,
       });
     }
-    req.log.error({ err: error }, 'batch volume analysis error');
+    logger.error({ err: error }, 'batch volume analysis error');
     return res.status(error.status || 500).json({
       error: 'Failed to analyze prompt volumes',
       details: error.message,
     });
+  }
+});
+
+/**
+ * GET /api/volumes/status/:brandId
+ * Progress of a running analysis: { running, total, analyzed }.
+ *
+ * `running` is per-process, so a server restart mid-run reports false while
+ * rows are still being written. The client treats that as "stopped" and shows
+ * what actually landed, which is the honest reading — the counts come from the
+ * table either way.
+ */
+router.get('/status/:brandId', requireFeature('prompt_volumes'), async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    await assertBrandAccess(brandId, req.user.id);
+
+    const { total, analyzed } = await getVolumeProgress(brandId);
+
+    return res.json({ running: runningBrands.has(brandId), total, analyzed });
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        error: 'quota_exceeded',
+        message: error.message,
+      });
+    }
+    logger.error({ err: error }, 'volume status error');
+    return res.status(error.status || 500).json({ error: 'Failed to read volume status' });
   }
 });
 

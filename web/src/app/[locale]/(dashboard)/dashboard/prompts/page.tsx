@@ -68,7 +68,13 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { analyzePromptVolumesBatch, refreshVolumes, type VolumeQuota } from '@/lib/actions/volumes';
+import {
+  startPromptVolumeAnalysis,
+  getVolumeAnalysisStatus,
+  refreshVolumes,
+  type VolumeQuota,
+  type VolumeErrorCode,
+} from '@/lib/actions/volumes';
 import {
   addPromptToBrand,
   deletePrompt,
@@ -899,6 +905,36 @@ function KpiCard({
   );
 }
 
+/**
+ * A volume run is polled, not awaited — the server keeps going regardless. At
+ * the measured 6.4s per prompt a ten-second tick still shows steady movement,
+ * without turning a quarter-hour run into hundreds of round-trips.
+ */
+const VOLUME_POLL_MS = 10_000;
+
+/**
+ * Ceiling on how long the page keeps watching. At the measured 6.4s median per
+ * prompt a 1000-prompt brand runs well past this; the run itself is unaffected,
+ * the page just stops narrating it and shows what has landed.
+ */
+const VOLUME_WATCH_MS = 30 * 60_000;
+
+/**
+ * Wording for the closed set of failure codes. Server text never reaches a
+ * customer: it names batch sizes, upstream APIs and Postgres columns, none of
+ * which mean anything to the person reading the toast.
+ */
+function volumeErrorMessage(code: VolumeErrorCode, fallback: string): string {
+  switch (code) {
+    case 'quota_exceeded':
+      return 'Monthly volume analysis limit reached. Upgrade your plan for more.';
+    case 'plan_limit':
+      return 'Volume analysis is not part of your current plan.';
+    default:
+      return fallback;
+  }
+}
+
 function VolumePill({ value }: { value: number }) {
   return <span className="tabular-nums text-sm font-semibold">~{formatCompactNumber(value)}</span>;
 }
@@ -912,6 +948,13 @@ export default function PromptsPage() {
   const [visibility, setVisibility] = useState<Record<string, PromptVisibilitySummary>>({});
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState<{
+    analyzed: number;
+    total: number;
+  } | null>(null);
+  // Bumped whenever a run is superseded or the brand changes, so a poll that is
+  // still in flight cannot write progress for a brand no longer on screen.
+  const analysisGenRef = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
   const [quota, setQuota] = useState<VolumeQuota | null>(null);
   const [addPromptOpen, setAddPromptOpen] = useState(false);
@@ -1068,47 +1111,115 @@ export default function PromptsPage() {
     };
   }, [loadData]);
 
-  const handleAnalyzeNew = async () => {
+  // Switching brands (or leaving) ends the watch. The run itself is on the
+  // server and carries on; only this page's narration of it stops.
+  useEffect(() => {
+    return () => {
+      analysisGenRef.current += 1;
+      setAnalyzing(false);
+      setAnalysisProgress(null);
+    };
+  }, [activeBrandId]);
+
+  /**
+   * Start a run, then follow it to the end.
+   *
+   * The work outlives the request that starts it: every prompt costs an LLM
+   * call plus a DataForSEO call and they run in order, which measures at a 6.4s
+   * median — about eleven minutes for a 100-prompt brand. Holding the request
+   * open for that would be cut by the platform long before the run finished,
+   * and the old shape sent the prompts inline and was refused outright past 50
+   * of them. So the server answers as soon as the work is queued and
+   * this polls its count; each prompt is saved on its own row as it lands, so
+   * whatever finished is kept even if this page goes away.
+   */
+  const runVolumeAnalysis = async (force: boolean) => {
     if (!activeBrandId) return;
 
-    const promptsWithoutVolume = allPrompts.filter(
-      (p) => p.isActive && !volumes.find((v) => v.promptId === p.id),
-    );
-
-    const promptsToAnalyze =
-      promptsWithoutVolume.length > 0 ? promptsWithoutVolume : allPrompts.filter((p) => p.isActive);
-
-    if (promptsToAnalyze.length === 0) {
+    if (!allPrompts.some((p) => p.isActive)) {
       toast.error('No active prompts to analyze. Add prompts to a brand first.');
       return;
     }
 
+    const gen = ++analysisGenRef.current;
     setAnalyzing(true);
+    setAnalysisProgress(null);
+
     try {
-      const result = await analyzePromptVolumesBatch(
-        promptsToAnalyze.map((p) => ({ promptId: p.id, promptText: p.text })),
-      );
-      if (result.remaining !== undefined && quota) {
+      const started = await startPromptVolumeAnalysis(activeBrandId, force);
+
+      if (!started.ok) {
+        toast.error(
+          volumeErrorMessage(
+            started.code,
+            'Volume analysis could not be started. Please try again.',
+          ),
+        );
+        return;
+      }
+
+      if (!started.running && started.started === 0) {
+        toast.success('Every active prompt already has volume data.');
+        return;
+      }
+
+      if (started.remaining !== undefined && quota) {
         setQuota({
           ...quota,
-          remaining: result.remaining,
-          used: quota.limit === -1 ? 0 : quota.limit - result.remaining,
+          remaining: started.remaining,
+          used: quota.limit === -1 ? 0 : quota.limit - started.remaining,
         });
       }
-      toast.success(`Analyzed ${promptsToAnalyze.length} prompts`);
-      await loadData();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Volume analysis failed';
-      if (message.includes('limit reached')) {
-        toast.error('Monthly volume analysis limit reached. Upgrade your plan for more.');
-      } else {
-        console.error('Volume analysis failed:', err);
-        toast.error('Volume analysis failed');
+
+      toast.success(
+        started.started > 0
+          ? `Analyzing ${started.started} prompt${started.started === 1 ? '' : 's'} — this keeps running in the background.`
+          : 'Volume analysis is already running for this brand.',
+      );
+
+      // Only a status that comes back saying the run has stopped counts as
+      // finished. Giving up on the watch — deadline reached, status unreadable
+      // — says nothing about the run, and claiming otherwise would send someone
+      // off with a half-filled table believing it was complete.
+      let finished = false;
+      const deadline = Date.now() + VOLUME_WATCH_MS;
+
+      for (;;) {
+        await new Promise((resolve) => setTimeout(resolve, VOLUME_POLL_MS));
+        if (analysisGenRef.current !== gen) return;
+
+        const status = await getVolumeAnalysisStatus(activeBrandId);
+        if (analysisGenRef.current !== gen) return;
+
+        if (!status) break;
+        setAnalysisProgress({ analyzed: status.analyzed, total: status.total });
+        if (!status.running) {
+          finished = true;
+          break;
+        }
+        if (Date.now() > deadline) break;
       }
+
+      await loadData();
+      if (analysisGenRef.current === gen) {
+        toast.success(
+          finished
+            ? 'Volume analysis finished.'
+            : 'Still analyzing in the background — reopen this page later for the rest.',
+        );
+      }
+    } catch (err) {
+      console.error('Volume analysis failed:', err);
+      toast.error('Volume analysis could not be started. Please try again.');
     } finally {
-      setAnalyzing(false);
+      if (analysisGenRef.current === gen) {
+        setAnalyzing(false);
+        setAnalysisProgress(null);
+      }
     }
   };
+
+  const handleAnalyzeNew = () => runVolumeAnalysis(false);
 
   const handleRefreshVolumes = async () => {
     if (!activeBrandId || volumes.length === 0) return;
@@ -1116,6 +1227,12 @@ export default function PromptsPage() {
     setRefreshing(true);
     try {
       const result = await refreshVolumes(activeBrandId);
+      if (!result.ok) {
+        toast.error(
+          volumeErrorMessage(result.code, 'Volumes could not be refreshed. Please try again.'),
+        );
+        return;
+      }
       if (result.remaining !== undefined && quota) {
         setQuota({
           ...quota,
@@ -1126,56 +1243,14 @@ export default function PromptsPage() {
       toast.success(`Refreshed volumes for ${result.refreshed} prompts`);
       await loadData();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Volume refresh failed';
-      if (message.includes('limit reached')) {
-        toast.error('Monthly volume analysis limit reached. Upgrade your plan for more.');
-      } else {
-        console.error('Volume refresh failed:', err);
-        toast.error('Volume refresh failed');
-      }
+      console.error('Volume refresh failed:', err);
+      toast.error('Volumes could not be refreshed. Please try again.');
     } finally {
       setRefreshing(false);
     }
   };
 
-  const handleReanalyzeAll = async () => {
-    if (!activeBrandId) return;
-
-    const activePrompts = allPrompts.filter((p) => p.isActive);
-    if (activePrompts.length === 0) {
-      toast.error('No active prompts to analyze.');
-      return;
-    }
-
-    setAnalyzing(true);
-    try {
-      const result = await analyzePromptVolumesBatch(
-        activePrompts.map((p) => ({ promptId: p.id, promptText: p.text })),
-        undefined,
-        undefined,
-        true,
-      );
-      if (result.remaining !== undefined && quota) {
-        setQuota({
-          ...quota,
-          remaining: result.remaining,
-          used: quota.limit === -1 ? 0 : quota.limit - result.remaining,
-        });
-      }
-      toast.success(`Re-analyzed ${activePrompts.length} prompts with new keywords`);
-      await loadData();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Re-analysis failed';
-      if (message.includes('limit reached')) {
-        toast.error('Monthly volume analysis limit reached. Upgrade your plan for more.');
-      } else {
-        console.error('Re-analysis failed:', err);
-        toast.error('Re-analysis failed');
-      }
-    } finally {
-      setAnalyzing(false);
-    }
-  };
+  const handleReanalyzeAll = () => runVolumeAnalysis(true);
 
   const totalGoogleVol = volumes.reduce((s, v) => s + v.totalGoogleVolume, 0);
   const totalAiVol = volumes.reduce((s, v) => s + v.estAiVolume, 0);
@@ -1188,6 +1263,12 @@ export default function PromptsPage() {
   );
 
   const quotaExhausted = quota !== null && quota.limit !== -1 && quota.remaining <= 0;
+
+  // Reads "Analyzing 32/100..." once the first poll lands, so a run measured in
+  // minutes shows movement instead of an indefinite spinner.
+  const analyzingLabel = analysisProgress
+    ? `Analyzing ${analysisProgress.analyzed}/${analysisProgress.total}...`
+    : 'Analyzing...';
 
   // Join prompts with their volume + visibility summaries once, reused by the
   // All Prompts table.
@@ -1404,7 +1485,7 @@ export default function PromptsPage() {
                     {analyzing ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Analyzing...
+                        {analyzingLabel}
                       </>
                     ) : (
                       <>
@@ -1483,7 +1564,7 @@ export default function PromptsPage() {
                   ) : (
                     <BarChart3 className="h-4 w-4" />
                   )}
-                  {analyzing ? 'Analyzing...' : 'Re-analyze Keywords'}
+                  {analyzing ? analyzingLabel : 'Re-analyze Keywords'}
                 </Button>
               </>
             )}
@@ -1501,7 +1582,7 @@ export default function PromptsPage() {
                   ) : (
                     <BarChart3 className="h-4 w-4" />
                   )}
-                  {analyzing ? 'Analyzing...' : 'Analyze New Prompts'}
+                  {analyzing ? analyzingLabel : 'Analyze New Prompts'}
                 </Button>
               )}
           </div>
@@ -1535,7 +1616,7 @@ export default function PromptsPage() {
                       ) : (
                         <BarChart3 className="h-4 w-4" />
                       )}
-                      {analyzing ? 'Analyzing...' : 'Analyze Volumes'}
+                      {analyzing ? analyzingLabel : 'Analyze Volumes'}
                     </Button>
                     {quotaExhausted && (
                       <p className="text-xs text-red-500">

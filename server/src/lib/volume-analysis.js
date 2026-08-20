@@ -83,9 +83,87 @@ export async function fetchAndSaveVolumes(promptId, keywords, intent, locationCo
   return saved;
 }
 
+/**
+ * PostgREST caps an un-paginated select at 1000 rows, and an `.in()` filter
+ * travels in the query string rather than the body — a brand near the
+ * 1000-prompt ceiling would truncate silently on the first count and overflow
+ * the request line on the second (#714, #740, #741). Both reads below page,
+ * and scope through the prompt_sets embed so no list of prompt ids is ever
+ * assembled.
+ */
+const PAGE_SIZE = 1000;
+
+/**
+ * Ceiling on what one brand can page in. A backend that kept answering full
+ * pages would otherwise spin this loop forever, and the caller is a background
+ * run with nobody waiting on it to notice. The largest brand allowed today
+ * holds 1000 prompts, so this leaves an order of magnitude of headroom.
+ */
+const MAX_PAGED_ROWS = 50_000;
+
+async function fetchAllPages(buildQuery) {
+  const rows = [];
+  for (let from = 0; from < MAX_PAGED_ROWS; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    if (!data?.length) break;
+    rows.push(...data);
+    if (data.length < PAGE_SIZE) break;
+  }
+  return rows;
+}
+
+async function fetchPromptSetIds(brandId) {
+  const { data, error } = await supabaseAdmin
+    .from('prompt_sets')
+    .select('id')
+    .eq('brand_id', brandId);
+
+  if (error) throw new Error(`Failed to fetch prompt sets: ${error.message}`);
+  return (data || []).map((ps) => ps.id);
+}
+
+/**
+ * Inactive prompts are tracked on no platform, so analysing one spends an LLM
+ * call, a DataForSEO call and its share of the wait on a row no surface reads.
+ */
+function activePromptsQuery(setIds) {
+  return supabaseAdmin
+    .from('prompts')
+    .select('id, text')
+    .in('prompt_set_id', setIds)
+    .eq('is_active', true)
+    .order('id', { ascending: true });
+}
+
+/**
+ * How much of a brand's active prompt set already carries volumes. This is the
+ * pair the Prompts page polls while an analysis runs, so it stays two exact
+ * counts — no rows travel, and the 1000-row cap cannot reach it.
+ */
+export async function getVolumeProgress(brandId) {
+  const setIds = await fetchPromptSetIds(brandId);
+  if (setIds.length === 0) return { total: 0, analyzed: 0 };
+
+  const [{ count: total }, { count: analyzed }] = await Promise.all([
+    supabaseAdmin
+      .from('prompts')
+      .select('*', { count: 'exact', head: true })
+      .in('prompt_set_id', setIds)
+      .eq('is_active', true),
+    supabaseAdmin
+      .from('prompt_volumes')
+      .select('prompts!inner(prompt_set_id, is_active)', { count: 'exact', head: true })
+      .in('prompts.prompt_set_id', setIds)
+      .eq('prompts.is_active', true),
+  ]);
+
+  return { total: total || 0, analyzed: analyzed || 0 };
+}
+
 export async function analyzeBrandVolumes(
   brandId,
-  { promptIds, locationCode, languageCode, force = false, onlyMissing = false } = {},
+  { locationCode, languageCode, force = false, onlyMissing = false } = {},
 ) {
   const { data: brand, error: brandError } = await supabaseAdmin
     .from('brands')
@@ -104,62 +182,37 @@ export async function analyzeBrandVolumes(
     locationCode ?? (brand.region ? regionToLocationCode(brand.region) : undefined);
   const resolvedLanguageCode =
     languageCode ?? (brand.language ? languageToCode(brand.language) : undefined);
-  const { data: promptSets, error: psError } = await supabaseAdmin
-    .from('prompt_sets')
-    .select('id')
-    .eq('brand_id', brandId);
 
-  if (psError) {
-    throw new Error(`Failed to fetch prompt sets: ${psError.message}`);
-  }
-
-  if (!promptSets || promptSets.length === 0) {
+  const setIds = await fetchPromptSetIds(brandId);
+  if (setIds.length === 0) {
     return [];
   }
 
-  const setIds = promptSets.map((ps) => ps.id);
-  let promptsQuery = supabaseAdmin.from('prompts').select('id, text');
-
-  if (promptIds?.length) {
-    promptsQuery = promptsQuery.in('id', promptIds);
-  } else {
-    promptsQuery = promptsQuery.in('prompt_set_id', setIds);
-  }
-
-  const { data: prompts, error: pError } = await promptsQuery;
-
-  if (pError) {
-    throw new Error(`Failed to fetch prompts: ${pError.message}`);
-  }
-
-  if (!prompts || prompts.length === 0) {
+  const prompts = await fetchAllPages(() => activePromptsQuery(setIds));
+  if (prompts.length === 0) {
     return [];
   }
 
-  const analyzedPromptIds = prompts.map((p) => p.id);
   const existingMap = {};
   const existingPromptIds = new Set();
 
   if (!force || onlyMissing) {
-    const { data: existingRows, error: existingError } = await supabaseAdmin
-      .from('prompt_volumes')
-      .select('prompt_id, intent, keywords')
-      .in('prompt_id', analyzedPromptIds);
+    const existingRows = await fetchAllPages(() =>
+      supabaseAdmin
+        .from('prompt_volumes')
+        .select('prompt_id, intent, keywords, prompts!inner(prompt_set_id)')
+        .in('prompts.prompt_set_id', setIds)
+        .order('prompt_id', { ascending: true }),
+    );
 
-    if (existingError) {
-      throw new Error(`Failed to fetch existing volumes: ${existingError.message}`);
-    }
+    for (const row of existingRows) {
+      existingPromptIds.add(row.prompt_id);
 
-    if (existingRows) {
-      for (const row of existingRows) {
-        existingPromptIds.add(row.prompt_id);
-
-        if (row.keywords?.length) {
-          existingMap[row.prompt_id] = {
-            intent: row.intent,
-            keywords: row.keywords,
-          };
-        }
+      if (row.keywords?.length) {
+        existingMap[row.prompt_id] = {
+          intent: row.intent,
+          keywords: row.keywords,
+        };
       }
     }
   }

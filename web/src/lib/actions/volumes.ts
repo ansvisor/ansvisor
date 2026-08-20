@@ -49,21 +49,55 @@ export async function analyzePromptVolume(
 }
 
 /**
- * Analyze multiple prompts in batch.
- * Uses saved keywords when available, calls LLM only for new prompts.
- * Pass force=true to re-generate all keywords via LLM.
+ * Failure codes the page can phrase for itself.
+ *
+ * The server's own text is diagnostic — DataForSEO status lines, Postgres
+ * messages, argument validation — and none of it belongs in front of a
+ * customer. Next.js also redacts thrown server-action messages in production,
+ * so a caller reading `err.message` gets whatever the platform substituted
+ * rather than the reason. A small closed set of codes survives both, and the
+ * wording stays in the UI where it can be written for a person.
  */
-export async function analyzePromptVolumesBatch(
-  prompts: { promptId: string; promptText: string }[],
-  locationCode?: number,
-  languageCode?: string,
+export type VolumeErrorCode = 'quota_exceeded' | 'plan_limit' | 'failed';
+
+export type StartVolumeAnalysisResult =
+  | { ok: true; started: number; running: boolean; remaining?: number }
+  | { ok: false; code: VolumeErrorCode };
+
+export interface VolumeAnalysisStatus {
+  running: boolean;
+  total: number;
+  analyzed: number;
+}
+
+async function toErrorCode(res: Response): Promise<VolumeErrorCode> {
+  const body: { error?: string } = await res.json().catch(() => ({}));
+  if (body.error === 'quota_exceeded') return 'quota_exceeded';
+  if (body.error === 'plan_limit') return 'plan_limit';
+  console.error('Volume analysis request failed', res.status, body.error);
+  return 'failed';
+}
+
+/**
+ * Start volume analysis for a brand.
+ *
+ * The run outlives this request — a 100-prompt brand takes about eleven
+ * minutes, since every prompt costs an LLM call plus a DataForSEO call and
+ * they run in order. The server answers as soon as the work is queued;
+ * `getVolumeAnalysisStatus` reports how far it has got.
+ *
+ * force=true re-generates keywords for every active prompt; the default fills
+ * in only the prompts that have no volumes yet.
+ */
+export async function startPromptVolumeAnalysis(
+  brandId: string,
   force?: boolean,
-): Promise<{ results: (PromptVolume & { error?: string })[]; remaining?: number }> {
+): Promise<StartVolumeAnalysisResult> {
   const supabase = await createClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  if (!session) throw new Error('Not authenticated');
+  if (!session) return { ok: false, code: 'failed' };
 
   const res = await fetch(`${AEO_SERVER_URL}/api/volumes/analyze-batch`, {
     method: 'POST',
@@ -71,15 +105,48 @@ export async function analyzePromptVolumesBatch(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ prompts, locationCode, languageCode, force }),
+    body: JSON.stringify({ brandId, force }),
   });
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Server error: ${res.status}`);
-  }
+  if (!res.ok) return { ok: false, code: await toErrorCode(res) };
 
-  return res.json();
+  const body = await res.json();
+  return {
+    ok: true,
+    started: body.started ?? 0,
+    running: Boolean(body.running),
+    remaining: body.remaining,
+  };
+}
+
+/**
+ * How far the brand's analysis has got. Returns null when the status cannot be
+ * read, which the caller treats as "stop polling" rather than as a failure of
+ * the run itself — the run is on the server and keeps going either way.
+ */
+export async function getVolumeAnalysisStatus(
+  brandId: string,
+): Promise<VolumeAnalysisStatus | null> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return null;
+
+  const res = await fetch(`${AEO_SERVER_URL}/api/volumes/status/${brandId}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+    signal: AbortSignal.timeout(15_000),
+  });
+
+  if (!res.ok) return null;
+
+  const body = await res.json();
+  return {
+    running: Boolean(body.running),
+    total: body.total ?? 0,
+    analyzed: body.analyzed ?? 0,
+  };
 }
 
 /**
@@ -90,12 +157,14 @@ export async function refreshVolumes(
   brandId: string,
   locationCode?: number,
   languageCode?: string,
-): Promise<{ results: PromptVolume[]; refreshed: number; remaining?: number }> {
+): Promise<
+  { ok: true; refreshed: number; remaining?: number } | { ok: false; code: VolumeErrorCode }
+> {
   const supabase = await createClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  if (!session) throw new Error('Not authenticated');
+  if (!session) return { ok: false, code: 'failed' };
 
   const res = await fetch(`${AEO_SERVER_URL}/api/volumes/refresh`, {
     method: 'POST',
@@ -106,12 +175,10 @@ export async function refreshVolumes(
     body: JSON.stringify({ brandId, locationCode, languageCode }),
   });
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Server error: ${res.status}`);
-  }
+  if (!res.ok) return { ok: false, code: await toErrorCode(res) };
 
-  return res.json();
+  const body = await res.json();
+  return { ok: true, refreshed: body.refreshed ?? 0, remaining: body.remaining };
 }
 
 /**
