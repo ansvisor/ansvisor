@@ -1324,6 +1324,60 @@ export async function triggerTrackingCheck(
   return { jobId: data.jobId };
 }
 
+/**
+ * Submit a single freshly created prompt to the tracking pipeline.
+ *
+ * Deliberately scoped to ONE prompt id rather than the brand's whole
+ * unanalyzed set. Cloro delivers results asynchronously, so a prompt that is
+ * still in flight has no `prompt_results` rows yet and would be picked up —
+ * and paid for — a second time by the very next add. Passing only the id we
+ * just created keeps each prompt to exactly one submission.
+ *
+ * Never throws, and never surfaces a failure as an error: a prompt that can't
+ * be submitted right now (daily cap, cooldown, paused brand, no active
+ * subscription, server unreachable) is still saved, and the daily scheduled
+ * run picks it up. The boolean only decides which "prompt added" message the
+ * user sees.
+ */
+export async function analyzeNewPrompt(
+  brandId: string,
+  promptId: string,
+): Promise<{ started: boolean }> {
+  const supabase = await createClient();
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { started: false };
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/tracking/analyze-new`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ brandId, promptIds: [promptId] }),
+    });
+
+    if (!res.ok) {
+      // 402 (no subscription), 409 (paused brand) and 429 (daily cap or
+      // cooldown) are expected states rather than faults — stay quiet about
+      // them. Anything else is worth a server-side log.
+      if (res.status !== 402 && res.status !== 409 && res.status !== 429) {
+        console.error('Failed to submit new prompt for analysis', res.status);
+      }
+      return { started: false };
+    }
+
+    const body: { jobId?: string } = await res.json().catch(() => ({}));
+    return { started: Boolean(body.jobId) };
+  } catch (err) {
+    console.error('Failed to submit new prompt for analysis', err);
+    return { started: false };
+  }
+}
+
 export interface TrackingJobStatus {
   status: 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'not_found';
   progress: {

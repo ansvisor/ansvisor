@@ -100,7 +100,7 @@ import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { DataSourcesPanel } from './_data-sources-panel';
 import { PLANS } from '@/config/plans';
 import { getTopics } from '@/lib/actions/topic';
-import { type PromptVisibilitySummary } from '@/lib/actions/tracking';
+import { analyzeNewPrompt, type PromptVisibilitySummary } from '@/lib/actions/tracking';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import type { PromptVolume, Prompt, Topic } from '@/types';
 import { toast } from 'sonner';
@@ -578,8 +578,17 @@ function AddPromptDialog({
         setError(result.error);
         return;
       }
+      // Send the prompt off to be analyzed straight away instead of leaving it
+      // idle until tomorrow's scheduled run. Only this prompt is submitted, and
+      // a refusal (daily cap, cooldown, paused brand) is not an error — the
+      // prompt is saved either way, so the message just says which happened.
+      const { started } = await analyzeNewPrompt(brandId, result.prompt.id);
       onClose();
-      toast.success('Prompt added — it will be picked up by the next tracking run.');
+      toast.success(
+        started
+          ? 'Prompt added — analyzing it now.'
+          : 'Prompt added — it will be picked up by the next tracking run.',
+      );
       onAdded();
     } catch {
       setError('Failed to add prompt. Please try again.');
