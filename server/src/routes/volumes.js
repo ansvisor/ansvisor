@@ -14,6 +14,7 @@ import {
   mapVolumeRow,
   fetchAndSaveVolumes,
   analyzeBrandVolumes,
+  refreshBrandVolumes,
   getVolumeProgress,
 } from '../lib/volume-analysis.js';
 import logger from '../lib/logger.js';
@@ -276,75 +277,9 @@ router.post('/refresh', requireFeature('prompt_volumes'), async (req, res) => {
 
     await assertBrandAccess(brandId, req.user.id);
 
-    let resolvedLocationCode = locationCode;
-    let resolvedLanguageCode = languageCode;
-    if (resolvedLocationCode == null || resolvedLanguageCode == null) {
-      const { data: brand } = await supabaseAdmin
-        .from('brands')
-        .select('region, language')
-        .eq('id', brandId)
-        .maybeSingle();
-      if (brand) {
-        if (resolvedLocationCode == null) {
-          resolvedLocationCode = regionToLocationCode(brand.region);
-        }
-        if (resolvedLanguageCode == null) {
-          resolvedLanguageCode = languageToCode(brand.language);
-        }
-      }
-    }
-
-    const { data: promptSets } = await supabaseAdmin
-      .from('prompt_sets')
-      .select('id')
-      .eq('brand_id', brandId);
-
-    if (!promptSets?.length) {
-      return res.json({ results: [], refreshed: 0, remaining });
-    }
-
-    const { data: prompts } = await supabaseAdmin
-      .from('prompts')
-      .select('id')
-      .in(
-        'prompt_set_id',
-        promptSets.map((ps) => ps.id),
-      );
-
-    if (!prompts?.length) {
-      return res.json({ results: [], refreshed: 0, remaining });
-    }
-
-    const { data: existingVolumes } = await supabaseAdmin
-      .from('prompt_volumes')
-      .select('prompt_id, intent, keywords')
-      .in(
-        'prompt_id',
-        prompts.map((p) => p.id),
-      );
-
-    if (!existingVolumes?.length) {
-      return res.json({ results: [], refreshed: 0, remaining });
-    }
-
-    const results = [];
-
-    for (const row of existingVolumes) {
-      try {
-        const saved = await fetchAndSaveVolumes(
-          row.prompt_id,
-          row.keywords,
-          row.intent,
-          resolvedLocationCode,
-          resolvedLanguageCode,
-        );
-        results.push(mapVolumeRow(saved));
-      } catch (err) {
-        results.push({ promptId: row.prompt_id, error: err.message });
-      }
-    }
-
+    const results = await refreshBrandVolumes(brandId, { locationCode, languageCode });
     const refreshed = results.filter((r) => !r.error).length;
+
     if (refreshed > 0 && orgId) {
       await supabaseAdmin.from('volume_usage').insert({
         organization_id: orgId,
@@ -366,7 +301,7 @@ router.post('/refresh', requireFeature('prompt_volumes'), async (req, res) => {
         message: error.message,
       });
     }
-    req.log.error({ err: error }, 'volume refresh error');
+    logger.error({ err: error }, 'volume refresh error');
     return res.status(error.status || 500).json({
       error: 'Failed to refresh volumes',
       details: error.message,

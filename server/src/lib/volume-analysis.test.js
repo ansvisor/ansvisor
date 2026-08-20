@@ -211,16 +211,17 @@ describe('analyzeBrandVolumes', () => {
     expect(extractIntentKeywords).toHaveBeenCalledTimes(3);
   });
 
-  // One prompt's upstream failure is recorded against that prompt; the rest of
-  // the brand still gets analyzed.
-  it('records a per-prompt failure without dropping the run', async () => {
+  // Keyword extraction is still per prompt, so its failures still are: one
+  // prompt whose LLM call fails does not take the rest of the brand with it.
+  it('records a keyword-extraction failure against that prompt alone', async () => {
     const { analyzeBrandVolumes } = await load(seed({ activeCount: 3 }));
-    getSearchVolumes.mockRejectedValueOnce(new Error('DataForSEO API error (429)'));
+    extractIntentKeywords.mockRejectedValueOnce(new Error('model overloaded'));
 
     const results = await analyzeBrandVolumes('b1', { onlyMissing: true });
 
     expect(results).toHaveLength(3);
     expect(results.filter((r) => r.error)).toHaveLength(1);
+    expect(results.filter((r) => !r.error)).toHaveLength(2);
   });
 
   it('returns nothing for a brand with no prompt sets', async () => {
@@ -229,6 +230,107 @@ describe('analyzeBrandVolumes', () => {
     const { analyzeBrandVolumes } = await load(db);
 
     expect(await analyzeBrandVolumes('b1', { onlyMissing: true })).toEqual([]);
+  });
+
+  /**
+   * DataForSEO bills per request and takes up to 1000 keywords in one. Asking
+   * per prompt cost $0.09 each — $9.00 for a 100-prompt brand doing work a
+   * single request covers. These pin the request count, which is the bill.
+   */
+  it('looks up a 100-prompt brand in one request, not a hundred', async () => {
+    const { analyzeBrandVolumes } = await load(seed({ activeCount: 100 }));
+    extractIntentKeywords.mockImplementation((text) =>
+      Promise.resolve({ intent: 'informational', keywords: [`${text} a`, `${text} b`] }),
+    );
+
+    await analyzeBrandVolumes('b1', { onlyMissing: true });
+
+    expect(getSearchVolumes).toHaveBeenCalledTimes(1);
+    expect(getSearchVolumes.mock.calls[0][0]).toHaveLength(200);
+  });
+
+  it('splits into one request per 1000 keywords and no more', async () => {
+    // 600 prompts x 5 distinct keywords = 3000 keywords = 3 requests.
+    const { analyzeBrandVolumes } = await load(seed({ activeCount: 600 }));
+    extractIntentKeywords.mockImplementation((text) =>
+      Promise.resolve({
+        intent: 'informational',
+        keywords: Array.from({ length: 5 }, (_, i) => `${text} kw${i}`),
+      }),
+    );
+
+    await analyzeBrandVolumes('b1', { onlyMissing: true });
+
+    expect(getSearchVolumes).toHaveBeenCalledTimes(3);
+    for (const [chunk] of getSearchVolumes.mock.calls) {
+      expect(chunk.length).toBeLessThanOrEqual(1000);
+    }
+  });
+
+  it('sends a keyword shared by several prompts only once', async () => {
+    const { analyzeBrandVolumes } = await load(seed({ activeCount: 10 }));
+    extractIntentKeywords.mockResolvedValue({ intent: 'informational', keywords: ['same', 'kw'] });
+
+    await analyzeBrandVolumes('b1', { onlyMissing: true });
+
+    expect(getSearchVolumes).toHaveBeenCalledTimes(1);
+    expect(getSearchVolumes.mock.calls[0][0]).toEqual(['same', 'kw']);
+  });
+
+  // Each prompt must read only its own keywords out of a map that now holds
+  // the whole brand's, or every prompt would report the brand's total volume.
+  it('gives each prompt only its own keywords out of the shared answer', async () => {
+    const { analyzeBrandVolumes } = await load(seed({ activeCount: 2 }));
+    extractIntentKeywords
+      .mockResolvedValueOnce({ intent: 'i', keywords: ['alpha'] })
+      .mockResolvedValueOnce({ intent: 'i', keywords: ['beta'] });
+    getSearchVolumes.mockResolvedValue({
+      alpha: { volume: 100, competitionIndex: 10, competition: 'LOW' },
+      beta: { volume: 7, competitionIndex: 90, competition: 'HIGH' },
+    });
+
+    const results = await analyzeBrandVolumes('b1', { onlyMissing: true });
+
+    expect(results.map((r) => r.totalGoogleVolume).sort((a, b) => a - b)).toEqual([7, 100]);
+    expect(results.map((r) => r.googleVolumes)).toEqual([{ alpha: 100 }, { beta: 7 }]);
+  });
+
+  // The response echoes keywords in its own normalised form, so a prompt whose
+  // keyword differs only by case must still find its volume.
+  it('matches keywords back case-insensitively', async () => {
+    const { analyzeBrandVolumes } = await load(seed({ activeCount: 1 }));
+    extractIntentKeywords.mockResolvedValue({ intent: 'i', keywords: ['Best CRM Software'] });
+    getSearchVolumes.mockResolvedValue({
+      'best crm software': { volume: 500, competitionIndex: 40, competition: 'MEDIUM' },
+    });
+
+    const [row] = await analyzeBrandVolumes('b1', { onlyMissing: true });
+
+    expect(row.totalGoogleVolume).toBe(500);
+  });
+
+  // One request now stands in for up to two hundred prompts, so a blip that
+  // used to cost one prompt would cost all of them. It is retried first.
+  it('retries a failed request before giving up on the batch', async () => {
+    const { analyzeBrandVolumes } = await load(seed({ activeCount: 5 }));
+    getSearchVolumes
+      .mockRejectedValueOnce(new Error('DataForSEO API error (429)'))
+      .mockResolvedValue({ a: { volume: 10, competitionIndex: 50, competition: 'MEDIUM' } });
+
+    const results = await analyzeBrandVolumes('b1', { onlyMissing: true });
+
+    expect(getSearchVolumes).toHaveBeenCalledTimes(2);
+    expect(results.filter((r) => r.error)).toHaveLength(0);
+  });
+
+  it('fails every prompt the request covered when it cannot be retried through', async () => {
+    const { analyzeBrandVolumes } = await load(seed({ activeCount: 5 }));
+    getSearchVolumes.mockRejectedValue(new Error('DataForSEO down'));
+
+    const results = await analyzeBrandVolumes('b1', { onlyMissing: true });
+
+    expect(results).toHaveLength(5);
+    expect(results.every((r) => r.error)).toBe(true);
   });
 
   // An `.in()` filter travels in the query string, so a list of prompt ids is a
@@ -243,6 +345,49 @@ describe('analyzeBrandVolumes', () => {
       q.filters.filter(([op, col]) => op === 'in' && col === 'prompt_id'),
     );
     expect(idFilters).toEqual([]);
+  });
+});
+
+/**
+ * Refreshing re-reads Google volumes for prompts that already have keywords.
+ * It never calls the LLM, so after batching the whole refresh is one request
+ * per 1000 keywords — it used to be one request per prompt.
+ */
+describe('refreshBrandVolumes', () => {
+  it('refreshes a brand in one request and never calls the LLM', async () => {
+    const withVolumes = Array.from({ length: 40 }, (_, i) => `p${i}`);
+    const { refreshBrandVolumes } = await load(seed({ activeCount: 40, withVolumes }));
+
+    const results = await refreshBrandVolumes('b1');
+
+    expect(results).toHaveLength(40);
+    expect(getSearchVolumes).toHaveBeenCalledTimes(1);
+    expect(extractIntentKeywords).not.toHaveBeenCalled();
+  });
+
+  it('reuses the saved keywords rather than inventing new ones', async () => {
+    const { refreshBrandVolumes } = await load(seed({ activeCount: 2, withVolumes: ['p0', 'p1'] }));
+
+    await refreshBrandVolumes('b1');
+
+    expect(getSearchVolumes.mock.calls[0][0]).toEqual(['saved keyword']);
+  });
+
+  it('skips rows that carry no keywords to look up', async () => {
+    const db = seed({ activeCount: 2, withVolumes: ['p0', 'p1'] });
+    db.prompt_volumes[1].keywords = [];
+    const { refreshBrandVolumes } = await load(db);
+
+    expect(await refreshBrandVolumes('b1')).toHaveLength(1);
+  });
+
+  it('returns nothing for a brand with no prompt sets', async () => {
+    const db = seed({ activeCount: 2, withVolumes: ['p0'] });
+    db.prompt_sets = [];
+    const { refreshBrandVolumes } = await load(db);
+
+    expect(await refreshBrandVolumes('b1')).toEqual([]);
+    expect(getSearchVolumes).not.toHaveBeenCalled();
   });
 });
 

@@ -3,6 +3,7 @@ import { regionToLocationCode, languageToCode } from '../lib/dataforseo-codes.js
 import supabaseAdmin from '../config/supabase.js';
 import { AI_VOLUME_MULTIPLIER, extractIntentKeywords } from '../lib/intent-extraction.js';
 import { getSearchVolumes } from './dataforseo.js';
+import { withRetry } from './retry.js';
 import logger from './logger.js';
 
 export function mapVolumeRow(saved) {
@@ -23,20 +24,68 @@ export function mapVolumeRow(saved) {
   };
 }
 
-export async function fetchAndSaveVolumes(promptId, keywords, intent, locationCode, languageCode) {
-  const volumes = await getSearchVolumes(keywords, {
-    locationCode: locationCode || undefined,
-    languageCode: languageCode || undefined,
-  });
+/**
+ * DataForSEO bills per request, not per keyword: one request carries up to
+ * MAX_KEYWORDS_PER_REQUEST keywords, and a request for five costs exactly what
+ * a request for a thousand costs ($0.09 on the live endpoint). Asking once per
+ * prompt therefore multiplied the bill by the number of prompts — a 100-prompt
+ * brand spent $9.00 doing the work of a single $0.09 request.
+ */
+const MAX_KEYWORDS_PER_REQUEST = 1000;
 
-  // google_volumes stays a { keyword: number } map for the UI. Competition is
-  // aggregated per prompt as a volume-weighted average of the keyword indices.
+/**
+ * Look up every distinct keyword in as few requests as possible.
+ *
+ * A chunk is retried before it is given up on. It now carries up to two
+ * hundred prompts' worth of work, so losing one to a provider blip costs far
+ * more than it did when a failed request set back a single prompt.
+ */
+async function fetchVolumesForKeywords(keywords, { locationCode, languageCode }) {
+  const distinct = [...new Set((keywords || []).map((k) => String(k).trim()).filter(Boolean))];
+  const volumes = {};
+
+  for (let i = 0; i < distinct.length; i += MAX_KEYWORDS_PER_REQUEST) {
+    const chunk = distinct.slice(i, i + MAX_KEYWORDS_PER_REQUEST);
+    const part = await withRetry(
+      () =>
+        getSearchVolumes(chunk, {
+          locationCode: locationCode || undefined,
+          languageCode: languageCode || undefined,
+        }),
+      { attempts: 3, label: 'dataforseo search_volume' },
+    );
+    Object.assign(volumes, part);
+  }
+
+  return { volumes, requests: Math.ceil(distinct.length / MAX_KEYWORDS_PER_REQUEST) };
+}
+
+/**
+ * Reduce one prompt's keywords against a volume map that may cover the whole
+ * brand. google_volumes stays a { keyword: number } map for the UI, and
+ * competition is a volume-weighted average of the keyword indices.
+ *
+ * Lookups are case-folded because the response echoes keywords in its own
+ * normalised form; the stored key stays the returned one, so what lands in the
+ * column is unchanged from when each prompt had the response to itself.
+ */
+function summarizeVolumes(keywords, volumes) {
+  const byKeyword = new Map();
+  for (const [keyword, data] of Object.entries(volumes)) {
+    byKeyword.set(keyword.trim().toLowerCase(), [keyword, data]);
+  }
+
   const googleVolumes = {};
   let totalGoogleVolume = 0;
   let competitionWeightedSum = 0;
   let competitionWeight = 0;
-  for (const [keyword, data] of Object.entries(volumes)) {
-    googleVolumes[keyword] = data.volume;
+
+  for (const keyword of keywords || []) {
+    const hit = byKeyword.get(String(keyword).trim().toLowerCase());
+    if (!hit) continue;
+
+    const [returnedKeyword, data] = hit;
+    googleVolumes[returnedKeyword] = data.volume;
     totalGoogleVolume += data.volume;
     if (data.competitionIndex !== null && data.competitionIndex !== undefined) {
       competitionWeightedSum += data.competitionIndex * data.volume;
@@ -55,8 +104,16 @@ export async function fetchAndSaveVolumes(promptId, keywords, intent, locationCo
           ? 'MEDIUM'
           : 'HIGH';
 
-  const estAiVolume = Math.round(totalGoogleVolume * AI_VOLUME_MULTIPLIER);
+  return {
+    googleVolumes,
+    totalGoogleVolume,
+    competitionIndex,
+    competition,
+    estAiVolume: Math.round(totalGoogleVolume * AI_VOLUME_MULTIPLIER),
+  };
+}
 
+async function saveVolumeRow(promptId, intent, keywords, summary, locationCode, languageCode) {
   const { data: saved, error: dbError } = await supabaseAdmin
     .from('prompt_volumes')
     .upsert(
@@ -64,12 +121,12 @@ export async function fetchAndSaveVolumes(promptId, keywords, intent, locationCo
         prompt_id: promptId,
         intent,
         keywords,
-        google_volumes: googleVolumes,
-        total_google_volume: totalGoogleVolume,
+        google_volumes: summary.googleVolumes,
+        total_google_volume: summary.totalGoogleVolume,
         ai_volume_multiplier: AI_VOLUME_MULTIPLIER,
-        est_ai_volume: estAiVolume,
-        competition_index: competitionIndex,
-        competition,
+        est_ai_volume: summary.estAiVolume,
+        competition_index: summary.competitionIndex,
+        competition: summary.competition,
         location_code: locationCode || null,
         language_code: languageCode || null,
         fetched_at: new Date().toISOString(),
@@ -81,6 +138,82 @@ export async function fetchAndSaveVolumes(promptId, keywords, intent, locationCo
 
   if (dbError) throw new Error(dbError.message);
   return saved;
+}
+
+/**
+ * Single-prompt path (POST /api/volumes/analyze). One prompt is one request
+ * either way, so there is nothing to batch here.
+ */
+export async function fetchAndSaveVolumes(promptId, keywords, intent, locationCode, languageCode) {
+  const { volumes } = await fetchVolumesForKeywords(keywords, { locationCode, languageCode });
+  return saveVolumeRow(
+    promptId,
+    intent,
+    keywords,
+    summarizeVolumes(keywords, volumes),
+    locationCode,
+    languageCode,
+  );
+}
+
+/**
+ * Look the whole set up at once, then write each prompt's slice of the answer.
+ *
+ * A failed lookup fails every prompt it covered — that is the cost of asking
+ * once instead of N times, and why the request retries first. A failed write
+ * is still per-prompt.
+ */
+async function fetchAndStore(prepared, { locationCode, languageCode, brandId }) {
+  const results = [];
+  if (prepared.length === 0) return results;
+
+  let volumes;
+  let requests;
+  const lookupStart = Date.now();
+  try {
+    ({ volumes, requests } = await fetchVolumesForKeywords(
+      prepared.flatMap((p) => p.keywords || []),
+      { locationCode, languageCode },
+    ));
+  } catch (err) {
+    logger.error({ err, brandId, prompts: prepared.length }, 'volume lookup failed for brand');
+    return prepared.map(({ promptId }) => ({ promptId, error: err.message }));
+  }
+
+  const lookupMs = Date.now() - lookupStart;
+  const writeStart = Date.now();
+
+  for (const { promptId, intent, keywords } of prepared) {
+    try {
+      const saved = await saveVolumeRow(
+        promptId,
+        intent,
+        keywords,
+        summarizeVolumes(keywords, volumes),
+        locationCode,
+        languageCode,
+      );
+      results.push(mapVolumeRow(saved));
+    } catch (err) {
+      logger.error({ err, promptId }, 'volume save failed for prompt');
+      results.push({ promptId, error: err.message });
+    }
+  }
+
+  // Split by phase so the next run answers "how long does this take now?"
+  // without anyone having to guess which side the time went to.
+  logger.info(
+    {
+      brandId,
+      prompts: prepared.length,
+      dataforseoRequests: requests,
+      lookupMs,
+      writeMs: Date.now() - writeStart,
+    },
+    'brand volume lookup complete',
+  );
+
+  return results;
 }
 
 /**
@@ -134,6 +267,14 @@ function activePromptsQuery(setIds) {
     .in('prompt_set_id', setIds)
     .eq('is_active', true)
     .order('id', { ascending: true });
+}
+
+function existingVolumesQuery(setIds) {
+  return supabaseAdmin
+    .from('prompt_volumes')
+    .select('prompt_id, intent, keywords, prompts!inner(prompt_set_id)')
+    .in('prompts.prompt_set_id', setIds)
+    .order('prompt_id', { ascending: true });
 }
 
 /**
@@ -197,13 +338,7 @@ export async function analyzeBrandVolumes(
   const existingPromptIds = new Set();
 
   if (!force || onlyMissing) {
-    const existingRows = await fetchAllPages(() =>
-      supabaseAdmin
-        .from('prompt_volumes')
-        .select('prompt_id, intent, keywords, prompts!inner(prompt_set_id)')
-        .in('prompts.prompt_set_id', setIds)
-        .order('prompt_id', { ascending: true }),
-    );
+    const existingRows = await fetchAllPages(() => existingVolumesQuery(setIds));
 
     for (const row of existingRows) {
       existingPromptIds.add(row.prompt_id);
@@ -225,39 +360,74 @@ export async function analyzeBrandVolumes(
 
   const aiModel = resolveModel();
   const results = [];
+  const prepared = [];
+  const keywordStart = Date.now();
 
+  // Keywords first, one prompt at a time — a prompt with saved keywords costs
+  // nothing here, the rest cost one LLM call each. This is now the only
+  // per-prompt work in the run.
   for (const { id: promptId, text: promptText } of promptsToAnalyze) {
     try {
-      let intent;
-      let keywords;
-
       const cached = existingMap[promptId];
       if (cached) {
-        intent = cached.intent;
-        keywords = cached.keywords;
+        prepared.push({ promptId, intent: cached.intent, keywords: cached.keywords });
       } else {
-        const intentResult = await extractIntentKeywords(promptText, aiModel);
-        intent = intentResult.intent;
-        keywords = intentResult.keywords;
+        const { intent, keywords } = await extractIntentKeywords(promptText, aiModel);
+        prepared.push({ promptId, intent, keywords });
       }
-
-      const saved = await fetchAndSaveVolumes(
-        promptId,
-        keywords,
-        intent,
-        resolvedLocationCode,
-        resolvedLanguageCode,
-      );
-
-      results.push(mapVolumeRow(saved));
     } catch (err) {
-      logger.error({ err, promptId }, 'volume analysis failed for prompt');
-
-      results.push({
-        promptId,
-        error: err.message,
-      });
+      logger.error({ err, promptId }, 'keyword extraction failed for prompt');
+      results.push({ promptId, error: err.message });
     }
   }
+
+  logger.info(
+    { brandId, prompts: prepared.length, keywordMs: Date.now() - keywordStart },
+    'brand keyword extraction complete',
+  );
+
+  results.push(
+    ...(await fetchAndStore(prepared, {
+      locationCode: resolvedLocationCode,
+      languageCode: resolvedLanguageCode,
+      brandId,
+    })),
+  );
+
   return results;
+}
+
+/**
+ * Re-read Google volumes for every active prompt that already has keywords.
+ * No LLM is involved, so the whole refresh is one DataForSEO request per 1000
+ * keywords — it used to be one per prompt.
+ */
+export async function refreshBrandVolumes(brandId, { locationCode, languageCode } = {}) {
+  const { data: brand, error: brandError } = await supabaseAdmin
+    .from('brands')
+    .select('region, language')
+    .eq('id', brandId)
+    .maybeSingle();
+
+  if (brandError) throw new Error(`Failed to fetch brand: ${brandError.message}`);
+  if (!brand) throw new Error(`Brand ${brandId} not found`);
+
+  const resolvedLocationCode =
+    locationCode ?? (brand.region ? regionToLocationCode(brand.region) : undefined);
+  const resolvedLanguageCode =
+    languageCode ?? (brand.language ? languageToCode(brand.language) : undefined);
+
+  const setIds = await fetchPromptSetIds(brandId);
+  if (setIds.length === 0) return [];
+
+  const rows = await fetchAllPages(() => existingVolumesQuery(setIds));
+  const prepared = rows
+    .filter((row) => row.keywords?.length)
+    .map((row) => ({ promptId: row.prompt_id, intent: row.intent, keywords: row.keywords }));
+
+  return fetchAndStore(prepared, {
+    locationCode: resolvedLocationCode,
+    languageCode: resolvedLanguageCode,
+    brandId,
+  });
 }
