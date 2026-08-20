@@ -10,7 +10,7 @@ import {
   type SourceCategory,
   SOURCE_CATEGORIES,
 } from '@/lib/citations/classify';
-import { classifyArticleType, type ArticleType } from '@/lib/citations/article-type';
+import { classifyArticleType } from '@/lib/citations/article-type';
 import { citationUrlMatchKey, normalizeCitationUrl } from '@/lib/citations/normalize';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -212,221 +212,226 @@ async function scanFilteredResults<T>(
   return total;
 }
 
+/** URL rows the overview asks for. The table paginates a hundred at a time. */
+const CITATIONS_URL_LIMIT = 2000;
+
+/**
+ * Arguments shared by the three aggregate functions.
+ *
+ * Absent filters are `undefined`, which PostgREST omits from the request
+ * entirely, so each function falls back to its own default — `null`, meaning
+ * no filter. That is the same convention the insights RPCs already use.
+ */
+function overviewArgs(brandId: string, filters: CitationsFilters, topicPromptIds: string[] | null) {
+  const { from, to } = resolveDateRange(filters);
+  const promptIds =
+    filters.promptIds && filters.promptIds.length > 0 ? filters.promptIds : undefined;
+
+  return {
+    p_brand_id: brandId,
+    p_date_from: from ?? undefined,
+    p_date_to: expandDateToEndOfDay(to) ?? undefined,
+    p_models: modelFilterList(filters.platforms) ?? undefined,
+    p_regions: filters.regions && filters.regions.length > 0 ? filters.regions : undefined,
+    // Topics resolve to prompts before the call, so the functions never have
+    // to know that a topic is a set of prompts.
+    p_prompt_ids: topicPromptIds ?? promptIds ?? undefined,
+  };
+}
+
+/**
+ * Flatten the platform filter the way the picker sends it.
+ *
+ * One option can stand for a whole model family (`gpt-5-3-mini,gpt-5-5`), so a
+ * single selection may mean several slugs.
+ */
+function modelFilterList(models: string[] | undefined): string[] | null {
+  if (!models || models.length === 0) return null;
+  const list = Array.from(
+    new Set(
+      models.flatMap((model) =>
+        model
+          .split(',')
+          .map((slug) => slug.trim())
+          .filter(Boolean),
+      ),
+    ),
+  );
+  return list.length > 0 ? list : null;
+}
+
+interface DomainAggRow {
+  domain: string;
+  total_citations: number;
+  results_citing: number;
+  models: string[] | null;
+}
+
+interface UrlAggRow {
+  url: string;
+  domain: string;
+  title: string | null;
+  total_citations: number;
+  results_citing: number;
+  models: string[] | null;
+  total_urls: number;
+}
+
+/**
+ * The Citations overview, aggregated in Postgres (#732).
+ *
+ * Until phase 2 this paged every answer in the window out to the app tier and
+ * expanded `prompt_results.citations` here: 50 sequential requests carrying
+ * 65 MB of jsonb on the largest brand, and a hard 50,000-row ceiling that
+ * silently truncated it at its 51,679. The citation rows written in phase 1
+ * make that an ordinary indexed aggregation.
+ *
+ * What stays in JavaScript is what the database cannot know: which domains
+ * belong to this brand and which to a competitor. That classification depends
+ * on the brand's own domain list, and it applies to the ~20,000 aggregated
+ * domains rather than to two million citations.
+ */
 export async function getCitationsOverview(
   brandId: string,
   filters: CitationsFilters,
 ): Promise<CitationsOverview> {
   const supabase = await createClient();
 
-  // 1. Load brand's own domains.
-  const { data: brandDomainRows } = await supabase
-    .from('brand_domains')
-    .select('domain')
-    .eq('brand_id', brandId);
+  const [{ data: brandDomainRows }, { data: competitorRows }, topicPromptIds] = await Promise.all([
+    supabase.from('brand_domains').select('domain').eq('brand_id', brandId),
+    supabase.from('competitors').select('domain').eq('brand_id', brandId),
+    resolveTopicPromptIds(supabase, filters),
+  ]);
+
   const brandDomains = (brandDomainRows ?? [])
     .map((r) => normalizeDomain((r as { domain: string }).domain))
     .filter(Boolean);
-
-  // 2. Load competitor domains.
-  const { data: competitorRows } = await supabase
-    .from('competitors')
-    .select('domain')
-    .eq('brand_id', brandId);
   const competitorDomains = (competitorRows ?? [])
     .map((r) => normalizeDomain((r as { domain: string }).domain))
     .filter(Boolean);
-
   const classifyCtx = { brandDomains, competitorDomains };
 
-  // 3+4. Page through the filtered window (see scanFilteredResults) and
-  // aggregate in memory batch by batch.
-  interface OverviewResultRow {
-    id: string;
-    prompt_id: string;
-    platform: string | null;
-    model_used: string | null;
-    region: string | null;
-    created_at: string;
-    citations: Citation[] | null;
-  }
-  interface DomainAgg {
-    domain: string;
-    category: SourceCategory;
-    totalCitations: number;
-    resultsCiting: Set<string>;
-    models: Set<string>;
-    articleTypeCounts: Map<string, number>;
-  }
-  interface UrlAgg {
-    url: string;
-    domain: string;
-    category: SourceCategory;
-    title: string;
-    totalCitations: number;
-    resultsCiting: Set<string>;
-    models: Set<string>;
-    articleType: string | null;
-  }
+  const args = overviewArgs(brandId, filters, topicPromptIds);
 
-  const domainMap = new Map<string, DomainAgg>();
-  const urlMap = new Map<string, UrlAgg>();
+  // In parallel: the three are independent, and the slowest decides the wait.
+  const [domainRes, urlRes, statsRes] = await Promise.all([
+    supabase.rpc('citations_domains', args),
+    supabase.rpc('citations_urls', { ...args, p_limit: CITATIONS_URL_LIMIT }),
+    supabase.rpc('citations_window_stats', args),
+  ]);
 
-  const domainClassificationCache = new Map<string, SourceCategory>();
-  const articleTypeCache = new Map<string, ArticleType | null>();
+  if (domainRes.error) throw new Error(domainRes.error.message);
+  if (urlRes.error) throw new Error(urlRes.error.message);
+  if (statsRes.error) throw new Error(statsRes.error.message);
 
-  let totalCitations = 0;
-  const regionsSeen = new Set<string>();
+  const stats = (statsRes.data as { results: number; regions: string[] | null }[] | null)?.[0];
+  const totalResults = Number(stats?.results ?? 0);
 
-  const aggregateResult = (result: OverviewResultRow) => {
-    const citations = Array.isArray(result.citations) ? result.citations : [];
-    const modelKey = result.model_used || result.platform || '';
-
-    for (const cite of citations) {
-      const host = extractHostname(cite.url);
-      if (!host) continue;
-
-      let category = domainClassificationCache.get(host);
-
-      if (category === undefined) {
-        category = classifyDomain(host, classifyCtx);
-        domainClassificationCache.set(host, category);
-      }
-
-      if (filters.excludeOwnDomain && category === 'you') continue;
-      if (filters.competitorOnly && category !== 'competitor') continue;
-      if (filters.ownOnly && category !== 'you') continue;
-
-      totalCitations += 1;
-
-      // Domain aggregation.
-      const existingDomain = domainMap.get(host) ?? {
-        domain: host,
-        category,
-        totalCitations: 0,
-        resultsCiting: new Set<string>(),
-        models: new Set<string>(),
-        articleTypeCounts: new Map<string, number>(),
-      };
-      existingDomain.totalCitations += 1;
-      existingDomain.resultsCiting.add(result.id);
-      if (modelKey) existingDomain.models.add(modelKey);
-      const articleTypeKey = `${cite.url}\n${cite.title ?? ''}`;
-
-      let articleType = articleTypeCache.get(articleTypeKey);
-
-      if (articleType === undefined) {
-        articleType = classifyArticleType(cite.url, cite.title);
-        articleTypeCache.set(articleTypeKey, articleType);
-      }
-      if (articleType) {
-        existingDomain.articleTypeCounts.set(
-          articleType,
-          (existingDomain.articleTypeCounts.get(articleType) ?? 0) + 1,
-        );
-      }
-      domainMap.set(host, existingDomain);
-
-      // URL aggregation (preserve query parameters that identify the page).
-      const normalizedUrl = normalizeCitationUrl(cite.url);
-      const existingUrl = urlMap.get(normalizedUrl) ?? {
-        url: normalizedUrl,
-        domain: host,
-        category,
-        title: cite.title || '',
-        totalCitations: 0,
-        resultsCiting: new Set<string>(),
-        models: new Set<string>(),
-        articleType,
-      };
-      existingUrl.totalCitations += 1;
-      existingUrl.resultsCiting.add(result.id);
-      if (modelKey) existingUrl.models.add(modelKey);
-      if (!existingUrl.title && cite.title) existingUrl.title = cite.title;
-      urlMap.set(normalizedUrl, existingUrl);
+  const classifyCache = new Map<string, SourceCategory>();
+  const categoryOf = (domain: string): SourceCategory => {
+    let category = classifyCache.get(domain);
+    if (category === undefined) {
+      category = classifyDomain(domain, classifyCtx);
+      classifyCache.set(domain, category);
     }
+    return category;
   };
 
-  const totalResults = await scanFilteredResults<OverviewResultRow>(
-    supabase,
-    brandId,
-    filters,
-    'id, prompt_id, platform, model_used, region, created_at, citations, citation_count',
-    (batch) => {
-      for (const result of batch) {
-        if (result.region) regionsSeen.add(result.region);
-        aggregateResult(result);
-      }
-    },
-  );
+  // Scope filters apply to aggregated rows rather than to citations, which is
+  // exact: a domain's category is a property of the domain, so filtering after
+  // the rollup keeps every count identical to filtering before it.
+  const keep = (category: SourceCategory) => {
+    if (filters.excludeOwnDomain && category === 'you') return false;
+    if (filters.competitorOnly && category !== 'competitor') return false;
+    if (filters.ownOnly && category !== 'you') return false;
+    return true;
+  };
 
-  // 5. Build output arrays.
-  const rowsOut: CitationDomainRow[] = Array.from(domainMap.values())
-    .map((agg) => {
-      const resultsCiting = agg.resultsCiting.size;
-      const articleTypes = Array.from(agg.articleTypeCounts.entries())
-        .map(([type, count]) => ({ type, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 3);
+  const usagePct = (resultsCiting: number) =>
+    totalResults > 0 ? Math.round((resultsCiting / totalResults) * 1000) / 10 : 0;
+
+  const rows: CitationDomainRow[] = ((domainRes.data as DomainAggRow[] | null) ?? [])
+    .map((row) => ({ row, category: categoryOf(row.domain) }))
+    .filter(({ category }) => keep(category))
+    .map(({ row, category }) => {
+      const resultsCiting = Number(row.results_citing);
+      const totalCitations = Number(row.total_citations);
       return {
-        domain: agg.domain,
-        category: agg.category,
-        models: Array.from(agg.models).sort(),
-        totalCitations: agg.totalCitations,
+        domain: row.domain,
+        category,
+        models: (row.models ?? []).slice().sort(),
+        totalCitations,
         avgCitationsPerResult:
-          resultsCiting > 0 ? Math.round((agg.totalCitations / resultsCiting) * 10) / 10 : 0,
+          resultsCiting > 0 ? Math.round((totalCitations / resultsCiting) * 10) / 10 : 0,
         resultsCiting,
-        usagePct: totalResults > 0 ? Math.round((resultsCiting / totalResults) * 1000) / 10 : 0,
-        articleTypes,
+        usagePct: usagePct(resultsCiting),
+        // Computed but never rendered — see CitationDomainRow.
+        articleTypes: [],
       };
-    })
-    .sort((a, b) => b.totalCitations - a.totalCitations);
+    });
 
-  const urlRowsOut: CitationUrlRow[] = Array.from(urlMap.values())
-    .map((agg) => {
-      const resultsCiting = agg.resultsCiting.size;
+  const urlRowsRaw = (urlRes.data as UrlAggRow[] | null) ?? [];
+  const urlRows: CitationUrlRow[] = urlRowsRaw
+    .map((row) => ({ row, category: categoryOf(row.domain) }))
+    .filter(({ category }) => keep(category))
+    .map(({ row, category }) => {
+      const resultsCiting = Number(row.results_citing);
       return {
-        url: agg.url,
-        domain: agg.domain,
-        category: agg.category,
-        title: agg.title,
-        models: Array.from(agg.models).sort(),
-        totalCitations: agg.totalCitations,
+        url: row.url,
+        domain: row.domain,
+        category,
+        title: row.title ?? '',
+        models: (row.models ?? []).slice().sort(),
+        totalCitations: Number(row.total_citations),
         resultsCiting,
-        usagePct: totalResults > 0 ? Math.round((resultsCiting / totalResults) * 1000) / 10 : 0,
-        articleType: agg.articleType,
+        usagePct: usagePct(resultsCiting),
+        articleType: classifyArticleType(row.url, row.title ?? undefined),
       };
-    })
-    .sort((a, b) => b.totalCitations - a.totalCitations);
+    });
 
-  // 6. Source type breakdown (all categories, even with zero).
+  const citations = rows.reduce((sum, row) => sum + row.totalCitations, 0);
+
   const categoryCounts = new Map<SourceCategory, number>();
-  for (const row of rowsOut) {
+  for (const row of rows) {
     categoryCounts.set(row.category, (categoryCounts.get(row.category) ?? 0) + 1);
   }
-  const totalDomains = rowsOut.length;
   const sourceTypeBreakdown: CitationsSourceBreakdown[] = SOURCE_CATEGORIES.map((category) => {
     const count = categoryCounts.get(category) ?? 0;
     return {
       category,
       count,
-      pct: totalDomains > 0 ? Math.round((count / totalDomains) * 1000) / 10 : 0,
+      pct: rows.length > 0 ? Math.round((count / rows.length) * 1000) / 10 : 0,
     };
   }).filter((b) => b.count > 0);
 
   return {
-    rows: rowsOut,
-    urlRows: urlRowsOut,
+    rows,
+    urlRows,
     totals: {
-      domains: rowsOut.length,
-      urls: urlRowsOut.length,
-      citations: totalCitations,
+      domains: rows.length,
+      // The uncapped count, so the page never implies it has every URL. Falls
+      // back to what arrived when the window produced nothing at all.
+      urls: Number(urlRowsRaw[0]?.total_urls ?? urlRows.length),
+      citations,
       results: totalResults,
       avgCitationsPerResult:
-        totalResults > 0 ? Math.round((totalCitations / totalResults) * 10) / 10 : 0,
+        totalResults > 0 ? Math.round((citations / totalResults) * 10) / 10 : 0,
     },
     sourceTypeBreakdown,
-    availableRegions: Array.from(regionsSeen).sort(),
+    availableRegions: (stats?.regions ?? []).slice().sort(),
   };
+}
+
+/** Topic filter → the prompt ids it covers, or null when no topic is selected. */
+async function resolveTopicPromptIds(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  filters: CitationsFilters,
+): Promise<string[] | null> {
+  if (!filters.topicIds || filters.topicIds.length === 0) return null;
+  const { data } = await supabase.from('prompts').select('id').in('topic_id', filters.topicIds);
+  const ids = ((data ?? []) as { id: string }[]).map((p) => p.id);
+  // An empty result must exclude everything rather than filter nothing.
+  return ids.length > 0 ? ids : ['00000000-0000-0000-0000-000000000000'];
 }
 
 // ─── Competitor Gaps (#300) ─────────────────────────────────────────────────

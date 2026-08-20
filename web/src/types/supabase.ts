@@ -2141,6 +2141,59 @@ export type Database = {
         }
         Returns: Json
       }
+      citations_domains: {
+        Args: {
+          p_brand_id: string
+          p_date_from?: string
+          p_date_to?: string
+          p_models?: string[]
+          p_prompt_ids?: string[]
+          p_regions?: string[]
+          p_topic_ids?: string[]
+        }
+        Returns: {
+          domain: string
+          models: string[]
+          results_citing: number
+          total_citations: number
+        }[]
+      }
+      citations_urls: {
+        Args: {
+          p_brand_id: string
+          p_date_from?: string
+          p_date_to?: string
+          p_limit?: number
+          p_models?: string[]
+          p_prompt_ids?: string[]
+          p_regions?: string[]
+          p_topic_ids?: string[]
+        }
+        Returns: {
+          domain: string
+          models: string[]
+          results_citing: number
+          title: string
+          total_citations: number
+          total_urls: number
+          url: string
+        }[]
+      }
+      citations_window_stats: {
+        Args: {
+          p_brand_id: string
+          p_date_from?: string
+          p_date_to?: string
+          p_models?: string[]
+          p_prompt_ids?: string[]
+          p_regions?: string[]
+          p_topic_ids?: string[]
+        }
+        Returns: {
+          regions: string[]
+          results: number
+        }[]
+      }
       competitor_aggregates: {
         Args: {
           p_brand_id: string
