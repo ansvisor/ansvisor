@@ -67,7 +67,10 @@ export type StartVolumeAnalysisResult =
 export interface VolumeAnalysisStatus {
   running: boolean;
   total: number;
+  /** Rows on disk. During a run these are all written at the very end. */
   analyzed: number;
+  /** Prompts the run has finished with — what a progress readout counts. */
+  done: number;
 }
 
 async function toErrorCode(res: Response): Promise<VolumeErrorCode> {
@@ -146,6 +149,7 @@ export async function getVolumeAnalysisStatus(
     running: Boolean(body.running),
     total: body.total ?? 0,
     analyzed: body.analyzed ?? 0,
+    done: body.done ?? body.analyzed ?? 0,
   };
 }
 

@@ -349,6 +349,68 @@ describe('analyzeBrandVolumes', () => {
 });
 
 /**
+ * Progress reporting.
+ *
+ * Batching moved every write to the end of the run, so a progress figure taken
+ * from the table sat at zero for the whole wait and then jumped. These pin the
+ * report to the work itself, one prompt at a time.
+ */
+describe('analyzeBrandVolumes progress', () => {
+  it('reports the total before any prompt has been worked on', async () => {
+    const { analyzeBrandVolumes } = await load(seed({ activeCount: 12 }));
+    const seen = [];
+
+    await analyzeBrandVolumes('b1', { onlyMissing: true, onProgress: (p) => seen.push(p) });
+
+    expect(seen[0]).toEqual({ done: 0, total: 12 });
+  });
+
+  it('advances once per prompt rather than all at once at the end', async () => {
+    const { analyzeBrandVolumes } = await load(seed({ activeCount: 5 }));
+    const seen = [];
+
+    await analyzeBrandVolumes('b1', { onlyMissing: true, onProgress: (p) => seen.push(p) });
+
+    expect(seen.map((p) => p.done)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(seen.every((p) => p.total === 5)).toBe(true);
+  });
+
+  // A prompt whose keyword extraction failed is still a prompt the run has
+  // finished with; leaving it out would stall the count short of the total.
+  it('counts a failed prompt as done', async () => {
+    const { analyzeBrandVolumes } = await load(seed({ activeCount: 3 }));
+    extractIntentKeywords.mockRejectedValueOnce(new Error('model overloaded'));
+    const seen = [];
+
+    await analyzeBrandVolumes('b1', { onlyMissing: true, onProgress: (p) => seen.push(p) });
+
+    expect(seen[seen.length - 1]).toEqual({ done: 3, total: 3 });
+  });
+
+  it('runs without a listener at all', async () => {
+    const { analyzeBrandVolumes } = await load(seed({ activeCount: 2 }));
+
+    expect(await analyzeBrandVolumes('b1', { onlyMissing: true })).toHaveLength(2);
+  });
+
+  // The listener belongs to the UI. A broken one must not cost the run, which
+  // by then may be most of a quarter-hour of work.
+  it('survives a listener that throws', async () => {
+    const { analyzeBrandVolumes } = await load(seed({ activeCount: 3 }));
+
+    const results = await analyzeBrandVolumes('b1', {
+      onlyMissing: true,
+      onProgress: () => {
+        throw new Error('listener blew up');
+      },
+    });
+
+    expect(results).toHaveLength(3);
+    expect(results.every((r) => !r.error)).toBe(true);
+  });
+});
+
+/**
  * Refreshing re-reads Google volumes for prompts that already have keywords.
  * It never calls the LLM, so after batching the whole refresh is one request
  * per 1000 keywords — it used to be one request per prompt.

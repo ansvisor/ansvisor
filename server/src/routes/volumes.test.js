@@ -279,25 +279,67 @@ describe('POST /analyze-batch', () => {
 });
 
 describe('GET /status/:brandId', () => {
-  it('reports progress and whether a run is in flight', async () => {
+  /**
+   * Nothing reaches prompt_volumes until the lookup at the very end, so a
+   * status built on row counts read 0/100 for the whole ten-minute wait and
+   * then jumped straight to 100. The run reports its own progress instead.
+   */
+  it('counts the work in flight, not the rows on disk', async () => {
     const run = deferred();
     analyzeBrandVolumes.mockReturnValue(run.promise);
     await post({ brandId: 'b1' });
 
-    getVolumeProgress.mockResolvedValue({ total: 100, analyzed: 32 });
+    const { onProgress } = analyzeBrandVolumes.mock.calls[0][1];
+    onProgress({ done: 32, total: 100 });
+    getVolumeProgress.mockResolvedValue({ total: 100, analyzed: 0 });
+
     const res = await fetch(`${baseUrl}/status/b1`);
 
-    expect(await res.json()).toEqual({ running: true, total: 100, analyzed: 32 });
+    expect(await res.json()).toEqual({ running: true, total: 100, analyzed: 0, done: 32 });
     run.resolve([]);
   });
 
-  it('reports a brand with no run as stopped', async () => {
+  it('moves as the run reports further progress', async () => {
+    const run = deferred();
+    analyzeBrandVolumes.mockReturnValue(run.promise);
+    await post({ brandId: 'b1' });
+    const { onProgress } = analyzeBrandVolumes.mock.calls[0][1];
+
+    const seen = [];
+    for (const done of [0, 40, 90]) {
+      onProgress({ done, total: 100 });
+      seen.push((await (await fetch(`${baseUrl}/status/b1`)).json()).done);
+    }
+
+    expect(seen).toEqual([0, 40, 90]);
+    run.resolve([]);
+  });
+
+  // Once the run is over the rows are the truth, and they are what a page
+  // arriving later has to go on.
+  it('falls back to the rows on disk when nothing is running', async () => {
     getVolumeProgress.mockResolvedValue({ total: 100, analyzed: 100 });
 
     expect(await (await fetch(`${baseUrl}/status/b1`)).json()).toEqual({
       running: false,
       total: 100,
       analyzed: 100,
+      done: 100,
     });
+  });
+
+  // The page reads this on load to decide whether to show its button or its
+  // spinner; a refresh mid-run must not present the button again.
+  it('still reports a run that was started before this request', async () => {
+    const run = deferred();
+    analyzeBrandVolumes.mockReturnValue(run.promise);
+    await post({ brandId: 'b1' });
+
+    expect((await (await fetch(`${baseUrl}/status/b1`)).json()).running).toBe(true);
+
+    run.resolve([]);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect((await (await fetch(`${baseUrl}/status/b1`)).json()).running).toBe(false);
   });
 });

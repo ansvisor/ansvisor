@@ -26,7 +26,7 @@ const router = Router();
  * the request that starts it, so nothing else would stop a double-click from
  * starting a second pass over the same prompts.
  */
-const runningBrands = new Set();
+const runningBrands = new Map();
 
 /**
  * Claim the brand, or report that someone already holds it. Claiming and
@@ -35,8 +35,12 @@ const runningBrands = new Set();
  */
 function claimVolumeAnalysis(brandId) {
   if (runningBrands.has(brandId)) return false;
-  runningBrands.add(brandId);
+  runningBrands.set(brandId, { done: 0, total: 0 });
   return true;
+}
+
+function trackVolumeProgress(brandId, progress) {
+  if (runningBrands.has(brandId)) runningBrands.set(brandId, progress);
 }
 
 function releaseVolumeAnalysis(brandId) {
@@ -189,6 +193,7 @@ router.post('/analyze-batch', requireFeature('prompt_volumes'), async (req, res)
       languageCode,
       force,
       onlyMissing: !force,
+      onProgress: (progress) => trackVolumeProgress(brandId, progress),
     })
       .then(async (results) => {
         // Quota counts runs, not prompts, so this stays one row per click
@@ -231,7 +236,11 @@ router.post('/analyze-batch', requireFeature('prompt_volumes'), async (req, res)
 
 /**
  * GET /api/volumes/status/:brandId
- * Progress of a running analysis: { running, total, analyzed }.
+ * Progress of a running analysis: { running, total, analyzed, done }.
+ *
+ * `done` is what the page counts against: during a run it is the number of
+ * prompts whose keywords have been worked out, which is where the minutes go.
+ * `analyzed` stays the number of rows on disk, which only moves at the end.
  *
  * `running` is per-process, so a server restart mid-run reports false while
  * rows are still being written. The client treats that as "stopped" and shows
@@ -244,8 +253,17 @@ router.get('/status/:brandId', requireFeature('prompt_volumes'), async (req, res
     await assertBrandAccess(brandId, req.user.id);
 
     const { total, analyzed } = await getVolumeProgress(brandId);
+    const live = runningBrands.get(brandId);
 
-    return res.json({ running: runningBrands.has(brandId), total, analyzed });
+    // While a run is going, `analyzed` counts rows that are all written at the
+    // very end — it would read 0 for the whole wait and then jump to the total.
+    // The live counter tracks the work itself, so it moves throughout.
+    return res.json({
+      running: Boolean(live),
+      total: live?.total || total,
+      analyzed,
+      done: live ? live.done : analyzed,
+    });
   } catch (error) {
     if (error instanceof PlanLimitError) {
       return res.status(error.statusCode).json({

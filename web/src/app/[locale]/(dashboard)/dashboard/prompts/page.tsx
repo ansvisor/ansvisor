@@ -949,7 +949,7 @@ export default function PromptsPage() {
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState<{
-    analyzed: number;
+    done: number;
     total: number;
   } | null>(null);
   // Bumped whenever a run is superseded or the brand changes, so a poll that is
@@ -1111,15 +1111,87 @@ export default function PromptsPage() {
     };
   }, [loadData]);
 
-  // Switching brands (or leaving) ends the watch. The run itself is on the
-  // server and carries on; only this page's narration of it stops.
+  // loadData changes identity whenever the date range does. The watch below
+  // must not restart for that, so it reaches the current one through a ref.
+  const loadDataRef = useRef(loadData);
   useEffect(() => {
+    loadDataRef.current = loadData;
+  }, [loadData]);
+
+  /**
+   * Follow a run that is already going.
+   *
+   * Progress is the server's own count of prompts it has finished with, not
+   * rows on disk: batching writes every row in one go at the end, so a row
+   * count reads 0 for the whole wait and then jumps straight to the total.
+   *
+   * Only a status that says the run has stopped counts as finished. Giving up
+   * on the watch — deadline reached, status unreadable — says nothing about the
+   * run, and claiming otherwise would send someone off with a half-filled table
+   * believing it was complete.
+   */
+  const watchVolumeAnalysis = useCallback(async (brandId: string, gen: number) => {
+    let finished = false;
+    const deadline = Date.now() + VOLUME_WATCH_MS;
+
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, VOLUME_POLL_MS));
+      if (analysisGenRef.current !== gen) return { finished: false, superseded: true };
+
+      const status = await getVolumeAnalysisStatus(brandId);
+      if (analysisGenRef.current !== gen) return { finished: false, superseded: true };
+
+      if (!status) break;
+      setAnalysisProgress({ done: status.done, total: status.total });
+      if (!status.running) {
+        finished = true;
+        break;
+      }
+      if (Date.now() > deadline) break;
+    }
+
+    return { finished, superseded: false };
+  }, []);
+
+  /**
+   * A run outlives the page that started it, so on arrival — a reload, a tab
+   * reopened, a return to this brand — the page has to ask whether one is
+   * already going. Without this it offers the Analyze button again while the
+   * work is still in flight, which reads as though nothing were happening.
+   *
+   * Leaving the brand ends the watch. The run itself carries on; only this
+   * page's narration of it stops.
+   */
+  useEffect(() => {
+    if (!activeBrandId) return undefined;
+
+    const brandId = activeBrandId;
+    const gen = ++analysisGenRef.current;
+
+    (async () => {
+      const status = await getVolumeAnalysisStatus(brandId);
+      if (analysisGenRef.current !== gen || !status?.running) return;
+
+      setAnalyzing(true);
+      setAnalysisProgress({ done: status.done, total: status.total });
+
+      const { finished, superseded } = await watchVolumeAnalysis(brandId, gen);
+      if (superseded || analysisGenRef.current !== gen) return;
+
+      setAnalyzing(false);
+      setAnalysisProgress(null);
+      if (finished) {
+        await loadDataRef.current();
+        toast.success('Volume analysis finished.');
+      }
+    })();
+
     return () => {
       analysisGenRef.current += 1;
       setAnalyzing(false);
       setAnalysisProgress(null);
     };
-  }, [activeBrandId]);
+  }, [activeBrandId, watchVolumeAnalysis]);
 
   /**
    * Start a run, then follow it to the end.
@@ -1177,28 +1249,8 @@ export default function PromptsPage() {
           : 'Volume analysis is already running for this brand.',
       );
 
-      // Only a status that comes back saying the run has stopped counts as
-      // finished. Giving up on the watch — deadline reached, status unreadable
-      // — says nothing about the run, and claiming otherwise would send someone
-      // off with a half-filled table believing it was complete.
-      let finished = false;
-      const deadline = Date.now() + VOLUME_WATCH_MS;
-
-      for (;;) {
-        await new Promise((resolve) => setTimeout(resolve, VOLUME_POLL_MS));
-        if (analysisGenRef.current !== gen) return;
-
-        const status = await getVolumeAnalysisStatus(activeBrandId);
-        if (analysisGenRef.current !== gen) return;
-
-        if (!status) break;
-        setAnalysisProgress({ analyzed: status.analyzed, total: status.total });
-        if (!status.running) {
-          finished = true;
-          break;
-        }
-        if (Date.now() > deadline) break;
-      }
+      const { finished, superseded } = await watchVolumeAnalysis(activeBrandId, gen);
+      if (superseded) return;
 
       await loadData();
       if (analysisGenRef.current === gen) {
@@ -1267,7 +1319,7 @@ export default function PromptsPage() {
   // Reads "Analyzing 32/100..." once the first poll lands, so a run measured in
   // minutes shows movement instead of an indefinite spinner.
   const analyzingLabel = analysisProgress
-    ? `Analyzing ${analysisProgress.analyzed}/${analysisProgress.total}...`
+    ? `Analyzing ${analysisProgress.done}/${analysisProgress.total}...`
     : 'Analyzing...';
 
   // Join prompts with their volume + visibility summaries once, reused by the

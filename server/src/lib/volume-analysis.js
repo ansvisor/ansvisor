@@ -33,6 +33,16 @@ export function mapVolumeRow(saved) {
  */
 const MAX_KEYWORDS_PER_REQUEST = 1000;
 
+/** A progress listener is a courtesy to the UI; it never fails the run. */
+function report(onProgress, progress) {
+  if (!onProgress) return;
+  try {
+    onProgress(progress);
+  } catch (err) {
+    logger.warn({ err }, 'volume progress listener threw');
+  }
+}
+
 /**
  * Look up every distinct keyword in as few requests as possible.
  *
@@ -304,7 +314,7 @@ export async function getVolumeProgress(brandId) {
 
 export async function analyzeBrandVolumes(
   brandId,
-  { locationCode, languageCode, force = false, onlyMissing = false } = {},
+  { locationCode, languageCode, force = false, onlyMissing = false, onProgress } = {},
 ) {
   const { data: brand, error: brandError } = await supabaseAdmin
     .from('brands')
@@ -363,6 +373,11 @@ export async function analyzeBrandVolumes(
   const prepared = [];
   const keywordStart = Date.now();
 
+  // Nothing reaches prompt_volumes until the lookup at the end, so counting
+  // rows would read 0 for the whole of this phase and then jump. Progress is
+  // reported from here instead, where the work actually happens.
+  report(onProgress, { done: 0, total: promptsToAnalyze.length });
+
   // Keywords first, one prompt at a time — a prompt with saved keywords costs
   // nothing here, the rest cost one LLM call each. This is now the only
   // per-prompt work in the run.
@@ -379,6 +394,11 @@ export async function analyzeBrandVolumes(
       logger.error({ err, promptId }, 'keyword extraction failed for prompt');
       results.push({ promptId, error: err.message });
     }
+
+    report(onProgress, {
+      done: prepared.length + results.length,
+      total: promptsToAnalyze.length,
+    });
   }
 
   logger.info(
