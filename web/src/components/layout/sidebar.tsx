@@ -105,6 +105,11 @@ export function Sidebar() {
                 {group.title}
               </p>
             )}
+            {/* A group with no title has no header to set it apart, so it
+                carries a rule instead — without one its items read as the tail
+                of the group above. The first group needs neither: nothing
+                precedes it. */}
+            {!group.title && i > 0 && <Separator className="mb-2" />}
             {group.title && isCollapsed && i > 0 && <Separator className="my-2" />}
             <nav className="space-y-0.5">
               {group.items.map((item) => {

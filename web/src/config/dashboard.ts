@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Building2,
+  FileBarChart,
   FileText,
   Gauge,
   Globe,
@@ -106,6 +107,24 @@ export const dashboardNav: NavGroup[] = [
         href: '/dashboard/audit',
         icon: Gauge,
         requiredFeature: 'content_optimization',
+      },
+    ],
+  },
+  /**
+   * Reports sits in its own group rather than under Analytics or Optimization,
+   * because it draws on both: of its thirteen sections, `auditScore` comes from
+   * Site Audit and the rest from the analytics surfaces. Filing it under either
+   * heading would understate what it covers.
+   *
+   * It is also the only way into /dashboard/reports besides the button on
+   * Visibility — from Citations or Site Audit there was no route to it at all.
+   */
+  {
+    items: [
+      {
+        title: 'Reports',
+        href: '/dashboard/reports',
+        icon: FileBarChart,
       },
     ],
   },
