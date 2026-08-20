@@ -1142,7 +1142,7 @@ export default function PromptsPage() {
       if (analysisGenRef.current !== gen) return { finished: false, superseded: true };
 
       if (!status) break;
-      setAnalysisProgress({ done: status.done, total: status.total });
+      setAnalysisProgress(status.done === null ? null : { done: status.done, total: status.total });
       if (!status.running) {
         finished = true;
         break;
@@ -1173,7 +1173,7 @@ export default function PromptsPage() {
       if (analysisGenRef.current !== gen || !status?.running) return;
 
       setAnalyzing(true);
-      setAnalysisProgress({ done: status.done, total: status.total });
+      setAnalysisProgress(status.done === null ? null : { done: status.done, total: status.total });
 
       const { finished, superseded } = await watchVolumeAnalysis(brandId, gen);
       if (superseded || analysisGenRef.current !== gen) return;
@@ -1317,7 +1317,9 @@ export default function PromptsPage() {
   const quotaExhausted = quota !== null && quota.limit !== -1 && quota.remaining <= 0;
 
   // Reads "Analyzing 32/100..." once the first poll lands, so a run measured in
-  // minutes shows movement instead of an indefinite spinner.
+  // minutes shows movement instead of an indefinite spinner. A count is only
+  // shown while it is one: a server that does not report live progress leaves
+  // it out rather than parking on 0/100, which says less than no number at all.
   const analyzingLabel = analysisProgress
     ? `Analyzing ${analysisProgress.done}/${analysisProgress.total}...`
     : 'Analyzing...';

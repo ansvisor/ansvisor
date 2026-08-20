@@ -69,8 +69,15 @@ export interface VolumeAnalysisStatus {
   total: number;
   /** Rows on disk. During a run these are all written at the very end. */
   analyzed: number;
-  /** Prompts the run has finished with — what a progress readout counts. */
-  done: number;
+  /**
+   * Prompts the run has finished with — what a progress readout counts.
+   *
+   * null when the server does not report live progress, which is any build
+   * that predates it. Rows on disk are not a stand-in: they all appear at the
+   * very end, so substituting them would show a count frozen at zero for the
+   * whole run and then jumping to the total.
+   */
+  done: number | null;
 }
 
 async function toErrorCode(res: Response): Promise<VolumeErrorCode> {
@@ -149,7 +156,7 @@ export async function getVolumeAnalysisStatus(
     running: Boolean(body.running),
     total: body.total ?? 0,
     analyzed: body.analyzed ?? 0,
-    done: body.done ?? body.analyzed ?? 0,
+    done: typeof body.done === 'number' ? body.done : null,
   };
 }
 
