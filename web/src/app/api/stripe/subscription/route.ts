@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import { stripe, PRICE_IDS } from '@/lib/stripe';
 import { SUBSCRIBABLE_PLANS } from '@/config/plans';
 import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
@@ -170,9 +171,10 @@ export async function PATCH(req: NextRequest) {
       proration_behavior: 'create_prorations',
     })) as unknown as SubscriptionRaw;
 
-    // Optimistic DB update
-    const supabase = await createClient();
-    await supabase.from('organizations').update({ plan: newPlanId }).eq('id', org.id);
+    // Optimistic DB update. Stripe has already accepted the plan change, so
+    // this is the server mirroring its own decision, not the caller writing
+    // their own plan — hence the service role, same as the webhook.
+    await supabaseAdmin.from('organizations').update({ plan: newPlanId }).eq('id', org.id);
 
     // Align prompts to the new plan's engine set so an upgrade actually
     // expands (Starter → Growth: 2 → 8 engines) or trims (Growth → Starter:

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import { stripe, PRICE_IDS } from '@/lib/stripe';
 
 export async function POST(req: NextRequest) {
@@ -21,6 +22,20 @@ export async function POST(req: NextRequest) {
 
     if (!planId || !organizationId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    // The org id arrives in the request body, so confirm the caller is
+    // actually in it. Row-level security used to be the only thing standing
+    // between this and another org's row; the customer id below is now
+    // written with the service role, which answers to nothing but this check.
+    const { data: callerProfile } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', user.id)
+      .single();
+
+    if (callerProfile?.organization_id !== organizationId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const priceId = PRICE_IDS[planId]?.monthly;
@@ -54,7 +69,7 @@ export async function POST(req: NextRequest) {
       });
       customerId = customer.id;
 
-      await supabase
+      await supabaseAdmin
         .from('organizations')
         .update({ stripe_customer_id: customerId })
         .eq('id', organizationId);
