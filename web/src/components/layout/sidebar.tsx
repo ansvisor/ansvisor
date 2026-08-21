@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, Link } from '@/i18n/navigation';
 import { dashboardNav } from '@/config/dashboard';
+import { getDashboardNavLabel, shouldShowDashboardNavItem } from '@/lib/dashboard-navigation';
 import { useSidebarStore } from '@/stores/use-sidebar-store';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
@@ -50,22 +51,6 @@ export function Sidebar() {
   }, []);
 
   const logoSrc = mounted && resolvedTheme === 'dark' ? '/logo_dark.svg' : '/logo_light.svg';
-
-  const navKeyMap: Record<string, () => string> = {
-    Overview: () => t('overview'),
-    Brands: () => tBrands('title'),
-    Agent: () => t('agent'),
-    'Answer Engine Insights': () => t('insights'),
-    'AI Traffic Analytics': () => t('traffic'),
-    Prompts: () => t('prompts'),
-    Topics: () => t('topics'),
-    'Content Optimization': () => t('content'),
-    'Site Audit': () => t('audit'),
-    Citations: () => t('citations'),
-    Shopping: () => t('shopping'),
-    Reports: () => t('reports'),
-    Settings: () => t('settings'),
-  };
 
   return (
     <aside
@@ -113,10 +98,7 @@ export function Sidebar() {
             {group.title && isCollapsed && i > 0 && <Separator className="my-2" />}
             <nav className="space-y-0.5">
               {group.items.map((item) => {
-                // Hide entirely if a required brand preference is off — the
-                // user shouldn't see "Shopping (upgrade)" when the active
-                // brand simply isn't in e-commerce.
-                if (item.requiresBrandPref && !brandPrefs[item.requiresBrandPref]) {
+                if (!shouldShowDashboardNavItem(item, brandPrefs)) {
                   return null;
                 }
 
@@ -124,8 +106,7 @@ export function Sidebar() {
                   item.href === '/dashboard'
                     ? pathname === '/dashboard'
                     : pathname.startsWith(item.href);
-                const labelFn = navKeyMap[item.title];
-                const label = labelFn ? labelFn() : item.title;
+                const label = getDashboardNavLabel(item.title, t, tBrands);
 
                 // Dynamic badge override: show "Set up" on the Agent item
                 // when the org has no Anthropic key saved (cloud only).

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, Link } from '@/i18n/navigation';
 import { dashboardNav } from '@/config/dashboard';
+import { getDashboardNavLabel, shouldShowDashboardNavItem } from '@/lib/dashboard-navigation';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useAgentKeyStatus } from '@/hooks/use-agent-key-status';
 import { siteConfig } from '@/config/site';
@@ -27,7 +28,9 @@ export function MobileNav() {
   // so at most one network request is made even when both components mount.
   const agentKeyStatus = useAgentKeyStatus(isCloud);
   const agentKeyMissing = isCloud && agentKeyStatus === 'missing';
-  const { activeBrandId } = useBrandStore();
+  const activeBrandId = useBrandStore((s) => s.activeBrandId);
+  const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId) ?? null);
+  const brandPrefs = { shoppingModeEnabled: !!activeBrand?.shoppingModeEnabled };
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   // Hydration guard — see sidebar.tsx for the rationale; the two
@@ -39,21 +42,6 @@ export function MobileNav() {
   }, []);
 
   const logoSrc = mounted && resolvedTheme === 'dark' ? '/logo_dark.svg' : '/logo_light.svg';
-
-  const getLabel = (title: string): string => {
-    const map: Record<string, string> = {
-      Overview: t('overview'),
-      Brands: tBrands('title'),
-      'Answer Engine Insights': t('insights'),
-      'AI Traffic Analytics': t('traffic'),
-      Prompts: t('prompts'),
-      'Content Optimization': t('content'),
-      Citations: t('citations'),
-      Reports: t('reports'),
-      Settings: t('settings'),
-    };
-    return map[title] ?? title;
-  };
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -89,17 +77,21 @@ export function MobileNav() {
                   )}
                 >
                   <MessageSquareText className="h-4 w-4 shrink-0" />
-                  Prompts
+                  {t('prompts')}
                 </span>
               </Link>
             )}
             {dashboardNav.flatMap((group) =>
               group.items.map((item) => {
+                if (!shouldShowDashboardNavItem(item, brandPrefs)) {
+                  return null;
+                }
+
                 const isActive =
                   item.href === '/dashboard'
                     ? pathname === '/dashboard'
                     : pathname.startsWith(item.href);
-                const label = getLabel(item.title);
+                const label = getDashboardNavLabel(item.title, t, tBrands);
 
                 // Dynamic badge override: show "Set up" on the Agent item
                 // when the org has no Anthropic key saved (cloud only).
