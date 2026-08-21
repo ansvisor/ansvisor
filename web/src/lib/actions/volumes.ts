@@ -130,6 +130,46 @@ export async function startPromptVolumeAnalysis(
 }
 
 /**
+ * Start the free run a brand gets once its setup finishes.
+ *
+ * Setup already kicks off tracking, so Cloro scrapes while the user watches.
+ * This does the other half — keyword volumes and competition from DataForSEO —
+ * so the Prompts page has its numbers by the time anyone opens it, without
+ * anybody pressing Analyze.
+ *
+ * Never throws and never reports. The brand exists and its tracking has
+ * started; a volume run that could not be reached is not a reason to put an
+ * error in front of someone who just finished setting up, and the Analyze
+ * button is still there. The server declines a brand that already has volumes,
+ * so calling this twice costs nothing.
+ */
+export async function bootstrapBrandVolumes(brandId: string): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) return;
+
+    const res = await fetch(`${AEO_SERVER_URL}/api/volumes/bootstrap`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ brandId }),
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (!res.ok) {
+      console.error('Volume bootstrap request failed', res.status);
+    }
+  } catch (err) {
+    console.error('Volume bootstrap request failed', err);
+  }
+}
+
+/**
  * How far the brand's analysis has got. Returns null when the status cannot be
  * read, which the caller treats as "stop polling" rather than as a failure of
  * the run itself — the run is on the server and keeps going either way.

@@ -235,6 +235,86 @@ router.post('/analyze-batch', requireFeature('prompt_volumes'), async (req, res)
 });
 
 /**
+ * POST /api/volumes/bootstrap
+ * The one automatic run a brand gets, at the end of its setup.
+ *
+ * Tracking starts the moment setup finishes, so Cloro is already scraping
+ * while the user watches. Volumes were only ever started from the Stripe
+ * success route, which meant a paying org's first brand got them and every
+ * brand added afterwards got nothing until someone found the Analyze button.
+ *
+ * Deliberately outside the quota: the user did not ask for this run, so
+ * spending one of a Starter plan's four analyses on it would take an
+ * allowance they never offered. What bounds it instead is `analyzed`. A brand
+ * with volumes has already had its free run, so the endpoint declines and the
+ * quota-bearing /analyze-batch becomes the only way back in.
+ */
+router.post('/bootstrap', requireFeature('prompt_volumes'), async (req, res) => {
+  try {
+    const { brandId, locationCode, languageCode } = req.body;
+
+    if (!brandId) {
+      return res.status(400).json({ error: 'brandId is required' });
+    }
+
+    await assertBrandAccess(brandId, req.user.id);
+
+    // Claim before reading the counts, not after: the read is awaited, and a
+    // check that finishes before the claim leaves a gap two calls can both
+    // pass through — which for a free run means paying DataForSEO twice.
+    if (!claimVolumeAnalysis(brandId)) {
+      return res.status(202).json({ started: 0, running: true });
+    }
+
+    let total;
+    try {
+      const progress = await getVolumeProgress(brandId);
+      total = progress.total;
+      if (progress.analyzed > 0 || total === 0) {
+        releaseVolumeAnalysis(brandId);
+        return res.json({ started: 0, running: false });
+      }
+    } catch (err) {
+      releaseVolumeAnalysis(brandId);
+      throw err;
+    }
+
+    analyzeBrandVolumes(brandId, {
+      locationCode,
+      languageCode,
+      onlyMissing: true,
+      onProgress: (progress) => trackVolumeProgress(brandId, progress),
+    })
+      .then((results) => {
+        const successCount = results.filter((r) => !r.error).length;
+        logger.info(
+          { brandId, analyzed: successCount, of: results.length },
+          'volume bootstrap finished',
+        );
+      })
+      .catch((err) => {
+        logger.error({ err, brandId }, 'volume bootstrap failed');
+      })
+      .finally(() => releaseVolumeAnalysis(brandId));
+
+    return res.status(202).json({ started: total, running: true });
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        error: 'quota_exceeded',
+        message: error.message,
+      });
+    }
+    logger.error({ err: error }, 'volume bootstrap error');
+    return res.status(error.status || 500).json({
+      error: 'Failed to start volume analysis',
+      details: error.message,
+    });
+  }
+});
+
+/**
  * GET /api/volumes/status/:brandId
  * Progress of a running analysis: { running, total, analyzed, done }.
  *

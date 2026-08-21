@@ -9,6 +9,7 @@ import { createTopics } from '@/lib/actions/topic';
 import { getPromptCapacity, savePromptSet } from '@/lib/actions/prompt';
 import { addCompetitor } from '@/lib/actions/competitor';
 import { triggerTrackingCheck } from '@/lib/actions/tracking';
+import { bootstrapBrandVolumes } from '@/lib/actions/volumes';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { getFaviconUrl } from '@/lib/favicon';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -698,6 +699,12 @@ export default function NewBrandPage() {
       } catch {
         // Non-critical — scheduled tracking will still run
       }
+
+      // Volumes run alongside the scrape rather than waiting for someone to
+      // find the Analyze button. Awaited only until the server has taken the
+      // work: the run itself outlives this page, but a server action left
+      // in flight would be cancelled by the navigation below.
+      await bootstrapBrandVolumes(createdBrand.id);
 
       toast.success('Brand setup complete! Tracking is starting.');
       router.push('/dashboard/insights');

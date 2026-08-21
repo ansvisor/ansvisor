@@ -7,6 +7,7 @@ import { createBrand } from '@/lib/actions/brand';
 import { createTopics, getTopics } from '@/lib/actions/topic';
 import { getPromptCapacity, savePromptSet } from '@/lib/actions/prompt';
 import { triggerTrackingCheck } from '@/lib/actions/tracking';
+import { bootstrapBrandVolumes } from '@/lib/actions/volumes';
 import { addCompetitor, getCompetitors } from '@/lib/actions/competitor';
 import { getFaviconUrl } from '@/lib/favicon';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -899,6 +900,11 @@ export default function OnboardingPage() {
       } catch {
         // Non-critical — tracking will run on schedule
       }
+
+      // Volumes run alongside the scrape rather than waiting for someone to
+      // find the Analyze button. The cloud flow returns above and gets this
+      // from the Stripe success route once the plan is confirmed.
+      await bootstrapBrandVolumes(createdBrand.id);
 
       toast.success('Setup complete! Your first tracking is starting.');
 

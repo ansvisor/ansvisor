@@ -278,6 +278,121 @@ describe('POST /analyze-batch', () => {
   });
 });
 
+/**
+ * The free run a brand gets when its setup finishes.
+ *
+ * Setup already starts tracking, so Cloro scrapes while the user watches. The
+ * DataForSEO half was wired to the Stripe success route alone, which meant a
+ * paying org's first brand got volumes and every brand added afterwards sat at
+ * zero until someone found the Analyze button.
+ *
+ * What makes it safe to give away is the refusal below: a brand with volumes
+ * has had its run, so this cannot be called in a loop for free analyses.
+ */
+describe('POST /bootstrap', () => {
+  const bootstrap = (body) =>
+    fetch(`${baseUrl}/bootstrap`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  it('starts the run for a freshly created brand', async () => {
+    const res = await bootstrap({ brandId: 'b1' });
+
+    expect(res.status).toBe(202);
+    expect(await res.json()).toMatchObject({ started: 100, running: true });
+    expect(analyzeBrandVolumes).toHaveBeenCalledWith(
+      'b1',
+      expect.objectContaining({
+        onlyMissing: true,
+      }),
+    );
+  });
+
+  it('costs the plan nothing', async () => {
+    await bootstrap({ brandId: 'b1' });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Neither the check nor the ledger row: the user did not ask for this run,
+    // so it must not spend one of a Starter plan's four analyses.
+    expect(enforceVolumeQuota).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('declines a brand that already has volumes', async () => {
+    getVolumeProgress.mockResolvedValue({ total: 100, analyzed: 1 });
+
+    const res = await bootstrap({ brandId: 'b1' });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ started: 0, running: false });
+    expect(analyzeBrandVolumes).not.toHaveBeenCalled();
+  });
+
+  it('leaves the brand free to start again after declining', async () => {
+    getVolumeProgress.mockResolvedValue({ total: 100, analyzed: 1 });
+    await bootstrap({ brandId: 'b1' });
+
+    // A declined call that kept the claim would lock the Analyze button out
+    // of the brand for the lifetime of the process.
+    getVolumeProgress.mockResolvedValue({ total: 100, analyzed: 0 });
+    expect(await (await post({ brandId: 'b1' })).json()).toMatchObject({ running: true });
+  });
+
+  it('declines a brand with no prompts at all', async () => {
+    getVolumeProgress.mockResolvedValue({ total: 0, analyzed: 0 });
+
+    expect(await (await bootstrap({ brandId: 'b1' })).json()).toMatchObject({ started: 0 });
+    expect(analyzeBrandVolumes).not.toHaveBeenCalled();
+  });
+
+  it('starts nothing a second time when both calls arrive together', async () => {
+    analyzeBrandVolumes.mockReturnValue(deferred().promise);
+
+    const [a, b] = await Promise.all([bootstrap({ brandId: 'b1' }), bootstrap({ brandId: 'b1' })]);
+
+    // Two setups finishing at once, or a retried server action: the claim has
+    // to be taken before the counts are read, or both calls read "analyzed: 0"
+    // and DataForSEO is paid twice for the same brand.
+    expect(await Promise.all([a.json(), b.json()])).toEqual(
+      expect.arrayContaining([{ started: 0, running: true }]),
+    );
+    expect(analyzeBrandVolumes).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not start while the Analyze button is already running', async () => {
+    analyzeBrandVolumes.mockReturnValue(deferred().promise);
+    await post({ brandId: 'b1' });
+    analyzeBrandVolumes.mockClear();
+
+    const res = await bootstrap({ brandId: 'b1' });
+
+    expect(res.status).toBe(202);
+    expect(analyzeBrandVolumes).not.toHaveBeenCalled();
+  });
+
+  it('requires a brand', async () => {
+    expect((await bootstrap({})).status).toBe(400);
+  });
+
+  it('refuses a brand the caller cannot reach', async () => {
+    const denied = new Error('Forbidden');
+    denied.status = 403;
+    assertBrandAccess.mockRejectedValue(denied);
+
+    expect((await bootstrap({ brandId: 'someone-elses' })).status).toBe(403);
+    expect(analyzeBrandVolumes).not.toHaveBeenCalled();
+  });
+
+  it('releases the claim when the progress read fails', async () => {
+    getVolumeProgress.mockRejectedValueOnce(new Error('db down'));
+    expect((await bootstrap({ brandId: 'b1' })).status).toBe(500);
+
+    expect(await (await bootstrap({ brandId: 'b1' })).json()).toMatchObject({ running: true });
+  });
+});
+
 describe('GET /status/:brandId', () => {
   /**
    * Nothing reaches prompt_volumes until the lookup at the very end, so a
