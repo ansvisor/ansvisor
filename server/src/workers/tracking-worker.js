@@ -120,6 +120,39 @@ export function allTasksAreStale(rows, maxAgeMs, now = Date.now()) {
 }
 
 /**
+ * How many outstanding tasks count as a negligible tail for a run of this size.
+ *
+ * A floor of 3 rather than a pure percentage, because the fraction alone is
+ * useless on a small run: a single-prompt refresh submits about seven tasks,
+ * and 5% of that rounds to one, so one ghost would still hold the run open.
+ */
+export function tailRemainder(expected) {
+  return Math.max(3, Math.ceil(expected * 0.05));
+}
+
+/**
+ * True when an interactive run should stop waiting on the tasks it has left.
+ *
+ * Interactive runs are watched: a progress bar sits on the Insights page for
+ * as long as this loop polls. The ghost thresholds are sized for the slowest
+ * brand, where delivery can start an hour after submission, and applying them
+ * to a run that finished in four minutes left the bar frozen a couple of tasks
+ * short of the total for another twenty-five — reliably, because google-aio
+ * accepts a task and never calls back whenever the query has no AI Overview.
+ *
+ * Leaving early costs the run nothing but an undercounted `result_count`:
+ * /cloro/callback matches a late delivery by task id and inserts the result
+ * whether or not this loop is still watching for it.
+ *
+ * Cron runs have no audience and keep the patient thresholds, so a quiet gap
+ * mid-burst can never cost them results.
+ */
+export function interactiveTailExhausted({ pending, expected, quietPolls, quietPollLimit }) {
+  if (pending <= 0 || expected <= 0) return false;
+  return pending <= tailRemainder(expected) && quietPolls >= quietPollLimit;
+}
+
+/**
  * Core logic: fetch prompts, run them through specified models, store results.
  * @param {{ brandId: string, promptId?: string, promptIds?: string[], source?: string, job?: { progress: function, signal?: AbortSignal } }} opts
  */
@@ -437,9 +470,24 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
         // submission, and another's at 29.7 — seconds under this threshold.
         // Raise it if healthy runs start exiting as 'ghosts'.
         const ghostTaskAgeMs = (Number(process.env.CLORO_GHOST_TASK_AGE_MIN) || 30) * 60_000;
+        // A run someone kicked off from the UI is watched while it runs; a
+        // nightly cron run is not. Only the watched one pays for the ghost
+        // thresholds in user-visible time, so only it gets the short tail —
+        // two minutes of quiet is enough to call a negligible remainder done.
+        const isInteractive = source !== 'cron';
+        const interactiveTailPolls = Number(process.env.CLORO_INTERACTIVE_TAIL_POLLS) || 8;
 
         let lastPending = expectedSubmitted;
+        // Tracks the true count at every poll, unlike lastPending, which only
+        // moves when the set shrinks. Reported at exit so the log says how many
+        // tasks were abandoned rather than leaving it to be inferred.
+        let pendingAtExit = expectedSubmitted;
         let stalledPolls = 0;
+        // Consecutive polls where the pending set did not shrink. Distinct from
+        // stalledPolls, which advances only after delivery has been confirmed;
+        // this one is counted unconditionally so the interactive tail keeps
+        // working when that confirmation never comes.
+        let quietPolls = 0;
         const drainStartedAt = Date.now();
         const drainStartedIso = new Date(drainStartedAt).toISOString();
         let firstResultAt = null;
@@ -485,6 +533,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
 
           const ourRows = (rows || []).filter((r) => submittedTaskIds.has(r.task_id));
           const pending = ourRows.length;
+          pendingAtExit = pending;
           const processed = expectedSubmitted - pending;
           const allPendingAreOld = allTasksAreStale(ourRows, ghostTaskAgeMs);
 
@@ -512,13 +561,20 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
           }
 
           if (job) {
+            // Once delivery has gone quiet and only a negligible remainder is
+            // left, "still processing" reads as a hang. Say what is actually
+            // happening instead: the run is finishing, waiting on stragglers.
+            const finishingUp =
+              pending > 0 && quietPolls > 0 && pending <= tailRemainder(expectedSubmitted);
             job.progress({
               current: completedTasks + processed,
               total: totalTasks,
               promptText:
-                pending > 0
-                  ? `Receiving platform results — ${pending} task(s) still processing...`
-                  : 'All platform results received',
+                pending === 0
+                  ? 'All platform results received'
+                  : finishingUp
+                    ? `Finishing up — ${pending} platform check(s) haven't responded`
+                    : `Receiving platform results — ${pending} task(s) still processing...`,
               model: null,
               platform: 'cloro',
             });
@@ -526,23 +582,53 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
 
           if (pending === 0) break;
 
-          // Stall and ghost detection reason about changes in the pending set,
-          // so they only mean anything once something has come back.
+          // Whether the set moved this poll is tracked here, ABOVE the
+          // first-result guard. The guard below can hold a run indefinitely if
+          // the delivery probe never succeeds, and a measured run sat here for
+          // over forty minutes with 292 of its 294 tasks long since resolved —
+          // past the stall cap, past the ghost age, exiting on neither because
+          // execution never reached them. The interactive tail must not depend
+          // on that probe: a pending set that has shrunk to a handful is
+          // evidence enough that nothing is left worth waiting for, whether
+          // those tasks came back as results, failures or empty responses.
+          if (pending < lastPending) {
+            lastPending = pending;
+            stalledPolls = 0;
+            quietPolls = 0;
+          } else {
+            quietPolls += 1;
+          }
+
+          if (
+            isInteractive &&
+            interactiveTailExhausted({
+              pending,
+              expected: expectedSubmitted,
+              quietPolls,
+              quietPollLimit: interactiveTailPolls,
+            })
+          ) {
+            exitReason = 'tail';
+            break;
+          }
+
+          // Stall and ghost detection reason about results actually arriving,
+          // so they only mean anything once one demonstrably has.
           if (firstResultAt === null) {
             await new Promise((r) => setTimeout(r, drainPollMs));
             continue;
           }
 
-          if (pending < lastPending) {
-            lastPending = pending;
-            stalledPolls = 0;
-          } else if (allPendingAreOld && stalledPolls + 1 >= ghostStallPolls) {
-            stalledPolls += 1;
-            exitReason = 'ghosts';
-            break;
-          } else if (++stalledPolls >= stallPollLimit) {
-            exitReason = 'stalled';
-            break;
+          if (quietPolls > 0) {
+            if (allPendingAreOld && stalledPolls + 1 >= ghostStallPolls) {
+              stalledPolls += 1;
+              exitReason = 'ghosts';
+              break;
+            }
+            if (++stalledPolls >= stallPollLimit) {
+              exitReason = 'stalled';
+              break;
+            }
           }
 
           await new Promise((r) => setTimeout(r, drainPollMs));
@@ -551,13 +637,18 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
         // Always log how the drain ended. Reconstructing this from the database
         // the morning after — which is how #702 was diagnosed — is guesswork,
         // because the timed-out path used to fall out of the loop silently.
-        const log = exitReason === 'drained' ? logger.info : logger.warn;
+        // 'tail' joins 'drained' as an ordinary ending rather than a warning:
+        // it means the run delivered everything but a negligible remainder and
+        // chose not to make a waiting user sit through the ghost thresholds.
+        const healthyExit = exitReason === 'drained' || exitReason === 'tail';
+        const log = healthyExit ? logger.info : logger.warn;
         log.call(
           logger,
           {
             brandId,
             exitReason,
             expected: expectedSubmitted,
+            pendingAtExit,
             elapsedMs: Date.now() - drainStartedAt,
             firstResultAfterMs: firstResultAt ? firstResultAt - drainStartedAt : null,
           },

@@ -8,7 +8,9 @@ import {
   allTasksAreStale,
   drainBudgetExceeded,
   fetchAllPendingRows,
+  interactiveTailExhausted,
   runnablePlatforms,
+  tailRemainder,
   UNAVAILABLE_PLATFORMS,
 } from './tracking-worker.js';
 
@@ -250,5 +252,59 @@ describe('runnablePlatforms', () => {
   // all, rather than falling back to "no filter means run everything".
   it('leaves nothing to run when every platform is unavailable', () => {
     expect(runnablePlatforms([...UNAVAILABLE_PLATFORMS], { shoppingEnabled: true })).toEqual([]);
+  });
+});
+
+/**
+ * The short tail for watched runs.
+ *
+ * A brand's first analysis is started from the UI and its progress bar stays on
+ * screen for as long as the drain loop polls. One measured run delivered all
+ * 292 of its results in four and a half minutes, then held the bar at 292/294
+ * for another twenty-five waiting on two google-aio tasks that were never going
+ * to call back. Across ten days, runs spent an average of 19 minutes waiting on
+ * ghosts against 14 minutes actually receiving results.
+ *
+ * Nothing is lost by leaving early: /cloro/callback inserts a late delivery
+ * whether or not the loop is still watching.
+ */
+describe('tailRemainder', () => {
+  it('scales with the run for a large brand', () => {
+    expect(tailRemainder(294)).toBe(15);
+  });
+
+  it('never falls below three, so one ghost cannot hold a small run open', () => {
+    // A single-prompt refresh submits about seven tasks; 5% of that rounds to
+    // one, which would leave a lone ghost blocking the exit.
+    expect(tailRemainder(7)).toBe(3);
+    expect(tailRemainder(1)).toBe(3);
+  });
+});
+
+describe('interactiveTailExhausted', () => {
+  const exhausted = (over) =>
+    interactiveTailExhausted({ expected: 294, quietPollLimit: 8, ...over });
+
+  it('gives up on the measured case — 2 of 294 left, two minutes of quiet', () => {
+    expect(exhausted({ pending: 2, quietPolls: 8 })).toBe(true);
+  });
+
+  it('keeps waiting while the queue is still delivering', () => {
+    expect(exhausted({ pending: 2, quietPolls: 7 })).toBe(false);
+  });
+
+  // The whole point of the remainder: a run missing a real chunk of its
+  // results is not "finishing up", however quiet the queue has gone.
+  it('keeps waiting when a meaningful share of the run is still outstanding', () => {
+    expect(exhausted({ pending: 60, quietPolls: 40 })).toBe(false);
+  });
+
+  it('holds a small run open for one ghost but not for four', () => {
+    expect(exhausted({ pending: 1, expected: 7, quietPolls: 8 })).toBe(true);
+    expect(exhausted({ pending: 4, expected: 7, quietPolls: 8 })).toBe(false);
+  });
+
+  it('defers to the caller when the drain is already complete', () => {
+    expect(exhausted({ pending: 0, quietPolls: 99 })).toBe(false);
   });
 });
