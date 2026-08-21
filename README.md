@@ -14,43 +14,144 @@
 
 # Ansvisor — Open-Source AI Search Intelligence Platform
 
-**[Official website](https://www.ansvisor.com)**
+**[Official Website](https://www.ansvisor.com/)** · **[Documentation](https://docs.ansvisor.com/)**
 
-The search landscape is transforming fast. Buyers are moving from traditional search engines to AI platforms like ChatGPT, Claude, Gemini, Google AI Mode, etc.
+**Business Data + AI Behavior → Intelligence → Opportunities → Actions**
 
-At [Ansvisor](https://www.ansvisor.com), we are building the open future of AI Visibility and AI Search Optimization (AEO/GEO) to help brands claim their spot in AI-generated answers.
+Ansvisor is an **open-source AI Search Intelligence Platform** that helps brands understand, measure, and improve their visibility across AI Search.
 
-What excites us most about Ansvisor is our commitment to a build-in-public and transparent approach.
+Connect business data and traditional search signals with AI Search behavior across ChatGPT, Google AI Overviews, Google AI Mode, Gemini, Claude, Perplexity, Microsoft Copilot, Grok, and other AI platforms to discover opportunities, prioritize what matters, and improve brand visibility.
 
-We believe the future of AI visibility shouldn't be a black box. This field really needs an open platform.
+Track prompts, mentions, citations, competitors, AI traffic, and the sources AI systems rely on — all in one platform.
 
-We're incredibly excited to shape what's next alongside our amazing community.
+Self-host Ansvisor for free or use the managed [Ansvisor Cloud](https://www.ansvisor.com/).
+
+We're building Ansvisor in the open because we believe companies shouldn't need another black box to understand a black box.
+
+Our goal is to make AI Search intelligence more transparent, measurable, actionable, and accessible.
 
 > ⭐ **If you believe AI Visibility should be open and community-driven, [star the repo](https://github.com/ansvisor/ansvisor/stargazers) — it's how the next team discovers Ansvisor.**
 
-### Why Ansvisor?
+---
 
-> AI search is replacing the traditional click. When ChatGPT recommends a product, no Google ranking saves you. Ansvisor measures what classical SEO can't see — how often AI engines name your brand, which competitors get cited instead, and which prompts move the needle. Self-host it for free, or use the managed [cloud](https://www.ansvisor.com).
+## Why Ansvisor?
+
+AI Search is changing how people discover, evaluate, and choose brands.
+
+Traditional search data tells you how people find you through search engines. AI Search introduces another layer: how AI systems understand your brand, which sources they trust, when they mention or cite you, how competitors appear, and which prompts influence discovery.
+
+Ansvisor brings these signals together.
+
+With Ansvisor, you can:
+
+- **Monitor Answer Engine Insights & AI Visibility** — Track how your brand appears, performs, and is represented across leading AI platforms.
+- **Discover Prompts** — Find relevant prompt opportunities using Google Search Console, Google Analytics, Google Keyword Planner, and AI systems.
+- **Track Prompts** — Monitor the questions and conversations that matter to your audience and measure your visibility over time.
+- **Analyze Citations** — Discover which domains, URLs, competitors, and third-party sources AI systems cite.
+- **Track Mentions** — Understand when, where, and how AI systems talk about your brand, products, and services.
+- **Benchmark Competitors** — Compare your visibility, citations, mentions, and share of voice with competitors.
+- **Understand AI Traffic** — Connect AI Search visibility with visits and performance on your website.
+- **Discover Query Fan-Outs** — Explore the supporting queries AI systems may generate and use before producing an answer.
+- **Find Content Opportunities** — Identify content gaps, optimization opportunities, and topics based on real AI Search behavior.
+- **Audit AI Discoverability** — Analyze technical and content signals that can affect how AI systems discover, understand, and retrieve your website.
+
+The result is a clearer path from fragmented data to useful intelligence:
+
+**Business Data + AI Behavior → Intelligence → Opportunities → Actions**
+
+---
 
 ## Resources
 
-- 📚 [Explore Documentation](https://docs.ansvisor.com/)
+- 📜 [Read the Ansvisor Manifesto](https://www.ansvisor.com/manifesto)
 - 🎯 [Take an Interactive Product Tour](https://app.supademo.com/demo/cmq2b1p5k0rk9qm6ugicrn655?utm_source=link)
-- 📖 [AI Visibility Glossary](https://www.ansvisor.com/ai-visibility-glossary)
+- 📖 [Explore the AI Visibility Glossary](https://www.ansvisor.com/ai-visibility-glossary)
 - ✍️ [Read the Blog](https://www.ansvisor.com/blog)
 - 🔍 [Compare Ansvisor vs Alternatives](https://www.ansvisor.com/compare)
 
-## Features
+---
 
-- **Answer Engine Insights** — Real-time visibility scores across ChatGPT, Google AI Overview, Google AI Mode, Google Gemini, Perplexity, Microsoft Copilot, Grok, and Claude with weekly trend analysis
-- **Topics** — Cluster prompts by intent and topic so you can see exactly which themes your brand wins or loses
-- **Prompts** — Track unlimited natural-language queries, get AI-generated prompt suggestions based on competitor citations, and analyze monthly search volume per prompt
-- **Citations** — See every URL AI engines cite alongside your brand, classified by source type (news, review, owned, social, forum)
-- **AI Traffic Analytics** — Tracking pixel that measures real visits arriving from AI answer engines, with platform breakdown, top landing pages, and country segmentation
-- **Competitors** — Compare your AI presence against named competitors and surface visibility gaps to close
-- **Content Optimization** — AI-generated content briefs (title, outline, target keywords, competitor insights) with one-click webhook delivery to your CMS or workflow
-- **Multi-language Support** — 13 languages, 18 regions
-- **Self-hosted or Cloud** — Run it on your own infrastructure with every feature unlocked, or use the managed cloud at [ansvisor.com](https://www.ansvisor.com)
+## Open Source & Cloud Ready
+
+Ansvisor is built for teams that want transparency, flexibility, and control.
+
+You can inspect the code, understand how the platform works, contribute to its development, and deploy it on your own infrastructure.
+
+Or use [Ansvisor Cloud](https://www.ansvisor.com/) without managing infrastructure yourself.
+
+Whether you're an enterprise, agency, e-commerce brand, SaaS company, startup, or developer, Ansvisor provides an intelligence layer for understanding and improving your presence across AI Search.
+
+---
+
+## Supported AI Platforms
+
+Ansvisor helps you monitor and analyze brand visibility across:
+
+- ChatGPT
+- Google AI Overviews
+- Google AI Mode
+- Gemini
+- Claude
+- Perplexity
+- Microsoft Copilot
+- Grok
+- ChatGPT Shopping
+- and other AI-powered discovery experiences
+
+---
+
+## Built in the Open
+
+AI Search is still evolving, and we don't believe its measurement and optimization should happen behind another black box.
+
+We're building Ansvisor together with our open-source community around a few simple principles:
+
+- **Evidence over dogma**
+- **Measurement over assumptions**
+- **Transparency over black boxes**
+- **Outcomes over vanity metrics**
+- **Collaboration over closed innovation**
+
+Developers, marketers, SEO/AEO/GEO practitioners, researchers, agencies, and companies are welcome to contribute.
+
+You can help by:
+
+- Reporting issues
+- Suggesting features
+- Opening pull requests
+- Testing new releases
+- Improving documentation
+- Sharing feedback
+
+---
+
+## Get Started
+
+### Ansvisor Cloud
+
+The fastest way to get started without managing infrastructure.
+
+[**Start with Ansvisor Cloud →**](https://www.ansvisor.com/)
+
+### Self-Hosted
+
+Deploy Ansvisor on your own infrastructure and maintain control over your environment and data.
+
+[**Self-host Ansvisor →**](https://github.com/ansvisor/ansvisor)
+
+---
+
+## Building the Open Future of AI Search
+
+AI Search shouldn't become another ecosystem where companies have to rely entirely on opaque tools, unexplained scores, and assumptions.
+
+We're building Ansvisor to help companies understand what happens between a user's prompt and an AI-generated answer — from the questions people ask and the sources AI systems use to citations, mentions, competitors, traffic, and opportunities.
+
+Our goal is to move beyond visibility monitoring toward intelligence that helps teams understand **where opportunities exist, why they matter, and what to improve next.**
+
+**Business Data + AI Behavior → Intelligence → Opportunities → Actions**
+
+---
 
 ## Quick Start
 
