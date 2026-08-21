@@ -558,6 +558,7 @@
       "mentionEvidence": "Mention Evidence",
       "citationEvidence": "Citation Evidence"
     },
+    "missingSections": "Some sections could not be gathered and are not in this report:",
     "brandLabel": "Brand",
     "sectionsLabel": "Sections",
     "selectSections": "Pick at least one section",

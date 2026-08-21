@@ -220,6 +220,20 @@ export default function ReportDetailPage() {
       {/* Everything below renders from the immutable saved payload; the
           container id is the future PDF capture root. */}
       <div id="report-root" className="space-y-6">
+        {/* A section that could not be gathered is named here rather than
+            silently absent — otherwise the report reads as though the brand
+            had no data for it. */}
+        {payload.missingSections && payload.missingSections.length > 0 && (
+          <Card className="border-amber-500/40">
+            <CardContent className="py-4 text-sm text-muted-foreground">
+              {t('missingSections')}{' '}
+              <span className="text-foreground">
+                {payload.missingSections.map((s) => t(`sections.${s}`)).join(', ')}
+              </span>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{t('executiveSummary')}</CardTitle>

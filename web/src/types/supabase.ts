@@ -2331,6 +2331,66 @@ export type Database = {
           visible_runs: number
         }[]
       }
+      report_citation_evidence: {
+        Args: {
+          p_brand_id: string
+          p_date_from: string
+          p_date_to: string
+          p_limit?: number
+          p_prompts_per_url?: number
+        }
+        Returns: {
+          domain: string
+          sourced_prompts: string[]
+          title: string
+          total_citations: number
+          url: string
+        }[]
+      }
+      report_prompt_performance: {
+        Args: {
+          p_brand_id: string
+          p_date_from: string
+          p_date_to: string
+        }
+        Returns: {
+          citation_answers: number
+          mention_answers: number
+          pos_n: number
+          pos_sum: number
+          prompt_id: string
+          prompt_text: string
+          runs: number
+          sum_visibility: number
+          total_mentions: number
+          visible_runs: number
+        }[]
+      }
+      report_topic_performance: {
+        Args: {
+          p_brand_id: string
+          p_date_from: string
+          p_date_to: string
+          p_prev_from: string
+        }
+        Returns: {
+          citation_answers: number
+          mention_answers: number
+          pos_n: number
+          pos_sum: number
+          prev_citation_answers: number
+          prev_mention_answers: number
+          prev_pos_n: number
+          prev_pos_sum: number
+          prev_runs: number
+          prev_visible_runs: number
+          runs: number
+          sum_visibility: number
+          topic_id: string
+          topic_name: string
+          visible_runs: number
+        }[]
+      }
       share_of_voice_aggregates: {
         Args: {
           p_brand_id: string

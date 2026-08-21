@@ -19,7 +19,7 @@ import {
 } from '@/lib/actions/tracking';
 import { getCitationsOverview, type CitationsSourceBreakdown } from '@/lib/actions/citations';
 import { getShoppingKpis } from '@/lib/actions/shopping';
-import { extractHostname, type SourceCategory } from '@/lib/citations/classify';
+import { type SourceCategory } from '@/lib/citations/classify';
 import {
   getReportTemplate,
   ALL_REPORT_SECTIONS,
@@ -166,6 +166,12 @@ export interface ReportPayload {
   brandName: string;
   /** AI-generated executive summary (plain prose). */
   summaryText: string;
+  /**
+   * Sections that were asked for but could not be gathered. A report is
+   * generated without them rather than not at all, and this is how the page
+   * says which ones are missing instead of leaving the reader to guess.
+   */
+  missingSections?: ReportSection[];
   insights?: InsightsSummary;
   /** Prompt-level Visibility Rate — leads the KPI row (#492); absent on reports generated before this shipped. */
   visibilityRate?: ReportVisibilityRate;
@@ -231,14 +237,6 @@ const REPORT_TOP_DOMAINS = 10;
 const REPORT_PROMPT_COUNT = 5;
 
 /**
- * Every full-window prompt_results scan must page: PostgREST silently caps a
- * select at 1000 rows, which on busy brands computes a report section from a
- * truncated window (the #430/#464 defect family).
- */
-const SCAN_PAGE_SIZE = 1000;
-const SCAN_MAX_ROWS = 50_000;
-
-/**
  * Best/worst prompts by prompt-level Visibility Rate WITHIN the report period
  * — the share of runs the brand actually appeared in, not an average score
  * that zero-visibility runs dilute into misleading single digits (#562).
@@ -246,6 +244,18 @@ const SCAN_MAX_ROWS = 50_000;
  * custom historical ranges — so reports aggregate over [dateFrom, dateTo]
  * directly (same shape: exclude chatgpt-shopping, one row per run).
  */
+interface PromptPerfRow {
+  prompt_text: string | null;
+  runs: number;
+  visible_runs: number;
+  mention_answers: number;
+  citation_answers: number;
+  total_mentions: number;
+  sum_visibility: number;
+  pos_sum: number;
+  pos_n: number;
+}
+
 async function getPromptPerformance(
   brandId: string,
   dateFrom: string,
@@ -253,88 +263,32 @@ async function getPromptPerformance(
 ): Promise<{ best: ReportPromptPerf[]; worst: ReportPromptPerf[] }> {
   const supabase = await createClient();
 
-  const acc = new Map<
-    string,
-    {
-      sumVis: number;
-      mentions: number;
-      runs: number;
-      visibleRuns: number;
-      mentionAnswers: number;
-      citationAnswers: number;
-      posSum: number;
-      posN: number;
-    }
-  >();
-  for (let offset = 0; offset < SCAN_MAX_ROWS; offset += SCAN_PAGE_SIZE) {
-    const { data, error } = await supabase
-      .from('prompt_results')
-      .select('prompt_id, visibility_score, mention_count, citation_count, mention_position')
-      .eq('brand_id', brandId)
-      .neq('platform', 'chatgpt-shopping')
-      .gte('created_at', dateFrom)
-      .lte('created_at', dateTo)
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-      .range(offset, offset + SCAN_PAGE_SIZE - 1);
-    if (error) throw new Error(error.message);
+  const { data, error } = await supabase.rpc('report_prompt_performance', {
+    p_brand_id: brandId,
+    p_date_from: dateFrom,
+    p_date_to: dateTo,
+  });
+  if (error) throw new Error(error.message);
 
-    const batch = data ?? [];
-    for (const r of batch) {
-      const pid = r.prompt_id as string | null;
-      if (!pid) continue;
-      const entry = acc.get(pid) ?? {
-        sumVis: 0,
-        mentions: 0,
-        runs: 0,
-        visibleRuns: 0,
-        mentionAnswers: 0,
-        citationAnswers: 0,
-        posSum: 0,
-        posN: 0,
-      };
-      const mentions = (r.mention_count as number) ?? 0;
-      const citations = (r.citation_count as number) ?? 0;
-      const pos = r.mention_position as number | null;
-      entry.sumVis += (r.visibility_score as number) ?? 0;
-      entry.mentions += mentions;
-      entry.runs += 1;
-      if (mentions > 0 || citations > 0) entry.visibleRuns += 1;
-      if (mentions > 0) entry.mentionAnswers += 1;
-      if (citations > 0) entry.citationAnswers += 1;
-      if (pos !== null && pos !== undefined && pos > 0) {
-        entry.posSum += 1 / pos;
-        entry.posN += 1;
-      }
-      acc.set(pid, entry);
-    }
+  const rows = (data ?? []) as unknown as PromptPerfRow[];
 
-    if (batch.length < SCAN_PAGE_SIZE) break;
-  }
-  if (acc.size === 0) return { best: [], worst: [] };
-
-  const { data: promptRows } = await supabase
-    .from('prompts')
-    .select('id, text')
-    .in('id', [...acc.keys()]);
-  const textById = new Map((promptRows ?? []).map((p) => [p.id as string, p.text as string]));
-
-  const ranked = [...acc.entries()]
-    .map(([pid, v]) => ({
-      text: textById.get(pid) ?? '',
-      avgVisibility: Math.round((v.sumVis / v.runs) * 10) / 10,
-      visibilityRate: Math.round((v.visibleRuns / v.runs) * 1000) / 10,
+  const ranked = rows
+    .filter((r) => r.runs > 0)
+    .map((r) => ({
+      text: r.prompt_text ?? '',
+      avgVisibility: Math.round((r.sum_visibility / r.runs) * 10) / 10,
+      visibilityRate: Math.round((r.visible_runs / r.runs) * 1000) / 10,
       // AI Visibility Score over this prompt's answers — same blend as the
       // All Prompts column, so a prompt reads identically in a report.
       score:
         computeAiVisibilityScore({
-          answers: v.runs,
-          mentionAnswers: v.mentionAnswers,
-          citationAnswers: v.citationAnswers,
-          positionFactor: v.posN > 0 ? v.posSum / v.posN : null,
+          answers: r.runs,
+          mentionAnswers: r.mention_answers,
+          citationAnswers: r.citation_answers,
+          positionFactor: r.pos_n > 0 ? r.pos_sum / r.pos_n : null,
         }) ?? 0,
-      totalMentions: v.mentions,
-      runs: v.runs,
+      totalMentions: r.total_mentions,
+      runs: r.runs,
     }))
     .filter((p) => p.text)
     .sort((a, b) => b.score - a.score || b.totalMentions - a.totalMentions);
@@ -424,6 +378,23 @@ const REPORT_TOPIC_COUNT = 8;
  * getPromptPerformance: one paged prompt_results scan spanning both windows,
  * then resolve topic names.
  */
+interface TopicPerfRow {
+  topic_name: string | null;
+  runs: number;
+  visible_runs: number;
+  mention_answers: number;
+  citation_answers: number;
+  sum_visibility: number;
+  pos_sum: number;
+  pos_n: number;
+  prev_runs: number;
+  prev_visible_runs: number;
+  prev_mention_answers: number;
+  prev_citation_answers: number;
+  prev_pos_sum: number;
+  prev_pos_n: number;
+}
+
 async function getTopicPerformance(
   brandId: string,
   dateFrom: string,
@@ -432,143 +403,44 @@ async function getTopicPerformance(
   const supabase = await createClient();
   const prev = previousWindow(dateFrom, dateTo);
 
-  // Two windows in one scan hits the 1000-row cap even sooner than the
-  // single-window scans, so page it.
-  const rows: {
-    prompt_id: string | null;
-    visibility_score: number | null;
-    mention_count: number | null;
-    citation_count: number | null;
-    mention_position: number | null;
-    created_at: string;
-  }[] = [];
-  for (let offset = 0; offset < SCAN_MAX_ROWS; offset += SCAN_PAGE_SIZE) {
-    const { data, error } = await supabase
-      .from('prompt_results')
-      .select(
-        'prompt_id, visibility_score, mention_count, citation_count, mention_position, created_at',
-      )
-      .eq('brand_id', brandId)
-      .neq('platform', 'chatgpt-shopping')
-      .gte('created_at', prev.from)
-      .lte('created_at', dateTo)
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-      .range(offset, offset + SCAN_PAGE_SIZE - 1);
-    if (error) throw new Error(error.message);
+  const { data, error } = await supabase.rpc('report_topic_performance', {
+    p_brand_id: brandId,
+    p_date_from: dateFrom,
+    p_date_to: dateTo,
+    p_prev_from: prev.from,
+  });
+  if (error) throw new Error(error.message);
 
-    const batch = data ?? [];
-    rows.push(...batch);
-    if (batch.length < SCAN_PAGE_SIZE) break;
-  }
-  if (rows.length === 0) return [];
+  const rows = (data ?? []) as unknown as TopicPerfRow[];
 
-  const promptIds = [...new Set(rows.map((r) => r.prompt_id as string).filter(Boolean))];
-  const { data: promptRows } = await supabase
-    .from('prompts')
-    .select('id, topic_id')
-    .in('id', promptIds);
-  const topicByPrompt = new Map(
-    (promptRows ?? []).filter((p) => p.topic_id).map((p) => [p.id as string, p.topic_id as string]),
-  );
-  if (topicByPrompt.size === 0) return [];
-
-  interface Acc {
-    sumVis: number;
-    n: number;
-    visible: number;
-    mentionAnswers: number;
-    citationAnswers: number;
-    posSum: number;
-    posN: number;
-    prevN: number;
-    prevVisible: number;
-    prevMentionAnswers: number;
-    prevCitationAnswers: number;
-    prevPosSum: number;
-    prevPosN: number;
-  }
-  const byTopic = new Map<string, Acc>();
-  for (const r of rows) {
-    const topicId = topicByPrompt.get(r.prompt_id as string);
-    if (!topicId) continue;
-    const acc = byTopic.get(topicId) ?? {
-      sumVis: 0,
-      n: 0,
-      visible: 0,
-      mentionAnswers: 0,
-      citationAnswers: 0,
-      posSum: 0,
-      posN: 0,
-      prevN: 0,
-      prevVisible: 0,
-      prevMentionAnswers: 0,
-      prevCitationAnswers: 0,
-      prevPosSum: 0,
-      prevPosN: 0,
-    };
-    const mentions = (r.mention_count as number | null) ?? 0;
-    const citations = (r.citation_count as number | null) ?? 0;
-    const pos = r.mention_position as number | null;
-    const isVisible = mentions > 0 || citations > 0;
-    if ((r.created_at as string) >= dateFrom) {
-      acc.sumVis += r.visibility_score ?? 0;
-      acc.n += 1;
-      if (isVisible) acc.visible += 1;
-      if (mentions > 0) acc.mentionAnswers += 1;
-      if (citations > 0) acc.citationAnswers += 1;
-      if (pos !== null && pos !== undefined && pos > 0) {
-        acc.posSum += 1 / pos;
-        acc.posN += 1;
-      }
-    } else {
-      acc.prevN += 1;
-      if (isVisible) acc.prevVisible += 1;
-      if (mentions > 0) acc.prevMentionAnswers += 1;
-      if (citations > 0) acc.prevCitationAnswers += 1;
-      if (pos !== null && pos !== undefined && pos > 0) {
-        acc.prevPosSum += 1 / pos;
-        acc.prevPosN += 1;
-      }
-    }
-    byTopic.set(topicId, acc);
-  }
-
-  const { data: topicRows } = await supabase
-    .from('topics')
-    .select('id, name')
-    .in('id', [...byTopic.keys()]);
-  const nameById = new Map((topicRows ?? []).map((t) => [t.id as string, t.name as string]));
-
-  return [...byTopic.entries()]
-    .filter(([id, acc]) => acc.n > 0 && nameById.has(id))
-    .map(([id, acc]) => {
-      const rate = Math.round((acc.visible / acc.n) * 1000) / 10;
+  return rows
+    .filter((r) => r.runs > 0 && r.topic_name)
+    .map((r) => {
       // AI Visibility Score over the topic's answers, per window — same
       // blend as the Topics page so the two surfaces agree.
       const score =
         computeAiVisibilityScore({
-          answers: acc.n,
-          mentionAnswers: acc.mentionAnswers,
-          citationAnswers: acc.citationAnswers,
-          positionFactor: acc.posN > 0 ? acc.posSum / acc.posN : null,
+          answers: r.runs,
+          mentionAnswers: r.mention_answers,
+          citationAnswers: r.citation_answers,
+          positionFactor: r.pos_n > 0 ? r.pos_sum / r.pos_n : null,
         }) ?? 0;
       const prevScore =
-        acc.prevN > 0
+        r.prev_runs > 0
           ? (computeAiVisibilityScore({
-              answers: acc.prevN,
-              mentionAnswers: acc.prevMentionAnswers,
-              citationAnswers: acc.prevCitationAnswers,
-              positionFactor: acc.prevPosN > 0 ? acc.prevPosSum / acc.prevPosN : null,
+              answers: r.prev_runs,
+              mentionAnswers: r.prev_mention_answers,
+              citationAnswers: r.prev_citation_answers,
+              positionFactor: r.prev_pos_n > 0 ? r.prev_pos_sum / r.prev_pos_n : null,
             }) ?? 0)
           : null;
       return {
-        name: nameById.get(id)!,
-        avgVisibility: round1(acc.sumVis / acc.n),
-        visibilityRate: rate,
+        name: r.topic_name!,
+        avgVisibility: round1(r.sum_visibility / r.runs),
+        visibilityRate: Math.round((r.visible_runs / r.runs) * 1000) / 10,
         score,
         change: prevScore === null ? null : round1(score - prevScore),
-        results: acc.n,
+        results: r.runs,
       };
     })
     .sort((a, b) => b.results - a.results || b.score - a.score)
@@ -818,100 +690,36 @@ async function getMentionEvidence(
  * (#429). Needs its own paginated scan: the citations overview aggregates
  * URLs but doesn't keep the prompt attribution the evidence section is for.
  */
+interface CitationEvidenceRow {
+  url: string;
+  domain: string;
+  title: string;
+  total_citations: number;
+  sourced_prompts: string[] | null;
+}
+
 async function getCitationEvidence(
   brandId: string,
   dateFrom: string,
   dateTo: string,
 ): Promise<ReportCitationEvidence[]> {
   const supabase = await createClient();
-  const PAGE_SIZE = 1000;
-  const MAX_ROWS = 50_000;
 
-  interface UrlAgg {
-    url: string;
-    domain: string;
-    title: string;
-    count: number;
-    promptIds: Set<string>;
-  }
-  const byUrl = new Map<string, UrlAgg>();
+  const { data, error } = await supabase.rpc('report_citation_evidence', {
+    p_brand_id: brandId,
+    p_date_from: dateFrom,
+    p_date_to: dateTo,
+    p_limit: REPORT_EVIDENCE_COUNT,
+    p_prompts_per_url: EVIDENCE_PROMPTS_PER_URL,
+  });
+  if (error) throw new Error(error.message);
 
-  for (let offset = 0; offset < MAX_ROWS; offset += PAGE_SIZE) {
-    const { data, error } = await supabase
-      .from('prompt_results')
-      .select('prompt_id, citations')
-      .eq('brand_id', brandId)
-      .neq('platform', 'chatgpt-shopping')
-      .gte('created_at', dateFrom)
-      .lte('created_at', dateTo)
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-      .range(offset, offset + PAGE_SIZE - 1);
-    if (error) throw new Error(error.message);
-
-    const batch = (data ?? []) as Array<{
-      prompt_id: string | null;
-      citations: Array<{ url?: string; title?: string }> | null;
-    }>;
-
-    for (const row of batch) {
-      const citations = Array.isArray(row.citations) ? row.citations : [];
-      for (const cite of citations) {
-        if (!cite?.url) continue;
-        const host = extractHostname(cite.url);
-        if (!host) continue;
-        // Same URL normalization the Citations page uses, so the evidence
-        // list lines up with the overview's Top URLs.
-        let normalized = cite.url;
-        try {
-          const parsed = new URL(cite.url);
-          parsed.search = '';
-          parsed.hash = '';
-          normalized = parsed.toString().replace(/\/$/, '');
-        } catch {
-          // leave as-is
-        }
-        const agg = byUrl.get(normalized) ?? {
-          url: normalized,
-          domain: host,
-          title: cite.title || '',
-          count: 0,
-          promptIds: new Set<string>(),
-        };
-        agg.count += 1;
-        if (!agg.title && cite.title) agg.title = cite.title;
-        if (row.prompt_id) agg.promptIds.add(row.prompt_id);
-        byUrl.set(normalized, agg);
-      }
-    }
-
-    if (batch.length < PAGE_SIZE) break;
-  }
-
-  const top = [...byUrl.values()]
-    .sort((a, b) => b.count - a.count || a.url.localeCompare(b.url))
-    .slice(0, REPORT_EVIDENCE_COUNT);
-  if (top.length === 0) return [];
-
-  const allPromptIds = [...new Set(top.flatMap((u) => [...u.promptIds]))];
-  const promptTextById = new Map<string, string>();
-  if (allPromptIds.length > 0) {
-    const { data: promptRows } = await supabase
-      .from('prompts')
-      .select('id, text')
-      .in('id', allPromptIds);
-    for (const p of promptRows ?? []) promptTextById.set(p.id as string, p.text as string);
-  }
-
-  return top.map((u) => ({
-    url: u.url,
-    domain: u.domain,
-    title: u.title,
-    totalCitations: u.count,
-    sourcedPrompts: [...u.promptIds]
-      .map((id) => promptTextById.get(id))
-      .filter((t): t is string => Boolean(t))
-      .slice(0, EVIDENCE_PROMPTS_PER_URL),
+  return ((data ?? []) as unknown as CitationEvidenceRow[]).map((r) => ({
+    url: r.url,
+    domain: r.domain,
+    title: r.title,
+    totalCitations: r.total_citations,
+    sourcedPrompts: r.sourced_prompts ?? [],
   }));
 }
 
@@ -965,13 +773,38 @@ export async function createReport(
 
   // 1. Gather the metric snapshot through the existing analytics actions —
   //    only the picked sections (null = section not gathered).
+  //
+  //    A section that fails does not take the report with it. Losing one
+  //    module is a gap the reader can see; losing all fourteen because the
+  //    last one timed out is a report that never existed. What went missing is
+  //    recorded so the output can say so rather than quietly shrink.
+  const failed = new Set<ReportSection>();
+  async function section<T>(name: ReportSection, run: () => Promise<T>): Promise<T | null> {
+    try {
+      return await run();
+    } catch (err) {
+      console.error(`[reports] section "${name}" failed for brand ${brandId}:`, err);
+      failed.add(name);
+      return null;
+    }
+  }
+  const pick = <T>(name: ReportSection, run: () => Promise<T>) =>
+    has(name) ? section(name, run) : Promise.resolve(null);
+
+  //    Two waves rather than one. The first holds the sections backed by the
+  //    aggregate RPCs, which read the whole window in a single statement and
+  //    are therefore the ones that run out of the database's per-statement
+  //    time budget when everything else competes for the same I/O.
+  const [insights, visibilityRate, sov, comparison, trend] = await Promise.all([
+    pick('kpis', () => getInsightsSummary(brandId, range)),
+    pick('kpis', () => getReportVisibilityRate(brandId, range)),
+    pick('shareOfVoice', () => getShareOfVoiceData(brandId, range)),
+    pick('competitors', () => getCompetitorComparison(brandId, range)),
+    pick('trend', () => getVisibilityRateTrend(brandId, range)),
+  ]);
+
   const [
-    insights,
-    visibilityRate,
-    sov,
-    comparison,
     citations,
-    trend,
     promptPerformance,
     mentionEvidence,
     citationEvidence,
@@ -981,22 +814,17 @@ export async function createReport(
     shoppingVisibility,
     auditScore,
   ] = await Promise.all([
-    has('kpis') ? getInsightsSummary(brandId, range) : null,
-    has('kpis') ? getReportVisibilityRate(brandId, range) : null,
-    has('shareOfVoice') ? getShareOfVoiceData(brandId, range) : null,
-    has('competitors') ? getCompetitorComparison(brandId, range) : null,
-    has('citations')
-      ? getCitationsOverview(brandId, { datePreset: 'custom', dateFrom, dateTo })
-      : null,
-    has('trend') ? getVisibilityRateTrend(brandId, range) : null,
-    has('promptPerformance') ? getPromptPerformance(brandId, dateFrom, dateTo) : null,
-    has('mentionEvidence') ? getMentionEvidence(brandId, brandName, dateFrom, dateTo) : null,
-    has('citationEvidence') ? getCitationEvidence(brandId, dateFrom, dateTo) : null,
-    has('queryFanout') ? getFanoutSnapshot(brandId, dateFrom, dateTo) : null,
-    has('topicPerformance') ? getTopicPerformance(brandId, dateFrom, dateTo) : null,
-    has('aiTraffic') ? getTrafficSnapshot(brandId, dateFrom, dateTo) : null,
-    has('shoppingVisibility') ? getShoppingSnapshot(brandId, dateFrom, dateTo) : null,
-    has('auditScore') ? getAuditSnapshot(brandId, dateTo) : null,
+    pick('citations', () =>
+      getCitationsOverview(brandId, { datePreset: 'custom', dateFrom, dateTo }),
+    ),
+    pick('promptPerformance', () => getPromptPerformance(brandId, dateFrom, dateTo)),
+    pick('mentionEvidence', () => getMentionEvidence(brandId, brandName, dateFrom, dateTo)),
+    pick('citationEvidence', () => getCitationEvidence(brandId, dateFrom, dateTo)),
+    pick('queryFanout', () => getFanoutSnapshot(brandId, dateFrom, dateTo)),
+    pick('topicPerformance', () => getTopicPerformance(brandId, dateFrom, dateTo)),
+    pick('aiTraffic', () => getTrafficSnapshot(brandId, dateFrom, dateTo)),
+    pick('shoppingVisibility', () => getShoppingSnapshot(brandId, dateFrom, dateTo)),
+    pick('auditScore', () => getAuditSnapshot(brandId, dateTo)),
   ]);
 
   // Adapt VisibilityRateTrendData → VisibilityTrendPoint[] so the report
@@ -1023,6 +851,7 @@ export async function createReport(
 
   const snapshot: Omit<ReportPayload, 'summaryText'> = {
     brandName,
+    ...(failed.size > 0 ? { missingSections: [...failed] } : {}),
     ...(insights ? { insights } : {}),
     ...(visibilityRate ? { visibilityRate } : {}),
     ...(visibilityTrend ? { visibilityTrend } : {}),
@@ -1071,11 +900,19 @@ export async function createReport(
     },
     body: JSON.stringify({ brandId, snapshot, dateFrom, dateTo, template: template.id }),
   });
-  if (!res.ok) {
+  //    The prose is the one part of a report the reader can do without. If it
+  //    cannot be written, the figures are still worth keeping — the page shows
+  //    no summary, which is visible on its own.
+  let summary = '';
+  if (res.ok) {
+    ({ summary } = (await res.json()) as { summary: string });
+  } else {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || `Summary generation failed: ${res.status}`);
+    console.error(
+      `[reports] summary generation failed for brand ${brandId}:`,
+      body.message || res.status,
+    );
   }
-  const { summary } = (await res.json()) as { summary: string };
 
   const payload: ReportPayload = { ...snapshot, summaryText: summary };
 
