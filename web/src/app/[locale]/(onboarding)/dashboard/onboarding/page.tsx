@@ -9,6 +9,7 @@ import { getPromptCapacity, savePromptSet } from '@/lib/actions/prompt';
 import { triggerTrackingCheck } from '@/lib/actions/tracking';
 import { addCompetitor, getCompetitors } from '@/lib/actions/competitor';
 import { getFaviconUrl } from '@/lib/favicon';
+import { slugify } from '@/lib/slug';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { REGIONS, US_STATES, LANGUAGES } from '@/config/prompt-options';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
@@ -511,14 +512,7 @@ export default function OnboardingPage() {
       let orgId = profile?.organization_id;
 
       if (!orgId) {
-        const slug =
-          brandName
-            .toLowerCase()
-            .trim()
-            .replace(/\s+/g, '-')
-            .replace(/[^a-z0-9-]/g, '')
-            .replace(/-+/g, '-')
-            .replace(/^-|-$/g, '') || `org-${Date.now()}`;
+        const slug = slugify(brandName) || `org-${Date.now()}`;
 
         const { data: existing } = await supabase
           .from('organizations')

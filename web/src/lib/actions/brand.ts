@@ -3,17 +3,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { enforceLimit } from '@/lib/guards/plan-guard';
+import { slugify } from '@/lib/slug';
 import type { Brand, BrandDomain } from '@/types';
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
-}
 
 function mapDomainRow(d: Record<string, unknown>): BrandDomain {
   return {
