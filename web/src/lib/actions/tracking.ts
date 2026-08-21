@@ -174,6 +174,71 @@ function modelFilterArray(model: string | undefined): string[] | undefined {
   return list.length > 0 ? list : undefined;
 }
 
+// ── Daily-rollup routing (00066) ────────────────────────────────────────────
+//
+// The aggregate RPCs used to rescan a brand's whole history per page load;
+// past ~55k results that exceeds the authenticated role's 8s statement
+// timeout and the wide presets die. Every preset except 24h now describes its
+// window as whole UTC days, and calls that carry one are answered from the
+// pre-aggregated daily tables instead — cost scales with days in the window,
+// never with accumulated results.
+//
+// Topic-filtered calls deliberately stay on the raw RPCs: topic is a live
+// prompt attribute (reassigning a prompt must move its history), the rollups
+// have no prompt dimension at brand grain, and a topic slice is a small
+// fraction of the scan that made the raw path unaffordable.
+
+/**
+ * Whole-day UTC window, 'YYYY-MM-DD' inclusive on both ends. Its presence in
+ * an action's opts marks the call as servable from the daily rollups; either
+ * bound may be absent (the All-time preset carries an empty window).
+ */
+export interface DayWindow {
+  dayFrom?: string;
+  dayTo?: string;
+}
+
+interface WindowedOpts {
+  topicId?: string;
+  days?: DayWindow;
+}
+
+/** The day window to serve from rollups, or null when the raw path must answer. */
+function dailyWindow(opts?: WindowedOpts): DayWindow | null {
+  return opts?.days && !opts.topicId ? opts.days : null;
+}
+
+const DAY_MS = 86_400_000;
+
+function utcToday(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function addDays(day: string, n: number): string {
+  return new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * Current + previous equal-length day windows for the ↑/↓ delta math. An
+ * unbounded window anchors to the trailing 7 days, mirroring what the raw
+ * path's `now() - 7d` default has always compared against. The previous
+ * window ends the day BEFORE the current one starts — the raw path's
+ * timestamp arithmetic let the two windows share their boundary instant.
+ */
+function deltaDayWindows(days: DayWindow): {
+  cur: { dayFrom: string; dayTo: string };
+  prev: { dayFrom: string; dayTo: string };
+} {
+  const curTo = days.dayTo ?? utcToday();
+  const curFrom = days.dayFrom ?? addDays(curTo, -6);
+  const len = Math.round((Date.parse(curTo) - Date.parse(curFrom)) / DAY_MS) + 1;
+  const prevTo = addDays(curFrom, -1);
+  return {
+    cur: { dayFrom: curFrom, dayTo: curTo },
+    prev: { dayFrom: addDays(prevTo, -(len - 1)), dayTo: prevTo },
+  };
+}
+
 // ── RPC return shapes (mirror supabase/migrations/00031_insights_sentiment_denominator.sql) ─
 
 interface InsightsAggregates {
@@ -408,19 +473,36 @@ export interface VisibilityRateKpi {
  */
 export async function getVisibilityRateKpi(
   brandId: string,
-  opts?: { model?: string; region?: string; dateFrom?: string; dateTo?: string; topicId?: string },
+  opts?: {
+    model?: string;
+    region?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    topicId?: string;
+    days?: DayWindow;
+  },
 ): Promise<VisibilityRateKpi> {
   const supabase = await createClient();
+  const daily = dailyWindow(opts);
 
-  const { data, error } = await supabase.rpc('visible_prompt_stats', {
-    p_brand_id: brandId,
-    p_platform: undefined,
-    p_models: modelFilterArray(opts?.model),
-    p_region: opts?.region ?? undefined,
-    p_date_from: opts?.dateFrom ?? undefined,
-    p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
-    p_topic_id: opts?.topicId ?? undefined,
-  });
+  const { data, error } = daily
+    ? await supabase.rpc('visible_prompt_stats_daily', {
+        p_brand_id: brandId,
+        p_platform: undefined,
+        p_models: modelFilterArray(opts?.model),
+        p_region: opts?.region ?? undefined,
+        p_day_from: daily.dayFrom,
+        p_day_to: daily.dayTo,
+      })
+    : await supabase.rpc('visible_prompt_stats', {
+        p_brand_id: brandId,
+        p_platform: undefined,
+        p_models: modelFilterArray(opts?.model),
+        p_region: opts?.region ?? undefined,
+        p_date_from: opts?.dateFrom ?? undefined,
+        p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
+        p_topic_id: opts?.topicId ?? undefined,
+      });
   if (error) throw new Error(error.message);
 
   const row = (data ?? {}) as {
@@ -448,9 +530,17 @@ export async function getVisibilityRateKpi(
  */
 export async function getTrackedPromptsKpi(
   brandId: string,
-  opts?: { model?: string; region?: string; dateFrom?: string; dateTo?: string; topicId?: string },
+  opts?: {
+    model?: string;
+    region?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    topicId?: string;
+    days?: DayWindow;
+  },
 ): Promise<TrackedPromptsKpi> {
   const supabase = await createClient();
+  const daily = dailyWindow(opts);
 
   const { data: brand } = await supabase
     .from('brands')
@@ -472,15 +562,24 @@ export async function getTrackedPromptsKpi(
   };
 
   const [rpcResult, plan, quotaUsed] = await Promise.all([
-    supabase.rpc('tracked_prompt_count', {
-      p_brand_id: brandId,
-      p_platform: undefined,
-      p_models: modelFilterArray(opts?.model),
-      p_region: opts?.region ?? undefined,
-      p_date_from: opts?.dateFrom ?? undefined,
-      p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
-      p_topic_id: opts?.topicId ?? undefined,
-    }),
+    daily
+      ? supabase.rpc('tracked_prompt_count_daily', {
+          p_brand_id: brandId,
+          p_platform: undefined,
+          p_models: modelFilterArray(opts?.model),
+          p_region: opts?.region ?? undefined,
+          p_day_from: daily.dayFrom,
+          p_day_to: daily.dayTo,
+        })
+      : supabase.rpc('tracked_prompt_count', {
+          p_brand_id: brandId,
+          p_platform: undefined,
+          p_models: modelFilterArray(opts?.model),
+          p_region: opts?.region ?? undefined,
+          p_date_from: opts?.dateFrom ?? undefined,
+          p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
+          p_topic_id: opts?.topicId ?? undefined,
+        }),
     orgId ? getOrgPlan(orgId) : Promise.resolve(null),
     countOrgPrompts(),
   ]);
@@ -686,6 +785,7 @@ export async function getInsightsData(
     topicId?: string;
     dateFrom?: string;
     dateTo?: string;
+    days?: DayWindow;
     /** When the current view is filtered, check unfiltered data existence too. */
     checkUnfiltered?: boolean;
   },
@@ -696,8 +796,15 @@ export async function getInsightsData(
     topicId: opts.topicId,
     dateFrom: opts.dateFrom,
     dateTo: opts.dateTo,
+    days: opts.days,
   };
 
+  // The two heavyweight sections degrade instead of failing the page: a
+  // competitor or SoV error costs its own card, never the KPI header. Their
+  // empty shapes are exactly what the page already maps to "section hidden"
+  // (brands.length <= 1, byPlatform.length === 0). The summary and KPI reads
+  // stay fatal — the page is meaningless without them, and on the rollup
+  // path they are the cheap ones.
   const [
     summary,
     competitors,
@@ -709,8 +816,19 @@ export async function getInsightsData(
     unfilteredTotal,
   ] = await Promise.all([
     getInsightsSummary(brandId, filterOpts),
-    getCompetitorComparison(brandId, filterOpts),
-    getShareOfVoiceData(brandId, filterOpts),
+    getCompetitorComparison(brandId, filterOpts).catch((err) => {
+      console.error('[insights] competitor comparison failed', err);
+      return { brands: [], providerRows: [] } satisfies CompetitorComparisonData;
+    }),
+    getShareOfVoiceData(brandId, filterOpts).catch((err) => {
+      console.error('[insights] share of voice failed', err);
+      return {
+        overallSov: 0,
+        overallSovChange: null,
+        byPlatform: [],
+        trend: [],
+      } satisfies ShareOfVoiceData;
+    }),
     getTrackedPromptsKpi(brandId, filterOpts),
     getVisibilityRateKpi(brandId, filterOpts),
     getInsightsFilterOptions(brandId),
@@ -1128,10 +1246,12 @@ export async function getInsightsSummary(
     dateFrom?: string;
     dateTo?: string;
     topicId?: string;
+    days?: DayWindow;
   },
 ): Promise<InsightsSummary> {
   const supabase = await createClient();
   const p_models = modelFilterArray(opts?.model);
+  const daily = dailyWindow(opts);
 
   // Sums + counts come from Postgres in one round trip; we still do the
   // final divide + round in JS so the displayed numbers track the old
@@ -1144,12 +1264,24 @@ export async function getInsightsSummary(
     p_prompt_id: undefined as string | undefined,
     p_topic_id: opts?.topicId ?? undefined,
   };
+  const dailyArgs = {
+    p_brand_id: brandId,
+    p_platform: undefined as string | undefined,
+    p_models,
+    p_region: opts?.region ?? undefined,
+  };
 
-  const { data: curData, error } = await supabase.rpc('insights_aggregates', {
-    ...baseArgs,
-    p_date_from: opts?.dateFrom ?? undefined,
-    p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
-  });
+  const { data: curData, error } = daily
+    ? await supabase.rpc('insights_aggregates_daily', {
+        ...dailyArgs,
+        p_day_from: daily.dayFrom,
+        p_day_to: daily.dayTo,
+      })
+    : await supabase.rpc('insights_aggregates', {
+        ...baseArgs,
+        p_date_from: opts?.dateFrom ?? undefined,
+        p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
+      });
   if (error) throw new Error(error.message);
 
   const cur = curData as unknown as InsightsAggregates;
@@ -1220,22 +1352,35 @@ export async function getInsightsSummary(
 
     const duration = currentTo.getTime() - currentFrom.getTime();
     const prevFrom = new Date(currentFrom.getTime() - duration);
+    const deltaDays = daily ? deltaDayWindows(daily) : null;
 
     // Current-window aggregate: when no dateFrom was passed, the top-level
     // call above is unbounded — for the delta math we need the same
     // explicit "last 7 days" window the JS code used so the comparison
     // stays anchored to recent momentum.
     const [curRes, prevRes] = await Promise.all([
-      supabase.rpc('insights_aggregates', {
-        ...baseArgs,
-        p_date_from: opts?.dateFrom ?? currentFrom.toISOString(),
-        p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
-      }),
-      supabase.rpc('insights_aggregates', {
-        ...baseArgs,
-        p_date_from: prevFrom.toISOString(),
-        p_date_to: currentFrom.toISOString(),
-      }),
+      deltaDays
+        ? supabase.rpc('insights_aggregates_daily', {
+            ...dailyArgs,
+            p_day_from: deltaDays.cur.dayFrom,
+            p_day_to: deltaDays.cur.dayTo,
+          })
+        : supabase.rpc('insights_aggregates', {
+            ...baseArgs,
+            p_date_from: opts?.dateFrom ?? currentFrom.toISOString(),
+            p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
+          }),
+      deltaDays
+        ? supabase.rpc('insights_aggregates_daily', {
+            ...dailyArgs,
+            p_day_from: deltaDays.prev.dayFrom,
+            p_day_to: deltaDays.prev.dayTo,
+          })
+        : supabase.rpc('insights_aggregates', {
+            ...baseArgs,
+            p_date_from: prevFrom.toISOString(),
+            p_date_to: currentFrom.toISOString(),
+          }),
     ]);
     // Surface RPC failures rather than silently emit null deltas — masking
     // server-side errors here would hide real outages behind "no change."
@@ -1745,10 +1890,12 @@ export async function getCompetitorComparison(
     dateFrom?: string;
     dateTo?: string;
     topicId?: string;
+    days?: DayWindow;
   },
 ): Promise<CompetitorComparisonData> {
   const supabase = await createClient();
   const p_models = modelFilterArray(opts?.model);
+  const daily = dailyWindow(opts);
 
   const baseArgs = {
     p_brand_id: brandId,
@@ -1758,21 +1905,48 @@ export async function getCompetitorComparison(
     p_prompt_id: undefined as string | undefined,
     p_topic_id: opts?.topicId ?? undefined,
   };
+  const dailyArgs = {
+    p_brand_id: brandId,
+    p_platform: undefined as string | undefined,
+    p_models,
+    p_region: opts?.region ?? undefined,
+  };
+
+  // The heaviest reads on the page: competitor_aggregates over the raw rows
+  // took 9.7s on the largest brand's all-time window — past the 8s statement
+  // timeout. The rollup variants answer the same payload from the daily
+  // tables (00066).
+  const compRpc = (win: { dayFrom?: string; dayTo?: string } | null, from?: string, to?: string) =>
+    win
+      ? supabase.rpc('competitor_aggregates_daily', {
+          ...dailyArgs,
+          p_day_from: win.dayFrom,
+          p_day_to: win.dayTo,
+        })
+      : supabase.rpc('competitor_aggregates', {
+          ...baseArgs,
+          p_date_from: from,
+          p_date_to: to,
+        });
+  const visRpc = (win: { dayFrom?: string; dayTo?: string } | null, from?: string, to?: string) =>
+    win
+      ? supabase.rpc('ai_visibility_aggregates_daily', {
+          ...dailyArgs,
+          p_day_from: win.dayFrom,
+          p_day_to: win.dayTo,
+        })
+      : supabase.rpc('ai_visibility_aggregates', {
+          ...baseArgs,
+          p_date_from: from,
+          p_date_to: to,
+        });
 
   // Brand name + the displayed-period aggregates fire in parallel — all
   // are needed before we can shape the response.
   const [{ data: brand }, { data: aggDisplay, error: aggErr }, visDisplayRes] = await Promise.all([
     supabase.from('brands').select('name').eq('id', brandId).single(),
-    supabase.rpc('competitor_aggregates', {
-      ...baseArgs,
-      p_date_from: opts?.dateFrom ?? undefined,
-      p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
-    }),
-    supabase.rpc('ai_visibility_aggregates', {
-      ...baseArgs,
-      p_date_from: opts?.dateFrom ?? undefined,
-      p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
-    }),
+    compRpc(daily, opts?.dateFrom ?? undefined, expandDateToEndOfDay(opts?.dateTo) ?? undefined),
+    visRpc(daily, opts?.dateFrom ?? undefined, expandDateToEndOfDay(opts?.dateTo) ?? undefined),
   ]);
   if (aggErr) throw new Error(aggErr.message);
   if (visDisplayRes.error) throw new Error(visDisplayRes.error.message);
@@ -1800,23 +1974,22 @@ export async function getCompetitorComparison(
 
   const duration = currentTo.getTime() - currentFrom.getTime();
   const prevFrom = new Date(currentFrom.getTime() - duration);
+  const deltaDays = daily ? deltaDayWindows(daily) : null;
 
   const [curRes, prevRes, visPrevRes] = await Promise.all([
-    supabase.rpc('competitor_aggregates', {
-      ...baseArgs,
-      p_date_from: opts?.dateFrom ?? currentFrom.toISOString(),
-      p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
-    }),
-    supabase.rpc('competitor_aggregates', {
-      ...baseArgs,
-      p_date_from: prevFrom.toISOString(),
-      p_date_to: currentFrom.toISOString(),
-    }),
-    supabase.rpc('ai_visibility_aggregates', {
-      ...baseArgs,
-      p_date_from: prevFrom.toISOString(),
-      p_date_to: currentFrom.toISOString(),
-    }),
+    deltaDays
+      ? compRpc(deltaDays.cur)
+      : compRpc(
+          null,
+          opts?.dateFrom ?? currentFrom.toISOString(),
+          expandDateToEndOfDay(opts?.dateTo) ?? undefined,
+        ),
+    deltaDays
+      ? compRpc(deltaDays.prev)
+      : compRpc(null, prevFrom.toISOString(), currentFrom.toISOString()),
+    deltaDays
+      ? visRpc(deltaDays.prev)
+      : visRpc(null, prevFrom.toISOString(), currentFrom.toISOString()),
   ]);
   if (curRes.error) throw new Error(curRes.error.message);
   if (prevRes.error) throw new Error(prevRes.error.message);
@@ -2015,10 +2188,12 @@ export async function getShareOfVoiceData(
     dateFrom?: string;
     dateTo?: string;
     topicId?: string;
+    days?: DayWindow;
   },
 ): Promise<ShareOfVoiceData> {
   const supabase = await createClient();
   const p_models = modelFilterArray(opts?.model);
+  const daily = dailyWindow(opts);
 
   const baseArgs = {
     p_brand_id: brandId,
@@ -2028,6 +2203,21 @@ export async function getShareOfVoiceData(
     p_prompt_id: undefined as string | undefined,
     p_topic_id: opts?.topicId ?? undefined,
   };
+  const sovRpc = (win: { dayFrom?: string; dayTo?: string } | null, from?: string, to?: string) =>
+    win
+      ? supabase.rpc('share_of_voice_aggregates_daily', {
+          p_brand_id: brandId,
+          p_platform: undefined as string | undefined,
+          p_models,
+          p_region: opts?.region ?? undefined,
+          p_day_from: win.dayFrom,
+          p_day_to: win.dayTo,
+        })
+      : supabase.rpc('share_of_voice_aggregates', {
+          ...baseArgs,
+          p_date_from: from,
+          p_date_to: to,
+        });
 
   // Current-period aggregate + previous-period aggregate run in parallel —
   // both server-side, no row transfer or JS reduce. The previous-period
@@ -2045,18 +2235,15 @@ export async function getShareOfVoiceData(
   }
   const duration = currentTo.getTime() - currentFrom.getTime();
   const prevFrom = new Date(currentFrom.getTime() - duration);
+  const deltaDays = daily ? deltaDayWindows(daily) : null;
 
   const [{ data: curData, error: curErr }, { data: prevData, error: prevErr }] = await Promise.all([
-    supabase.rpc('share_of_voice_aggregates', {
-      ...baseArgs,
-      p_date_from: opts?.dateFrom ?? undefined,
-      p_date_to: expandDateToEndOfDay(opts?.dateTo) ?? undefined,
-    }),
-    supabase.rpc('share_of_voice_aggregates', {
-      ...baseArgs,
-      p_date_from: prevFrom.toISOString(),
-      p_date_to: currentFrom.toISOString(),
-    }),
+    daily
+      ? sovRpc(daily)
+      : sovRpc(null, opts?.dateFrom ?? undefined, expandDateToEndOfDay(opts?.dateTo) ?? undefined),
+    deltaDays
+      ? sovRpc(deltaDays.prev)
+      : sovRpc(null, prevFrom.toISOString(), currentFrom.toISOString()),
   ]);
   if (curErr) throw new Error(curErr.message);
   if (prevErr) throw new Error(prevErr.message);
@@ -2215,9 +2402,11 @@ export async function getVisibilityRateTrend(
     dateFrom?: string;
     dateTo?: string;
     topicId?: string;
+    days?: DayWindow;
   },
 ): Promise<VisibilityRateTrendData> {
   const supabase = await createClient();
+  const daily = dailyWindow(opts);
   // No explicit lower bound = the "All time" preset: the summary covers
   // everything (matching the leaderboard) and the chart plots an expanding
   // cumulative window instead of a fixed-length rolling one.
@@ -2247,6 +2436,17 @@ export async function getVisibilityRateTrend(
     p_date_to: to,
     p_topic_id: opts?.topicId ?? undefined,
   });
+  const dayArgs = (dayFrom: string | undefined, dayTo: string | undefined) => ({
+    p_brand_id: brandId,
+    p_platform: undefined as string | undefined,
+    p_models: modelFilterArray(opts?.model),
+    p_region: opts?.region ?? undefined,
+    p_day_from: dayFrom,
+    p_day_to: dayTo,
+  });
+  // Day-window equivalents of the three timestamp windows above: display,
+  // warm-up-extended fetch range, and the previous window for the delta.
+  const deltaDays = daily?.dayFrom ? deltaDayWindows(daily) : null;
 
   const [
     { data: brand },
@@ -2262,11 +2462,22 @@ export async function getVisibilityRateTrend(
     // The chart plots a rolling window per day, so the earliest displayed
     // days need trailing data from before the display range (all-time needs
     // no warm-up — the window expands from the first row).
-    supabase.rpc('visibility_rate_trend', rateArgs(prevFrom, dateTo)),
-    supabase.rpc('ai_visibility_aggregates', rateArgs(boundedFrom, dateTo)),
-    prevFrom && prevTo
-      ? supabase.rpc('ai_visibility_aggregates', rateArgs(prevFrom, prevTo))
-      : Promise.resolve({ data: null, error: new Error('no previous window') }),
+    daily
+      ? supabase.rpc('visibility_rate_trend_daily', dayArgs(deltaDays?.prev.dayFrom, daily.dayTo))
+      : supabase.rpc('visibility_rate_trend', rateArgs(prevFrom, dateTo)),
+    daily
+      ? supabase.rpc('ai_visibility_aggregates_daily', dayArgs(daily.dayFrom, daily.dayTo))
+      : supabase.rpc('ai_visibility_aggregates', rateArgs(boundedFrom, dateTo)),
+    daily
+      ? deltaDays
+        ? supabase.rpc(
+            'ai_visibility_aggregates_daily',
+            dayArgs(deltaDays.prev.dayFrom, deltaDays.prev.dayTo),
+          )
+        : Promise.resolve({ data: null, error: new Error('no previous window') })
+      : prevFrom && prevTo
+        ? supabase.rpc('ai_visibility_aggregates', rateArgs(prevFrom, prevTo))
+        : Promise.resolve({ data: null, error: new Error('no previous window') }),
   ]);
   if (rpcRes.error) throw new Error(rpcRes.error.message);
   if (visCurRes.error) throw new Error(visCurRes.error.message);

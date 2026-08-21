@@ -20,6 +20,7 @@ import {
   cleanupStalePendingTasks,
 } from './lib/job-manager.js';
 import { runTrackingJob } from './lib/job-runner.js';
+import { sweepInsightsRollups } from './lib/insights-rollups.js';
 import { parseScraperResponse } from './lib/cloro-scraper.js';
 import { handleScraperResult } from './lib/cloro-result-handler.js';
 import { verifyCloroWebhook } from './lib/cloro-webhook-verify.js';
@@ -120,6 +121,15 @@ async function runDailyTracking() {
   // today's runs and their own pulses are independent of this sweep.
   runPulseCatchUp().catch((err) => {
     logger.error({ err }, '[pulse] catch-up sweep crashed');
+  });
+
+  // Insights rollup backstop (00066). Re-refreshes the trailing days for
+  // every brand, so days whose run never stamped (partial, crashed) and
+  // out-of-run writes (a prompt analyzed right after being added) appear the
+  // next morning. Fire-and-forget: idempotent against the per-run refresh
+  // that today's runs will do when they stamp, and never blocks tracking.
+  sweepInsightsRollups().catch((err) => {
+    logger.error({ err }, '[insights-rollups] daily sweep crashed');
   });
 
   // Skip paused brands (is_active = false): the user has explicitly suspended

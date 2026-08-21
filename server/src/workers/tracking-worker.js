@@ -12,6 +12,7 @@ import { applyPlanOverrides } from '../lib/plan-guard.js';
 import { generateContentOpportunities } from '../lib/opportunity-generator.js';
 import { updateTargetUrlStats } from '../lib/target-url-stats.js';
 import { persistCitationRows } from '../lib/citation-rows.js';
+import { refreshForCompletedRun } from '../lib/insights-rollups.js';
 import logger from '../lib/logger.js';
 
 function resolveModelPlatform(model) {
@@ -872,6 +873,13 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
       } else {
         runStamped = true;
         logger.info({ brandId, trackingRunId, runResultCount }, 'tracking run stamped');
+
+        // Fold the run's days into the Insights rollups (00066). Anchored to
+        // the stamp on purpose: a day enters the wide-window aggregates only
+        // once its run completed, so mid-run partial counts never show. Runs
+        // that never reach this point are picked up by the daily sweep.
+        // Best-effort inside — a refresh failure never unstamps the run.
+        await refreshForCompletedRun(brandId, trackingRunStartedAt);
       }
     } else if ((runResultCount ?? 0) > 0) {
       logger.warn(

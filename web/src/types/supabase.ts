@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       agent_conversations: {
@@ -485,6 +460,30 @@ export type Database = {
           },
         ]
       }
+      citation_urls: {
+        Row: {
+          domain: string
+          first_seen_at: string
+          id: number
+          title: string | null
+          url: string
+        }
+        Insert: {
+          domain: string
+          first_seen_at?: string
+          id?: never
+          title?: string | null
+          url: string
+        }
+        Update: {
+          domain?: string
+          first_seen_at?: string
+          id?: never
+          title?: string | null
+          url?: string
+        }
+        Relationships: []
+      }
       cloro_pending_tasks: {
         Row: {
           brand_id: string
@@ -882,6 +881,215 @@ export type Database = {
           },
         ]
       }
+      insights_brand_daily: {
+        Row: {
+          answer_count: number
+          brand_id: string
+          citation_answers: number
+          day: string
+          max_created_at: string
+          mention_answers: number
+          mentioning_answers: number
+          model_used: string | null
+          platform: string | null
+          position_count: number
+          positive_count: number
+          region: string | null
+          sum_inv_position: number | null
+          sum_visibility: number
+          sum_visibility_visible: number
+          total_citations: number
+          total_mentions: number
+        }
+        Insert: {
+          answer_count: number
+          brand_id: string
+          citation_answers: number
+          day: string
+          max_created_at: string
+          mention_answers: number
+          mentioning_answers: number
+          model_used?: string | null
+          platform?: string | null
+          position_count: number
+          positive_count: number
+          region?: string | null
+          sum_inv_position?: number | null
+          sum_visibility: number
+          sum_visibility_visible: number
+          total_citations: number
+          total_mentions: number
+        }
+        Update: {
+          answer_count?: number
+          brand_id?: string
+          citation_answers?: number
+          day?: string
+          max_created_at?: string
+          mention_answers?: number
+          mentioning_answers?: number
+          model_used?: string | null
+          platform?: string | null
+          position_count?: number
+          positive_count?: number
+          region?: string | null
+          sum_inv_position?: number | null
+          sum_visibility?: number
+          sum_visibility_visible?: number
+          total_citations?: number
+          total_mentions?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insights_brand_daily_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      insights_competitor_daily: {
+        Row: {
+          answer_count: number
+          brand_id: string
+          citation_answers: number
+          competitor_id: string
+          day: string
+          mention_answers: number
+          model_used: string | null
+          platform: string | null
+          position_count: number
+          region: string | null
+          sum_inv_position: number | null
+          sum_visibility: number | null
+          total_citations: number
+          total_mentions: number
+        }
+        Insert: {
+          answer_count: number
+          brand_id: string
+          citation_answers: number
+          competitor_id: string
+          day: string
+          mention_answers: number
+          model_used?: string | null
+          platform?: string | null
+          position_count: number
+          region?: string | null
+          sum_inv_position?: number | null
+          sum_visibility?: number | null
+          total_citations: number
+          total_mentions: number
+        }
+        Update: {
+          answer_count?: number
+          brand_id?: string
+          citation_answers?: number
+          competitor_id?: string
+          day?: string
+          mention_answers?: number
+          model_used?: string | null
+          platform?: string | null
+          position_count?: number
+          region?: string | null
+          sum_inv_position?: number | null
+          sum_visibility?: number | null
+          total_citations?: number
+          total_mentions?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insights_competitor_daily_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      insights_competitor_prompt_daily: {
+        Row: {
+          brand_id: string
+          competitor_id: string
+          day: string
+          model_used: string | null
+          platform: string | null
+          prompt_id: string
+          region: string | null
+        }
+        Insert: {
+          brand_id: string
+          competitor_id: string
+          day: string
+          model_used?: string | null
+          platform?: string | null
+          prompt_id: string
+          region?: string | null
+        }
+        Update: {
+          brand_id?: string
+          competitor_id?: string
+          day?: string
+          model_used?: string | null
+          platform?: string | null
+          prompt_id?: string
+          region?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insights_competitor_prompt_daily_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      insights_prompt_daily: {
+        Row: {
+          answer_count: number
+          brand_id: string
+          day: string
+          has_citation: boolean
+          has_mention: boolean
+          model_used: string | null
+          platform: string | null
+          prompt_id: string
+          region: string | null
+        }
+        Insert: {
+          answer_count: number
+          brand_id: string
+          day: string
+          has_citation: boolean
+          has_mention: boolean
+          model_used?: string | null
+          platform?: string | null
+          prompt_id: string
+          region?: string | null
+        }
+        Update: {
+          answer_count?: number
+          brand_id?: string
+          day?: string
+          has_citation?: boolean
+          has_mention?: boolean
+          model_used?: string | null
+          platform?: string | null
+          prompt_id?: string
+          region?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insights_prompt_daily_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integration_connections: {
         Row: {
           composio_account_id: string | null
@@ -1251,6 +1459,52 @@ export type Database = {
             columns: ["prompt_id"]
             isOneToOne: false
             referencedRelation: "prompts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prompt_result_citations: {
+        Row: {
+          brand_id: string
+          created_at: string
+          position: number
+          prompt_result_id: string
+          url_id: number
+        }
+        Insert: {
+          brand_id: string
+          created_at: string
+          position: number
+          prompt_result_id: string
+          url_id: number
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          position?: number
+          prompt_result_id?: string
+          url_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_result_citations_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_result_citations_prompt_result_id_fkey"
+            columns: ["prompt_result_id"]
+            isOneToOne: false
+            referencedRelation: "prompt_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_result_citations_url_id_fkey"
+            columns: ["url_id"]
+            isOneToOne: false
+            referencedRelation: "citation_urls"
             referencedColumns: ["id"]
           },
         ]
@@ -2141,6 +2395,24 @@ export type Database = {
         }
         Returns: Json
       }
+      ai_visibility_aggregates_daily: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_platform?: string
+          p_region?: string
+        }
+        Returns: Json
+      }
+      citation_url_ids: {
+        Args: { p_urls: Json }
+        Returns: {
+          id: number
+          url: string
+        }[]
+      }
       citations_domains: {
         Args: {
           p_brand_id: string
@@ -2206,6 +2478,31 @@ export type Database = {
           p_topic_id?: string
         }
         Returns: Json
+      }
+      competitor_aggregates_daily: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_platform?: string
+          p_region?: string
+        }
+        Returns: Json
+      }
+      content_opportunity_aggregates: {
+        Args: {
+          p_brand_id: string
+          p_impact?: string
+          p_q?: string
+          p_status?: string
+          p_type?: string
+        }
+        Returns: {
+          avg_score: number
+          high_impact_count: number
+          sent_count: number
+        }[]
       }
       get_latest_prompt_results:
         | {
@@ -2297,6 +2594,17 @@ export type Database = {
         }
         Returns: Json
       }
+      insights_aggregates_daily: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_platform?: string
+          p_region?: string
+        }
+        Returns: Json
+      }
       insights_filter_options: {
         Args: { p_brand_id: string }
         Returns: {
@@ -2331,6 +2639,10 @@ export type Database = {
           visible_runs: number
         }[]
       }
+      refresh_insights_daily: {
+        Args: { p_brand_id: string; p_day_from: string; p_day_to: string }
+        Returns: undefined
+      }
       report_citation_evidence: {
         Args: {
           p_brand_id: string
@@ -2347,16 +2659,19 @@ export type Database = {
           url: string
         }[]
       }
-      report_query_fanout_engines: {
-        Args: {
-          p_brand_id: string
-          p_date_from: string
-          p_date_to: string
-        }
+      report_prompt_performance: {
+        Args: { p_brand_id: string; p_date_from: string; p_date_to: string }
         Returns: {
-          answers_with_fanout: number
-          distinct_queries: number
-          engine: string
+          citation_answers: number
+          mention_answers: number
+          pos_n: number
+          pos_sum: number
+          prompt_id: string
+          prompt_text: string
+          runs: number
+          sum_visibility: number
+          total_mentions: number
+          visible_runs: number
         }[]
       }
       report_query_fanout: {
@@ -2372,23 +2687,12 @@ export type Database = {
           times_searched: number
         }[]
       }
-      report_prompt_performance: {
-        Args: {
-          p_brand_id: string
-          p_date_from: string
-          p_date_to: string
-        }
+      report_query_fanout_engines: {
+        Args: { p_brand_id: string; p_date_from: string; p_date_to: string }
         Returns: {
-          citation_answers: number
-          mention_answers: number
-          pos_n: number
-          pos_sum: number
-          prompt_id: string
-          prompt_text: string
-          runs: number
-          sum_visibility: number
-          total_mentions: number
-          visible_runs: number
+          answers_with_fanout: number
+          distinct_queries: number
+          engine: string
         }[]
       }
       report_topic_performance: {
@@ -2426,6 +2730,17 @@ export type Database = {
           p_prompt_id?: string
           p_region?: string
           p_topic_id?: string
+        }
+        Returns: Json
+      }
+      share_of_voice_aggregates_daily: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_platform?: string
+          p_region?: string
         }
         Returns: Json
       }
@@ -2470,6 +2785,17 @@ export type Database = {
         }
         Returns: number
       }
+      tracked_prompt_count_daily: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_platform?: string
+          p_region?: string
+        }
+        Returns: number
+      }
       visibility_rate_trend: {
         Args: {
           p_brand_id: string
@@ -2479,6 +2805,17 @@ export type Database = {
           p_platform?: string
           p_region?: string
           p_topic_id?: string
+        }
+        Returns: Json
+      }
+      visibility_rate_trend_daily: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_platform?: string
+          p_region?: string
         }
         Returns: Json
       }
@@ -2503,6 +2840,17 @@ export type Database = {
           p_platform?: string
           p_region?: string
           p_topic_id?: string
+        }
+        Returns: Json
+      }
+      visible_prompt_stats_daily: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_platform?: string
+          p_region?: string
         }
         Returns: Json
       }
@@ -2635,9 +2983,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       invitation_status: ["pending", "accepted", "expired", "revoked"],

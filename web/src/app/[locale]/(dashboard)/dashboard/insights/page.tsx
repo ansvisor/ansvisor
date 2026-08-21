@@ -152,12 +152,29 @@ const INSIGHT_EXPORT_HEADERS = [
   'competitor_mentions',
 ];
 
-function getDateRange(preset: DatePreset, custom: { from: string; to: string }) {
-  if (preset === 'all') return { dateFrom: undefined, dateTo: undefined };
+/**
+ * Every preset except 24h describes whole UTC calendar days, carried in
+ * `days` — that is what lets the aggregate actions answer from the daily
+ * rollup tables (00066) instead of rescanning the brand's history. The
+ * timestamp fields are kept in step for the paths that still take
+ * timestamps (CSV export, topic-filtered raw fallbacks), so both paths
+ * describe the same window.
+ *
+ * A preset window is the trailing N calendar days ending today: numbers
+ * move when a tracking run completes, not continuously as the clock's
+ * trailing edge slides. 24h keeps its rolling window — it is anchored to
+ * the last completed run downstream and stays on the raw path.
+ */
+function getDateRange(
+  preset: DatePreset,
+  custom: { from: string; to: string },
+): { dateFrom?: string; dateTo?: string; days?: { dayFrom?: string; dayTo?: string } } {
+  if (preset === 'all') return { dateFrom: undefined, dateTo: undefined, days: {} };
   if (preset === 'custom') {
     return {
-      dateFrom: custom.from || undefined,
+      dateFrom: custom.from ? `${custom.from}T00:00:00.000Z` : undefined,
       dateTo: custom.to ? `${custom.to}T23:59:59.999Z` : undefined,
+      days: { dayFrom: custom.from || undefined, dayTo: custom.to || undefined },
     };
   }
   if (preset === '24h') {
@@ -166,9 +183,12 @@ function getDateRange(preset: DatePreset, custom: { from: string; to: string }) 
     return { dateFrom: from.toISOString(), dateTo: undefined };
   }
   const days = preset === '7d' ? 7 : preset === '30d' ? 30 : 90;
-  const from = new Date();
-  from.setDate(from.getDate() - days);
-  return { dateFrom: from.toISOString(), dateTo: undefined };
+  const to = new Date();
+  const from = new Date(to);
+  from.setUTCDate(from.getUTCDate() - (days - 1));
+  const dayFrom = from.toISOString().slice(0, 10);
+  const dayTo = to.toISOString().slice(0, 10);
+  return { dateFrom: `${dayFrom}T00:00:00.000Z`, dateTo: undefined, days: { dayFrom, dayTo } };
 }
 
 // ─── Info Tooltip ─────────────────────────────────────────────────────────────
@@ -964,7 +984,8 @@ export default function InsightsPage() {
       if (!silent) setIsLoading(true);
       try {
         const f = overrideFilters ?? filtersRef.current;
-        let { dateFrom, dateTo } = getDateRange(f.datePreset, {
+        // eslint-disable-next-line prefer-const -- dateFrom/dateTo are reassigned by the 24h anchor below
+        let { dateFrom, dateTo, days } = getDateRange(f.datePreset, {
           from: f.dateFrom,
           to: f.dateTo,
         });
@@ -992,6 +1013,10 @@ export default function InsightsPage() {
           topicId: f.topic || undefined,
           dateFrom,
           dateTo,
+          // Whole-day window → the aggregate actions answer from the daily
+          // rollups (00066). Absent for 24h, whose anchored window above is
+          // timestamp-shaped and stays on the raw path.
+          days,
         };
 
         const hasFilters = Boolean(f.datePreset !== 'all' || f.model || f.region || f.topic);
@@ -1054,7 +1079,13 @@ export default function InsightsPage() {
         if (/unexpected response/i.test(message)) {
           console.debug('[insights] load aborted by navigation', err);
         } else if (!silent) {
-          toast.error(message || 'Failed to load insights');
+          // Next.js redacts server-action error messages in production
+          // builds ("An error occurred in the Server Components render…"),
+          // so relaying `message` verbatim shows the user that boilerplate
+          // instead of anything actionable. Anything unrecognizable gets the
+          // plain fallback.
+          const redacted = !message || /server components render|digest property/i.test(message);
+          toast.error(redacted ? 'Failed to load insights — please try again' : message);
         } else {
           // Silent refreshes fire every ~10s while a tracking job runs; a
           // transient 5xx or network blip there shouldn't pop a red toast —
