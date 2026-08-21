@@ -68,6 +68,21 @@ export interface ReportFanoutQuery {
   timesSearched: number;
 }
 
+/**
+ * How much each engine fanned out, beside the top-ten table.
+ *
+ * That table ranks by how many answers ran the identical string, which favours
+ * engines that reuse their phrasing — an engine can search the most and place
+ * in the top ten the least. These two numbers separate variety from volume so
+ * the table is not read as the whole picture.
+ */
+export interface ReportFanoutEngine {
+  /** Platform slug as stored on the result (UI maps to a label). */
+  engine: string;
+  distinctQueries: number;
+  answersWithFanout: number;
+}
+
 /** One concrete brand mention: which prompt, where, and the passage (#429). */
 export interface ReportMentionEvidence {
   promptText: string;
@@ -188,6 +203,8 @@ export interface ReportPayload {
   citationEvidence?: ReportCitationEvidence[];
   /** Most-run observed fan-out sub-queries in the period. */
   queryFanout?: ReportFanoutQuery[];
+  /** Per-engine fan-out coverage; absent on reports generated before it shipped. */
+  queryFanoutEngines?: ReportFanoutEngine[];
   /** Per-topic visibility with deltas vs the previous window. */
   topicPerformance?: ReportTopicPerf[];
   /** Real AI-referred visits in the period. */
@@ -315,26 +332,49 @@ interface FanoutRow {
   times_searched: number;
 }
 
+interface FanoutEngineRow {
+  engine: string;
+  distinct_queries: number;
+  answers_with_fanout: number;
+}
+
 async function getFanoutSnapshot(
   brandId: string,
   dateFrom: string,
   dateTo: string,
-): Promise<ReportFanoutQuery[]> {
+): Promise<{ queries: ReportFanoutQuery[]; engines: ReportFanoutEngine[] }> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc('report_query_fanout', {
-    p_brand_id: brandId,
-    p_date_from: dateFrom,
-    p_date_to: dateTo,
-    p_limit: REPORT_FANOUT_COUNT,
-  });
-  if (error) throw new Error(error.message);
+  // The ranking and the coverage read the same rows for the same window, so
+  // they go together and either both land or neither does.
+  const [topRes, engineRes] = await Promise.all([
+    supabase.rpc('report_query_fanout', {
+      p_brand_id: brandId,
+      p_date_from: dateFrom,
+      p_date_to: dateTo,
+      p_limit: REPORT_FANOUT_COUNT,
+    }),
+    supabase.rpc('report_query_fanout_engines', {
+      p_brand_id: brandId,
+      p_date_from: dateFrom,
+      p_date_to: dateTo,
+    }),
+  ]);
+  if (topRes.error) throw new Error(topRes.error.message);
+  if (engineRes.error) throw new Error(engineRes.error.message);
 
-  return ((data ?? []) as unknown as FanoutRow[]).map((r) => ({
-    query: r.query,
-    engines: r.engines ?? [],
-    timesSearched: r.times_searched,
-  }));
+  return {
+    queries: ((topRes.data ?? []) as unknown as FanoutRow[]).map((r) => ({
+      query: r.query,
+      engines: r.engines ?? [],
+      timesSearched: r.times_searched,
+    })),
+    engines: ((engineRes.data ?? []) as unknown as FanoutEngineRow[]).map((r) => ({
+      engine: r.engine,
+      distinctQueries: r.distinct_queries,
+      answersWithFanout: r.answers_with_fanout,
+    })),
+  };
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -837,7 +877,12 @@ export async function createReport(
     ...(promptPerformance ? { promptPerformance } : {}),
     ...(mentionEvidence && mentionEvidence.length > 0 ? { mentionEvidence } : {}),
     ...(citationEvidence && citationEvidence.length > 0 ? { citationEvidence } : {}),
-    ...(queryFanout ? { queryFanout } : {}),
+    ...(queryFanout && queryFanout.queries.length > 0
+      ? {
+          queryFanout: queryFanout.queries,
+          ...(queryFanout.engines.length > 0 ? { queryFanoutEngines: queryFanout.engines } : {}),
+        }
+      : {}),
     ...(topicPerformance && topicPerformance.length > 0 ? { topicPerformance } : {}),
     ...(aiTraffic ? { aiTraffic } : {}),
     ...(shoppingVisibility ? { shoppingVisibility } : {}),

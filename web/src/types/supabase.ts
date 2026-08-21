@@ -2347,6 +2347,18 @@ export type Database = {
           url: string
         }[]
       }
+      report_query_fanout_engines: {
+        Args: {
+          p_brand_id: string
+          p_date_from: string
+          p_date_to: string
+        }
+        Returns: {
+          answers_with_fanout: number
+          distinct_queries: number
+          engine: string
+        }[]
+      }
       report_query_fanout: {
         Args: {
           p_brand_id: string

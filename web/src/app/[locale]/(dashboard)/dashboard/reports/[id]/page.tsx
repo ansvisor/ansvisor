@@ -582,6 +582,25 @@ export default function ReportDetailPage() {
               <p className="text-sm text-muted-foreground">{t('queryFanoutDescription')}</p>
             </CardHeader>
             <CardContent>
+              {/* The table ranks by repeats of the same string, which favours
+                  engines that reuse their phrasing. Without this an engine that
+                  searches the most but rephrases every time reads as one that
+                  does not fan out at all. */}
+              {payload.queryFanoutEngines && payload.queryFanoutEngines.length > 0 && (
+                <div className="mb-4 flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
+                  {payload.queryFanoutEngines.map((e) => (
+                    <span key={e.engine}>
+                      <span className="text-foreground">
+                        {PLATFORM_LABELS[e.engine] ?? e.engine}
+                      </span>{' '}
+                      {t('fanoutCoverage', {
+                        queries: e.distinctQueries,
+                        answers: e.answersWithFanout,
+                      })}
+                    </span>
+                  ))}
+                </div>
+              )}
               <Table>
                 <TableHeader>
                   <TableRow>

@@ -614,6 +614,7 @@
     "worstPrompts": "Weakest Prompts",
     "queryFanout": "Query Fan-out",
     "queryFanoutDescription": "Sub-queries answer engines actually ran while answering your tracked prompts.",
+    "fanoutCoverage": "{queries} distinct sub-queries across {answers} answers",
     "notFound": "Report not found.",
     "backToReports": "Back to Reports",
     "generatedOn": "Generated on",
