@@ -30,7 +30,7 @@ We're building Ansvisor in the open because we believe companies shouldn't need 
 
 Our goal is to make AI Search intelligence more transparent, measurable, actionable, and accessible.
 
-> ⭐ **If you believe AI Visibility should be open and community-driven, [star the repo](https://github.com/ansvisor/ansvisor/stargazers) — it's how the next team discovers Ansvisor.**
+> ⭐ **If you believe AI Visibility should be open and community-driven, star the repo — it's how the next team discovers Ansvisor.**
 
 ---
 
