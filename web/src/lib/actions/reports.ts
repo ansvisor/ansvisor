@@ -309,53 +309,32 @@ const REPORT_FANOUT_COUNT = 10;
  * grouping) but bounded to [dateFrom, dateTo] instead of a rolling window
  * anchored to "now", which would lie for historical custom ranges.
  */
+interface FanoutRow {
+  query: string;
+  engines: string[] | null;
+  times_searched: number;
+}
+
 async function getFanoutSnapshot(
   brandId: string,
   dateFrom: string,
   dateTo: string,
 ): Promise<ReportFanoutQuery[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('prompt_results')
-    .select('platform, search_queries')
-    .eq('brand_id', brandId)
-    .gte('created_at', dateFrom)
-    .lte('created_at', dateTo);
+
+  const { data, error } = await supabase.rpc('report_query_fanout', {
+    p_brand_id: brandId,
+    p_date_from: dateFrom,
+    p_date_to: dateTo,
+    p_limit: REPORT_FANOUT_COUNT,
+  });
   if (error) throw new Error(error.message);
 
-  const normalize = (raw: string) => raw.replace(/\s+/g, ' ').trim();
-  const byQuery = new Map<string, { display: string; engines: Set<string>; count: number }>();
-
-  for (const row of data ?? []) {
-    const items = Array.isArray(row.search_queries)
-      ? (row.search_queries as { query?: unknown; source_platform?: unknown }[])
-      : [];
-    const seenInRow = new Set<string>();
-    for (const item of items) {
-      const q = typeof item?.query === 'string' ? normalize(item.query) : '';
-      if (!q) continue;
-      const key = q.toLowerCase();
-      let acc = byQuery.get(key);
-      if (!acc) {
-        acc = { display: q, engines: new Set(), count: 0 };
-        byQuery.set(key, acc);
-      }
-      const sp =
-        typeof item?.source_platform === 'string' && item.source_platform
-          ? item.source_platform
-          : (row.platform as string | null);
-      if (sp) acc.engines.add(sp);
-      if (!seenInRow.has(key)) {
-        acc.count += 1;
-        seenInRow.add(key);
-      }
-    }
-  }
-
-  return [...byQuery.values()]
-    .sort((a, b) => b.count - a.count || a.display.localeCompare(b.display))
-    .slice(0, REPORT_FANOUT_COUNT)
-    .map((a) => ({ query: a.display, engines: [...a.engines].sort(), timesSearched: a.count }));
+  return ((data ?? []) as unknown as FanoutRow[]).map((r) => ({
+    query: r.query,
+    engines: r.engines ?? [],
+    timesSearched: r.times_searched,
+  }));
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
