@@ -12,7 +12,7 @@
 
 </div>
 
-# Ansvisor - Open-source AI Visibility Platform for AI Search
+# Ansvisor — Open-Source AI Search Intelligence Platform
 
 **[Official website](https://www.ansvisor.com)**
 
