@@ -36,7 +36,7 @@ Our goal is to make AI Search intelligence more transparent, measurable, actiona
 
 ## Why Ansvisor?
 
-AI Search is changing how people discover, evaluate, and choose brands.
+AI Search is changing how people discover, evaluate, and choose brands, making Answer Engine Optimization (AEO), Generative Engine Optimization (GEO), and AI SEO increasingly important for improving brand visibility in AI-generated answers.
 
 Traditional search data tells you how people find you through search engines. AI Search introduces another layer: how AI systems understand your brand, which sources they trust, when they mention or cite you, how competitors appear, and which prompts influence discovery.
 
