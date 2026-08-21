@@ -54,6 +54,7 @@ With Ansvisor, you can:
 - **Discover Query Fan-Outs** — Explore the supporting queries AI systems may generate and use before producing an answer.
 - **Find Content Opportunities** — Identify content gaps, optimization opportunities, and topics based on real AI Search behavior.
 - **Audit AI Discoverability** — Analyze technical and content signals that can affect how AI systems discover, understand, and retrieve your website.
+- **MCP Server** — Connect Ansvisor's AI Search intelligence with AI assistants and agent workflows through the Model Context Protocol (MCP).
 
 The result is a clearer path from fragmented data to useful intelligence:
 
