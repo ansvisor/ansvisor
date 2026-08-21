@@ -2,7 +2,7 @@ function escape(value: unknown): string {
   if (value === null || value === undefined) return '';
 
   const s = String(value);
-  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
 

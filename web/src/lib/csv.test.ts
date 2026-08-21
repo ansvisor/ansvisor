@@ -21,6 +21,16 @@ test('newline in a value triggers quoting', () => {
   expect(result).toBe('text\n\"line1\nline2\"');
 });
 
+test('lone carriage return in a value triggers quoting', () => {
+  const result = toCsv([{ text: 'line1\rline2' }], ['text']);
+  expect(result).toBe('text\n\"line1\rline2\"');
+});
+
+test('CRLF in a value remains quoted', () => {
+  const result = toCsv([{ text: 'line1\r\nline2' }], ['text']);
+  expect(result).toBe('text\n\"line1\r\nline2\"');
+});
+
 test('null and undefined become empty strings', () => {
   const result = toCsv([{ a: null, b: undefined, c: 'value' }], ['a', 'b', 'c']);
   expect(result).toBe('a,b,c\n,,value');
