@@ -322,6 +322,11 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
  * (brand_id, pulse_date) key stops the same day being sent twice, and the
  * window key (#701) stops the recovery pulse repeating a run that today's own
  * pulse is about to report — the two dates disagree, the data does not.
+ *
+ * Cron runs only: the pulse trigger never fires for manual/immediate runs, so
+ * those are not "missed" pulses to recover. Sweeping them mailed every new
+ * brand twice on its first morning — once at cycle start for yesterday's
+ * onboarding run, once when its own daily run completed an hour later.
  */
 export async function runPulseCatchUp() {
   try {
@@ -329,6 +334,7 @@ export async function runPulseCatchUp() {
     const { data: runs, error } = await supabaseAdmin
       .from('tracking_runs')
       .select('brand_id, completed_at')
+      .eq('source', 'cron')
       .not('completed_at', 'is', null)
       .gte('completed_at', since)
       .order('completed_at', { ascending: false });

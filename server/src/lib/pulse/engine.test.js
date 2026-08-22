@@ -1,10 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The module imports the supabase admin client, whose config hard-exits when
 // SUPABASE_* env is absent (as in CI) — stub it before the import chain.
-vi.mock('../../config/supabase.js', () => ({ default: {} }));
+const from = vi.fn();
+vi.mock('../../config/supabase.js', () => ({ default: { from: (...a) => from(...a) } }));
 
-import { pulseWindowKey } from './engine.js';
+import { pulseWindowKey, runPulseCatchUp } from './engine.js';
 
 /**
  * Pulse window dedupe (#701).
@@ -53,5 +54,79 @@ describe('pulseWindowKey', () => {
 
   it('returns null when a run-anchored window has no end, rather than a false match', () => {
     expect(pulseWindowKey({ window: { runAnchored: true } })).toBeNull();
+  });
+});
+
+/**
+ * Catch-up sweep scope: only cron runs can have a "missed" pulse, because the
+ * pulse trigger never fires for manual or backfill runs in the first place.
+ * Sweeping those mailed every new brand twice on its first morning — the
+ * onboarding run (deliberately unpulsed) was "recovered" at cycle start, then
+ * the brand's own daily run pulsed an hour later.
+ */
+describe('runPulseCatchUp', () => {
+  // Minimal filtering query fake: applies eq/not/gte predicates to the given
+  // rows and resolves like postgrest ({ data, count, error: null }).
+  function fakeTable(rows) {
+    const filters = [];
+    const matches = () => rows.filter((r) => filters.every((f) => f(r)));
+    const builder = {
+      select: () => builder,
+      eq: (col, val) => (filters.push((r) => r[col] === val), builder),
+      gte: (col, val) => (filters.push((r) => r[col] >= val), builder),
+      not: (col, op, val) => {
+        if (op === 'is' && val === null) filters.push((r) => r[col] !== null);
+        return builder;
+      },
+      order: () => builder,
+      then: (resolve) => {
+        const data = matches();
+        return Promise.resolve({ data, count: data.length, error: null }).then(resolve);
+      },
+    };
+    return builder;
+  }
+
+  let queriedTables;
+
+  beforeEach(() => {
+    from.mockReset();
+    queriedTables = [];
+  });
+
+  function tables(fixtures) {
+    from.mockImplementation((table) => {
+      queriedTables.push(table);
+      return fakeTable(fixtures[table] ?? []);
+    });
+  }
+
+  const recent = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+  it('ignores manual and backfill runs — they were never owed a pulse', async () => {
+    tables({
+      tracking_runs: [
+        { brand_id: 'new-brand', completed_at: recent, source: 'manual' },
+        { brand_id: 'old-brand', completed_at: recent, source: 'backfill' },
+      ],
+    });
+
+    const res = await runPulseCatchUp();
+
+    expect(res).toEqual({ sent: 0, skipped: 0 });
+    expect(queriedTables).not.toContain('sent_pulses');
+  });
+
+  it('still considers a cron run with no pulse row after it', async () => {
+    tables({
+      tracking_runs: [{ brand_id: 'brand-1', completed_at: recent, source: 'cron' }],
+      // A pulse already recorded after the run: the sweep looks, then skips.
+      sent_pulses: [{ brand_id: 'brand-1', created_at: new Date().toISOString() }],
+    });
+
+    const res = await runPulseCatchUp();
+
+    expect(res).toEqual({ sent: 0, skipped: 0 });
+    expect(queriedTables).toContain('sent_pulses');
   });
 });
