@@ -209,7 +209,6 @@ function SortableHead({
 export default function TopicsPage() {
   const t = useTranslations('topics');
   const common = useTranslations('common');
-  const tCommon = useTranslations('common');
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore(
     (s) => s.brands.find((brand) => brand.id === s.activeBrandId) ?? null,
@@ -712,7 +711,7 @@ export default function TopicsPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right text-xs text-muted-foreground">
-                      {formatRelative(topic.lastRunAt, tCommon)}
+                      {formatRelative(topic.lastRunAt, common)}
                     </TableCell>
                     <TableCell className="pr-6 text-right">
                       <Link
