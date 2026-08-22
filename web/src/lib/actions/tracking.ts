@@ -574,18 +574,25 @@ async function getInsightsRecommendations(brandId: string): Promise<InsightsReco
   return { topics, prompts };
 }
 
-/** Cheap existence check for a brand's (non-shopping) prompt_results — counts, no rows. */
-async function getBrandResultsTotal(brandId: string): Promise<number> {
+/**
+ * Does this brand have any (non-shopping) prompt_results at all?
+ *
+ * A yes/no question, so it asks for a single row with LIMIT 1 and stops at the
+ * first match, rather than an exact COUNT that visits every matching row only
+ * to compare the total against zero.
+ */
+async function brandHasResults(brandId: string): Promise<boolean> {
   const supabase = await createClient();
-  const { count, error } = await supabase
+  const { data, error } = await supabase
     .from('prompt_results')
-    .select('id', { count: 'exact', head: true })
+    .select('id')
     .eq('brand_id', brandId)
-    .neq('platform', 'chatgpt-shopping');
-  // Throw rather than swallow: a failed count must not masquerade as "no data"
+    .neq('platform', 'chatgpt-shopping')
+    .limit(1);
+  // Throw rather than swallow: a failed check must not masquerade as "no data"
   // and silently flip the page to its empty state.
   if (error) throw new Error(error.message);
-  return count ?? 0;
+  return (data?.length ?? 0) > 0;
 }
 
 export interface InsightsData {
@@ -706,7 +713,7 @@ export async function getInsightsData(
     visibilityRate,
     filterOptions,
     recommendations,
-    unfilteredTotal,
+    unfilteredHasData,
   ] = await Promise.all([
     getInsightsSummary(brandId, filterOpts),
     getCompetitorComparison(brandId, filterOpts),
@@ -715,12 +722,12 @@ export async function getInsightsData(
     getVisibilityRateKpi(brandId, filterOpts),
     getInsightsFilterOptions(brandId),
     getInsightsRecommendations(brandId),
-    opts.checkUnfiltered ? getBrandResultsTotal(brandId) : Promise.resolve(null),
+    opts.checkUnfiltered ? brandHasResults(brandId) : Promise.resolve(null),
   ]);
 
   // insights_aggregates counts the same filtered set the summary shows, so it
   // stands in for the removed results fetch when no unfiltered check ran.
-  const hasAnyData = unfilteredTotal !== null ? unfilteredTotal > 0 : summary.totalResults > 0;
+  const hasAnyData = unfilteredHasData !== null ? unfilteredHasData : summary.totalResults > 0;
 
   return {
     summary,
