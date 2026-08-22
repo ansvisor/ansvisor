@@ -50,22 +50,10 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toCsv } from '@/lib/csv';
+import { formatRelative } from '@/lib/format-relative';
 import { compareNullsLast, type SortDir } from '../prompts/prompt-sort';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
-
-function formatRelative(iso: string | null, t: ReturnType<typeof useTranslations>): string {
-  if (!iso) return '—';
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return t('relative.justNow');
-  if (m < 60) return t('relative.minutesAgo', { m });
-  const h = Math.floor(m / 60);
-  if (h < 24) return t('relative.hoursAgo', { h });
-  const d = Math.floor(h / 24);
-  if (d < 30) return t('relative.daysAgo', { d });
-  return new Date(iso).toLocaleDateString();
-}
 
 function visibilityBarColor(score: number) {
   if (score >= 75) return 'bg-emerald-500';
@@ -221,6 +209,7 @@ function SortableHead({
 export default function TopicsPage() {
   const t = useTranslations('topics');
   const common = useTranslations('common');
+  const tCommon = useTranslations('common');
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore(
     (s) => s.brands.find((brand) => brand.id === s.activeBrandId) ?? null,
@@ -723,7 +712,7 @@ export default function TopicsPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right text-xs text-muted-foreground">
-                      {formatRelative(topic.lastRunAt, t)}
+                      {formatRelative(topic.lastRunAt, tCommon)}
                     </TableCell>
                     <TableCell className="pr-6 text-right">
                       <Link

@@ -17,6 +17,7 @@ const PlatformBreakdownChart = dynamic(
     loading: () => <Skeleton className="h-64 w-full" />,
   },
 );
+import { useTranslations } from 'next-intl';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
 import {
@@ -62,6 +63,7 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { toCsv } from '@/lib/csv';
+import { formatRelative } from '@/lib/format-relative';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -198,17 +200,6 @@ function SnippetBanner({ trackingCode }: { trackingCode?: string }) {
       </CardContent>
     </Card>
   );
-}
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
 }
 
 // ─── Filter Bar ───────────────────────────────────────────────────────────────
@@ -459,6 +450,7 @@ export default function TrafficPage() {
 }
 
 function TrafficPageContent({ brand }: { brand: Brand }) {
+  const tCommon = useTranslations('common');
   const [datePreset, setDatePreset] = useState<DatePreset>('7d');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
@@ -881,7 +873,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                       {logs.map((row) => (
                         <TableRow key={row.id} className="hover:bg-muted/50">
                           <TableCell className="pl-6 text-xs text-muted-foreground whitespace-nowrap">
-                            {timeAgo(row.createdAt)}
+                            {formatRelative(row.createdAt, tCommon)}
                           </TableCell>
                           <TableCell>
                             <span className="text-sm">

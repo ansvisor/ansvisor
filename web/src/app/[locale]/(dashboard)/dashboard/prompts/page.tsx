@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
 import { Link } from '@/i18n/navigation';
 import dynamic from 'next/dynamic';
@@ -105,6 +106,7 @@ import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import type { PromptVolume, Prompt, Topic } from '@/types';
 import { toast } from 'sonner';
 import { toCsv } from '@/lib/csv';
+import { formatRelative } from '@/lib/format-relative';
 import { compareNullsLast, type SortDir } from './prompt-sort';
 import { formatCompactNumber } from '@/lib/format';
 import { usePagination, TablePager } from '@/components/table-pager';
@@ -270,19 +272,6 @@ type TabId = (typeof VALID_TABS)[number];
 
 const PROMPT_VIEWS = ['tracked', 'suggestions'] as const;
 type PromptsView = (typeof PROMPT_VIEWS)[number];
-
-function formatRelative(iso?: string): string {
-  if (!iso) return '—';
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const diffMin = Math.round(diffMs / 60000);
-  if (diffMin < 1) return 'Just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.round(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.round(diffHr / 24);
-  if (diffDay < 30) return `${diffDay}d ago`;
-  return new Date(iso).toLocaleDateString();
-}
 
 function visibilityColorClass(score: number): string {
   if (score >= 70) return 'text-emerald-600 dark:text-emerald-400';
@@ -1984,6 +1973,7 @@ function AllPromptsTab({
   /** Opens the Edit Prompt dialog for a row; undefined hides the pencil (member role). */
   onEditPrompt?: (prompt: Prompt) => void;
 }) {
+  const tCommon = useTranslations('common');
   const [search, setSearch] = useState('');
   const [workFilter, setWorkFilter] = useState<'all' | 'none' | PromptWorkStatus>('all');
   // Optimistic per-row status overrides — the prompts prop belongs to the
@@ -2363,7 +2353,7 @@ function AllPromptsTab({
                     )}
                   </TableCell>
                   <TableCell className="text-right text-xs text-muted-foreground">
-                    {formatRelative(vis?.lastRunAt)}
+                    {formatRelative(vis?.lastRunAt, tCommon)}
                   </TableCell>
                   {onEditPrompt && (
                     <TableCell className="text-right pr-6">
