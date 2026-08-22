@@ -13,7 +13,13 @@
     "search": "Search",
     "filter": "Filter",
     "export": "Export",
-    "noData": "No data available"
+    "noData": "No data available",
+    "relative": {
+      "justNow": "just now",
+      "minutesAgo": "{m}m ago",
+      "hoursAgo": "{h}h ago",
+      "daysAgo": "{d}d ago"
+    }
   },
   "nav": {
     "overview": "Overview",
@@ -233,13 +239,7 @@
       "lastRun": "Last run"
     },
     "appearedIn": "Appeared in {visible} of {active, plural, one {# prompt} other {# prompts}}",
-    "openDetails": "Open topic details",
-    "relative": {
-      "justNow": "just now",
-      "minutesAgo": "{m}m ago",
-      "hoursAgo": "{h}h ago",
-      "daysAgo": "{d}d ago"
-    }
+    "openDetails": "Open topic details"
   },
   "content": {
     "title": "Content Opportunities",

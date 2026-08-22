@@ -819,6 +819,7 @@ function RecommendationsSection({ data }: { data: InsightsRecommendations }) {
 
 import { saveTrackingJob, loadTrackingJob, clearTrackingJob } from '@/lib/tracking-job-store';
 import { toCsv } from '@/lib/csv';
+import { formatRelative } from '@/lib/format-relative';
 
 function TrackingProgressBanner({
   jobStatus,
@@ -951,6 +952,7 @@ function NoCompetitorsTeaser() {
 
 export default function InsightsPage() {
   const t = useTranslations('insights');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const { isCloud } = usePlanContext();
   const brand = useBrandStore((s) => s.getActiveBrand());
@@ -1395,7 +1397,7 @@ export default function InsightsPage() {
   }
 
   const lastCheckedLabel = summary?.lastCheckedAt
-    ? formatTimeAgo(new Date(summary.lastCheckedAt))
+    ? formatRelative(summary.lastCheckedAt, tCommon)
     : 'Never';
 
   const handleResetFilters = () => {
@@ -1755,17 +1757,4 @@ export default function InsightsPage() {
       />
     </div>
   );
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatTimeAgo(date: Date): string {
-  const diff = Date.now() - date.getTime();
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
 }
