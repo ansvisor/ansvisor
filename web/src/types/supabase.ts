@@ -2406,11 +2406,45 @@ export type Database = {
         }
         Returns: Json
       }
+      citation_url_candidates: {
+        Args: { p_brand_id: string; p_domain: string }
+        Returns: {
+          id: number
+          title: string
+          url: string
+        }[]
+      }
       citation_url_ids: {
         Args: { p_urls: Json }
         Returns: {
           id: number
           url: string
+        }[]
+      }
+      citation_url_occurrences: {
+        Args: {
+          p_brand_id: string
+          p_date_from?: string
+          p_date_to?: string
+          p_models?: string[]
+          p_prompt_ids?: string[]
+          p_regions?: string[]
+          p_topic_ids?: string[]
+          p_url_ids: number[]
+        }
+        Returns: {
+          brand_mentioned: boolean
+          citations_in_answer: number
+          created_at: string
+          model_used: string
+          platform: string
+          prompt_id: string
+          prompt_text: string
+          rank: number
+          region: string
+          result_id: string
+          sentiment: string
+          total_sources: number
         }[]
       }
       citations_domains: {

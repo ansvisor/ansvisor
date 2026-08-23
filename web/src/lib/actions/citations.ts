@@ -766,11 +766,17 @@ function escapeIlike(value: string): string {
 const URL_DETAIL_TRAFFIC_MAX_ROWS = 5000;
 
 /**
- * Everything the per-URL citation detail page needs (#535): a URL-filtered
- * scan of prompt_results plus, for brand-owned URLs, the targeting and
- * traffic bridges. Uses the same scan, filters and URL bucketing as
- * getCitationsOverview so the counts here agree with the overview tables for
- * the same URL, window and filters.
+ * Everything the per-URL citation detail page needs (#535), read from the
+ * citation rows (#732) plus, for brand-owned URLs, the targeting and traffic
+ * bridges. Uses the same filters as getCitationsOverview so the counts here
+ * agree with the overview tables for the same URL, window and filters.
+ *
+ * Two calls rather than one because the URL identity this page groups by is
+ * `normalizeCitationUrl`, which lives in TypeScript: SQL narrows to the
+ * target's domain, the match itself happens here with the same function that
+ * renders the result, and only the ids it accepted go back for the
+ * occurrences. Reimplementing those rules in SQL would be a second definition
+ * of the same identity, free to drift from this one.
  */
 export async function getCitationUrlDetail(
   brandId: string,
@@ -797,94 +803,86 @@ export async function getCitationUrlDetail(
     ? classifyDomain(targetHost, { brandDomains, competitorDomains })
     : 'other';
 
-  interface DetailResultRow {
-    id: string;
+  interface CandidateRow {
+    id: number;
+    url: string;
+    title: string | null;
+  }
+
+  interface OccurrenceRow {
+    result_id: string;
     prompt_id: string;
+    prompt_text: string | null;
     platform: string | null;
     model_used: string | null;
     region: string | null;
     created_at: string;
     sentiment: string | null;
-    mention_count: number | null;
-    citations: Citation[] | null;
+    brand_mentioned: boolean;
+    citations_in_answer: number;
+    rank: number;
+    total_sources: number;
   }
 
-  interface RawOccurrence extends Omit<CitationUrlOccurrence, 'promptText'> {
-    promptText: string | null;
-  }
+  // Every URL the brand has cited on this host, folded through the page's own
+  // normalization. One target usually covers several stored URLs: query
+  // strings and a trailing slash are not part of the identity here.
+  const { data: candidateRows, error: candidateErr } = await supabase.rpc(
+    'citation_url_candidates',
+    { p_brand_id: brandId, p_domain: targetHost },
+  );
+  if (candidateErr) throw new Error(candidateErr.message);
 
-  const occurrences: RawOccurrence[] = [];
-  const models = new Set<string>();
+  const urlIds: number[] = [];
   let title = '';
+  // By id, so the title is the one recorded the first time the URL was seen
+  // rather than whichever row the database happened to return first.
+  for (const row of ((candidateRows ?? []) as CandidateRow[]).slice().sort((a, b) => a.id - b.id)) {
+    if (normalizeCitationUrl(row.url) !== targetUrl) continue;
+    urlIds.push(row.id);
+    if (!title && row.title) title = row.title;
+  }
+
+  const topicPromptIds = await resolveTopicPromptIds(supabase, filters);
+  let occurrenceRows: OccurrenceRow[] = [];
+  if (urlIds.length > 0) {
+    const { data, error } = await supabase.rpc('citation_url_occurrences', {
+      ...overviewArgs(brandId, filters, topicPromptIds),
+      p_url_ids: urlIds,
+    });
+    if (error) throw new Error(error.message);
+    occurrenceRows = (data ?? []) as OccurrenceRow[];
+  }
+
+  const models = new Set<string>();
   let totalCitations = 0;
   let firstSeen: string | null = null;
   let lastSeen: string | null = null;
 
-  await scanFilteredResults<DetailResultRow>(
-    supabase,
-    brandId,
-    filters,
-    'id, prompt_id, platform, model_used, region, created_at, sentiment, mention_count, citations',
-    (batch) => {
-      for (const result of batch) {
-        const citations = Array.isArray(result.citations) ? result.citations : [];
-        if (citations.length === 0) continue;
+  const withText: CitationUrlOccurrence[] = occurrenceRows.map((row) => {
+    totalCitations += row.citations_in_answer;
+    const modelKey = row.model_used || row.platform || '';
+    if (modelKey) models.add(modelKey);
+    if (!firstSeen || row.created_at < firstSeen) firstSeen = row.created_at;
+    if (!lastSeen || row.created_at > lastSeen) lastSeen = row.created_at;
 
-        // Rank citations by their position in the answer; find ours.
-        const ordered = [...citations].sort((a, b) => (a.startIndex ?? 0) - (b.startIndex ?? 0));
-        let rank = 0;
-        let citationsInAnswer = 0;
-        for (let i = 0; i < ordered.length; i++) {
-          if (normalizeCitationUrl(ordered[i].url) !== targetUrl) continue;
-          citationsInAnswer += 1;
-          if (rank === 0) rank = i + 1;
-          if (!title && ordered[i].title) title = ordered[i].title;
-        }
-        if (citationsInAnswer === 0) continue;
+    return {
+      resultId: row.result_id,
+      promptId: row.prompt_id,
+      promptText: row.prompt_text ?? '(deleted prompt)',
+      platform: row.platform,
+      modelUsed: row.model_used,
+      region: row.region,
+      createdAt: row.created_at,
+      sentiment: row.sentiment,
+      brandMentioned: row.brand_mentioned,
+      citationsInAnswer: row.citations_in_answer,
+      rank: row.rank,
+      totalSources: row.total_sources,
+    };
+  });
 
-        totalCitations += citationsInAnswer;
-        const modelKey = result.model_used || result.platform || '';
-        if (modelKey) models.add(modelKey);
-        if (!firstSeen || result.created_at < firstSeen) firstSeen = result.created_at;
-        if (!lastSeen || result.created_at > lastSeen) lastSeen = result.created_at;
-
-        occurrences.push({
-          resultId: result.id,
-          promptId: result.prompt_id,
-          promptText: null,
-          platform: result.platform,
-          modelUsed: result.model_used,
-          region: result.region,
-          createdAt: result.created_at,
-          sentiment: result.sentiment,
-          brandMentioned: (result.mention_count ?? 0) > 0,
-          citationsInAnswer,
-          rank,
-          totalSources: citations.length,
-        });
-      }
-    },
-  );
-
-  occurrences.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-
-  // Resolve prompt texts for everything the scan touched.
-  const promptIds = Array.from(new Set(occurrences.map((o) => o.promptId)));
-  const promptTextById = new Map<string, string>();
-  if (promptIds.length > 0) {
-    const { data: promptRows, error: promptErr } = await supabase
-      .from('prompts')
-      .select('id, text')
-      .in('id', promptIds);
-    if (promptErr) throw new Error(promptErr.message);
-    for (const p of (promptRows ?? []) as { id: string; text: string }[]) {
-      promptTextById.set(p.id, p.text);
-    }
-  }
-  const withText: CitationUrlOccurrence[] = occurrences.map((o) => ({
-    ...o,
-    promptText: o.promptText ?? promptTextById.get(o.promptId) ?? '(deleted prompt)',
-  }));
+  const promptIds = Array.from(new Set(withText.map((o) => o.promptId)));
 
   // Prompts breakdown — the queries this page is winning.
   const groupMap = new Map<string, CitationUrlPromptGroup>();
