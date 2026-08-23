@@ -22,6 +22,7 @@ import {
 import { normalizeCitationUrl } from '@/lib/citations/normalize';
 import { getTopicById } from '@/lib/actions/topic';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
+import { getOrgLocationUsage } from '@/lib/prompt-locations';
 import { getPromptVolumes } from '@/lib/actions/volumes';
 import { getPromptSuggestions } from '@/lib/actions/prompt-suggestions';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
@@ -525,8 +526,10 @@ export async function getVisibilityRateKpi(
  * cards (the `tracked_prompt_count` RPC mirrors `insights_aggregates`,
  * shopping excluded) — because a static account-state number sitting in a
  * filter-reactive row would read as inconsistent. The quota sub-line is
- * deliberately a "now" fact: org-wide usage against the effective plan
- * limit, matching what `enforceLimit` counts on write.
+ * deliberately a "now" fact: org-wide tracked LOCATIONS against the
+ * effective plan limit (#691), from the same counter every write-path guard
+ * uses, so the number shown and the number that rejects a save cannot
+ * disagree.
  */
 export async function getTrackedPromptsKpi(
   brandId: string,
@@ -549,16 +552,10 @@ export async function getTrackedPromptsKpi(
     .single();
   const orgId = (brand?.organization_id as string | undefined) ?? null;
 
-  const countOrgPrompts = async (): Promise<number> => {
+  const countOrgLocations = async (): Promise<number> => {
     if (!orgId) return 0;
-    const { count } = await supabase
-      .from('prompts')
-      .select('id, prompt_sets!inner(brand_id, brands!inner(organization_id))', {
-        count: 'exact',
-        head: true,
-      })
-      .eq('prompt_sets.brands.organization_id', orgId);
-    return count ?? 0;
+    const usage = await getOrgLocationUsage(supabase, orgId);
+    return usage.total;
   };
 
   const [rpcResult, plan, quotaUsed] = await Promise.all([
@@ -581,7 +578,7 @@ export async function getTrackedPromptsKpi(
           p_topic_id: opts?.topicId ?? undefined,
         }),
     orgId ? getOrgPlan(orgId) : Promise.resolve(null),
-    countOrgPrompts(),
+    countOrgLocations(),
   ]);
   if (rpcResult.error) throw new Error(rpcResult.error.message);
 
