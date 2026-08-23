@@ -2687,6 +2687,13 @@ export type Database = {
           regions: string[]
         }[]
       }
+      org_prompt_location_usage: {
+        Args: { p_organization_id: string }
+        Returns: {
+          brand_id: string
+          locations: number
+        }[]
+      }
       prompt_performance_aggregates: {
         Args: {
           p_brand_id: string

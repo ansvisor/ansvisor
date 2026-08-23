@@ -24,17 +24,14 @@ describe('promptLocationCount', () => {
 });
 
 describe('summarizeLocationRows', () => {
-  it('sums locations org-wide and per brand', () => {
+  it('totals the per-brand rows the RPC returns', () => {
     const usage = summarizeLocationRows([
-      { regions: ['US'], brandId: 'a' },
-      { regions: ['US', 'DE'], brandId: 'a' },
-      { regions: [], brandId: 'b' },
-      { regions: ['GB'], brandId: null },
+      { brand_id: 'a', locations: 3 },
+      { brand_id: 'b', locations: 1 },
     ]);
-    expect(usage.total).toBe(5);
+    expect(usage.total).toBe(4);
     expect(usage.byBrand.get('a')).toBe(3);
     expect(usage.byBrand.get('b')).toBe(1);
-    expect(usage.byBrand.has('')).toBe(false);
   });
 
   it('returns zero usage for no rows', () => {

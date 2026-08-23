@@ -22,6 +22,10 @@ type ServerSupabase = Awaited<ReturnType<typeof createClient>>;
  * Locations one prompt tracks: one per region entry. A prompt with an empty
  * or missing region list still runs once (the worker falls back to a single
  * untargeted pass), so it costs one.
+ *
+ * Mirrored in SQL by `org_prompt_location_usage` (00070) as
+ * `greatest(coalesce(array_length(regions,1),0),1)` — the two definitions
+ * must not drift.
  */
 export function promptLocationCount(regions: readonly unknown[] | null | undefined): number {
   return Array.isArray(regions) && regions.length > 0 ? regions.length : 1;
@@ -40,36 +44,35 @@ export interface OrgLocationUsage {
 
 /** Pure aggregation half of {@link getOrgLocationUsage}, split out for tests. */
 export function summarizeLocationRows(
-  rows: { regions: string[] | null; brandId: string | null }[],
+  rows: { brand_id: string; locations: number }[],
 ): OrgLocationUsage {
   const byBrand = new Map<string, number>();
   let total = 0;
   for (const row of rows) {
-    const locations = promptLocationCount(row.regions);
-    total += locations;
-    if (row.brandId) {
-      byBrand.set(row.brandId, (byBrand.get(row.brandId) ?? 0) + locations);
-    }
+    total += row.locations;
+    byBrand.set(row.brand_id, row.locations);
   }
   return { total, byBrand };
 }
 
+/**
+ * The count comes from the `org_prompt_location_usage` RPC — one aggregate
+ * per call, no rows travel. Selecting the org's prompt rows and summing here
+ * would look equivalent but isn't: PostgREST silently caps an un-paginated
+ * select at 1000 rows (the #427/#450/#464 trap), and a truncated sum
+ * UNDER-counts — the guard would wave an over-limit org through with no
+ * error anywhere. The RPC is security invoker, so RLS scopes it to orgs the
+ * caller belongs to.
+ */
 export async function getOrgLocationUsage(
   supabase: ServerSupabase,
   organizationId: string,
 ): Promise<OrgLocationUsage> {
-  const { data, error } = await supabase
-    .from('prompts')
-    .select('regions, prompt_sets!inner(brand_id, brands!inner(organization_id))')
-    .eq('prompt_sets.brands.organization_id', organizationId);
+  const { data, error } = await supabase.rpc('org_prompt_location_usage', {
+    p_organization_id: organizationId,
+  });
   if (error) throw new Error(error.message);
-
-  return summarizeLocationRows(
-    (data ?? []).map((row) => ({
-      regions: (row.regions as string[] | null) ?? null,
-      brandId: (row.prompt_sets as unknown as { brand_id: string } | null)?.brand_id ?? null,
-    })),
-  );
+  return summarizeLocationRows(data ?? []);
 }
 
 /**

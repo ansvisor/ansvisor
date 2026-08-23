@@ -300,34 +300,49 @@ export async function updatePrompt(
   if (updates.category !== undefined) payload.category = updates.category || null;
   if (updates.isActive !== undefined) payload.is_active = updates.isActive;
 
-  if (updates.category !== undefined) {
-    const { data: promptWithBrand } = await supabase
-      .from('prompts')
-      .select('prompt_sets!inner(brand_id)')
-      .eq('id', id)
-      .single();
-    const brandId = (promptWithBrand?.prompt_sets as { brand_id: string })?.brand_id;
-    if (brandId) {
-      payload.topic_id = await resolveTopicId(supabase, brandId, updates.category);
-    }
-  }
-
-  if (updates.platforms !== undefined || updates.models !== undefined) {
+  // Category, platform/model and region updates all need context from the
+  // prompt's row (its current regions, brand, org and shopping pref) — one
+  // fetch serves every branch below.
+  let ctx: {
+    regions: string[] | null;
+    brandId: string;
+    organizationId: string;
+    shoppingEnabled: boolean | null;
+  } | null = null;
+  if (
+    updates.category !== undefined ||
+    updates.platforms !== undefined ||
+    updates.models !== undefined ||
+    updates.regions !== undefined
+  ) {
     const { data: promptRow } = await supabase
       .from('prompts')
-      .select('prompt_sets!inner(brands!inner(organization_id, shopping_mode_enabled))')
+      .select(
+        'regions, prompt_sets!inner(brand_id, brands!inner(organization_id, shopping_mode_enabled))',
+      )
       .eq('id', id)
       .single();
-    const brandRow = (
-      promptRow?.prompt_sets as {
-        brands: { organization_id: string; shopping_mode_enabled: boolean | null };
-      }
-    )?.brands;
-    if (!brandRow?.organization_id) throw new Error('Prompt not found');
+    const set = promptRow?.prompt_sets as unknown as {
+      brand_id: string;
+      brands: { organization_id: string; shopping_mode_enabled: boolean | null };
+    } | null;
+    if (!set?.brands?.organization_id) throw new Error('Prompt not found');
+    ctx = {
+      regions: (promptRow?.regions as string[] | null) ?? null,
+      brandId: set.brand_id,
+      organizationId: set.brands.organization_id,
+      shoppingEnabled: set.brands.shopping_mode_enabled,
+    };
+  }
 
-    const plan = await getOrgPlan(brandRow.organization_id);
+  if (updates.category !== undefined && ctx) {
+    payload.topic_id = await resolveTopicId(supabase, ctx.brandId, updates.category);
+  }
+
+  if ((updates.platforms !== undefined || updates.models !== undefined) && ctx) {
+    const plan = await getOrgPlan(ctx.organizationId);
     const filtered = filterByPlan(plan, updates.platforms ?? [], updates.models ?? []);
-    const platforms = stripShoppingWhenDisabled(filtered.platforms, brandRow.shopping_mode_enabled);
+    const platforms = stripShoppingWhenDisabled(filtered.platforms, ctx.shoppingEnabled);
     if (platforms.length === 0 && filtered.models.length === 0) {
       throw new Error('At least one platform or model must be selected.');
     }
@@ -345,7 +360,7 @@ export async function updatePrompt(
   // style; nothing in the UI can send `regions` yet, and the region editor
   // that will (#691 follow-up) must surface this as a value, since
   // production masks thrown server-action messages (#427).
-  if (updates.regions !== undefined) {
+  if (updates.regions !== undefined && ctx) {
     const regions = [...new Set(updates.regions.map((r) => r.trim().toUpperCase()))];
     if (regions.length === 0) {
       throw new Error('Select at least one location.');
@@ -358,19 +373,10 @@ export async function updatePrompt(
       );
     }
 
-    const { data: promptRow } = await supabase
-      .from('prompts')
-      .select('regions, prompt_sets!inner(brands!inner(organization_id))')
-      .eq('id', id)
-      .single();
-    const orgId = (promptRow?.prompt_sets as { brands: { organization_id: string } } | null)?.brands
-      ?.organization_id;
-    if (!orgId) throw new Error('Prompt not found');
-
-    const delta = regions.length - promptLocationCount(promptRow?.regions as string[] | null);
+    const delta = regions.length - promptLocationCount(ctx.regions);
     if (delta > 0) {
-      const plan = await getOrgPlan(orgId);
-      const usage = await getOrgLocationUsage(supabase, orgId);
+      const plan = await getOrgPlan(ctx.organizationId);
+      const usage = await getOrgLocationUsage(supabase, ctx.organizationId);
       const limitError = locationLimitMessage(plan, usage.total, delta);
       if (limitError) throw new PlanLimitError(limitError, plan.name);
     }
