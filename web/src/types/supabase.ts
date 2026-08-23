@@ -2406,6 +2406,47 @@ export type Database = {
         }
         Returns: Json
       }
+      citation_competitor_sources: {
+        Args: {
+          p_brand_domains: string[]
+          p_brand_id: string
+          p_competitor_domains: string[]
+          p_date_from?: string
+          p_date_to?: string
+          p_models?: string[]
+          p_prompt_ids?: string[]
+          p_regions?: string[]
+          p_topic_ids?: string[]
+        }
+        Returns: {
+          answers_feeding: number
+          competitor_id: string
+          domain: string
+          strength: number
+        }[]
+      }
+      citation_gap_domains: {
+        Args: {
+          p_brand_domains: string[]
+          p_brand_id: string
+          p_competitor_domains: string[]
+          p_date_from?: string
+          p_date_to?: string
+          p_models?: string[]
+          p_prompt_ids?: string[]
+          p_regions?: string[]
+          p_topic_ids?: string[]
+        }
+        Returns: {
+          appears_in_ours: boolean
+          competitor_answers: number
+          competitor_names: string[]
+          domain: string
+          our_answer_count: number
+          strength: number
+          total_answers: number
+        }[]
+      }
       citation_url_candidates: {
         Args: { p_brand_id: string; p_domain: string }
         Returns: {

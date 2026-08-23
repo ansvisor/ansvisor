@@ -2,7 +2,6 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { expandDateToEndOfDay } from '@/lib/dates';
-import type { Citation, CompetitorMention } from '@/types';
 import {
   classifyDomain,
   extractHostname,
@@ -105,109 +104,6 @@ function resolveDateRange(filters: CitationsFilters): { from?: string; to?: stri
 }
 
 // ─── Main action ──────────────────────────────────────────────────────────────
-
-/**
- * Apply the platform/model filter to `prompt_results.model_used`.
- *
- * Supports both a single slug (`gpt-5-5`) and a comma-joined family
- * (`gpt-5-3-mini,gpt-5-5`) so the UI can filter an entire provider family
- * from one dropdown option.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function applyModelFilter<T extends { eq: any; in: any }>(
-  query: T,
-  models: string[] | undefined,
-): T {
-  if (!models || models.length === 0) return query;
-
-  const list = Array.from(
-    new Set(
-      models.flatMap((model) =>
-        model
-          .split(',')
-          .map((slug) => slug.trim())
-          .filter(Boolean),
-      ),
-    ),
-  );
-
-  if (list.length <= 1) return query.eq('model_used', list[0] ?? models[0]);
-  return query.in('model_used', list);
-}
-
-/**
- * PostgREST silently caps un-paginated selects at 1000 rows, which quietly
- * truncated every citations aggregation on brands with more than 1000 results
- * in the selected window (the overview literally reported `results: 1000`).
- * Page through the filtered window instead, feeding each batch to `onBatch` so
- * full citation payloads never accumulate in memory. Returns the total rows
- * scanned. The hard row ceiling bounds the `all` preset on huge brands.
- */
-const CITATIONS_SCAN_PAGE_SIZE = 1000;
-const CITATIONS_SCAN_MAX_ROWS = 50_000;
-
-async function scanFilteredResults<T>(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  brandId: string,
-  filters: CitationsFilters,
-  select: string,
-  onBatch: (batch: T[]) => void,
-): Promise<number> {
-  // Resolve topic → prompt ids once, not per page.
-  let topicPromptIds: string[] | null = null;
-  if (filters.topicIds && filters.topicIds.length > 0) {
-    const { data: topicPrompts } = await supabase
-      .from('prompts')
-      .select('id')
-      .in('topic_id', filters.topicIds);
-    topicPromptIds = ((topicPrompts ?? []) as { id: string }[]).map((p) => p.id);
-  }
-
-  const { from, to } = resolveDateRange(filters);
-  const expandedTo = expandDateToEndOfDay(to);
-
-  let total = 0;
-  for (let offset = 0; offset < CITATIONS_SCAN_MAX_ROWS; offset += CITATIONS_SCAN_PAGE_SIZE) {
-    let query = supabase
-      .from('prompt_results')
-      .select(select)
-      .eq('brand_id', brandId)
-      // #155 — chatgpt-shopping rows are isolated from analytical aggregates.
-      // The insights KPIs already exclude them; without this, the Citations
-      // page counted a superset of what the KPI counts.
-      .neq('platform', 'chatgpt-shopping');
-    if (from) query = query.gte('created_at', from);
-    if (expandedTo) query = query.lte('created_at', expandedTo);
-    if (filters.platforms && filters.platforms.length > 0) {
-      query = applyModelFilter(query, filters.platforms);
-    }
-    if (filters.regions && filters.regions.length > 0) {
-      query = query.in('region', filters.regions);
-    }
-    if (filters.promptIds && filters.promptIds.length > 0) {
-      query = query.in('prompt_id', filters.promptIds);
-    }
-    if (topicPromptIds) {
-      query = query.in(
-        'prompt_id',
-        topicPromptIds.length > 0 ? topicPromptIds : ['00000000-0000-0000-0000-000000000000'],
-      );
-    }
-
-    const { data, error } = await query
-      // Deterministic order so .range() pages don't shuffle between requests.
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-      .range(offset, offset + CITATIONS_SCAN_PAGE_SIZE - 1);
-    if (error) throw new Error(error.message);
-
-    const batch = (data ?? []) as unknown as T[];
-    total += batch.length;
-    if (batch.length > 0) onBatch(batch);
-    if (batch.length < CITATIONS_SCAN_PAGE_SIZE) break;
-  }
-  return total;
-}
 
 /** URL rows the overview asks for. The table paginates a hundred at a time. */
 const CITATIONS_URL_LIMIT = 2000;
@@ -486,18 +382,14 @@ export async function getCitationGaps(
 ): Promise<CitationGaps> {
   const supabase = await createClient();
 
-  const { data: brandDomainRows } = await supabase
-    .from('brand_domains')
-    .select('domain')
-    .eq('brand_id', brandId);
+  const [{ data: brandDomainRows }, { data: competitorRows }, topicPromptIds] = await Promise.all([
+    supabase.from('brand_domains').select('domain').eq('brand_id', brandId),
+    supabase.from('competitors').select('id, name, domain').eq('brand_id', brandId),
+    resolveTopicPromptIds(supabase, filters),
+  ]);
   const brandDomains = (brandDomainRows ?? [])
     .map((r) => normalizeDomain((r as { domain: string }).domain))
     .filter(Boolean);
-
-  const { data: competitorRows } = await supabase
-    .from('competitors')
-    .select('id, name, domain')
-    .eq('brand_id', brandId);
   const competitorList = (competitorRows ?? []) as Array<{
     id: string;
     name: string;
@@ -510,141 +402,91 @@ export async function getCitationGaps(
 
   const classifyCtx = { brandDomains, competitorDomains };
 
-  interface GapResultRow {
-    id: string;
-    citations: Citation[] | null;
-    competitor_mentions: CompetitorMention[] | null;
-    mention_count: number | null;
-  }
-
-  interface DomainAgg {
-    domain: string;
-    category: SourceCategory;
-    competitorAnswers: Set<string>;
-    appearsInOurAnswers: boolean;
+  // The co-occurrence counting lives in SQL (#777) over the citation rows —
+  // the raw-answer scan it replaces moved 129 MB of jsonb for the largest
+  // brand and silently stopped at 50,000 answers, oldest first. The brand and
+  // competitor domain lists ride along because the you/competitor split
+  // depends on their CURRENT state; category labels for display are still
+  // computed here, with the same classifier as the rest of the page.
+  interface GapDomainRow {
+    domain: string | null;
+    competitor_answers: number;
+    appears_in_ours: boolean;
     strength: number;
-    competitorNames: Set<string>;
+    competitor_names: string[] | null;
+    our_answer_count: number;
+    total_answers: number;
   }
-  interface CompDomainAgg {
+  interface CompSourceRow {
+    competitor_id: string;
     domain: string;
-    category: SourceCategory;
-    answersFeeding: Set<string>;
+    answers_feeding: number;
     strength: number;
   }
 
-  const domainMap = new Map<string, DomainAgg>();
-  const byCompMap = new Map<string, Map<string, CompDomainAgg>>();
-  let ourAnswerCount = 0;
-  const domainClassificationCache = new Map<string, SourceCategory>();
-
-  const aggregateAnswer = (r: GapResultRow) => {
-    const citations = Array.isArray(r.citations) ? r.citations : [];
-    const domainCat = new Map<string, SourceCategory>();
-
-    for (const cite of citations) {
-      const host = extractHostname(cite.url);
-      if (!host || domainCat.has(host)) continue;
-
-      let category = domainClassificationCache.get(host);
-
-      if (category === undefined) {
-        category = classifyDomain(host, classifyCtx);
-        domainClassificationCache.set(host, category);
-      }
-
-      domainCat.set(host, category);
-    }
-    // Weight each answer's co-occurrences by 1 / distinct sources so a focused
-    // answer counts more per domain than a sprawling multi-source one.
-    const weight = domainCat.size > 0 ? 1 / domainCat.size : 0;
-
-    const ourDomainCited = Array.from(domainCat.values()).some((cat) => cat === 'you');
-    const wePresent = (r.mention_count ?? 0) > 0 || ourDomainCited;
-    if (wePresent) ourAnswerCount += 1;
-
-    const mentions = Array.isArray(r.competitor_mentions) ? r.competitor_mentions : [];
-    const mentionedCompetitors = mentions.filter((m) => (m.mention_count ?? 0) > 0);
-    const competitorPresent = mentionedCompetitors.length > 0;
-    const competitorNamesInAnswer = mentionedCompetitors.map(
-      (m) => competitorNameById.get(m.competitor_id) ?? ((m.name || '').trim() || 'Competitor'),
-    );
-
-    for (const [domain, category] of domainCat) {
-      // Only third-party publications are actionable — skip our and competitor sites.
-      if (category === 'you' || category === 'competitor') continue;
-
-      const agg = domainMap.get(domain) ?? {
-        domain,
-        category,
-        competitorAnswers: new Set<string>(),
-        appearsInOurAnswers: false,
-        strength: 0,
-        competitorNames: new Set<string>(),
-      };
-      if (wePresent) agg.appearsInOurAnswers = true;
-      if (competitorPresent && !wePresent) {
-        agg.competitorAnswers.add(r.id);
-        agg.strength += weight;
-        for (const name of competitorNamesInAnswer) agg.competitorNames.add(name);
-      }
-      domainMap.set(domain, agg);
-
-      if (competitorPresent) {
-        for (const m of mentionedCompetitors) {
-          let perDomain = byCompMap.get(m.competitor_id);
-          if (!perDomain) {
-            perDomain = new Map<string, CompDomainAgg>();
-            byCompMap.set(m.competitor_id, perDomain);
-          }
-          const cd = perDomain.get(domain) ?? {
-            domain,
-            category,
-            answersFeeding: new Set<string>(),
-            strength: 0,
-          };
-          cd.answersFeeding.add(r.id);
-          cd.strength += weight;
-          perDomain.set(domain, cd);
-        }
-      }
-    }
+  const rpcArgs = {
+    ...overviewArgs(brandId, filters, topicPromptIds),
+    p_brand_domains: brandDomains,
+    p_competitor_domains: competitorDomains,
   };
+  const [gapRes, compRes] = await Promise.all([
+    supabase.rpc('citation_gap_domains', rpcArgs),
+    supabase.rpc('citation_competitor_sources', rpcArgs),
+  ]);
+  if (gapRes.error) throw new Error(gapRes.error.message);
+  if (compRes.error) throw new Error(compRes.error.message);
 
-  const totalAnswers = await scanFilteredResults<GapResultRow>(
-    supabase,
-    brandId,
-    filters,
-    'id, citations, competitor_mentions, mention_count',
-    (batch) => {
-      for (const r of batch) aggregateAnswer(r);
-    },
-  );
+  const gapRows = (gapRes.data as GapDomainRow[] | null) ?? [];
+  // The null-domain summary row is always present, so the totals survive
+  // windows where no third-party domain qualifies.
+  const summary = gapRows.find((r) => r.domain === null);
+  const totalAnswers = Number(summary?.total_answers ?? 0);
+  const ourAnswerCount = Number(summary?.our_answer_count ?? 0);
+  const domainRows = gapRows.filter((r): r is GapDomainRow & { domain: string } => !!r.domain);
 
-  const gapDomains: CitationGapDomain[] = Array.from(domainMap.values())
-    .filter((g) => !g.appearsInOurAnswers && g.competitorAnswers.size >= GAP_MIN_COMPETITOR_ANSWERS)
-    .map((g) => ({
-      domain: g.domain,
-      category: g.category,
-      competitorAnswers: g.competitorAnswers.size,
-      competitors: Array.from(g.competitorNames).sort().slice(0, GAP_MAX_COMPETITOR_CHIPS),
-      strength: Math.round(g.strength * 1000) / 1000,
+  const domainClassificationCache = new Map<string, SourceCategory>();
+  const categoryOf = (domain: string): SourceCategory => {
+    let category = domainClassificationCache.get(domain);
+    if (category === undefined) {
+      category = classifyDomain(domain, classifyCtx);
+      domainClassificationCache.set(domain, category);
+    }
+    return category;
+  };
+  const appearsInOurs = new Map(domainRows.map((r) => [r.domain, r.appears_in_ours]));
+
+  const gapDomains: CitationGapDomain[] = domainRows
+    .filter((r) => !r.appears_in_ours && Number(r.competitor_answers) >= GAP_MIN_COMPETITOR_ANSWERS)
+    .map((r) => ({
+      domain: r.domain,
+      category: categoryOf(r.domain),
+      competitorAnswers: Number(r.competitor_answers),
+      competitors: (r.competitor_names ?? []).slice(0, GAP_MAX_COMPETITOR_CHIPS),
+      strength: Math.round(Number(r.strength) * 1000) / 1000,
     }))
     .sort((a, b) => b.strength - a.strength || b.competitorAnswers - a.competitorAnswers)
     .slice(0, GAP_MAX_ROWS);
 
+  const byCompMap = new Map<string, CompetitorSourceDomain[]>();
+  for (const row of (compRes.data as CompSourceRow[] | null) ?? []) {
+    let list = byCompMap.get(row.competitor_id);
+    if (!list) {
+      list = [];
+      byCompMap.set(row.competitor_id, list);
+    }
+    list.push({
+      domain: row.domain,
+      category: categoryOf(row.domain),
+      answersFeeding: Number(row.answers_feeding),
+      alsoCitesUs: appearsInOurs.get(row.domain) ?? false,
+      strength: Math.round(Number(row.strength) * 1000) / 1000,
+    });
+  }
   const byCompetitor: Record<string, CompetitorSourceDomain[]> = {};
-  for (const [competitorId, perDomain] of byCompMap) {
-    const list = Array.from(perDomain.values())
-      .map((cd) => ({
-        domain: cd.domain,
-        category: cd.category,
-        answersFeeding: cd.answersFeeding.size,
-        alsoCitesUs: domainMap.get(cd.domain)?.appearsInOurAnswers ?? false,
-        strength: Math.round(cd.strength * 1000) / 1000,
-      }))
+  for (const [competitorId, list] of byCompMap) {
+    byCompetitor[competitorId] = list
       .sort((a, b) => b.strength - a.strength || b.answersFeeding - a.answersFeeding)
       .slice(0, GAP_MAX_ROWS);
-    if (list.length > 0) byCompetitor[competitorId] = list;
   }
 
   const competitors: CitationGapCompetitor[] = competitorList
