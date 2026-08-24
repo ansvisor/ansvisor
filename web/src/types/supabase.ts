@@ -2706,7 +2706,12 @@ export type Database = {
         Returns: Json
       }
       prompt_visibility_summaries: {
-        Args: { p_brand_id: string; p_date_from?: string; p_date_to?: string }
+        Args: {
+          p_brand_id: string
+          p_date_from?: string
+          p_date_to?: string
+          p_region?: string
+        }
         Returns: {
           avg_visibility: number
           avg_visibility_visible: number

@@ -603,6 +603,10 @@ export interface InsightsFilterOptions {
  * Deliberately unfiltered (whole-brand): the dropdowns must keep offering
  * every value the brand has ever produced, not just the current window's.
  */
+export async function getBrandFilterOptions(brandId: string): Promise<InsightsFilterOptions> {
+  return getInsightsFilterOptions(brandId);
+}
+
 async function getInsightsFilterOptions(brandId: string): Promise<InsightsFilterOptions> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('insights_filter_options', { p_brand_id: brandId });
@@ -1631,12 +1635,17 @@ export interface PromptVisibilitySummary {
  * last N days (default 30). Used by the All Prompts tab to show a quick
  * health column next to each prompt.
  *
+ * `region` scopes the aggregate to one tracked location (#691). Without it
+ * a multi-location prompt's figures are the blend of everywhere it runs,
+ * which hides exactly what tracking several locations was meant to reveal —
+ * a prompt can be strong at home and invisible abroad.
+ *
  * Returns a map keyed by prompt_id. Prompts without any runs in the window
  * simply won't appear in the map (callers should render "—").
  */
 export async function getPromptVisibilitySummaries(
   brandId: string,
-  opts?: { days?: number; from?: string; to?: string },
+  opts?: { days?: number; from?: string; to?: string; region?: string },
 ): Promise<Record<string, PromptVisibilitySummary>> {
   const supabase = await createClient();
   // `from`/`to` win when given (the custom range, #713); otherwise the day
@@ -1653,6 +1662,8 @@ export async function getPromptVisibilitySummaries(
     p_brand_id: brandId,
     p_date_from: since,
     p_date_to: opts?.to ?? undefined,
+    // One tracked location, or every location blended when absent (#691).
+    p_region: opts?.region ?? undefined,
   });
 
   if (error) throw new Error(error.message);
