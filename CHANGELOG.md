@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-24
+
+### Added
+
+- **Google Analytics 4 integration** — connect a GA4 account from Settings → Integrations through Composio managed auth, map each brand to one of its properties, and sync AI-sourced sessions, conversions and revenue daily (#695, #703, #718). AI Traffic then reports what AI referrals are actually worth, not just how many arrived, and instances without Composio credentials degrade to a safe no-op
+- **Prompts can target several locations at once** — a prompt's tracking locations are now a per-prompt list of countries and US states (`US-CA`), edited from the prompt card with a searchable picker (#783). Plan quota meters the tracked **location** rather than the prompt row, since a prompt tracked in three places costs three times the scraper and model calls; every write path measures the change it makes, so re-saving at the cap succeeds and removing a location frees capacity immediately (#781). Google AI Overview and AI Mode have no sub-country mechanism, so their state locations collapse to one country-wide run instead of billing the identical query twice
+- **Per-prompt visibility broken down by location** — a Location control on the Prompts page re-reads the health columns for one tracked location, so a prompt that is strong at home and invisible abroad no longer hides behind a blended average (#784)
+- **Pages AI engines ignore** — analytics-backed detection of valuable pages that AI search sends no traffic to, surfaced in AI Traffic and turned into prompt suggestions built from the pages worth defending (#724, #725, #720)
+- Prompts: suggestions get their own tab that shows what feeds them (#727), a new prompt is analyzed the moment it is added (#754), and a 7d / 30d / 90d range selector (#697)
+- **One date range control** across Visibility, Citations and Prompts, so the three pages can no longer disagree about the window they describe (#722)
+- Tracking: an **OpenRouter provider**, with sentiment analysis made provider-agnostic (#708)
+- Reports moved into the sidebar (#750)
+- Ops: CI flags pull requests that change a migration, so the apply step is not forgotten (#736)
+
+### Changed
+
+- **Citations, Topics and Insights aggregate in Postgres instead of downloading their windows.** The overview pages stopped shipping tens of thousands of rows to the browser to add them up (#726, #744); the per-URL detail page and Competitor Gaps read the citation index instead of paging every answer, which also removed a silent 50,000-row truncation that had been hiding the newest answers from both (#776, #778); and the dashboard serves from daily rollups rather than rescanning history (#773). Citations are written as rows alongside each answer to make this possible (#737, #739)
+- Content Optimization generates three opportunities per run instead of five to fifteen, so a run produces work a team can actually act on (#735)
+- Prompts: the All Prompts table sorts by visibility score descending by default (#714)
+- Citations: source filtering became a segmented control beside the table it scopes, replacing the server-side source filters (#742, #748)
+- Relative-time formatting is resolved through one shared helper instead of per-page copies (#767, #772)
+
+### Fixed
+
+- **Security: the citation RPCs enforce organization membership.** Six security-definer functions could be called with any brand UUID by any authenticated user, leaving the tenant boundary to the web tier alone; they now check membership themselves (#779, #780)
+- **Settings: organization updates are restricted to admins**, with server-managed columns locked against client writes (#755)
+- **A brand's first day no longer sends two Daily Pulse emails** — the catch-up sweep treated the deliberately unpulsed onboarding run as a missed pulse (#774), and a pulse can no longer be sent twice for the same tracking window (#717)
+- **Tracking runs survive slow and stalled Cloro queues** — runs whose first result lands late are no longer discarded (#710), ghost tasks no longer hold a run open (#690) or make a watched run sit through the full thresholds (#761), the pending-task read is paged so large runs aren't cut short (#716), and Grok submissions stop while the provider returns 500 for all of them (#734)
+- Citations: answers with many citations are no longer dropped by unchunked URL lookups (#738), the stored lookup pages past PostgREST's 1000-row cap (#740), URLs resolve through the request body instead of an over-long query string (#741), "has any citations" is answered without counting every row (#707), content stays visible during refetch (#775), an ambiguous column reference is resolved (#743), and a load failure no longer toasts after leaving the page (#696)
+- Prompt volumes: a brand's keywords are analysed when its setup finishes rather than only after checkout (#765), volume analysis covers a whole brand instead of failing past 50 prompts (#747), DataForSEO is asked once per brand instead of once per prompt (#749), and progress is reported from the run and picked up again on reload (#751, #752)
+- Reports: sections aggregate in Postgres and a report survives one failing section (#762); query fan-out ranks over the whole window and shows per-engine coverage (#764)
+- Content Optimization: filters stay reachable on zero results and selections can be deleted (#733); metrics are calculated across all opportunities (#700); the empty-state Generate button respects the cloud restriction (#699)
+- Topic detail trend charts and reports use the AI Visibility Score formula (#685, #693)
+- Slugs transliterate non-ASCII letters instead of deleting them (#763)
+- CSV: fields containing lone carriage returns are quoted (#758)
+- Mobile navigation preferences are aligned with the sidebar (#771)
+- Database: the missing `cloro_pending_tasks` migration was added (#692) and the `prompt_suggestions` table definition recovered (#711)
+- CI: `messages/*.json` is covered by the format check (#698)
+
+### Docs
+
+- The README is retitled and rewritten around AI Search intelligence (#769, #770)
+- Migration 00055's comment is corrected — there was no schema drift (#723)
+
 ## [0.2.0] - 2026-08-09
 
 ### Added
