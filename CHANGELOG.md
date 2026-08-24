@@ -51,6 +51,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The README is retitled and rewritten around AI Search intelligence (#769, #770)
 - Migration 00055's comment is corrected — there was no schema drift (#723)
 
+### Contributors
+
+Huge thanks to everyone who shipped code in this release — and a special welcome to our **first-time contributors**: @mikam44700, @shahzainshafique, @dawNotPoi, @luozejian and @kn-dev-code 🎉
+
+Thanks as well to our returning contributors @BharadwajKanneveti, @Maqbool61 and @Pavel-glitch-ui for coming back with more! 🙌
+
 ## [0.2.0] - 2026-08-09
 
 ### Added
