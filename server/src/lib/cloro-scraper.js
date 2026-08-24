@@ -37,7 +37,8 @@ export function buildRequestBody(promptText, scraperId, region, state) {
   // State-level geo-targeting (#554): the AI endpoints accept a USPS state
   // code alongside country US and route through an in-state proxy. Google
   // AIO / AI Mode use location/uule for sub-country targeting instead and
-  // must never receive it — their branches below skip this spread.
+  // must never receive it — their branches below skip this spread, and since
+  // #691 the caller never even submits a per-state task for them.
   const stateField = country === 'US' && state ? { state } : {};
 
   if (scraperId === 'chatgpt-shopping') {
@@ -232,7 +233,8 @@ export function parseScraperResponse(result, scraperId) {
  * @param {string} scraperId
  * @param {string} [region]
  * @param {{ webhookUrl?: string, state?: string }} [opts] - `state` is the
- *   brand's optional USPS code (#554); only forwarded on US AI-endpoint tasks.
+ *   USPS code of the location this task targets (#554, per-prompt since
+ *   #691); only forwarded on US AI-endpoint tasks.
  * @returns {Promise<{ taskId: string, scraperId: string }>}
  */
 export async function submitScraperTask(promptText, scraperId, region, opts = {}) {

@@ -1668,7 +1668,7 @@ export default function OnboardingPage() {
                     <strong>
                       {plan.limits.maxPrompts === -1 ? 'Unlimited' : plan.limits.maxPrompts}
                     </strong>{' '}
-                    prompts tracked
+                    prompt locations tracked
                   </PlanFeatureItem>
                   <PlanFeatureItem>
                     <strong>{plan.limits.maxPlatforms}</strong> answer engines

@@ -5,6 +5,7 @@
 
 import OpenAI from 'openai';
 import { logger } from './logger.js';
+import { userLocationFor } from './locations.js';
 
 const DEFAULT_MODEL = 'gpt-5-chat-latest';
 
@@ -24,7 +25,9 @@ function getClient() {
  * Run a single prompt through OpenAI Responses API with web_search enabled.
  * @param {string} promptText - The prompt to send
  * @param {string} [model] - OpenAI model name (defaults to gpt-5-chat-latest)
- * @param {string} [region] - ISO 2-letter country code for web_search user_location
+ * @param {string} [region] - Location code for web_search user_location: an
+ *   ISO country (`DE`) or a US state (`US-CA`, #691). Country-only codes
+ *   produce exactly the payload they did before states existed.
  * @returns {Promise<{ text: string, citations: Array<{ url: string, title: string, startIndex: number, endIndex: number }>, model: string }>}
  */
 export async function runPrompt(promptText, model, region) {
@@ -32,8 +35,9 @@ export async function runPrompt(promptText, model, region) {
   const modelName = model || DEFAULT_MODEL;
 
   const webSearchTool = { type: 'web_search' };
-  if (region) {
-    webSearchTool.user_location = { type: 'approximate', country: region };
+  const userLocation = userLocationFor(region);
+  if (userLocation) {
+    webSearchTool.user_location = userLocation;
   }
 
   const response = await openai.responses.create({

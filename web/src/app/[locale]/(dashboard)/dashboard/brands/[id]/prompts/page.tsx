@@ -8,6 +8,8 @@ import {
   savePromptSet,
   addPromptToSet,
   updatePrompt,
+  updatePromptLocations,
+  getLocationQuota,
   deletePrompt,
 } from '@/lib/actions/prompt';
 import { getBrandById } from '@/lib/actions/brand';
@@ -67,6 +69,12 @@ export default function PromptsPage() {
   const [brand, setBrand] = useState<Brand | null>(null);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [promptSets, setPromptSets] = useState<PromptSet[]>([]);
+  // Org-wide location usage, so each card's picker can stop at the plan cap
+  // with a reason instead of letting the save fail afterwards (#691).
+  const [locationQuota, setLocationQuota] = useState<{
+    maxPrompts: number;
+    used: number;
+  } | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestedPrompt[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -136,13 +144,15 @@ export default function PromptsPage() {
   const loadData = useCallback(
     async (isCancelled?: () => boolean) => {
       try {
-        const [brandData, sets, topicsData] = await Promise.all([
+        const [brandData, sets, topicsData, quota] = await Promise.all([
           getBrandById(brandId),
           getPromptSets(brandId),
           getTopics(brandId),
+          getLocationQuota(brandId).catch(() => null),
         ]);
         if (isCancelled?.()) return;
         setBrand(brandData);
+        setLocationQuota(quota);
         setTopics(topicsData);
         if (topicsData.length > 0 && !manualCategory) {
           setManualCategory(topicsData[0].name);
@@ -398,6 +408,22 @@ export default function PromptsPage() {
       }
     },
     [updatePromptLocal, loadData],
+  );
+
+  const handleRegionsChange = useCallback(
+    async (promptId: string, regions: string[]) => {
+      const result = await updatePromptLocations(promptId, regions);
+      if ('error' in result) {
+        toast.error(result.error);
+        // The refusal means our usage figure was stale (a parallel edit, or
+        // another tab): reload so the pickers bound themselves correctly.
+        await loadData();
+        return;
+      }
+      updatePromptLocal(promptId, { regions: result.prompt.regions });
+      setLocationQuota(await getLocationQuota(brandId).catch(() => null));
+    },
+    [brandId, updatePromptLocal, loadData],
   );
 
   const handlePlatformsChange = useCallback(
@@ -888,6 +914,15 @@ export default function PromptsPage() {
                 onCategoryChange={(category) => handleCategoryChange(prompt.id, category)}
                 onModelsChange={(models) => handleModelsChange(prompt.id, models)}
                 onPlatformsChange={(platforms) => handlePlatformsChange(prompt.id, platforms)}
+                onRegionsChange={(regions) => handleRegionsChange(prompt.id, regions)}
+                maxLocations={
+                  locationQuota && locationQuota.maxPrompts !== -1
+                    ? Math.max(
+                        prompt.regions.length,
+                        locationQuota.maxPrompts - locationQuota.used + prompt.regions.length,
+                      )
+                    : null
+                }
                 onDelete={() => handleDeletePrompt(prompt.id)}
                 mode="manage"
               />

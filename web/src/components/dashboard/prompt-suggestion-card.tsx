@@ -24,6 +24,8 @@ import {
 import { cn } from '@/lib/utils';
 import { Check, Pencil, Trash2, X } from 'lucide-react';
 import { MODEL_GROUPS, ALL_MODELS, SCRAPER_GROUPS, ALL_SCRAPERS } from '@/config/prompt-options';
+import { formatRegionDisplay } from '@/lib/region';
+import { LocationPicker } from '@/components/dashboard/location-picker';
 
 interface TopicOption {
   id: string;
@@ -45,6 +47,12 @@ interface PromptSuggestionCardProps {
   allowedModelIds?: string[];
   onModelsChange?: (models: string[]) => void;
   onPlatformsChange?: (platforms: string[]) => void;
+  onRegionsChange?: (regions: string[]) => void;
+  /**
+   * Most locations this prompt may hold under the org's plan (null =
+   * unlimited). Only supplied where editing locations is offered.
+   */
+  maxLocations?: number | null;
   onCategoryChange?: (category: string) => void;
   mode?: 'review' | 'manage';
 }
@@ -61,6 +69,14 @@ const TOPIC_COLOR_PALETTE = [
   'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
   'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',
 ];
+
+/** Order-insensitive comparison — reordering is not a location change. */
+function sameLocations(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const left = [...a].sort();
+  const right = [...b].sort();
+  return left.every((code, i) => code === right[i]);
+}
 
 function getTopicColor(name: string): string {
   let hash = 0;
@@ -85,6 +101,8 @@ export const PromptSuggestionCard = memo(function PromptSuggestionCard({
   allowedModelIds,
   onModelsChange,
   onPlatformsChange,
+  onRegionsChange,
+  maxLocations,
   onCategoryChange,
   mode = 'review',
 }: PromptSuggestionCardProps) {
@@ -93,6 +111,7 @@ export const PromptSuggestionCard = memo(function PromptSuggestionCard({
   const [editCategory, setEditCategory] = useState(category);
   const [editModels, setEditModels] = useState<string[]>(models ?? []);
   const [editPlatforms, setEditPlatforms] = useState<string[]>(platforms ?? []);
+  const [editRegions, setEditRegions] = useState<string[]>(regions ?? []);
 
   const visibleScrapers = allowedScraperIds
     ? ALL_SCRAPERS.filter((s) => allowedScraperIds.includes(s.id))
@@ -108,6 +127,11 @@ export const PromptSuggestionCard = memo(function PromptSuggestionCard({
     if (onCategoryChange && editCategory !== category) onCategoryChange(editCategory);
     if (onModelsChange) onModelsChange(editModels);
     if (onPlatformsChange) onPlatformsChange(editPlatforms);
+    // Locations meter against the plan, so only send a real change — an
+    // untouched prompt must never spend a quota check on save.
+    if (onRegionsChange && !sameLocations(editRegions, regions ?? [])) {
+      onRegionsChange(editRegions);
+    }
     setIsEditing(false);
   };
 
@@ -116,6 +140,7 @@ export const PromptSuggestionCard = memo(function PromptSuggestionCard({
     setEditCategory(category);
     setEditModels(models ?? []);
     setEditPlatforms(platforms ?? []);
+    setEditRegions(regions ?? []);
     setIsEditing(false);
   };
 
@@ -317,6 +342,15 @@ export const PromptSuggestionCard = memo(function PromptSuggestionCard({
                     )}
                   </div>
                 )}
+
+                {onRegionsChange && (
+                  <LocationPicker
+                    value={editRegions}
+                    onChange={setEditRegions}
+                    maxSelectable={maxLocations ?? null}
+                    platforms={editPlatforms}
+                  />
+                )}
               </div>
             )}
           </div>
@@ -383,7 +417,7 @@ export const PromptSuggestionCard = memo(function PromptSuggestionCard({
             regions.length > 0 &&
             regions.map((r) => (
               <Badge key={r} variant="outline" className="text-[10px]">
-                {r}
+                {formatRegionDisplay(r)}
               </Badge>
             ))}
           {models &&

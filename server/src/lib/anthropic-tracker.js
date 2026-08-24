@@ -4,6 +4,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { userLocationFor } from './locations.js';
 
 let client = null;
 
@@ -21,7 +22,9 @@ function getClient() {
  * Run a single prompt through Anthropic Messages API with web_search enabled.
  * @param {string} promptText
  * @param {string} model - e.g. "claude-sonnet-5"
- * @param {string} [region] - ISO 2-letter country code for web_search user_location
+ * @param {string} [region] - Location code for web_search user_location: an
+ *   ISO country (`DE`) or a US state (`US-CA`, #691). Country-only codes
+ *   produce exactly the payload they did before states existed.
  * @returns {Promise<{ text: string, citations: Array<{ url: string, title: string, startIndex: number, endIndex: number }>, model: string }>}
  */
 export async function runPromptAnthropic(promptText, model, region) {
@@ -33,8 +36,9 @@ export async function runPromptAnthropic(promptText, model, region) {
     max_uses: 5,
   };
 
-  if (region) {
-    webSearchTool.user_location = { type: 'approximate', country: region };
+  const userLocation = userLocationFor(region);
+  if (userLocation) {
+    webSearchTool.user_location = userLocation;
   }
 
   const response = await anthropic.messages.create({

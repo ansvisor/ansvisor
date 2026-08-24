@@ -12,6 +12,7 @@ import { applyPlanOverrides } from '../lib/plan-guard.js';
 import { generateContentOpportunities } from '../lib/opportunity-generator.js';
 import { updateTargetUrlStats } from '../lib/target-url-stats.js';
 import { persistCitationRows } from '../lib/citation-rows.js';
+import { parseLocation, locationsForScraper } from '../lib/locations.js';
 import { refreshForCompletedRun } from '../lib/insights-rollups.js';
 import logger from '../lib/logger.js';
 
@@ -161,7 +162,9 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   // 1. Fetch brand info with domains
   const { data: brand, error: brandErr } = await supabaseAdmin
     .from('brands')
-    .select('id, name, organization_id, shopping_mode_enabled, state')
+    // `state` is deliberately not read: it is the default location offered
+    // when new prompts are created, not a tracking-time override (#691).
+    .select('id, name, organization_id, shopping_mode_enabled')
     .eq('id', brandId)
     .single();
   if (brandErr || !brand) throw new Error(`Brand not found: ${brandId}`);
@@ -283,13 +286,23 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   const allowedPlatformsFor = (prompt) =>
     runnablePlatforms(prompt.platforms, { shoppingEnabled: brand.shopping_mode_enabled });
 
-  // 4. Count total tasks: prompt × (models + scrapers) × regions
+  // A prompt's tracked locations (#691): country codes and US state codes
+  // (`US-CA`) alike. No locations means one untargeted run, which is what an
+  // empty list has always meant here.
+  const locationsFor = (prompt) =>
+    prompt.regions && prompt.regions.length > 0 ? prompt.regions : [null];
+
+  // 4. Count total tasks: one per prompt × engine × location that engine can
+  // actually run. Google AIO / AI Mode have no sub-country mechanism, so
+  // their state locations collapse to one country-wide task — counting them
+  // per state would promise the progress bar work that is never submitted.
   let totalTasks = 0;
   for (const prompt of prompts) {
-    const mc = allowedModelsFor(prompt).length;
-    const sc = allowedPlatformsFor(prompt).length;
-    const rc = prompt.regions && prompt.regions.length > 0 ? prompt.regions.length : 1;
-    totalTasks += (mc + sc) * rc;
+    const locations = locationsFor(prompt);
+    totalTasks += allowedModelsFor(prompt).length * locations.length;
+    for (const scraperId of allowedPlatformsFor(prompt)) {
+      totalTasks += locationsForScraper(locations, scraperId).length;
+    }
   }
 
   // 5. Shared counters & helper
@@ -327,10 +340,12 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   const scraperTasks = [];
   for (const prompt of prompts) {
     const scrapersToRun = allowedPlatformsFor(prompt);
-    const regionsToRun = prompt.regions && prompt.regions.length > 0 ? prompt.regions : [null];
 
     for (const scraperId of scrapersToRun) {
-      for (const region of regionsToRun) {
+      // `region` carries the full location code — it is what gets stamped on
+      // the result row, so a Google run collapsed to its country is recorded
+      // as the country it actually ran in, not the state that was asked for.
+      for (const region of locationsForScraper(locationsFor(prompt), scraperId)) {
         scraperTasks.push({ prompt, scraperId, region });
       }
     }
@@ -356,15 +371,20 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
 
     // Submit all tasks concurrently
     const submissions = await Promise.allSettled(
-      scraperTasks.map((t) =>
-        submitScraperTask(t.prompt.text, t.scraperId, t.region, {
+      scraperTasks.map((t) => {
+        // Targeting comes from the prompt's own location, not from the
+        // brand's single state column (#691): different prompts can target
+        // different places, and a brand-wide override would silently win
+        // over them.
+        const { country, state } = parseLocation(t.region);
+        return submitScraperTask(t.prompt.text, t.scraperId, country, {
           webhookUrl,
-          state: brand.state,
+          state,
         }).then((res) => ({
           ...res,
           meta: t,
-        })),
-      ),
+        }));
+      }),
     );
 
     const submitted = [];
@@ -728,10 +748,10 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   const modelTasks = [];
   for (const prompt of prompts) {
     const modelsToRun = allowedModelsFor(prompt);
-    const regionsToRun = prompt.regions && prompt.regions.length > 0 ? prompt.regions : [null];
+    const locations = locationsFor(prompt);
 
     for (const modelName of modelsToRun) {
-      for (const region of regionsToRun) {
+      for (const region of locations) {
         modelTasks.push({ prompt, modelName, region });
       }
     }
