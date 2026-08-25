@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Topic detail trend charts and reports use the AI Visibility Score formula (#685, #693)
 - Slugs transliterate non-ASCII letters instead of deleting them (#763)
 - CSV: fields containing lone carriage returns are quoted (#758)
+- **Brand avatars fall back instead of rendering nothing** — a manually-set logo URL, then the primary domain's Google favicon, then the site's own `/favicon.ico`, then initials. Google answers an unindexed domain with a 16×16 grey-globe placeholder rather than a failure the browser reports, so it is detected by size instead of waiting for an error that never fires (#759, #782). Brand Settings gains a Logo URL field for the manual override, and a derived favicon is no longer written to `logo_url` at brand creation or on a domain change — the column now means "the icon this brand chose", which is what lets the chain run at all
 - Mobile navigation preferences are aligned with the sidebar (#771)
 - Database: the missing `cloro_pending_tasks` migration was added (#692) and the `prompt_suggestions` table definition recovered (#711)
 - CI: `messages/*.json` is covered by the format check (#698)
