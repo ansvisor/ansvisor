@@ -1,10 +1,11 @@
 /**
  * Page opportunity detection (#719, Phase 5).
  *
- * Answers one question per brand: which pages carry commercial weight, and
- * get nothing from AI engines. Both halves come from tables the GA sync
- * (#704) already aggregates, so detection is arithmetic over a few hundred
- * rows — no model, no page fetching, and nothing that scans result citations.
+ * Answers two questions per brand: which pages carry commercial weight and
+ * get nothing from AI engines, and — for each of those — why. The figures
+ * come from `ga_page_ai_visibility`, which aggregates the tables the GA sync
+ * (#704) writes and joins the brand's own citations and prompt targeting to
+ * them. No model runs in this path and no page is fetched.
  *
  * The ranking signal is chosen from what the property actually reports rather
  * than assumed. A shop with ecommerce ranks on money; a site with no
@@ -12,9 +13,16 @@
  * every finding, because a surface that calls an engagement rank "your most
  * valuable page" is making a true statement about the wrong thing.
  *
- * Deliberately not here: LLM enrichment, clustering, and the full opportunity
- * lifecycle. Those need more volume than this produces today, and a finding
- * nobody can verify is worse than one that is merely narrow.
+ * Ranking and the exclusion list stay here rather than moving into SQL with
+ * the aggregation: `isExcludedPath` is shared with the prompt suggestion
+ * generator (#705), and a second copy of it in the RPC would drift from this
+ * one the first time either is extended. The cost is that every page travels,
+ * which is what the paginated read below exists to survive.
+ *
+ * Deliberately not here: LLM enrichment, clustering, and the acted-on half of
+ * the opportunity lifecycle. Those need more volume than one connected
+ * property produces, and a finding nobody can verify is worse than one that
+ * is merely narrow.
  */
 
 import supabaseAdmin from '../config/supabase.js';
@@ -34,6 +42,28 @@ const MIN_SESSIONS = 10;
 
 /** How far up its own site a page must rank before it is worth raising. */
 const MIN_PERCENTILE = 70;
+
+/**
+ * PostgREST returns at most 1000 rows per request whatever range is asked
+ * for, so the read is paged rather than trusted to come back whole.
+ *
+ * This is the #427/#450/#464 trap, and detection was standing on it: it read
+ * 28 days of `ga_page_stats` un-paginated, and ga-sync keeps up to 5000 pages
+ * per day. Truncation there does not merely lose findings — the AI-traffic
+ * half truncates too, and a page missing from that lookup is raised as
+ * receiving no AI traffic when it received some. Today's only property
+ * produces 743 rows and fits under the cap, which is the only reason nothing
+ * has gone wrong yet.
+ */
+const READ_PAGE_SIZE = 1000;
+
+/**
+ * Stop after this many pages of rows. A site large enough to reach it has
+ * something wrong with it, and the run is logged rather than left to walk a
+ * table for minutes — but it is logged, not silently trimmed, because a
+ * ranking computed over part of a site is exactly the failure above.
+ */
+const MAX_READ_PAGES = 50;
 
 /**
  * Ranking signals in order of how directly they express commercial value.
@@ -64,6 +94,31 @@ export function pickValueSignal(pages) {
 function signalValue(page, signalName) {
   const signal = VALUE_SIGNALS.find((s) => s.name === signalName);
   return signal ? (signal.of(page) ?? 0) : 0;
+}
+
+/**
+ * Why a page that earns gets nothing from AI engines.
+ *
+ * Three states, because they need three different actions and lumping them
+ * together points two thirds of the customers at the wrong fix:
+ *
+ *   cited              answers do cite this page and it still earns no visit
+ *   targeted_not_cited a prompt points here and no answer cites it
+ *   not_targeted       nothing we track points here at all
+ *
+ * The last one is a coverage gap, and on a large site it is the common case:
+ * URL-level AI visibility exists for a three-digit number of pages, so
+ * "invisible" is the default state rather than a discovery. Saying which kind
+ * of invisible is the whole value of the classification.
+ *
+ * `targeted` means a prompt carries this URL as a target (#642), not that a
+ * prompt covers the page's topic — that is not something arithmetic can
+ * decide, and inventing it would put a made-up reason on a finding.
+ */
+export function classifyCitationState({ citations = 0, targetingPrompts = 0 } = {}) {
+  if (citations > 0) return 'cited';
+  if (targetingPrompts > 0) return 'targeted_not_cited';
+  return 'not_targeted';
 }
 
 /**
@@ -103,8 +158,12 @@ export function scorePages(pages, signalName) {
  * without a floor hands every site the same number of findings; the floor
  * without a percentile buries a small site's best page under a large one's
  * long tail.
+ *
+ * The citation state explains a finding, it does not gate one: a page cited
+ * 104 times that still earns no AI visit is as real a problem as one nothing
+ * points to, and dropping it would hide the more surprising of the two.
  */
-export function detectPageOpportunities({ pages, aiByPage, windowDays = WINDOW_DAYS }) {
+export function detectPageOpportunities({ pages, windowDays = WINDOW_DAYS }) {
   const signal = pickValueSignal(pages);
   const scored = scorePages(pages, signal);
 
@@ -112,7 +171,7 @@ export function detectPageOpportunities({ pages, aiByPage, windowDays = WINDOW_D
     .filter((page) => page.sessions >= MIN_SESSIONS)
     .filter((page) => page.value > 0)
     .filter((page) => page.valuePercentile >= MIN_PERCENTILE)
-    .filter((page) => !(aiByPage?.get(page.landingPage)?.sessions > 0))
+    .filter((page) => !(page.aiSessions > 0))
     .map((page) => ({
       landing_page: page.landingPage,
       kind: 'no_ai_traffic',
@@ -127,86 +186,76 @@ export function detectPageOpportunities({ pages, aiByPage, windowDays = WINDOW_D
       engagement_seconds: page.engagementSeconds,
       ai_sessions: 0,
       ai_platforms: [],
+      citation_state: classifyCitationState(page),
+      citations: page.citations ?? 0,
+      citing_prompts: page.citingPrompts ?? 0,
+      targeting_prompts: page.targetingPrompts ?? 0,
       window_days: windowDays,
     }));
 }
 
-/** Sum the per-day GA rows into one row per landing page. */
-export function aggregatePages(rows) {
-  const byPage = new Map();
-  for (const row of rows ?? []) {
-    const page = row.landing_page ?? '';
-    if (isExcludedPath(page)) continue;
-    const acc = byPage.get(page) ?? {
-      landingPage: page,
-      sessions: 0,
-      engagedSessions: 0,
-      keyEvents: 0,
-      transactions: 0,
-      revenue: 0,
-      engagementSeconds: 0,
-    };
-    acc.sessions += Number(row.sessions) || 0;
-    acc.engagedSessions += Number(row.engaged_sessions) || 0;
-    acc.keyEvents += Number(row.key_events) || 0;
-    acc.transactions += Number(row.transactions) || 0;
-    acc.revenue += Number(row.purchase_revenue) || 0;
-    acc.engagementSeconds += Number(row.engagement_duration_seconds) || 0;
-    byPage.set(page, acc);
-  }
-  return [...byPage.values()];
+/**
+ * RPC rows in the shape the scoring above reads.
+ *
+ * Excluded paths are dropped here rather than after ranking, so they are out
+ * of the denominator too: /checkout carries a shop's revenue, and leaving it
+ * in the population would push every real page's percentile down.
+ */
+export function mapVisibilityRows(rows) {
+  return (rows ?? [])
+    .filter((row) => !isExcludedPath(row.landing_page ?? ''))
+    .map((row) => ({
+      landingPage: row.landing_page ?? '',
+      sessions: Number(row.sessions) || 0,
+      engagedSessions: Number(row.engaged_sessions) || 0,
+      keyEvents: Number(row.key_events) || 0,
+      transactions: Number(row.transactions) || 0,
+      revenue: Number(row.revenue) || 0,
+      engagementSeconds: Number(row.engagement_seconds) || 0,
+      aiSessions: Number(row.ai_sessions) || 0,
+      aiPlatforms: row.ai_platforms ?? [],
+      citations: Number(row.citations) || 0,
+      citingPrompts: Number(row.citing_prompts) || 0,
+      targetingPrompts: Number(row.targeting_prompts) || 0,
+    }));
 }
 
 /**
- * AI-referred sessions and platforms per landing page.
+ * Every page of the brand's window, read a thousand rows at a time.
  *
- * A plain lookup, with no scope filtering: the candidate set is decided when
- * pages are aggregated, and filtering here as well would only hide the answer
- * to "does this page already get AI traffic".
+ * Ordered by landing page rather than left to the planner: `range` without an
+ * order is a promise the database never made, and two requests could return
+ * the same row twice while another is never seen at all.
  */
-export function aggregateAiTraffic(rows) {
-  const byPage = new Map();
-  for (const row of rows ?? []) {
-    const page = row.landing_page ?? '';
-    if (!page) continue;
-    const acc = byPage.get(page) ?? { sessions: 0, platforms: new Set() };
-    acc.sessions += Number(row.sessions) || 0;
-    if (row.platform) acc.platforms.add(row.platform);
-    byPage.set(page, acc);
+async function readVisibilityRows(brandId, since) {
+  const rows = [];
+
+  for (let page = 0; page < MAX_READ_PAGES; page++) {
+    const from = page * READ_PAGE_SIZE;
+    const { data, error } = await supabaseAdmin
+      .rpc('ga_page_ai_visibility', { p_brand_id: brandId, p_since: since })
+      .order('landing_page', { ascending: true })
+      .range(from, from + READ_PAGE_SIZE - 1);
+
+    if (error) throw new Error(error.message);
+    rows.push(...(data ?? []));
+    if (!data || data.length < READ_PAGE_SIZE) return rows;
   }
-  return new Map(
-    [...byPage].map(([page, acc]) => [
-      page,
-      { sessions: acc.sessions, platforms: [...acc.platforms] },
-    ]),
+
+  logger.warn(
+    { brandId, read: rows.length },
+    '[page-opportunities] page limit reached; ranking covers only what was read',
   );
+  return rows;
 }
 
 async function detectForBrand(brandId) {
   const since = new Date(Date.now() - WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);
 
-  const [{ data: pageRows, error: pageErr }, { data: aiRows, error: aiErr }] = await Promise.all([
-    supabaseAdmin
-      .from('ga_page_stats')
-      .select(
-        'landing_page, sessions, engaged_sessions, key_events, transactions, purchase_revenue, engagement_duration_seconds',
-      )
-      .eq('brand_id', brandId)
-      .gte('date', since),
-    supabaseAdmin
-      .from('ga_ai_traffic_stats')
-      .select('landing_page, platform, sessions')
-      .eq('brand_id', brandId)
-      .gte('date', since),
-  ]);
-  if (pageErr) throw new Error(pageErr.message);
-  if (aiErr) throw new Error(aiErr.message);
-  if (!pageRows?.length) return { found: 0, resolved: 0 };
+  const pages = mapVisibilityRows(await readVisibilityRows(brandId, since));
+  if (!pages.length) return { found: 0, resolved: 0 };
 
-  const findings = detectPageOpportunities({
-    pages: aggregatePages(pageRows),
-    aiByPage: aggregateAiTraffic(aiRows),
-  });
+  const findings = detectPageOpportunities({ pages });
 
   const now = new Date().toISOString();
   if (findings.length > 0) {
@@ -237,7 +286,11 @@ async function detectForBrand(brandId) {
     .lt('last_detected_at', now);
   if (resolveErr) throw new Error(resolveErr.message);
 
-  return { found: findings.length, signal: findings[0]?.value_signal ?? null };
+  return {
+    found: findings.length,
+    signal: findings[0]?.value_signal ?? null,
+    cited: findings.filter((f) => f.citation_state === 'cited').length,
+  };
 }
 
 /**

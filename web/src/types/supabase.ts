@@ -1314,6 +1314,9 @@ export type Database = {
           ai_platforms: string[]
           ai_sessions: number
           brand_id: string
+          citation_state: string | null
+          citations: number
+          citing_prompts: number
           engaged_sessions: number
           engagement_seconds: number
           first_detected_at: string
@@ -1325,6 +1328,7 @@ export type Database = {
           resolved_at: string | null
           revenue: number
           sessions: number
+          targeting_prompts: number
           transactions: number
           value_percentile: number
           value_rank: number
@@ -1335,6 +1339,9 @@ export type Database = {
           ai_platforms?: string[]
           ai_sessions?: number
           brand_id: string
+          citation_state?: string | null
+          citations?: number
+          citing_prompts?: number
           engaged_sessions?: number
           engagement_seconds?: number
           first_detected_at?: string
@@ -1346,6 +1353,7 @@ export type Database = {
           resolved_at?: string | null
           revenue?: number
           sessions?: number
+          targeting_prompts?: number
           transactions?: number
           value_percentile: number
           value_rank: number
@@ -1356,6 +1364,9 @@ export type Database = {
           ai_platforms?: string[]
           ai_sessions?: number
           brand_id?: string
+          citation_state?: string | null
+          citations?: number
+          citing_prompts?: number
           engaged_sessions?: number
           engagement_seconds?: number
           first_detected_at?: string
@@ -1367,6 +1378,7 @@ export type Database = {
           resolved_at?: string | null
           revenue?: number
           sessions?: number
+          targeting_prompts?: number
           transactions?: number
           value_percentile?: number
           value_rank?: number
@@ -2651,6 +2663,23 @@ export type Database = {
               isSetofReturn: true
             }
           }
+      ga_page_ai_visibility: {
+        Args: { p_brand_id: string; p_since: string }
+        Returns: {
+          ai_platforms: string[]
+          ai_sessions: number
+          citations: number
+          citing_prompts: number
+          engaged_sessions: number
+          engagement_seconds: number
+          key_events: number
+          landing_page: string
+          revenue: number
+          sessions: number
+          targeting_prompts: number
+          transactions: number
+        }[]
+      }
       gsc_candidate_queries: {
         Args: { p_brand_id: string; p_min_impressions: number; p_since: string }
         Returns: {
@@ -2690,6 +2719,10 @@ export type Database = {
           models: string[]
           regions: string[]
         }[]
+      }
+      normalize_page_path: {
+        Args: { p_url: string }
+        Returns: string
       }
       org_prompt_location_usage: {
         Args: { p_organization_id: string }
@@ -2886,6 +2919,10 @@ export type Database = {
           p_region?: string
         }
         Returns: number
+      }
+      url_decode_safe: {
+        Args: { p_value: string }
+        Returns: string
       }
       visibility_rate_trend: {
         Args: {

@@ -62,6 +62,36 @@ const SIGNAL_COPY: Record<
   },
 };
 
+/**
+ * Why a page that earns gets nothing from AI engines.
+ *
+ * The three states need three different actions, and the card exists to say
+ * which. A page cited a hundred times that still earns no visit is a
+ * click-through problem; a page nothing points at is a coverage gap; a page a
+ * prompt targets and no answer cites is a visibility loss. Presenting them
+ * identically — which this card did until the engine could tell them apart —
+ * sends two customers in three to fix the wrong thing.
+ */
+const CITATION_COPY: Record<
+  Exclude<PageOpportunity['citationState'], null>,
+  { label: string; detail: (row: PageOpportunity) => string }
+> = {
+  cited: {
+    label: 'Cited',
+    detail: (row) =>
+      `${row.citations.toLocaleString()} citation${row.citations === 1 ? '' : 's'} in answers`,
+  },
+  targeted_not_cited: {
+    label: 'Not cited',
+    detail: (row) =>
+      `${row.targetingPrompts} prompt${row.targetingPrompts === 1 ? '' : 's'} target this page`,
+  },
+  not_targeted: {
+    label: 'No prompt',
+    detail: () => 'nothing you track points here',
+  },
+};
+
 function signalValue(row: PageOpportunity): string {
   if (row.valueSignal === 'revenue') return row.revenue.toLocaleString();
   if (row.valueSignal === 'transactions') return row.transactions.toLocaleString();
@@ -115,7 +145,9 @@ export function PageOpportunitiesCard({ brandId }: { brandId: string }) {
           </Badge>
         </div>
         <p className="text-xs text-muted-foreground">
-          {copy.explain} None of these received a visit from an AI assistant in the window.
+          {copy.explain} None of these received a visit from an AI assistant in the window, and{' '}
+          <span className="font-medium">AI visibility</span> says why: whether answers already cite
+          the page, whether a prompt you track points at it, or whether nothing does.
         </p>
       </CardHeader>
       <CardContent className="p-0">
@@ -123,6 +155,7 @@ export function PageOpportunitiesCard({ brandId }: { brandId: string }) {
           <TableHeader>
             <TableRow>
               <TableHead className="pl-6">Page</TableHead>
+              <TableHead>AI visibility</TableHead>
               <TableHead className="text-right">Sessions</TableHead>
               <TableHead className="text-right">{copy.column}</TableHead>
               <TableHead className="text-right pr-6">Rank {copy.label}</TableHead>
@@ -135,6 +168,26 @@ export function PageOpportunitiesCard({ brandId }: { brandId: string }) {
                   <span className="font-mono text-xs text-muted-foreground line-clamp-1">
                     {row.landingPage}
                   </span>
+                </TableCell>
+                <TableCell>
+                  {/* Null on findings raised before the classification landed:
+                      the next nightly run fills them, and saying nothing beats
+                      guessing which of the three they are. */}
+                  {row.citationState ? (
+                    <div className="space-y-0.5">
+                      <Badge
+                        variant={row.citationState === 'cited' ? 'secondary' : 'outline'}
+                        className="text-xs"
+                      >
+                        {CITATION_COPY[row.citationState].label}
+                      </Badge>
+                      <div className="text-[10px] text-muted-foreground">
+                        {CITATION_COPY[row.citationState].detail(row)}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">&mdash;</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-right tabular-nums text-sm">
                   {row.sessions.toLocaleString()}

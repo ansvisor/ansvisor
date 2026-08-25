@@ -360,6 +360,15 @@ export interface PageOpportunity {
   engagementSeconds: number;
   windowDays: number;
   firstDetectedAt: string;
+  /**
+   * Why this page gets nothing from AI engines — cited anyway, targeted by a
+   * prompt and not cited, or not targeted at all. Null on findings raised
+   * before the classification existed; the next nightly run fills them.
+   */
+  citationState: 'cited' | 'targeted_not_cited' | 'not_targeted' | null;
+  citations: number;
+  citingPrompts: number;
+  targetingPrompts: number;
 }
 
 export async function getPageOpportunities(
@@ -370,7 +379,7 @@ export async function getPageOpportunities(
   const { data, error } = await supabase
     .from('page_opportunities')
     .select(
-      'landing_page, value_signal, value_percentile, value_rank, sessions, engaged_sessions, key_events, transactions, revenue, engagement_seconds, window_days, first_detected_at',
+      'landing_page, value_signal, value_percentile, value_rank, sessions, engaged_sessions, key_events, transactions, revenue, engagement_seconds, window_days, first_detected_at, citation_state, citations, citing_prompts, targeting_prompts',
     )
     .eq('brand_id', brandId)
     .is('resolved_at', null)
@@ -392,5 +401,9 @@ export async function getPageOpportunities(
     engagementSeconds: Number(row.engagement_seconds) || 0,
     windowDays: Number(row.window_days) || 0,
     firstDetectedAt: row.first_detected_at as string,
+    citationState: row.citation_state as PageOpportunity['citationState'],
+    citations: Number(row.citations) || 0,
+    citingPrompts: Number(row.citing_prompts) || 0,
+    targetingPrompts: Number(row.targeting_prompts) || 0,
   }));
 }
