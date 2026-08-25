@@ -787,7 +787,8 @@
       "viewInsights": "View Insights",
       "addTopic": "Add Topics",
       "addPrompt": "Add Prompts"
-    }
+    },
+    "logoUrlHint": "Paste a direct URL to your logo. Leave blank to use the favicon from your primary domain."
   },
   "plans": {
     "free": "Free",

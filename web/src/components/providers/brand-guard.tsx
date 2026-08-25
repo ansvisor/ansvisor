@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore, useCallback } from 'react';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { BrandAvatar } from '@/components/brand-avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -95,17 +95,14 @@ function BrandSelector({
   brands,
   onSelect,
 }: {
-  brands: { id: string; name: string; logoUrl?: string }[];
+  brands: {
+    id: string;
+    name: string;
+    logoUrl?: string;
+    domains: { domain: string; isPrimary: boolean }[];
+  }[];
   onSelect: (id: string) => void;
 }) {
-  const initials = (name: string) =>
-    name
-      .split(' ')
-      .map((w) => w[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
-
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
       <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
@@ -124,12 +121,14 @@ function BrandSelector({
             onClick={() => onSelect(brand.id)}
           >
             <CardContent className="flex items-center gap-3 p-4">
-              <Avatar className="h-9 w-9 rounded-md bg-zinc-50 dark:bg-zinc-100">
-                <AvatarImage src={brand.logoUrl} alt={brand.name} className="object-contain p-1" />
-                <AvatarFallback className="rounded-md bg-primary text-primary-foreground text-sm font-semibold">
-                  {initials(brand.name)}
-                </AvatarFallback>
-              </Avatar>
+              <BrandAvatar
+                logoUrl={brand.logoUrl}
+                name={brand.name}
+                domains={brand.domains}
+                className="h-9 w-9 rounded-md bg-zinc-50 dark:bg-zinc-100"
+                fallbackClassName="rounded-md bg-primary text-primary-foreground text-sm font-semibold"
+                imageClassName="object-contain p-1"
+              />
               <span className="flex-1 text-left text-sm font-medium">{brand.name}</span>
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
             </CardContent>

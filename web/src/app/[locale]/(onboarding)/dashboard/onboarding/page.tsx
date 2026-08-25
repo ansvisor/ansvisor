@@ -544,12 +544,10 @@ export default function OnboardingPage() {
 
       // Create brand if not already created
       if (!createdBrand) {
-        const logoUrl = domain ? getFaviconUrl(domain) : undefined;
-
+        // logo_url starts null — BrandAvatar derives the favicon at render time.
         const brand = await createBrand({
           organizationId: orgId,
           name: brandName.trim(),
-          logoUrl,
           description: description.trim() || undefined,
           region,
           state: region === 'US' ? usState || undefined : undefined,

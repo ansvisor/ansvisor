@@ -374,14 +374,13 @@ export default function NewBrandPage() {
   const handleCreateBrand = async () => {
     setIsLoading(true);
     try {
-      const logoUrl = domain ? getFaviconUrl(domain) : undefined;
+      // logo_url starts null — BrandAvatar derives the favicon at render time.
 
       // Back → Continue must not create a second brand (#447): once the brand
       // exists, re-submitting this step updates it in place instead.
       if (createdBrand) {
         let brand = await updateBrand(createdBrand.id, {
           name: brandName.trim(),
-          logoUrl: logoUrl ?? null,
           description: description.trim() || null,
           region,
           state: region === 'US' ? usState || null : null,
@@ -418,7 +417,6 @@ export default function NewBrandPage() {
         const brand = await createBrand({
           organizationId: profile.organization_id,
           name: brandName.trim(),
-          logoUrl,
           description: description.trim() || undefined,
           region,
           state: region === 'US' ? usState || undefined : undefined,

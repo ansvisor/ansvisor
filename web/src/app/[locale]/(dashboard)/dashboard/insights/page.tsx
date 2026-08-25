@@ -1517,14 +1517,14 @@ export default function InsightsPage() {
                 />
                 <KpiCard
                   title="Tracked Prompts"
-                  tooltip="Distinct prompts that produced tracked results in the selected period and filters. The quota below is current usage across your organization — it does not change with the date range."
+                  tooltip="Distinct prompts that produced tracked results in the selected period and filters. The quota below is current usage across your organization, counting one per location each prompt targets — it does not change with the date range."
                   icon={Layers}
                   value={trackedPrompts?.activeInPeriod ?? 0}
                   sub={
                     trackedPrompts && trackedPrompts.quotaLimit !== -1 ? (
                       <>
                         <span className="tabular-nums">
-                          {trackedPrompts.quotaUsed} / {trackedPrompts.quotaLimit} prompts
+                          {trackedPrompts.quotaUsed} / {trackedPrompts.quotaLimit} prompt locations
                         </span>
                         {trackedPrompts.quotaUsed >= trackedPrompts.quotaLimit * 0.9 && (
                           <button
@@ -1540,7 +1540,7 @@ export default function InsightsPage() {
                         )}
                       </>
                     ) : (
-                      `${trackedPrompts?.quotaUsed ?? 0} prompts tracked`
+                      `${trackedPrompts?.quotaUsed ?? 0} prompt locations tracked`
                     )
                   }
                   onClick={() => router.push('/dashboard/prompts')}

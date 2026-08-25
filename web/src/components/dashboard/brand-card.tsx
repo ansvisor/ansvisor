@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { BrandAvatar } from '@/components/brand-avatar';
 import { Badge } from '@/components/ui/badge';
 import { ChevronRight, Globe, MessageSquareText, Plus, Settings, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -21,13 +21,6 @@ export function BrandCard({ brand }: BrandCardProps) {
   // which is the tracking (paused/active) state.
   const isSelected = brand.id === activeBrandId;
 
-  const initials = brand.name
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-
   const primaryDomain = brand.domains.find((d) => d.isPrimary);
 
   const select = () => setActiveBrand(brand.id);
@@ -41,12 +34,14 @@ export function BrandCard({ brand }: BrandCardProps) {
       )}
     >
       <div className="flex items-start gap-3 px-4 py-3.5">
-        <Avatar className="h-10 w-10 rounded-lg bg-zinc-50 dark:bg-zinc-100">
-          <AvatarImage src={brand.logoUrl} alt={brand.name} className="object-contain p-1" />
-          <AvatarFallback className="rounded-lg bg-background text-foreground text-sm font-bold">
-            {initials}
-          </AvatarFallback>
-        </Avatar>
+        <BrandAvatar
+          logoUrl={brand.logoUrl}
+          name={brand.name}
+          domains={brand.domains}
+          className="h-10 w-10 rounded-lg bg-zinc-50 dark:bg-zinc-100"
+          fallbackClassName="rounded-lg bg-background text-foreground text-sm font-bold"
+          imageClassName="object-contain p-1"
+        />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="truncate text-sm font-semibold leading-tight">{brand.name}</h3>

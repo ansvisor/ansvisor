@@ -147,6 +147,7 @@ function GeneralTab({
 }) {
   const t = useTranslations('brands');
   const [name, setName] = useState(brand.name);
+  const [logoUrl, setLogoUrl] = useState(brand.logoUrl ?? '');
   const [industry, setIndustry] = useState(brand.industry ?? '');
   const [description, setDescription] = useState(brand.description ?? '');
   const [region, setRegion] = useState(brand.region ?? 'US');
@@ -155,10 +156,13 @@ function GeneralTab({
 
   const handleSave = async () => {
     if (!name.trim()) return;
+    const trimmedLogoUrl = logoUrl.trim();
+    if (trimmedLogoUrl && !trimmedLogoUrl.match(/^https?:\/\/.+/)) return;
     setIsSaving(true);
     try {
       const updated = await updateBrand(brand.id, {
         name: name.trim(),
+        logoUrl: trimmedLogoUrl || null,
         industry: industry || null,
         description: description || null,
         region,
@@ -167,6 +171,7 @@ function GeneralTab({
       onUpdate({
         name: updated.name,
         slug: updated.slug,
+        logoUrl: updated.logoUrl,
         industry: updated.industry,
         description: updated.description,
         region: updated.region,
@@ -196,6 +201,21 @@ function GeneralTab({
             onChange={(e) => setName(e.target.value)}
             placeholder={t('brandNamePlaceholder')}
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="logo-url">{t('logoUrl')}</Label>
+          <Input
+            id="logo-url"
+            type="text"
+            value={logoUrl}
+            onChange={(e) => setLogoUrl(e.target.value)}
+            placeholder="https://example.com/logo.png"
+          />
+          {logoUrl.trim() && !logoUrl.trim().match(/^https?:\/\/.+/) && (
+            <p className="text-xs text-destructive">URL must start with https:// or http://</p>
+          )}
+          <p className="text-xs text-muted-foreground">{t('logoUrlHint')}</p>
         </div>
 
         <div className="space-y-2">
@@ -491,17 +511,11 @@ function DomainsTab({
       );
       setDomains(savedDomains);
 
-      const newPrimary = savedDomains.find((d) => d.isPrimary);
-      const newLogoUrl = newPrimary ? getFaviconUrl(newPrimary.domain) : null;
-      const oldPrimary = brand.domains.find((d) => d.isPrimary);
-
-      if (newPrimary?.domain !== oldPrimary?.domain) {
-        await updateBrand(brand.id, { logoUrl: newLogoUrl });
-      }
-
+      // logo_url is never written here. BrandAvatar derives the favicon at
+      // render time (Google → /favicon.ico → initials), so there is nothing
+      // to store. Keeping logo_url = null for new brands ensures the chain runs.
       onUpdate({
         domains: savedDomains,
-        logoUrl: newLogoUrl ?? undefined,
         updatedAt: new Date().toISOString(),
       });
       toast.success(t('settings.saved'));

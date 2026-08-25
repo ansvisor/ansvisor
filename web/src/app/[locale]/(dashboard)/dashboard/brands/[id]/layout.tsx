@@ -4,7 +4,7 @@ import { use } from 'react';
 import { usePathname, Link } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { BrandAvatar } from '@/components/brand-avatar';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, MessageSquareText, Settings, Tag } from 'lucide-react';
 
@@ -27,15 +27,6 @@ export default function BrandDetailLayout({
   const { brands } = useBrandStore();
   const brand = brands.find((b) => b.id === id);
 
-  const initials = brand
-    ? brand.name
-        .split(' ')
-        .map((w) => w[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2)
-    : '?';
-
   return (
     <div className="space-y-6">
       {/* Brand header + back */}
@@ -47,12 +38,14 @@ export default function BrandDetailLayout({
         </Link>
         {brand && (
           <div className="flex items-center gap-3">
-            <Avatar className="h-9 w-9 rounded-lg bg-zinc-50 dark:bg-zinc-100">
-              <AvatarImage src={brand.logoUrl} alt={brand.name} className="object-contain p-1" />
-              <AvatarFallback className="rounded-lg bg-primary text-primary-foreground text-sm font-semibold">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
+            <BrandAvatar
+              logoUrl={brand.logoUrl}
+              name={brand.name}
+              domains={brand.domains}
+              className="h-9 w-9 rounded-lg bg-zinc-50 dark:bg-zinc-100"
+              fallbackClassName="rounded-lg bg-primary text-primary-foreground text-sm font-semibold"
+              imageClassName="object-contain p-1"
+            />
             <div>
               <h1 className="text-xl font-bold tracking-tight">{brand.name}</h1>
               <p className="text-xs text-muted-foreground">

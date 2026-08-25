@@ -98,6 +98,8 @@ import {
   type PromptRangePreset,
 } from '@/config/prompt-options';
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
+import { getBrandFilterOptions } from '@/lib/actions/tracking';
+import { formatRegionDisplay } from '@/lib/region';
 import { DataSourcesPanel } from './_data-sources-panel';
 import { PLANS } from '@/config/plans';
 import { getTopics } from '@/lib/actions/topic';
@@ -995,6 +997,10 @@ export default function PromptsPage() {
     return DEFAULT_PROMPT_RANGE_PRESET;
   })();
   const [rangePreset, setRangePreset] = useState<PromptRangePreset>(initialRange);
+  // Which tracked location the health columns describe. Empty = every
+  // location blended, which is what the table has always shown (#691).
+  const [regionFilter, setRegionFilter] = useState('');
+  const [availableRegions, setAvailableRegions] = useState<string[]>([]);
   const [customFrom, setCustomFrom] = useState(() => searchParams.get('from') ?? '');
   const [customTo, setCustomTo] = useState(() => searchParams.get('to') ?? '');
 
@@ -1080,6 +1086,7 @@ export default function PromptsPage() {
           days: range?.days,
           from: range?.from,
           to: range?.to,
+          region: regionFilter || undefined,
         });
         if (isCancelled?.()) return;
         setVolumes(page.volumes);
@@ -1098,7 +1105,7 @@ export default function PromptsPage() {
         if (!isCancelled?.()) setLoading(false);
       }
     },
-    [activeBrandId, range],
+    [activeBrandId, range, regionFilter],
   );
 
   useEffect(() => {
@@ -1108,6 +1115,35 @@ export default function PromptsPage() {
       cancelled = true;
     };
   }, [loadData]);
+
+  // Locations the brand has actually produced results in — the same
+  // whole-brand list the Visibility page offers, so the two pages never
+  // disagree about where this brand is tracked. A brand tracked in one place
+  // gets no control at all: a filter with a single option is noise.
+  useEffect(() => {
+    if (!activeBrandId) {
+      setAvailableRegions([]);
+      return;
+    }
+    let cancelled = false;
+    getBrandFilterOptions(activeBrandId)
+      .then((options) => {
+        if (cancelled) return;
+        setAvailableRegions([...options.regions].sort((a, b) => a.localeCompare(b)));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrandId]);
+
+  // A location that stops producing results must not keep filtering the
+  // table to nothing — fall back to the blended view.
+  useEffect(() => {
+    if (regionFilter && availableRegions.length > 0 && !availableRegions.includes(regionFilter)) {
+      setRegionFilter('');
+    }
+  }, [availableRegions, regionFilter]);
 
   // loadData changes identity whenever the date range does. The watch below
   // must not restart for that, so it reaches the current one through a ref.
@@ -1465,6 +1501,36 @@ export default function PromptsPage() {
               onFromChange={setCustomFrom}
               onToChange={setCustomTo}
             />
+
+            {availableRegions.length > 1 && (
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                  Location
+                </label>
+                <Select
+                  value={regionFilter || null}
+                  onValueChange={(v) => setRegionFilter(!v || v === '__all__' ? '' : String(v))}
+                >
+                  <SelectTrigger className="h-8 w-48 text-xs">
+                    <SelectValue placeholder="All Locations">
+                      {(value) =>
+                        value && value !== '__all__'
+                          ? formatRegionDisplay(String(value))
+                          : 'All Locations'
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Locations</SelectItem>
+                    {availableRegions.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {formatRegionDisplay(r)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         )}
 

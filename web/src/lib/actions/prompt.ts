@@ -3,8 +3,14 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import type { PromptSet, Prompt, AIPlatform, PromptVolume } from '@/types';
-import { enforceLimit, getOrgPlan, PlanLimitError } from '@/lib/guards/plan-guard';
+import { getOrgPlan } from '@/lib/guards/plan-guard';
+import {
+  getOrgLocationUsage,
+  locationLimitMessage,
+  promptLocationCount,
+} from '@/lib/prompt-locations';
 import { ALL_MODELS, ALL_SCRAPERS, DEFAULT_PROMPT_RANGE_DAYS } from '@/config/prompt-options';
+import { isValidLocation, locationCode } from '@/lib/region';
 import type { Plan } from '@/config/plans';
 import { getPromptVolumes, type VolumeQuota } from '@/lib/actions/volumes';
 import { getPromptVisibilitySummaries, type PromptVisibilitySummary } from '@/lib/actions/tracking';
@@ -74,35 +80,29 @@ function mapPromptSetRow(
   };
 }
 
-async function getOrgPromptCount(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  organizationId: string,
-): Promise<number> {
-  const { count } = await supabase
-    .from('prompts')
-    .select('id, prompt_sets!inner(brand_id, brands!inner(organization_id))', {
-      count: 'exact',
-      head: true,
-    })
-    .eq('prompt_sets.brands.organization_id', organizationId);
-
-  return count ?? 0;
-}
-
+/**
+ * `region` is the location new prompts start at — the brand's country, or
+ * its state when one is set (#691). The brand's state is a DEFAULT here, not
+ * a tracking-time override: the worker targets each prompt's own locations,
+ * so a brand-wide setting that silently won over them would leave two
+ * sources of truth for the same question.
+ */
 async function getBrandContext(
   supabase: Awaited<ReturnType<typeof createClient>>,
   brandId: string,
 ): Promise<{ organizationId: string; region: string }> {
   const { data } = await supabase
     .from('brands')
-    .select('organization_id, region')
+    .select('organization_id, region, state')
     .eq('id', brandId)
     .single();
 
   if (!data?.organization_id) throw new Error('Brand not found');
+  const country = (data.region as string | null) ?? 'US';
+  const candidate = locationCode(country, data.state as string | null);
   return {
     organizationId: data.organization_id as string,
-    region: (data.region as string | null) ?? 'US',
+    region: isValidLocation(candidate) ? candidate : country,
   };
 }
 
@@ -155,11 +155,14 @@ interface SavePromptSetInput {
 export type SavePromptSetResult = { promptSet: PromptSet } | { error: string; code?: 'plan_limit' };
 
 /**
- * How many prompts a brand's save may total before hitting the org's plan cap.
- * `used` counts prompts on the org's OTHER brands only — savePromptSet
- * replaces this brand's own set, so its current prompts don't count against a
- * re-save. Lets the setup wizards gate the review step inline (counter +
- * disabled Continue) instead of failing the save after the fact.
+ * How many tracked locations a brand's save may total before hitting the
+ * org's plan cap (#691: quota counts prompt × location, not prompt rows —
+ * though the wizards only create single-location prompts, so for them one
+ * prompt still costs one). `used` counts locations on the org's OTHER brands
+ * only — savePromptSet replaces this brand's own set, so its current prompts
+ * don't count against a re-save. Lets the setup wizards gate the review step
+ * inline (counter + disabled Continue) instead of failing the save after the
+ * fact.
  */
 export async function getPromptCapacity(
   brandId: string,
@@ -167,14 +170,10 @@ export async function getPromptCapacity(
   const supabase = await createClient();
   const { organizationId: orgId } = await getBrandContext(supabase, brandId);
   const plan = await getOrgPlan(orgId);
-  const totalOrgPrompts = await getOrgPromptCount(supabase, orgId);
-  const { count: brandPromptCount } = await supabase
-    .from('prompts')
-    .select('id, prompt_sets!inner(brand_id)', { count: 'exact', head: true })
-    .eq('prompt_sets.brand_id', brandId);
+  const usage = await getOrgLocationUsage(supabase, orgId);
   return {
     maxPrompts: plan.limits.maxPrompts,
-    used: totalOrgPrompts - (brandPromptCount ?? 0),
+    used: usage.total - (usage.byBrand.get(brandId) ?? 0),
   };
 }
 
@@ -193,28 +192,17 @@ export async function savePromptSet(input: SavePromptSetInput): Promise<SaveProm
   );
   const plan = await getOrgPlan(orgId);
 
-  // Count existing prompts for this org, excluding prompts that belong
-  // to this brand (they will be replaced below)
-  const totalOrgPrompts = await getOrgPromptCount(supabase, orgId);
-
-  const { count: brandPromptCount } = await supabase
-    .from('prompts')
-    .select('id, prompt_sets!inner(brand_id)', { count: 'exact', head: true })
-    .eq('prompt_sets.brand_id', input.brandId);
-
-  const otherPrompts = totalOrgPrompts - (brandPromptCount ?? 0);
-
-  // Inclusive cap: saving exactly maxPrompts is allowed; only reject when the
-  // resulting total would exceed it. Spell out the counts so the user knows
-  // exactly how many prompts to remove (onboarding generates 5 per topic, so
-  // hitting the cap there is a normal, recoverable state).
-  const maxPrompts = plan.limits.maxPrompts;
-  const requestedTotal = otherPrompts + input.prompts.length;
-  if (maxPrompts !== -1 && requestedTotal > maxPrompts) {
-    return {
-      code: 'plan_limit',
-      error: `Your ${plan.name} plan allows up to ${maxPrompts} tracked prompts and this would save ${requestedTotal}. Remove ${requestedTotal - maxPrompts} prompt${requestedTotal - maxPrompts === 1 ? '' : 's'} to continue, or upgrade your plan.`,
-    };
+  // Count existing tracked locations for this org, excluding this brand's own
+  // (its whole set is replaced below, so a re-save doesn't compete with
+  // itself). Every prompt saved here targets exactly one location — the
+  // brand's region — so the request adds one location per prompt. The cap is
+  // inclusive: landing exactly on maxPrompts is allowed (onboarding generates
+  // 5 per topic, so hitting the cap there is a normal, recoverable state).
+  const usage = await getOrgLocationUsage(supabase, orgId);
+  const otherLocations = usage.total - (usage.byBrand.get(input.brandId) ?? 0);
+  const limitError = locationLimitMessage(plan, otherLocations, input.prompts.length);
+  if (limitError) {
+    return { code: 'plan_limit', error: limitError };
   }
 
   // Delete existing prompt sets for this brand to avoid duplicates
@@ -316,34 +304,43 @@ export async function updatePrompt(
   if (updates.category !== undefined) payload.category = updates.category || null;
   if (updates.isActive !== undefined) payload.is_active = updates.isActive;
 
-  if (updates.category !== undefined) {
-    const { data: promptWithBrand } = await supabase
-      .from('prompts')
-      .select('prompt_sets!inner(brand_id)')
-      .eq('id', id)
-      .single();
-    const brandId = (promptWithBrand?.prompt_sets as { brand_id: string })?.brand_id;
-    if (brandId) {
-      payload.topic_id = await resolveTopicId(supabase, brandId, updates.category);
-    }
-  }
-
-  if (updates.platforms !== undefined || updates.models !== undefined) {
+  // Both the category and the platform/model branch need context from the
+  // prompt's row (its brand, org and shopping pref) — one fetch serves them.
+  let ctx: {
+    brandId: string;
+    organizationId: string;
+    shoppingEnabled: boolean | null;
+  } | null = null;
+  if (
+    updates.category !== undefined ||
+    updates.platforms !== undefined ||
+    updates.models !== undefined
+  ) {
     const { data: promptRow } = await supabase
       .from('prompts')
-      .select('prompt_sets!inner(brands!inner(organization_id, shopping_mode_enabled))')
+      .select('prompt_sets!inner(brand_id, brands!inner(organization_id, shopping_mode_enabled))')
       .eq('id', id)
       .single();
-    const brandRow = (
-      promptRow?.prompt_sets as {
-        brands: { organization_id: string; shopping_mode_enabled: boolean | null };
-      }
-    )?.brands;
-    if (!brandRow?.organization_id) throw new Error('Prompt not found');
+    const set = promptRow?.prompt_sets as unknown as {
+      brand_id: string;
+      brands: { organization_id: string; shopping_mode_enabled: boolean | null };
+    } | null;
+    if (!set?.brands?.organization_id) throw new Error('Prompt not found');
+    ctx = {
+      brandId: set.brand_id,
+      organizationId: set.brands.organization_id,
+      shoppingEnabled: set.brands.shopping_mode_enabled,
+    };
+  }
 
-    const plan = await getOrgPlan(brandRow.organization_id);
+  if (updates.category !== undefined && ctx) {
+    payload.topic_id = await resolveTopicId(supabase, ctx.brandId, updates.category);
+  }
+
+  if ((updates.platforms !== undefined || updates.models !== undefined) && ctx) {
+    const plan = await getOrgPlan(ctx.organizationId);
     const filtered = filterByPlan(plan, updates.platforms ?? [], updates.models ?? []);
-    const platforms = stripShoppingWhenDisabled(filtered.platforms, brandRow.shopping_mode_enabled);
+    const platforms = stripShoppingWhenDisabled(filtered.platforms, ctx.shoppingEnabled);
     if (platforms.length === 0 && filtered.models.length === 0) {
       throw new Error('At least one platform or model must be selected.');
     }
@@ -363,6 +360,92 @@ export async function updatePrompt(
   }
 
   return mapPromptRow(data as Record<string, unknown>);
+}
+
+export type UpdatePromptLocationsResult =
+  | { prompt: Prompt }
+  | { error: string; code?: 'plan_limit' };
+
+/**
+ * Retarget a prompt's tracking locations (#691).
+ *
+ * Its own action rather than a field on `updatePrompt` because locations are
+ * the only prompt edit that meters against the plan, so this is the one that
+ * can be REFUSED — and a refusal has to reach the user as a value: every
+ * error thrown from a server action reaches production as a meaningless
+ * digest string (#427).
+ *
+ * The guard measures the DELTA, not the total: an edit that grows the list
+ * from one location to three costs exactly what adding two more
+ * single-location prompts would, and fails the same way with the same
+ * message. Re-saving an unchanged list at the cap succeeds, and removing
+ * locations frees capacity immediately — including for an org left over its
+ * limit by a plan downgrade.
+ */
+export async function updatePromptLocations(
+  id: string,
+  regionsInput: string[],
+): Promise<UpdatePromptLocationsResult> {
+  const supabase = await createClient();
+
+  const regions = [...new Set(regionsInput.map((r) => r.trim().toUpperCase()))];
+  if (regions.length === 0) {
+    return { error: 'Select at least one location.' };
+  }
+  const unknown = regions.filter((r) => !isValidLocation(r));
+  if (unknown.length > 0) {
+    return {
+      error: `Unknown location code${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}`,
+    };
+  }
+
+  const { data: promptRow } = await supabase
+    .from('prompts')
+    .select('regions, prompt_sets!inner(brands!inner(organization_id))')
+    .eq('id', id)
+    .single();
+  const orgId = (
+    promptRow?.prompt_sets as unknown as { brands: { organization_id: string } } | null
+  )?.brands?.organization_id;
+  if (!orgId) return { error: 'Prompt not found' };
+
+  const delta = regions.length - promptLocationCount(promptRow?.regions as string[] | null);
+  if (delta > 0) {
+    const plan = await getOrgPlan(orgId);
+    const usage = await getOrgLocationUsage(supabase, orgId);
+    const limitError = locationLimitMessage(plan, usage.total, delta);
+    if (limitError) return { error: limitError, code: 'plan_limit' };
+  }
+
+  const { data, error } = await supabase
+    .from('prompts')
+    .update({ regions })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error || !data) {
+    return { error: error?.message ?? 'Failed to update locations' };
+  }
+
+  revalidatePath('/dashboard/brands');
+  return { prompt: mapPromptRow(data as Record<string, unknown>) };
+}
+
+/**
+ * Org-wide tracked-location usage against the plan cap, for the prompts page
+ * to bound its location pickers before a save can fail.
+ */
+export async function getLocationQuota(
+  brandId: string,
+): Promise<{ maxPrompts: number; used: number }> {
+  const supabase = await createClient();
+  const { organizationId: orgId } = await getBrandContext(supabase, brandId);
+  const [plan, usage] = await Promise.all([
+    getOrgPlan(orgId),
+    getOrgLocationUsage(supabase, orgId),
+  ]);
+  return { maxPrompts: plan.limits.maxPrompts, used: usage.total };
 }
 
 interface AddPromptInput {
@@ -396,15 +479,13 @@ export async function addPromptToSet(input: AddPromptInput): Promise<AddPromptTo
     supabase,
     ps.brand_id as string,
   );
-  const currentCount = await getOrgPromptCount(supabase, orgId);
-  try {
-    await enforceLimit(orgId, 'maxPrompts', currentCount);
-  } catch (err) {
-    if (err instanceof PlanLimitError) return { error: err.message, code: 'plan_limit' };
-    throw err;
-  }
-
   const plan = await getOrgPlan(orgId);
+
+  // A new prompt starts at exactly one location (the brand's region), so the
+  // change adds one to the org's tracked-location total (#691).
+  const usage = await getOrgLocationUsage(supabase, orgId);
+  const limitError = locationLimitMessage(plan, usage.total, 1);
+  if (limitError) return { error: limitError, code: 'plan_limit' };
   const filtered = filterByPlan(plan, input.platforms, input.models ?? []);
   if (filtered.platforms.length === 0 && filtered.models.length === 0) {
     return { error: 'At least one platform or model must be selected.' };
@@ -549,15 +630,21 @@ export interface PromptsPageData {
  */
 export async function getPromptsPageData(
   brandId: string,
-  opts?: { days?: number; from?: string; to?: string },
+  opts?: { days?: number; from?: string; to?: string; region?: string },
 ): Promise<PromptsPageData> {
-  // Only the visibility summaries are window-scoped. Prompt sets are the
-  // roster itself, and volumes are keyword-level estimates with no date
-  // dimension, so neither changes with the selected range.
+  // Only the visibility summaries are window- and location-scoped. Prompt
+  // sets are the roster itself, and volumes are keyword-level estimates with
+  // no date dimension, so neither changes with the selected range or the
+  // selected location.
   const days = opts?.days ?? DEFAULT_PROMPT_RANGE_DAYS;
   const [promptSets, visibility, volumesResult] = await Promise.all([
     getPromptSets(brandId),
-    getPromptVisibilitySummaries(brandId, { days, from: opts?.from, to: opts?.to }),
+    getPromptVisibilitySummaries(brandId, {
+      days,
+      from: opts?.from,
+      to: opts?.to,
+      region: opts?.region,
+    }),
     getPromptVolumes(brandId).then(
       (r) => ({ volumes: r.volumes, quota: r.quota ?? null, degraded: false }),
       (err) => {

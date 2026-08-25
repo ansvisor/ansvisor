@@ -8395,3 +8395,203 @@ comment on function public.citation_url_candidates(uuid, text) is
 comment on function public.citation_url_occurrences(uuid, bigint[], timestamptz, timestamptz, text[], text[], uuid[], uuid[]) is
   'Answers citing any of the given URL ids (#732) — the per-URL citation detail table, one row per answer. Members of the brand''s organization only (#779): a service-role caller reads empty.';
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00070_org_prompt_location_usage.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Aggregate the tracked-location quota count in Postgres (#691 part 1).
+--
+-- The web tier first computed it by selecting every prompt row's `regions`
+-- and summing in JavaScript. PostgREST silently caps an un-paginated select
+-- at 1000 rows (the #427/#450/#464 trap), and the failure direction is the
+-- bad one: a truncated sum UNDER-counts, so the quota guard would let an org
+-- past its plan limit without an error anywhere. The largest org holds 552
+-- prompt rows today, but part 2 of #691 multiplies rows into locations, so
+-- the ceiling was already in reach. Aggregating here means no rows travel at
+-- all — and the bulk-add path, which runs one guard check per prompt in
+-- parallel, stops downloading the org's whole roster N times over.
+--
+-- One row per brand rather than a single org total: savePromptSet replaces a
+-- brand's whole set, so its cap check and the wizards' capacity endpoint
+-- need "the org minus this brand", which the caller derives from these rows.
+--
+-- A prompt's location count is `greatest(coalesce(array_length(regions,1),0),1)`
+-- — one per region entry, minimum one, because the tracking worker runs a
+-- prompt with no regions once (`regions or [null]`). This mirrors
+-- `promptLocationCount` in web/src/lib/prompt-locations.ts exactly; the two
+-- definitions must not drift.
+--
+-- SECURITY INVOKER on purpose, unlike the citation RPCs (#780): prompts,
+-- prompt_sets and brands all carry org-membership select policies, so RLS
+-- already scopes the aggregation to the caller's own org — a foreign
+-- organization id simply aggregates zero visible rows.
+create or replace function public.org_prompt_location_usage(p_organization_id uuid)
+returns table (brand_id uuid, locations bigint)
+language sql
+stable
+set search_path to 'public'
+as $$
+  select b.id, sum(greatest(coalesce(array_length(p.regions, 1), 0), 1))::bigint
+  from public.prompts p
+  join public.prompt_sets ps on ps.id = p.prompt_set_id
+  join public.brands b on b.id = ps.brand_id
+  where b.organization_id = p_organization_id
+  group by b.id;
+$$;
+
+revoke all on function public.org_prompt_location_usage(uuid) from public;
+grant execute on function public.org_prompt_location_usage(uuid) to authenticated, service_role;
+
+comment on function public.org_prompt_location_usage(uuid) is
+  'Tracked prompt locations per brand for one org (#691) — the plan-quota unit, one per region entry per prompt, minimum one. Security invoker: RLS scopes it to the caller''s org.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00071_prompt_state_locations.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Move state targeting from the brand onto the prompt (#691 part 2).
+--
+-- APPLY AFTER DEPLOYING THE SERVER, not before. The running worker passes a
+-- prompt's region straight through as the Cloro `country` field, so a row
+-- reading `US-DE` would be submitted as country "US-DE" and rejected — this
+-- brand's tracking would fail until the deploy landed. The new worker parses
+-- the code first, so once it is live the order no longer matters.
+--
+-- `brands.state` was a single USPS code the tracking worker applied to every
+-- US task the brand ran (#554). Targeting now lives on the prompt, as a
+-- location code in `prompts.regions` (`US-CA`), so different prompts can
+-- track different places — and the worker no longer reads `brands.state` at
+-- all. Left alone, that would silently downgrade the brands that had a state
+-- set: their prompts would keep saying `US` and start running country-wide.
+--
+-- So fold the brand's state into its own prompts' `US` entries, once. Other
+-- countries are untouched: the state only ever applied to US tasks.
+--
+-- Quota is unaffected — a prompt targeting `US-DE` tracks exactly one
+-- location, the same as one targeting `US` (#691 part 1 counts entries, not
+-- codes), so no org's usage or limit standing moves.
+--
+-- The column itself stays, with a narrower job: it is the DEFAULT location
+-- offered to prompts created for that brand, not a tracking-time override.
+-- Two sources of truth for "where does this prompt run" is exactly the
+-- conflict this migration removes.
+update public.prompts p
+set regions = (
+  select array_agg(
+    case when r = 'US' then 'US-' || b.state else r end
+    order by idx
+  )
+  from unnest(p.regions) with ordinality as t(r, idx)
+)
+from public.prompt_sets ps, public.brands b
+where ps.id = p.prompt_set_id
+  and b.id = ps.brand_id
+  and b.state is not null
+  and b.state ~ '^[A-Z]{2}$'
+  and 'US' = any(p.regions);
+
+comment on column public.brands.state is
+  'Default US state for prompts created for this brand (#691). Targeting itself lives in prompts.regions as location codes (US-CA); the tracking worker does not read this column.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00072_prompt_visibility_summaries_region.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Let the per-prompt health column answer "…in which location?" (#691).
+--
+-- Prompts can now be tracked in several places at once, so a single blended
+-- number per prompt hides the thing multi-location tracking was bought for:
+-- a prompt can be strong at home and invisible in Germany, and the All
+-- Prompts table averaged the two into one figure with no way to split them.
+-- Every other analytical surface already takes a region — Insights, the
+-- citation RPCs, the KPI cards — this one was the gap.
+--
+-- The parameter is appended with a NULL default, and NULL keeps the previous
+-- whole-brand behaviour exactly, so callers that don't pass it are unchanged.
+--
+-- The 3-argument signature is dropped rather than left in place: with both
+-- installed, a 3-argument call would match the old function AND the new one
+-- through its default, which Postgres rejects as ambiguous. Dropping it is
+-- safe across the deploy window because PostgREST passes arguments by name —
+-- the running app's 3-name call binds to the new function and takes the
+-- default.
+DROP FUNCTION IF EXISTS public.prompt_visibility_summaries(uuid, timestamptz, timestamptz);
+
+CREATE FUNCTION public.prompt_visibility_summaries(
+  p_brand_id  uuid,
+  p_date_from timestamptz DEFAULT NULL,
+  p_date_to   timestamptz DEFAULT NULL,
+  p_region    text DEFAULT NULL
+)
+RETURNS TABLE (
+  prompt_id              uuid,
+  avg_visibility         double precision,
+  avg_visibility_visible double precision,
+  total_mentions         bigint,
+  total_citations        bigint,
+  runs                   bigint,
+  visible_runs           bigint,
+  mention_answers        bigint,
+  citation_answers       bigint,
+  position_factor        double precision,
+  last_run_at            timestamptz
+)
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = public
+AS $$
+  SELECT pr.prompt_id,
+         AVG(COALESCE(pr.visibility_score, 0))::double precision AS avg_visibility,
+         AVG(COALESCE(pr.visibility_score, 0))
+           FILTER (WHERE pr.mention_count > 0 OR pr.citation_count > 0)
+           ::double precision                                    AS avg_visibility_visible,
+         COALESCE(SUM(pr.mention_count), 0)::bigint              AS total_mentions,
+         COALESCE(SUM(pr.citation_count), 0)::bigint             AS total_citations,
+         COUNT(*)::bigint                                        AS runs,
+         COUNT(*) FILTER (WHERE pr.mention_count > 0 OR pr.citation_count > 0)::bigint
+                                                                 AS visible_runs,
+         COUNT(*) FILTER (WHERE pr.mention_count > 0)::bigint    AS mention_answers,
+         COUNT(*) FILTER (WHERE pr.citation_count > 0)::bigint   AS citation_answers,
+         AVG(1.0 / pr.mention_position)
+           FILTER (WHERE pr.mention_position IS NOT NULL)
+           ::double precision                                    AS position_factor,
+         MAX(pr.created_at)                                      AS last_run_at
+  FROM public.prompt_results pr
+  WHERE pr.brand_id = p_brand_id
+    AND pr.prompt_id IS NOT NULL
+    AND pr.platform <> 'chatgpt-shopping'  -- #155 - isolate from analytics
+    AND (p_date_from IS NULL OR pr.created_at >= p_date_from)
+    AND (p_date_to   IS NULL OR pr.created_at <= p_date_to)
+    AND (p_region    IS NULL OR pr.region = p_region)
+  GROUP BY pr.prompt_id
+$$;
+
+GRANT EXECUTE ON FUNCTION
+  public.prompt_visibility_summaries(uuid, timestamptz, timestamptz, text)
+  TO authenticated;
+
+COMMENT ON FUNCTION
+  public.prompt_visibility_summaries(uuid, timestamptz, timestamptz, text) IS
+  'Per-prompt visibility/mention aggregates for the All Prompts table. p_region scopes to one tracked location (#691); NULL blends every location, as before.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00073_clear_derived_logo_urls.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Migration: 00073_clear_derived_logo_urls
+--
+-- Context (issue #759):
+--   logo_url was written at brand creation and on every primary-domain change
+--   using Google's s2/favicons service. The new BrandAvatar component derives
+--   the favicon at render time instead (Google → /favicon.ico → initials), so
+--   logo_url should only hold a URL the user explicitly chose.
+--
+-- Effect:
+--   Clears the derived Google favicon URLs so existing brands reach the
+--   fallback chain. The single brand with logo_url = null already did.
+--   Manual URLs (2 rows in production at time of writing) are unaffected
+--   because they do not match the s2/favicons pattern.
+--
+-- Safe to re-run: WHERE clause is idempotent.
+
+update brands
+set logo_url = null
+where logo_url like '%s2/favicons%';
+

@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { BrandAvatar } from '@/components/brand-avatar';
 import { cn } from '@/lib/utils';
 import { Check, ChevronsUpDown, Plus } from 'lucide-react';
 
@@ -26,14 +26,6 @@ export function BrandSwitcher({ collapsed = false }: BrandSwitcherProps) {
   const { brands, activeBrandId, setActiveBrand } = useBrandStore();
 
   const activeBrand = brands.find((b) => b.id === activeBrandId) ?? null;
-
-  const initials = (name: string) =>
-    name
-      .split(' ')
-      .map((w) => w[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
 
   if (brands.length === 0) {
     return (
@@ -60,16 +52,18 @@ export function BrandSwitcher({ collapsed = false }: BrandSwitcherProps) {
         )}
         aria-label={t('switchBrand')}
       >
-        <Avatar className="h-6 w-6 shrink-0 rounded-md bg-zinc-50 dark:bg-zinc-100">
-          <AvatarImage
-            src={activeBrand?.logoUrl}
-            alt={activeBrand?.name}
-            className="object-contain p-0.5"
+        {activeBrand ? (
+          <BrandAvatar
+            logoUrl={activeBrand.logoUrl}
+            name={activeBrand.name}
+            domains={activeBrand.domains}
+            className="h-6 w-6 shrink-0 rounded-md bg-zinc-50 dark:bg-zinc-100"
           />
-          <AvatarFallback className="rounded-md bg-primary text-primary-foreground text-xs font-semibold">
-            {activeBrand ? initials(activeBrand.name) : '?'}
-          </AvatarFallback>
-        </Avatar>
+        ) : (
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold">
+            ?
+          </span>
+        )}
 
         {!collapsed && (
           <>
@@ -99,16 +93,13 @@ export function BrandSwitcher({ collapsed = false }: BrandSwitcherProps) {
               onClick={() => setActiveBrand(brand.id)}
               className="flex items-center gap-2"
             >
-              <Avatar className="h-5 w-5 shrink-0 rounded-md bg-zinc-50 dark:bg-zinc-100">
-                <AvatarImage
-                  src={brand.logoUrl}
-                  alt={brand.name}
-                  className="object-contain p-0.5"
-                />
-                <AvatarFallback className="rounded-md bg-primary/10 text-primary text-xs font-semibold">
-                  {initials(brand.name)}
-                </AvatarFallback>
-              </Avatar>
+              <BrandAvatar
+                logoUrl={brand.logoUrl}
+                name={brand.name}
+                domains={brand.domains}
+                className="h-5 w-5 shrink-0 rounded-md bg-zinc-50 dark:bg-zinc-100"
+                fallbackClassName="rounded-md bg-primary/10 text-primary text-xs font-semibold"
+              />
               <div className="flex-1 overflow-hidden">
                 <p className="flex items-center gap-1.5 truncate text-sm font-medium">
                   <span className="truncate">{brand.name}</span>

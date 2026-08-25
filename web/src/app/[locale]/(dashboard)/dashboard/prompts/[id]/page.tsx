@@ -38,6 +38,7 @@ import {
   RotateCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatRegionDisplay } from '@/lib/region';
 import { toast } from 'sonner';
 import { useUserRole } from '@/hooks/use-user-role';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
@@ -486,7 +487,7 @@ function PlatformResultGroup({
             <ModelBadge model={group.modelUsed ?? group.platform} platform={group.platform} />
             {group.region && (
               <Badge variant="outline" className="text-[10px]">
-                {group.region}
+                {formatRegionDisplay(group.region)}
               </Badge>
             )}
             <span className="text-[11px] text-muted-foreground">
