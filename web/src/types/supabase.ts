@@ -2406,6 +2406,10 @@ export type Database = {
         }
         Returns: Json
       }
+      apply_prompt_locations: {
+        Args: { p_updates: Json }
+        Returns: number
+      }
       citation_competitor_sources: {
         Args: {
           p_brand_domains: string[]

@@ -7,6 +7,7 @@ import { getOrgPlan } from '@/lib/guards/plan-guard';
 import {
   getOrgLocationUsage,
   locationLimitMessage,
+  planBulkLocationChange,
   promptLocationCount,
 } from '@/lib/prompt-locations';
 import { ALL_MODELS, ALL_SCRAPERS, DEFAULT_PROMPT_RANGE_DAYS } from '@/config/prompt-options';
@@ -430,6 +431,118 @@ export async function updatePromptLocations(
 
   revalidatePath('/dashboard/brands');
   return { prompt: mapPromptRow(data as Record<string, unknown>) };
+}
+
+/**
+ * PostgREST takes an `.in()` list in the query string, so a selection of a few
+ * hundred prompts would overrun the request line long before the row cap
+ * mattered — 100 UUIDs is already ~3.7KB (#427's lesson, same constant as the
+ * fan-out roster read). The write itself goes out as a POST body and needs no
+ * chunking.
+ */
+const BULK_LOCATION_READ_CHUNK = 100;
+
+export interface BulkLocationSummary {
+  /** Prompts whose locations moved. */
+  updated: number;
+  /** Already had every added location, or none of the removed ones. */
+  unchanged: number;
+  /** Skipped: the removal would have left them with no location at all. */
+  blocked: number;
+  /** Locations the batch added (negative when it freed some). */
+  delta: number;
+}
+
+export type BulkUpdatePromptLocationsResult =
+  | BulkLocationSummary
+  | { error: string; code?: 'plan_limit' };
+
+/**
+ * Add or remove one or more tracking locations across a selection of prompts
+ * (#691).
+ *
+ * Add/remove rather than "set every selected prompt to this list": a selection
+ * can hold prompts targeting different places, and assigning one list to all of
+ * them would erase that targeting without saying so.
+ *
+ * The plan cap is measured once, for the whole batch, and the write goes out as
+ * a single statement (`apply_prompt_locations`, 00074). Looping the
+ * single-prompt action instead would check the cap once per prompt and could
+ * stop half-way through, leaving a partly-retargeted selection and a bill for
+ * whatever landed before the limit bit.
+ *
+ * Current locations are re-read here rather than taken from the caller: the
+ * quota arithmetic must not rest on numbers the client supplied.
+ */
+export async function bulkUpdatePromptLocations(
+  promptIds: string[],
+  action: 'add' | 'remove',
+  locationsInput: string[],
+): Promise<BulkUpdatePromptLocationsResult> {
+  const supabase = await createClient();
+
+  const ids = [...new Set(promptIds)].filter(Boolean);
+  if (ids.length === 0) return { error: 'Select at least one prompt.' };
+
+  const locations = [...new Set(locationsInput.map((r) => r.trim().toUpperCase()))].filter(Boolean);
+  if (locations.length === 0) return { error: 'Select at least one location.' };
+  const unknown = locations.filter((r) => !isValidLocation(r));
+  if (unknown.length > 0) {
+    return {
+      error: `Unknown location code${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}`,
+    };
+  }
+
+  const rows: { id: string; regions: string[]; organizationId: string }[] = [];
+  for (let i = 0; i < ids.length; i += BULK_LOCATION_READ_CHUNK) {
+    const { data, error } = await supabase
+      .from('prompts')
+      .select('id, regions, prompt_sets!inner(brands!inner(organization_id))')
+      .in('id', ids.slice(i, i + BULK_LOCATION_READ_CHUNK));
+    if (error) return { error: error.message };
+    for (const row of data ?? []) {
+      const orgId = (row.prompt_sets as unknown as { brands: { organization_id: string } } | null)
+        ?.brands?.organization_id;
+      if (!orgId) continue;
+      rows.push({
+        id: row.id as string,
+        regions: (row.regions as string[] | null) ?? [],
+        organizationId: orgId,
+      });
+    }
+  }
+
+  // RLS decides what came back; a selection that resolves to nothing is a
+  // stale page, not a request to write.
+  if (rows.length === 0) return { error: 'None of the selected prompts are available.' };
+
+  const plan = planBulkLocationChange(rows, action, locations);
+  if (plan.changes.length === 0) {
+    return { updated: 0, unchanged: plan.unchanged, blocked: plan.blocked, delta: 0 };
+  }
+
+  if (plan.delta > 0) {
+    const orgId = rows[0].organizationId;
+    const [orgPlan, usage] = await Promise.all([
+      getOrgPlan(orgId),
+      getOrgLocationUsage(supabase, orgId),
+    ]);
+    const limitError = locationLimitMessage(orgPlan, usage.total, plan.delta);
+    if (limitError) return { error: limitError, code: 'plan_limit' };
+  }
+
+  const { data: written, error } = await supabase.rpc('apply_prompt_locations', {
+    p_updates: plan.changes.map((c) => ({ id: c.promptId, regions: c.regions })),
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath('/dashboard/brands');
+  return {
+    updated: Number(written ?? 0),
+    unchanged: plan.unchanged,
+    blocked: plan.blocked,
+    delta: plan.delta,
+  };
 }
 
 /**

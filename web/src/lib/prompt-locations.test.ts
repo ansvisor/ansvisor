@@ -3,6 +3,7 @@ import {
   promptLocationCount,
   summarizeLocationRows,
   locationLimitMessage,
+  planBulkLocationChange,
 } from './prompt-locations';
 import { PLANS } from '@/config/plans';
 
@@ -81,5 +82,78 @@ describe('locationLimitMessage', () => {
 
   it('uses singular grammar for a single excess location', () => {
     expect(locationLimitMessage(starter, 50, 1)).toContain('Remove 1 location ');
+  });
+});
+
+describe('planBulkLocationChange', () => {
+  const prompts = [
+    { id: 'a', regions: ['US'] },
+    { id: 'b', regions: ['US', 'DE'] },
+    { id: 'c', regions: ['TR'] },
+  ];
+
+  it('adds a location only where it is missing', () => {
+    const plan = planBulkLocationChange(prompts, 'add', ['DE']);
+    expect(plan.changes.map((c) => c.promptId)).toEqual(['a', 'c']);
+    expect(plan.changes[0].regions).toEqual(['US', 'DE']);
+    // 'b' already had DE — no cost, no write.
+    expect(plan.unchanged).toBe(1);
+    expect(plan.delta).toBe(2);
+  });
+
+  it('appends rather than reorders, so existing targeting is untouched', () => {
+    const plan = planBulkLocationChange([{ id: 'a', regions: ['DE', 'US'] }], 'add', ['TR']);
+    expect(plan.changes[0].regions).toEqual(['DE', 'US', 'TR']);
+  });
+
+  it('removes a location and frees capacity', () => {
+    const plan = planBulkLocationChange(prompts, 'remove', ['DE']);
+    expect(plan.changes.map((c) => c.promptId)).toEqual(['b']);
+    expect(plan.changes[0].regions).toEqual(['US']);
+    expect(plan.delta).toBe(-1);
+    expect(plan.unchanged).toBe(2);
+  });
+
+  it('never empties a prompt — single-location prompts are skipped, not emptied', () => {
+    // 'a' and 'c' each target one location; removing it would make them
+    // untrackable, so they stay and are reported.
+    const plan = planBulkLocationChange(prompts, 'remove', ['US', 'TR']);
+    expect(plan.blocked).toBe(2);
+    expect(plan.changes.map((c) => c.promptId)).toEqual(['b']);
+    expect(plan.changes[0].regions).toEqual(['DE']);
+  });
+
+  it('counts a batch add as one location per prompt', () => {
+    const many = Array.from({ length: 40 }, (_, i) => ({ id: `p${i}`, regions: ['US'] }));
+    expect(planBulkLocationChange(many, 'add', ['DE']).delta).toBe(40);
+  });
+
+  it('prices multiple locations per prompt', () => {
+    const plan = planBulkLocationChange([{ id: 'a', regions: ['US'] }], 'add', ['DE', 'TR']);
+    expect(plan.delta).toBe(2);
+    expect(plan.changes[0].regions).toEqual(['US', 'DE', 'TR']);
+  });
+
+  it('normalizes case and ignores duplicates in the requested list', () => {
+    const plan = planBulkLocationChange([{ id: 'a', regions: ['US'] }], 'add', [
+      'de',
+      'DE',
+      ' de ',
+    ]);
+    expect(plan.delta).toBe(1);
+    expect(plan.changes[0].regions).toEqual(['US', 'DE']);
+  });
+
+  it('does nothing when no location is chosen', () => {
+    const plan = planBulkLocationChange(prompts, 'add', []);
+    expect(plan).toEqual({ changes: [], unchanged: 0, blocked: 0, delta: 0 });
+  });
+
+  it('charges nothing for the first location of a prompt that had none', () => {
+    // An empty region list already costs one — the worker runs it untargeted
+    // once — so naming that location is free.
+    const plan = planBulkLocationChange([{ id: 'a', regions: [] }], 'add', ['DE']);
+    expect(plan.changes[0].regions).toEqual(['DE']);
+    expect(plan.delta).toBe(0);
   });
 });

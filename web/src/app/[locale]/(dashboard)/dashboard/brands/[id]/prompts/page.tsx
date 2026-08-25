@@ -9,12 +9,16 @@ import {
   addPromptToSet,
   updatePrompt,
   updatePromptLocations,
+  bulkUpdatePromptLocations,
   getLocationQuota,
   deletePrompt,
 } from '@/lib/actions/prompt';
 import { getBrandById } from '@/lib/actions/brand';
 import { getTopics } from '@/lib/actions/topic';
 import { PromptSuggestionCard } from '@/components/dashboard/prompt-suggestion-card';
+import { LocationPicker } from '@/components/dashboard/location-picker';
+import { planBulkLocationChange } from '@/lib/prompt-locations';
+import { formatRegionDisplay } from '@/lib/region';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -28,7 +32,8 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Sparkles, Save, X, Play, Search, Lock } from 'lucide-react';
+import { Loader2, Plus, Sparkles, Save, X, Play, Search, Lock, Globe } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { MODEL_GROUPS, ALL_MODELS, SCRAPER_GROUPS, ALL_SCRAPERS } from '@/config/prompt-options';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { useUserRole } from '@/hooks/use-user-role';
@@ -112,6 +117,14 @@ export default function PromptsPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeDialogOpen, setAnalyzeDialogOpen] = useState(false);
   const [selectedAnalyzeIds, setSelectedAnalyzeIds] = useState<Set<string>>(new Set());
+
+  // Bulk retargeting (#691). Adding a location to a selection multiplies
+  // scraper spend, so the dialog prices the change before it is applied.
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkAction, setBulkAction] = useState<'add' | 'remove'>('add');
+  const [bulkLocations, setBulkLocations] = useState<string[]>([]);
+  const [bulkPromptIds, setBulkPromptIds] = useState<Set<string>>(new Set());
+  const [isBulkSaving, setIsBulkSaving] = useState(false);
   const [isLoadingUnanalyzed, setIsLoadingUnanalyzed] = useState(false);
 
   // Flatten all prompts from all sets, sorted newest first
@@ -425,6 +438,64 @@ export default function PromptsPage() {
     },
     [brandId, updatePromptLocal, loadData],
   );
+
+  // The dialog prices the change with the same function the server action
+  // enforces with, so the preview and the guard cannot disagree.
+  const bulkPlan = useMemo(
+    () =>
+      planBulkLocationChange(
+        allPrompts.filter((p) => bulkPromptIds.has(p.id)),
+        bulkAction,
+        bulkLocations,
+      ),
+    [allPrompts, bulkPromptIds, bulkAction, bulkLocations],
+  );
+
+  // Every engine the selection spans: the state-targeting caveat applies if
+  // any selected prompt runs a country-only engine.
+  const bulkSelectedPlatforms = useMemo(
+    () => [
+      ...new Set(allPrompts.filter((p) => bulkPromptIds.has(p.id)).flatMap((p) => p.platforms)),
+    ],
+    [allPrompts, bulkPromptIds],
+  );
+
+  const openBulkDialog = useCallback(() => {
+    setBulkAction('add');
+    setBulkLocations([]);
+    setBulkPromptIds(new Set(allPrompts.map((p) => p.id)));
+    setBulkOpen(true);
+  }, [allPrompts]);
+
+  const handleBulkApply = useCallback(async () => {
+    if (bulkPromptIds.size === 0 || bulkLocations.length === 0) return;
+    setIsBulkSaving(true);
+    try {
+      const result = await bulkUpdatePromptLocations(
+        Array.from(bulkPromptIds),
+        bulkAction,
+        bulkLocations,
+      );
+      if ('error' in result) {
+        toast.error(result.error);
+        return;
+      }
+      // Report what did NOT happen too: a silent "12 updated" hides the
+      // single-location prompts a removal deliberately left alone.
+      const parts = [
+        `${result.updated} prompt${result.updated === 1 ? '' : 's'} updated`,
+        result.unchanged > 0 ? `${result.unchanged} already matched` : null,
+        result.blocked > 0 ? `${result.blocked} kept their only location` : null,
+      ].filter(Boolean);
+      toast.success(parts.join(' · '));
+      setBulkOpen(false);
+      await loadData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update locations');
+    } finally {
+      setIsBulkSaving(false);
+    }
+  }, [bulkPromptIds, bulkLocations, bulkAction, loadData]);
 
   const handlePlatformsChange = useCallback(
     async (promptId: string, platforms: string[]) => {
@@ -882,19 +953,25 @@ export default function PromptsPage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">All Prompts ({allPrompts.length})</h2>
-            <Button
-              size="sm"
-              variant={unanalyzedPrompts.length > 0 ? 'default' : 'outline'}
-              onClick={openAnalyzeDialog}
-            >
-              <Search className="mr-2 h-3.5 w-3.5" />
-              Analyze Prompts
-              {unanalyzedPrompts.length > 0 && (
-                <Badge variant="secondary" className="ml-2 text-[10px]">
-                  {unanalyzedPrompts.length} new
-                </Badge>
-              )}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={openBulkDialog}>
+                <Globe className="mr-2 h-3.5 w-3.5" />
+                Locations
+              </Button>
+              <Button
+                size="sm"
+                variant={unanalyzedPrompts.length > 0 ? 'default' : 'outline'}
+                onClick={openAnalyzeDialog}
+              >
+                <Search className="mr-2 h-3.5 w-3.5" />
+                Analyze Prompts
+                {unanalyzedPrompts.length > 0 && (
+                  <Badge variant="secondary" className="ml-2 text-[10px]">
+                    {unanalyzedPrompts.length} new
+                  </Badge>
+                )}
+              </Button>
+            </div>
           </div>
           <div className="space-y-2">
             {allPrompts.map((prompt) => (
@@ -1037,6 +1114,153 @@ export default function PromptsPage() {
                 Analyze ({selectedAnalyzeIds.size})
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk locations dialog (#691) */}
+      <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Tracking locations</DialogTitle>
+            <DialogDescription>
+              Add a location to several prompts at once, or stop tracking one. Each prompt keeps the
+              locations you don&apos;t touch.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="inline-flex rounded-lg border p-1" role="tablist">
+              {(['add', 'remove'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  role="tab"
+                  aria-selected={bulkAction === mode}
+                  onClick={() => setBulkAction(mode)}
+                  className={cn(
+                    'rounded-md px-3 py-1 text-xs font-medium transition-colors',
+                    bulkAction === mode
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {mode === 'add' ? 'Add' : 'Remove'}
+                </button>
+              ))}
+            </div>
+
+            <LocationPicker
+              value={bulkLocations}
+              onChange={setBulkLocations}
+              maxSelectable={null}
+              allowEmpty
+              label={bulkAction === 'add' ? 'Locations to add' : 'Locations to remove'}
+              countNoun="selected"
+              platforms={bulkSelectedPlatforms}
+            />
+
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">
+                  {bulkPromptIds.size} of {allPrompts.length} prompts selected
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    setBulkPromptIds(
+                      bulkPromptIds.size === allPrompts.length
+                        ? new Set()
+                        : new Set(allPrompts.map((p) => p.id)),
+                    )
+                  }
+                >
+                  {bulkPromptIds.size === allPrompts.length ? 'Deselect All' : 'Select All'}
+                </Button>
+              </div>
+              <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-md border p-2">
+                {allPrompts.map((prompt) => {
+                  const checked = bulkPromptIds.has(prompt.id);
+                  return (
+                    <label
+                      key={prompt.id}
+                      className="flex cursor-pointer items-start gap-2.5 rounded-md p-2 transition-colors hover:bg-muted/50"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() =>
+                          setBulkPromptIds((prev) => {
+                            const next = new Set(prev);
+                            if (checked) next.delete(prompt.id);
+                            else next.add(prompt.id);
+                            return next;
+                          })
+                        }
+                        className="mt-0.5"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm leading-snug">{prompt.text}</p>
+                        <div className="mt-0.5 flex flex-wrap gap-1">
+                          {prompt.regions.map((r) => (
+                            <span key={r} className="text-[10px] text-muted-foreground">
+                              {formatRegionDisplay(r)}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Priced before the click: every added location is another set of
+                scraper and model calls, and another unit against the plan. */}
+            {bulkLocations.length > 0 && (
+              <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs">
+                {bulkPlan.changes.length === 0 ? (
+                  <span className="text-muted-foreground">
+                    Nothing to change — the selected prompts already match.
+                  </span>
+                ) : (
+                  <>
+                    <span className="font-medium">
+                      {bulkPlan.changes.length} prompt
+                      {bulkPlan.changes.length === 1 ? '' : 's'} will change
+                    </span>
+                    <span className="text-muted-foreground">
+                      {' · '}
+                      {bulkPlan.delta >= 0 ? '+' : ''}
+                      {bulkPlan.delta} location{Math.abs(bulkPlan.delta) === 1 ? '' : 's'}
+                      {locationQuota && locationQuota.maxPrompts !== -1
+                        ? ` (${locationQuota.used + bulkPlan.delta} of ${locationQuota.maxPrompts} used)`
+                        : ''}
+                    </span>
+                    {bulkPlan.blocked > 0 && (
+                      <p className="mt-1 text-muted-foreground">
+                        {bulkPlan.blocked} prompt{bulkPlan.blocked === 1 ? '' : 's'} would be left
+                        with no location, so {bulkPlan.blocked === 1 ? 'it stays' : 'they stay'} as
+                        {bulkPlan.blocked === 1 ? ' it is' : ' they are'}.
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkOpen(false)} disabled={isBulkSaving}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkApply}
+              disabled={isBulkSaving || bulkPlan.changes.length === 0}
+            >
+              {isBulkSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {bulkAction === 'add' ? 'Add' : 'Remove'} ({bulkPlan.changes.length})
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

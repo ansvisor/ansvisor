@@ -100,3 +100,81 @@ export function locationLimitMessage(plan: Plan, used: number, adding: number): 
     `to continue, or upgrade your plan.`
   );
 }
+
+// ─── Bulk retargeting ────────────────────────────────────────────────────────
+
+export interface PromptLocations {
+  id: string;
+  regions: string[];
+}
+
+export interface BulkLocationChange {
+  promptId: string;
+  /** The prompt's locations after the change. Never empty. */
+  regions: string[];
+  /** Locations this prompt gains (negative when it loses some). */
+  delta: number;
+}
+
+export interface BulkLocationPlan {
+  /** Only the prompts whose locations actually move. */
+  changes: BulkLocationChange[];
+  /** Already had every added location, or had none of the removed ones. */
+  unchanged: number;
+  /** Would have been left with no location at all, so they were left alone. */
+  blocked: number;
+  /** Locations the whole batch adds — what the plan cap is measured against. */
+  delta: number;
+}
+
+/**
+ * Work out what a bulk add/remove does, before anything is written (#691).
+ *
+ * Add and remove rather than "set the list to X": prompts in a selection can
+ * target different places, and assigning one list to all of them would wipe
+ * that targeting silently. Adding a location a prompt already has, or
+ * removing one it doesn't, costs nothing and changes nothing.
+ *
+ * A prompt is never left with zero locations — one with no location cannot
+ * be tracked at all — so a remove that would empty a prompt skips it and is
+ * reported instead. The batch still applies to everything else: refusing the
+ * whole operation because one prompt of forty is single-location would be
+ * worse than telling the user which ones stayed put.
+ *
+ * The same function runs in the dialog (to price the change before the click)
+ * and in the server action (to enforce it), so the preview and the guard can
+ * never disagree.
+ */
+export function planBulkLocationChange(
+  prompts: readonly PromptLocations[],
+  action: 'add' | 'remove',
+  locations: readonly string[],
+): BulkLocationPlan {
+  const wanted = [...new Set(locations.map((code) => code.trim().toUpperCase()))].filter(Boolean);
+  const plan: BulkLocationPlan = { changes: [], unchanged: 0, blocked: 0, delta: 0 };
+  if (wanted.length === 0) return plan;
+
+  for (const prompt of prompts) {
+    const current = prompt.regions ?? [];
+    const next =
+      action === 'add'
+        ? [...current, ...wanted.filter((code) => !current.includes(code))]
+        : current.filter((code) => !wanted.includes(code));
+
+    if (next.length === current.length) {
+      plan.unchanged++;
+      continue;
+    }
+    // Removing every location would make the prompt untrackable.
+    if (next.length === 0) {
+      plan.blocked++;
+      continue;
+    }
+
+    const delta = promptLocationCount(next) - promptLocationCount(current);
+    plan.changes.push({ promptId: prompt.id, regions: next, delta });
+    plan.delta += delta;
+  }
+
+  return plan;
+}

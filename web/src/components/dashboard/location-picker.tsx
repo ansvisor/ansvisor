@@ -36,6 +36,16 @@ export interface LocationPickerProps {
   maxSelectable: number | null;
   /** Engines the prompt runs, to warn where state targeting doesn't apply. */
   platforms?: string[];
+  /** Field label. Defaults to the per-prompt wording. */
+  label?: string;
+  /** What the count describes, when the plan is unlimited. */
+  countNoun?: string;
+  /**
+   * Allow clearing every chip. A prompt must keep at least one location — it
+   * cannot be tracked otherwise — but a picker used to CHOOSE locations (the
+   * bulk dialog) has no such floor.
+   */
+  allowEmpty?: boolean;
 }
 
 /** Engines with no sub-country mechanism — mirrors the worker's collapse. */
@@ -55,7 +65,15 @@ const COUNTRY_ONLY_PLATFORMS = new Set(['google-aio', 'google-aimode']);
  * and Google's engines have no state targeting, so a state pick runs them
  * country-wide instead of twice.
  */
-export function LocationPicker({ value, onChange, maxSelectable, platforms }: LocationPickerProps) {
+export function LocationPicker({
+  value,
+  onChange,
+  maxSelectable,
+  platforms,
+  label = 'Locations',
+  countNoun = 'tracked',
+  allowEmpty = false,
+}: LocationPickerProps) {
   const options = useMemo<LocationOption[]>(
     () => [
       ...REGIONS.map((region) => ({
@@ -77,7 +95,7 @@ export function LocationPicker({ value, onChange, maxSelectable, platforms }: Lo
 
   // A prompt with no location cannot be tracked, so the last chip keeps its
   // remove control hidden rather than failing server-side.
-  const canRemove = value.length > 1;
+  const canRemove = allowEmpty || value.length > 1;
 
   const hasStatePick = value.some((code) => parseLocation(code)?.state);
   const countryOnlyEngines = (platforms ?? []).filter((id) => COUNTRY_ONLY_PLATFORMS.has(id));
@@ -96,10 +114,10 @@ export function LocationPicker({ value, onChange, maxSelectable, platforms }: Lo
   return (
     <div>
       <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-        Locations
+        {label}
         <span className="ml-1 font-normal">
           {maxSelectable === null
-            ? `· ${value.length} tracked`
+            ? `· ${value.length} ${countNoun}`
             : `· ${value.length} of ${maxSelectable} available`}
         </span>
       </label>
@@ -125,7 +143,7 @@ export function LocationPicker({ value, onChange, maxSelectable, platforms }: Lo
                     <div>{formatRegionDisplay(option.value)}</div>
                     <div className="text-[10px] text-muted-foreground">
                       {selected.has(option.value)
-                        ? 'Already tracked'
+                        ? `Already ${countNoun}`
                         : atCap
                           ? 'Plan limit reached — remove a location or upgrade'
                           : option.sublabel}
