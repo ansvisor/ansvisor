@@ -10,11 +10,14 @@ import {
   SOURCE_CATEGORIES,
 } from '@/lib/citations/classify';
 import { classifyArticleType } from '@/lib/citations/article-type';
+import { scopeDomainArgs, type CitationsSourceScope } from '@/lib/citations/scope';
 import { citationUrlMatchKey, normalizeCitationUrl } from '@/lib/citations/normalize';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type CitationsDatePreset = '24h' | '7d' | '30d' | '90d' | 'all' | 'custom';
+
+export type { CitationsSourceScope };
 
 export interface CitationsFilters {
   datePreset: CitationsDatePreset;
@@ -24,6 +27,15 @@ export interface CitationsFilters {
   topicIds?: string[];
   promptIds?: string[];
   regions?: string[];
+  /**
+   * Which sources the URL list covers (#745).
+   *
+   * Only the URL list needs it. The domain list is returned uncapped, so
+   * filtering that after the fact is exact and stays on the client; the URL
+   * list is capped at the top 2,000, and a scope applied to what arrived
+   * reports a slice of the global top N as though it were the whole scope.
+   */
+  sourceScope?: CitationsSourceScope;
 }
 
 export interface CitationArticleTypeCount {
@@ -205,16 +217,19 @@ export async function getCitationsOverview(
   const classifyCtx = { brandDomains, competitorDomains };
 
   const args = overviewArgs(brandId, filters, topicPromptIds);
+  const scoped = Boolean(filters.sourceScope && filters.sourceScope !== 'all');
 
-  // In parallel: the three are independent, and the slowest decides the wait.
-  const [domainRes, urlRes, statsRes] = await Promise.all([
+  // A scope is resolved from the classified domain list, so a scoped URL query
+  // has to wait for the domain query to land. The unscoped view — the one every
+  // page open starts on — keeps all three in flight, because serializing it
+  // would double the default load for a filter nobody selected.
+  const [domainRes, statsRes, parallelUrlRes] = await Promise.all([
     supabase.rpc('citations_domains', args),
-    supabase.rpc('citations_urls', { ...args, p_limit: CITATIONS_URL_LIMIT }),
     supabase.rpc('citations_window_stats', args),
+    scoped ? null : supabase.rpc('citations_urls', { ...args, p_limit: CITATIONS_URL_LIMIT }),
   ]);
 
   if (domainRes.error) throw new Error(domainRes.error.message);
-  if (urlRes.error) throw new Error(urlRes.error.message);
   if (statsRes.error) throw new Error(statsRes.error.message);
 
   const stats = (statsRes.data as { results: number; regions: string[] | null }[] | null)?.[0];
@@ -251,6 +266,15 @@ export async function getCitationsOverview(
         articleTypes: [],
       };
     });
+
+  const urlRes =
+    parallelUrlRes ??
+    (await supabase.rpc('citations_urls', {
+      ...args,
+      p_limit: CITATIONS_URL_LIMIT,
+      ...scopeDomainArgs(filters.sourceScope, rows),
+    }));
+  if (urlRes.error) throw new Error(urlRes.error.message);
 
   const urlRowsRaw = (urlRes.data as UrlAggRow[] | null) ?? [];
   const urlRows: CitationUrlRow[] = urlRowsRaw
@@ -290,8 +314,10 @@ export async function getCitationsOverview(
     urlRows,
     totals: {
       domains: rows.length,
-      // The uncapped count, so the page never implies it has every URL. Falls
-      // back to what arrived when the window produced nothing at all.
+      // The uncapped count *within the selected scope*, so the page never
+      // implies it has every URL and never reports a slice of the global top
+      // 2,000 as the whole scope (#745). Falls back to what arrived when the
+      // window produced nothing at all.
       urls: Number(urlRowsRaw[0]?.total_urls ?? urlRows.length),
       citations,
       results: totalResults,

@@ -2526,6 +2526,8 @@ export type Database = {
           p_brand_id: string
           p_date_from?: string
           p_date_to?: string
+          p_domains?: string[]
+          p_exclude_domains?: string[]
           p_limit?: number
           p_models?: string[]
           p_prompt_ids?: string[]

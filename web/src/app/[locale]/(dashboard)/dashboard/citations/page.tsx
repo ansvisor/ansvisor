@@ -829,6 +829,10 @@ export default function CitationsPage() {
     }
   });
 
+  // The server already scoped these (#745). This is kept for the moment
+  // between picking a scope and the refetch landing, when `data` still holds
+  // the previous scope's rows — without it the table would show the old scope
+  // under the new one's name. Once the fresh rows arrive it filters nothing.
   const filteredUrlRows = (data?.urlRows ?? []).filter((urlRow) => {
     switch (filters.sourceScope) {
       case 'own':
@@ -891,6 +895,15 @@ export default function CitationsPage() {
     filters.prompt,
   ]);
 
+  // The URL list is capped, so its scope has to be applied in the query rather
+  // than to what came back (#745) — which means changing the scope refetches
+  // the overview. Kept separate from gapFilters above so Competitor Gaps, which
+  // the scope does not apply to, still doesn't refetch when it changes.
+  const overviewFilters = useMemo<CitationsFilters>(
+    () => ({ ...gapFilters, sourceScope: filters.sourceScope }),
+    [gapFilters, filters.sourceScope],
+  );
+
   useEffect(() => {
     if (!activeBrandId) return;
     getTopics(activeBrandId)
@@ -917,7 +930,7 @@ export default function CitationsPage() {
     setIsLoading(true);
     setLoadFailed(false);
     try {
-      const overview = await getCitationsOverview(activeBrandId, gapFilters);
+      const overview = await getCitationsOverview(activeBrandId, overviewFilters);
       if (stale()) return;
       setData(overview);
 
@@ -948,7 +961,7 @@ export default function CitationsPage() {
     } finally {
       if (!stale()) setIsLoading(false);
     }
-  }, [activeBrandId, gapFilters]);
+  }, [activeBrandId, overviewFilters]);
 
   useEffect(() => {
     if (!activeBrandId) return;
