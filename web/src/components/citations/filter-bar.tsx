@@ -8,6 +8,7 @@
  */
 
 import { useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import type { Topic } from '@/types';
 import { cn } from '@/lib/utils';
 import type { CitationsDatePreset } from '@/lib/actions/citations';
@@ -88,8 +89,15 @@ export function SourceScopeFilter({
   onChange: (scope: SourceScope) => void;
   className?: string;
 }) {
+  const t = useTranslations('common');
+  const scopeLabel: Record<SourceScope, string> = {
+    all: t('sourceAll'),
+    own: t('sourceBrand'),
+    competitors: t('sourceCompetitors'),
+    third_party: t('sourceThirdParty'),
+  };
   return (
-    <div className={cn('flex flex-wrap gap-2', className)} role="group" aria-label="Sources">
+    <div className={cn('flex flex-wrap gap-2', className)} role="group" aria-label={t('sources')}>
       {SOURCE_SCOPES.map((scope) => (
         <button
           key={scope.value}
@@ -103,7 +111,7 @@ export function SourceScopeFilter({
               : 'bg-card text-foreground hover:bg-muted',
           )}
         >
-          {scope.label}
+          {scopeLabel[scope.value]}
         </button>
       ))}
     </div>
@@ -235,6 +243,7 @@ export function CitationsFilterBar({
   // base-ui Combobox needs `{ value, label }` shaped items so it can use the
   // built-in filter and display logic without custom item-to-string helpers.
   // Truncate long prompt text so the dropdown stays a sensible width.
+  const t = useTranslations('common');
   const promptComboboxItems = useMemo<PromptComboboxItem[]>(
     () =>
       prompts.map((p) => ({
@@ -261,22 +270,24 @@ export function CitationsFilterBar({
 
       {topics.length > 0 && (
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Topic</label>
+          <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+            {t('topic')}
+          </label>
           <Select
             value={filters.topic || null}
             onValueChange={(v) => onChange({ topic: !v || v === '__all__' ? '' : v })}
           >
             <SelectTrigger className="h-8 w-40 text-xs">
-              <SelectValue placeholder="All Topics">
+              <SelectValue placeholder={t('allTopics')}>
                 {(value) =>
                   value && value !== '__all__'
-                    ? (topics.find((t) => t.id === value)?.name ?? 'All Topics')
-                    : 'All Topics'
+                    ? (topics.find((t) => t.id === value)?.name ?? t('allTopics'))
+                    : t('allTopics')
                 }
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">All Topics</SelectItem>
+              <SelectItem value="__all__">{t('allTopics')}</SelectItem>
               {topics.map((t) => (
                 <SelectItem key={t.id} value={t.id}>
                   {t.name}
@@ -289,7 +300,9 @@ export function CitationsFilterBar({
 
       {prompts.length > 0 && (
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Prompt</label>
+          <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+            {t('prompt')}
+          </label>
           <Combobox
             items={promptComboboxItems}
             value={
@@ -304,12 +317,12 @@ export function CitationsFilterBar({
             }
           >
             <ComboboxTrigger className="h-8 w-56 text-xs">
-              <ComboboxValue placeholder="All Prompts" />
+              <ComboboxValue placeholder={t('allPrompts')} />
             </ComboboxTrigger>
             <ComboboxContent>
-              <ComboboxInput placeholder="Search prompts…" />
+              <ComboboxInput placeholder={t('searchPrompts')} />
               <ComboboxList>
-                <ComboboxEmpty>No prompts match.</ComboboxEmpty>
+                <ComboboxEmpty>{t('noPromptsMatch')}</ComboboxEmpty>
                 <ComboboxCollection>
                   {(item: PromptComboboxItem) => (
                     <ComboboxItem key={item.value} value={item} title={item.fullText}>
@@ -324,23 +337,25 @@ export function CitationsFilterBar({
       )}
 
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Platform</label>
+        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+          {t('platform')}
+        </label>
         <Select
           value={filters.platform || null}
           onValueChange={(v) => onChange({ platform: !v || v === '__all__' ? '' : v })}
         >
           <SelectTrigger className="h-8 w-40 text-xs">
-            <SelectValue placeholder="All Platforms">
+            <SelectValue placeholder={t('allPlatforms')}>
               {(value) =>
                 value && value !== '__all__'
                   ? (platforms.find((platform) => platform.value === value)?.label ??
                     getGroupedPlatformLabel(value))
-                  : 'All Platforms'
+                  : t('allPlatforms')
               }
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">All Platforms</SelectItem>
+            <SelectItem value="__all__">{t('allPlatforms')}</SelectItem>
             {platforms.map((platform) => (
               <SelectItem key={platform.value} value={platform.value}>
                 {platform.label}
@@ -351,16 +366,18 @@ export function CitationsFilterBar({
       </div>
 
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Region</label>
+        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+          {t('region')}
+        </label>
         <Select
           value={filters.region || null}
           onValueChange={(v) => onChange({ region: !v || v === '__all__' ? '' : v })}
         >
           <SelectTrigger className="h-8 w-32 text-xs">
-            <SelectValue placeholder="All Regions" />
+            <SelectValue placeholder={t('allRegions')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">All Regions</SelectItem>
+            <SelectItem value="__all__">{t('allRegions')}</SelectItem>
             {regions.map((r) => (
               <SelectItem key={r} value={r}>
                 {r}

@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { BarChart3, Loader2, Search, Unplug } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import {
   getIntegrationStatus,
   connectIntegration,
@@ -100,6 +101,7 @@ function IntegrationCard({
   authConfigEnv: string;
   children?: ReactNode;
 }) {
+  const t = useTranslations('settings');
   const [status, setStatus] = useState<IntegrationStatus | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -235,7 +237,9 @@ function IntegrationCard({
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
-                <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+                <DialogClose render={<Button variant="outline" />}>
+                  {t('integrations_cancel')}
+                </DialogClose>
                 <DialogClose
                   render={
                     <Button
@@ -258,7 +262,7 @@ function IntegrationCard({
             disabled={connecting}
           >
             {connecting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {connecting ? 'Connecting…' : 'Connect'}
+            {connecting ? t('integrations_connecting') : t('integrations_connect')}
           </Button>
         )}
       </div>
@@ -320,6 +324,7 @@ function PropertyMapping({
   loadRows: () => Promise<BrandPropertyRow[]>;
   save: (brandId: string, value: string | null) => Promise<void>;
 }) {
+  const t = useTranslations('settings');
   const [options, setOptions] = useState<PropertyOption[] | null>(null);
   const [rows, setRows] = useState<BrandPropertyRow[] | null>(null);
   const [loadFailed, setLoadFailed] = useState<string | null>(null);
@@ -401,14 +406,14 @@ function PropertyMapping({
   // mapping. Search Console values are the label (a URL), but a GA4 value is a
   // numeric id, which would otherwise show as a bare number once picked.
   const selectItems = [
-    { value: NONE_VALUE, label: 'Not mapped' },
+    { value: NONE_VALUE, label: t('integrations_notMapped') },
     ...options.map((option) => ({ value: option.value, label: option.label })),
   ];
 
   return (
     <div className="rounded-lg border p-4 space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-medium">Property mapping</p>
+        <p className="text-sm font-medium">{t('integrations_propertyMapping')}</p>
         <span className="text-xs text-muted-foreground">
           {mappedCount} of {rows.length} brand{rows.length !== 1 ? 's' : ''} mapped
         </span>
@@ -428,10 +433,10 @@ function PropertyMapping({
                 onValueChange={(v) => handlePick(row.brandId, v ?? NONE_VALUE)}
               >
                 <SelectTrigger className="h-8 w-64 text-xs">
-                  <SelectValue placeholder="Select a property" />
+                  <SelectValue placeholder={t('integrations_selectProperty')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NONE_VALUE}>Not mapped</SelectItem>
+                  <SelectItem value={NONE_VALUE}>{t('integrations_notMapped')}</SelectItem>
                   {options.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}

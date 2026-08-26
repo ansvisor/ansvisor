@@ -804,6 +804,7 @@ function triggerDownload(csv: string, filename: string) {
 
 export default function CitationsPage() {
   const t = useTranslations('citations');
+  const tCommon = useTranslations('common');
   const { getActiveBrand } = useBrandStore();
   const brand = getActiveBrand();
 
@@ -1157,7 +1158,7 @@ export default function CitationsPage() {
               <Download className="h-4 w-4" />
             )}
 
-            {isExporting ? 'Exporting...' : 'Export CSV'}
+            {isExporting ? tCommon('exporting') : tCommon('exportCsv')}
           </Button>
         </span>
       </div>

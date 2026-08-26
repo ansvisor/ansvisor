@@ -489,6 +489,7 @@ function FilterBar({
   availableModels: string[];
   availableTopics: Topic[];
 }) {
+  const t = useTranslations('common');
   const set = (patch: Partial<InsightsFilters>) => onChange({ ...filters, ...patch });
 
   return (
@@ -506,22 +507,24 @@ function FilterBar({
       {/* Topic filter */}
       {availableTopics.length > 0 && (
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Topic</label>
+          <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+            {t('topic')}
+          </label>
           <Select
             value={filters.topic || null}
             onValueChange={(v) => set({ topic: !v || v === '__all__' ? '' : v })}
           >
             <SelectTrigger className="h-8 w-40 text-xs">
-              <SelectValue placeholder="All Topics">
+              <SelectValue placeholder={t('allTopics')}>
                 {(value) =>
                   value && value !== '__all__'
-                    ? (availableTopics.find((t) => t.id === value)?.name ?? 'All Topics')
-                    : 'All Topics'
+                    ? (availableTopics.find((topic) => topic.id === value)?.name ?? t('allTopics'))
+                    : t('allTopics')
                 }
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">All Topics</SelectItem>
+              <SelectItem value="__all__">{t('allTopics')}</SelectItem>
               {availableTopics.map((t) => (
                 <SelectItem key={t.id} value={t.id}>
                   {t.name}
@@ -534,20 +537,22 @@ function FilterBar({
 
       {/* Region filter */}
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Region</label>
+        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+          {t('region')}
+        </label>
         <Select
           value={filters.region || null}
           onValueChange={(v) => set({ region: !v || v === '__all__' ? '' : v })}
         >
           <SelectTrigger className="h-8 w-48 text-xs">
-            <SelectValue placeholder="All Regions">
+            <SelectValue placeholder={t('allRegions')}>
               {(value) =>
-                value && value !== '__all__' ? formatRegionDisplay(String(value)) : 'All Regions'
+                value && value !== '__all__' ? formatRegionDisplay(String(value)) : t('allRegions')
               }
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">All Regions</SelectItem>
+            <SelectItem value="__all__">{t('allRegions')}</SelectItem>
             {availableRegions.map((r) => (
               <SelectItem key={r} value={r}>
                 {formatRegionDisplay(r)}
@@ -559,15 +564,17 @@ function FilterBar({
 
       {/* Model filter */}
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">AI Model</label>
+        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+          {t('aiModel')}
+        </label>
         <Select
           value={filters.model || null}
           onValueChange={(v) => set({ model: !v || v === '__all__' ? '' : v })}
         >
           <SelectTrigger className="h-8 w-44 text-xs">
-            <SelectValue placeholder="All Platforms">
+            <SelectValue placeholder={t('allPlatforms')}>
               {(value) => {
-                if (!value || value === '__all__') return 'All Platforms';
+                if (!value || value === '__all__') return t('allPlatforms');
                 const firstSlug = String(value).split(',')[0];
                 return (
                   MODEL_PROVIDER_LABELS[firstSlug] ??
@@ -578,7 +585,7 @@ function FilterBar({
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">All Platforms</SelectItem>
+            <SelectItem value="__all__">{t('allPlatforms')}</SelectItem>
             {availableModels.map((m) => {
               // m is a comma-separated slug list representing a provider family
               const firstSlug = m.split(',')[0];
@@ -1433,7 +1440,7 @@ export default function InsightsPage() {
             ) : (
               <Download className="h-4 w-4" />
             )}
-            {isExporting ? 'Exporting...' : 'Export CSV'}
+            {isExporting ? tCommon('exporting') : tCommon('exportCsv')}
           </Button>
 
           <Link href="/dashboard/reports" className={cn(buttonVariants(), 'gap-2')}>

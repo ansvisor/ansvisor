@@ -962,6 +962,7 @@ export default function PromptsPage() {
   const { canManage } = useUserRole();
 
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
+  const tCommon = useTranslations('common');
   const activeBrand = useBrandStore(
     (s) => s.brands.find((brand) => brand.id === s.activeBrandId) ?? null,
   );
@@ -1469,7 +1470,7 @@ export default function PromptsPage() {
                   disabled={!canExport}
                 >
                   <Download className="h-4 w-4" />
-                  Export CSV
+                  {tCommon('exportCsv')}
                 </Button>
               </span>
             )}

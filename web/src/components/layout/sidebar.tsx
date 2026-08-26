@@ -6,7 +6,11 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, Link } from '@/i18n/navigation';
 import { dashboardNav } from '@/config/dashboard';
-import { getDashboardNavLabel, shouldShowDashboardNavItem } from '@/lib/dashboard-navigation';
+import {
+  getDashboardNavLabel,
+  getDashboardNavGroupLabel,
+  shouldShowDashboardNavItem,
+} from '@/lib/dashboard-navigation';
 import { useSidebarStore } from '@/stores/use-sidebar-store';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
@@ -87,7 +91,7 @@ export function Sidebar() {
           <div key={i} className="mb-4">
             {group.title && !isCollapsed && (
               <p className="mb-1 px-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {group.title}
+                {getDashboardNavGroupLabel(group.title, t)}
               </p>
             )}
             {/* A group with no title has no header to set it apart, so it

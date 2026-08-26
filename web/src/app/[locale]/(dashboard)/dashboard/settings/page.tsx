@@ -71,11 +71,11 @@ export default function SettingsPage() {
     { id: 'project', label: t('project') },
     { id: 'team', label: t('team') },
     { id: 'notifications', label: t('notifications') },
-    { id: 'integrations', label: 'Integrations' },
-    { id: 'api-keys', label: 'API Keys' },
+    { id: 'integrations', label: t('integrations') },
+    { id: 'api-keys', label: t('apiKeys') },
     // Agent BYOK is a cloud-only concern — self-host operators configure
     // ANTHROPIC_API_KEY in their own env, no UI needed.
-    ...(isCloud ? [{ id: 'agent' as Section, label: 'Agent' }] : []),
+    ...(isCloud ? [{ id: 'agent' as Section, label: t('agent') }] : []),
     ...(isCloud ? [{ id: 'billing' as Section, label: t('billing') }] : []),
   ];
 

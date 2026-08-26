@@ -655,7 +655,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
             ) : (
               <Download className="h-4 w-4" />
             )}
-            {isExporting ? 'Exporting...' : 'Export CSV'}
+            {isExporting ? tCommon('exporting') : tCommon('exportCsv')}
           </Button>
         </div>
       </div>

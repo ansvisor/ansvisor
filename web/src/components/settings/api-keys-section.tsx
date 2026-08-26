@@ -18,6 +18,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Copy, KeyRound, Loader2, Plus, Trash2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 interface ApiKey {
   id: string;
@@ -45,6 +46,7 @@ function formatDate(iso: string | null): string {
 }
 
 export function ApiKeysSection() {
+  const t = useTranslations('settings');
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
@@ -125,22 +127,19 @@ export function ApiKeysSection() {
           <div>
             <CardTitle className="flex items-center gap-2">
               <KeyRound className="h-4 w-4" />
-              API Keys
+              {t('apiKeys_title')}
             </CardTitle>
-            <CardDescription>
-              Long-lived tokens for the Ansvisor MCP server and other external clients. Keys are
-              shown once at creation — store them somewhere safe.
-            </CardDescription>
+            <CardDescription>{t('apiKeys_description')}</CardDescription>
           </div>
           <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1.5 shrink-0">
             <Plus className="h-4 w-4" />
-            New key
+            {t('apiKeys_newKey')}
           </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="rounded-md border bg-muted/40 p-3 text-xs space-y-1.5">
-          <p className="font-medium text-foreground">MCP endpoint</p>
+          <p className="font-medium text-foreground">{t('apiKeys_mcpEndpoint')}</p>
           <div className="flex items-center gap-2">
             <code className="flex-1 truncate font-mono">{mcpEndpoint}</code>
             <Button
@@ -172,9 +171,7 @@ export function ApiKeysSection() {
             <Skeleton className="h-12 w-full" />
           </div>
         ) : keys.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">
-            No API keys yet. Create one to connect the MCP server.
-          </p>
+          <p className="text-sm text-muted-foreground py-6 text-center">{t('apiKeys_noKeys')}</p>
         ) : (
           <div className="divide-y rounded-md border">
             {keys.map((k) => {
@@ -186,7 +183,7 @@ export function ApiKeysSection() {
                       <p className="text-sm font-medium truncate">{k.name}</p>
                       {revoked && (
                         <Badge variant="outline" className="text-[10px]">
-                          revoked
+                          {t('apiKeys_revoked')}
                         </Badge>
                       )}
                     </div>
@@ -215,29 +212,27 @@ export function ApiKeysSection() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New API key</DialogTitle>
-            <DialogDescription>
-              Give this key a memorable name (e.g. &quot;MCP — my laptop&quot;).
-            </DialogDescription>
+            <DialogTitle>{t('apiKeys_newKeyTitle')}</DialogTitle>
+            <DialogDescription>{t('apiKeys_newKeyDescription')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2">
-            <Label htmlFor="apiKeyName">Name</Label>
+            <Label htmlFor="apiKeyName">{t('apiKeys_name')}</Label>
             <Input
               id="apiKeyName"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="MCP — local"
+              placeholder={t('apiKeys_namePlaceholder')}
               autoFocus
               disabled={creating}
             />
           </div>
           <DialogFooter>
             <DialogClose render={<Button variant="outline" disabled={creating} />}>
-              Cancel
+              {t('apiKeys_cancel')}
             </DialogClose>
             <Button onClick={handleCreate} disabled={creating || !newName.trim()}>
               {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create
+              {t('apiKeys_create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -246,10 +241,8 @@ export function ApiKeysSection() {
       <Dialog open={!!revealedToken} onOpenChange={(v) => !v && setRevealedToken(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Copy your API key</DialogTitle>
-            <DialogDescription>
-              You won&apos;t be able to see this again. Store it somewhere safe.
-            </DialogDescription>
+            <DialogTitle>{t('apiKeys_copyTitle')}</DialogTitle>
+            <DialogDescription>{t('apiKeys_copyDescription')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2">
             <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-2 font-mono text-xs">
@@ -264,7 +257,7 @@ export function ApiKeysSection() {
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={() => setRevealedToken(null)}>Done</Button>
+            <Button onClick={() => setRevealedToken(null)}>{t('apiKeys_done')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

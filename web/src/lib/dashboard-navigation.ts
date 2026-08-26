@@ -21,6 +21,19 @@ export const dashboardNavLabelKeys: Record<string, NavLabelKey> = {
   Reports: { namespace: 'nav', key: 'reports' },
 };
 
+/** Map from the static group title string in dashboard.ts to its nav key. */
+export const dashboardNavGroupKeys: Record<string, string> = {
+  Analytics: 'analytics',
+  Optimization: 'optimization',
+};
+
+/** Resolve a NavGroup.title to its translated label, or return the raw string
+ *  as a fallback so new groups surface immediately rather than silently. */
+export function getDashboardNavGroupLabel(title: string, t: Translator): string {
+  const key = dashboardNavGroupKeys[title];
+  return key ? t(key) : title;
+}
+
 export function getDashboardNavLabel(title: string, t: Translator, tBrands: Translator): string {
   const label = dashboardNavLabelKeys[title];
   if (!label) return title;

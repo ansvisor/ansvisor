@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
@@ -28,8 +29,8 @@ export const ALL_DATE_PRESETS: readonly DateRangePreset[] = [
   'custom',
 ];
 
-export function dateRangePresetLabel(preset: DateRangePreset): string {
-  if (preset === 'custom') return 'Custom';
+export function dateRangePresetLabel(preset: DateRangePreset, tCustom: string): string {
+  if (preset === 'custom') return tCustom;
   if (preset === 'all') return 'All';
   return preset;
 }
@@ -57,20 +58,28 @@ export function DateRangeFilter<P extends string = DateRangePreset>({
   value,
   onChange,
   presets,
-  label = 'Date Range',
+  label,
   from,
   to,
   onFromChange,
   onToChange,
   className,
 }: DateRangeFilterProps<P>) {
+  const t = useTranslations('common');
+  const resolvedLabel = label ?? t('dateRange');
   const showCustom = value === 'custom' && onFromChange && onToChange;
 
   return (
     <>
       <div className={className}>
-        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">{label}</label>
-        <div className="flex rounded-md border overflow-hidden" role="group" aria-label={label}>
+        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+          {resolvedLabel}
+        </label>
+        <div
+          className="flex rounded-md border overflow-hidden"
+          role="group"
+          aria-label={resolvedLabel}
+        >
           {presets.map((preset) => (
             <button
               key={preset}
@@ -84,7 +93,7 @@ export function DateRangeFilter<P extends string = DateRangePreset>({
                   : 'bg-card hover:bg-muted text-foreground',
               )}
             >
-              {dateRangePresetLabel(preset as DateRangePreset)}
+              {dateRangePresetLabel(preset as DateRangePreset, t('custom'))}
             </button>
           ))}
         </div>
@@ -93,7 +102,9 @@ export function DateRangeFilter<P extends string = DateRangePreset>({
       {showCustom && (
         <>
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">From</label>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              {t('from')}
+            </label>
             <Input
               type="date"
               value={from ?? ''}
@@ -102,7 +113,9 @@ export function DateRangeFilter<P extends string = DateRangePreset>({
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">To</label>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              {t('to')}
+            </label>
             <Input
               type="date"
               value={to ?? ''}
