@@ -393,7 +393,7 @@ export default function TopicsPage() {
               disabled={!canExport}
             >
               <Download className="h-4 w-4" />
-              {t('exportCsv')}
+              {common('exportCsv')}
             </Button>
           </span>
           <Link

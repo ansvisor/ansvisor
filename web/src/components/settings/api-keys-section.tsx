@@ -47,6 +47,7 @@ function formatDate(iso: string | null): string {
 
 export function ApiKeysSection() {
   const t = useTranslations('settings');
+  const tCommon = useTranslations('common');
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
@@ -152,16 +153,18 @@ export function ApiKeysSection() {
             </Button>
           </div>
           <p className="text-muted-foreground">
-            Paste this URL + a key below into Claude Desktop / Claude Code / Cursor. See the{' '}
-            <a
-              href="https://github.com/ansvisor/ansvisor#whats-next"
-              target="_blank"
-              rel="noreferrer"
-              className="underline"
-            >
-              MCP guide
-            </a>
-            .
+            {t.rich('apiKeys_mcpEndpointHint', {
+              link: (chunks) => (
+                <a
+                  href="https://github.com/ansvisor/ansvisor#whats-next"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline"
+                >
+                  {chunks}
+                </a>
+              ),
+            })}
           </p>
         </div>
 
@@ -189,7 +192,10 @@ export function ApiKeysSection() {
                     </div>
                     <p className="text-xs text-muted-foreground font-mono">{k.prefix}…</p>
                     <p className="text-[11px] text-muted-foreground">
-                      Created {formatDate(k.created_at)} · Last used {formatDate(k.last_used_at)}
+                      {t('apiKeys_created', {
+                        date: formatDate(k.created_at),
+                        lastUsed: formatDate(k.last_used_at),
+                      })}
                     </p>
                   </div>
                   {!revoked && (
@@ -228,7 +234,7 @@ export function ApiKeysSection() {
           </div>
           <DialogFooter>
             <DialogClose render={<Button variant="outline" disabled={creating} />}>
-              {t('apiKeys_cancel')}
+              {tCommon('cancel')}
             </DialogClose>
             <Button onClick={handleCreate} disabled={creating || !newName.trim()}>
               {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

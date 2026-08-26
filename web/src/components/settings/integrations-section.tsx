@@ -49,13 +49,12 @@ import { matchProperty } from '@/lib/property-match';
  * provider only supplies its labels and any post-connection UI of its own.
  */
 export function IntegrationsSection() {
+  const t = useTranslations('settings');
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Integrations</CardTitle>
-        <CardDescription>
-          Connect external data sources. Connections are shared with your whole organization.
-        </CardDescription>
+        <CardTitle>{t('integrations')}</CardTitle>
+        <CardDescription>{t('integrations_description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <IntegrationCard
@@ -206,7 +205,7 @@ function IntegrationCard({
                   variant="outline"
                   className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                 >
-                  Connected
+                  {t('integrations_connected')}
                 </Badge>
               )}
             </div>
@@ -218,7 +217,7 @@ function IntegrationCard({
           <Skeleton className="h-8 w-24" />
         ) : status === 'not_configured' ? (
           <Badge variant="outline" className="text-muted-foreground shrink-0">
-            Not configured
+            {t('integrations_notConfigured')}
           </Badge>
         ) : status === 'connected' ? (
           <Dialog>
@@ -226,15 +225,14 @@ function IntegrationCard({
               render={<Button variant="outline" size="sm" className="gap-2 shrink-0" />}
             >
               <Unplug className="h-3.5 w-3.5" />
-              Disconnect
+              {t('integrations_disconnect')}
             </DialogTrigger>
             <DialogContent className="sm:max-w-sm">
               <DialogHeader>
-                <DialogTitle>Disconnect {label}</DialogTitle>
-                <DialogDescription>
-                  The stored connection is removed for the whole organization. You can reconnect at
-                  any time.
-                </DialogDescription>
+                <DialogTitle>
+                  {t('integrations_disconnect')} {label}
+                </DialogTitle>
+                <DialogDescription>{t('integrations_disconnectDescription')}</DialogDescription>
               </DialogHeader>
               <DialogFooter>
                 <DialogClose render={<Button variant="outline" />}>
@@ -249,7 +247,7 @@ function IntegrationCard({
                     />
                   }
                 >
-                  Disconnect
+                  {t('integrations_disconnect')}
                 </DialogClose>
               </DialogFooter>
             </DialogContent>

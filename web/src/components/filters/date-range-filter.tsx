@@ -29,9 +29,9 @@ export const ALL_DATE_PRESETS: readonly DateRangePreset[] = [
   'custom',
 ];
 
-export function dateRangePresetLabel(preset: DateRangePreset, tCustom: string): string {
-  if (preset === 'custom') return tCustom;
-  if (preset === 'all') return 'All';
+export function dateRangePresetLabel(preset: DateRangePreset, t: (key: string) => string): string {
+  if (preset === 'custom') return t('custom');
+  if (preset === 'all') return t('all');
   return preset;
 }
 
@@ -93,7 +93,7 @@ export function DateRangeFilter<P extends string = DateRangePreset>({
                   : 'bg-card hover:bg-muted text-foreground',
               )}
             >
-              {dateRangePresetLabel(preset as DateRangePreset, t('custom'))}
+              {dateRangePresetLabel(preset as DateRangePreset, t)}
             </button>
           ))}
         </div>

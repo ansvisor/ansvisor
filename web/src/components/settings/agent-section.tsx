@@ -41,6 +41,7 @@ function formatDate(iso: string | null): string {
  */
 export function AgentSection() {
   const t = useTranslations('settings');
+  const tCommon = useTranslations('common');
   const [state, setState] = useState<KeyState | null>(null);
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState('');
@@ -123,7 +124,7 @@ export function AgentSection() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Sparkles className="h-4 w-4" />
-          {t('agent_title')}
+          {t('agent')}
         </CardTitle>
         <CardDescription>{t('agent_description')}</CardDescription>
       </CardHeader>
@@ -142,8 +143,8 @@ export function AgentSection() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Saved {formatDate(state.setAt)}
-              {state.setByEmail && ` by ${state.setByEmail}`}.
+              {t('agent_savedAt', { date: formatDate(state.setAt) })}
+              {state.setByEmail && ` ${t('agent_savedBy', { email: state.setByEmail })}`}.
             </p>
           </div>
         ) : (
@@ -170,20 +171,22 @@ export function AgentSection() {
                 />
                 <Button onClick={handleSave} disabled={saving || !input.trim()}>
                   {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {isReplacing ? t('agent_replace') : t('agent_save')}
+                  {isReplacing ? t('agent_replace') : tCommon('save')}
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Get a key from{' '}
-                <a
-                  href="https://console.anthropic.com/settings/keys"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline"
-                >
-                  console.anthropic.com
-                </a>
-                . The key is encrypted at rest; Ansvisor support cannot read it.
+                {t.rich('agent_keyHint', {
+                  link: (chunks) => (
+                    <a
+                      href="https://console.anthropic.com/settings/keys"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline"
+                    >
+                      {chunks}
+                    </a>
+                  ),
+                })}
               </p>
             </div>
 

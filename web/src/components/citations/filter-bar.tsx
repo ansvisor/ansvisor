@@ -288,9 +288,9 @@ export function CitationsFilterBar({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">{t('allTopics')}</SelectItem>
-              {topics.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.name}
+              {topics.map((topic) => (
+                <SelectItem key={topic.id} value={topic.id}>
+                  {topic.name}
                 </SelectItem>
               ))}
             </SelectContent>

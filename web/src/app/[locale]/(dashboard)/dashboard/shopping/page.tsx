@@ -105,6 +105,7 @@ function getDomainName(url: string): string {
 }
 export default function ShoppingPage() {
   const t = useTranslations('shopping');
+  const tCommon = useTranslations('common');
   const { activeBrandId } = useBrandStore();
   const { canUse, requiredPlanFor } = useFeatureGate();
   const hasFullAccess = canUse('shopping_analytics');
@@ -331,7 +332,7 @@ export default function ShoppingPage() {
                       }}
                     >
                       <Download className="mr-2 h-4 w-4" />
-                      {t('exportCsv')}
+                      {tCommon('exportCsv')}
                     </Button>
                   </div>
                   <ProductTable
@@ -398,7 +399,7 @@ export default function ShoppingPage() {
                       }}
                     >
                       <Download className="mr-2 h-4 w-4" />
-                      {t('exportCsv')}
+                      {tCommon('exportCsv')}
                     </Button>
                   </div>
                   <ProductTable
@@ -441,6 +442,7 @@ function PromptsTabContent({
   promptsData: CardEligiblePromptsResponse | null;
   loading: boolean;
 }) {
+  const tCommon = useTranslations('common');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPrompt, setSelectedPrompt] = useState<CardEligiblePromptRow | null>(null);
 
@@ -527,7 +529,7 @@ function PromptsTabContent({
           className="gap-1.5"
         >
           <Download className="h-3.5 w-3.5" />
-          {t('exportCsv')}
+          {tCommon('exportCsv')}
         </Button>
       </div>
 
