@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -1247,6 +1247,47 @@ export type Database = {
           },
         ]
       }
+      kpi_definitions: {
+        Row: {
+          brand_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          kpi_key: string
+          target: number
+          timeframe: string
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kpi_key: string
+          target: number
+          timeframe?: string
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kpi_key?: string
+          target?: number
+          timeframe?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kpi_definitions_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           anthropic_api_key_encrypted: string | null
@@ -2418,10 +2459,7 @@ export type Database = {
         }
         Returns: Json
       }
-      apply_prompt_locations: {
-        Args: { p_updates: Json }
-        Returns: number
-      }
+      apply_prompt_locations: { Args: { p_updates: Json }; Returns: number }
       citation_competitor_sources: {
         Args: {
           p_brand_domains: string[]
@@ -2597,6 +2635,23 @@ export type Database = {
           sent_count: number
         }[]
       }
+      ga_page_ai_visibility: {
+        Args: { p_brand_id: string; p_since: string }
+        Returns: {
+          ai_platforms: string[]
+          ai_sessions: number
+          citations: number
+          citing_prompts: number
+          engaged_sessions: number
+          engagement_seconds: number
+          key_events: number
+          landing_page: string
+          revenue: number
+          sessions: number
+          targeting_prompts: number
+          transactions: number
+        }[]
+      }
       get_latest_prompt_results:
         | {
             Args: { p_brand_id: string; p_platform?: string }
@@ -2665,23 +2720,6 @@ export type Database = {
               isSetofReturn: true
             }
           }
-      ga_page_ai_visibility: {
-        Args: { p_brand_id: string; p_since: string }
-        Returns: {
-          ai_platforms: string[]
-          ai_sessions: number
-          citations: number
-          citing_prompts: number
-          engaged_sessions: number
-          engagement_seconds: number
-          key_events: number
-          landing_page: string
-          revenue: number
-          sessions: number
-          targeting_prompts: number
-          transactions: number
-        }[]
-      }
       gsc_candidate_queries: {
         Args: { p_brand_id: string; p_min_impressions: number; p_since: string }
         Returns: {
@@ -2722,10 +2760,7 @@ export type Database = {
           regions: string[]
         }[]
       }
-      normalize_page_path: {
-        Args: { p_url: string }
-        Returns: string
-      }
+      normalize_page_path: { Args: { p_url: string }; Returns: string }
       org_prompt_location_usage: {
         Args: { p_organization_id: string }
         Returns: {
@@ -2922,10 +2957,7 @@ export type Database = {
         }
         Returns: number
       }
-      url_decode_safe: {
-        Args: { p_value: string }
-        Returns: string
-      }
+      url_decode_safe: { Args: { p_value: string }; Returns: string }
       visibility_rate_trend: {
         Args: {
           p_brand_id: string

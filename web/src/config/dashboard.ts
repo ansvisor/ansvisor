@@ -10,6 +10,7 @@ import {
   ShoppingBag,
   Sparkles,
   Tag,
+  Target,
 } from 'lucide-react';
 import type { Feature } from '@/config/plans';
 
@@ -51,6 +52,11 @@ export const dashboardNav: NavGroup[] = [
         href: '/dashboard/agent',
         icon: Sparkles,
         requiredFeature: 'ai_agent',
+      },
+      {
+        title: 'Action Center',
+        href: '/dashboard/action-center',
+        icon: Target,
       },
     ],
   },

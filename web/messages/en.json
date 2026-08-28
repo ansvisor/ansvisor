@@ -47,6 +47,7 @@
   "nav": {
     "overview": "Overview",
     "agent": "Agent",
+    "actionCenter": "Action Center",
     "insights": "Visibility",
     "traffic": "AI Traffic Analytics",
     "prompts": "Prompts",
@@ -60,6 +61,98 @@
     "settings": "Settings",
     "analytics": "Analytics",
     "optimization": "Optimization"
+  },
+  "actionCenter": {
+    "tabs": {
+      "label": "Action Center sections",
+      "kpis": "KPIs",
+      "actions": "Actions",
+      "signals": "Signals",
+      "history": "History"
+    },
+    "pages": {
+      "actions": "What should you do now, ranked by your KPI goals.",
+      "signals": "What changed across your AI visibility data.",
+      "history": "What was done, and what it moved."
+    },
+    "comingSoon": {
+      "title": "Coming soon",
+      "description": "This part of the Action Center is on its way. KPIs are live — start by setting your goals there."
+    },
+    "categories": {
+      "visibility": "Visibility",
+      "citations": "Citations",
+      "mentions": "Mentions",
+      "traffic": "Traffic",
+      "content": "Content"
+    },
+    "kpis": {
+      "title": "KPIs",
+      "subtitle": "Track the metrics that matter, aligned with your goals.",
+      "allKpis": "All KPIs",
+      "table": {
+        "kpi": "KPI",
+        "value": "Value",
+        "change": "Change",
+        "trend": "Trend (7D)",
+        "status": "Status",
+        "goal": "Goal",
+        "vsGoal": "vs Goal",
+        "actions": "Actions"
+      },
+      "status": {
+        "on_track": "On Track",
+        "at_risk": "At Risk",
+        "off_track": "Off Track",
+        "goal_reached": "Goal Reached"
+      },
+      "pointsChange": "{value} pts",
+      "vsGoalAria": "{progress}% of goal",
+      "menu": {
+        "label": "Actions for {name}",
+        "remove": "Remove KPI"
+      },
+      "empty": {
+        "title": "No KPIs configured yet",
+        "description": "Choose a KPI framework to define what Ansvisor should prioritize for this brand.",
+        "cta": "Apply the default KPI set"
+      },
+      "allInactive": "No active KPIs for this brand.",
+      "noResults": "No KPIs match this filter.",
+      "clearFilter": "Clear filter",
+      "applyFailed": "Couldn't apply the KPI set. Only admins and managers can change KPIs.",
+      "removeFailed": "Couldn't remove the KPI. Only admins and managers can change KPIs.",
+      "error": {
+        "title": "We couldn't load your KPIs.",
+        "retry": "Try again"
+      },
+      "noBrand": {
+        "title": "No brand selected",
+        "description": "Select a brand to view its KPIs."
+      }
+    },
+    "registry": {
+      "ai_visibility": {
+        "name": "AI Visibility",
+        "description": "Share of tracked prompts where your brand appears"
+      },
+      "citations": {
+        "name": "Citations",
+        "description": "Total citations across all AI responses"
+      },
+      "mentions": {
+        "name": "Mentions",
+        "description": "Brand mentions in AI responses"
+      },
+      "share_of_voice": {
+        "name": "Share of Voice",
+        "description": "Your share of brand mentions vs competitors"
+      },
+      "ai_referral_traffic": {
+        "name": "AI Referral Traffic",
+        "description": "Visits arriving from AI platforms"
+      }
+    }
   },
   "agent": {
     "newChat": "New chat",

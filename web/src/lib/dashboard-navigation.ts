@@ -10,6 +10,7 @@ type NavLabelKey = { namespace: 'nav'; key: string } | { namespace: 'brands'; ke
 export const dashboardNavLabelKeys: Record<string, NavLabelKey> = {
   Brands: { namespace: 'brands', key: 'title' },
   Agent: { namespace: 'nav', key: 'agent' },
+  'Action Center': { namespace: 'nav', key: 'actionCenter' },
   'Answer Engine Insights': { namespace: 'nav', key: 'insights' },
   'AI Traffic Analytics': { namespace: 'nav', key: 'traffic' },
   Prompts: { namespace: 'nav', key: 'prompts' },
