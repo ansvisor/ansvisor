@@ -50,7 +50,7 @@ import {
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Brand, Prompt, PromptSet, Topic } from '@/types';
-import { API_BASE_URL } from '@/config/api';
+import { BROWSER_API_BASE_URL } from '@/config/api';
 
 interface UnanalyzedPrompt {
   id: string;
@@ -58,7 +58,7 @@ interface UnanalyzedPrompt {
   category: string;
 }
 
-const AEO_SERVER_URL = API_BASE_URL;
+const AEO_SERVER_URL = BROWSER_API_BASE_URL;
 
 interface SuggestedPrompt {
   text: string;
