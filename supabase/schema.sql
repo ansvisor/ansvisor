@@ -9087,7 +9087,9 @@ comment on function public.citations_urls(
 ) is
   'Top cited URLs for one brand, capped at p_limit by citation count (#732). p_domains / p_exclude_domains apply the source scope before the cap so it never reports a slice of the global top N as the whole scope (#745); the caller resolves the scope to domains, and total_urls counts the scoped set. Security definer with an explicit org-membership guard (#780).';
 
-
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00077_citations_rpcs_custom_plan.sql
+-- ─────────────────────────────────────────────────────────────────────────
 -- Plan the heavy citation reads with their arguments known.
 --
 -- A `language sql` function's body is planned with the arguments as
@@ -9552,3 +9554,4 @@ comment on function public.citation_competitor_sources(
   uuid, text[], text[], timestamptz, timestamptz, text[], text[], uuid[], uuid[]
 ) is
   'Per-competitor source domains for the Competitor Gaps tab (#777), keyed by the competitor id recorded in the mention. plpgsql + force_custom_plan so the arguments reach the planner.';
+
