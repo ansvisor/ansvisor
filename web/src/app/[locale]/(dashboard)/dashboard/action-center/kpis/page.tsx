@@ -3,17 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { AlertCircle, Loader2, Plus, Target } from 'lucide-react';
+import { AlertCircle, Plus, Settings2, Target } from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
-import {
-  applyDefaultKpis,
-  getKpiSnapshots,
-  removeKpi,
-  type KpiSnapshotsResult,
-} from '@/lib/actions/kpis';
+import { getKpiSnapshots, removeKpi, type KpiSnapshotsResult } from '@/lib/actions/kpis';
 import type { KpiCategory, KpiKey } from '@/lib/kpis/registry';
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
+import { KpiFrameworkDrawer } from '@/components/action-center/kpi-framework-drawer';
 import { KpiTable } from '@/components/action-center/kpi-table';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -51,7 +47,7 @@ function KpisContent({ brand }: { brand: Brand }) {
   const [loadFailed, setLoadFailed] = useState(false);
   const [category, setCategory] = useState<KpiCategory | 'all'>('all');
   const [busyKey, setBusyKey] = useState<KpiKey | null>(null);
-  const [isApplying, setIsApplying] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -76,18 +72,6 @@ function KpisContent({ brand }: { brand: Brand }) {
     return [...counts.entries()];
   }, [kpis]);
   const visible = category === 'all' ? kpis : kpis.filter((k) => k.category === category);
-
-  const handleApplyDefaults = async () => {
-    setIsApplying(true);
-    try {
-      await applyDefaultKpis(brand.id);
-      await load();
-    } catch {
-      toast.error(t('applyFailed'));
-    } finally {
-      setIsApplying(false);
-    }
-  };
 
   const handleRemove = async (key: KpiKey) => {
     setBusyKey(key);
@@ -130,42 +114,74 @@ function KpisContent({ brand }: { brand: Brand }) {
     );
   }
 
+  const drawer = (
+    <KpiFrameworkDrawer
+      brandId={brand.id}
+      open={isDrawerOpen}
+      onOpenChange={setIsDrawerOpen}
+      onSaved={() => void load()}
+    />
+  );
+
   if (!result?.configured) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
-        <Target className="h-8 w-8 text-muted-foreground" />
-        <h2 className="mt-4 font-semibold">{t('empty.title')}</h2>
-        <p className="mt-1 max-w-md text-sm text-muted-foreground">{t('empty.description')}</p>
-        <Button className="mt-4" onClick={() => void handleApplyDefaults()} disabled={isApplying}>
-          {isApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          {t('empty.cta')}
-        </Button>
-      </div>
+      <>
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
+          <Target className="h-8 w-8 text-muted-foreground" />
+          <h2 className="mt-4 font-semibold">{t('empty.title')}</h2>
+          <p className="mt-1 max-w-md text-sm text-muted-foreground">{t('empty.description')}</p>
+          <Button className="mt-4" onClick={() => setIsDrawerOpen(true)}>
+            <Plus className="h-4 w-4" />
+            {t('empty.cta')}
+          </Button>
+        </div>
+        {drawer}
+      </>
     );
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <CategoryPill
-          label={t('allKpis')}
-          count={kpis.length}
-          isActive={category === 'all'}
-          onClick={() => setCategory('all')}
-        />
-        {categories.map(([key, count]) => (
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <CategoryPill
-            key={key}
-            label={tCategories(key)}
-            count={count}
-            isActive={category === key}
-            onClick={() => setCategory(key)}
+            label={t('allKpis')}
+            count={kpis.length}
+            isActive={category === 'all'}
+            onClick={() => setCategory('all')}
           />
-        ))}
+          {categories.map(([key, count]) => (
+            <CategoryPill
+              key={key}
+              label={tCategories(key)}
+              count={count}
+              isActive={category === key}
+              onClick={() => setCategory(key)}
+            />
+          ))}
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setIsDrawerOpen(true)}>
+          <Settings2 className="h-4 w-4" />
+          {t('editKpis')}
+        </Button>
       </div>
 
+      <button
+        type="button"
+        onClick={() => setIsDrawerOpen(true)}
+        className="flex h-24 w-36 flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/40 hover:text-foreground"
+      >
+        <Plus className="h-5 w-5" />
+        <span className="text-sm font-medium">{t('addKpi')}</span>
+      </button>
+
       {visible.length > 0 ? (
-        <KpiTable kpis={visible} onRemove={(key) => void handleRemove(key)} busyKey={busyKey} />
+        <KpiTable
+          kpis={visible}
+          onEdit={() => setIsDrawerOpen(true)}
+          onRemove={(key) => void handleRemove(key)}
+          busyKey={busyKey}
+        />
       ) : kpis.length > 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
           <p className="text-sm text-muted-foreground">{t('noResults')}</p>
@@ -175,11 +191,16 @@ function KpisContent({ brand }: { brand: Brand }) {
         </div>
       ) : (
         // Configured but nothing active/computable — distinct from the
-        // never-configured empty state, which offers the default set.
+        // never-configured empty state.
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
           <p className="text-sm text-muted-foreground">{t('allInactive')}</p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => setIsDrawerOpen(true)}>
+            {t('editKpis')}
+          </Button>
         </div>
       )}
+
+      {drawer}
     </div>
   );
 }

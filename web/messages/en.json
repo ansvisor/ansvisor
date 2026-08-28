@@ -108,19 +108,21 @@
       },
       "pointsChange": "{value} pts",
       "vsGoalAria": "{progress}% of goal",
+      "editKpis": "Edit KPIs",
+      "addKpi": "Add KPI",
       "menu": {
         "label": "Actions for {name}",
+        "edit": "Edit KPI",
         "remove": "Remove KPI"
       },
       "empty": {
         "title": "No KPIs configured yet",
         "description": "Choose a KPI framework to define what Ansvisor should prioritize for this brand.",
-        "cta": "Apply the default KPI set"
+        "cta": "Configure KPIs"
       },
       "allInactive": "No active KPIs for this brand.",
       "noResults": "No KPIs match this filter.",
       "clearFilter": "Clear filter",
-      "applyFailed": "Couldn't apply the KPI set. Only admins and managers can change KPIs.",
       "removeFailed": "Couldn't remove the KPI. Only admins and managers can change KPIs.",
       "error": {
         "title": "We couldn't load your KPIs.",
@@ -130,6 +132,58 @@
         "title": "No brand selected",
         "description": "Select a brand to view its KPIs."
       }
+    },
+    "drawer": {
+      "title": "Configure KPI Framework",
+      "description": "Customize the KPIs Ansvisor tracks for this brand.",
+      "steps": {
+        "template": {
+          "title": "1 · Choose KPI template",
+          "description": "Start with a template or build your own."
+        },
+        "goals": {
+          "title": "2 · Set goals & targets",
+          "description": "Define your targets and time period."
+        }
+      },
+      "templates": {
+        "ai_search_visibility": {
+          "name": "AI Search Visibility",
+          "description": "Core KPIs for AI visibility and citations."
+        },
+        "content_performance": {
+          "name": "Content Performance",
+          "description": "KPIs for content quality and impact."
+        },
+        "brand_monitoring": {
+          "name": "Brand Monitoring",
+          "description": "KPIs for mentions, sentiment and reputation."
+        },
+        "custom": {
+          "name": "Custom Framework",
+          "description": "Build your own KPI set from scratch."
+        },
+        "notAvailable": "Coming soon — its KPIs aren't measurable yet."
+      },
+      "timePeriod": "Time period",
+      "timeframes": {
+        "weekly": "Weekly",
+        "monthly": "Monthly",
+        "quarterly": "Quarterly"
+      },
+      "targets": "Targets",
+      "targetAria": "Target for {name}",
+      "invalidTarget": "Targets must be positive; percent targets can't exceed 100.",
+      "showAll": "Show all KPIs ({count} more)",
+      "callout": {
+        "title": "This KPI framework will drive your Action Center.",
+        "description": "Actions and recommendations are prioritized based on your KPI goals."
+      },
+      "cancel": "Cancel",
+      "save": "Save & Apply",
+      "saved": "KPI framework applied.",
+      "saveFailed": "Couldn't save the framework. Only admins and managers can change KPIs.",
+      "loadFailed": "Couldn't load your current KPIs."
     },
     "registry": {
       "ai_visibility": {

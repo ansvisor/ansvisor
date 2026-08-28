@@ -21,6 +21,7 @@ import {
   KPI_REGISTRY,
   TIMEFRAME_DAYS,
   isKpiKey,
+  isValidKpiTarget,
   type KpiCategory,
   type KpiDirection,
   type KpiKey,
@@ -300,25 +301,80 @@ export async function getKpiSnapshots(brandId: string): Promise<KpiSnapshotsResu
   return { configured: true, kpis: snapshots };
 }
 
-/**
- * One-click way in from the empty state: activate the core AI-search KPI set
- * with registry default targets. The framework drawer (follow-up issue)
- * generalizes this into picking templates and editing targets; existing
- * definitions are left untouched so re-applying can never overwrite a target
- * someone set deliberately. RLS restricts the write to admins and managers.
- */
-export async function applyDefaultKpis(brandId: string): Promise<void> {
+export interface KpiDefinition {
+  kpiKey: KpiKey;
+  target: number;
+  timeframe: KpiTimeframe;
+  isActive: boolean;
+}
+
+/** Raw definitions for the framework drawer's prefill — registry-known keys
+ *  only, same skip rule as the snapshot read. */
+export async function getKpiDefinitions(brandId: string): Promise<KpiDefinition[]> {
   const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('kpi_definitions')
+    .select('kpi_key, target, timeframe, is_active')
+    .eq('brand_id', brandId);
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as KpiDefinitionRow[])
+    .filter((r) => isKpiKey(r.kpi_key))
+    .map((r) => ({
+      kpiKey: r.kpi_key as KpiKey,
+      target: Number(r.target),
+      timeframe: r.timeframe,
+      isActive: r.is_active,
+    }));
+}
+
+export interface KpiFrameworkEntry {
+  key: KpiKey;
+  target: number;
+}
+
+/**
+ * Save & Apply from the framework drawer: the entries ARE the framework.
+ * Listed KPIs are upserted active with their targets; every other definition
+ * the brand has is deactivated, not deleted, so its target survives being
+ * re-enabled later. One timeframe for the whole framework, per the drawer's
+ * single Time Period control. RLS restricts the write to admins and managers.
+ */
+export async function saveKpiFramework(
+  brandId: string,
+  timeframe: KpiTimeframe,
+  entries: KpiFrameworkEntry[],
+): Promise<void> {
+  if (entries.length === 0) throw new Error('empty framework');
+  if (!(timeframe in TIMEFRAME_DAYS)) throw new Error('unknown timeframe');
+  for (const entry of entries) {
+    if (!isKpiKey(entry.key) || !isValidKpiTarget(entry.key, entry.target)) {
+      throw new Error(`invalid target for ${entry.key}`);
+    }
+  }
+
+  const supabase = await createClient();
+  const now = new Date().toISOString();
   const { error } = await supabase.from('kpi_definitions').upsert(
-    DEFAULT_KPI_SET.map((key) => ({
+    entries.map((entry) => ({
       brand_id: brandId,
-      kpi_key: key,
-      target: KPI_REGISTRY[key].defaultTarget,
-      timeframe: 'monthly',
+      kpi_key: entry.key,
+      target: entry.target,
+      timeframe,
+      is_active: true,
+      updated_at: now,
     })),
-    { onConflict: 'brand_id,kpi_key', ignoreDuplicates: true },
+    { onConflict: 'brand_id,kpi_key' },
   );
   if (error) throw new Error(error.message);
+
+  // Safe as a not-in filter: kpi_key values come from the registry, which
+  // has no commas or quotes to break PostgREST's list syntax.
+  const { error: deactivateErr } = await supabase
+    .from('kpi_definitions')
+    .update({ is_active: false, updated_at: now })
+    .eq('brand_id', brandId)
+    .not('kpi_key', 'in', `(${entries.map((e) => e.key).join(',')})`);
+  if (deactivateErr) throw new Error(deactivateErr.message);
 }
 
 /**

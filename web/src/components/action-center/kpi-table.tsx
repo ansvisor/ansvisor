@@ -7,6 +7,7 @@ import {
   MessageSquare,
   MoreHorizontal,
   MousePointerClick,
+  Pencil,
   PieChart,
   Quote,
   TrendingDown,
@@ -127,10 +128,12 @@ function GoalProgress({ snapshot }: { snapshot: KpiSnapshot }) {
 
 export function KpiTable({
   kpis,
+  onEdit,
   onRemove,
   busyKey,
 }: {
   kpis: KpiSnapshot[];
+  onEdit: () => void;
   onRemove: (key: KpiKey) => void;
   busyKey: KpiKey | null;
 }) {
@@ -204,6 +207,10 @@ export function KpiTable({
                       <MoreHorizontal className="h-4 w-4" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={onEdit}>
+                        <Pencil className="h-4 w-4" />
+                        {t('menu.edit')}
+                      </DropdownMenuItem>
                       <DropdownMenuItem variant="destructive" onClick={() => onRemove(kpi.key)}>
                         <Trash2 className="h-4 w-4" />
                         {t('menu.remove')}

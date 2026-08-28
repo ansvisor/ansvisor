@@ -96,9 +96,8 @@ export function isKpiKey(value: string): value is KpiKey {
 }
 
 /**
- * The default framework applied from the empty state: the core AI-search
- * set. The framework drawer (follow-up issue) generalizes this into
- * user-picked templates; until then this is the one-click way in.
+ * The default framework: the core AI-search set. Doubles as the canonical
+ * display order for KPI rows.
  */
 export const DEFAULT_KPI_SET: KpiKey[] = [
   'ai_visibility',
@@ -107,6 +106,32 @@ export const DEFAULT_KPI_SET: KpiKey[] = [
   'share_of_voice',
   'ai_referral_traffic',
 ];
+
+export type KpiTemplateKey =
+  | 'ai_search_visibility'
+  | 'content_performance'
+  | 'brand_monitoring'
+  | 'custom';
+
+/**
+ * Templates are presets over the registry, nothing more — picking one checks
+ * a set of KPIs and seeds their default targets. A template with no
+ * computable KPIs yet (content, brand monitoring) renders disabled in the
+ * drawer rather than being hidden: the roadmap is allowed to show.
+ */
+export const KPI_TEMPLATES: Record<KpiTemplateKey, KpiKey[]> = {
+  ai_search_visibility: DEFAULT_KPI_SET,
+  content_performance: [],
+  brand_monitoring: [],
+  custom: [],
+};
+
+/** A target must be positive, and a percent target cannot exceed 100. Used
+ *  by both the drawer (to gate Save) and the server action (to reject). */
+export function isValidKpiTarget(key: KpiKey, target: number): boolean {
+  if (!Number.isFinite(target) || target <= 0) return false;
+  return KPI_REGISTRY[key].unit !== 'percent' || target <= 100;
+}
 
 /** Days in a timeframe's comparison window. */
 export const TIMEFRAME_DAYS: Record<KpiTimeframe, number> = {
