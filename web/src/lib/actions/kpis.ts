@@ -28,7 +28,12 @@ import {
   type KpiTimeframe,
   type KpiUnit,
 } from '@/lib/kpis/registry';
-import { deriveKpiStatus, kpiProgress, type KpiStatus } from '@/lib/kpis/status';
+import {
+  deriveKpiStatus,
+  kpiProgress,
+  scaleTargetToWindow,
+  type KpiStatus,
+} from '@/lib/kpis/status';
 import {
   getInsightsSummary,
   getShareOfVoiceData,
@@ -174,6 +179,7 @@ type WindowMetrics = Awaited<ReturnType<typeof fetchWindowMetrics>>;
 function buildSnapshot(
   def: { kpiKey: KpiKey; target: number; timeframe: KpiTimeframe },
   metrics: WindowMetrics,
+  windowDays?: number,
 ): KpiSnapshot | null {
   const meta = KPI_REGISTRY[def.kpiKey];
 
@@ -235,7 +241,13 @@ function buildSnapshot(
     }
   }
 
-  const progress = kpiProgress(value, def.target, meta.direction);
+  // With an explicit window, the goal is held against that window's slice
+  // (flow metrics scale, percent levels don't) — otherwise a monthly target
+  // next to a 7-day value would report false alarm on every row.
+  const target = windowDays
+    ? scaleTargetToWindow(def.target, meta.unit, windowDays, TIMEFRAME_DAYS[def.timeframe])
+    : def.target;
+  const progress = kpiProgress(value, target, meta.direction);
   return {
     key: def.kpiKey,
     category: meta.category,
@@ -246,7 +258,7 @@ function buildSnapshot(
     change,
     changeKind,
     trend,
-    target: def.target,
+    target,
     progress,
     status: deriveKpiStatus({ progress, change, direction: meta.direction }),
   };
@@ -299,6 +311,10 @@ export async function getKpiSnapshots(
     byTimeframe.set(def.timeframe, group);
   }
 
+  const windowDays = window
+    ? Math.round((Date.parse(window.dayTo) - Date.parse(window.dayFrom)) / DAY_MS) + 1
+    : undefined;
+
   const snapshots: KpiSnapshot[] = [];
   await Promise.all(
     [...byTimeframe.entries()].map(async ([timeframe, defs]) => {
@@ -309,7 +325,7 @@ export async function getKpiSnapshots(
         window,
       );
       for (const def of defs) {
-        const snapshot = buildSnapshot(def, metrics);
+        const snapshot = buildSnapshot(def, metrics, windowDays);
         if (snapshot) snapshots.push(snapshot);
       }
     }),

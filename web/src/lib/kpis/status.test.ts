@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { deriveKpiStatus, isImprovement, kpiProgress } from './status';
+import { deriveKpiStatus, isImprovement, kpiProgress, scaleTargetToWindow } from './status';
 
 test('progress is a plain ratio for higher_is_better', () => {
   expect(kpiProgress(42.6, 50, 'higher_is_better')).toBe(85);
@@ -55,4 +55,17 @@ test('improvement respects direction', () => {
   expect(isImprovement(5, 'higher_is_better')).toBe(true);
   expect(isImprovement(-5, 'higher_is_better')).toBe(false);
   expect(isImprovement(-5, 'lower_is_better')).toBe(true);
+});
+
+test('flow targets scale to the viewed window, percent levels never do', () => {
+  // Monthly 100 citations viewed over a week: the week's slice.
+  expect(scaleTargetToWindow(100, 'count', 7, 30)).toBe(23);
+  // Longer window than the timeframe scales up.
+  expect(scaleTargetToWindow(100, 'count', 90, 30)).toBe(300);
+  // A rate goal is a level: 50% is 50% over any window.
+  expect(scaleTargetToWindow(50, 'percent', 7, 30)).toBe(50);
+  // Window equal to the timeframe is a no-op.
+  expect(scaleTargetToWindow(100, 'sessions', 30, 30)).toBe(100);
+  // A tiny slice never rounds to zero — progress against 0 is undefined.
+  expect(scaleTargetToWindow(2, 'count', 1, 90)).toBe(1);
 });
