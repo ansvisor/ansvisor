@@ -94,11 +94,15 @@ export function KpiFrameworkDrawer({
   open,
   onOpenChange,
   onSaved,
+  focusKpi,
 }: {
   brandId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
+  /** Set when opened from a row's Edit action: that KPI's target input is
+   *  scrolled into view and focused once the prefill lands. */
+  focusKpi?: KpiKey | null;
 }) {
   const t = useTranslations('actionCenter.drawer');
   const tRegistry = useTranslations('actionCenter.registry');
@@ -149,6 +153,16 @@ export function KpiFrameworkDrawer({
   useEffect(() => {
     if (open) void prefill();
   }, [open, prefill]);
+
+  useEffect(() => {
+    if (!open || isLoading || !focusKpi) return;
+    const input = document.getElementById(`kpi-target-${focusKpi}`);
+    if (input instanceof HTMLInputElement) {
+      input.scrollIntoView({ block: 'center' });
+      input.focus();
+      input.select();
+    }
+  }, [open, isLoading, focusKpi]);
 
   const entries = useMemo(
     () =>
@@ -293,6 +307,7 @@ export function KpiFrameworkDrawer({
                       </Label>
                       <div className="relative w-28">
                         <Input
+                          id={`kpi-target-${key}`}
                           type="number"
                           inputMode="decimal"
                           value={entry.target}

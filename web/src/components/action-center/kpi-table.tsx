@@ -133,7 +133,7 @@ export function KpiTable({
   busyKey,
 }: {
   kpis: KpiSnapshot[];
-  onEdit: () => void;
+  onEdit: (key: KpiKey) => void;
   onRemove: (key: KpiKey) => void;
   busyKey: KpiKey | null;
 }) {
@@ -207,7 +207,7 @@ export function KpiTable({
                       <MoreHorizontal className="h-4 w-4" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={onEdit}>
+                      <DropdownMenuItem onClick={() => onEdit(kpi.key)}>
                         <Pencil className="h-4 w-4" />
                         {t('menu.edit')}
                       </DropdownMenuItem>

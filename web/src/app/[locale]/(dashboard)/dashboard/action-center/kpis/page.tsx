@@ -48,6 +48,12 @@ function KpisContent({ brand }: { brand: Brand }) {
   const [category, setCategory] = useState<KpiCategory | 'all'>('all');
   const [busyKey, setBusyKey] = useState<KpiKey | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [editKey, setEditKey] = useState<KpiKey | null>(null);
+
+  const openDrawer = (key: KpiKey | null = null) => {
+    setEditKey(key);
+    setIsDrawerOpen(true);
+  };
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -120,6 +126,7 @@ function KpisContent({ brand }: { brand: Brand }) {
       open={isDrawerOpen}
       onOpenChange={setIsDrawerOpen}
       onSaved={() => void load()}
+      focusKpi={editKey}
     />
   );
 
@@ -130,7 +137,7 @@ function KpisContent({ brand }: { brand: Brand }) {
           <Target className="h-8 w-8 text-muted-foreground" />
           <h2 className="mt-4 font-semibold">{t('empty.title')}</h2>
           <p className="mt-1 max-w-md text-sm text-muted-foreground">{t('empty.description')}</p>
-          <Button className="mt-4" onClick={() => setIsDrawerOpen(true)}>
+          <Button className="mt-4" onClick={() => openDrawer()}>
             <Plus className="h-4 w-4" />
             {t('empty.cta')}
           </Button>
@@ -160,7 +167,7 @@ function KpisContent({ brand }: { brand: Brand }) {
             />
           ))}
         </div>
-        <Button variant="outline" size="sm" onClick={() => setIsDrawerOpen(true)}>
+        <Button variant="outline" size="sm" onClick={() => openDrawer()}>
           <Settings2 className="h-4 w-4" />
           {t('editKpis')}
         </Button>
@@ -168,7 +175,7 @@ function KpisContent({ brand }: { brand: Brand }) {
 
       <button
         type="button"
-        onClick={() => setIsDrawerOpen(true)}
+        onClick={() => openDrawer()}
         className="flex h-24 w-36 flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/40 hover:text-foreground"
       >
         <Plus className="h-5 w-5" />
@@ -178,7 +185,7 @@ function KpisContent({ brand }: { brand: Brand }) {
       {visible.length > 0 ? (
         <KpiTable
           kpis={visible}
-          onEdit={() => setIsDrawerOpen(true)}
+          onEdit={(key) => openDrawer(key)}
           onRemove={(key) => void handleRemove(key)}
           busyKey={busyKey}
         />
@@ -194,7 +201,7 @@ function KpisContent({ brand }: { brand: Brand }) {
         // never-configured empty state.
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
           <p className="text-sm text-muted-foreground">{t('allInactive')}</p>
-          <Button variant="outline" size="sm" className="mt-3" onClick={() => setIsDrawerOpen(true)}>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => openDrawer()}>
             {t('editKpis')}
           </Button>
         </div>
