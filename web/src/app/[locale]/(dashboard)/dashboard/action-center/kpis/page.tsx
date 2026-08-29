@@ -3,17 +3,41 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { AlertCircle, Plus, Settings2, Target } from 'lucide-react';
+import { AlertCircle, ListFilter, Plus, Settings2, Target } from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
-import { getKpiSnapshots, removeKpi, type KpiSnapshotsResult } from '@/lib/actions/kpis';
+import {
+  getKpiSnapshots,
+  removeKpi,
+  type KpiSnapshotsResult,
+  type KpiWindow,
+} from '@/lib/actions/kpis';
 import type { KpiCategory, KpiKey } from '@/lib/kpis/registry';
+import type { KpiStatus } from '@/lib/kpis/status';
+import { DateRangeFilter, type DateRangePreset } from '@/components/filters/date-range-filter';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
 import { KpiFrameworkDrawer } from '@/components/action-center/kpi-framework-drawer';
 import { KpiTable } from '@/components/action-center/kpi-table';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+
+const KPI_DATE_PRESETS: readonly DateRangePreset[] = ['7d', '30d', '90d', 'custom'];
+const PRESET_DAYS: Partial<Record<DateRangePreset, number>> = { '7d': 7, '30d': 30, '90d': 90 };
+const KPI_STATUSES: readonly KpiStatus[] = ['on_track', 'at_risk', 'off_track', 'goal_reached'];
+const DAY_MS = 86_400_000;
+
+function utcDay(offset = 0): string {
+  return new Date(Date.now() - offset * DAY_MS).toISOString().slice(0, 10);
+}
 
 export default function ActionCenterKpisPage() {
   const brand = useBrandStore((s) => s.getActiveBrand());
@@ -49,6 +73,22 @@ function KpisContent({ brand }: { brand: Brand }) {
   const [busyKey, setBusyKey] = useState<KpiKey | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editKey, setEditKey] = useState<KpiKey | null>(null);
+  const [datePreset, setDatePreset] = useState<DateRangePreset>('30d');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const [statusFilter, setStatusFilter] = useState<Set<KpiStatus>>(new Set());
+
+  // null while a custom range is half-entered: keep showing the last data
+  // instead of refetching on every keystroke.
+  const window = useMemo<KpiWindow | null>(() => {
+    if (datePreset === 'custom') {
+      return customFrom && customTo && customFrom <= customTo
+        ? { dayFrom: customFrom, dayTo: customTo }
+        : null;
+    }
+    const days = PRESET_DAYS[datePreset] ?? 30;
+    return { dayFrom: utcDay(days - 1), dayTo: utcDay() };
+  }, [datePreset, customFrom, customTo]);
 
   const openDrawer = (key: KpiKey | null = null) => {
     setEditKey(key);
@@ -56,16 +96,17 @@ function KpisContent({ brand }: { brand: Brand }) {
   };
 
   const load = useCallback(async () => {
+    if (!window) return;
     setIsLoading(true);
     setLoadFailed(false);
     try {
-      setResult(await getKpiSnapshots(brand.id));
+      setResult(await getKpiSnapshots(brand.id, window));
     } catch {
       setLoadFailed(true);
     } finally {
       setIsLoading(false);
     }
-  }, [brand.id]);
+  }, [brand.id, window]);
 
   useEffect(() => {
     void load();
@@ -77,7 +118,20 @@ function KpisContent({ brand }: { brand: Brand }) {
     for (const kpi of kpis) counts.set(kpi.category, (counts.get(kpi.category) ?? 0) + 1);
     return [...counts.entries()];
   }, [kpis]);
-  const visible = category === 'all' ? kpis : kpis.filter((k) => k.category === category);
+  const visible = kpis.filter(
+    (k) =>
+      (category === 'all' || k.category === category) &&
+      (statusFilter.size === 0 || statusFilter.has(k.status)),
+  );
+
+  const toggleStatus = (status: KpiStatus) => {
+    setStatusFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+  };
 
   const handleRemove = async (key: KpiKey) => {
     setBusyKey(key);
@@ -149,7 +203,7 @@ function KpisContent({ brand }: { brand: Brand }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <CategoryPill
             label={t('allKpis')}
@@ -167,10 +221,48 @@ function KpisContent({ brand }: { brand: Brand }) {
             />
           ))}
         </div>
-        <Button variant="outline" size="sm" onClick={() => openDrawer()}>
-          <Settings2 className="h-4 w-4" />
-          {t('editKpis')}
-        </Button>
+        <div className="flex flex-wrap items-end gap-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className={cn(
+                'flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors hover:bg-muted/50',
+                statusFilter.size > 0 && 'border-foreground/30 bg-muted font-medium',
+              )}
+            >
+              <ListFilter className="h-4 w-4" />
+              {t('filters')}
+              {statusFilter.size > 0 && (
+                <span className="text-xs text-muted-foreground">{statusFilter.size}</span>
+              )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>{t('table.status')}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {KPI_STATUSES.map((status) => (
+                <DropdownMenuCheckboxItem
+                  key={status}
+                  checked={statusFilter.has(status)}
+                  onCheckedChange={() => toggleStatus(status)}
+                >
+                  {t(`status.${status}`)}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DateRangeFilter
+            value={datePreset}
+            onChange={setDatePreset}
+            presets={KPI_DATE_PRESETS}
+            from={customFrom}
+            to={customTo}
+            onFromChange={setCustomFrom}
+            onToChange={setCustomTo}
+          />
+          <Button variant="outline" className="h-9" onClick={() => openDrawer()}>
+            <Settings2 className="h-4 w-4" />
+            {t('editKpis')}
+          </Button>
+        </div>
       </div>
 
       <button
@@ -192,7 +284,15 @@ function KpisContent({ brand }: { brand: Brand }) {
       ) : kpis.length > 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
           <p className="text-sm text-muted-foreground">{t('noResults')}</p>
-          <Button variant="outline" size="sm" className="mt-3" onClick={() => setCategory('all')}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3"
+            onClick={() => {
+              setCategory('all');
+              setStatusFilter(new Set());
+            }}
+          >
             {t('clearFilter')}
           </Button>
         </div>

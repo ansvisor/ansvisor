@@ -107,9 +107,14 @@ function sumTrafficPoint(point: Record<string, unknown>): number {
  * once and shared: five KPIs must not mean five times the round trips when
  * they share a window.
  */
-async function fetchWindowMetrics(brandId: string, timeframe: KpiTimeframe, keys: Set<KpiKey>) {
+async function fetchWindowMetrics(
+  brandId: string,
+  timeframe: KpiTimeframe,
+  keys: Set<KpiKey>,
+  windowOverride?: KpiWindow,
+) {
   const windowDays = TIMEFRAME_DAYS[timeframe];
-  const days = { dayFrom: daysAgo(windowDays - 1), dayTo: utcToday() };
+  const days = windowOverride ?? { dayFrom: daysAgo(windowDays - 1), dayTo: utcToday() };
   const trendFrom = daysAgo(TREND_DAYS - 1);
 
   const wantsInsights = keys.has('citations') || keys.has('mentions');
@@ -121,7 +126,7 @@ async function fetchWindowMetrics(brandId: string, timeframe: KpiTimeframe, keys
     keys.has('ai_referral_traffic')
       ? getTrafficSummary(brandId, {
           dateFrom: `${days.dayFrom}T00:00:00.000Z`,
-          dateTo: new Date().toISOString(),
+          dateTo: `${days.dayTo}T23:59:59.999Z`,
         })
       : null,
     keys.has('ai_referral_traffic')
@@ -247,7 +252,22 @@ function buildSnapshot(
   };
 }
 
-export async function getKpiSnapshots(brandId: string): Promise<KpiSnapshotsResult> {
+/**
+ * Whole-day UTC measurement window, inclusive on both ends. When given, it
+ * overrides every KPI's own timeframe window — the toolbar's date range is
+ * one control over one table, so all rows must answer for the same days.
+ * The 7-day trend sparkline is deliberately not affected: its column is
+ * labeled "Trend (7D)" whatever the window.
+ */
+export interface KpiWindow {
+  dayFrom: string;
+  dayTo: string;
+}
+
+export async function getKpiSnapshots(
+  brandId: string,
+  window?: KpiWindow,
+): Promise<KpiSnapshotsResult> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('kpi_definitions')
@@ -286,6 +306,7 @@ export async function getKpiSnapshots(brandId: string): Promise<KpiSnapshotsResu
         brandId,
         timeframe,
         new Set(defs.map((d) => d.kpiKey)),
+        window,
       );
       for (const def of defs) {
         const snapshot = buildSnapshot(def, metrics);

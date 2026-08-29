@@ -90,6 +90,7 @@
       "title": "KPIs",
       "subtitle": "Track the metrics that matter, aligned with your goals.",
       "allKpis": "All KPIs",
+      "filters": "Filters",
       "table": {
         "kpi": "KPI",
         "value": "Value",
