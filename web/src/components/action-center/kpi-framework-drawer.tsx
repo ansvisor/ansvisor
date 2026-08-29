@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { BarChart3, FileText, Info, Loader2, Megaphone, PencilRuler } from 'lucide-react';
+import { BarChart3, CheckCircle2, FileText, Info, Loader2, Megaphone, PencilRuler } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -229,14 +229,14 @@ export function KpiFrameworkDrawer({
                       className={cn(
                         'flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors',
                         isSelected
-                          ? 'border-foreground/40 bg-muted/60'
+                          ? 'border-foreground bg-muted/60 ring-1 ring-foreground'
                           : 'hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50',
                       )}
                     >
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-background">
                         <Icon className="h-4 w-4 text-muted-foreground" />
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium">{t(`templates.${key}.name`)}</p>
                         <p className="text-xs text-muted-foreground">
                           {isAvailable
@@ -244,6 +244,9 @@ export function KpiFrameworkDrawer({
                             : t('templates.notAvailable')}
                         </p>
                       </div>
+                      {isSelected && (
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
+                      )}
                     </button>
                   );
                 })}
