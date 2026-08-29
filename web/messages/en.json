@@ -91,6 +91,7 @@
       "subtitle": "Track the metrics that matter, aligned with your goals.",
       "allKpis": "All KPIs",
       "filters": "Filters",
+      "dateRangeAria": "Date range",
       "table": {
         "kpi": "KPI",
         "value": "Value",

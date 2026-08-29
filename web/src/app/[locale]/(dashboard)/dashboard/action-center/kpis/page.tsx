@@ -14,7 +14,6 @@ import {
 } from '@/lib/actions/kpis';
 import type { KpiCategory, KpiKey } from '@/lib/kpis/registry';
 import type { KpiStatus } from '@/lib/kpis/status';
-import { DateRangeFilter, type DateRangePreset } from '@/components/filters/date-range-filter';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -30,8 +29,9 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
-const KPI_DATE_PRESETS: readonly DateRangePreset[] = ['7d', '30d', '90d', 'custom'];
-const PRESET_DAYS: Partial<Record<DateRangePreset, number>> = { '7d': 7, '30d': 30, '90d': 90 };
+type KpiDatePreset = '7d' | '30d' | '90d';
+const KPI_DATE_PRESETS: readonly KpiDatePreset[] = ['7d', '30d', '90d'];
+const PRESET_DAYS: Record<KpiDatePreset, number> = { '7d': 7, '30d': 30, '90d': 90 };
 const KPI_STATUSES: readonly KpiStatus[] = ['on_track', 'at_risk', 'off_track', 'goal_reached'];
 const DAY_MS = 86_400_000;
 
@@ -73,22 +73,13 @@ function KpisContent({ brand }: { brand: Brand }) {
   const [busyKey, setBusyKey] = useState<KpiKey | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editKey, setEditKey] = useState<KpiKey | null>(null);
-  const [datePreset, setDatePreset] = useState<DateRangePreset>('30d');
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
+  const [datePreset, setDatePreset] = useState<KpiDatePreset>('30d');
   const [statusFilter, setStatusFilter] = useState<Set<KpiStatus>>(new Set());
 
-  // null while a custom range is half-entered: keep showing the last data
-  // instead of refetching on every keystroke.
-  const window = useMemo<KpiWindow | null>(() => {
-    if (datePreset === 'custom') {
-      return customFrom && customTo && customFrom <= customTo
-        ? { dayFrom: customFrom, dayTo: customTo }
-        : null;
-    }
-    const days = PRESET_DAYS[datePreset] ?? 30;
+  const window = useMemo<KpiWindow>(() => {
+    const days = PRESET_DAYS[datePreset];
     return { dayFrom: utcDay(days - 1), dayTo: utcDay() };
-  }, [datePreset, customFrom, customTo]);
+  }, [datePreset]);
 
   const openDrawer = (key: KpiKey | null = null) => {
     setEditKey(key);
@@ -96,7 +87,6 @@ function KpisContent({ brand }: { brand: Brand }) {
   };
 
   const load = useCallback(async () => {
-    if (!window) return;
     setIsLoading(true);
     setLoadFailed(false);
     try {
@@ -203,7 +193,7 @@ function KpisContent({ brand }: { brand: Brand }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <CategoryPill
             label={t('allKpis')}
@@ -221,7 +211,7 @@ function KpisContent({ brand }: { brand: Brand }) {
             />
           ))}
         </div>
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
@@ -249,15 +239,28 @@ function KpisContent({ brand }: { brand: Brand }) {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <DateRangeFilter
-            value={datePreset}
-            onChange={setDatePreset}
-            presets={KPI_DATE_PRESETS}
-            from={customFrom}
-            to={customTo}
-            onFromChange={setCustomFrom}
-            onToChange={setCustomTo}
-          />
+          <div
+            className="flex h-9 overflow-hidden rounded-md border"
+            role="group"
+            aria-label={t('dateRangeAria')}
+          >
+            {KPI_DATE_PRESETS.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setDatePreset(preset)}
+                aria-pressed={datePreset === preset}
+                className={cn(
+                  'px-3 text-sm font-medium transition-colors',
+                  datePreset === preset
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-card text-foreground hover:bg-muted',
+                )}
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
           <Button variant="outline" className="h-9" onClick={() => openDrawer()}>
             <Settings2 className="h-4 w-4" />
             {t('editKpis')}
