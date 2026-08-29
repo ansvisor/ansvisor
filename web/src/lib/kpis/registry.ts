@@ -118,9 +118,14 @@ export type KpiTemplateKey =
  * a set of KPIs and seeds their default targets. A template with no
  * computable KPIs yet (content, brand monitoring) renders disabled in the
  * drawer rather than being hidden: the roadmap is allowed to show.
+ *
+ * AI Search Visibility is deliberately the four answer-engine KPIs, not the
+ * whole registry: referral traffic measures what arrives at the site, not
+ * presence in answers, and a template identical to "everything" would make
+ * picking it indistinguishable from not picking it.
  */
 export const KPI_TEMPLATES: Record<KpiTemplateKey, KpiKey[]> = {
-  ai_search_visibility: DEFAULT_KPI_SET,
+  ai_search_visibility: ['ai_visibility', 'citations', 'mentions', 'share_of_voice'],
   content_performance: [],
   brand_monitoring: [],
   custom: [],
