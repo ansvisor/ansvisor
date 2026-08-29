@@ -28,11 +28,13 @@ import {
   KPI_KEYS,
   KPI_REGISTRY,
   KPI_TEMPLATES,
+  TIMEFRAME_DAYS,
   isValidKpiTarget,
   type KpiKey,
   type KpiTemplateKey,
   type KpiTimeframe,
 } from '@/lib/kpis/registry';
+import { scaleTargetToWindow } from '@/lib/kpis/status';
 import { cn } from '@/lib/utils';
 
 const TEMPLATE_ICONS: Record<KpiTemplateKey, React.ComponentType<{ className?: string }>> = {
@@ -178,6 +180,29 @@ export function KpiFrameworkDrawer({
   );
   const canSave = !isLoading && !isSaving && entries.length > 0 && invalidKeys.size === 0;
 
+  // Switching the period rescales flow targets to the new cadence (weekly
+  // 23 citations becomes monthly ~99) so the numbers keep meaning the same
+  // goal; percent targets are levels and stay as typed. A non-numeric
+  // half-typed value is left alone rather than clobbered.
+  const handleTimeframeChange = (next: KpiTimeframe) => {
+    setDraft((prev) => {
+      const fromDays = TIMEFRAME_DAYS[timeframe];
+      const toDays = TIMEFRAME_DAYS[next];
+      return Object.fromEntries(
+        KPI_KEYS.map((key) => {
+          const entry = prev[key];
+          const num = Number(entry.target);
+          const scaled =
+            Number.isFinite(num) && num > 0
+              ? scaleTargetToWindow(num, KPI_REGISTRY[key].unit, toDays, fromDays)
+              : null;
+          return [key, scaled === null ? entry : { ...entry, target: String(scaled) }];
+        }),
+      ) as Draft;
+    });
+    setTimeframe(next);
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
@@ -265,7 +290,7 @@ export function KpiFrameworkDrawer({
                 </Label>
                 <Select
                   value={timeframe}
-                  onValueChange={(v) => setTimeframe(v as KpiTimeframe)}
+                  onValueChange={(v) => handleTimeframeChange(v as KpiTimeframe)}
                 >
                   <SelectTrigger id="kpi-timeframe" className="mt-1 h-9 w-full text-sm">
                     <SelectValue />
