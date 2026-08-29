@@ -174,7 +174,6 @@
       "targets": "Targets",
       "targetAria": "Target for {name}",
       "invalidTarget": "Targets must be positive; percent targets can't exceed 100.",
-      "showAll": "Show all KPIs ({count} more)",
       "callout": {
         "title": "This KPI framework will drive your Action Center.",
         "description": "Actions and recommendations are prioritized based on your KPI goals."

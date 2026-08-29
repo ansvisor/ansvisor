@@ -108,7 +108,6 @@ export function KpiFrameworkDrawer({
   const [template, setTemplate] = useState<KpiTemplateKey>('ai_search_visibility');
   const [timeframe, setTimeframe] = useState<KpiTimeframe>('monthly');
   const [draft, setDraft] = useState<Draft>(() => templateDraft('ai_search_visibility'));
-  const [showAll, setShowAll] = useState(false);
 
   const prefill = useCallback(async () => {
     setIsLoading(true);
@@ -118,7 +117,6 @@ export function KpiFrameworkDrawer({
         setTemplate('ai_search_visibility');
         setTimeframe('monthly');
         setDraft(templateDraft('ai_search_visibility'));
-        setShowAll(false);
         return;
       }
       // An existing framework opens as what it is — the user's own set —
@@ -140,7 +138,6 @@ export function KpiFrameworkDrawer({
           }),
         ) as Draft,
       );
-      setShowAll(false);
     } catch {
       toast.error(t('loadFailed'));
       onOpenChange(false);
@@ -166,15 +163,6 @@ export function KpiFrameworkDrawer({
     [entries],
   );
   const canSave = !isLoading && !isSaving && entries.length > 0 && invalidKeys.size === 0;
-
-  // The template's KPIs always show; the rest sit behind "Show all KPIs".
-  // Anything already enabled shows regardless — a hidden checked row would
-  // be saved without being visible.
-  const templateKeys = new Set(KPI_TEMPLATES[template]);
-  const visibleKeys = KPI_KEYS.filter(
-    (key) => showAll || templateKeys.has(key) || draft[key]?.enabled || template === 'custom',
-  );
-  const hiddenCount = KPI_KEYS.length - visibleKeys.length;
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -279,8 +267,10 @@ export function KpiFrameworkDrawer({
               </div>
 
               <p className="mt-4 text-xs font-medium text-muted-foreground">{t('targets')}</p>
+              {/* Every registry KPI is always listed: picking a template must
+                  visibly toggle checkmarks, not make rows silently vanish. */}
               <div className="mt-2 space-y-2">
-                {visibleKeys.map((key) => {
+                {KPI_KEYS.map((key) => {
                   const entry = draft[key];
                   const isInvalid = entry.enabled && invalidKeys.has(key);
                   return (
@@ -327,16 +317,6 @@ export function KpiFrameworkDrawer({
               </div>
               {invalidKeys.size > 0 && (
                 <p className="mt-2 text-xs text-destructive">{t('invalidTarget')}</p>
-              )}
-              {hiddenCount > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3 w-full"
-                  onClick={() => setShowAll(true)}
-                >
-                  {t('showAll', { count: hiddenCount })}
-                </Button>
               )}
             </section>
 
