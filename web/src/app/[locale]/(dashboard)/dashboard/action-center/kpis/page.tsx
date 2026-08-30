@@ -265,17 +265,12 @@ function KpisContent({ brand }: { brand: Brand }) {
             <Settings2 className="h-3.5 w-3.5" />
             {t('editKpis')}
           </Button>
+          <Button size="sm" className="text-xs" onClick={() => openDrawer()}>
+            <Plus className="h-3.5 w-3.5" />
+            {t('addKpi')}
+          </Button>
         </div>
       </div>
-
-      <button
-        type="button"
-        onClick={() => openDrawer()}
-        className="flex h-20 w-32 flex-col items-center justify-center gap-1 rounded-lg border border-dashed text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/40 hover:text-foreground"
-      >
-        <Plus className="h-4 w-4" />
-        <span className="text-xs font-medium">{t('addKpi')}</span>
-      </button>
 
       {visible.length > 0 ? (
         <KpiTable
