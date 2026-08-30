@@ -94,7 +94,7 @@ function KpiChange({ snapshot }: { snapshot: KpiSnapshot }) {
   return (
     <span
       className={cn(
-        'flex items-center gap-1 text-sm font-medium',
+        'flex items-center gap-1 text-xs font-medium tabular-nums',
         improving ? 'text-green-600 dark:text-green-400' : 'text-red-500',
       )}
     >
@@ -108,7 +108,7 @@ function GoalProgress({ snapshot }: { snapshot: KpiSnapshot }) {
   const t = useTranslations('actionCenter.kpis');
   return (
     <div className="w-24">
-      <span className="text-sm font-medium">{snapshot.progress}%</span>
+      <span className="text-xs font-medium tabular-nums">{snapshot.progress}%</span>
       <div
         role="progressbar"
         aria-valuenow={Math.min(snapshot.progress, 100)}
@@ -145,13 +145,13 @@ export function KpiTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>{t('table.kpi')}</TableHead>
-            <TableHead>{t('table.value')}</TableHead>
-            <TableHead>{t('table.change')}</TableHead>
-            <TableHead>{t('table.trend')}</TableHead>
-            <TableHead>{t('table.status')}</TableHead>
-            <TableHead>{t('table.goal')}</TableHead>
-            <TableHead>{t('table.vsGoal')}</TableHead>
+            <TableHead className="text-xs">{t('table.kpi')}</TableHead>
+            <TableHead className="text-xs">{t('table.value')}</TableHead>
+            <TableHead className="text-xs">{t('table.change')}</TableHead>
+            <TableHead className="text-xs">{t('table.trend')}</TableHead>
+            <TableHead className="text-xs">{t('table.status')}</TableHead>
+            <TableHead className="text-xs">{t('table.goal')}</TableHead>
+            <TableHead className="text-xs">{t('table.vsGoal')}</TableHead>
             <TableHead className="w-10">
               <span className="sr-only">{t('table.actions')}</span>
             </TableHead>
@@ -175,7 +175,7 @@ export function KpiTable({
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="text-base font-semibold">
+                <TableCell className="text-sm font-semibold tabular-nums">
                   {formatKpiValue(kpi.value, kpi.unit)}
                 </TableCell>
                 <TableCell>
@@ -191,7 +191,7 @@ export function KpiTable({
                     {t(`status.${kpi.status}`)}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
+                <TableCell className="text-xs text-muted-foreground tabular-nums">
                   {formatKpiValue(kpi.target, kpi.unit)}
                 </TableCell>
                 <TableCell>

@@ -215,11 +215,11 @@ function KpisContent({ brand }: { brand: Brand }) {
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
-                'flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors hover:bg-muted/50',
-                statusFilter.size > 0 && 'border-foreground/30 bg-muted font-medium',
+                'flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors hover:bg-muted/50',
+                statusFilter.size > 0 && 'border-foreground/30 bg-muted',
               )}
             >
-              <ListFilter className="h-4 w-4" />
+              <ListFilter className="h-3.5 w-3.5" />
               {t('filters')}
               {statusFilter.size > 0 && (
                 <span className="text-xs text-muted-foreground">{statusFilter.size}</span>
@@ -240,7 +240,7 @@ function KpisContent({ brand }: { brand: Brand }) {
             </DropdownMenuContent>
           </DropdownMenu>
           <div
-            className="flex h-9 overflow-hidden rounded-md border"
+            className="flex h-8 overflow-hidden rounded-md border"
             role="group"
             aria-label={t('dateRangeAria')}
           >
@@ -251,7 +251,7 @@ function KpisContent({ brand }: { brand: Brand }) {
                 onClick={() => setDatePreset(preset)}
                 aria-pressed={datePreset === preset}
                 className={cn(
-                  'px-3 text-sm font-medium transition-colors',
+                  'px-3 text-xs font-medium transition-colors',
                   datePreset === preset
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-card text-foreground hover:bg-muted',
@@ -261,8 +261,8 @@ function KpisContent({ brand }: { brand: Brand }) {
               </button>
             ))}
           </div>
-          <Button variant="outline" className="h-9" onClick={() => openDrawer()}>
-            <Settings2 className="h-4 w-4" />
+          <Button variant="outline" size="sm" className="text-xs" onClick={() => openDrawer()}>
+            <Settings2 className="h-3.5 w-3.5" />
             {t('editKpis')}
           </Button>
         </div>
@@ -271,10 +271,10 @@ function KpisContent({ brand }: { brand: Brand }) {
       <button
         type="button"
         onClick={() => openDrawer()}
-        className="flex h-24 w-36 flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/40 hover:text-foreground"
+        className="flex h-20 w-32 flex-col items-center justify-center gap-1 rounded-lg border border-dashed text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/40 hover:text-foreground"
       >
-        <Plus className="h-5 w-5" />
-        <span className="text-sm font-medium">{t('addKpi')}</span>
+        <Plus className="h-4 w-4" />
+        <span className="text-xs font-medium">{t('addKpi')}</span>
       </button>
 
       {visible.length > 0 ? (
@@ -332,9 +332,9 @@ function CategoryPill({
       onClick={onClick}
       aria-pressed={isActive}
       className={cn(
-        'flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors',
+        'flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors',
         isActive
-          ? 'border-foreground/20 bg-muted font-medium'
+          ? 'border-foreground/20 bg-muted text-foreground'
           : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
       )}
     >
