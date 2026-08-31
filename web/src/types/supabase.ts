@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -2129,6 +2129,80 @@ export type Database = {
           },
         ]
       }
+      signals: {
+        Row: {
+          action_id: string | null
+          brand_id: string
+          category: string
+          change_value: number | null
+          created_at: string
+          current_value: number | null
+          dedup_key: string
+          detected_at: string
+          id: string
+          impact: string
+          kind: string
+          kpi_keys: string[]
+          last_detected_at: string
+          payload: Json
+          previous_value: number | null
+          resolved_at: string | null
+          source: string[]
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          action_id?: string | null
+          brand_id: string
+          category: string
+          change_value?: number | null
+          created_at?: string
+          current_value?: number | null
+          dedup_key: string
+          detected_at?: string
+          id?: string
+          impact: string
+          kind: string
+          kpi_keys?: string[]
+          last_detected_at?: string
+          payload?: Json
+          previous_value?: number | null
+          resolved_at?: string | null
+          source?: string[]
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          action_id?: string | null
+          brand_id?: string
+          category?: string
+          change_value?: number | null
+          created_at?: string
+          current_value?: number | null
+          dedup_key?: string
+          detected_at?: string
+          id?: string
+          impact?: string
+          kind?: string
+          kpi_keys?: string[]
+          last_detected_at?: string
+          payload?: Json
+          previous_value?: number | null
+          resolved_at?: string | null
+          source?: string[]
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signals_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_audit_usage: {
         Row: {
           audit_id: string | null
@@ -2903,6 +2977,10 @@ export type Database = {
           p_platform?: string
           p_region?: string
         }
+        Returns: Json
+      }
+      signals_summary: {
+        Args: { p_brand_id: string; p_from: string; p_to: string }
         Returns: Json
       }
       topics_overview_aggregates: {

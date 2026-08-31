@@ -207,6 +207,147 @@
         "name": "AI Referral Traffic",
         "description": "Visits arriving from AI platforms"
       }
+    },
+    "signalCategories": {
+      "visibility": "Visibility",
+      "citation": "Citation",
+      "mention": "Mention",
+      "traffic": "Traffic",
+      "technical": "Technical",
+      "competitor": "Competitor"
+    },
+    "signalsPage": {
+      "title": "Signals",
+      "subtitle": "Real-time signals from AI Search, your site, and the web. These signals drive your Action Center.",
+      "cards": {
+        "total": "Total Signals",
+        "important": "Important Signals",
+        "new": "New Signals",
+        "resolved": "Resolved Signals",
+        "avgImpact": "Avg. Signal Impact",
+        "vsPrev": "vs previous {days} days",
+        "noPrev": "no previous data"
+      },
+      "allSignals": "All",
+      "filters": {
+        "impact": "Impact",
+        "status": "Status",
+        "source": "Source",
+        "all": "All",
+        "search": "Search signals…",
+        "clear": "Clear filters"
+      },
+      "table": {
+        "signal": "Signal",
+        "type": "Type",
+        "impact": "Impact",
+        "source": "Source",
+        "affected": "Affected",
+        "detected": "Detected",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "status": {
+        "new": "New",
+        "acknowledged": "Acknowledged",
+        "resolved": "Resolved",
+        "dismissed": "Dismissed"
+      },
+      "impact": {
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      },
+      "sources": {
+        "ai_results": "AI Results",
+        "ga4": "Google Analytics 4",
+        "gsc": "Google Search Console",
+        "site_audit": "Site Audit"
+      },
+      "states": {
+        "dropped": "Dropped",
+        "gained": "Gained",
+        "lost": "Lost",
+        "opportunity": "Opportunity",
+        "gain": "Gain",
+        "overtaken": "Overtaken",
+        "crossed": "Crossed"
+      },
+      "affected": {
+        "prompts": "{count, plural, one {1 prompt} other {# prompts}}",
+        "urls": "{count, plural, one {1 URL} other {# URLs}}",
+        "platform": "1 platform",
+        "competitor": "1 competitor",
+        "allPrompts": "All prompts"
+      },
+      "menu": {
+        "label": "Actions for this signal",
+        "acknowledge": "Acknowledge",
+        "resolve": "Mark resolved",
+        "dismiss": "Dismiss",
+        "reopen": "Reopen"
+      },
+      "statusChangeFailed": "Couldn't update the signal.",
+      "empty": {
+        "title": "No signals yet",
+        "description": "Signals are detected after your daily tracking runs. Meaningful changes across visibility, citations, competitors and traffic will appear here."
+      },
+      "noResults": "No signals match these filters.",
+      "error": {
+        "title": "We couldn't load your signals.",
+        "retry": "Try again"
+      },
+      "noBrand": {
+        "title": "No brand selected",
+        "description": "Select a brand to view its signals."
+      },
+      "drawer": {
+        "whatChanged": "What changed",
+        "affected": "Affected",
+        "relatedKpis": "Related KPIs",
+        "detected": "Detected",
+        "lastDetected": "Last detected",
+        "source": "Source",
+        "status": "Status"
+      }
+    },
+    "signalTexts": {
+      "sharp_drop": {
+        "title": "Visibility dropped sharply",
+        "description": "You were visible in {from}% of responses, now {to}%."
+      },
+      "prompt_gain": {
+        "title": "Visibility gained for “{prompt}”",
+        "description": "This prompt's visibility score rose {gain} points over the past week."
+      },
+      "new_engine": {
+        "title": "New AI platform appearance",
+        "description": "Your brand appeared on {platform} for the first time."
+      },
+      "lost_citations": {
+        "title": "Citations lost for “{prompt}”",
+        "description": "Your pages are no longer cited in answers to this prompt."
+      },
+      "first_citation": {
+        "title": "First citation for {url}",
+        "description": "“{prompt}” now cites this page for the first time."
+      },
+      "competitor_surge": {
+        "title": "{name} visibility surged",
+        "description": "Their visibility rate rose from {from}% to {to}% within a week."
+      },
+      "competitor_crossed": {
+        "title": "{name} passed your visibility",
+        "description": "They are now at {competitorRate}% while you are at {brandRate}%."
+      },
+      "competitor_overtaken": {
+        "title": "You overtook {name}",
+        "description": "Your visibility rate moved above theirs ({brandRate}% vs {competitorRate}%)."
+      },
+      "page_opportunity": {
+        "title": "High-value page without AI traffic",
+        "description": "{page} ranks #{rank} on your site by {signal} but receives no AI referrals."
+      }
     }
   },
   "agent": {
