@@ -32,7 +32,9 @@ export type SignalKind =
   | 'competitor_surge'
   | 'competitor_crossed'
   | 'competitor_overtaken'
-  | 'page_opportunity';
+  | 'page_opportunity'
+  | 'uncited_mentions'
+  | 'audit_low_score';
 
 export const SIGNAL_CATEGORIES: readonly SignalCategory[] = [
   'visibility',
@@ -60,7 +62,16 @@ export interface SignalKindMeta {
   kind: SignalKind;
   /** i18n key under actionCenter.signalKinds.<key> for the Type column's
    *  state word (Dropped, Lost, Gained, Opportunity…). */
-  stateKey: 'dropped' | 'gained' | 'lost' | 'opportunity' | 'gain' | 'overtaken' | 'crossed';
+  stateKey:
+    | 'dropped'
+    | 'gained'
+    | 'lost'
+    | 'opportunity'
+    | 'gain'
+    | 'overtaken'
+    | 'crossed'
+    | 'uncited'
+    | 'issue';
   /** Whether the change arrow, when change_value is present, is good news. */
   positive: boolean;
 }
@@ -75,6 +86,8 @@ export const SIGNAL_KINDS: Record<SignalKind, SignalKindMeta> = {
   competitor_crossed: { kind: 'competitor_crossed', stateKey: 'crossed', positive: false },
   competitor_overtaken: { kind: 'competitor_overtaken', stateKey: 'overtaken', positive: true },
   page_opportunity: { kind: 'page_opportunity', stateKey: 'opportunity', positive: true },
+  uncited_mentions: { kind: 'uncited_mentions', stateKey: 'uncited', positive: false },
+  audit_low_score: { kind: 'audit_low_score', stateKey: 'issue', positive: false },
 };
 
 export function isSignalKind(value: string): value is SignalKind {

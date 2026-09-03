@@ -271,7 +271,9 @@
         "opportunity": "Opportunity",
         "gain": "Gain",
         "overtaken": "Overtaken",
-        "crossed": "Crossed"
+        "crossed": "Crossed",
+        "uncited": "Uncited",
+        "issue": "Issue"
       },
       "affected": {
         "prompts": "{count, plural, one {1 prompt} other {# prompts}}",
@@ -347,6 +349,14 @@
       "page_opportunity": {
         "title": "High-value page without AI traffic",
         "description": "{page} ranks #{rank} on your site by {signal} but receives no AI referrals."
+      },
+      "uncited_mentions": {
+        "title": "Brand mentioned without citation",
+        "description": "Your brand is mentioned but never cited in {count} prompts."
+      },
+      "audit_low_score": {
+        "title": "Audited pages score low on AEO readiness",
+        "description": "{count, plural, one {1 audited page scores} other {# audited pages score}} below 50/100."
       }
     }
   },

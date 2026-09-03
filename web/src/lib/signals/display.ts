@@ -50,6 +50,10 @@ export function signalTexts(
           rank: Number(p.valueRank ?? 0),
           signal: str(p, 'valueSignal').replace('_', ' '),
         };
+      case 'uncited_mentions':
+        return { count: signal.currentValue ?? 0 };
+      case 'audit_low_score':
+        return { count: signal.currentValue ?? 0 };
     }
   })();
 
@@ -81,5 +85,16 @@ export function signalAffected(
       return { label: t('affected.competitor'), detail: str(p, 'competitorName') };
     case 'page_opportunity':
       return { label: t('affected.urls', { count: 1 }), detail: str(p, 'landingPage') };
+    case 'uncited_mentions': {
+      const count = Array.isArray(p.promptIds) ? p.promptIds.length : (signal.currentValue ?? 0);
+      return { label: t('affected.prompts', { count: Number(count) }), detail: null };
+    }
+    case 'audit_low_score': {
+      const urls = Array.isArray(p.urls) ? (p.urls as { url?: string }[]) : [];
+      return {
+        label: t('affected.urls', { count: Number(signal.currentValue ?? urls.length) }),
+        detail: urls[0]?.url ?? null,
+      };
+    }
   }
 }

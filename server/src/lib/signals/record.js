@@ -31,6 +31,18 @@ import { computePulseMetrics } from '../pulse/metrics.js';
 import { logger } from '../logger.js';
 
 const DETECTION_WINDOW_DAYS = 7;
+const DAY_MS = 86_400_000;
+
+/** A "mentioned but never cited" pattern needs at least this many prompts
+ *  before it is a signal — one or two uncited mentions are normal noise. */
+const UNCITED_MIN_PROMPTS = 3;
+
+/** Audits older than this no longer describe the page (it may have been
+ *  rewritten since); their findings age out instead of nagging forever. */
+const AUDIT_MAX_AGE_DAYS = 90;
+
+/** Latest completed audit below this total score raises a technical signal. */
+const AUDIT_LOW_SCORE = 50;
 
 /**
  * Static knowledge per detector kind. Mirrored by the web registry
@@ -93,6 +105,18 @@ const KIND_META = {
     kpiKeys: ['ai_referral_traffic'],
     persistent: true,
   },
+  uncited_mentions: {
+    category: 'mention',
+    impact: 'medium',
+    kpiKeys: ['citations', 'mentions'],
+    persistent: true,
+  },
+  audit_low_score: {
+    category: 'technical',
+    impact: 'medium',
+    kpiKeys: [],
+    persistent: true,
+  },
 };
 
 /** Pulse highlight/warning → signal candidate. Returns null for entries that
@@ -150,6 +174,88 @@ function fromPulseEntry(entry) {
   return candidate;
 }
 
+/**
+ * Mentioned-but-never-cited (brief §10's headline mention signal), from the
+ * same per-prompt aggregates the Prompts page reads. A prompt counts when
+ * the window's answers mention the brand at least once and cite it never —
+ * the brand is in the conversation but AI engines have nothing of its own
+ * to point at. One consolidated signal (brief §29), not one per prompt.
+ */
+async function uncitedMentionCandidates(brandId, now) {
+  const from = new Date(now.getTime() - DETECTION_WINDOW_DAYS * DAY_MS);
+  const { data, error } = await supabaseAdmin.rpc('prompt_visibility_summaries', {
+    p_brand_id: brandId,
+    p_date_from: from.toISOString(),
+    p_date_to: now.toISOString(),
+  });
+  if (error) throw new Error(error.message);
+
+  const uncited = (data ?? []).filter(
+    (row) => Number(row.runs) > 0 && Number(row.total_mentions) > 0 && Number(row.total_citations) === 0,
+  );
+  if (uncited.length < UNCITED_MIN_PROMPTS) return [];
+
+  return [
+    {
+      kind: 'uncited_mentions',
+      dedupKey: 'uncited_mentions',
+      source: ['ai_results'],
+      payload: { promptIds: uncited.map((row) => row.prompt_id).slice(0, 50) },
+      previousValue: null,
+      currentValue: uncited.length,
+      changeValue: null,
+    },
+  ];
+}
+
+/**
+ * Low AEO readiness from Site Audit's stored scores (brief §12). Only the
+ * LATEST completed audit of each URL speaks for it — an old bad score
+ * followed by a good re-audit is a fixed page — and audits past the age cap
+ * no longer describe the page at all.
+ *
+ * Consolidated into ONE signal per brand (§29): a brand that audits forty
+ * weak pages has one condition, "audited pages score low", not forty rows
+ * drowning every other category. The worst pages ride in the payload for
+ * the drawer; the full list lives on the Site Audit page.
+ */
+async function auditCandidates(brandId, now) {
+  const since = new Date(now.getTime() - AUDIT_MAX_AGE_DAYS * DAY_MS).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('site_audits')
+    .select('url, total_score, completed_at')
+    .eq('brand_id', brandId)
+    .eq('status', 'completed')
+    .not('total_score', 'is', null)
+    .gte('completed_at', since)
+    .order('completed_at', { ascending: false })
+    .limit(500);
+  if (error) throw new Error(error.message);
+
+  const latestByUrl = new Map();
+  for (const audit of data ?? []) {
+    if (!latestByUrl.has(audit.url)) latestByUrl.set(audit.url, audit);
+  }
+
+  const low = [...latestByUrl.values()]
+    .map((audit) => ({ url: audit.url, score: Number(audit.total_score) }))
+    .filter((audit) => audit.score < AUDIT_LOW_SCORE)
+    .sort((a, b) => a.score - b.score);
+  if (low.length === 0) return [];
+
+  return [
+    {
+      kind: 'audit_low_score',
+      dedupKey: 'audit_low_score',
+      source: ['site_audit'],
+      payload: { urls: low.slice(0, 10) },
+      previousValue: null,
+      currentValue: low.length,
+      changeValue: null,
+    },
+  ];
+}
+
 /** Open page-opportunity findings → signal candidates. */
 async function pageOpportunityCandidates(brandId) {
   const { data, error } = await supabaseAdmin
@@ -202,6 +308,8 @@ export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) 
     if (candidate) candidates.push(candidate);
   }
   candidates.push(...(await pageOpportunityCandidates(brandId)));
+  candidates.push(...(await uncitedMentionCandidates(brandId, now)));
+  candidates.push(...(await auditCandidates(brandId, now)));
 
   // Existing rows decide insert vs update vs reopen. A brand's signal set is
   // small (tens), so reading it whole is cheaper than being clever.
