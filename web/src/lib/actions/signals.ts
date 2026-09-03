@@ -43,7 +43,8 @@ export interface SignalFilters {
   impact?: SignalImpact;
   status?: SignalStatus;
   source?: SignalSource;
-  /** ISO day bounds on detected_at, inclusive. */
+  /** ISO day bounds, inclusive. A signal is in the window when its lifetime
+   *  overlaps it — same semantics as the summary's "total". */
   dayFrom: string;
   dayTo: string;
 }
@@ -80,8 +81,8 @@ export async function getSignals(brandId: string, filters: SignalFilters): Promi
       'id, category, kind, impact, status, source, detected_at, last_detected_at, resolved_at, previous_value, current_value, change_value, payload, kpi_keys, action_id',
     )
     .eq('brand_id', brandId)
-    .gte('detected_at', `${filters.dayFrom}T00:00:00.000Z`)
     .lt('detected_at', nextDay(filters.dayTo))
+    .or(`resolved_at.is.null,resolved_at.gte.${filters.dayFrom}T00:00:00.000Z`)
     .order('detected_at', { ascending: false })
     .limit(1000);
 
@@ -115,13 +116,23 @@ export async function getSignals(brandId: string, filters: SignalFilters): Promi
 }
 
 export interface SignalsSummary {
+  /** Conditions active in the window (lifetime overlaps it). */
   total: number;
   prevTotal: number;
+  /** High-impact subset of `total`. */
   important: number;
+  prevImportant: number;
+  /** Conditions first detected inside the window. */
   newCount: number;
+  prevNew: number;
+  /** Conditions resolved inside the window. */
   resolved: number;
-  /** ISO day → count, for the card sparklines. */
-  byDay: Record<string, number>;
+  prevResolved: number;
+  /** ISO day → count series for the card sparklines. */
+  byDayActive: Record<string, number>;
+  byDayImportant: Record<string, number>;
+  byDayNew: Record<string, number>;
+  byDayResolved: Record<string, number>;
   byCategory: Record<string, number>;
   bySource: Record<string, number>;
 }
@@ -142,9 +153,15 @@ export async function getSignalsSummary(
     total?: number;
     prev_total?: number;
     important?: number;
+    prev_important?: number;
     new?: number;
+    prev_new?: number;
     resolved?: number;
-    by_day?: Record<string, number>;
+    prev_resolved?: number;
+    by_day_active?: Record<string, number>;
+    by_day_important?: Record<string, number>;
+    by_day_new?: Record<string, number>;
+    by_day_resolved?: Record<string, number>;
     by_category?: Record<string, number>;
     by_source?: Record<string, number>;
   };
@@ -152,9 +169,15 @@ export async function getSignalsSummary(
     total: Number(raw.total ?? 0),
     prevTotal: Number(raw.prev_total ?? 0),
     important: Number(raw.important ?? 0),
+    prevImportant: Number(raw.prev_important ?? 0),
     newCount: Number(raw.new ?? 0),
+    prevNew: Number(raw.prev_new ?? 0),
     resolved: Number(raw.resolved ?? 0),
-    byDay: raw.by_day ?? {},
+    prevResolved: Number(raw.prev_resolved ?? 0),
+    byDayActive: raw.by_day_active ?? {},
+    byDayImportant: raw.by_day_important ?? {},
+    byDayNew: raw.by_day_new ?? {},
+    byDayResolved: raw.by_day_resolved ?? {},
     byCategory: raw.by_category ?? {},
     bySource: raw.by_source ?? {},
   };

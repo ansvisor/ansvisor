@@ -153,13 +153,30 @@ function SignalsContent({ brand }: { brand: Brand }) {
     return counts;
   }, [signals]);
 
-  const sparkPoints = useMemo<KpiTrendPoint[]>(() => {
-    if (!summary) return [];
-    return Array.from({ length: Math.min(windowDays, 30) }, (_, i) => {
-      const day = utcDay(Math.min(windowDays, 30) - 1 - i);
-      return { date: day, value: summary.byDay[day] ?? 0 };
-    });
-  }, [summary, windowDays]);
+  // One sparkline series per card, over the window's days (capped at 30
+  // points so 90d stays legible at sparkline size).
+  const sparkSeries = useCallback(
+    (byDay: Record<string, number>): KpiTrendPoint[] => {
+      const points = Math.min(windowDays, 30);
+      return Array.from({ length: points }, (_, i) => {
+        const day = utcDay(points - 1 - i);
+        return { date: day, value: byDay[day] ?? 0 };
+      });
+    },
+    [windowDays],
+  );
+
+  // "vs Aug 20 – Aug 26" — the previous equal-length window, spelled out
+  // like the mockup rather than as a relative phrase.
+  const prevRangeLabel = useMemo(() => {
+    const fmt = (day: string) =>
+      new Date(`${day}T00:00:00Z`).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'UTC',
+      });
+    return `${fmt(utcDay(windowDays * 2 - 1))} – ${fmt(utcDay(windowDays))}`;
+  }, [windowDays]);
 
   const hasActiveFilters =
     category !== 'all' || impact !== 'all' || status !== 'all' || source !== 'all' || search !== '';
@@ -240,13 +257,31 @@ function SignalsContent({ brand }: { brand: Brand }) {
             label={t('cards.total')}
             value={summary.total}
             prev={summary.prevTotal}
-            days={windowDays}
-            spark={sparkPoints}
+            rangeLabel={prevRangeLabel}
+            spark={sparkSeries(summary.byDayActive)}
           />
-          <SummaryCard label={t('cards.important')} value={summary.important} days={windowDays} />
-          <SummaryCard label={t('cards.new')} value={summary.newCount} days={windowDays} />
-          <SummaryCard label={t('cards.resolved')} value={summary.resolved} days={windowDays} />
-          <AvgImpactCard summary={summary} />
+          <SummaryCard
+            label={t('cards.important')}
+            value={summary.important}
+            prev={summary.prevImportant}
+            rangeLabel={prevRangeLabel}
+            spark={sparkSeries(summary.byDayImportant)}
+          />
+          <SummaryCard
+            label={t('cards.new')}
+            value={summary.newCount}
+            prev={summary.prevNew}
+            rangeLabel={prevRangeLabel}
+            spark={sparkSeries(summary.byDayNew)}
+          />
+          <SummaryCard
+            label={t('cards.resolved')}
+            value={summary.resolved}
+            prev={summary.prevResolved}
+            rangeLabel={prevRangeLabel}
+            spark={sparkSeries(summary.byDayResolved)}
+          />
+          <AvgImpactCard summary={summary} days={windowDays} />
         </div>
       )}
 
@@ -363,77 +398,87 @@ function SummaryCard({
   label,
   value,
   prev,
-  days,
+  rangeLabel,
   spark,
 }: {
   label: string;
   value: number;
-  prev?: number;
-  days: number;
-  spark?: KpiTrendPoint[];
+  prev: number;
+  rangeLabel: string;
+  spark: KpiTrendPoint[];
 }) {
   const t = useTranslations('actionCenter.signalsPage');
-  const change =
-    prev !== undefined && prev > 0 ? Math.round(((value - prev) / prev) * 100) : null;
+  const change = prev > 0 ? Math.round(((value - prev) / prev) * 100) : null;
   return (
     <Card>
       <CardContent className="p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {label}
-        </p>
+        <p className="text-xs font-medium text-muted-foreground">{label}</p>
         <div className="mt-1 flex items-end justify-between gap-2">
           <span className="text-2xl font-bold tabular-nums">{value}</span>
-          {spark && spark.length > 1 && (
-            <span className="text-muted-foreground">
+          {spark.length > 1 && (
+            <span className="text-muted-foreground/60">
               <KpiSparkline points={spark} />
             </span>
           )}
         </div>
-        {change !== null && (
-          <p
-            className={cn(
-              'mt-1 flex items-center gap-0.5 text-xs',
-              change >= 0
-                ? 'text-green-600 dark:text-green-400'
-                : 'text-red-500',
-            )}
-          >
-            {change >= 0 ? (
-              <TrendingUp className="h-3 w-3" />
-            ) : (
-              <TrendingDown className="h-3 w-3" />
-            )}
-            {Math.abs(change)}% {t('cards.vsPrev', { days })}
-          </p>
-        )}
+        <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+          {change !== null ? (
+            <>
+              <span
+                className={cn(
+                  'flex items-center gap-0.5 font-medium',
+                  change >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500',
+                )}
+              >
+                {change >= 0 ? (
+                  <TrendingUp className="h-3 w-3" />
+                ) : (
+                  <TrendingDown className="h-3 w-3" />
+                )}
+                {Math.abs(change)}%
+              </span>
+              {t('cards.vsRange', { range: rangeLabel })}
+            </>
+          ) : (
+            t('cards.noPrev')
+          )}
+        </p>
       </CardContent>
     </Card>
   );
 }
 
-function AvgImpactCard({ summary }: { summary: SignalsSummary }) {
+function AvgImpactCard({ summary, days }: { summary: SignalsSummary; days: number }) {
   const t = useTranslations('actionCenter.signalsPage');
-  const ratio = summary.total > 0 ? summary.important / summary.total : 0;
-  const level = ratio >= 0.5 ? 'high' : ratio >= 0.2 ? 'medium' : 'low';
+  const levelOf = (important: number, total: number) => {
+    const ratio = total > 0 ? important / total : 0;
+    return ratio >= 0.5 ? 'high' : ratio >= 0.2 ? 'medium' : 'low';
+  };
+  const level = levelOf(summary.important, summary.total);
+  const prevLevel = levelOf(summary.prevImportant, summary.prevTotal);
+  const comparison =
+    summary.prevTotal === 0
+      ? t('cards.noPrev')
+      : level === prevLevel
+        ? t('cards.impactSame', { days })
+        : level === 'high' || (level === 'medium' && prevLevel === 'low')
+          ? t('cards.impactHigher', { days })
+          : t('cards.impactLower', { days });
   const filled = level === 'high' ? 10 : level === 'medium' ? 6 : 3;
   return (
     <Card>
       <CardContent className="p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {t('cards.avgImpact')}
-        </p>
+        <p className="text-xs font-medium text-muted-foreground">{t('cards.avgImpact')}</p>
         <p className="mt-1 text-2xl font-bold">{t(`impact.${level}`)}</p>
-        <div className="mt-2 flex gap-0.5" aria-hidden="true">
+        <div className="mt-1.5 flex gap-0.5" aria-hidden="true">
           {Array.from({ length: 12 }, (_, i) => (
             <span
               key={i}
-              className={cn(
-                'h-2.5 w-1 rounded-sm',
-                i < filled ? 'bg-foreground/70' : 'bg-muted',
-              )}
+              className={cn('h-2.5 w-1 rounded-sm', i < filled ? 'bg-foreground/70' : 'bg-muted')}
             />
           ))}
         </div>
+        <p className="mt-1 text-xs text-muted-foreground">{comparison}</p>
       </CardContent>
     </Card>
   );

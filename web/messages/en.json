@@ -225,8 +225,11 @@
         "new": "New Signals",
         "resolved": "Resolved Signals",
         "avgImpact": "Avg. Signal Impact",
-        "vsPrev": "vs previous {days} days",
-        "noPrev": "no previous data"
+        "noPrev": "no previous data",
+        "vsRange": "vs {range}",
+        "impactSame": "Same as previous {days} days",
+        "impactHigher": "Higher than previous {days} days",
+        "impactLower": "Lower than previous {days} days"
       },
       "allSignals": "All",
       "filters": {
@@ -336,15 +339,15 @@
       },
       "competitor_surge": {
         "title": "{name} visibility surged",
-        "description": "Their visibility rate rose from {from}% to {to}% within a week."
+        "description": "Across your tracked prompts, their 7-day visibility score rose from {from}% to {to}%."
       },
       "competitor_crossed": {
         "title": "{name} passed your visibility",
-        "description": "They are now at {competitorRate}% while you are at {brandRate}%."
+        "description": "Across your tracked prompts, their 7-day visibility score is now {competitorRate}% while yours is {brandRate}%."
       },
       "competitor_overtaken": {
         "title": "You overtook {name}",
-        "description": "Your visibility rate moved above theirs ({brandRate}% vs {competitorRate}%)."
+        "description": "Across your tracked prompts, your 7-day visibility score moved above theirs ({brandRate}% vs {competitorRate}%)."
       },
       "page_opportunity": {
         "title": "High-value page without AI traffic",
