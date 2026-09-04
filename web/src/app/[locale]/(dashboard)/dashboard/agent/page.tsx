@@ -35,6 +35,15 @@ import {
   ChevronDown,
   KeyRound,
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface ConversationRow {
   id: string;
@@ -136,6 +145,8 @@ function AgentChat(props: {
     messagesEndRef,
   } = props;
   const t = useTranslations('agent');
+  const tc = useTranslations('common');
+  const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
 
   // Ref mirrors activeId for prepareSendMessagesRequest. Reading the
   // state directly from the transport closure gives us a stale snapshot —
@@ -254,7 +265,6 @@ function AgentChat(props: {
   }
 
   async function deleteConversation(id: string) {
-    if (!confirm(t('deleteConfirm'))) return;
     const res = await fetch(`/api/agent/conversations/${id}`, { method: 'DELETE' });
     if (!res.ok) {
       const body = await res.json().catch(() => null);
@@ -346,7 +356,7 @@ function AgentChat(props: {
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  void deleteConversation(c.id);
+                  setPendingConfirm(c.id);
                 }}
                 className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
                 aria-label={t('deleteConversation')}
@@ -355,6 +365,37 @@ function AgentChat(props: {
               </button>
             </div>
           ))}
+          <Dialog
+            open={pendingConfirm !== null}
+            onOpenChange={(v) => !v && setPendingConfirm(null)}
+          >
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle>{t('deleteConversation')}</DialogTitle>
+                <DialogDescription>{t('deleteConfirm')}</DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <DialogClose render={<Button variant="outline" />}>{tc('cancel')}</DialogClose>
+                <DialogClose
+                  render={
+                    <Button
+                      variant="destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+
+                        if (pendingConfirm === null) {
+                          return;
+                        }
+                        void deleteConversation(pendingConfirm);
+                      }}
+                    />
+                  }
+                >
+                  {tc('delete')}
+                </DialogClose>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </aside>
 

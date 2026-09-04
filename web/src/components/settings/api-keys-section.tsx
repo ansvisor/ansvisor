@@ -55,6 +55,7 @@ export function ApiKeysSection() {
   const [creating, setCreating] = useState(false);
   const [revealedToken, setRevealedToken] = useState<string | null>(null);
   const mcpEndpoint = getMcpEndpoint();
+  const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -100,9 +101,6 @@ export function ApiKeysSection() {
   };
 
   const handleRevoke = async (id: string) => {
-    if (!confirm('Revoke this API key? Clients using it will lose access immediately.')) {
-      return;
-    }
     try {
       const res = await fetch(`/api/keys/${id}`, { method: 'DELETE' });
       if (!res.ok) {
@@ -176,42 +174,77 @@ export function ApiKeysSection() {
         ) : keys.length === 0 ? (
           <p className="text-sm text-muted-foreground py-6 text-center">{t('apiKeys_noKeys')}</p>
         ) : (
-          <div className="divide-y rounded-md border">
-            {keys.map((k) => {
-              const revoked = !!k.revoked_at;
-              return (
-                <div key={k.id} className="flex items-center justify-between gap-4 p-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium truncate">{k.name}</p>
-                      {revoked && (
-                        <Badge variant="outline" className="text-[10px]">
-                          {t('apiKeys_revoked')}
-                        </Badge>
-                      )}
+          <>
+            <div className="divide-y rounded-md border">
+              {keys.map((k) => {
+                const revoked = !!k.revoked_at;
+                return (
+                  <div key={k.id} className="flex items-center justify-between gap-4 p-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate">{k.name}</p>
+                        {revoked && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {t('apiKeys_revoked')}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground font-mono">{k.prefix}…</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {t('apiKeys_created', {
+                          date: formatDate(k.created_at),
+                          lastUsed: formatDate(k.last_used_at),
+                        })}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground font-mono">{k.prefix}…</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {t('apiKeys_created', {
-                        date: formatDate(k.created_at),
-                        lastUsed: formatDate(k.last_used_at),
-                      })}
-                    </p>
+                    {!revoked && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setConfirmRevoke(k.id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
-                  {!revoked && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRevoke(k.id)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+            <Dialog
+              open={confirmRevoke !== null}
+              onOpenChange={(v) => !v && setConfirmRevoke(null)}
+            >
+              <DialogContent className="sm:max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>{t('revokeApiKey')}</DialogTitle>
+                  <DialogDescription>{t('revokeApiKeyConfirm')}</DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <DialogClose render={<Button variant="outline" />}>
+                    {tCommon('cancel')}
+                  </DialogClose>
+                  <DialogClose
+                    render={
+                      <Button
+                        variant="destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+
+                          if (confirmRevoke === null) {
+                            return;
+                          }
+                          void handleRevoke(confirmRevoke);
+                        }}
+                      />
+                    }
+                  >
+                    {t('revoke')}
+                  </DialogClose>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </>
         )}
       </CardContent>
 

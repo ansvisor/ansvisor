@@ -14,6 +14,7 @@ import {
   DialogContent,
   DialogDescription,
   DialogFooter,
+  DialogClose,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -80,6 +81,7 @@ export default function ReportsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
 
   const [template, setTemplate] = useState<ReportTemplateId>('executive_summary');
   const [preset, setPreset] = useState<DatePreset>('30d');
@@ -174,11 +176,11 @@ export default function ReportsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm(t('deleteConfirm'))) return;
     setDeletingId(id);
     try {
       await deleteReport(id);
       setReports((prev) => prev.filter((r) => r.id !== id));
+      setPendingConfirm(null);
     } catch (err) {
       console.error('Report delete error:', err);
       toast.error(t('deleteFailed'));
@@ -216,61 +218,96 @@ export default function ReportsPage() {
               <p className="text-sm text-muted-foreground">{t('emptyLibrary')}</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('columns.title')}</TableHead>
-                  <TableHead>{t('columns.period')}</TableHead>
-                  <TableHead>{t('columns.created')}</TableHead>
-                  <TableHead className="w-[140px] text-right">{t('columns.actions')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {reports.map((report) => (
-                  <TableRow key={report.id}>
-                    <TableCell>
-                      <span className="font-medium">{report.title}</span>
-                      {KNOWN_TEMPLATE_IDS.has(report.template) &&
-                        t.has(`templates.${report.template}.name`) && (
-                          <span className="mt-0.5 block text-xs text-muted-foreground">
-                            {t(`templates.${report.template}.name`)}
-                          </span>
-                        )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatDate(report.dateFrom)} — {formatDate(report.dateTo)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatDate(report.createdAt)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => router.push(`/dashboard/reports/${report.id}`)}
-                        >
-                          {tc('view')}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-muted-foreground hover:text-destructive"
-                          disabled={deletingId === report.id}
-                          onClick={() => handleDelete(report.id)}
-                        >
-                          {deletingId === report.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
-                    </TableCell>
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('columns.title')}</TableHead>
+                    <TableHead>{t('columns.period')}</TableHead>
+                    <TableHead>{t('columns.created')}</TableHead>
+                    <TableHead className="w-[140px] text-right">{t('columns.actions')}</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {reports.map((report) => (
+                    <TableRow key={report.id}>
+                      <TableCell>
+                        <span className="font-medium">{report.title}</span>
+                        {KNOWN_TEMPLATE_IDS.has(report.template) &&
+                          t.has(`templates.${report.template}.name`) && (
+                            <span className="mt-0.5 block text-xs text-muted-foreground">
+                              {t(`templates.${report.template}.name`)}
+                            </span>
+                          )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatDate(report.dateFrom)} — {formatDate(report.dateTo)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatDate(report.createdAt)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => router.push(`/dashboard/reports/${report.id}`)}
+                          >
+                            {tc('view')}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-muted-foreground hover:text-destructive"
+                            disabled={deletingId === report.id}
+                            onClick={() => setPendingConfirm(report.id)}
+                          >
+                            {deletingId === report.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <Dialog
+                open={pendingConfirm !== null}
+                onOpenChange={(v) => !v && setPendingConfirm(null)}
+              >
+                <DialogContent className="sm:max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle>{t('deleteTitle')}</DialogTitle>
+                    <DialogDescription>{t('deleteConfirm')}</DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <DialogClose render={<Button variant="outline" />}>{tc('cancel')}</DialogClose>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      disabled={deletingId === pendingConfirm}
+                      onClick={(e) => {
+                        e.stopPropagation();
+
+                        if (pendingConfirm === null) {
+                          return;
+                        }
+
+                        void handleDelete(pendingConfirm);
+                      }}
+                    >
+                      {deletingId === pendingConfirm && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      {tc('delete')}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </>
           )}
         </CardContent>
       </Card>

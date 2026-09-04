@@ -11,6 +11,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Loader2, Lock, Sparkles, Trash2, CheckCircle2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useUserRole } from '@/hooks/use-user-role';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface KeyState {
   configured: boolean;
@@ -48,6 +57,7 @@ export function AgentSection() {
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
   const { canAdmin } = useUserRole();
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,13 +105,6 @@ export function AgentSection() {
   };
 
   const handleClear = async () => {
-    if (
-      !confirm(
-        'Remove the Anthropic API key? Team members will lose access to the agent until a new key is saved.',
-      )
-    ) {
-      return;
-    }
     setClearing(true);
     try {
       const res = await fetch('/api/settings/anthropic-key', { method: 'DELETE' });
@@ -195,7 +198,7 @@ export function AgentSection() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleClear}
+                  onClick={() => setConfirmClear(true)}
                   disabled={clearing}
                   className="text-destructive hover:text-destructive"
                 >
@@ -206,6 +209,33 @@ export function AgentSection() {
                   )}
                   {t('agent_removeKey')}
                 </Button>
+                <Dialog open={confirmClear} onOpenChange={setConfirmClear}>
+                  <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                      <DialogTitle>{t('agent_removeKey')}</DialogTitle>
+                      <DialogDescription>{t('agent_removeKeyConfirm')}</DialogDescription>
+                    </DialogHeader>
+
+                    <DialogFooter>
+                      <DialogClose render={<Button variant="outline" />}>
+                        {tCommon('cancel')}
+                      </DialogClose>
+
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        disabled={clearing}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleClear();
+                        }}
+                      >
+                        {clearing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {t('remove')}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </div>
             )}
           </>
