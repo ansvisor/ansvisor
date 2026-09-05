@@ -497,8 +497,9 @@ function FilterSelect({
   options: { value: string; label: string }[];
   allLabel: string;
 }) {
+  const items = [{ value: 'all', label: allLabel }, ...options];
   return (
-    <Select value={value} onValueChange={(v) => onChange(v ?? 'all')}>
+    <Select value={value} onValueChange={(v) => onChange(v ?? 'all')} items={items}>
       <SelectTrigger className="h-8 w-36 text-xs">
         <span className="text-muted-foreground">{label}:</span>
         <SelectValue />

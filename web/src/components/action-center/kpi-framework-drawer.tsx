@@ -291,6 +291,7 @@ export function KpiFrameworkDrawer({
                 <Select
                   value={timeframe}
                   onValueChange={(v) => handleTimeframeChange(v as KpiTimeframe)}
+                  items={TIMEFRAMES.map((tf) => ({ value: tf, label: t(`timeframes.${tf}`) }))}
                 >
                   <SelectTrigger id="kpi-timeframe" className="mt-1 h-9 w-full text-sm">
                     <SelectValue />
