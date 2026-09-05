@@ -361,6 +361,174 @@
         "title": "Audited pages score low on AEO readiness",
         "description": "{count, plural, one {1 audited page scores} other {# audited pages score}} below 50/100."
       }
+    },
+    "actionCategories": {
+      "growth": "Growth",
+      "protect": "Protect",
+      "recover": "Recover",
+      "fix": "Fix",
+      "compete": "Compete"
+    },
+    "actionsPage": {
+      "title": "Actions",
+      "subtitle": "Know what changed, what matters, and what to do next.",
+      "cards": {
+        "top": "Top Actions",
+        "topSub": "Highest priority right now",
+        "atRisk": "At Risk",
+        "atRiskSub": "Visibility or traffic declining",
+        "opportunities": "Opportunities",
+        "opportunitiesSub": "High potential to grow",
+        "inProgress": "In Progress",
+        "inProgressSub": "Actions currently running",
+        "impact": "Potential Impact",
+        "impactSub": "Across open actions"
+      },
+      "allActions": "All",
+      "filters": {
+        "impact": "Impact",
+        "status": "Status",
+        "assignee": "Assignee",
+        "all": "All",
+        "unassigned": "Unassigned",
+        "search": "Search actions…",
+        "clear": "Clear filters"
+      },
+      "sort": {
+        "label": "Sort",
+        "priority": "Priority",
+        "impact": "Impact",
+        "newest": "Newest",
+        "due_date": "Due date",
+        "updated": "Recently updated"
+      },
+      "table": {
+        "action": "Action",
+        "impact": "Impact",
+        "status": "Status",
+        "assignee": "Assignee",
+        "dueDate": "Due date",
+        "updated": "Updated",
+        "actions": "Actions"
+      },
+      "status": {
+        "new": "New",
+        "in_progress": "In Progress",
+        "completed": "Completed",
+        "on_hold": "On Hold",
+        "no_improvement": "No Improvement",
+        "dismissed": "Dismissed"
+      },
+      "impact": {
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      },
+      "taskProgress": "{completed}/{total} tasks",
+      "tags": {
+        "signals": "{count, plural, one {1 signal} other {# signals}}",
+        "prompts": "{count, plural, one {1 prompt} other {# prompts}}",
+        "pages": "{count, plural, one {1 page} other {# pages}}"
+      },
+      "menu": {
+        "label": "Actions for this item"
+      },
+      "empty": {
+        "title": "No actions yet",
+        "description": "Actions are generated from your signals after daily tracking runs. When meaningful work emerges, it will appear here — quality over quantity."
+      },
+      "noResults": "No actions match these filters.",
+      "error": {
+        "title": "We couldn't load your actions.",
+        "retry": "Try again"
+      },
+      "noBrand": {
+        "title": "No brand selected",
+        "description": "Select a brand to view its actions."
+      },
+      "updateFailed": "Couldn't update the action.",
+      "drawer": {
+        "actionId": "Action ID",
+        "tabs": {
+          "overview": "Overview",
+          "tasks": "Tasks",
+          "signals": "Signals",
+          "history": "History"
+        },
+        "why": "Why this action?",
+        "goal": "Goal",
+        "kpis": "KPIs",
+        "kpiTarget": "target {target}",
+        "noKpis": "No configured KPIs are linked to this action.",
+        "primarySignals": "Primary signals",
+        "tasksProgress": "{completed} / {total} tasks completed",
+        "noSignals": "No linked signals.",
+        "assignee": "Assignee",
+        "assignTo": "Assign to teammate",
+        "dueDate": "Due date",
+        "statusLabel": "Status",
+        "events": {
+          "created": "Action created",
+          "reopened": "Action reopened — its condition is firing again",
+          "signals_linked": "{count, plural, one {1 new signal} other {# new signals}} linked",
+          "status_changed": "Status changed to {to}",
+          "assigned": "Assignee changed",
+          "due_date_set": "Due date updated",
+          "task_status": "Task updated"
+        }
+      }
+    },
+    "actionTexts": {
+      "recover_visibility": {
+        "title": "Recover lost visibility and citations",
+        "description": "Citations were lost across {prompts, plural, one {1 prompt} other {# prompts}}.",
+        "descriptionWithDrop": "Visibility dropped from {from}% to {to}%; citations lost across {prompts, plural, one {1 prompt} other {# prompts}}.",
+        "goal": "Recover and grow visibility and citations for the affected prompts."
+      },
+      "capture_ai_traffic": {
+        "title": "Capture AI traffic for {pages, plural, one {1 high-value page} other {# high-value pages}}",
+        "description": "Pages with strong business value receive no AI referrals.",
+        "goal": "Make these pages visible and cited in AI answers so they start earning AI referrals."
+      },
+      "convert_mentions": {
+        "title": "Convert mentions into citations",
+        "description": "Your brand is mentioned but never cited in {prompts, plural, one {1 prompt} other {# prompts}}.",
+        "goal": "Give AI engines something of yours to cite where you are already part of the answer."
+      },
+      "fix_low_scores": {
+        "title": "Fix low-scoring pages",
+        "description": "{pages, plural, one {1 audited page scores} other {# audited pages score}} below 50/100 on AEO readiness.",
+        "goal": "Bring the audited pages above the readiness bar."
+      },
+      "close_competitor_gap": {
+        "title": "Close the gap with {name}",
+        "titleMany": "Close the gap with competitors",
+        "description": "Competitor visibility moved sharply against you across your tracked prompts.",
+        "goal": "Regain the visibility position lost to competitors."
+      }
+    },
+    "actionTasks": {
+      "analyze_losses": "Analyze lost citations and competitor sources",
+      "coverage_gaps": "Identify missing topic and entity coverage",
+      "update_content": "Update the target pages' content",
+      "internal_links": "Strengthen internal linking to affected pages",
+      "validate": "Validate across AI platforms",
+      "review_pages": "Review the affected high-value pages",
+      "optimize_content": "Optimize content for AI answer inclusion",
+      "identify_prompts": "Identify the prompts mentioning you without citation",
+      "create_citable_content": "Create or improve citable source content",
+      "strengthen_sources": "Strengthen the pages AI engines could cite",
+      "review_audits": "Review the failing audit findings",
+      "fix_issues": "Fix the highest-impact issues first",
+      "revalidate": "Re-run the audits to confirm the fixes",
+      "analyze_competitor": "Analyze what the competitor gained visibility with",
+      "strengthen_content": "Strengthen your content where they now win"
+    },
+    "taskStatus": {
+      "todo": "To Do",
+      "in_progress": "In Progress",
+      "completed": "Completed",
+      "blocked": "Blocked"
     }
   },
   "agent": {

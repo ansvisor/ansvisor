@@ -10,6 +10,7 @@
 import 'dotenv/config';
 import supabaseAdmin from '../config/supabase.js';
 import { recordSignalsForBrand } from '../lib/signals/record.js';
+import { generateActionsForBrand } from '../lib/action-center/generate.js';
 
 const arg = process.argv[2];
 if (!arg) {
@@ -33,7 +34,8 @@ if (arg === '--all') {
 for (const brandId of brandIds) {
   try {
     const result = await recordSignalsForBrand(brandId);
-    console.log(brandId, JSON.stringify(result));
+    const actions = result.skipped ? { skipped: result.skipped } : await generateActionsForBrand(brandId);
+    console.log(brandId, JSON.stringify({ signals: result, actions }));
   } catch (err) {
     console.error(brandId, 'FAILED:', err.message);
   }

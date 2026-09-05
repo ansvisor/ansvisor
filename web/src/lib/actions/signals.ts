@@ -11,32 +11,15 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import {
-  isSignalKind,
-  type SignalCategory,
-  type SignalImpact,
-  type SignalKind,
-  type SignalSource,
-  type SignalStatus,
+import type {
+  SignalCategory,
+  SignalImpact,
+  SignalSource,
+  SignalStatus,
 } from '@/lib/signals/registry';
+import { SIGNAL_ROW_COLUMNS, mapSignalRows, type Signal, type SignalRow } from '@/lib/signals/map';
 
-export interface Signal {
-  id: string;
-  category: SignalCategory;
-  kind: SignalKind;
-  impact: SignalImpact;
-  status: SignalStatus;
-  source: SignalSource[];
-  detectedAt: string;
-  lastDetectedAt: string;
-  resolvedAt: string | null;
-  previousValue: number | null;
-  currentValue: number | null;
-  changeValue: number | null;
-  payload: Record<string, unknown>;
-  kpiKeys: string[];
-  actionId: string | null;
-}
+export type { Signal } from '@/lib/signals/map';
 
 export interface SignalFilters {
   category?: SignalCategory;
@@ -49,24 +32,6 @@ export interface SignalFilters {
   dayTo: string;
 }
 
-interface SignalRow {
-  id: string;
-  category: string;
-  kind: string;
-  impact: string;
-  status: string;
-  source: string[];
-  detected_at: string;
-  last_detected_at: string;
-  resolved_at: string | null;
-  previous_value: number | null;
-  current_value: number | null;
-  change_value: number | null;
-  payload: Record<string, unknown>;
-  kpi_keys: string[];
-  action_id: string | null;
-}
-
 /**
  * A brand's signals for the window, newest first. Fetched whole (up to the
  * PostgREST 1000-row cap) rather than paged: per-brand signal counts are
@@ -77,9 +42,7 @@ export async function getSignals(brandId: string, filters: SignalFilters): Promi
   const supabase = await createClient();
   let query = supabase
     .from('signals')
-    .select(
-      'id, category, kind, impact, status, source, detected_at, last_detected_at, resolved_at, previous_value, current_value, change_value, payload, kpi_keys, action_id',
-    )
+    .select(SIGNAL_ROW_COLUMNS)
     .eq('brand_id', brandId)
     .lt('detected_at', nextDay(filters.dayTo))
     .or(`resolved_at.is.null,resolved_at.gte.${filters.dayFrom}T00:00:00.000Z`)
@@ -94,25 +57,7 @@ export async function getSignals(brandId: string, filters: SignalFilters): Promi
   const { data, error } = await query;
   if (error) throw new Error(error.message);
 
-  return ((data ?? []) as SignalRow[])
-    .filter((row) => isSignalKind(row.kind))
-    .map((row) => ({
-      id: row.id,
-      category: row.category as SignalCategory,
-      kind: row.kind as SignalKind,
-      impact: row.impact as SignalImpact,
-      status: row.status as SignalStatus,
-      source: (row.source ?? []) as SignalSource[],
-      detectedAt: row.detected_at,
-      lastDetectedAt: row.last_detected_at,
-      resolvedAt: row.resolved_at,
-      previousValue: row.previous_value === null ? null : Number(row.previous_value),
-      currentValue: row.current_value === null ? null : Number(row.current_value),
-      changeValue: row.change_value === null ? null : Number(row.change_value),
-      payload: row.payload ?? {},
-      kpiKeys: row.kpi_keys ?? [],
-      actionId: row.action_id,
-    }));
+  return mapSignalRows((data ?? []) as SignalRow[]);
 }
 
 export interface SignalsSummary {
