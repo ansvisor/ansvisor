@@ -9556,7 +9556,7 @@ comment on function public.citation_competitor_sources(
   'Per-competitor source domains for the Competitor Gaps tab (#777), keyed by the competitor id recorded in the mention. plpgsql + force_custom_plan so the arguments reach the planner.';
 
 -- ─────────────────────────────────────────────────────────────────────────
--- migrations/00077_kpi_definitions.sql
+-- migrations/00078_kpi_definitions.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- Action Center: KPI definitions (issue: Action Center KPIs page).
 --
@@ -9645,7 +9645,7 @@ create policy "kpi_definitions: admin/manager delete"
   );
 
 -- ─────────────────────────────────────────────────────────────────────────
--- migrations/00078_signals.sql
+-- migrations/00079_signals.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- Action Center: signals (observation layer).
 --
@@ -9817,7 +9817,7 @@ as $$
 $$;
 
 -- ─────────────────────────────────────────────────────────────────────────
--- migrations/00079_signals_summary_cards.sql
+-- migrations/00080_signals_summary_cards.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- Signals summary v2: everything the five mockup cards show (issue: Action
 -- Center Signals page).
