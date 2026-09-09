@@ -6,7 +6,37 @@ import { Select as SelectPrimitive } from '@base-ui/react/select';
 import { cn } from '@/lib/utils';
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from 'lucide-react';
 
-const Select = SelectPrimitive.Root;
+/**
+ * RULE — always pass `items` (value/label pairs) to the Select root.
+ *
+ * Base UI's Select.Value renders the RAW VALUE in the trigger unless the
+ * root receives `items` to map values to labels. A select over enum-ish
+ * values ("in_progress", model ids, timeframe keys) therefore reads fine in
+ * the dropdown but shows the bare value once picked — a bug that has
+ * slipped into first implementations repeatedly. Passing `items` even when
+ * value === label costs one line and can never be wrong.
+ *
+ * Development builds warn once per page load when a Select renders without
+ * items, so the mistake is caught at first render instead of in review.
+ */
+let warnedMissingItems = false;
+
+function Select<Value, Multiple extends boolean | undefined = false>(
+  props: SelectPrimitive.Root.Props<Value, Multiple>,
+) {
+  const missingItems = props.items === undefined;
+  React.useEffect(() => {
+    if (process.env.NODE_ENV !== 'production' && missingItems && !warnedMissingItems) {
+      warnedMissingItems = true;
+      console.warn(
+        '[ui/select] A Select rendered without `items`. Base UI shows the raw value in the ' +
+          'trigger unless the root gets {value, label} items — pass them (see select.tsx). ' +
+          'Warning shown once per page load; more selects may be affected.',
+      );
+    }
+  }, [missingItems]);
+  return <SelectPrimitive.Root {...props} />;
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
