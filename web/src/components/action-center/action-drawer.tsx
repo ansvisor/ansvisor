@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useRouter } from '@/i18n/navigation';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -75,10 +76,17 @@ export function ActionDrawer({
   const tTasks = useTranslations('actionCenter.actionTasks');
   const tTaskStatus = useTranslations('actionCenter.taskStatus');
 
+  const router = useRouter();
   const [tab, setTab] = useState<DrawerTab>('overview');
   const [detail, setDetail] = useState<ActionDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+
+  // Traceability: a signal card jumps to the Signals page with that signal's
+  // drawer open — the evidence must be one click from the action it created.
+  const openSignal = (signalId: string) => {
+    router.push(`/dashboard/action-center/signals?signal=${signalId}`);
+  };
 
   const load = useCallback(async () => {
     if (!action) return;
@@ -213,13 +221,18 @@ export function ActionDrawer({
                   {detail.signals.slice(0, 3).map((signal) => {
                     const st = signalTexts(signal, tSignalTexts);
                     return (
-                      <div key={signal.id} className="rounded-md border px-3 py-2">
+                      <button
+                        key={signal.id}
+                        type="button"
+                        onClick={() => openSignal(signal.id)}
+                        className="block w-full rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted/40"
+                      >
                         <div className="flex items-center justify-between gap-2">
                           <p className="truncate text-xs font-medium">{st.title}</p>
                           <ImpactDots impact={signal.impact} />
                         </div>
                         <p className="truncate text-xs text-muted-foreground">{st.description}</p>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -283,13 +296,18 @@ export function ActionDrawer({
               {detail.signals.map((signal) => {
                 const st = signalTexts(signal, tSignalTexts);
                 return (
-                  <div key={signal.id} className="rounded-md border px-3 py-2">
+                  <button
+                    key={signal.id}
+                    type="button"
+                    onClick={() => openSignal(signal.id)}
+                    className="block w-full rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted/40"
+                  >
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate text-xs font-medium">{st.title}</p>
                       <SignalStatusBadge status={signal.status} />
                     </div>
                     <p className="truncate text-xs text-muted-foreground">{st.description}</p>
-                  </div>
+                  </button>
                 );
               })}
             </section>

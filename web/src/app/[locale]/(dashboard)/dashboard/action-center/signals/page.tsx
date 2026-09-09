@@ -124,6 +124,22 @@ function SignalsContent({ brand }: { brand: Brand }) {
     void load();
   }, [load]);
 
+  // Deep link from an action's evidence: /signals?signal=<id> opens that
+  // signal's drawer once the list lands, then cleans the URL so refresh and
+  // back behave normally. Read via window.location rather than
+  // useSearchParams to keep the page out of a Suspense boundary.
+  useEffect(() => {
+    if (!signals) return;
+    const params = new URLSearchParams(window.location.search);
+    const signalId = params.get('signal');
+    if (!signalId) return;
+    const match = signals.find((signal) => signal.id === signalId);
+    if (match) setSelected(match);
+    params.delete('signal');
+    const query = params.toString();
+    window.history.replaceState(null, '', window.location.pathname + (query ? `?${query}` : ''));
+  }, [signals]);
+
   // Category/impact/status/source/search all narrow client-side: the whole
   // window is already loaded (per-brand signal counts are tens), and search
   // must match the composed titles, which only exist here.
