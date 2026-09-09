@@ -1,7 +1,8 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Check, Eye, RotateCcw, X } from 'lucide-react';
+import { ArrowUpRight, Check, Eye, RotateCcw, X } from 'lucide-react';
+import { Link } from '@/i18n/navigation';
 import {
   Sheet,
   SheetContent,
@@ -128,6 +129,15 @@ export function SignalDrawer({
             <p className="mt-1 text-sm">{affected.label}</p>
             {affected.detail && (
               <p className="break-all text-xs text-muted-foreground">{affected.detail}</p>
+            )}
+            {typeof signal.payload.promptId === 'string' && (
+              <Link
+                href={`/dashboard/prompts/${signal.payload.promptId}`}
+                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-foreground underline-offset-2 hover:underline"
+              >
+                {t('drawer.viewPrompt')}
+                <ArrowUpRight className="h-3 w-3" />
+              </Link>
             )}
           </div>
 

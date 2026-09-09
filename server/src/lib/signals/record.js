@@ -142,14 +142,16 @@ function fromPulseEntry(entry) {
       candidate.changeValue = -entry.drop;
       break;
     case 'prompt_gain':
-      candidate.payload = { promptText: entry.promptText };
+      // The prompt's id lives in the dedup key (prompt_gain:<id>); surfaced
+      // in the payload so the drawer can link to the prompt itself.
+      candidate.payload = { promptText: entry.promptText, promptId: entry.key.split(':')[1] };
       candidate.changeValue = entry.gain;
       break;
     case 'new_engine':
       candidate.payload = { platform: entry.platform };
       break;
     case 'lost_citations':
-      candidate.payload = { promptText: entry.promptText };
+      candidate.payload = { promptText: entry.promptText, promptId: entry.key.split(':')[1] };
       break;
     case 'first_citation':
       candidate.payload = { url: entry.url, label: entry.label, promptText: entry.promptText };

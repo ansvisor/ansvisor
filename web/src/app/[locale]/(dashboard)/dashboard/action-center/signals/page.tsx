@@ -99,6 +99,18 @@ function SignalsContent({ brand }: { brand: Brand }) {
   const [selected, setSelected] = useState<Signal | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  // The open drawer lives in the URL (?signal=<id>), mirroring the Actions
+  // page: back from a prompt page — or a refresh — restores it, and the
+  // action drawer's evidence links land here with the drawer already open.
+  const selectSignal = (signal: Signal | null) => {
+    setSelected(signal);
+    const params = new URLSearchParams(window.location.search);
+    if (signal) params.set('signal', signal.id);
+    else params.delete('signal');
+    const query = params.toString();
+    window.history.replaceState(null, '', window.location.pathname + (query ? `?${query}` : ''));
+  };
+
   const windowDays = PRESET_DAYS[datePreset];
   const dayFrom = utcDay(windowDays - 1);
   const dayTo = utcDay();
@@ -124,20 +136,15 @@ function SignalsContent({ brand }: { brand: Brand }) {
     void load();
   }, [load]);
 
-  // Deep link from an action's evidence: /signals?signal=<id> opens that
-  // signal's drawer once the list lands, then cleans the URL so refresh and
-  // back behave normally. Read via window.location rather than
-  // useSearchParams to keep the page out of a Suspense boundary.
+  // Restore the drawer named by the URL once the list is in. Read via
+  // window.location rather than useSearchParams to keep the page out of a
+  // Suspense boundary; the param stays while the drawer is open.
   useEffect(() => {
     if (!signals) return;
-    const params = new URLSearchParams(window.location.search);
-    const signalId = params.get('signal');
+    const signalId = new URLSearchParams(window.location.search).get('signal');
     if (!signalId) return;
     const match = signals.find((signal) => signal.id === signalId);
     if (match) setSelected(match);
-    params.delete('signal');
-    const query = params.toString();
-    window.history.replaceState(null, '', window.location.pathname + (query ? `?${query}` : ''));
   }, [signals]);
 
   // Category/impact/status/source/search all narrow client-side: the whole
@@ -385,7 +392,7 @@ function SignalsContent({ brand }: { brand: Brand }) {
       {visible.length > 0 ? (
         <SignalTable
           signals={visible}
-          onSelect={setSelected}
+          onSelect={selectSignal}
           onStatusChange={(signal, next) => void handleStatusChange(signal, next)}
           busyId={busyId}
         />
@@ -401,7 +408,7 @@ function SignalsContent({ brand }: { brand: Brand }) {
       <SignalDrawer
         signal={selected}
         onOpenChange={(open) => {
-          if (!open) setSelected(null);
+          if (!open) selectSignal(null);
         }}
         onStatusChange={(signal, next) => void handleStatusChange(signal, next)}
         isBusy={busyId === selected?.id}

@@ -313,7 +313,8 @@
         "detected": "Detected",
         "lastDetected": "Last detected",
         "source": "Source",
-        "status": "Status"
+        "status": "Status",
+        "viewPrompt": "View prompt"
       }
     },
     "signalTexts": {
