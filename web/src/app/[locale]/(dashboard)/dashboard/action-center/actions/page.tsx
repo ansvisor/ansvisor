@@ -88,6 +88,18 @@ function ActionsContent({ brand }: { brand: Brand }) {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // The open drawer lives in the URL (?action=<id>) so that coming BACK from
+  // a signal's page — or refreshing — restores it. replaceState, not push:
+  // opening and closing the drawer must not grow the history stack.
+  const selectAction = (id: string | null) => {
+    setSelectedId(id);
+    const params = new URLSearchParams(window.location.search);
+    if (id) params.set('action', id);
+    else params.delete('action');
+    const query = params.toString();
+    window.history.replaceState(null, '', window.location.pathname + (query ? `?${query}` : ''));
+  };
+
   const load = useCallback(async () => {
     setLoadFailed(false);
     try {
@@ -105,6 +117,13 @@ function ActionsContent({ brand }: { brand: Brand }) {
       .then(setMembers)
       .catch(() => setMembers([]));
   }, [load]);
+
+  // Restore the drawer named by the URL once the list is in.
+  useEffect(() => {
+    if (!actions) return;
+    const id = new URLSearchParams(window.location.search).get('action');
+    if (id && actions.some((action) => action.id === id)) setSelectedId(id);
+  }, [actions]);
 
   const selected = useMemo(
     () => (actions ?? []).find((action) => action.id === selectedId) ?? null,
@@ -338,7 +357,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
       </div>
 
       {visible.length > 0 ? (
-        <ActionTable actions={visible} onSelect={(action) => setSelectedId(action.id)} />
+        <ActionTable actions={visible} onSelect={(action) => selectAction(action.id)} />
       ) : (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
           <p className="text-sm text-muted-foreground">{t('noResults')}</p>
@@ -353,7 +372,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
         action={selected}
         members={members}
         onOpenChange={(open) => {
-          if (!open) setSelectedId(null);
+          if (!open) selectAction(null);
         }}
         onChanged={() => void load()}
       />
