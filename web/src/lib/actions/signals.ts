@@ -128,6 +128,19 @@ export async function getSignalsSummary(
   };
 }
 
+/** Count of untriaged signals, for the Action Center tab badge. A head
+ *  count query — no rows transferred, immune to the row cap. */
+export async function getNewSignalCount(brandId: string): Promise<number> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from('signals')
+    .select('id', { count: 'exact', head: true })
+    .eq('brand_id', brandId)
+    .eq('status', 'new');
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
 /**
  * Triage: any org member can move a signal through its lifecycle (RLS
  * enforces membership). Resolving stamps resolved_at; leaving the resolved

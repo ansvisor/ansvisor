@@ -1,7 +1,10 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link, usePathname } from '@/i18n/navigation';
+import { useBrandStore } from '@/stores/use-brand-store';
+import { getNewSignalCount } from '@/lib/actions/signals';
 import { cn } from '@/lib/utils';
 
 const TABS = [
@@ -20,6 +23,23 @@ export function ActionCenterTabs() {
   const pathname = usePathname();
   const t = useTranslations('actionCenter.tabs');
 
+  // Untriaged-signal count on the Signals tab: information ("something new
+  // is waiting"), not decoration. Best-effort — a failed count shows nothing.
+  const brandId = useBrandStore((s) => s.activeBrandId);
+  const [newSignals, setNewSignals] = useState(0);
+  useEffect(() => {
+    if (!brandId) return;
+    let cancelled = false;
+    getNewSignalCount(brandId)
+      .then((count) => {
+        if (!cancelled) setNewSignals(count);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, pathname]);
+
   return (
     <nav className="flex gap-6 border-b" aria-label={t('label')}>
       {TABS.map((tab) => {
@@ -37,6 +57,11 @@ export function ActionCenterTabs() {
             )}
           >
             {t(tab.key)}
+            {tab.key === 'signals' && newSignals > 0 && (
+              <span className="ml-1.5 rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
+                {newSignals}
+              </span>
+            )}
           </Link>
         );
       })}

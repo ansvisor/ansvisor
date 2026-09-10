@@ -188,6 +188,10 @@ export function KpiTable({
                 </TableCell>
                 <TableCell>
                   <Badge variant="outline" className={STATUS_BADGE[kpi.status]}>
+                    <span
+                      aria-hidden="true"
+                      className="h-1.5 w-1.5 rounded-full bg-current opacity-70"
+                    />
                     {t(`status.${kpi.status}`)}
                   </Badge>
                 </TableCell>

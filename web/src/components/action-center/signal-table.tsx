@@ -1,7 +1,25 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Check, Eye, MoreHorizontal, RotateCcw, X } from 'lucide-react';
+import {
+  BarChart3,
+  Check,
+  Eye,
+  Gauge,
+  Link2,
+  MessageSquare,
+  MoreHorizontal,
+  MousePointerClick,
+  RotateCcw,
+  Search,
+  Sparkles,
+  Swords,
+  TrendingDown,
+  TrendingUp,
+  Trophy,
+  Unlink,
+  X,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
@@ -18,10 +36,56 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { Signal } from '@/lib/actions/signals';
-import { SIGNAL_KINDS, type SignalImpact, type SignalStatus } from '@/lib/signals/registry';
+import {
+  SIGNAL_KINDS,
+  type SignalImpact,
+  type SignalKind,
+  type SignalSource,
+  type SignalStatus,
+} from '@/lib/signals/registry';
 import { signalAffected, signalTexts } from '@/lib/signals/display';
 import { formatRelative } from '@/lib/format-relative';
 import { cn } from '@/lib/utils';
+
+export const SIGNAL_ICONS: Record<SignalKind, React.ComponentType<{ className?: string }>> = {
+  sharp_drop: TrendingDown,
+  prompt_gain: TrendingUp,
+  new_engine: Sparkles,
+  lost_citations: Unlink,
+  first_citation: Link2,
+  competitor_surge: Swords,
+  competitor_crossed: Swords,
+  competitor_overtaken: Trophy,
+  page_opportunity: MousePointerClick,
+  uncited_mentions: MessageSquare,
+  audit_low_score: Gauge,
+};
+
+const SOURCE_ICONS: Record<SignalSource, React.ComponentType<{ className?: string }>> = {
+  ai_results: Sparkles,
+  ga4: BarChart3,
+  gsc: Search,
+  site_audit: Gauge,
+};
+
+/** Data sources as icon + name pairs — icons carry recognition, the text
+ *  stays the accessible signal. */
+export function SourceList({ sources }: { sources: SignalSource[] }) {
+  const t = useTranslations('actionCenter.signalsPage');
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+      {sources.map((source) => {
+        const Icon = SOURCE_ICONS[source];
+        return (
+          <span key={source} className="flex items-center gap-1 text-xs text-muted-foreground">
+            {Icon && <Icon className="h-3 w-3" />}
+            {t(`sources.${source}`)}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
 
 /**
  * Impact as the mockup's multi-dot meter. Never color alone: the dots sit
@@ -64,6 +128,7 @@ export function SignalStatusBadge({ status }: { status: SignalStatus }) {
   const t = useTranslations('actionCenter.signalsPage');
   return (
     <Badge variant="outline" className={STATUS_BADGE[status]}>
+      <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
       {t(`status.${status}`)}
     </Badge>
   );
@@ -71,6 +136,11 @@ export function SignalStatusBadge({ status }: { status: SignalStatus }) {
 
 function detectedLabel(iso: string, tCommon: ReturnType<typeof useTranslations>): string {
   return formatRelative(iso, tCommon);
+}
+
+function KindIcon({ kind }: { kind: SignalKind }) {
+  const Icon = SIGNAL_ICONS[kind];
+  return <Icon className="h-4 w-4 text-muted-foreground" />;
 }
 
 export function SignalTable({
@@ -119,8 +189,15 @@ export function SignalTable({
                 onClick={() => onSelect(signal)}
               >
                 <TableCell className="max-w-[360px]">
-                  <p className="truncate text-sm font-medium">{texts.title}</p>
-                  <p className="truncate text-xs text-muted-foreground">{texts.description}</p>
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-muted/40">
+                      <KindIcon kind={signal.kind} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{texts.title}</p>
+                      <p className="truncate text-xs text-muted-foreground">{texts.description}</p>
+                    </div>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <p className="text-xs font-medium">{tCategories(signal.category)}</p>
@@ -134,8 +211,8 @@ export function SignalTable({
                     <ImpactDots impact={signal.impact} />
                   </div>
                 </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
-                  {signal.source.map((s) => t(`sources.${s}`)).join(' + ')}
+                <TableCell>
+                  <SourceList sources={signal.source} />
                 </TableCell>
                 <TableCell className="max-w-[180px]">
                   <p className="text-xs font-medium">{affected.label}</p>

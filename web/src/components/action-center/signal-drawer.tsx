@@ -17,7 +17,7 @@ import type { Signal } from '@/lib/actions/signals';
 import { SIGNAL_KINDS, type SignalStatus } from '@/lib/signals/registry';
 import { signalAffected, signalTexts } from '@/lib/signals/display';
 import { isKpiKey } from '@/lib/kpis/registry';
-import { ImpactDots, SignalStatusBadge } from './signal-table';
+import { ImpactDots, SIGNAL_ICONS, SignalStatusBadge, SourceList } from './signal-table';
 
 /**
  * Signal detail: the evidence view. Deliberately light in v1 — identity,
@@ -68,8 +68,15 @@ export function SignalDrawer({
               {t(`impact.${signal.impact}`)}
             </span>
           </div>
-          <SheetTitle>{texts.title}</SheetTitle>
-          <SheetDescription>{texts.description}</SheetDescription>
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-muted/40">
+              <HeaderIcon kind={signal.kind} />
+            </div>
+            <div className="min-w-0">
+              <SheetTitle>{texts.title}</SheetTitle>
+              <SheetDescription>{texts.description}</SheetDescription>
+            </div>
+          </div>
         </SheetHeader>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-4 text-sm">
@@ -78,9 +85,7 @@ export function SignalDrawer({
               <SignalStatusBadge status={signal.status} />
             </DetailItem>
             <DetailItem label={t('drawer.source')}>
-              <span className="text-xs">
-                {signal.source.map((s) => t(`sources.${s}`)).join(' + ')}
-              </span>
+              <SourceList sources={signal.source} />
             </DetailItem>
             <DetailItem label={t('drawer.detected')}>
               <span className="text-xs tabular-nums">{formatStamp(signal.detectedAt)}</span>
@@ -208,6 +213,11 @@ export function SignalDrawer({
       </SheetContent>
     </Sheet>
   );
+}
+
+function HeaderIcon({ kind }: { kind: Signal['kind'] }) {
+  const Icon = SIGNAL_ICONS[kind];
+  return <Icon className="h-4 w-4 text-muted-foreground" />;
 }
 
 function DetailItem({ label, children }: { label: string; children: React.ReactNode }) {

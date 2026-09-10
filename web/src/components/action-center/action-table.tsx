@@ -25,7 +25,7 @@ import { ImpactDots } from './signal-table';
 import { formatRelative } from '@/lib/format-relative';
 import { cn } from '@/lib/utils';
 
-const KIND_ICONS: Record<ActionKind, React.ComponentType<{ className?: string }>> = {
+export const KIND_ICONS: Record<ActionKind, React.ComponentType<{ className?: string }>> = {
   recover_visibility: BarChart3,
   capture_ai_traffic: MousePointerClick,
   convert_mentions: MessageSquare,
@@ -46,6 +46,7 @@ export function ActionStatusBadge({ status }: { status: ActionStatus }) {
   const t = useTranslations('actionCenter.actionsPage');
   return (
     <Badge variant="outline" className={ACTION_STATUS_BADGE[status]}>
+      <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
       {t(`status.${status}`)}
     </Badge>
   );

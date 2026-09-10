@@ -43,7 +43,13 @@ import { actionContextTags, actionTexts } from '@/lib/action-center/display';
 import { signalTexts } from '@/lib/signals/display';
 import { isKpiKey } from '@/lib/kpis/registry';
 import { ImpactDots, SignalStatusBadge } from './signal-table';
+import { KIND_ICONS } from './action-table';
 import { cn } from '@/lib/utils';
+
+function ActionHeaderIcon({ kind }: { kind: ActionItem['kind'] }) {
+  const Icon = KIND_ICONS[kind];
+  return <Icon className="h-4 w-4 text-muted-foreground" />;
+}
 
 type DrawerTab = 'overview' | 'tasks' | 'signals' | 'history';
 const TABS: DrawerTab[] = ['overview', 'tasks', 'signals', 'history'];
@@ -141,8 +147,15 @@ export function ActionDrawer({
               {t('drawer.actionId')}: AC-{action.actionNo}
             </span>
           </div>
-          <SheetTitle>{texts.title}</SheetTitle>
-          <SheetDescription>{texts.description}</SheetDescription>
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-muted/40">
+              <ActionHeaderIcon kind={action.kind} />
+            </div>
+            <div className="min-w-0">
+              <SheetTitle>{texts.title}</SheetTitle>
+              <SheetDescription>{texts.description}</SheetDescription>
+            </div>
+          </div>
           <div className="flex flex-wrap gap-1">
             {tags.map((tag) => (
               <Badge key={tag} variant="outline" className="text-[10px]">
