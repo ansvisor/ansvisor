@@ -51,6 +51,27 @@ import { cn } from '@/lib/utils';
 
 const OPEN_STATUSES: ActionStatus[] = ['new', 'in_progress', 'on_hold', 'no_improvement'];
 
+const isOpen = (action: ActionItem) => OPEN_STATUSES.includes(action.status);
+
+/**
+ * What each summary card counts, one predicate per card.
+ *
+ * The cards used to be numbers with no way back to the rows behind them: "At
+ * Risk 2" above a table of three, and nothing saying which two — At Risk spans
+ * Recover *and* Fix, which neither the card nor the category badges admitted.
+ * Clicking a card now narrows the table to exactly what it counted, and since
+ * the count and the filter read the same predicate they cannot disagree.
+ */
+const CARD_FILTERS = {
+  top: (action: ActionItem) => isOpen(action) && action.impact === 'high',
+  atRisk: (action: ActionItem) =>
+    isOpen(action) && (action.category === 'recover' || action.category === 'fix'),
+  opportunities: (action: ActionItem) => isOpen(action) && action.category === 'growth',
+  inProgress: (action: ActionItem) => action.status === 'in_progress',
+} as const;
+
+type CardFocus = keyof typeof CARD_FILTERS;
+
 export default function ActionCenterActionsPage() {
   const brand = useBrandStore((s) => s.getActiveBrand());
   const t = useTranslations('actionCenter.actionsPage');
@@ -90,6 +111,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
   const [assignee, setAssignee] = useState<string>('all');
   const [sort, setSort] = useState<ActionSort>('priority');
   const [search, setSearch] = useState('');
+  const [focus, setFocus] = useState<CardFocus | null>(null);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -138,6 +160,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
     const filtered = (actions ?? []).filter((action) => {
+      if (focus && !CARD_FILTERS[focus](action)) return false;
       if (category !== 'all' && action.category !== category) return false;
       if (impact !== 'all' && action.impact !== impact) return false;
       if (status !== 'all' && action.status !== status) return false;
@@ -167,7 +190,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
           return comparePriority(a, b);
       }
     });
-  }, [actions, category, impact, status, assignee, search, sort, tTexts, t]);
+  }, [actions, focus, category, impact, status, assignee, search, sort, tTexts, t]);
 
   const categoryCounts = useMemo(() => {
     const counts = new Map<ActionCategory, number>();
@@ -178,20 +201,21 @@ function ActionsContent({ brand }: { brand: Brand }) {
   }, [actions]);
 
   const summary = useMemo(() => {
-    const open = (actions ?? []).filter((action) => OPEN_STATUSES.includes(action.status));
+    const all = actions ?? [];
+    const open = all.filter(isOpen);
     const impacts = open.map((action) => action.impact);
     return {
-      top: open.filter((action) => action.impact === 'high').length,
-      atRisk: open.filter((action) => action.category === 'recover' || action.category === 'fix')
-        .length,
-      opportunities: open.filter((action) => action.category === 'growth').length,
-      inProgress: (actions ?? []).filter((action) => action.status === 'in_progress').length,
+      top: all.filter(CARD_FILTERS.top).length,
+      atRisk: all.filter(CARD_FILTERS.atRisk).length,
+      opportunities: all.filter(CARD_FILTERS.opportunities).length,
+      inProgress: all.filter(CARD_FILTERS.inProgress).length,
       potential: impacts.includes('high') ? 'high' : impacts.includes('medium') ? 'medium' : 'low',
       hasOpen: open.length > 0,
     };
   }, [actions]);
 
   const hasActiveFilters =
+    focus !== null ||
     category !== 'all' ||
     impact !== 'all' ||
     status !== 'all' ||
@@ -199,6 +223,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
     search !== '';
 
   const clearFilters = () => {
+    setFocus(null);
     setCategory('all');
     setImpact('all');
     setStatus('all');
@@ -248,29 +273,39 @@ function ActionsContent({ brand }: { brand: Brand }) {
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {/* Each card toggles itself as the table's filter, so a count always
+            has a way back to the rows it came from. */}
         <SummaryCard
           icon={CircleDot}
           label={t('cards.top')}
           value={summary.top}
           sub={t('cards.topSub')}
+          isActive={focus === 'top'}
+          onClick={() => setFocus(focus === 'top' ? null : 'top')}
         />
         <SummaryCard
           icon={Shield}
           label={t('cards.atRisk')}
           value={summary.atRisk}
           sub={t('cards.atRiskSub')}
+          isActive={focus === 'atRisk'}
+          onClick={() => setFocus(focus === 'atRisk' ? null : 'atRisk')}
         />
         <SummaryCard
           icon={Sparkles}
           label={t('cards.opportunities')}
           value={summary.opportunities}
           sub={t('cards.opportunitiesSub')}
+          isActive={focus === 'opportunities'}
+          onClick={() => setFocus(focus === 'opportunities' ? null : 'opportunities')}
         />
         <SummaryCard
           icon={ArrowUpDown}
           label={t('cards.inProgress')}
           value={summary.inProgress}
           sub={t('cards.inProgressSub')}
+          isActive={focus === 'inProgress'}
+          onClick={() => setFocus(focus === 'inProgress' ? null : 'inProgress')}
         />
         <Card>
           <CardContent className="p-4">
@@ -399,14 +434,38 @@ function SummaryCard({
   label,
   value,
   sub,
+  isActive,
+  onClick,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: number;
   sub: string;
+  /** Omit both to render a card that only reports, like Potential Impact. */
+  isActive?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <Card>
+    <Card
+      {...(onClick
+        ? {
+            role: 'button' as const,
+            tabIndex: 0,
+            'aria-pressed': isActive,
+            onClick,
+            onKeyDown: (event: React.KeyboardEvent) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onClick();
+              }
+            },
+            className: cn(
+              'cursor-pointer transition-colors hover:border-foreground/30',
+              isActive && 'border-foreground/60 bg-muted/40',
+            ),
+          }
+        : {})}
+    >
       <CardContent className="p-4">
         <div className="flex items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded-md border bg-muted/40">
