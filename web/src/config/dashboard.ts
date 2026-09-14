@@ -48,12 +48,6 @@ export const dashboardNav: NavGroup[] = [
         icon: Building2,
       },
       {
-        title: 'Agent',
-        href: '/dashboard/agent',
-        icon: Sparkles,
-        requiredFeature: 'ai_agent',
-      },
-      {
         title: 'Action Center',
         href: '/dashboard/action-center',
         icon: Target,
@@ -113,6 +107,15 @@ export const dashboardNav: NavGroup[] = [
         href: '/dashboard/audit',
         icon: Gauge,
         requiredFeature: 'content_optimization',
+      },
+      // The route stays /dashboard/agent: renaming the URL would break every
+      // existing link for a label change, and the sidebar's "Set up" badge
+      // keys off that href.
+      {
+        title: 'Chat',
+        href: '/dashboard/agent',
+        icon: Sparkles,
+        requiredFeature: 'ai_agent',
       },
     ],
   },

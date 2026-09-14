@@ -9,7 +9,7 @@ type NavLabelKey = { namespace: 'nav'; key: string } | { namespace: 'brands'; ke
  * mobile menus from silently falling out of sync. */
 export const dashboardNavLabelKeys: Record<string, NavLabelKey> = {
   Brands: { namespace: 'brands', key: 'title' },
-  Agent: { namespace: 'nav', key: 'agent' },
+  Chat: { namespace: 'nav', key: 'chat' },
   'Action Center': { namespace: 'nav', key: 'actionCenter' },
   'Answer Engine Insights': { namespace: 'nav', key: 'insights' },
   'AI Traffic Analytics': { namespace: 'nav', key: 'traffic' },
