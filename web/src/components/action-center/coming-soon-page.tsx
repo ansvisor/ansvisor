@@ -5,12 +5,12 @@ import { Hourglass } from 'lucide-react';
 import { ActionCenterTabs } from './action-center-tabs';
 
 /**
- * Shared shell for the Action Center sections that exist in navigation but
- * not yet in function (Actions, Signals, History). Honest placeholder over a
- * dead tab: the route works, the nav highlights, and the body says exactly
- * where things stand.
+ * Shell for an Action Center section whose route exists but whose page does
+ * not yet. Only History uses it now that Actions and Signals are real, and
+ * History is no longer in the tab bar — so this answers a deep link or a
+ * bookmark rather than a click, and says plainly where things stand.
  */
-export function ComingSoonPage({ tab }: { tab: 'actions' | 'signals' | 'history' }) {
+export function ComingSoonPage({ tab }: { tab: 'history' }) {
   const t = useTranslations('actionCenter');
 
   return (

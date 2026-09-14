@@ -7,15 +7,18 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { getNewSignalCount } from '@/lib/actions/signals';
 import { cn } from '@/lib/utils';
 
+// History is deliberately absent: the route still answers, but a top-level
+// tab that only ever says "coming soon" is a dead end for anyone who clicks
+// it. It returns here when the page renders the action_events trail the
+// action drawer already shows per action.
 const TABS = [
   { key: 'kpis', href: '/dashboard/action-center/kpis' },
   { key: 'actions', href: '/dashboard/action-center/actions' },
   { key: 'signals', href: '/dashboard/action-center/signals' },
-  { key: 'history', href: '/dashboard/action-center/history' },
 ] as const;
 
 /**
- * The Action Center's section nav: KPIs | Actions | Signals | History.
+ * The Action Center's section nav: KPIs | Actions | Signals.
  * Route-backed rather than state-backed tabs so each section is linkable
  * and the browser back button works across them.
  */
