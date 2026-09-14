@@ -59,9 +59,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { BROWSER_API_BASE_URL } from '@/config/api';
-
-const AEO_SERVER_URL = BROWSER_API_BASE_URL;
+import { suggestTopics, generatePromptsFromTopics, suggestCompetitors } from '@/lib/ai-brand-setup';
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
 
@@ -590,32 +588,14 @@ export default function OnboardingPage() {
     setLoadingTopics(true);
     setTopicSuggestError(false);
     try {
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      const res = await fetch(`${AEO_SERVER_URL}/api/topics/suggest`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({
-          brandName: brandName.trim(),
-          industry: '',
-          description: description.trim(),
-          website: domain,
-          language,
-        }),
+      const { topics } = await suggestTopics({
+        brandName: brandName.trim(),
+        description: description.trim(),
+        website: domain,
+        language,
       });
-
-      if (!res.ok) throw new Error('Failed to suggest topics');
-      const data = await res.json();
-
-      const names = (data.topics || []).map((t: { name: string }) => t.name);
-      setSuggestedTopics(names);
-      setSelectedTopics(new Set(names.slice(0, 7)));
+      setSuggestedTopics(topics);
+      setSelectedTopics(new Set(topics.slice(0, 7)));
     } catch (err) {
       console.error('Topic suggestion error:', err);
       setTopicSuggestError(true);
@@ -663,35 +643,16 @@ export default function OnboardingPage() {
       // Save topics to DB
       await createTopics(createdBrand.id, topicNames);
 
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      const res = await fetch(`${AEO_SERVER_URL}/api/prompts/from-topics`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({
+      const { topicPrompts: generated } = await generatePromptsFromTopics(
+        {
           brandName: brandName.trim(),
-          industry: '',
           description: description.trim(),
-          topics: topicNames,
+          website: domain,
           language,
-        }),
-      });
-
-      if (!res.ok) throw new Error('Failed to generate prompts');
-      const data = await res.json();
-
-      setTopicPrompts(
-        (data.topicPrompts || []).map((tp: { topic: string; prompts: string[] }) => ({
-          topic: tp.topic,
-          prompts: tp.prompts,
-        })),
+        },
+        topicNames,
       );
+      setTopicPrompts(generated);
       track('onboarding_step_completed', {
         step: 3,
         step_name: 'topics',
@@ -773,35 +734,13 @@ export default function OnboardingPage() {
     setLoadingCompetitors(true);
     setCompetitorSuggestError(false);
     try {
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      const res = await fetch(`${AEO_SERVER_URL}/api/competitors/suggest`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({
-          brandName: brandName.trim(),
-          industry: '',
-          description: description.trim(),
-          language,
-        }),
+      const { competitors } = await suggestCompetitors({
+        brandName: brandName.trim(),
+        description: description.trim(),
+        website: domain,
+        language,
       });
-
-      if (!res.ok) throw new Error('Failed to suggest competitors');
-      const data = await res.json();
-
-      setSuggestedCompetitors(
-        (data.competitors || []).map((c: { name: string; domain: string }) => ({
-          name: c.name,
-          domain: c.domain,
-          selected: true,
-        })),
-      );
+      setSuggestedCompetitors(competitors.map((c) => ({ ...c, selected: true })));
     } catch (err) {
       console.error('Competitor suggestion error:', err);
       setCompetitorSuggestError(true);
