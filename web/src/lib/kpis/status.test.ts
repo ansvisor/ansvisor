@@ -19,9 +19,9 @@ test('a non-positive target yields zero progress, not Infinity', () => {
 });
 
 test('goal_reached wins over a bad trend', () => {
-  expect(
-    deriveKpiStatus({ progress: 104, change: -8, direction: 'higher_is_better' }),
-  ).toBe('goal_reached');
+  expect(deriveKpiStatus({ progress: 104, change: -8, direction: 'higher_is_better' })).toBe(
+    'goal_reached',
+  );
 });
 
 test('status follows the documented progress bands', () => {

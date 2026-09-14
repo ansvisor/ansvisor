@@ -34,11 +34,7 @@ import {
   scaleTargetToWindow,
   type KpiStatus,
 } from '@/lib/kpis/status';
-import {
-  getInsightsSummary,
-  getShareOfVoiceData,
-  getVisibilityRateTrend,
-} from './tracking';
+import { getInsightsSummary, getShareOfVoiceData, getVisibilityRateTrend } from './tracking';
 import { getTrafficSummary, getTrafficTrend } from './traffic';
 
 const TREND_DAYS = 7;
@@ -195,9 +191,7 @@ function buildSnapshot(
       value = summary.rate;
       change = summary.change;
       changeKind = 'points';
-      trend = points
-        .slice(-TREND_DAYS)
-        .map((p) => ({ date: p.date, value: p.values['you'] ?? 0 }));
+      trend = points.slice(-TREND_DAYS).map((p) => ({ date: p.date, value: p.values['you'] ?? 0 }));
       break;
     }
     case 'citations': {

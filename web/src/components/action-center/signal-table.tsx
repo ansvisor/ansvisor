@@ -98,10 +98,7 @@ export function ImpactDots({ impact }: { impact: SignalImpact }) {
   return (
     <span className="flex items-center gap-0.5" aria-hidden="true">
       {[0, 1, 2].map((i) => (
-        <span
-          key={i}
-          className={cn('h-1.5 w-1.5 rounded-full', i < filled ? color : 'bg-muted')}
-        />
+        <span key={i} className={cn('h-1.5 w-1.5 rounded-full', i < filled ? color : 'bg-muted')} />
       ))}
     </span>
   );
@@ -183,11 +180,7 @@ export function SignalTable({
             const stateKey = SIGNAL_KINDS[signal.kind].stateKey;
             const detected = new Date(signal.detectedAt);
             return (
-              <TableRow
-                key={signal.id}
-                className="cursor-pointer"
-                onClick={() => onSelect(signal)}
-              >
+              <TableRow key={signal.id} className="cursor-pointer" onClick={() => onSelect(signal)}>
                 <TableCell className="max-w-[360px]">
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-muted/40">

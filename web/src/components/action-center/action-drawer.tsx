@@ -212,9 +212,7 @@ export function ActionDrawer({
                       .filter((kpi) => relatedKpis.includes(kpi.kpiKey) && isKpiKey(kpi.kpiKey))
                       .map((kpi) => (
                         <div key={kpi.kpiKey} className="rounded-md border px-3 py-2">
-                          <p className="text-xs font-medium">
-                            {tRegistry(`${kpi.kpiKey}.name`)}
-                          </p>
+                          <p className="text-xs font-medium">{tRegistry(`${kpi.kpiKey}.name`)}</p>
                           <p className="text-xs text-muted-foreground">
                             {t('drawer.kpiTarget', { target: kpi.target })}
                           </p>

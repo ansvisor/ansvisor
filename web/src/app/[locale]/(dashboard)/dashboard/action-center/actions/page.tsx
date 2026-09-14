@@ -187,7 +187,11 @@ function ActionsContent({ brand }: { brand: Brand }) {
   }, [actions]);
 
   const hasActiveFilters =
-    category !== 'all' || impact !== 'all' || status !== 'all' || assignee !== 'all' || search !== '';
+    category !== 'all' ||
+    impact !== 'all' ||
+    status !== 'all' ||
+    assignee !== 'all' ||
+    search !== '';
 
   const clearFilters = () => {
     setCategory('all');
@@ -239,7 +243,12 @@ function ActionsContent({ brand }: { brand: Brand }) {
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <SummaryCard icon={CircleDot} label={t('cards.top')} value={summary.top} sub={t('cards.topSub')} />
+        <SummaryCard
+          icon={CircleDot}
+          label={t('cards.top')}
+          value={summary.top}
+          sub={t('cards.topSub')}
+        />
         <SummaryCard
           icon={Shield}
           label={t('cards.atRisk')}

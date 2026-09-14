@@ -1,13 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import {
-  BarChart3,
-  MessageSquare,
-  MousePointerClick,
-  Swords,
-  Wrench,
-} from 'lucide-react';
+import { BarChart3, MessageSquare, MousePointerClick, Swords, Wrench } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -52,11 +46,7 @@ export function ActionStatusBadge({ status }: { status: ActionStatus }) {
   );
 }
 
-export function AssigneeAvatar({
-  assignee,
-}: {
-  assignee: ActionItem['assignee'];
-}) {
+export function AssigneeAvatar({ assignee }: { assignee: ActionItem['assignee'] }) {
   if (!assignee) return <span className="text-xs text-muted-foreground">—</span>;
   const initials = (assignee.fullName ?? '?')
     .split(/\s+/)
@@ -103,11 +93,7 @@ export function ActionTable({
             const texts = actionTexts(action, tTexts);
             const tags = actionContextTags(action, t);
             return (
-              <TableRow
-                key={action.id}
-                className="cursor-pointer"
-                onClick={() => onSelect(action)}
-              >
+              <TableRow key={action.id} className="cursor-pointer" onClick={() => onSelect(action)}>
                 <TableCell className="max-w-[380px]">
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-muted/40">

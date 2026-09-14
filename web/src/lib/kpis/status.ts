@@ -49,8 +49,7 @@ export function deriveKpiStatus({
   if (progress >= 100) return 'goal_reached';
   if (progress < 40) return 'off_track';
   const movingWrongWay =
-    change !== null &&
-    (direction === 'higher_is_better' ? change < 0 : change > 0);
+    change !== null && (direction === 'higher_is_better' ? change < 0 : change > 0);
   if (progress < 70 || movingWrongWay) return 'at_risk';
   return 'on_track';
 }

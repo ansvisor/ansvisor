@@ -46,12 +46,7 @@ export const ACTION_STATUSES: readonly ActionStatus[] = [
 
 export const ACTION_IMPACTS: readonly ActionImpact[] = ['high', 'medium', 'low'];
 
-export const TASK_STATUSES: readonly TaskStatus[] = [
-  'todo',
-  'in_progress',
-  'completed',
-  'blocked',
-];
+export const TASK_STATUSES: readonly TaskStatus[] = ['todo', 'in_progress', 'completed', 'blocked'];
 
 export interface ActionKindMeta {
   kind: ActionKind;

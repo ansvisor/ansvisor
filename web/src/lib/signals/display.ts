@@ -14,10 +14,7 @@ function str(payload: Record<string, unknown>, key: string): string {
   return typeof value === 'string' ? value : String(value ?? '');
 }
 
-export function signalTexts(
-  signal: Signal,
-  t: Translator,
-): { title: string; description: string } {
+export function signalTexts(signal: Signal, t: Translator): { title: string; description: string } {
   const p = signal.payload;
   const values = ((): Record<string, string | number> => {
     switch (signal.kind) {

@@ -80,7 +80,11 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
 
   const [tasksRes, signalsRes, profilesRes] = await Promise.all([
     supabase.from('action_tasks').select('action_id, status').in('action_id', actionIds),
-    supabase.from('signals').select('action_id').eq('brand_id', brandId).not('action_id', 'is', null),
+    supabase
+      .from('signals')
+      .select('action_id')
+      .eq('brand_id', brandId)
+      .not('action_id', 'is', null),
     assigneeIds.length > 0
       ? supabase.from('profiles').select('id, full_name, avatar_url').in('id', assigneeIds)
       : Promise.resolve({ data: [], error: null }),
