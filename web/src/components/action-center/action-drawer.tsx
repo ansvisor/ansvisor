@@ -39,7 +39,7 @@ import {
   type ActionStatus,
   type TaskStatus,
 } from '@/lib/action-center/registry';
-import { actionContextTags, actionTexts } from '@/lib/action-center/display';
+import { actionContextTags, actionTexts, memberLabel } from '@/lib/action-center/display';
 import { signalTexts } from '@/lib/signals/display';
 import { isKpiKey } from '@/lib/kpis/registry';
 import { ImpactDots, SignalStatusBadge } from './signal-table';
@@ -403,7 +403,7 @@ export function ActionDrawer({
                 { value: 'unassigned', label: t('filters.unassigned') },
                 ...members.map((member) => ({
                   value: member.userId,
-                  label: member.fullName ?? member.userId.slice(0, 8),
+                  label: memberLabel(member),
                 })),
               ]}
             >
@@ -414,7 +414,7 @@ export function ActionDrawer({
                 <SelectItem value="unassigned">{t('filters.unassigned')}</SelectItem>
                 {members.map((member) => (
                   <SelectItem key={member.userId} value={member.userId}>
-                    {member.fullName ?? member.userId.slice(0, 8)}
+                    {memberLabel(member)}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -98,3 +98,16 @@ export function comparePriority(a: ActionItem, b: ActionItem): number {
     b.updatedAt.localeCompare(a.updatedAt)
   );
 }
+
+/**
+ * How a team member is named in an assignee picker.
+ *
+ * `full_name` is optional on a profile and most of this organization's members
+ * have never set one, so the previous fallback — the first eight characters of
+ * the user's uuid — put strings like `1d3fb0a2` in the dropdown. Email is the
+ * one identifier every member is guaranteed to have and to recognise, which is
+ * what the team settings list has always shown.
+ */
+export function memberLabel(member: { fullName: string | null; email: string }): string {
+  return member.fullName?.trim() || member.email;
+}

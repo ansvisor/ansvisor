@@ -27,7 +27,12 @@ import {
   type ActionSort,
   type ActionStatus,
 } from '@/lib/action-center/registry';
-import { actionContextTags, actionTexts, comparePriority } from '@/lib/action-center/display';
+import {
+  actionContextTags,
+  actionTexts,
+  comparePriority,
+  memberLabel,
+} from '@/lib/action-center/display';
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
 import { ActionTable } from '@/components/action-center/action-table';
 import { ActionDrawer } from '@/components/action-center/action-drawer';
@@ -343,7 +348,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
             { value: 'unassigned', label: t('filters.unassigned') },
             ...members.map((member) => ({
               value: member.userId,
-              label: member.fullName ?? member.userId.slice(0, 8),
+              label: memberLabel(member),
             })),
           ]}
           allLabel={t('filters.all')}
