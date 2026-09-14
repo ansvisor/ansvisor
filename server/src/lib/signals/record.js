@@ -193,7 +193,8 @@ async function uncitedMentionCandidates(brandId, now) {
   if (error) throw new Error(error.message);
 
   const uncited = (data ?? []).filter(
-    (row) => Number(row.runs) > 0 && Number(row.total_mentions) > 0 && Number(row.total_citations) === 0,
+    (row) =>
+      Number(row.runs) > 0 && Number(row.total_mentions) > 0 && Number(row.total_citations) === 0,
   );
   if (uncited.length < UNCITED_MIN_PROMPTS) return [];
 

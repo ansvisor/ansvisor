@@ -34,7 +34,9 @@ if (arg === '--all') {
 for (const brandId of brandIds) {
   try {
     const result = await recordSignalsForBrand(brandId);
-    const actions = result.skipped ? { skipped: result.skipped } : await generateActionsForBrand(brandId);
+    const actions = result.skipped
+      ? { skipped: result.skipped }
+      : await generateActionsForBrand(brandId);
     console.log(brandId, JSON.stringify({ signals: result, actions }));
   } catch (err) {
     console.error(brandId, 'FAILED:', err.message);

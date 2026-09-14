@@ -144,7 +144,9 @@ async function linkSignals(actionId, signals) {
 export async function generateActionsForBrand(brandId, { now = new Date() } = {}) {
   const { data: openSignals, error: signalsErr } = await supabaseAdmin
     .from('signals')
-    .select('id, kind, impact, kpi_keys, payload, previous_value, current_value, change_value, action_id')
+    .select(
+      'id, kind, impact, kpi_keys, payload, previous_value, current_value, change_value, action_id',
+    )
     .eq('brand_id', brandId)
     .in('status', ['new', 'acknowledged'])
     .limit(1000);
