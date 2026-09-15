@@ -1,6 +1,6 @@
 <div align="center">
 
-[![Ansvisor Banner](https://cdn.prod.website-files.com/69e606308fb6f96fb911b251/6a2a92ca0bf3f52b9dbf73d5_811d97a16c5c5f3b7bf3b4875078037e_1.png)](https://www.ansvisor.com)
+[![Ansvisor Banner](https://cdn.prod.website-files.com/69e606308fb6f96fb911b251/6aa99287516ddd71037ffae7_Ansvisor%20-%20AI%20Search%20Intelligence%20Platform%20for%20Better%20AI%20Visibility.png)](https://www.ansvisor.com)
 
 [![🚀 Try the Cloud — ansvisor.com](https://img.shields.io/badge/🚀_Try_the_Cloud-ansvisor.com-6366f1?style=for-the-badge&logoColor=white&logo=vercel)](https://www.ansvisor.com)
 [![📚 Docs](https://img.shields.io/badge/📚_Docs-docs.ansvisor.com-10b981?style=for-the-badge&logoColor=white&logo=readthedocs)](https://docs.ansvisor.com)
