@@ -25,7 +25,7 @@ export type ActionKind =
   | 'fix_low_scores'
   | 'close_competitor_gap';
 
-export type TaskStatus = 'todo' | 'in_progress' | 'completed' | 'blocked';
+export type TaskStatus = 'todo' | 'in_progress' | 'completed' | 'canceled';
 
 export const ACTION_CATEGORIES: readonly ActionCategory[] = [
   'growth',
@@ -46,7 +46,12 @@ export const ACTION_STATUSES: readonly ActionStatus[] = [
 
 export const ACTION_IMPACTS: readonly ActionImpact[] = ['high', 'medium', 'low'];
 
-export const TASK_STATUSES: readonly TaskStatus[] = ['todo', 'in_progress', 'completed', 'blocked'];
+export const TASK_STATUSES: readonly TaskStatus[] = [
+  'todo',
+  'in_progress',
+  'completed',
+  'canceled',
+];
 
 export interface ActionKindMeta {
   kind: ActionKind;

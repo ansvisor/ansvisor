@@ -93,8 +93,11 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
   if (signalsRes.error) throw new Error(signalsRes.error.message);
   if (profilesRes.error) throw new Error(profilesRes.error.message);
 
+  // Canceled tasks leave the denominator: the work was called off, so it must
+  // not hold the action below 100% forever the way a blocked one used to.
   const taskTotals = new Map<string, { total: number; completed: number }>();
   for (const task of tasksRes.data ?? []) {
+    if (task.status === 'canceled') continue;
     const acc = taskTotals.get(task.action_id) ?? { total: 0, completed: 0 };
     acc.total += 1;
     if (task.status === 'completed') acc.completed += 1;
@@ -138,7 +141,10 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
 export interface ActionTask {
   id: string;
   position: number;
-  taskKey: string;
+  /** Template key for a generated task; null once someone renames or adds one. */
+  taskKey: string | null;
+  /** User-supplied text. Takes precedence over the template when present. */
+  title: string | null;
   status: TaskStatus;
 }
 
@@ -171,7 +177,7 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
   const [tasksRes, signalsRes, eventsRes, kpisRes] = await Promise.all([
     supabase
       .from('action_tasks')
-      .select('id, position, task_key, status')
+      .select('id, position, task_key, title, status')
       .eq('action_id', actionId)
       .order('position'),
     supabase
@@ -201,6 +207,7 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
       id: task.id,
       position: task.position,
       taskKey: task.task_key,
+      title: task.title,
       status: task.status as TaskStatus,
     })),
     signals: mapSignalRows((signalsRes.data ?? []) as SignalRow[]),
@@ -230,6 +237,20 @@ async function logEvent(
   await supabase
     .from('action_events')
     .insert({ action_id: actionId, event, data, actor_id: auth.user?.id ?? null });
+}
+
+/** Bump the action's updated stamp so the table's Updated column tracks real
+ *  work, not just nightly refreshes. */
+async function touchAction(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  actionId: string,
+) {
+  await supabase
+    .from('actions')
+    .update({ updated_at: new Date().toISOString() })
+    .eq('brand_id', brandId)
+    .eq('id', actionId);
 }
 
 export async function updateActionStatus(
@@ -295,11 +316,113 @@ export async function updateTaskStatus(
     .eq('id', taskId);
   if (error) throw new Error(error.message);
   await logEvent(supabase, actionId, 'task_status', { taskId, to: status });
-  // Bump the action's updated stamp so the table's Updated column tracks
-  // real work, not just nightly refreshes.
-  await supabase
-    .from('actions')
-    .update({ updated_at: new Date().toISOString() })
-    .eq('brand_id', brandId)
-    .eq('id', actionId);
+  await touchAction(supabase, brandId, actionId);
+}
+
+/** Longest a task's text may be. Long enough for a real instruction, short
+ *  enough to stay one line in the drawer. */
+const TASK_TITLE_MAX = 200;
+
+function cleanTaskTitle(raw: string): string {
+  const title = raw.trim().slice(0, TASK_TITLE_MAX);
+  if (!title) throw new Error('Task text is required');
+  return title;
+}
+
+/**
+ * Append a task of the user's own wording.
+ *
+ * `task_key` stays null — these have no template — so the renderable check
+ * carries the title, and `unique (action_id, task_key)` does not apply to
+ * them (Postgres treats nulls as distinct), which is what lets an action hold
+ * as many as someone types.
+ */
+export async function addTask(brandId: string, actionId: string, title: string): Promise<void> {
+  const supabase = await createClient();
+  const text = cleanTaskTitle(title);
+
+  // Append after the current last, reading through the caller's own RLS so a
+  // position can only ever be computed from tasks they can see.
+  const { data: last, error: lastErr } = await supabase
+    .from('action_tasks')
+    .select('position')
+    .eq('action_id', actionId)
+    .order('position', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (lastErr) throw new Error(lastErr.message);
+
+  const { error } = await supabase.from('action_tasks').insert({
+    action_id: actionId,
+    position: (last?.position ?? 0) + 1,
+    title: text,
+    status: 'todo',
+  });
+  if (error) throw new Error(error.message);
+
+  await logEvent(supabase, actionId, 'task_added', { title: text });
+  await touchAction(supabase, brandId, actionId);
+}
+
+/**
+ * Rename a task. A generated task keeps its `task_key` for provenance — which
+ * template it grew from stays answerable — and the title simply wins at render
+ * time.
+ */
+export async function updateTaskTitle(
+  brandId: string,
+  actionId: string,
+  taskId: string,
+  title: string,
+): Promise<void> {
+  const supabase = await createClient();
+  const text = cleanTaskTitle(title);
+
+  const { error } = await supabase
+    .from('action_tasks')
+    .update({ title: text, updated_at: new Date().toISOString() })
+    .eq('action_id', actionId)
+    .eq('id', taskId);
+  if (error) throw new Error(error.message);
+
+  await logEvent(supabase, actionId, 'task_renamed', { taskId, title: text });
+  await touchAction(supabase, brandId, actionId);
+}
+
+/**
+ * Remove a task and close the gap in the numbering.
+ *
+ * The drawer shows `position` to the reader ("1. 2. 3."), so leaving a hole
+ * would show one. Renumbering runs row by row rather than in one statement
+ * because PostgREST has no bulk conditional update; a handful of tasks per
+ * action makes that a non-issue.
+ */
+export async function deleteTask(brandId: string, actionId: string, taskId: string): Promise<void> {
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from('action_tasks')
+    .delete()
+    .eq('action_id', actionId)
+    .eq('id', taskId);
+  if (error) throw new Error(error.message);
+
+  const { data: remaining, error: readErr } = await supabase
+    .from('action_tasks')
+    .select('id, position')
+    .eq('action_id', actionId)
+    .order('position');
+  if (readErr) throw new Error(readErr.message);
+
+  await Promise.all(
+    (remaining ?? [])
+      .map((task, index) => ({ task, wanted: index + 1 }))
+      .filter(({ task, wanted }) => task.position !== wanted)
+      .map(({ task, wanted }) =>
+        supabase.from('action_tasks').update({ position: wanted }).eq('id', task.id),
+      ),
+  );
+
+  await logEvent(supabase, actionId, 'task_deleted', { taskId });
+  await touchAction(supabase, brandId, actionId);
 }

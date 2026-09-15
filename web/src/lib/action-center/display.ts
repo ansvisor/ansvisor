@@ -111,3 +111,19 @@ export function comparePriority(a: ActionItem, b: ActionItem): number {
 export function memberLabel(member: { fullName: string | null; email: string }): string {
   return member.fullName?.trim() || member.email;
 }
+
+/**
+ * A task's text: what the user wrote, or the template it was generated from.
+ *
+ * Generated tasks carry a `task_key` into actionCenter.actionTasks and no
+ * title. Adding or renaming a task writes a title, which wins from then on —
+ * the key stays behind so which template a task grew from is still answerable.
+ */
+export function taskText(
+  task: { taskKey: string | null; title: string | null },
+  t: Translator,
+): string {
+  const title = task.title?.trim();
+  if (title) return title;
+  return task.taskKey ? t(task.taskKey) : '';
+}

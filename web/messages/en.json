@@ -476,7 +476,14 @@
           "assigned": "Assignee changed",
           "due_date_set": "Due date updated",
           "task_status": "Task updated"
-        }
+        },
+        "taskText": "Task text",
+        "renameTask": "Rename task",
+        "deleteTask": "Delete task",
+        "addTask": "Add task",
+        "addTaskPlaceholder": "What needs doing?",
+        "addTaskConfirm": "Add",
+        "addTaskCancel": "Cancel"
       }
     },
     "actionTexts": {
@@ -529,7 +536,7 @@
       "todo": "To Do",
       "in_progress": "In Progress",
       "completed": "Completed",
-      "blocked": "Blocked"
+      "canceled": "Canceled"
     }
   },
   "agent": {

@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { toast } from 'sonner';
+import { Plus, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -24,13 +26,17 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  addTask,
   assignAction,
+  deleteTask,
   getActionDetail,
   setActionDueDate,
   updateActionStatus,
   updateTaskStatus,
+  updateTaskTitle,
   type ActionDetail,
   type ActionItem,
+  type ActionTask,
 } from '@/lib/actions/action-center';
 import type { TeamMember } from '@/lib/actions/team';
 import {
@@ -39,7 +45,7 @@ import {
   type ActionStatus,
   type TaskStatus,
 } from '@/lib/action-center/registry';
-import { actionContextTags, actionTexts, memberLabel } from '@/lib/action-center/display';
+import { actionContextTags, actionTexts, memberLabel, taskText } from '@/lib/action-center/display';
 import { signalTexts } from '@/lib/signals/display';
 import { isKpiKey } from '@/lib/kpis/registry';
 import { ImpactDots, SignalStatusBadge } from './signal-table';
@@ -251,53 +257,38 @@ export function ActionDrawer({
             </>
           ) : tab === 'tasks' ? (
             <section>
+              {/* Canceled tasks leave the denominator — the work was called
+                  off, so it should not hold the action short of done. */}
               <p className="text-xs text-muted-foreground">
                 {t('drawer.tasksProgress', {
                   completed: detail.tasks.filter((task) => task.status === 'completed').length,
-                  total: detail.tasks.length,
+                  total: detail.tasks.filter((task) => task.status !== 'canceled').length,
                 })}
               </p>
               <div className="mt-3 space-y-2">
                 {detail.tasks.map((task) => (
-                  <div
+                  <TaskRow
                     key={task.id}
-                    className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
-                  >
-                    <p
-                      className={cn(
-                        'min-w-0 flex-1 text-sm',
-                        task.status === 'completed' && 'text-muted-foreground line-through',
-                      )}
-                    >
-                      {task.position}. {tTasks(task.taskKey)}
-                    </p>
-                    <Select
-                      value={task.status}
-                      onValueChange={(value) =>
-                        void mutate(() =>
-                          updateTaskStatus(brandId, action.id, task.id, value as TaskStatus),
-                        )
-                      }
-                      disabled={isBusy}
-                      items={TASK_STATUSES.map((status) => ({
-                        value: status,
-                        label: tTaskStatus(status),
-                      }))}
-                    >
-                      <SelectTrigger className="h-7 w-32 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TASK_STATUSES.map((status) => (
-                          <SelectItem key={status} value={status}>
-                            {tTaskStatus(status)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                    task={task}
+                    disabled={isBusy}
+                    text={taskText(task, tTasks)}
+                    statusLabel={tTaskStatus}
+                    t={t}
+                    onStatusChange={(status) =>
+                      void mutate(() => updateTaskStatus(brandId, action.id, task.id, status))
+                    }
+                    onRename={(title) =>
+                      void mutate(() => updateTaskTitle(brandId, action.id, task.id, title))
+                    }
+                    onDelete={() => void mutate(() => deleteTask(brandId, action.id, task.id))}
+                  />
                 ))}
               </div>
+              <AddTaskForm
+                disabled={isBusy}
+                t={t}
+                onAdd={(title) => void mutate(() => addTask(brandId, action.id, title))}
+              />
             </section>
           ) : tab === 'signals' ? (
             <section className="space-y-2">
@@ -423,5 +414,191 @@ export function ActionDrawer({
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+type TaskTranslator = (key: string, values?: Record<string, string | number>) => string;
+
+/**
+ * One task: its text, its status, and the two edits a person can make to it.
+ *
+ * Renaming happens in place rather than in a dialog — the text is one line and
+ * a dialog for one line is a detour. Escape abandons the edit, Enter or blur
+ * commits it, and an empty value is treated as abandonment rather than as a
+ * request to blank the task out, which the database would refuse anyway.
+ */
+function TaskRow({
+  task,
+  text,
+  disabled,
+  statusLabel,
+  t,
+  onStatusChange,
+  onRename,
+  onDelete,
+}: {
+  task: ActionTask;
+  text: string;
+  disabled: boolean;
+  statusLabel: TaskTranslator;
+  t: TaskTranslator;
+  onStatusChange: (status: TaskStatus) => void;
+  onRename: (title: string) => void;
+  onDelete: () => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const isEditing = draft !== null;
+
+  const commit = () => {
+    const next = (draft ?? '').trim();
+    if (next && next !== text) onRename(next);
+    setDraft(null);
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
+      {isEditing ? (
+        <Input
+          autoFocus
+          value={draft}
+          maxLength={200}
+          disabled={disabled}
+          aria-label={t('drawer.taskText')}
+          className="h-7 min-w-0 flex-1 text-sm"
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commit();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              setDraft(null);
+            }
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => setDraft(text)}
+          title={t('drawer.renameTask')}
+          className={cn(
+            'min-w-0 flex-1 truncate rounded px-1 py-0.5 text-left text-sm hover:bg-muted/60',
+            (task.status === 'completed' || task.status === 'canceled') &&
+              'text-muted-foreground line-through',
+          )}
+        >
+          {task.position}. {text}
+        </button>
+      )}
+      <Select
+        value={task.status}
+        onValueChange={(value) => onStatusChange(value as TaskStatus)}
+        disabled={disabled || isEditing}
+        items={TASK_STATUSES.map((status) => ({ value: status, label: statusLabel(status) }))}
+      >
+        <SelectTrigger className="h-7 w-32 shrink-0 text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {TASK_STATUSES.map((status) => (
+            <SelectItem key={status} value={status}>
+              {statusLabel(status)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        disabled={disabled || isEditing}
+        onClick={onDelete}
+        aria-label={t('drawer.deleteTask')}
+        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+}
+
+/** Append a task of the user's own wording. Collapsed to a single button until
+ *  it is needed, so the common case — reading the generated list — stays quiet. */
+function AddTaskForm({
+  disabled,
+  t,
+  onAdd,
+}: {
+  disabled: boolean;
+  t: TaskTranslator;
+  onAdd: (title: string) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+
+  if (draft === null) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={disabled}
+        onClick={() => setDraft('')}
+        className="mt-3 h-8 w-full text-xs"
+      >
+        <Plus className="mr-1.5 h-3.5 w-3.5" />
+        {t('drawer.addTask')}
+      </Button>
+    );
+  }
+
+  const submit = () => {
+    const title = draft.trim();
+    if (title) onAdd(title);
+    setDraft(null);
+  };
+
+  return (
+    <div className="mt-3 flex items-center gap-2">
+      <Input
+        autoFocus
+        value={draft}
+        maxLength={200}
+        disabled={disabled}
+        placeholder={t('drawer.addTaskPlaceholder')}
+        aria-label={t('drawer.addTask')}
+        className="h-8 min-w-0 flex-1 text-sm"
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            submit();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            setDraft(null);
+          }
+        }}
+      />
+      <Button
+        type="button"
+        size="sm"
+        disabled={disabled || draft.trim() === ''}
+        onClick={submit}
+        className="h-8 shrink-0 text-xs"
+      >
+        {t('drawer.addTaskConfirm')}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={disabled}
+        onClick={() => setDraft(null)}
+        className="h-8 shrink-0 text-xs"
+      >
+        {t('drawer.addTaskCancel')}
+      </Button>
+    </div>
   );
 }
