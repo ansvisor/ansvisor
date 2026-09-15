@@ -75,10 +75,6 @@
       "signals": "What changed across your AI visibility data.",
       "history": "What was done, and what it moved."
     },
-    "comingSoon": {
-      "title": "Coming soon",
-      "description": "This part of the Action Center is on its way. KPIs, Actions and Signals are live in the meantime."
-    },
     "categories": {
       "visibility": "Visibility",
       "citations": "Citations",
@@ -537,6 +533,132 @@
       "in_progress": "In Progress",
       "completed": "Completed",
       "canceled": "Canceled"
+    },
+    "historyPage": {
+      "title": "History",
+      "subtitle": "Browse past actions, what they were meant to do, and what has been measured since.",
+      "table": {
+        "action": "Action",
+        "type": "Type",
+        "impact": "Impact",
+        "affected": "Affected",
+        "result": "Result",
+        "status": "Status",
+        "date": "Date"
+      },
+      "status": {
+        "new": "New",
+        "in_progress": "In Progress",
+        "completed": "Completed",
+        "on_hold": "On Hold",
+        "no_improvement": "No Improvement",
+        "dismissed": "Dismissed"
+      },
+      "affected": {
+        "prompt": "{count} prompts",
+        "url": "{count} pages",
+        "citation": "{count} signals",
+        "keyword": "{count} keywords",
+        "topic": "{count} topics",
+        "competitor": "Competitor",
+        "platform": "{count} platforms"
+      },
+      "validation": {
+        "pending": "Not measured",
+        "running": "Measuring",
+        "improved": "Improved",
+        "no_improvement": "No improvement",
+        "declined": "Declined",
+        "not_required": "Not applicable"
+      },
+      "validationHint": {
+        "pending": "no result recorded",
+        "running": "in progress",
+        "improved": "vs before",
+        "no_improvement": "vs before",
+        "declined": "vs before",
+        "not_required": "action was dismissed"
+      },
+      "validationExplain": {
+        "pending": "This action's effect has not been measured. The metrics below fill in once validation runs.",
+        "running": "Validation is running. Results appear when it finishes.",
+        "improved": "Measured after this action closed.",
+        "no_improvement": "Measured after this action closed; the metrics did not move.",
+        "declined": "Measured after this action closed; the metrics moved the wrong way.",
+        "not_required": "This action was dismissed, so nothing was measured."
+      },
+      "range": {
+        "7d": "7d",
+        "30d": "30d",
+        "90d": "90d",
+        "all": "All"
+      },
+      "sort": {
+        "newest": "Newest",
+        "oldest": "Oldest",
+        "impact": "Impact"
+      },
+      "filters": {
+        "status": "Status",
+        "type": "Type",
+        "impact": "Impact",
+        "source": "Source",
+        "sort": "Sort",
+        "all": "All",
+        "search": "Search actions…",
+        "clear": "Clear filters"
+      },
+      "cards": {
+        "total": "Total Actions",
+        "totalSub": "in this window",
+        "completed": "Completed",
+        "inProgress": "In Progress",
+        "noImprovement": "No Improvement",
+        "dismissed": "Dismissed",
+        "ofTotal": "{percent}% of total"
+      },
+      "pagination": {
+        "showing": "Showing {from}–{to} of {total} actions",
+        "page": "{page} / {pageCount}",
+        "previous": "Previous",
+        "next": "Next"
+      },
+      "drawer": {
+        "goal": "What was the goal?",
+        "whatHappened": "What happened?",
+        "triggeredBy": "Consolidated from {count} signals",
+        "result": "Result",
+        "visibilityChange": "Visibility Change",
+        "citationsChange": "Citations Change",
+        "promptsImproved": "Prompts Improved",
+        "timeToClose": "Time to Close",
+        "vsBefore": "vs before",
+        "netChange": "net change",
+        "ofAffected": "of affected",
+        "fromStart": "from start",
+        "days": "{n} days",
+        "affected": "Affected",
+        "noAffected": "Nothing recorded.",
+        "tasks": "Tasks ({completed}/{total})",
+        "noTasks": "No tasks were created.",
+        "viewAction": "View action →"
+      },
+      "empty": {
+        "title": "No action history yet",
+        "description": "Actions appear here once they are underway or closed. Nothing has reached that point for this brand."
+      },
+      "noMatch": {
+        "title": "No actions match these filters",
+        "clear": "Clear filters"
+      },
+      "error": {
+        "title": "We couldn't load action history.",
+        "retry": "Try again"
+      },
+      "noBrand": {
+        "title": "No brand selected",
+        "description": "Select a brand to view its action history."
+      }
     }
   },
   "agent": {
