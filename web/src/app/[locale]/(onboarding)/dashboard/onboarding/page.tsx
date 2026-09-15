@@ -274,6 +274,7 @@ export default function OnboardingPage() {
   const [topicPrompts, setTopicPrompts] = useState<TopicPromptsData[]>([]);
   const [loadingPrompts, setLoadingPrompts] = useState(false);
   const [promptGenError, setPromptGenError] = useState(false);
+  const [topicSaveError, setTopicSaveError] = useState(false);
   const [promptCapacity, setPromptCapacity] = useState<{
     maxPrompts: number;
     used: number;
@@ -637,12 +638,26 @@ export default function OnboardingPage() {
   const handleGeneratePrompts = async () => {
     if (!createdBrand) return;
     setLoadingPrompts(true);
+    setTopicSaveError(false);
     setPromptGenError(false);
     const topicNames = Array.from(selectedTopics);
-    try {
-      // Save topics to DB
-      await createTopics(createdBrand.id, topicNames);
 
+    // Save topics to DB first, with its own error handling. createTopics
+    // deletes the brand's existing topics before inserting the new ones, so
+    // a failure here must keep the user on this step to retry rather than
+    // falling through to the prompt-generation catch below — otherwise the
+    // brand is left with zero topics while the wizard blames prompt
+    // generation and advances anyway.
+    try {
+      await createTopics(createdBrand.id, topicNames);
+    } catch (err) {
+      console.error('Topic save error:', err);
+      setTopicSaveError(true);
+      setLoadingPrompts(false);
+      return;
+    }
+
+    try {
       const { topicPrompts: generated } = await generatePromptsFromTopics(
         {
           brandName: brandName.trim(),
@@ -1206,6 +1221,12 @@ export default function OnboardingPage() {
                       <Plus className="h-4 w-4" />
                     </Button>
                   </div>
+                </div>
+              )}
+
+              {topicSaveError && (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+                  Couldn&apos;t save your topics — please try again.
                 </div>
               )}
 
