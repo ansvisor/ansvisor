@@ -21,6 +21,7 @@ import {
 } from './lib/job-manager.js';
 import { runTrackingJob } from './lib/job-runner.js';
 import { sweepInsightsRollups } from './lib/insights-rollups.js';
+import { sweepActionValidation } from './lib/action-center/validate.js';
 import { parseScraperResponse } from './lib/cloro-scraper.js';
 import { handleScraperResult } from './lib/cloro-result-handler.js';
 import { verifyCloroWebhook } from './lib/cloro-webhook-verify.js';
@@ -130,6 +131,14 @@ async function runDailyTracking() {
   // that today's runs will do when they stamp, and never blocks tracking.
   sweepInsightsRollups().catch((err) => {
     logger.error({ err }, '[insights-rollups] daily sweep crashed');
+  });
+
+  // Measure what closed actions actually moved (#818 phase 2). Runs after the
+  // rollups above are refreshed, since it reads them — but fire-and-forget
+  // like the rest: an unmeasured action is a gap in History, not a reason to
+  // hold up tonight's tracking.
+  sweepActionValidation().catch((err) => {
+    logger.error({ err }, '[action-validation] daily sweep crashed');
   });
 
   // Skip paused brands (is_active = false): the user has explicitly suspended

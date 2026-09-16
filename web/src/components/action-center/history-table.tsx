@@ -55,13 +55,25 @@ export function HistoryStatusBadge({ status }: { status: ActionStatus }) {
 function ResultCell({ item }: { item: ActionHistoryItem }) {
   const t = useTranslations('actionCenter.historyPage');
   const tOutcome = useTranslations('actionCenter.actionOutcome');
+  const tRegistry = useTranslations('actionCenter.registry');
 
   if (item.results.length > 0) {
     return (
       <div className="space-y-0.5">
         {item.results.slice(0, 2).map((metric) => (
-          <p key={metric.id} className="text-xs tabular-nums">
-            {(metric.delta ?? 0) > 0 ? '↑' : '↓'} {Math.abs(metric.delta ?? 0)} {metric.label}
+          <p
+            key={metric.id}
+            className={cn(
+              'text-xs tabular-nums',
+              (metric.delta ?? 0) > 0
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : (metric.delta ?? 0) < 0
+                  ? 'text-red-500'
+                  : '',
+            )}
+          >
+            {(metric.delta ?? 0) > 0 ? '↑' : '↓'} {Math.abs(metric.delta ?? 0)}
+            {metric.unit === 'percent' ? '%' : ''} {tRegistry(`${metric.metric}.name`)}
           </p>
         ))}
       </div>

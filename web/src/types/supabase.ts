@@ -119,6 +119,8 @@ export type Database = {
           payload: Json
           status: string
           updated_at: string
+          validated_at: string | null
+          validation: Json | null
         }
         Insert: {
           action_no?: never
@@ -138,6 +140,8 @@ export type Database = {
           payload?: Json
           status?: string
           updated_at?: string
+          validated_at?: string | null
+          validation?: Json | null
         }
         Update: {
           action_no?: never
@@ -157,6 +161,8 @@ export type Database = {
           payload?: Json
           status?: string
           updated_at?: string
+          validated_at?: string | null
+          validation?: Json | null
         }
         Relationships: [
           {

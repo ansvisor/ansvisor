@@ -7,9 +7,11 @@
  * tab makes a single round trip for a page of rows and the shapes it renders
  * are settled before they reach React.
  *
- * Everything returned is read from rows the product already writes. The one
- * field that is deliberately empty is `results` — see lib/action-center/history
- * for why, and for the shape a validation pass would fill.
+ * Everything returned is read from rows the product already writes, including
+ * `results`: the nightly validation sweep measures a closed action's success
+ * metrics before it was raised and after it closed, and this maps that
+ * measurement into the shape the table and drawer render. An action that has
+ * not been measured yet carries no results and says so.
  */
 
 import { createClient } from '@/lib/supabase/server';
@@ -34,6 +36,7 @@ interface HistoryRow {
   impact: string;
   status: string;
   outcome: string;
+  validation: ValidationSnapshot | null;
   payload: Record<string, unknown>;
   kpi_keys: string[];
   assignee_id: string | null;
@@ -43,7 +46,53 @@ interface HistoryRow {
 }
 
 const HISTORY_COLUMNS =
-  'id, action_no, category, kind, impact, status, outcome, payload, kpi_keys, assignee_id, created_at, completed_at, updated_at';
+  'id, action_no, category, kind, impact, status, outcome, validation, payload, kpi_keys, assignee_id, created_at, completed_at, updated_at';
+
+/** What the validation sweep stores on an action. */
+interface ValidationSnapshot {
+  measuredAt: string;
+  beforeWindow: { from: string; to: string };
+  afterWindow: { from: string; to: string };
+  metrics: {
+    metric: string;
+    unit: string;
+    before: number | null;
+    after: number | null;
+  }[];
+}
+
+/**
+ * The measured pairs, as metrics the UI can render.
+ *
+ * Deltas are computed here rather than read from storage, so a displayed
+ * change can never contradict the two values it came from. A metric missing
+ * either half is dropped: it was not measured, and a half-measurement shown
+ * as a number is worse than an honest absence.
+ */
+function resultsFrom(validation: ValidationSnapshot | null): ActionResultMetric[] {
+  if (!validation?.metrics) return [];
+  return validation.metrics
+    .filter((m) => m.before != null && m.after != null)
+    .map((m) => {
+      const before = m.before as number;
+      const after = m.after as number;
+      return {
+        id: m.metric,
+        label: m.metric,
+        metric: m.metric as ActionResultMetric['metric'],
+        before,
+        after,
+        delta: Math.round((after - before) * 10) / 10,
+        // A before of zero has no ratio; the absolute delta carries it.
+        ...(before === 0
+          ? {}
+          : { deltaPercent: Math.round(((after - before) / before) * 1000) / 10 }),
+        unit: m.unit as ActionResultMetric['unit'],
+        // Every metric the sweep measures reads higher-is-better.
+        direction: 'higher_is_better',
+      } satisfies ActionResultMetric;
+    });
+}
 
 function num(payload: Record<string, unknown>, key: string): number {
   const value = payload[key];
@@ -186,9 +235,7 @@ export async function getActionHistory(
 
   return rows.map((row) => {
     const triggerSignals = signalsByAction.get(row.id) ?? [];
-    // Empty until something measures an action's effect — see
-    // lib/action-center/history for why, and for the shape it would fill.
-    const results: ActionResultMetric[] = [];
+    const results = resultsFrom(row.validation);
     return {
       id: row.id,
       actionNo: Number(row.action_no),

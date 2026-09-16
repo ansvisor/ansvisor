@@ -21,18 +21,45 @@ import { HistoryStatusBadge } from './history-table';
 import { cn } from '@/lib/utils';
 
 /**
- * One metric an action moved.
+ * One metric an action moved, as before → after.
  *
- * Renders a dash rather than a zero when nothing has measured it: zero is a
- * measurement, and claiming one that was never taken is the failure this whole
- * tab exists to avoid.
+ * Both halves are shown rather than only the delta: a jump of seven means
+ * something different at a base of ten than at a base of a thousand, and the
+ * reader deciding whether the work paid off needs the base.
  */
-function ResultMetricCard({ label, value, sub }: { label: string; value: string; sub: string }) {
+function ResultMetricCard({
+  label,
+  before,
+  after,
+  delta,
+  unit,
+}: {
+  label: string;
+  before: number;
+  after: number;
+  delta: number;
+  unit: string;
+}) {
+  const suffix = unit === 'percent' ? '%' : '';
+  const rose = delta > 0;
   return (
     <div className="rounded-md border p-3">
       <p className="text-[11px] text-muted-foreground">{label}</p>
-      <p className="mt-1 text-lg font-semibold tabular-nums">{value}</p>
-      <p className="text-[11px] text-muted-foreground">{sub}</p>
+      <p
+        className={cn(
+          'mt-1 text-lg font-semibold tabular-nums',
+          rose ? 'text-emerald-600 dark:text-emerald-400' : delta < 0 ? 'text-red-500' : '',
+        )}
+      >
+        {rose ? '↑' : delta < 0 ? '↓' : ''}
+        {Math.abs(delta)}
+        {suffix}
+      </p>
+      <p className="text-[11px] tabular-nums text-muted-foreground">
+        {before}
+        {suffix} → {after}
+        {suffix}
+      </p>
     </div>
   );
 }
@@ -56,6 +83,7 @@ export function HistoryDrawer({
   const tTasks = useTranslations('actionCenter.actionTasks');
   const tTaskStatus = useTranslations('actionCenter.taskStatus');
   const tSources = useTranslations('actionCenter.signalsPage.sources');
+  const tRegistry = useTranslations('actionCenter.registry');
   const tAffected = useTranslations('actionCenter.historyPage.affected');
   const router = useRouter();
 
@@ -72,13 +100,6 @@ export function HistoryDrawer({
   const countedTasks = item.tasks.filter(
     (task) => !UNCOUNTED_TASK_STATUSES.includes(task.status),
   ).length;
-
-  const metricValue = (metric: string) => {
-    const found = item.results.find((r) => r.metric === metric);
-    if (!found) return '—';
-    const delta = found.delta ?? 0;
-    return `${delta > 0 ? '↑' : delta < 0 ? '↓' : ''}${Math.abs(delta)}${found.unit === 'percent' ? '%' : ''}`;
-  };
 
   return (
     <Sheet open={Boolean(item)} onOpenChange={onOpenChange}>
@@ -146,28 +167,25 @@ export function HistoryDrawer({
               </p>
             )}
             <div className="mt-2 grid grid-cols-2 gap-2">
-              <ResultMetricCard
-                label={t('drawer.visibilityChange')}
-                value={metricValue('visibility')}
-                sub={t('drawer.vsBefore')}
-              />
-              <ResultMetricCard
-                label={t('drawer.citationsChange')}
-                value={metricValue('citations')}
-                sub={t('drawer.netChange')}
-              />
-              <ResultMetricCard
-                label={t('drawer.promptsImproved')}
-                value={metricValue('prompts_improved')}
-                sub={t('drawer.ofAffected')}
-              />
-              <ResultMetricCard
-                label={t('drawer.timeToClose')}
-                value={
-                  item.timeToCloseDays != null ? t('drawer.days', { n: item.timeToCloseDays }) : '—'
-                }
-                sub={t('drawer.fromStart')}
-              />
+              {item.results.map((metric) => (
+                <ResultMetricCard
+                  key={metric.id}
+                  label={tRegistry(`${metric.metric}.name`)}
+                  before={metric.before ?? 0}
+                  after={metric.after ?? 0}
+                  delta={metric.delta ?? 0}
+                  unit={metric.unit}
+                />
+              ))}
+              <div className="rounded-md border p-3">
+                <p className="text-[11px] text-muted-foreground">{t('drawer.timeToClose')}</p>
+                <p className="mt-1 text-lg font-semibold tabular-nums">
+                  {item.timeToCloseDays != null
+                    ? t('drawer.days', { n: item.timeToCloseDays })
+                    : '—'}
+                </p>
+                <p className="text-[11px] text-muted-foreground">{t('drawer.fromStart')}</p>
+              </div>
             </div>
           </section>
 
