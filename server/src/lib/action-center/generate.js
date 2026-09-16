@@ -28,18 +28,12 @@
 
 import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
+import { resolve } from '../../config/action-engine.js';
 
-/**
- * How long a kind rests after a cycle closes before a new one may open.
- *
- * Without it, a condition that is still firing would produce a fresh action
- * the night after someone closed the last one — a treadmill. The old code
- * used this window to decide whether to resurrect the completed row; now it
- * decides when the next cycle may begin, and the completed row is never
- * touched again.
- */
-const REST_AFTER_CLOSE_DAYS = 14;
 const DAY_MS = 86_400_000;
+
+// Thresholds live in config/action-engine.js (#818 phase 2.5).
+const { noise } = resolve();
 
 const IMPACT_RANK = { high: 3, medium: 2, low: 1 };
 
@@ -217,7 +211,7 @@ export async function generateActionsForBrand(brandId, { now = new Date() } = {}
       // night — the same restraint the old reopen window provided, minus the
       // resurrection.
       const closedAt = lastClosedAt.get(rule.kind) ?? 0;
-      if (closedAt && now.getTime() - closedAt < REST_AFTER_CLOSE_DAYS * DAY_MS) {
+      if (closedAt && now.getTime() - closedAt < noise.restAfterCloseDays * DAY_MS) {
         resting += 1;
         continue;
       }

@@ -26,12 +26,17 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { computeAiVisibilityScore } from '../../config/visibility-score.js';
 import { logger } from '../logger.js';
+import { resolve } from '../../config/action-engine.js';
 
 const DAY_MS = 86_400_000;
 
+// Windows and the noise floor live in config/action-engine.js (#818 phase
+// 2.5), with every other number the engine judges by.
+const { validation } = resolve();
+
 /** Length of each measurement window. Equal on both sides so the comparison
  *  is between like periods. */
-export const MEASUREMENT_WINDOW_DAYS = 7;
+export const MEASUREMENT_WINDOW_DAYS = validation.windowDays;
 
 /**
  * How long after closing before an action can be measured.
@@ -49,10 +54,8 @@ export const VALIDATION_WAIT_DAYS = MEASUREMENT_WINDOW_DAYS + 1;
  * How much a metric must move to count as movement, as a fraction of its
  * before value. Below this, a difference is indistinguishable from the
  * week-to-week noise every one of these metrics carries.
- *
- * Centralised with the rest of the engine's thresholds in phase 2.5 (#818).
  */
-export const MEANINGFUL_CHANGE_RATIO = 0.05;
+export const MEANINGFUL_CHANGE_RATIO = validation.meaningfulChangeRatio;
 
 /** Every metric here reads higher-is-better; a drop is a decline. */
 const MEASURABLE_KPIS = {

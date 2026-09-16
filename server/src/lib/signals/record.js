@@ -29,20 +29,13 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { computePulseMetrics } from '../pulse/metrics.js';
 import { logger } from '../logger.js';
+import { resolve } from '../../config/action-engine.js';
 
-const DETECTION_WINDOW_DAYS = 7;
 const DAY_MS = 86_400_000;
 
-/** A "mentioned but never cited" pattern needs at least this many prompts
- *  before it is a signal — one or two uncited mentions are normal noise. */
-const UNCITED_MIN_PROMPTS = 3;
-
-/** Audits older than this no longer describe the page (it may have been
- *  rewritten since); their findings age out instead of nagging forever. */
-const AUDIT_MAX_AGE_DAYS = 90;
-
-/** Latest completed audit below this total score raises a technical signal. */
-const AUDIT_LOW_SCORE = 50;
+// What counts as a signal is decided in config/action-engine.js (#818 phase
+// 2.5), alongside every other threshold the engine judges by.
+const { detection } = resolve();
 
 /**
  * Static knowledge per detector kind. Mirrored by the web registry
@@ -184,7 +177,7 @@ function fromPulseEntry(entry) {
  * to point at. One consolidated signal (brief §29), not one per prompt.
  */
 async function uncitedMentionCandidates(brandId, now) {
-  const from = new Date(now.getTime() - DETECTION_WINDOW_DAYS * DAY_MS);
+  const from = new Date(now.getTime() - detection.windowDays * DAY_MS);
   const { data, error } = await supabaseAdmin.rpc('prompt_visibility_summaries', {
     p_brand_id: brandId,
     p_date_from: from.toISOString(),
@@ -196,7 +189,7 @@ async function uncitedMentionCandidates(brandId, now) {
     (row) =>
       Number(row.runs) > 0 && Number(row.total_mentions) > 0 && Number(row.total_citations) === 0,
   );
-  if (uncited.length < UNCITED_MIN_PROMPTS) return [];
+  if (uncited.length < detection.uncitedMinPrompts) return [];
 
   return [
     {
@@ -223,7 +216,7 @@ async function uncitedMentionCandidates(brandId, now) {
  * the drawer; the full list lives on the Site Audit page.
  */
 async function auditCandidates(brandId, now) {
-  const since = new Date(now.getTime() - AUDIT_MAX_AGE_DAYS * DAY_MS).toISOString();
+  const since = new Date(now.getTime() - detection.auditMaxAgeDays * DAY_MS).toISOString();
   const { data, error } = await supabaseAdmin
     .from('site_audits')
     .select('url, total_score, completed_at')
@@ -242,7 +235,7 @@ async function auditCandidates(brandId, now) {
 
   const low = [...latestByUrl.values()]
     .map((audit) => ({ url: audit.url, score: Number(audit.total_score) }))
-    .filter((audit) => audit.score < AUDIT_LOW_SCORE)
+    .filter((audit) => audit.score < detection.auditLowScore)
     .sort((a, b) => a.score - b.score);
   if (low.length === 0) return [];
 
@@ -291,7 +284,7 @@ async function pageOpportunityCandidates(brandId) {
  */
 export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) {
   const metrics = await computePulseMetrics(brandId, {
-    windowDays: DETECTION_WINDOW_DAYS,
+    windowDays: detection.windowDays,
     now,
   });
 

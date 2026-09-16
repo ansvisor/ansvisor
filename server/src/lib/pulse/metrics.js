@@ -2,6 +2,7 @@ import supabaseAdmin from '../../config/supabase.js';
 import { computeAiVisibilityScore } from '../../config/visibility-score.js';
 import { chunkIds, selectInChunks } from '../chunked-in.js';
 import { logger } from '../logger.js';
+import { resolve } from '../../config/action-engine.js';
 
 /**
  * Daily Pulse metric computation (#540).
@@ -15,20 +16,16 @@ import { logger } from '../logger.js';
 
 const DAY_MS = 86_400_000;
 
-// Detector thresholds (issue #540 v1 scope).
-const DROP_MIN_POINTS = 15;
-const DROP_MIN_RELATIVE = 0.3;
-const DROP_MIN_PROMPTS = 10;
-const SURGE_MIN_POINTS = 15;
-const LOST_CITED_RATIO = 0.6;
-const LOST_CONSECUTIVE_DAYS = 3;
-const MOVER_MIN_GAIN = 5;
+// Detector thresholds live in config/action-engine.js, with every other
+// number that decides what counts (#818 phase 2.5). Read through `resolve()`
+// so per-definition and per-workspace overrides land without touching this
+// file.
+const { detection, noise } = resolve();
+
+// How many risers the digest names. A presentation choice, not a detection
+// threshold — it does not change what was found, only how much of it is
+// listed — so it stays here.
 const MOVER_LIMIT = 3;
-// A platform is considered degraded (data-collection incident, not a real
-// visibility change) when its result volume across ALL orgs collapses below
-// this fraction of its trailing 7-day daily average.
-const OUTAGE_COLLAPSE_RATIO = 0.25;
-const OUTAGE_MIN_BASELINE = 20;
 
 // Cloro scraper platforms, as stored in prompt_results.platform. Keep in
 // sync with SCRAPER_TASK_TYPES in ../cloro-scraper.js (minus shopping,
@@ -306,12 +303,12 @@ async function lostCitationPrompts(brandId, promptById, now) {
   const lost = [];
   for (const [promptId, days] of byPrompt) {
     const ordered = [...days.entries()].sort(([a], [b]) => a.localeCompare(b));
-    if (ordered.length < LOST_CONSECUTIVE_DAYS + 2) continue;
-    const tail = ordered.slice(-LOST_CONSECUTIVE_DAYS);
+    if (ordered.length < detection.lostCitationQuietDays + 2) continue;
+    const tail = ordered.slice(-detection.lostCitationQuietDays);
     if (tail.some(([, cited]) => cited)) continue;
-    const head = ordered.slice(0, -LOST_CONSECUTIVE_DAYS);
+    const head = ordered.slice(0, -detection.lostCitationQuietDays);
     const citedDays = head.filter(([, cited]) => cited).length;
-    if (citedDays / head.length >= LOST_CITED_RATIO) {
+    if (citedDays / head.length >= detection.lostCitationCitedRatio) {
       lost.push({ promptId, promptText: promptById.get(promptId)?.text ?? '' });
     }
   }
@@ -343,8 +340,8 @@ async function degradedPlatforms(now) {
     ]);
     const dailyBaseline = (baseline ?? 0) / 7;
     if (
-      dailyBaseline >= OUTAGE_MIN_BASELINE &&
-      (today ?? 0) < dailyBaseline * OUTAGE_COLLAPSE_RATIO
+      dailyBaseline >= noise.outageMinBaseline &&
+      (today ?? 0) < dailyBaseline * noise.outageCollapseRatio
     ) {
       degraded.push(platform);
     }
@@ -473,7 +470,7 @@ export async function computePulseMetrics(brandId, { windowDays = 1, now = new D
     const prev = prevWeekPromptAvg.get(promptId);
     if (!prev) continue;
     const gain = round1(cur.score - prev.score);
-    if (gain >= MOVER_MIN_GAIN) {
+    if (gain >= detection.moverMinGain) {
       movers.push({ promptId, text: promptById.get(promptId)?.text ?? '', gain });
     }
   }
@@ -512,10 +509,10 @@ export async function computePulseMetrics(brandId, { windowDays = 1, now = new D
   const drop = round1(prevWeekRate.rate - weekRate.rate);
   if (
     !outage &&
-    weekRate.total >= DROP_MIN_PROMPTS &&
-    drop >= DROP_MIN_POINTS &&
+    weekRate.total >= detection.visibilityDropMinPrompts &&
+    drop >= detection.visibilityDropPoints &&
     prevWeekRate.rate > 0 &&
-    drop / prevWeekRate.rate >= DROP_MIN_RELATIVE
+    drop / prevWeekRate.rate >= detection.visibilityDropRatio
   ) {
     warnings.push({
       type: 'sharp_drop',
@@ -530,7 +527,7 @@ export async function computePulseMetrics(brandId, { windowDays = 1, now = new D
     const prev = prevWeekComp.competitors.get(id);
     if (!prev) continue;
     const surge = round1(comp.rate - prev.rate);
-    if (surge >= SURGE_MIN_POINTS) {
+    if (surge >= detection.competitorSurgePoints) {
       warnings.push({
         type: 'competitor_surge',
         key: `competitor_surge:${id}`,

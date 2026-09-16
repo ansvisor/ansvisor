@@ -28,8 +28,12 @@
 import supabaseAdmin from '../config/supabase.js';
 import { isExcludedPath } from './page-paths.js';
 import { logger } from './logger.js';
+import { resolve } from '../config/action-engine.js';
 
-const WINDOW_DAYS = 28;
+// Thresholds live in config/action-engine.js (#818 phase 2.5).
+const { detection } = resolve();
+
+const WINDOW_DAYS = detection.pageWindowDays;
 
 /**
  * A page below this has too little behind it for a finding, whatever its
@@ -38,10 +42,10 @@ const WINDOW_DAYS = 28;
  * of pages, so a brand with genuinely little to fix would still be handed a
  * full list.
  */
-const MIN_SESSIONS = 10;
+const MIN_SESSIONS = detection.pageMinSessions;
 
 /** How far up its own site a page must rank before it is worth raising. */
-const MIN_PERCENTILE = 70;
+const MIN_PERCENTILE = detection.pageMinPercentile;
 
 /**
  * PostgREST returns at most 1000 rows per request whatever range is asked
