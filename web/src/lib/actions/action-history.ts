@@ -14,12 +14,11 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { isActionKind, type ActionCategory, type ActionImpact } from '@/lib/action-center/registry';
-import type { ActionStatus, TaskStatus } from '@/lib/action-center/registry';
+import type { ActionOutcome, ActionStatus, TaskStatus } from '@/lib/action-center/registry';
 import { SIGNAL_SOURCES, type SignalSource } from '@/lib/signals/registry';
 import {
   HISTORY_STATUSES,
   daysBetween,
-  validationStatusFor,
   type ActionHistoryItem,
   type ActionHistoryTask,
   type ActionResultMetric,
@@ -34,6 +33,7 @@ interface HistoryRow {
   kind: string;
   impact: string;
   status: string;
+  outcome: string;
   payload: Record<string, unknown>;
   kpi_keys: string[];
   assignee_id: string | null;
@@ -43,7 +43,7 @@ interface HistoryRow {
 }
 
 const HISTORY_COLUMNS =
-  'id, action_no, category, kind, impact, status, payload, kpi_keys, assignee_id, created_at, completed_at, updated_at';
+  'id, action_no, category, kind, impact, status, outcome, payload, kpi_keys, assignee_id, created_at, completed_at, updated_at';
 
 function num(payload: Record<string, unknown>, key: string): number {
   const value = payload[key];
@@ -196,7 +196,7 @@ export async function getActionHistory(
       type: row.category as ActionCategory,
       impact: row.impact as ActionImpact,
       status: row.status as ActionStatus,
-      validationStatus: validationStatusFor(row.status as ActionStatus, results),
+      outcome: row.outcome as ActionOutcome,
       payload: row.payload ?? {},
       kpiKeys: row.kpi_keys ?? [],
       sources: [...(sourcesByAction.get(row.id) ?? [])],

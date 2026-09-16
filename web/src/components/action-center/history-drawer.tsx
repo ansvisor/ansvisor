@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/sheet';
 import { actionTexts } from '@/lib/action-center/display';
 import type { ActionHistoryItem } from '@/lib/action-center/history';
+import { UNCOUNTED_TASK_STATUSES } from '@/lib/action-center/registry';
 import { ImpactDots } from './signal-table';
 import { KIND_ICONS } from './action-table';
 import { HistoryStatusBadge } from './history-table';
@@ -68,7 +69,9 @@ export function HistoryDrawer({
   const date = item.completedAt ?? item.createdAt;
   const measured = item.results.length > 0;
   const completedTasks = item.tasks.filter((task) => task.status === 'completed').length;
-  const countedTasks = item.tasks.filter((task) => task.status !== 'canceled').length;
+  const countedTasks = item.tasks.filter(
+    (task) => !UNCOUNTED_TASK_STATUSES.includes(task.status),
+  ).length;
 
   const metricValue = (metric: string) => {
     const found = item.results.find((r) => r.metric === metric);
@@ -139,7 +142,7 @@ export function HistoryDrawer({
               // line is recorded; the effect is not, because nothing re-reads
               // these metrics after an action closes.
               <p className="mt-1 text-xs text-muted-foreground">
-                {t(`validationExplain.${item.validationStatus}`)}
+                {t(`outcomeExplain.${item.outcome}`)}
               </p>
             )}
             <div className="mt-2 grid grid-cols-2 gap-2">
@@ -206,7 +209,8 @@ export function HistoryDrawer({
                     <span
                       className={cn(
                         'min-w-0 flex-1',
-                        (task.status === 'completed' || task.status === 'canceled') &&
+                        (task.status === 'completed' ||
+                          UNCOUNTED_TASK_STATUSES.includes(task.status)) &&
                           'text-muted-foreground line-through',
                       )}
                     >

@@ -62,6 +62,7 @@ export type Database = {
           created_at: string
           id: string
           position: number
+          skip_reason: string | null
           status: string
           task_key: string | null
           title: string | null
@@ -72,6 +73,7 @@ export type Database = {
           created_at?: string
           id?: string
           position: number
+          skip_reason?: string | null
           status?: string
           task_key?: string | null
           title?: string | null
@@ -82,6 +84,7 @@ export type Database = {
           created_at?: string
           id?: string
           position?: number
+          skip_reason?: string | null
           status?: string
           task_key?: string | null
           title?: string | null
@@ -112,6 +115,7 @@ export type Database = {
           impact: string
           kind: string
           kpi_keys: string[]
+          outcome: string
           payload: Json
           status: string
           updated_at: string
@@ -130,6 +134,7 @@ export type Database = {
           impact: string
           kind: string
           kpi_keys?: string[]
+          outcome?: string
           payload?: Json
           status?: string
           updated_at?: string
@@ -148,6 +153,7 @@ export type Database = {
           impact?: string
           kind?: string
           kpi_keys?: string[]
+          outcome?: string
           payload?: Json
           status?: string
           updated_at?: string

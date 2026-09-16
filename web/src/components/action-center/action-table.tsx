@@ -32,7 +32,6 @@ export const ACTION_STATUS_BADGE: Record<ActionStatus, string> = {
   in_progress: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
   completed: 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400',
   on_hold: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  no_improvement: 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
   dismissed: 'border-border bg-muted/50 text-muted-foreground',
 };
 

@@ -42,6 +42,7 @@ import type { TeamMember } from '@/lib/actions/team';
 import {
   ACTION_STATUSES,
   TASK_STATUSES,
+  UNCOUNTED_TASK_STATUSES,
   type ActionStatus,
   type TaskStatus,
 } from '@/lib/action-center/registry';
@@ -262,7 +263,9 @@ export function ActionDrawer({
               <p className="text-xs text-muted-foreground">
                 {t('drawer.tasksProgress', {
                   completed: detail.tasks.filter((task) => task.status === 'completed').length,
-                  total: detail.tasks.filter((task) => task.status !== 'canceled').length,
+                  total: detail.tasks.filter(
+                    (task) => !UNCOUNTED_TASK_STATUSES.includes(task.status),
+                  ).length,
                 })}
               </p>
               <div className="mt-3 space-y-2">
@@ -274,8 +277,10 @@ export function ActionDrawer({
                     text={taskText(task, tTasks)}
                     statusLabel={tTaskStatus}
                     t={t}
-                    onStatusChange={(status) =>
-                      void mutate(() => updateTaskStatus(brandId, action.id, task.id, status))
+                    onStatusChange={(status, skipReason) =>
+                      void mutate(() =>
+                        updateTaskStatus(brandId, action.id, task.id, status, skipReason),
+                      )
                     }
                     onRename={(title) =>
                       void mutate(() => updateTaskTitle(brandId, action.id, task.id, title))
@@ -442,12 +447,15 @@ function TaskRow({
   disabled: boolean;
   statusLabel: TaskTranslator;
   t: TaskTranslator;
-  onStatusChange: (status: TaskStatus) => void;
+  onStatusChange: (status: TaskStatus, skipReason?: string) => void;
   onRename: (title: string) => void;
   onDelete: () => void;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const isEditing = draft !== null;
+  // Choosing Skipped opens a reason field rather than committing: a skip
+  // without a reason cannot be told apart from an abandoned task later.
+  const [skipDraft, setSkipDraft] = useState<string | null>(null);
 
   const commit = () => {
     const next = (draft ?? '').trim();
@@ -456,70 +464,128 @@ function TaskRow({
   };
 
   return (
-    <div className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
-      {isEditing ? (
-        <Input
-          autoFocus
-          value={draft}
-          maxLength={200}
-          disabled={disabled}
-          aria-label={t('drawer.taskText')}
-          className="h-7 min-w-0 flex-1 text-sm"
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              commit();
-            } else if (e.key === 'Escape') {
-              e.preventDefault();
-              setDraft(null);
-            }
+    <div className="rounded-md border">
+      <div className="flex items-center justify-between gap-2 px-3 py-2">
+        {isEditing ? (
+          <Input
+            autoFocus
+            value={draft}
+            maxLength={200}
+            disabled={disabled}
+            aria-label={t('drawer.taskText')}
+            className="h-7 min-w-0 flex-1 text-sm"
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                commit();
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                setDraft(null);
+              }
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => setDraft(text)}
+            title={t('drawer.renameTask')}
+            className={cn(
+              'min-w-0 flex-1 truncate rounded px-1 py-0.5 text-left text-sm hover:bg-muted/60',
+              (task.status === 'completed' || UNCOUNTED_TASK_STATUSES.includes(task.status)) &&
+                'text-muted-foreground line-through',
+            )}
+          >
+            {task.position}. {text}
+          </button>
+        )}
+        <Select
+          value={task.status}
+          onValueChange={(value) => {
+            const next = value as TaskStatus;
+            if (next === 'skipped') setSkipDraft('');
+            else onStatusChange(next);
           }}
-        />
-      ) : (
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => setDraft(text)}
-          title={t('drawer.renameTask')}
-          className={cn(
-            'min-w-0 flex-1 truncate rounded px-1 py-0.5 text-left text-sm hover:bg-muted/60',
-            (task.status === 'completed' || task.status === 'canceled') &&
-              'text-muted-foreground line-through',
-          )}
+          disabled={disabled || isEditing || skipDraft !== null}
+          items={TASK_STATUSES.map((status) => ({ value: status, label: statusLabel(status) }))}
         >
-          {task.position}. {text}
-        </button>
+          <SelectTrigger className="h-7 w-32 shrink-0 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TASK_STATUSES.map((status) => (
+              <SelectItem key={status} value={status}>
+                {statusLabel(status)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          disabled={disabled || isEditing || skipDraft !== null}
+          onClick={onDelete}
+          aria-label={t('drawer.deleteTask')}
+          className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      {skipDraft !== null && (
+        <div className="flex items-center gap-2 border-t bg-muted/30 px-3 py-2">
+          <Input
+            autoFocus
+            value={skipDraft}
+            maxLength={200}
+            disabled={disabled}
+            placeholder={t('drawer.skipReasonPlaceholder')}
+            aria-label={t('drawer.skipReason')}
+            className="h-7 min-w-0 flex-1 text-xs"
+            onChange={(e) => setSkipDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && skipDraft.trim()) {
+                e.preventDefault();
+                onStatusChange('skipped', skipDraft.trim());
+                setSkipDraft(null);
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                setSkipDraft(null);
+              }
+            }}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={disabled || skipDraft.trim() === ''}
+            className="h-7 shrink-0 text-xs"
+            onClick={() => {
+              onStatusChange('skipped', skipDraft.trim());
+              setSkipDraft(null);
+            }}
+          >
+            {t('drawer.skipConfirm')}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={disabled}
+            className="h-7 shrink-0 text-xs"
+            onClick={() => setSkipDraft(null)}
+          >
+            {t('drawer.skipCancel')}
+          </Button>
+        </div>
       )}
-      <Select
-        value={task.status}
-        onValueChange={(value) => onStatusChange(value as TaskStatus)}
-        disabled={disabled || isEditing}
-        items={TASK_STATUSES.map((status) => ({ value: status, label: statusLabel(status) }))}
-      >
-        <SelectTrigger className="h-7 w-32 shrink-0 text-xs">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {TASK_STATUSES.map((status) => (
-            <SelectItem key={status} value={status}>
-              {statusLabel(status)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        disabled={disabled || isEditing}
-        onClick={onDelete}
-        aria-label={t('drawer.deleteTask')}
-        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </Button>
+
+      {task.status === 'skipped' && task.skipReason && skipDraft === null && (
+        <p className="border-t px-3 py-1.5 text-[11px] text-muted-foreground">{task.skipReason}</p>
+      )}
     </div>
   );
 }

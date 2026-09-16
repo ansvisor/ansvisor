@@ -16,6 +16,7 @@ import {
   type ActionCategory,
   type ActionImpact,
   type ActionKind,
+  UNCOUNTED_TASK_STATUSES,
   type ActionStatus,
   type TaskStatus,
 } from '@/lib/action-center/registry';
@@ -93,11 +94,11 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
   if (signalsRes.error) throw new Error(signalsRes.error.message);
   if (profilesRes.error) throw new Error(profilesRes.error.message);
 
-  // Canceled tasks leave the denominator: the work was called off, so it must
-  // not hold the action below 100% forever the way a blocked one used to.
+  // Skipped and failed tasks leave the denominator: neither is outstanding
+  // work, so neither should hold an action below 100% for good.
   const taskTotals = new Map<string, { total: number; completed: number }>();
   for (const task of tasksRes.data ?? []) {
-    if (task.status === 'canceled') continue;
+    if ((UNCOUNTED_TASK_STATUSES as readonly string[]).includes(task.status)) continue;
     const acc = taskTotals.get(task.action_id) ?? { total: 0, completed: 0 };
     acc.total += 1;
     if (task.status === 'completed') acc.completed += 1;
@@ -146,6 +147,8 @@ export interface ActionTask {
   /** User-supplied text. Takes precedence over the template when present. */
   title: string | null;
   status: TaskStatus;
+  /** Why the task was skipped; null for every other status. */
+  skipReason: string | null;
 }
 
 export interface ActionEvent {
@@ -177,7 +180,7 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
   const [tasksRes, signalsRes, eventsRes, kpisRes] = await Promise.all([
     supabase
       .from('action_tasks')
-      .select('id, position, task_key, title, status')
+      .select('id, position, task_key, title, status, skip_reason')
       .eq('action_id', actionId)
       .order('position'),
     supabase
@@ -209,6 +212,7 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
       taskKey: task.task_key,
       title: task.title,
       status: task.status as TaskStatus,
+      skipReason: task.skip_reason,
     })),
     signals: mapSignalRows((signalsRes.data ?? []) as SignalRow[]),
     events: (eventsRes.data ?? []).map((event) => ({
@@ -307,15 +311,27 @@ export async function updateTaskStatus(
   actionId: string,
   taskId: string,
   status: TaskStatus,
+  skipReason?: string,
 ): Promise<void> {
   const supabase = await createClient();
+
+  // A skip records why. "We decided not to" is only useful to the next reader
+  // if it says what the decision was; without it a skipped task is
+  // indistinguishable from an abandoned one.
+  const reason = status === 'skipped' ? (skipReason ?? '').trim().slice(0, 200) : null;
+  if (status === 'skipped' && !reason) throw new Error('A skipped task needs a reason');
+
   const { error } = await supabase
     .from('action_tasks')
-    .update({ status, updated_at: new Date().toISOString() })
+    .update({ status, skip_reason: reason, updated_at: new Date().toISOString() })
     .eq('action_id', actionId)
     .eq('id', taskId);
   if (error) throw new Error(error.message);
-  await logEvent(supabase, actionId, 'task_status', { taskId, to: status });
+  await logEvent(supabase, actionId, 'task_status', {
+    taskId,
+    to: status,
+    ...(reason ? { reason } : {}),
+  });
   await touchAction(supabase, brandId, actionId);
 }
 

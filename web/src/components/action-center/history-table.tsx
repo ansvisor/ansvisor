@@ -31,7 +31,6 @@ const STATUS_TONES: Record<string, string> = {
   completed: 'text-emerald-600 dark:text-emerald-400',
   in_progress: 'text-blue-600 dark:text-blue-400',
   on_hold: 'text-muted-foreground',
-  no_improvement: 'text-amber-600 dark:text-amber-400',
   dismissed: 'text-muted-foreground',
 };
 
@@ -55,6 +54,7 @@ export function HistoryStatusBadge({ status }: { status: ActionStatus }) {
  */
 function ResultCell({ item }: { item: ActionHistoryItem }) {
   const t = useTranslations('actionCenter.historyPage');
+  const tOutcome = useTranslations('actionCenter.actionOutcome');
 
   if (item.results.length > 0) {
     return (
@@ -70,10 +70,8 @@ function ResultCell({ item }: { item: ActionHistoryItem }) {
 
   return (
     <div className="space-y-0.5">
-      <p className="text-xs text-muted-foreground">{t(`validation.${item.validationStatus}`)}</p>
-      <p className="text-[11px] text-muted-foreground/70">
-        {t(`validationHint.${item.validationStatus}`)}
-      </p>
+      <p className="text-xs text-muted-foreground">{tOutcome(item.outcome)}</p>
+      <p className="text-[11px] text-muted-foreground/70">{t(`outcomeHint.${item.outcome}`)}</p>
     </div>
   );
 }

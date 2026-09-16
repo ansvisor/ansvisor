@@ -411,9 +411,8 @@
       "status": {
         "new": "New",
         "in_progress": "In Progress",
-        "completed": "Completed",
         "on_hold": "On Hold",
-        "no_improvement": "No Improvement",
+        "completed": "Completed",
         "dismissed": "Dismissed"
       },
       "impact": {
@@ -479,7 +478,11 @@
         "addTask": "Add task",
         "addTaskPlaceholder": "What needs doing?",
         "addTaskConfirm": "Add",
-        "addTaskCancel": "Cancel"
+        "addTaskCancel": "Cancel",
+        "skipReason": "Why was this skipped?",
+        "skipReasonPlaceholder": "e.g. handled elsewhere, no longer relevant",
+        "skipConfirm": "Skip task",
+        "skipCancel": "Cancel"
       }
     },
     "actionTexts": {
@@ -531,8 +534,10 @@
     "taskStatus": {
       "todo": "To Do",
       "in_progress": "In Progress",
+      "waiting_approval": "Waiting Approval",
       "completed": "Completed",
-      "canceled": "Canceled"
+      "skipped": "Skipped",
+      "failed": "Failed"
     },
     "historyPage": {
       "title": "History",
@@ -549,9 +554,8 @@
       "status": {
         "new": "New",
         "in_progress": "In Progress",
-        "completed": "Completed",
         "on_hold": "On Hold",
-        "no_improvement": "No Improvement",
+        "completed": "Completed",
         "dismissed": "Dismissed"
       },
       "affected": {
@@ -562,30 +566,6 @@
         "topic": "{count} topics",
         "competitor": "Competitor",
         "platform": "{count} platforms"
-      },
-      "validation": {
-        "pending": "Not measured",
-        "running": "Measuring",
-        "improved": "Improved",
-        "no_improvement": "No improvement",
-        "declined": "Declined",
-        "not_required": "Not applicable"
-      },
-      "validationHint": {
-        "pending": "no result recorded",
-        "running": "in progress",
-        "improved": "vs before",
-        "no_improvement": "vs before",
-        "declined": "vs before",
-        "not_required": "action was dismissed"
-      },
-      "validationExplain": {
-        "pending": "This action's effect has not been measured. The metrics below fill in once validation runs.",
-        "running": "Validation is running. Results appear when it finishes.",
-        "improved": "Measured after this action closed.",
-        "no_improvement": "Measured after this action closed; the metrics did not move.",
-        "declined": "Measured after this action closed; the metrics moved the wrong way.",
-        "not_required": "This action was dismissed, so nothing was measured."
       },
       "range": {
         "7d": "7d",
@@ -658,7 +638,28 @@
       "noBrand": {
         "title": "No brand selected",
         "description": "Select a brand to view its action history."
+      },
+      "outcomeHint": {
+        "pending_measurement": "no result recorded",
+        "improved": "vs before",
+        "no_meaningful_change": "vs before",
+        "declined": "vs before",
+        "not_measurable": "action was dismissed"
+      },
+      "outcomeExplain": {
+        "pending_measurement": "This action's effect has not been measured. The metrics below fill in once validation runs.",
+        "improved": "Measured after this action closed.",
+        "no_meaningful_change": "Measured after this action closed; the metrics did not move.",
+        "declined": "Measured after this action closed; the metrics moved the wrong way.",
+        "not_measurable": "This action was dismissed, so nothing was measured."
       }
+    },
+    "actionOutcome": {
+      "pending_measurement": "Not measured",
+      "improved": "Improved",
+      "no_meaningful_change": "No meaningful change",
+      "declined": "Declined",
+      "not_measurable": "Not measurable"
     }
   },
   "agent": {

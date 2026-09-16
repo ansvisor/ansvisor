@@ -10,13 +10,24 @@ export type ActionCategory = 'growth' | 'protect' | 'recover' | 'fix' | 'compete
 
 export type ActionImpact = 'high' | 'medium' | 'low';
 
-export type ActionStatus =
-  | 'new'
-  | 'in_progress'
-  | 'completed'
-  | 'on_hold'
-  | 'no_improvement'
-  | 'dismissed';
+/** Was the work done? Execution only — see ActionOutcome for whether it helped. */
+export type ActionStatus = 'new' | 'in_progress' | 'on_hold' | 'completed' | 'dismissed';
+
+/**
+ * Did the work help?
+ *
+ * Kept apart from ActionStatus on purpose: an action is completed by someone
+ * finishing it, and measured afterwards by something re-reading its metrics.
+ * `no_improvement` used to live in the status column, which made the two
+ * questions unanswerable for an action that was completed but never measured
+ * — today, every one of them.
+ */
+export type ActionOutcome =
+  | 'pending_measurement'
+  | 'improved'
+  | 'no_meaningful_change'
+  | 'declined'
+  | 'not_measurable';
 
 export type ActionKind =
   | 'recover_visibility'
@@ -25,7 +36,13 @@ export type ActionKind =
   | 'fix_low_scores'
   | 'close_competitor_gap';
 
-export type TaskStatus = 'todo' | 'in_progress' | 'completed' | 'canceled';
+export type TaskStatus =
+  | 'todo'
+  | 'in_progress'
+  | 'waiting_approval'
+  | 'completed'
+  | 'skipped'
+  | 'failed';
 
 export const ACTION_CATEGORIES: readonly ActionCategory[] = [
   'growth',
@@ -38,20 +55,35 @@ export const ACTION_CATEGORIES: readonly ActionCategory[] = [
 export const ACTION_STATUSES: readonly ActionStatus[] = [
   'new',
   'in_progress',
-  'completed',
   'on_hold',
-  'no_improvement',
+  'completed',
   'dismissed',
 ];
+
+export const ACTION_OUTCOMES: readonly ActionOutcome[] = [
+  'pending_measurement',
+  'improved',
+  'no_meaningful_change',
+  'declined',
+  'not_measurable',
+];
+
+/** An action whose cycle is over: it is history, and its kind's slot is free. */
+export const CLOSED_ACTION_STATUSES: readonly ActionStatus[] = ['completed', 'dismissed'];
 
 export const ACTION_IMPACTS: readonly ActionImpact[] = ['high', 'medium', 'low'];
 
 export const TASK_STATUSES: readonly TaskStatus[] = [
   'todo',
   'in_progress',
+  'waiting_approval',
   'completed',
-  'canceled',
+  'skipped',
+  'failed',
 ];
+
+/** Statuses that leave the progress denominator — the work is not outstanding. */
+export const UNCOUNTED_TASK_STATUSES: readonly TaskStatus[] = ['skipped', 'failed'];
 
 export interface ActionKindMeta {
   kind: ActionKind;

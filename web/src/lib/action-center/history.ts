@@ -16,31 +16,21 @@
  * is no "after" to compare it to. Visibility change, citations change, prompts
  * improved: none of them have a source.
  *
- * So `results` comes back empty and `validationStatus` says `pending` rather
- * than a number, and the UI says so plainly instead of implying a measurement
- * that did not happen. The types below are the full shape a validation pass
- * would fill in; adding it is a matter of populating these, not reshaping
- * them.
+ * So `results` comes back empty and `outcome` reads `pending_measurement`
+ * rather than a number, and the UI says so plainly instead of implying a
+ * measurement that did not happen. The types below are the full shape the
+ * validation pass (#818, phase 2) will fill in; adding it is a matter of
+ * populating these, not reshaping them.
  */
 
-import type { ActionCategory, ActionImpact, ActionStatus } from './registry';
+import type {
+  ActionCategory,
+  ActionImpact,
+  ActionOutcome,
+  ActionStatus,
+  TaskStatus,
+} from './registry';
 import type { SignalSource } from '@/lib/signals/registry';
-
-/**
- * Whether an action's effect has been measured.
- *
- * Distinct from ActionStatus on purpose: an action can be `completed` while
- * its validation is still `pending`, which is exactly the state every closed
- * action is in today. `not_required` is for actions that were dismissed —
- * nothing ran, so there is nothing to measure.
- */
-export type ValidationStatus =
-  | 'pending'
-  | 'running'
-  | 'improved'
-  | 'no_improvement'
-  | 'declined'
-  | 'not_required';
 
 /** A metric an action moved, read before and after it ran. */
 export interface ActionResultMetric {
@@ -82,7 +72,7 @@ export interface ActionHistoryTask {
   id: string;
   /** Resolved text: the user's title when they wrote one, else the template. */
   title: string;
-  status: 'completed' | 'skipped' | 'failed' | 'todo' | 'in_progress' | 'canceled';
+  status: TaskStatus;
   completedAt?: string;
 }
 
@@ -102,7 +92,8 @@ export interface ActionHistoryItem {
   type: ActionCategory;
   impact: ActionImpact;
   status: ActionStatus;
-  validationStatus: ValidationStatus;
+  /** Did it help? Read from the action's own column, not inferred here. */
+  outcome: ActionOutcome;
   payload: Record<string, unknown>;
   kpiKeys: string[];
   sources: SignalSource[];
@@ -137,10 +128,9 @@ export interface HistorySummary {
  *  still running so the tab shows the whole arc rather than only its end. */
 export const HISTORY_STATUSES: readonly ActionStatus[] = [
   'in_progress',
-  'completed',
-  'no_improvement',
-  'dismissed',
   'on_hold',
+  'completed',
+  'dismissed',
 ];
 
 export const HISTORY_SORTS = ['newest', 'oldest', 'impact'] as const;
@@ -155,7 +145,9 @@ export function summarize(items: ActionHistoryItem[]): HistorySummary {
   const count = (status: ActionStatus) => items.filter((i) => i.status === status).length;
   const completed = count('completed');
   const inProgress = count('in_progress');
-  const noImprovement = count('no_improvement');
+  // An outcome, not a status: an action reaches it by being completed and
+  // then measured, so it is counted from the outcome column.
+  const noImprovement = items.filter((i) => i.outcome === 'no_meaningful_change').length;
   const dismissed = count('dismissed');
 
   const impacts = items.map((i) => i.impact);
@@ -179,27 +171,6 @@ export function summarize(items: ActionHistoryItem[]): HistorySummary {
     dismissedPercent: pct(dismissed, total),
     topImpact,
   };
-}
-
-/**
- * Whether an action's effect has been measured.
- *
- * Every closed action answers `pending` today, and a dismissed one answers
- * `not_required` — nothing ran, so there is nothing to measure. The other
- * values exist for the validation pass to return; nothing produces them yet,
- * and inferring one from the action's own status would be inventing the
- * measurement rather than reporting it.
- */
-export function validationStatusFor(
-  status: ActionStatus,
-  results: ActionResultMetric[],
-): ValidationStatus {
-  if (status === 'dismissed') return 'not_required';
-  if (results.length === 0) return 'pending';
-  const improved = results.some((r) =>
-    r.direction === 'higher_is_better' ? (r.delta ?? 0) > 0 : (r.delta ?? 0) < 0,
-  );
-  return improved ? 'improved' : 'no_improvement';
 }
 
 /** Whole days between two stamps, floored — "4 days" means four elapsed. */

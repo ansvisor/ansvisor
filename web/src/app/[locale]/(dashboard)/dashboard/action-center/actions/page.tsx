@@ -49,7 +49,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
-const OPEN_STATUSES: ActionStatus[] = ['new', 'in_progress', 'on_hold', 'no_improvement'];
+const OPEN_STATUSES: ActionStatus[] = ['new', 'in_progress', 'on_hold'];
 
 const isOpen = (action: ActionItem) => OPEN_STATUSES.includes(action.status);
 

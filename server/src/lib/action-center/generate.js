@@ -11,21 +11,34 @@
  * replace this module without touching the schema.
  *
  * Lifecycle across nights, mirroring signals:
- *  - an OPEN action is refreshed: payload recounted, newly detected signals
- *    linked (logged as a signals_linked event);
- *  - a DISMISSED action stays dismissed;
- *  - a COMPLETED action stays completed while fresh — but if its condition
- *    is still (or again) firing REOPEN_AFTER_DAYS after completion, it
- *    reopens: the outcome did not hold, and hiding that would be lying.
+ *  - an ACTIVE action keeps its scope. Newly detected signals are linked to
+ *    it as evidence, but its payload is not rewritten: it is a work package
+ *    someone may already be executing against, and silently changing what it
+ *    covers is worse than leaving a new problem for the next cycle;
+ *  - a CLOSED action — completed or dismissed — is finished. It is never
+ *    written to again and never resurrected; it is the historical record of
+ *    one execution cycle;
+ *  - closing frees the kind's slot. Once the rest window has passed, a still
+ *    firing condition opens a NEW action beside the old one, with its own
+ *    baseline, tasks and outcome.
  *
  * `baseline` snapshots the linked signals' measured values at creation —
- * the "before" half of the future validation comparison.
+ * the "before" half of the future validation comparison (#818, phase 2).
  */
 
 import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 
-const REOPEN_AFTER_DAYS = 14;
+/**
+ * How long a kind rests after a cycle closes before a new one may open.
+ *
+ * Without it, a condition that is still firing would produce a fresh action
+ * the night after someone closed the last one — a treadmill. The old code
+ * used this window to decide whether to resurrect the completed row; now it
+ * decides when the next cycle may begin, and the completed row is never
+ * touched again.
+ */
+const REST_AFTER_CLOSE_DAYS = 14;
 const DAY_MS = 86_400_000;
 
 const IMPACT_RANK = { high: 3, medium: 2, low: 1 };
@@ -152,18 +165,40 @@ export async function generateActionsForBrand(brandId, { now = new Date() } = {}
     .limit(1000);
   if (signalsErr) throw new Error(signalsErr.message);
 
-  const { data: existingRows, error: actionsErr } = await supabaseAdmin
+  // Only the active ones. A completed or dismissed action is a finished
+  // cycle: it neither blocks a new one nor is ever written to again, so it
+  // has no bearing on what happens tonight beyond the rest window below.
+  const { data: activeRows, error: actionsErr } = await supabaseAdmin
     .from('actions')
-    .select('id, dedup_key, status, completed_at')
+    .select('id, dedup_key, status')
     .eq('brand_id', brandId)
+    .not('status', 'in', '("completed","dismissed")')
     .limit(1000);
   if (actionsErr) throw new Error(actionsErr.message);
-  const existing = new Map((existingRows ?? []).map((row) => [row.dedup_key, row]));
+  const active = new Map((activeRows ?? []).map((row) => [row.dedup_key, row]));
+
+  // How recently each kind was closed, so a condition that is still firing
+  // does not reopen as a fresh action the very next night.
+  const { data: closedRows, error: closedErr } = await supabaseAdmin
+    .from('actions')
+    .select('dedup_key, completed_at, updated_at')
+    .eq('brand_id', brandId)
+    .in('status', ['completed', 'dismissed'])
+    .order('created_at', { ascending: false })
+    .limit(1000);
+  if (closedErr) throw new Error(closedErr.message);
+  const lastClosedAt = new Map();
+  for (const row of closedRows ?? []) {
+    const closed = Date.parse(row.completed_at ?? row.updated_at ?? '') || 0;
+    if (closed > (lastClosedAt.get(row.dedup_key) ?? 0)) {
+      lastClosedAt.set(row.dedup_key, closed);
+    }
+  }
 
   const nowIso = now.toISOString();
   let created = 0;
   let refreshed = 0;
-  let reopened = 0;
+  let resting = 0;
 
   for (const rule of ACTION_RULES) {
     const matched = (openSignals ?? []).filter((signal) => rule.signalKinds.includes(signal.kind));
@@ -174,9 +209,19 @@ export async function generateActionsForBrand(brandId, { now = new Date() } = {}
       .sort((a, b) => IMPACT_RANK[b] - IMPACT_RANK[a])[0];
     const kpiKeys = [...new Set(matched.flatMap((signal) => signal.kpi_keys ?? []))];
     const payload = buildPayload(rule, matched);
-    const current = existing.get(rule.kind);
+    const current = active.get(rule.kind);
 
     if (!current) {
+      // The slot is open. Leave it open a while after a cycle closed, so a
+      // condition that is still firing does not produce a fresh action every
+      // night — the same restraint the old reopen window provided, minus the
+      // resurrection.
+      const closedAt = lastClosedAt.get(rule.kind) ?? 0;
+      if (closedAt && now.getTime() - closedAt < REST_AFTER_CLOSE_DAYS * DAY_MS) {
+        resting += 1;
+        continue;
+      }
+
       const { data: inserted, error } = await supabaseAdmin
         .from('actions')
         .insert({
@@ -208,43 +253,21 @@ export async function generateActionsForBrand(brandId, { now = new Date() } = {}
       continue;
     }
 
-    if (current.status === 'dismissed') continue;
-
-    if (current.status === 'completed') {
-      const completedAt = current.completed_at ? Date.parse(current.completed_at) : 0;
-      if (now.getTime() - completedAt < REOPEN_AFTER_DAYS * DAY_MS) continue;
-      const { error } = await supabaseAdmin
-        .from('actions')
-        .update({
-          status: 'new',
-          impact,
-          payload,
-          kpi_keys: kpiKeys,
-          completed_at: null,
-          updated_at: nowIso,
-        })
-        .eq('id', current.id);
-      if (error) throw new Error(error.message);
-      await logEvent(current.id, 'reopened', { signalCount: matched.length });
-      await linkSignals(current.id, matched);
-      reopened += 1;
-      continue;
-    }
-
-    // Open in some form (new / in_progress / on_hold / no_improvement):
-    // refresh the measured context, quietly — an event only when the
-    // evidence actually grew.
-    const { error } = await supabaseAdmin
-      .from('actions')
-      .update({ impact, payload, kpi_keys: kpiKeys, updated_at: nowIso })
-      .eq('id', current.id);
-    if (error) throw new Error(error.message);
+    // An active action (new / in_progress / on_hold) keeps the scope it was
+    // created with. Signals that arrived since are linked as evidence — they
+    // are why this action exists — but `payload` is the work package someone
+    // may already be executing against, and rewriting it nightly turned a
+    // recovery for six prompts into a recovery for a different nine without
+    // telling anyone. New targets wait for the next cycle.
     const linked = await linkSignals(current.id, matched);
-    if (linked > 0) await logEvent(current.id, 'signals_linked', { count: linked });
+    if (linked > 0) {
+      await supabaseAdmin.from('actions').update({ updated_at: nowIso }).eq('id', current.id);
+      await logEvent(current.id, 'signals_linked', { count: linked });
+    }
     refreshed += 1;
   }
 
-  const summary = { created, refreshed, reopened };
+  const summary = { created, refreshed, resting };
   logger.info({ brandId, ...summary }, '[actions] generated');
   return summary;
 }
