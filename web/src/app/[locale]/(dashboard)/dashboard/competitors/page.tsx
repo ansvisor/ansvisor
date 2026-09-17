@@ -1154,7 +1154,10 @@ export default function CompetitorsPage() {
     try {
       const [comps, comparison] = await Promise.all([
         getCompetitors(brand.id),
-        getCompetitorComparison(brand.id),
+        // Empty day window = all-time served from the daily rollups; without
+        // it the raw all-time scan exceeds the 8s statement timeout on
+        // brands with a large result history.
+        getCompetitorComparison(brand.id, { days: {} }),
       ]);
       setCompetitors(comps);
       setComparisonData(comparison.brands.length > 1 ? comparison : null);
