@@ -273,7 +273,8 @@
         "overtaken": "Overtaken",
         "crossed": "Crossed",
         "uncited": "Uncited",
-        "issue": "Issue"
+        "issue": "Issue",
+        "slipping": "Slipping"
       },
       "affected": {
         "prompts": "{count, plural, one {1 prompt} other {# prompts}}",
@@ -358,6 +359,10 @@
       "audit_low_score": {
         "title": "Audited pages score low on AEO readiness",
         "description": "{count, plural, one {1 audited page scores} other {# audited pages score}} below 50/100."
+      },
+      "visibility_slipping": {
+        "title": "Visibility is slipping",
+        "description": "You were visible in {from}% of responses, now {to}%."
       }
     },
     "actionCategories": {
@@ -513,6 +518,12 @@
         "titleMany": "Close the gap with competitors",
         "description": "Competitor visibility moved sharply against you across your tracked prompts.",
         "goal": "Regain the visibility position lost to competitors."
+      },
+      "protect_visibility": {
+        "title": "Protect visibility before it slips further",
+        "description": "Visibility is falling from a strong position.",
+        "descriptionWithDrop": "Visibility slipped from {from}% to {to}% — still strong, but heading down.",
+        "goal": "Hold the position while it is still there, rather than recovering it later."
       }
     },
     "actionTasks": {
@@ -530,7 +541,10 @@
       "fix_issues": "Fix the highest-impact issues first",
       "revalidate": "Re-run the audits to confirm the fixes",
       "analyze_competitor": "Analyze what the competitor gained visibility with",
-      "strengthen_content": "Strengthen your content where they now win"
+      "strengthen_content": "Strengthen your content where they now win",
+      "diagnose_slip": "Diagnose what changed in the last week",
+      "review_responses": "Review the AI responses that stopped mentioning you",
+      "reinforce_content": "Reinforce the content behind the affected prompts"
     },
     "taskStatus": {
       "todo": "To Do",

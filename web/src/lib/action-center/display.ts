@@ -32,6 +32,18 @@ export function actionTexts(
           : t('recover_visibility.description', { prompts: num(p, 'promptCount') }),
       };
     }
+    case 'protect_visibility': {
+      const hasDrop = p.dropFrom !== undefined && p.dropFrom !== null;
+      return {
+        title: t('protect_visibility.title'),
+        description: hasDrop
+          ? t('protect_visibility.descriptionWithDrop', {
+              from: num(p, 'dropFrom'),
+              to: num(p, 'dropTo'),
+            })
+          : t('protect_visibility.description'),
+      };
+    }
     case 'capture_ai_traffic':
       return {
         title: t('capture_ai_traffic.title', { pages: num(p, 'pageCount') }),
@@ -68,6 +80,8 @@ export function actionContextTags(action: ActionItem, t: Translator): string[] {
   switch (action.kind) {
     case 'recover_visibility':
       if (num(p, 'promptCount') > 0) tags.push(t('tags.prompts', { count: num(p, 'promptCount') }));
+      break;
+    case 'protect_visibility':
       break;
     case 'capture_ai_traffic':
       tags.push(t('tags.pages', { count: num(p, 'pageCount') }));

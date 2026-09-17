@@ -50,6 +50,16 @@ const KIND_META = {
     kpiKeys: ['ai_visibility'],
     persistent: true,
   },
+  // Early deterioration, the Protect family's trigger: a brand with a real
+  // position losing ground, caught before it becomes the collapse above.
+  // Medium rather than high — it is a warning, not an emergency, and filing
+  // it as high would make both grades mean the same thing.
+  visibility_slipping: {
+    category: 'visibility',
+    impact: 'medium',
+    kpiKeys: ['ai_visibility'],
+    persistent: true,
+  },
   prompt_gain: {
     category: 'visibility',
     impact: 'medium',
@@ -130,6 +140,7 @@ function fromPulseEntry(entry) {
 
   switch (entry.type) {
     case 'sharp_drop':
+    case 'visibility_slipping':
       candidate.previousValue = entry.from;
       candidate.currentValue = entry.to;
       candidate.changeValue = -entry.drop;

@@ -19,6 +19,7 @@ export function signalTexts(signal: Signal, t: Translator): { title: string; des
   const values = ((): Record<string, string | number> => {
     switch (signal.kind) {
       case 'sharp_drop':
+      case 'visibility_slipping':
         return { from: signal.previousValue ?? 0, to: signal.currentValue ?? 0 };
       case 'prompt_gain':
         return { prompt: str(p, 'promptText'), gain: signal.changeValue ?? 0 };
@@ -68,6 +69,7 @@ export function signalAffected(
   const p = signal.payload;
   switch (signal.kind) {
     case 'sharp_drop':
+    case 'visibility_slipping':
       return { label: t('affected.allPrompts'), detail: null };
     case 'prompt_gain':
     case 'lost_citations':

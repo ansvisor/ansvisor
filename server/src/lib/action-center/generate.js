@@ -49,6 +49,16 @@ const ACTION_RULES = [
     signalKinds: ['sharp_drop', 'lost_citations'],
     taskKeys: ['analyze_losses', 'coverage_gaps', 'update_content', 'internal_links', 'validate'],
   },
+  // The Protect family's first definition. Kept apart from recover_visibility
+  // on purpose: the work differs. Recovering asks what was lost and how to
+  // win it back; protecting asks what is slipping and how to hold it, while
+  // the position still exists to hold.
+  {
+    kind: 'protect_visibility',
+    category: 'protect',
+    signalKinds: ['visibility_slipping'],
+    taskKeys: ['diagnose_slip', 'review_responses', 'reinforce_content', 'validate'],
+  },
   {
     kind: 'capture_ai_traffic',
     category: 'growth',
@@ -89,6 +99,14 @@ function buildPayload(rule, signals) {
       if (drop) {
         payload.dropFrom = drop.previous_value;
         payload.dropTo = drop.current_value;
+      }
+      break;
+    }
+    case 'protect_visibility': {
+      const slip = (byKind.get('visibility_slipping') ?? [])[0];
+      if (slip) {
+        payload.dropFrom = slip.previous_value;
+        payload.dropTo = slip.current_value;
       }
       break;
     }

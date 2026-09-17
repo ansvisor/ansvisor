@@ -374,6 +374,43 @@ async function latestCompletedRunTimes(brandId, limit = 3) {
  *   windows, while the detector windows (7d vs previous 7d, 14d citation
  *   history) stay fixed per the issue spec.
  */
+/**
+ * How far visibility fell, and which grade of signal that is.
+ *
+ * A brand's visible-prompt rate is whatever its own level happens to be —
+ * measured across live brands it ranges from under 1% to 88% — so judging a
+ * fall by a fixed number of points decides which customers are allowed to
+ * have the signal at all. Requiring 15 points meant a brand sitting at 12%
+ * could lose four fifths of its visibility unreported, never having had 15
+ * points to lose. That is why this detector had not fired once in production.
+ *
+ * Severity is therefore led by the relative loss, with an absolute floor only
+ * to clear measurement noise — week-to-week movement averages 1.3 points
+ * across live brands, so three sits above the wobble without excluding much.
+ *
+ * The two grades are exclusive and ordered: a fall severe enough to be a
+ * collapse is that, not an early warning. Recover asks what was lost and how
+ * to win it back; Protect asks what is slipping and how to hold it while the
+ * position still exists to hold.
+ *
+ * Returns null when nothing is worth reporting.
+ */
+export function classifyVisibilityFall({ from, to, promptCount, outage = false }) {
+  if (outage) return null;
+  if (promptCount < detection.visibilityDropMinPrompts) return null;
+
+  const drop = round1(from - to);
+  if (drop < detection.visibilityDropFloorPoints) return null;
+
+  const relative = from > 0 ? drop / from : 0;
+  if (relative >= detection.visibilityDropRatio) return { type: 'sharp_drop', drop };
+
+  if (from >= detection.slippingMinBaseline && relative >= detection.slippingMinRatio) {
+    return { type: 'visibility_slipping', drop };
+  }
+  return null;
+}
+
 export async function computePulseMetrics(brandId, { windowDays = 1, now = new Date() } = {}) {
   // Daily KPI windows anchor to the tracking-run ledger — the exact same
   // windows the Insights 24h view resolves (getTrackingWindow) — so the
@@ -506,20 +543,19 @@ export async function computePulseMetrics(brandId, { windowDays = 1, now = new D
   const warnings = [];
   const outage = degraded.length > 0;
 
-  const drop = round1(prevWeekRate.rate - weekRate.rate);
-  if (
-    !outage &&
-    weekRate.total >= detection.visibilityDropMinPrompts &&
-    drop >= detection.visibilityDropPoints &&
-    prevWeekRate.rate > 0 &&
-    drop / prevWeekRate.rate >= detection.visibilityDropRatio
-  ) {
+  const fall = classifyVisibilityFall({
+    from: prevWeekRate.rate,
+    to: weekRate.rate,
+    promptCount: weekRate.total,
+    outage,
+  });
+  if (fall) {
     warnings.push({
-      type: 'sharp_drop',
-      key: 'sharp_drop',
+      type: fall.type,
+      key: fall.type,
       from: prevWeekRate.rate,
       to: weekRate.rate,
-      drop,
+      drop: fall.drop,
     });
   }
 

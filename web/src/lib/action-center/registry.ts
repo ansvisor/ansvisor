@@ -31,6 +31,7 @@ export type ActionOutcome =
 
 export type ActionKind =
   | 'recover_visibility'
+  | 'protect_visibility'
   | 'capture_ai_traffic'
   | 'convert_mentions'
   | 'fix_low_scores'
@@ -95,6 +96,10 @@ export const ACTION_KINDS: Record<ActionKind, ActionKindMeta> = {
   recover_visibility: {
     kind: 'recover_visibility',
     taskKeys: ['analyze_losses', 'coverage_gaps', 'update_content', 'internal_links', 'validate'],
+  },
+  protect_visibility: {
+    kind: 'protect_visibility',
+    taskKeys: ['diagnose_slip', 'review_responses', 'reinforce_content', 'validate'],
   },
   capture_ai_traffic: {
     kind: 'capture_ai_traffic',

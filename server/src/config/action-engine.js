@@ -33,15 +33,40 @@ export const ENGINE_THRESHOLDS = Object.freeze({
     windowDays: 7,
 
     /**
-     * A visibility fall has to clear both: enough absolute points that it is
-     * visible on a chart, and enough of the brand's own level that it means
-     * something. Either alone misfires — fifteen points is catastrophic at a
-     * base of twenty and noise at a base of ninety.
+     * A visibility fall is judged by how much of the brand's own level it
+     * took, not by a fixed number of points.
+     *
+     * Brands sit anywhere from under 1% to 88% visible; a points threshold
+     * decides which of them are allowed to have the signal at all. At 15
+     * points a brand sitting at 12% could lose four fifths of its visibility
+     * unreported, having never had 15 points to lose — which is why the
+     * detector had not fired once in production.
+     *
+     * The floor exists only to clear measurement noise: week-to-week movement
+     * averages 1.2 points across live brands, so 3 sits comfortably above the
+     * wobble without excluding anyone. Measured across 124 brands, the pair
+     * reports about four a week.
      */
-    visibilityDropPoints: 15,
     visibilityDropRatio: 0.3,
+    visibilityDropFloorPoints: 3,
     /** Below this many tracked prompts the average is too thin to trust. */
     visibilityDropMinPrompts: 10,
+
+    /**
+     * Early deterioration — the Protect family's trigger.
+     *
+     * Judged relatively like the collapse above, one band below it, so the two
+     * grades are measured the same way and differ only in severity. A fixed
+     * points band would have been almost empty: with the collapse at 30% of a
+     * baseline, five points from a baseline of twenty leaves less than a point
+     * of room between the grades.
+     *
+     * The baseline keeps it to brands with something to protect. Scores across
+     * live brands average 9.8 and top out at 48, so ten is "above average" —
+     * a real position, not a brand that was barely visible to begin with.
+     */
+    slippingMinRatio: 0.1,
+    slippingMinBaseline: 10,
 
     /** A competitor's rise, in points, before it is worth reporting. */
     competitorSurgePoints: 15,

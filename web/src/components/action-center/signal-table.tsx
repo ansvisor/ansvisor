@@ -49,6 +49,7 @@ import { cn } from '@/lib/utils';
 
 export const SIGNAL_ICONS: Record<SignalKind, React.ComponentType<{ className?: string }>> = {
   sharp_drop: TrendingDown,
+  visibility_slipping: TrendingDown,
   prompt_gain: TrendingUp,
   new_engine: Sparkles,
   lost_citations: Unlink,
