@@ -84,6 +84,35 @@ export const ENGINE_THRESHOLDS = Object.freeze({
      *  signal is worth an action: one prompt is an anecdote. */
     uncitedMinPrompts: 3,
 
+    /**
+     * A platform gap worth naming.
+     *
+     * Platforms differ for everyone: the spread between a brand's best and
+     * worst averages 12 points across live brands, so a gap alone is the
+     * normal state. Twenty is comfortably above that average, and the floor
+     * on the best platform is what makes the gap mean "achievable here,
+     * absent there" rather than "weak everywhere". Together they report
+     * about one brand in five.
+     */
+    platformGapPoints: 20,
+    platformBestFloor: 25,
+    /** A platform needs this many tracked prompts before its rate is a rate,
+     *  and this many platforms must qualify before a comparison is one. */
+    platformMinPrompts: 10,
+    platformMinCompared: 3,
+
+    /**
+     * A citation gap worth naming.
+     *
+     * A competitor leads two thirds of brands on citations in any given week,
+     * so being behind is not the signal — being behind by a multiple is. The
+     * absolute floor keeps the multiple off small numbers, where twice as
+     * many citations can mean four against two. Reports about one brand in
+     * four.
+     */
+    citationGapMultiple: 2,
+    citationGapMinAbsolute: 20,
+
     /** Site Audit score below this is a problem; an audit older than this is
      *  not evidence about the page as it stands today. */
     auditLowScore: 50,

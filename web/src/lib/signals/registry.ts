@@ -26,6 +26,8 @@ export type SignalStatus = 'new' | 'acknowledged' | 'resolved' | 'dismissed';
 export type SignalKind =
   | 'sharp_drop'
   | 'visibility_slipping'
+  | 'platform_gap'
+  | 'competitor_citation_gap'
   | 'prompt_gain'
   | 'new_engine'
   | 'lost_citations'
@@ -73,6 +75,7 @@ export interface SignalKindMeta {
     | 'crossed'
     | 'uncited'
     | 'slipping'
+    | 'gap'
     | 'issue';
   /** Whether the change arrow, when change_value is present, is good news. */
   positive: boolean;
@@ -81,6 +84,8 @@ export interface SignalKindMeta {
 export const SIGNAL_KINDS: Record<SignalKind, SignalKindMeta> = {
   sharp_drop: { kind: 'sharp_drop', stateKey: 'dropped', positive: false },
   visibility_slipping: { kind: 'visibility_slipping', stateKey: 'slipping', positive: false },
+  platform_gap: { kind: 'platform_gap', stateKey: 'gap', positive: false },
+  competitor_citation_gap: { kind: 'competitor_citation_gap', stateKey: 'gap', positive: false },
   prompt_gain: { kind: 'prompt_gain', stateKey: 'gained', positive: true },
   new_engine: { kind: 'new_engine', stateKey: 'gained', positive: true },
   lost_citations: { kind: 'lost_citations', stateKey: 'lost', positive: false },
