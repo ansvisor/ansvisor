@@ -65,6 +65,14 @@ const ACTION_RULES = [
     signalKinds: ['page_opportunity'],
     taskKeys: ['review_pages', 'coverage_gaps', 'optimize_content', 'validate'],
   },
+  // Growth's second definition: the brand ranks somewhere, so the content can
+  // rank — it is the engine, not the material, that differs.
+  {
+    kind: 'expand_platform_visibility',
+    category: 'growth',
+    signalKinds: ['platform_gap'],
+    taskKeys: ['compare_platforms', 'coverage_gaps', 'optimize_content', 'validate'],
+  },
   {
     kind: 'convert_mentions',
     category: 'growth',
@@ -76,6 +84,15 @@ const ACTION_RULES = [
     category: 'fix',
     signalKinds: ['audit_low_score'],
     taskKeys: ['review_audits', 'fix_issues', 'revalidate'],
+  },
+  // Compete's second definition. Distinct from close_competitor_gap, which is
+  // about visibility: this one is about who gets cited, and the work is
+  // earning references rather than ranking answers.
+  {
+    kind: 'close_citation_gap',
+    category: 'compete',
+    signalKinds: ['competitor_citation_gap'],
+    taskKeys: ['compare_citations', 'identify_sources', 'strengthen_sources', 'validate'],
   },
   {
     kind: 'close_competitor_gap',
@@ -99,6 +116,25 @@ function buildPayload(rule, signals) {
       if (drop) {
         payload.dropFrom = drop.previous_value;
         payload.dropTo = drop.current_value;
+      }
+      break;
+    }
+    case 'expand_platform_visibility': {
+      const gap = (byKind.get('platform_gap') ?? [])[0];
+      if (gap) {
+        payload.platform = gap.payload?.platform;
+        payload.bestPlatform = gap.payload?.bestPlatform;
+        payload.dropFrom = gap.previous_value;
+        payload.dropTo = gap.current_value;
+      }
+      break;
+    }
+    case 'close_citation_gap': {
+      const gap = (byKind.get('competitor_citation_gap') ?? [])[0];
+      if (gap) {
+        payload.competitorNames = gap.payload?.competitorName ? [gap.payload.competitorName] : [];
+        payload.citationCount = gap.current_value;
+        payload.competitorCitations = gap.payload?.competitorCitations;
       }
       break;
     }

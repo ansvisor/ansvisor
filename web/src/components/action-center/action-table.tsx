@@ -8,6 +8,8 @@ import {
   Swords,
   Wrench,
   ShieldCheck,
+  Layers,
+  Quote,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -29,6 +31,8 @@ import { cn } from '@/lib/utils';
 export const KIND_ICONS: Record<ActionKind, React.ComponentType<{ className?: string }>> = {
   recover_visibility: BarChart3,
   protect_visibility: ShieldCheck,
+  expand_platform_visibility: Layers,
+  close_citation_gap: Quote,
   capture_ai_traffic: MousePointerClick,
   convert_mentions: MessageSquare,
   fix_low_scores: Wrench,

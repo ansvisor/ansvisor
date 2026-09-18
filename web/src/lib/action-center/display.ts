@@ -9,6 +9,11 @@ import type { ActionItem } from '@/lib/actions/action-center';
 
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
+function str(payload: Record<string, unknown>, key: string): string {
+  const value = payload[key];
+  return typeof value === 'string' ? value : '';
+}
+
 function num(payload: Record<string, unknown>, key: string): number {
   return Number(payload[key] ?? 0);
 }
@@ -49,6 +54,29 @@ export function actionTexts(
         title: t('capture_ai_traffic.title', { pages: num(p, 'pageCount') }),
         description: t('capture_ai_traffic.description'),
       };
+    case 'expand_platform_visibility':
+      return {
+        title: t('expand_platform_visibility.title', { platform: str(p, 'platform') }),
+        description: t('expand_platform_visibility.description', {
+          platform: str(p, 'platform'),
+          best: str(p, 'bestPlatform'),
+          bestRate: num(p, 'dropFrom'),
+          rate: num(p, 'dropTo'),
+        }),
+      };
+    case 'close_citation_gap': {
+      const names = Array.isArray(p.competitorNames) ? (p.competitorNames as string[]) : [];
+      return {
+        title: t('close_citation_gap.title'),
+        description: names[0]
+          ? t('close_citation_gap.descriptionWithName', {
+              competitor: names[0],
+              theirs: num(p, 'competitorCitations'),
+              ours: num(p, 'citationCount'),
+            })
+          : t('close_citation_gap.description'),
+      };
+    }
     case 'convert_mentions':
       return {
         title: t('convert_mentions.title'),
@@ -83,6 +111,14 @@ export function actionContextTags(action: ActionItem, t: Translator): string[] {
       break;
     case 'protect_visibility':
       break;
+    case 'expand_platform_visibility':
+      tags.push(str(p, 'platform'));
+      break;
+    case 'close_citation_gap': {
+      const names = Array.isArray(p.competitorNames) ? (p.competitorNames as string[]) : [];
+      if (names[0]) tags.push(names[0]);
+      break;
+    }
     case 'capture_ai_traffic':
       tags.push(t('tags.pages', { count: num(p, 'pageCount') }));
       break;

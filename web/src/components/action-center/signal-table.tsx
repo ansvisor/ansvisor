@@ -19,6 +19,8 @@ import {
   Trophy,
   Unlink,
   X,
+  Layers,
+  Quote,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -50,6 +52,8 @@ import { cn } from '@/lib/utils';
 export const SIGNAL_ICONS: Record<SignalKind, React.ComponentType<{ className?: string }>> = {
   sharp_drop: TrendingDown,
   visibility_slipping: TrendingDown,
+  platform_gap: Layers,
+  competitor_citation_gap: Quote,
   prompt_gain: TrendingUp,
   new_engine: Sparkles,
   lost_citations: Unlink,
