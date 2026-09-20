@@ -10,6 +10,8 @@ import {
   ShieldCheck,
   Layers,
   Quote,
+  Sparkles,
+  Target,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -22,13 +24,15 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { ActionItem } from '@/lib/actions/action-center';
-import type { ActionKind, ActionStatus } from '@/lib/action-center/registry';
+import type { ActionCategory, ActionKind, ActionStatus } from '@/lib/action-center/registry';
 import { actionContextTags, actionTexts } from '@/lib/action-center/display';
 import { ImpactDots } from './signal-table';
 import { formatRelative } from '@/lib/format-relative';
 import { cn } from '@/lib/utils';
 
-export const KIND_ICONS: Record<ActionKind, React.ComponentType<{ className?: string }>> = {
+type IconComponent = React.ComponentType<{ className?: string }>;
+
+const KIND_ICONS: Record<ActionKind, IconComponent> = {
   recover_visibility: BarChart3,
   protect_visibility: ShieldCheck,
   expand_platform_visibility: Layers,
@@ -38,6 +42,36 @@ export const KIND_ICONS: Record<ActionKind, React.ComponentType<{ className?: st
   fix_low_scores: Wrench,
   close_competitor_gap: Swords,
 };
+
+/** What a kind we have no icon for falls back to — every definition belongs
+ *  to a family, and the family says enough to orient a reader. */
+const CATEGORY_ICONS: Record<ActionCategory, IconComponent> = {
+  growth: Sparkles,
+  protect: ShieldCheck,
+  recover: BarChart3,
+  fix: Wrench,
+  compete: Swords,
+};
+
+/**
+ * The icon for an action, whatever kind it turns out to be.
+ *
+ * A component rather than a lookup helper so the resolution happens in one
+ * place: callers that only render it should not have to hold a component in
+ * a variable to do so.
+ */
+export function ActionIcon({
+  kind,
+  category,
+  className,
+}: {
+  kind: string;
+  category: ActionCategory;
+  className?: string;
+}) {
+  const Icon = KIND_ICONS[kind as ActionKind] ?? CATEGORY_ICONS[category] ?? Target;
+  return <Icon className={className} />;
+}
 
 export const ACTION_STATUS_BADGE: Record<ActionStatus, string> = {
   new: 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400',
@@ -100,7 +134,6 @@ export function ActionTable({
         </TableHeader>
         <TableBody>
           {actions.map((action) => {
-            const Icon = KIND_ICONS[action.kind];
             const texts = actionTexts(action, tTexts);
             const tags = actionContextTags(action, t);
             return (
@@ -108,7 +141,11 @@ export function ActionTable({
                 <TableCell className="max-w-[380px]">
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-muted/40">
-                      <Icon className="h-4 w-4 text-muted-foreground" />
+                      <ActionIcon
+                        kind={action.kind}
+                        category={action.category}
+                        className="h-4 w-4 text-muted-foreground"
+                      />
                     </div>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{texts.title}</p>

@@ -539,6 +539,10 @@
         "description": "You reach {bestRate}% of {best} answers but {rate}% on {platform} — the content ranks, this engine does not surface it.",
         "goal": "Close the gap between your strongest engine and your weakest."
       },
+      "unknown": {
+        "description": "This action comes from a detection rule newer than this release of the app. Its tasks, evidence and measurement are complete — only the written description is missing.",
+        "goal": "Work through the tasks below; they carry what this action is for."
+      },
       "close_citation_gap": {
         "title": "Close the citation gap",
         "description": "A competitor is cited far more often than you are.",

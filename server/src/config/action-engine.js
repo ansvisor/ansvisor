@@ -138,6 +138,22 @@ export const ENGINE_THRESHOLDS = Object.freeze({
     restAfterCloseDays: 14,
 
     /**
+     * How many new actions one brand may be given in a day.
+     *
+     * A ceiling, not a target. Today it binds on nothing: eight definitions
+     * produce at most three actions on a brand's busiest day, because a brand
+     * rarely has more than a couple of distinct conditions firing at once.
+     * The ceiling is the definition count, and the plan takes that to sixty —
+     * at which point a bad night could hand someone a list nobody reads, and
+     * the engine would have talked its way out of being believed.
+     *
+     * Five is what one person can plausibly start on in a week. Anything over
+     * it is not lost: the condition is still firing, so the slot opens again
+     * tomorrow, in priority order.
+     */
+    maxNewActionsPerDay: 5,
+
+    /**
      * Platform-wide result volume collapsing to this fraction of its trailing
      * daily average is a collection incident on our side, not a visibility
      * change on the customer's. Signals are suppressed rather than reported.

@@ -9,8 +9,14 @@ vi.mock('../logger.js', () => ({
 }));
 
 import { generateActionsForBrand } from './generate.js';
+import { ENGINE_THRESHOLDS } from '../../config/action-engine.js';
+
+const { maxNewActionsPerDay } = ENGINE_THRESHOLDS.noise;
 
 const BRAND = 'brand-1';
+/** A brand with everything connected, so eligibility is not what a test is
+ *  measuring unless it says so. */
+const ALL_SOURCES = new Set(['tracking', 'competitors', 'site_audits', 'analytics']);
 const NOW = new Date('2026-09-16T04:00:00Z');
 
 /**
@@ -219,7 +225,162 @@ describe('generateActionsForBrand', () => {
 
     const summary = await generateActionsForBrand(BRAND, { now: NOW });
 
-    expect(summary).toEqual({ created: 0, refreshed: 0, resting: 0 });
+    expect(summary).toEqual({
+      created: 0,
+      refreshed: 0,
+      resting: 0,
+      ineligible: 0,
+      capped: 0,
+    });
     expect(writes.inserted).toHaveLength(0);
+  });
+});
+
+/**
+ * Phase 4 (#818): the engine stopped knowing any definition by name. What is
+ * tested here is the part it still owns — whether a brand may have this
+ * definition at all, and how many it may have in one day.
+ */
+describe('eligibility', () => {
+  it('does not raise a definition the brand has no data for', async () => {
+    const writes = mockDb({ signals: [signal({ kind: 'page_opportunity', impact: 'medium' })] });
+
+    // Page opportunities are landing pages read from an analytics connection.
+    const summary = await generateActionsForBrand(BRAND, {
+      now: NOW,
+      sources: new Set(['tracking']),
+    });
+
+    expect(summary.created).toBe(0);
+    expect(summary.ineligible).toBe(1);
+    expect(writes.inserted.find((w) => w.table === 'actions')).toBeUndefined();
+  });
+
+  it('raises it once the source is connected', async () => {
+    const writes = mockDb({ signals: [signal({ kind: 'page_opportunity', impact: 'medium' })] });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    expect(summary.created).toBe(1);
+    expect(summary.ineligible).toBe(0);
+    expect(writes.inserted.find((w) => w.table === 'actions').rows[0]).toMatchObject({
+      kind: 'capture_ai_traffic',
+      category: 'growth',
+    });
+  });
+
+  /**
+   * Losing a source mid-cycle must not orphan work already handed out: the
+   * action stays, and evidence keeps attaching to it.
+   */
+  it('keeps maintaining an active action whose source went away', async () => {
+    const writes = mockDb({
+      signals: [signal({ id: 's9', kind: 'page_opportunity', impact: 'medium' })],
+      activeActions: [{ id: 'a9', dedup_key: 'capture_ai_traffic', status: 'in_progress' }],
+    });
+
+    const summary = await generateActionsForBrand(BRAND, {
+      now: NOW,
+      sources: new Set(['tracking']),
+    });
+
+    expect(summary.refreshed).toBe(1);
+    expect(summary.ineligible).toBe(0);
+    expect(writes.updated.some((w) => w.table === 'signals')).toBe(true);
+  });
+});
+
+describe('the daily cap', () => {
+  /** One open signal for every definition that exists. */
+  const oneOfEachKind = () =>
+    [
+      'sharp_drop',
+      'visibility_slipping',
+      'platform_gap',
+      'uncited_mentions',
+      'page_opportunity',
+      'audit_low_score',
+      'competitor_citation_gap',
+      'competitor_surge',
+    ].map((kind, index) => signal({ id: `s${index}`, kind, impact: 'medium' }));
+
+  it('stops at the configured number of new actions a day', async () => {
+    const writes = mockDb({ signals: oneOfEachKind() });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    expect(summary.created).toBe(maxNewActionsPerDay);
+    expect(summary.capped).toBe(8 - maxNewActionsPerDay);
+    expect(writes.inserted.filter((w) => w.table === 'actions')).toHaveLength(maxNewActionsPerDay);
+  });
+
+  /**
+   * The budget is the day's, not the run's. An action raised this morning
+   * and dismissed by lunch still spent its slot — the brand was told.
+   */
+  it('counts what the brand was already given today', async () => {
+    const spent = Array.from({ length: maxNewActionsPerDay - 1 }, (_, i) => ({
+      id: `spent-${i}`,
+      dedup_key: `unrelated-${i}`,
+      status: 'new',
+      created_at: NOW.toISOString(),
+    }));
+    const writes = mockDb({ signals: oneOfEachKind(), activeActions: spent });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    expect(summary.created).toBe(1);
+    expect(writes.inserted.filter((w) => w.table === 'actions')).toHaveLength(1);
+  });
+
+  it('ignores actions raised on earlier days', async () => {
+    const yesterday = Array.from({ length: maxNewActionsPerDay }, (_, i) => ({
+      id: `old-${i}`,
+      dedup_key: `unrelated-${i}`,
+      status: 'new',
+      created_at: daysAgo(1),
+    }));
+    mockDb({ signals: oneOfEachKind(), activeActions: yesterday });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    expect(summary.created).toBe(maxNewActionsPerDay);
+  });
+
+  /** When there is room for one, it goes to the one that matters most. */
+  it('spends the last slot on the highest impact candidate', async () => {
+    const spent = Array.from({ length: maxNewActionsPerDay - 1 }, (_, i) => ({
+      id: `spent-${i}`,
+      dedup_key: `unrelated-${i}`,
+      status: 'new',
+      created_at: NOW.toISOString(),
+    }));
+    const writes = mockDb({
+      signals: [
+        signal({ id: 'low', kind: 'platform_gap', impact: 'low' }),
+        signal({ id: 'high', kind: 'sharp_drop', impact: 'high' }),
+      ],
+      activeActions: spent,
+    });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    expect(summary.created).toBe(1);
+    expect(summary.capped).toBe(1);
+    expect(writes.inserted.find((w) => w.table === 'actions').rows[0].kind).toBe(
+      'recover_visibility',
+    );
+  });
+});
+
+describe('the definition version', () => {
+  it('is stamped on the action that the definition raised', async () => {
+    const writes = mockDb({ signals: [signal()] });
+
+    await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    const row = writes.inserted.find((w) => w.table === 'actions').rows[0];
+    expect(row.definition_version).toBeGreaterThanOrEqual(1);
+    expect(Number.isInteger(row.definition_version)).toBe(true);
   });
 });
