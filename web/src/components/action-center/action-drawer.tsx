@@ -46,17 +46,18 @@ import {
   type ActionStatus,
   type TaskStatus,
 } from '@/lib/action-center/registry';
-import { actionContextTags, actionTexts, memberLabel, taskText } from '@/lib/action-center/display';
+import {
+  actionContextTags,
+  actionGoal,
+  actionTexts,
+  memberLabel,
+  taskText,
+} from '@/lib/action-center/display';
 import { signalTexts } from '@/lib/signals/display';
 import { isKpiKey } from '@/lib/kpis/registry';
 import { ImpactDots, SignalStatusBadge } from './signal-table';
-import { KIND_ICONS } from './action-table';
+import { ActionIcon } from './action-table';
 import { cn } from '@/lib/utils';
-
-function ActionHeaderIcon({ kind }: { kind: ActionItem['kind'] }) {
-  const Icon = KIND_ICONS[kind];
-  return <Icon className="h-4 w-4 text-muted-foreground" />;
-}
 
 type DrawerTab = 'overview' | 'tasks' | 'signals' | 'history';
 const TABS: DrawerTab[] = ['overview', 'tasks', 'signals', 'history'];
@@ -156,7 +157,11 @@ export function ActionDrawer({
           </div>
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-muted/40">
-              <ActionHeaderIcon kind={action.kind} />
+              <ActionIcon
+                kind={action.kind}
+                category={action.category}
+                className="h-4 w-4 text-muted-foreground"
+              />
             </div>
             <div className="min-w-0">
               <SheetTitle>{texts.title}</SheetTitle>
@@ -208,7 +213,7 @@ export function ActionDrawer({
               <Separator />
               <section>
                 <p className="text-xs font-medium text-muted-foreground">{t('drawer.goal')}</p>
-                <p className="mt-1">{tTexts(`${action.kind}.goal`)}</p>
+                <p className="mt-1">{actionGoal(action.kind, tTexts)}</p>
               </section>
               <Separator />
               <section>

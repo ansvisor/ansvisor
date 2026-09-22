@@ -1,10 +1,16 @@
 import type { ActionItem } from '@/lib/actions/action-center';
+import { isActionKind } from '@/lib/action-center/registry';
 
 /**
  * Composes what an action row shows from `kind` + `payload`, mirroring the
  * signals display helper: templates live in i18n
  * (actionCenter.actionTexts.<kind>), this module prepares the values and
  * picks the right variant when a payload part is optional.
+ *
+ * The server can raise a kind this build has never heard of — that is the
+ * point of the definition registry, which grows on its own release cycle.
+ * Such an action is presented generically rather than hidden: the work is
+ * real, and a row nobody can read is still better than a row nobody sees.
  */
 
 type Translator = (key: string, values?: Record<string, string | number>) => string;
@@ -18,12 +24,30 @@ function num(payload: Record<string, unknown>, key: string): number {
   return Number(payload[key] ?? 0);
 }
 
+/**
+ * `expand_platform_visibility` → "Expand platform visibility".
+ *
+ * Definition ids are written to be read — they are verb phrases naming the
+ * work — so the id itself is a better title than any generic string.
+ */
+export function humanizeKind(kind: string): string {
+  const words = kind.replace(/_/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 export function actionTexts(
   action: ActionItem,
   t: Translator,
 ): { title: string; description: string } {
   const p = action.payload;
-  switch (action.kind) {
+  const kind = action.kind;
+  if (!isActionKind(kind)) {
+    return {
+      title: humanizeKind(kind),
+      description: t('unknown.description'),
+    };
+  }
+  switch (kind) {
     case 'recover_visibility': {
       const hasDrop = p.dropFrom !== undefined && p.dropFrom !== null;
       return {
@@ -100,11 +124,23 @@ export function actionTexts(
   }
 }
 
+/**
+ * What the drawer shows under "Goal".
+ *
+ * Its own helper rather than an inline `t(`${kind}.goal`)` in two components,
+ * because an unknown kind has no goal key and next-intl would render the key
+ * itself into the drawer.
+ */
+export function actionGoal(kind: string, t: Translator): string {
+  return isActionKind(kind) ? t(`${kind}.goal`) : t('unknown.goal');
+}
+
 /** Compact evidence chips under the title: signal count plus the kind's own
  *  count (pages, prompts, competitors). */
 export function actionContextTags(action: ActionItem, t: Translator): string[] {
   const p = action.payload;
   const tags = [t('tags.signals', { count: action.signalCount })];
+  if (!isActionKind(action.kind)) return tags;
   switch (action.kind) {
     case 'recover_visibility':
       if (num(p, 'promptCount') > 0) tags.push(t('tags.prompts', { count: num(p, 'promptCount') }));
