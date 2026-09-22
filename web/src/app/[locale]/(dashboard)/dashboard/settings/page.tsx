@@ -19,11 +19,15 @@ import { ApiKeysSection } from '@/components/settings/api-keys-section';
 import { AgentSection } from '@/components/settings/agent-section';
 import { NotificationsSection } from '@/components/settings/notifications-section';
 import { IntegrationsSection } from '@/components/settings/integrations-section';
+import { OrganizationSection } from '@/components/settings/organization-section';
+import { updateAccountName } from '@/lib/actions/organization';
+import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 type Section =
   | 'account'
   | 'theme'
-  | 'project'
+  | 'organization'
   | 'team'
   | 'notifications'
   | 'integrations'
@@ -45,10 +49,13 @@ export default function SettingsPage() {
     if (tabParam === 'notifications') return 'notifications';
     // OAuth popups land back here after the Composio consent flow (#577).
     if (tabParam === 'integrations') return 'integrations';
+    // Legacy deep-link: ?tab=project now maps to the new organization tab.
+    if (tabParam === 'organization' || tabParam === 'project') return 'organization';
     return 'account';
   });
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
+  const [savingName, setSavingName] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -65,10 +72,22 @@ export default function SettingsPage() {
     router.refresh();
   }
 
+  async function handleSaveAccount() {
+    setSavingName(true);
+    try {
+      await updateAccountName(displayName);
+      toast.success(t('saved'));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('accountSaveFailed'));
+    } finally {
+      setSavingName(false);
+    }
+  }
+
   const navItems: { id: Section; label: string }[] = [
     { id: 'account', label: t('account') },
     { id: 'theme', label: t('theme') },
-    { id: 'project', label: t('project') },
+    { id: 'organization', label: t('organization') },
     { id: 'team', label: t('team') },
     { id: 'notifications', label: t('notifications') },
     { id: 'integrations', label: t('integrations') },
@@ -137,7 +156,10 @@ export default function SettingsPage() {
                     disabled
                   />
                 </div>
-                <Button>{t('save')}</Button>
+                <Button onClick={handleSaveAccount} disabled={savingName || !displayName.trim()}>
+                  {savingName && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {t('save')}
+                </Button>
                 <Separator className="my-2" />
                 <Button
                   variant="outline"
@@ -165,26 +187,8 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Project */}
-          {active === 'project' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{t('project')}</CardTitle>
-                <CardDescription>Configure your project settings.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="projectName">{t('projectName')}</Label>
-                  <Input id="projectName" placeholder="My Brand" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="domain">{t('domain')}</Label>
-                  <Input id="domain" placeholder="example.com" />
-                </div>
-                <Button>{t('save')}</Button>
-              </CardContent>
-            </Card>
-          )}
+          {/* Organization */}
+          {active === 'organization' && <OrganizationSection />}
 
           {/* Team */}
           {active === 'team' && <TeamSection />}
