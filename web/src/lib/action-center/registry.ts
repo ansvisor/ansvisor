@@ -32,6 +32,8 @@ export type ActionOutcome =
 export type ActionKind =
   | 'recover_visibility'
   | 'protect_visibility'
+  | 'expand_platform_visibility'
+  | 'close_citation_gap'
   | 'capture_ai_traffic'
   | 'convert_mentions'
   | 'fix_low_scores'
@@ -100,6 +102,14 @@ export const ACTION_KINDS: Record<ActionKind, ActionKindMeta> = {
   protect_visibility: {
     kind: 'protect_visibility',
     taskKeys: ['diagnose_slip', 'review_responses', 'reinforce_content', 'validate'],
+  },
+  expand_platform_visibility: {
+    kind: 'expand_platform_visibility',
+    taskKeys: ['compare_platforms', 'coverage_gaps', 'optimize_content', 'validate'],
+  },
+  close_citation_gap: {
+    kind: 'close_citation_gap',
+    taskKeys: ['compare_citations', 'identify_sources', 'strengthen_sources', 'validate'],
   },
   capture_ai_traffic: {
     kind: 'capture_ai_traffic',

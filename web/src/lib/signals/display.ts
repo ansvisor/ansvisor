@@ -21,6 +21,19 @@ export function signalTexts(signal: Signal, t: Translator): { title: string; des
       case 'sharp_drop':
       case 'visibility_slipping':
         return { from: signal.previousValue ?? 0, to: signal.currentValue ?? 0 };
+      case 'platform_gap':
+        return {
+          platform: str(p, 'platform'),
+          best: str(p, 'bestPlatform'),
+          rate: signal.currentValue ?? 0,
+          bestRate: signal.previousValue ?? 0,
+        };
+      case 'competitor_citation_gap':
+        return {
+          competitor: str(p, 'competitorName'),
+          theirs: signal.previousValue ?? 0,
+          ours: signal.currentValue ?? 0,
+        };
       case 'prompt_gain':
         return { prompt: str(p, 'promptText'), gain: signal.changeValue ?? 0 };
       case 'new_engine':
@@ -71,6 +84,10 @@ export function signalAffected(
     case 'sharp_drop':
     case 'visibility_slipping':
       return { label: t('affected.allPrompts'), detail: null };
+    case 'platform_gap':
+      return { label: t('affected.platform'), detail: str(p, 'platform') };
+    case 'competitor_citation_gap':
+      return { label: t('affected.competitor'), detail: str(p, 'competitorName') };
     case 'prompt_gain':
     case 'lost_citations':
       return { label: t('affected.prompts', { count: 1 }), detail: str(p, 'promptText') };

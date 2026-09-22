@@ -274,13 +274,14 @@
         "crossed": "Crossed",
         "uncited": "Uncited",
         "issue": "Issue",
-        "slipping": "Slipping"
+        "slipping": "Slipping",
+        "gap": "Gap"
       },
       "affected": {
         "prompts": "{count, plural, one {1 prompt} other {# prompts}}",
         "urls": "{count, plural, one {1 URL} other {# URLs}}",
-        "platform": "1 platform",
-        "competitor": "1 competitor",
+        "platform": "Platform",
+        "competitor": "Competitor",
         "allPrompts": "All prompts"
       },
       "menu": {
@@ -363,6 +364,14 @@
       "visibility_slipping": {
         "title": "Visibility is slipping",
         "description": "You were visible in {from}% of responses, now {to}%."
+      },
+      "platform_gap": {
+        "title": "Weak on {platform}",
+        "description": "You are visible in {bestRate}% of {best} answers, but only {rate}% on {platform}."
+      },
+      "competitor_citation_gap": {
+        "title": "A competitor is cited far more often",
+        "description": "{competitor} was cited in {theirs} answers; you were cited in {ours}."
       }
     },
     "actionCategories": {
@@ -524,6 +533,17 @@
         "description": "Visibility is falling from a strong position.",
         "descriptionWithDrop": "Visibility slipped from {from}% to {to}% — still strong, but heading down.",
         "goal": "Hold the position while it is still there, rather than recovering it later."
+      },
+      "expand_platform_visibility": {
+        "title": "Expand visibility on {platform}",
+        "description": "You reach {bestRate}% of {best} answers but {rate}% on {platform} — the content ranks, this engine does not surface it.",
+        "goal": "Close the gap between your strongest engine and your weakest."
+      },
+      "close_citation_gap": {
+        "title": "Close the citation gap",
+        "description": "A competitor is cited far more often than you are.",
+        "descriptionWithName": "{competitor} was cited in {theirs} answers to your {ours}.",
+        "goal": "Earn citations from the sources answering these prompts."
       }
     },
     "actionTasks": {
@@ -544,7 +564,10 @@
       "strengthen_content": "Strengthen your content where they now win",
       "diagnose_slip": "Diagnose what changed in the last week",
       "review_responses": "Review the AI responses that stopped mentioning you",
-      "reinforce_content": "Reinforce the content behind the affected prompts"
+      "reinforce_content": "Reinforce the content behind the affected prompts",
+      "compare_platforms": "Compare how each engine answers the affected prompts",
+      "compare_citations": "Compare which sources cite the competitor and not you",
+      "identify_sources": "Identify the sources worth earning a citation from"
     },
     "taskStatus": {
       "todo": "To Do",
