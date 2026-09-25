@@ -36,6 +36,7 @@ import { runGscSync } from './lib/gsc-sync.js';
 import { runGaSync } from './lib/ga-sync.js';
 import { runPageOpportunityDetection } from './lib/page-opportunities.js';
 import { runPulseCatchUp } from './lib/pulse/engine.js';
+import { runSignalCatchUp } from './lib/signals/pass.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -122,6 +123,15 @@ async function runDailyTracking() {
   // today's runs and their own pulses are independent of this sweep.
   runPulseCatchUp().catch((err) => {
     logger.error({ err }, '[pulse] catch-up sweep crashed');
+  });
+
+  // The same recovery for signals and actions (#818). A pass that threw last
+  // night — a statement timeout on a large brand, a deploy, an OOM — left no
+  // row in signal_runs, and this re-runs it. Without it a lost night was lost
+  // for good: the Action Center simply showed nothing new and said nothing
+  // about why.
+  runSignalCatchUp().catch((err) => {
+    logger.error({ err }, '[signals] catch-up sweep crashed');
   });
 
   // Insights rollup backstop (00066). Re-refreshes the trailing days for
