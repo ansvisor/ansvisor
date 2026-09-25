@@ -12,11 +12,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { actionTexts } from '@/lib/action-center/display';
+import { actionGoal, actionTexts } from '@/lib/action-center/display';
 import type { ActionHistoryItem } from '@/lib/action-center/history';
 import { UNCOUNTED_TASK_STATUSES } from '@/lib/action-center/registry';
 import { ImpactDots } from './signal-table';
-import { KIND_ICONS } from './action-table';
+import { ActionIcon } from './action-table';
 import { HistoryStatusBadge } from './history-table';
 import { cn } from '@/lib/utils';
 
@@ -89,7 +89,6 @@ export function HistoryDrawer({
 
   if (!item) return null;
 
-  const Icon = KIND_ICONS[item.kind as keyof typeof KIND_ICONS];
   const texts = actionTexts(
     { kind: item.kind, payload: item.payload } as Parameters<typeof actionTexts>[0],
     tTexts,
@@ -118,7 +117,11 @@ export function HistoryDrawer({
           </div>
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-muted/40">
-              {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
+              <ActionIcon
+                kind={item.kind}
+                category={item.type}
+                className="h-4 w-4 text-muted-foreground"
+              />
             </div>
             <div className="min-w-0">
               <SheetTitle>{texts.title}</SheetTitle>
@@ -139,7 +142,7 @@ export function HistoryDrawer({
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-4 text-sm">
           <section>
             <p className="text-xs font-medium text-muted-foreground">{t('drawer.goal')}</p>
-            <p className="mt-1">{tTexts(`${item.kind}.goal`)}</p>
+            <p className="mt-1">{actionGoal(item.kind, tTexts)}</p>
           </section>
 
           <Separator />

@@ -14,7 +14,7 @@ import { actionTexts } from '@/lib/action-center/display';
 import type { ActionHistoryItem } from '@/lib/action-center/history';
 import type { ActionStatus } from '@/lib/action-center/registry';
 import { ImpactDots } from './signal-table';
-import { KIND_ICONS } from './action-table';
+import { ActionIcon } from './action-table';
 import { cn } from '@/lib/utils';
 
 /** Low-saturation per type, the way the Signals table tints its categories —
@@ -119,7 +119,6 @@ export function HistoryTable({
         </TableHeader>
         <TableBody>
           {items.map((item) => {
-            const Icon = KIND_ICONS[item.kind as keyof typeof KIND_ICONS];
             const texts = actionTexts(
               { kind: item.kind, payload: item.payload } as Parameters<typeof actionTexts>[0],
               tTexts,
@@ -134,7 +133,11 @@ export function HistoryTable({
                 <TableCell className="max-w-[360px]">
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-muted/40">
-                      {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
+                      <ActionIcon
+                        kind={item.kind}
+                        category={item.type}
+                        className="h-4 w-4 text-muted-foreground"
+                      />
                     </div>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{texts.title}</p>

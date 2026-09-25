@@ -12,10 +12,8 @@
 
 import { createClient } from '@/lib/supabase/server';
 import {
-  isActionKind,
   type ActionCategory,
   type ActionImpact,
-  type ActionKind,
   UNCOUNTED_TASK_STATUSES,
   type ActionStatus,
   type TaskStatus,
@@ -33,7 +31,12 @@ export interface ActionItem {
   id: string;
   actionNo: number;
   category: ActionCategory;
-  kind: ActionKind;
+  /**
+   * The server definition's id. Not narrowed to the kinds this build has copy
+   * for: the definition registry grows on its own release cycle, and an
+   * action we cannot name is still an action someone has to do.
+   */
+  kind: string;
   impact: ActionImpact;
   status: ActionStatus;
   payload: Record<string, unknown>;
@@ -73,7 +76,7 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
     .eq('brand_id', brandId)
     .limit(1000);
   if (error) throw new Error(error.message);
-  const rows = ((data ?? []) as ActionRow[]).filter((row) => isActionKind(row.kind));
+  const rows = (data ?? []) as ActionRow[];
   if (rows.length === 0) return [];
 
   const actionIds = rows.map((row) => row.id);
@@ -124,7 +127,7 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
     id: row.id,
     actionNo: Number(row.action_no),
     category: row.category as ActionCategory,
-    kind: row.kind as ActionKind,
+    kind: row.kind,
     impact: row.impact as ActionImpact,
     status: row.status as ActionStatus,
     payload: row.payload ?? {},

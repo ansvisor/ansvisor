@@ -1,0 +1,63 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const from = vi.fn();
+vi.mock('../../config/supabase.js', () => ({ default: { from: (...a) => from(...a) } }));
+
+import { resolveBrandSources } from './sources.js';
+
+const BRAND = 'brand-1';
+
+/**
+ * Answers one row per table that has something, nothing for the rest.
+ *
+ * `tables` is what the brand HAS; anything absent answers empty, which is
+ * what a brand without competitors or audits looks like.
+ */
+function mockDb(tables) {
+  from.mockImplementation((table) => {
+    const builder = {
+      select: () => builder,
+      eq: () => builder,
+      limit: () => builder,
+      then: (resolve, reject) =>
+        Promise.resolve({ data: tables[table] ?? [], error: null }).then(resolve, reject),
+    };
+    return builder;
+  });
+}
+
+beforeEach(() => from.mockReset());
+
+describe('resolveBrandSources', () => {
+  it('always includes tracking — a brand without it is not a brand yet', async () => {
+    mockDb({});
+    expect([...(await resolveBrandSources(BRAND))]).toEqual(['tracking']);
+  });
+
+  it('reports the competitors and audits the brand has', async () => {
+    mockDb({ competitors: [{ id: 'c1' }], site_audits: [{ id: 'a1' }] });
+
+    const sources = await resolveBrandSources(BRAND);
+
+    expect(sources.has('competitors')).toBe(true);
+    expect(sources.has('site_audits')).toBe(true);
+    expect(sources.has('analytics')).toBe(false);
+  });
+
+  /** Integrations are connected per organization, so the brand has to be
+   *  resolved to one before the connection can be found. */
+  it('finds an analytics connection through the brand’s organization', async () => {
+    mockDb({
+      brands: [{ organization_id: 'org-1' }],
+      integration_connections: [{ id: 'i1' }],
+    });
+
+    expect((await resolveBrandSources(BRAND)).has('analytics')).toBe(true);
+  });
+
+  it('claims no analytics for a brand with no organization', async () => {
+    mockDb({ integration_connections: [{ id: 'i1' }] });
+
+    expect((await resolveBrandSources(BRAND)).has('analytics')).toBe(false);
+  });
+});

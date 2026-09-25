@@ -15,7 +15,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import { isActionKind, type ActionCategory, type ActionImpact } from '@/lib/action-center/registry';
+import type { ActionCategory, ActionImpact } from '@/lib/action-center/registry';
 import type { ActionOutcome, ActionStatus, TaskStatus } from '@/lib/action-center/registry';
 import { SIGNAL_SOURCES, type SignalSource } from '@/lib/signals/registry';
 import {
@@ -168,7 +168,7 @@ export async function getActionHistory(
   const { data, error } = await query;
   if (error) throw new Error(error.message);
 
-  const rows = ((data ?? []) as HistoryRow[]).filter((row) => isActionKind(row.kind));
+  const rows = (data ?? []) as HistoryRow[];
   if (rows.length === 0) return [];
 
   const actionIds = rows.map((row) => row.id);

@@ -1,9 +1,16 @@
 /**
- * The action registry — static product knowledge about every action kind
- * the generator can produce. Same division of labor as signals: the server
- * (server/src/lib/action-center/generate.js ACTION_RULES) owns what gets
- * stored; this file owns display — i18n template keys, task lists, and the
- * context tags a row shows.
+ * The action registry — what this build knows how to present.
+ *
+ * Same division of labor as signals, with one asymmetry worth naming: the
+ * server's definition registry (server/src/lib/action-center/definitions) is
+ * the source of truth for which actions EXIST, and it is meant to grow
+ * without this file following. So the list below is not a contract — it is
+ * the set of kinds we have written copy and an icon for. Anything the server
+ * raises that is not here still reaches the user, presented from its
+ * category and its id; see lib/action-center/display.ts.
+ *
+ * Dropping a kind from this list therefore degrades an action; it never
+ * hides one.
  */
 
 export type ActionCategory = 'growth' | 'protect' | 'recover' | 'fix' | 'compete';
@@ -29,6 +36,7 @@ export type ActionOutcome =
   | 'declined'
   | 'not_measurable';
 
+/** A kind this build has copy and an icon for. */
 export type ActionKind =
   | 'recover_visibility'
   | 'protect_visibility'
@@ -88,49 +96,25 @@ export const TASK_STATUSES: readonly TaskStatus[] = [
 /** Statuses that leave the progress denominator — the work is not outstanding. */
 export const UNCOUNTED_TASK_STATUSES: readonly TaskStatus[] = ['skipped', 'failed'];
 
-export interface ActionKindMeta {
-  kind: ActionKind;
-  /** Ordered task template keys — the DB rows carry the same keys. */
-  taskKeys: string[];
-}
+export const ACTION_KINDS: readonly ActionKind[] = [
+  'recover_visibility',
+  'protect_visibility',
+  'expand_platform_visibility',
+  'close_citation_gap',
+  'capture_ai_traffic',
+  'convert_mentions',
+  'fix_low_scores',
+  'close_competitor_gap',
+];
 
-export const ACTION_KINDS: Record<ActionKind, ActionKindMeta> = {
-  recover_visibility: {
-    kind: 'recover_visibility',
-    taskKeys: ['analyze_losses', 'coverage_gaps', 'update_content', 'internal_links', 'validate'],
-  },
-  protect_visibility: {
-    kind: 'protect_visibility',
-    taskKeys: ['diagnose_slip', 'review_responses', 'reinforce_content', 'validate'],
-  },
-  expand_platform_visibility: {
-    kind: 'expand_platform_visibility',
-    taskKeys: ['compare_platforms', 'coverage_gaps', 'optimize_content', 'validate'],
-  },
-  close_citation_gap: {
-    kind: 'close_citation_gap',
-    taskKeys: ['compare_citations', 'identify_sources', 'strengthen_sources', 'validate'],
-  },
-  capture_ai_traffic: {
-    kind: 'capture_ai_traffic',
-    taskKeys: ['review_pages', 'coverage_gaps', 'optimize_content', 'validate'],
-  },
-  convert_mentions: {
-    kind: 'convert_mentions',
-    taskKeys: ['identify_prompts', 'create_citable_content', 'strengthen_sources'],
-  },
-  fix_low_scores: {
-    kind: 'fix_low_scores',
-    taskKeys: ['review_audits', 'fix_issues', 'revalidate'],
-  },
-  close_competitor_gap: {
-    kind: 'close_competitor_gap',
-    taskKeys: ['analyze_competitor', 'coverage_gaps', 'strengthen_content', 'validate'],
-  },
-};
-
+/**
+ * Is this one of the kinds we have copy for?
+ *
+ * A guard, not a filter. Callers use it to choose between the written
+ * presentation and the generic one — never to decide whether a row is real.
+ */
 export function isActionKind(value: string): value is ActionKind {
-  return value in ACTION_KINDS;
+  return (ACTION_KINDS as readonly string[]).includes(value);
 }
 
 /** Sort orders the toolbar offers. Priority is impact-weighted evidence. */

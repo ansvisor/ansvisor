@@ -43,7 +43,7 @@ const { detection } = resolve();
  * this side owns what gets STORED: category, impact, sources, KPI links,
  * and whether the condition persists.
  */
-const KIND_META = {
+export const KIND_META = {
   sharp_drop: {
     category: 'visibility',
     impact: 'high',
