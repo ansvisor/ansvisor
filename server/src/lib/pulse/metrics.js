@@ -16,6 +16,36 @@ import { resolve } from '../../config/action-engine.js';
 
 const DAY_MS = 86_400_000;
 
+function utcDay(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function addDays(day, n) {
+  return new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
+}
+
+/** The instants a whole-day window spans, for callers with no daily RPC. */
+function dayWindowBounds(win) {
+  return [new Date(`${win.from}T00:00:00.000Z`), new Date(`${win.to}T23:59:59.999Z`)];
+}
+
+/**
+ * The trailing `length` whole UTC days ending today, and the equal window
+ * before it.
+ *
+ * Same convention the dashboard's delta math uses (deltaDayWindows in
+ * web/src/lib/actions/tracking.ts), so a comparison the pulse reports and one
+ * the user reads on Insights cover the same days.
+ */
+export function trailingDayWindows(now, length) {
+  const to = utcDay(now);
+  const from = addDays(to, -(length - 1));
+  return {
+    cur: { from, to },
+    prev: { from: addDays(from, -length), to: addDays(from, -1) },
+  };
+}
+
 // Detector thresholds live in config/action-engine.js, with every other
 // number that decides what counts (#818 phase 2.5). Read through `resolve()`
 // so per-definition and per-workspace overrides land without touching this
@@ -87,16 +117,30 @@ async function rpc(name, params, attempt = 0) {
   return data;
 }
 
-async function visibilityRate(brandId, from, to) {
-  const params = {
-    p_brand_id: brandId,
-    p_date_from: from.toISOString(),
-    p_date_to: to.toISOString(),
-  };
+/**
+ * A window the rollups can answer, or the raw timestamps.
+ *
+ * `days` is a whole-UTC-day window ({ from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' },
+ * inclusive on both ends). When one is given the call is served from the
+ * pre-aggregated daily tables (00066), whose cost scales with the number of
+ * days rather than with everything the brand has ever collected. Without one
+ * the raw RPC answers, which is what a window that does not fall on day
+ * boundaries — the 24-hour run-anchored one — needs.
+ */
+export function windowParams(brandId, from, to, days) {
+  return days
+    ? { p_brand_id: brandId, p_day_from: days.from, p_day_to: days.to }
+    : { p_brand_id: brandId, p_date_from: from.toISOString(), p_date_to: to.toISOString() };
+}
+
+export const daily = (name, days) => (days ? `${name}_daily` : name);
+
+async function visibilityRate(brandId, from, to, days = null) {
+  const params = windowParams(brandId, from, to, days);
   const [stats, tracked, vis] = await Promise.all([
-    rpc('visible_prompt_stats', params),
-    rpc('tracked_prompt_count', params),
-    rpc('ai_visibility_aggregates', params),
+    rpc(daily('visible_prompt_stats', days), params),
+    rpc(daily('tracked_prompt_count', days), params),
+    rpc(daily('ai_visibility_aggregates', days), params),
   ]);
   const visible = stats?.visible_prompts ?? 0;
   const total = tracked ?? 0;
@@ -112,12 +156,8 @@ async function visibilityRate(brandId, from, to) {
   return { visible, total, rate: score };
 }
 
-async function insightsWindow(brandId, from, to) {
-  const agg = await rpc('insights_aggregates', {
-    p_brand_id: brandId,
-    p_date_from: from.toISOString(),
-    p_date_to: to.toISOString(),
-  });
+async function insightsWindow(brandId, from, to, days = null) {
+  const agg = await rpc(daily('insights_aggregates', days), windowParams(brandId, from, to, days));
   const mentioning = agg?.mentioning_results ?? 0;
   return {
     totalResults: agg?.total_results ?? 0,
@@ -127,12 +167,11 @@ async function insightsWindow(brandId, from, to) {
   };
 }
 
-async function competitorRates(brandId, from, to) {
-  const agg = await rpc('ai_visibility_aggregates', {
-    p_brand_id: brandId,
-    p_date_from: from.toISOString(),
-    p_date_to: to.toISOString(),
-  });
+async function competitorRates(brandId, from, to, days = null) {
+  const agg = await rpc(
+    daily('ai_visibility_aggregates', days),
+    windowParams(brandId, from, to, days),
+  );
   // Shared denominator (the brand's answers), same as the web leaderboard.
   const answers = agg?.answers ?? 0;
   const brandRate =
@@ -416,9 +455,9 @@ export async function computePulseMetrics(brandId, { windowDays = 1, now = new D
   // windows the Insights 24h view resolves (getTrackingWindow) — so the
   // email can never disagree with the dashboard. A wall-clock [now-24h]
   // window double-counts whenever two runs land within 24h of each other
-  // (e.g. the day the cron time moved earlier). Weekly pulses and the
-  // detector windows below stay clock-based per the issue spec; brands
-  // with no completed run yet fall back to the clock window.
+  // (e.g. the day the cron time moved earlier). Brands with no completed run
+  // yet fall back to the clock window. Everything wider than a day is read in
+  // whole UTC days instead — see below.
   let curTo = now;
   let curFrom = new Date(now.getTime() - windowDays * DAY_MS);
   let prevTo = curFrom;
@@ -438,8 +477,26 @@ export async function computePulseMetrics(brandId, { windowDays = 1, now = new D
     }
   }
 
-  const weekFrom = new Date(now.getTime() - 7 * DAY_MS);
-  const twoWeekFrom = new Date(now.getTime() - 14 * DAY_MS);
+  // Everything measured in days is read from the daily rollups, and is
+  // therefore expressed in whole UTC days rather than in clock offsets.
+  //
+  // This is the fix for a silent failure, not a tidy-up. `insights_aggregates`
+  // and `ai_visibility_aggregates` rescan every result a brand has ever
+  // collected; past roughly 25k results that exceeds PostgREST's 8s statement
+  // timeout, and on the largest brand it did so on every single call. The
+  // pulse survived on its retries and its catch-up sweep. Signal recording,
+  // which shares this function, had neither — so that brand recorded no
+  // signals at all for six days, and with them no actions. The rollup answers
+  // the same window in a tenth of a second.
+  //
+  // The 24-hour window stays on the raw RPCs: it is anchored to the
+  // tracking-run ledger rather than to midnight, so no whole-day window can
+  // express it, and it is cheap for exactly the same reason the wide ones
+  // are not.
+  const week = trailingDayWindows(now, 7);
+  const detector = windowDays === 1 ? null : trailingDayWindows(now, windowDays);
+  const [weekFrom, weekTo] = dayWindowBounds(week.cur);
+  const [twoWeekFrom, twoWeekTo] = dayWindowBounds(week.prev);
 
   const prompts = await brandPrompts(brandId);
   const promptById = new Map(prompts.map((p) => [p.id, p]));
@@ -459,15 +516,18 @@ export async function computePulseMetrics(brandId, { windowDays = 1, now = new D
     lostCitations,
     degraded,
   ] = await series([
-    () => visibilityRate(brandId, curFrom, curTo),
-    () => visibilityRate(brandId, weekFrom, now),
-    () => visibilityRate(brandId, twoWeekFrom, weekFrom),
-    () => insightsWindow(brandId, curFrom, curTo),
-    () => insightsWindow(brandId, prevFrom, prevTo),
-    () => competitorRates(brandId, weekFrom, now),
-    () => competitorRates(brandId, twoWeekFrom, weekFrom),
-    () => promptScores(brandId, weekFrom, now),
-    () => promptScores(brandId, twoWeekFrom, weekFrom),
+    () => visibilityRate(brandId, curFrom, curTo, detector?.cur ?? null),
+    () => visibilityRate(brandId, weekFrom, weekTo, week.cur),
+    () => visibilityRate(brandId, twoWeekFrom, twoWeekTo, week.prev),
+    () => insightsWindow(brandId, curFrom, curTo, detector?.cur ?? null),
+    () => insightsWindow(brandId, prevFrom, prevTo, detector?.prev ?? null),
+    () => competitorRates(brandId, weekFrom, weekTo, week.cur),
+    () => competitorRates(brandId, twoWeekFrom, twoWeekTo, week.prev),
+    // No daily variant exists for the per-prompt summaries, so these stay on
+    // the raw RPC — but over the same days as everything above, so the
+    // movers cannot describe a different week from the rates beside them.
+    () => promptScores(brandId, weekFrom, weekTo),
+    () => promptScores(brandId, twoWeekFrom, twoWeekTo),
     () => firstTimeCitations(promptById, curFrom),
     () => newEngineAppearances(brandId, curFrom),
     () => lostCitationPrompts(brandId, promptById, now),

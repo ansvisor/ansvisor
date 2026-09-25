@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 // SUPABASE_* env is absent (as in CI) — stub it before the import chain.
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
-import { isTransientDbError, series } from './metrics.js';
+import { daily, isTransientDbError, series, trailingDayWindows, windowParams } from './metrics.js';
 
 /**
  * Pulse metric execution shape (#687).
@@ -74,5 +74,73 @@ describe('isTransientDbError', () => {
   it('handles a missing message without throwing', () => {
     expect(isTransientDbError(undefined)).toBe(false);
     expect(isTransientDbError('')).toBe(false);
+  });
+});
+
+/**
+ * Window shape (#818).
+ *
+ * The wide windows moved off the raw aggregate RPCs, which rescan everything
+ * a brand has ever collected and cross the database's 8s statement timeout
+ * once a brand is large enough. They are now expressed in whole UTC days and
+ * answered from the daily rollups. What is worth pinning is the arithmetic:
+ * which days a comparison covers decides what every detector reads.
+ */
+describe('trailingDayWindows', () => {
+  const now = new Date('2026-09-25T02:13:00Z');
+
+  it('covers the trailing seven days, today included', () => {
+    expect(trailingDayWindows(now, 7).cur).toEqual({ from: '2026-09-19', to: '2026-09-25' });
+  });
+
+  it('puts the previous window immediately before, never overlapping', () => {
+    const { cur, prev } = trailingDayWindows(now, 7);
+    expect(prev).toEqual({ from: '2026-09-12', to: '2026-09-18' });
+    expect(prev.to < cur.from).toBe(true);
+  });
+
+  it('gives both windows the same length, so the comparison is like for like', () => {
+    const { cur, prev } = trailingDayWindows(now, 7);
+    const span = (w) => (Date.parse(w.to) - Date.parse(w.from)) / 86_400_000;
+    expect(span(cur)).toBe(span(prev));
+  });
+
+  /** The hour the nightly run happens must not change which days it reads. */
+  it('does not depend on the time of day', () => {
+    const early = trailingDayWindows(new Date('2026-09-25T00:04:00Z'), 7);
+    const late = trailingDayWindows(new Date('2026-09-25T23:58:00Z'), 7);
+    expect(early).toEqual(late);
+  });
+
+  it('crosses a month boundary by date, not by arithmetic on the day number', () => {
+    expect(trailingDayWindows(new Date('2026-03-02T05:00:00Z'), 7).cur.from).toBe('2026-02-24');
+  });
+});
+
+describe('rollup routing', () => {
+  it('sends a whole-day window to the rollup variant', () => {
+    const days = { from: '2026-09-19', to: '2026-09-25' };
+    expect(daily('ai_visibility_aggregates', days)).toBe('ai_visibility_aggregates_daily');
+    expect(windowParams('b1', null, null, days)).toEqual({
+      p_brand_id: 'b1',
+      p_day_from: '2026-09-19',
+      p_day_to: '2026-09-25',
+    });
+  });
+
+  /**
+   * The 24-hour window is anchored to the tracking-run ledger rather than to
+   * midnight, so no whole-day window can express it — and it is cheap, being
+   * one run's worth of rows.
+   */
+  it('leaves a run-anchored window on the raw RPC', () => {
+    const from = new Date('2026-09-24T02:10:00Z');
+    const to = new Date('2026-09-25T02:13:00Z');
+    expect(daily('ai_visibility_aggregates', null)).toBe('ai_visibility_aggregates');
+    expect(windowParams('b1', from, to, null)).toEqual({
+      p_brand_id: 'b1',
+      p_date_from: from.toISOString(),
+      p_date_to: to.toISOString(),
+    });
   });
 });
