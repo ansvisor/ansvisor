@@ -384,3 +384,70 @@ describe('the definition version', () => {
     expect(Number.isInteger(row.definition_version)).toBe(true);
   });
 });
+
+/**
+ * Phase 5's exit condition (#818), through the writer rather than the
+ * planner: two brands with the same problem, one with an integration
+ * connected and one without, are given different work.
+ */
+describe('the task plan the action is created with', () => {
+  const taskRows = (writes) =>
+    (writes.inserted.find((w) => w.table === 'action_tasks')?.rows ?? []).map(
+      (row) => row.task_key,
+    );
+
+  it('asks a brand with analytics what the drop cost in sessions', async () => {
+    const writes = mockDb({ signals: [signal()] });
+
+    await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    expect(taskRows(writes)).toContain('measure_traffic_impact');
+  });
+
+  it('does not ask a brand that has no analytics connected', async () => {
+    const writes = mockDb({ signals: [signal()] });
+
+    await generateActionsForBrand(BRAND, { now: NOW, sources: new Set(['tracking']) });
+
+    expect(taskRows(writes)).not.toContain('measure_traffic_impact');
+    expect(taskRows(writes).length).toBeGreaterThan(0);
+  });
+
+  it('records how each task may be carried out, and what it waits on', async () => {
+    const writes = mockDb({ signals: [signal()] });
+
+    await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    const rows = writes.inserted.find((w) => w.table === 'action_tasks').rows;
+    for (const row of rows) {
+      expect(['manual', 'agent']).toContain(row.mode);
+      expect(['none', 'approval']).toContain(row.permission);
+      expect(Array.isArray(row.depends_on)).toBe(true);
+      expect(row.task_version).toBeGreaterThanOrEqual(1);
+    }
+    // Positions are contiguous whatever the plan dropped.
+    expect(rows.map((row) => row.position)).toEqual(rows.map((_, i) => i + 1));
+  });
+
+  it('names the target on a task whose payload resolves one', async () => {
+    const writes = mockDb({
+      signals: [
+        signal({
+          kind: 'platform_gap',
+          impact: 'medium',
+          payload: { platform: 'gemini-web', bestPlatform: 'chatgpt-web' },
+        }),
+      ],
+    });
+
+    await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    const compare = writes.inserted
+      .find((w) => w.table === 'action_tasks')
+      .rows.find((row) => row.task_key === 'compare_platforms');
+    expect(compare.title_params).toEqual({
+      platform: 'gemini-web',
+      bestPlatform: 'chatgpt-web',
+    });
+  });
+});

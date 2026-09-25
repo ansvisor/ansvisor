@@ -40,6 +40,7 @@ import { logger } from '../logger.js';
 import { resolve } from '../../config/action-engine.js';
 import { isEligible, loadDefinitions } from './definitions/index.js';
 import { resolveBrandSources } from './sources.js';
+import { planTasks } from './tasks/plan.js';
 
 const DAY_MS = 86_400_000;
 
@@ -110,7 +111,9 @@ function startOfUtcDay(now) {
   return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 }
 
-async function openCycle({ brandId, definition, signals, impact }) {
+async function openCycle({ brandId, definition, signals, impact, available }) {
+  const payload = { signalCount: signals.length, ...definition.payload(groupByKind(signals)) };
+
   const { data: inserted, error } = await supabaseAdmin
     .from('actions')
     .insert({
@@ -119,7 +122,7 @@ async function openCycle({ brandId, definition, signals, impact }) {
       kind: definition.id,
       definition_version: definition.version,
       impact,
-      payload: { signalCount: signals.length, ...definition.payload(groupByKind(signals)) },
+      payload,
       kpi_keys: [...new Set(signals.flatMap((signal) => signal.kpi_keys ?? []))],
       baseline: buildBaseline(signals),
       dedup_key: definition.id,
@@ -128,11 +131,20 @@ async function openCycle({ brandId, definition, signals, impact }) {
     .single();
   if (error) throw new Error(error.message);
 
+  // The plan follows from what this brand has and what this action is about
+  // — not from the kind alone (#818 phase 5). Two brands with the same
+  // problem and different integrations get different lists here.
+  const plan = planTasks(definition, { sources: available, payload });
   const { error: tasksErr } = await supabaseAdmin.from('action_tasks').insert(
-    definition.tasks.map((taskKey, index) => ({
+    plan.map((item) => ({
       action_id: inserted.id,
-      position: index + 1,
-      task_key: taskKey,
+      position: item.position,
+      task_key: item.taskKey,
+      task_version: item.version,
+      mode: item.mode,
+      permission: item.permission,
+      depends_on: item.dependsOn,
+      title_params: item.titleParams,
     })),
   );
   if (tasksErr) throw new Error(tasksErr.message);
@@ -141,6 +153,7 @@ async function openCycle({ brandId, definition, signals, impact }) {
     impact,
     signalCount: signals.length,
     definitionVersion: definition.version,
+    taskCount: plan.length,
   });
   await linkSignals(inserted.id, signals);
 }
@@ -257,7 +270,7 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
   const opening = candidates.slice(0, room);
 
   for (const candidate of opening) {
-    await openCycle({ brandId, ...candidate });
+    await openCycle({ brandId, available, ...candidate });
   }
 
   const summary = {

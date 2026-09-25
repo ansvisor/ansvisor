@@ -206,10 +206,22 @@ export function memberLabel(member: { fullName: string | null; email: string }):
  * the key stays behind so which template a task grew from is still answerable.
  */
 export function taskText(
-  task: { taskKey: string | null; title: string | null },
+  task: {
+    taskKey: string | null;
+    title: string | null;
+    titleParams?: Record<string, string | number>;
+  },
   t: Translator,
 ): string {
   const title = task.title?.trim();
   if (title) return title;
-  return task.taskKey ? t(task.taskKey) : '';
+  if (!task.taskKey) return '';
+
+  // A planned task that knows what it is about carries the values as
+  // parameters and is rendered from the `_target` variant of its message —
+  // "Compare gemini-web coverage against chatgpt-web" rather than "Compare
+  // platform coverage". No parameters means no target was resolvable, and
+  // the plain message is the honest one.
+  const params = task.titleParams ?? {};
+  return Object.keys(params).length > 0 ? t(`${task.taskKey}_target`, params) : t(task.taskKey);
 }

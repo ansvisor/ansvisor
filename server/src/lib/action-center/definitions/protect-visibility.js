@@ -13,7 +13,13 @@ export default {
   requires: ['tracking'],
   // Who is taking the ground is context, not a precondition.
   optional: ['competitors'],
-  tasks: ['diagnose_slip', 'review_responses', 'reinforce_content', 'validate'],
+  tasks: [
+    'diagnose_slip',
+    'competitor_pressure',
+    'review_responses',
+    'reinforce_content',
+    'validate',
+  ],
 
   payload(byKind) {
     const slip = (byKind.get('visibility_slipping') ?? [])[0];

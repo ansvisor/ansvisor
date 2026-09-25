@@ -150,6 +150,14 @@ export interface ActionTask {
   /** User-supplied text. Takes precedence over the template when present. */
   title: string | null;
   status: TaskStatus;
+  /**
+   * Values the task's text names — the platform, the competitor, the count.
+   * Parameters rather than resolved text, so a planned task stays
+   * translatable; empty when the task names nothing specific.
+   */
+  titleParams: Record<string, string | number>;
+  /** Task keys within the same action that must finish first. */
+  dependsOn: string[];
   /** Why the task was skipped; null for every other status. */
   skipReason: string | null;
 }
@@ -183,7 +191,7 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
   const [tasksRes, signalsRes, eventsRes, kpisRes] = await Promise.all([
     supabase
       .from('action_tasks')
-      .select('id, position, task_key, title, status, skip_reason')
+      .select('id, position, task_key, title, status, skip_reason, title_params, depends_on')
       .eq('action_id', actionId)
       .order('position'),
     supabase
@@ -215,6 +223,8 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
       taskKey: task.task_key,
       title: task.title,
       status: task.status as TaskStatus,
+      titleParams: (task.title_params ?? {}) as Record<string, string | number>,
+      dependsOn: (task.depends_on ?? []) as string[],
       skipReason: task.skip_reason,
     })),
     signals: mapSignalRows((signalsRes.data ?? []) as SignalRow[]),
