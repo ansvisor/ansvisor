@@ -27,7 +27,7 @@ const NOW = new Date('2026-09-16T04:00:00Z');
  * lets `await supabase.from(x).select(y).eq(...)` resolve without a terminal
  * call.
  */
-function mockDb({ signals = [], activeActions = [], closedActions = [] } = {}) {
+function mockDb({ signals = [], activeActions = [], closedActions = [], candidates = [] } = {}) {
   const writes = { inserted: [], updated: [] };
 
   from.mockImplementation((table) => {
@@ -69,6 +69,7 @@ function mockDb({ signals = [], activeActions = [], closedActions = [] } = {}) {
       if (table === 'actions') {
         return { data: state.negated ? activeActions : closedActions, error: null };
       }
+      if (table === 'action_candidates') return { data: candidates, error: null };
       return { data: [], error: null };
     }
 
@@ -231,6 +232,9 @@ describe('generateActionsForBrand', () => {
       resting: 0,
       ineligible: 0,
       capped: 0,
+      queued: 0,
+      waiting: 0,
+      stale: 0,
     });
     expect(writes.inserted).toHaveLength(0);
   });
@@ -449,5 +453,165 @@ describe('the task plan the action is created with', () => {
       platform: 'gemini-web',
       bestPlatform: 'chatgpt-web',
     });
+  });
+});
+
+/**
+ * Phase 6's exit condition (#818): a finding the engine cannot act on yet is
+ * not lost. One active action per definition is the right rule, but until now
+ * it left a second finding nowhere to go — linked as evidence and then
+ * forgotten, because the next cycle was built from whatever happened to be
+ * open on the night the slot freed up.
+ */
+describe('the candidate queue', () => {
+  const queueWrites = (writes) => [
+    ...writes.inserted.filter((w) => w.table === 'action_candidates'),
+    ...writes.updated.filter((w) => w.table === 'action_candidates'),
+  ];
+
+  it('queues a finding it cannot act on, instead of only logging it as evidence', async () => {
+    const writes = mockDb({
+      signals: [signal({ id: 'newcomer' })],
+      activeActions: [{ id: 'a1', dedup_key: 'recover_visibility', status: 'in_progress' }],
+    });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    expect(summary.created).toBe(0);
+    expect(summary.refreshed).toBe(1);
+    expect(summary.queued).toBe(1);
+
+    const queued = writes.inserted.find((w) => w.table === 'action_candidates');
+    expect(queued.rows[0]).toMatchObject({
+      brand_id: BRAND,
+      definition_id: 'recover_visibility',
+      status: 'waiting',
+      signal_ids: ['newcomer'],
+    });
+  });
+
+  it('promotes what it queued once the slot is free', async () => {
+    const writes = mockDb({ signals: [signal()] });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    expect(summary.created).toBe(1);
+    expect(writes.inserted.find((w) => w.table === 'actions')).toBeDefined();
+    const promoted = writes.updated.filter(
+      (w) => w.table === 'action_candidates' && w.patch.status === 'promoted',
+    );
+    expect(promoted).toHaveLength(1);
+    expect(promoted[0].patch.promoted_action_id).toBe('new-actions');
+  });
+
+  /**
+   * The clock that decides priority. A candidate that has been waiting since
+   * last week must not look like one found tonight, or the age term — the
+   * only thing stopping a quiet finding starving — never fires.
+   */
+  it('keeps the date a waiting candidate was first found', async () => {
+    const writes = mockDb({
+      signals: [signal()],
+      candidates: [
+        {
+          id: 'c1',
+          definition_id: 'recover_visibility',
+          first_seen_at: daysAgo(9),
+          signal_ids: [],
+        },
+      ],
+    });
+
+    await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    const refresh = writes.updated.find(
+      (w) => w.table === 'action_candidates' && w.patch.status === 'waiting',
+    );
+    expect(refresh.patch.first_seen_at).toBe(daysAgo(9));
+    expect(refresh.patch.last_seen_at).toBe(NOW.toISOString());
+  });
+
+  it('does not queue a signal an action has already claimed', async () => {
+    const writes = mockDb({
+      signals: [signal({ action_id: 'a1' })],
+      activeActions: [{ id: 'a1', dedup_key: 'recover_visibility', status: 'new' }],
+    });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    expect(summary.queued).toBe(0);
+    expect(queueWrites(writes).filter((w) => w.rows || w.patch.status === 'waiting')).toHaveLength(
+      0,
+    );
+  });
+
+  /**
+   * Stale rather than deleted: the queue is a record of what the engine found,
+   * and a condition that returns should come back with a fresh clock rather
+   * than inherit the patience of a finding that ended.
+   */
+  it('stales a candidate whose signals are gone', async () => {
+    const writes = mockDb({
+      signals: [],
+      candidates: [
+        {
+          id: 'c1',
+          definition_id: 'recover_visibility',
+          first_seen_at: daysAgo(3),
+          signal_ids: [],
+        },
+      ],
+    });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    expect(summary.stale).toBe(1);
+    expect(
+      writes.updated.some((w) => w.table === 'action_candidates' && w.patch.status === 'stale'),
+    ).toBe(true);
+  });
+
+  /** A finding that cannot be acted on for any reason is still recorded as
+   *  found — the queue is written before promotion is even considered. */
+  it('queues a resting definition rather than dropping the night', async () => {
+    const writes = mockDb({
+      signals: [signal()],
+      closedActions: [
+        { dedup_key: 'recover_visibility', completed_at: daysAgo(1), updated_at: daysAgo(1) },
+      ],
+    });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    expect(summary.created).toBe(0);
+    expect(summary.resting).toBe(1);
+    expect(summary.queued).toBe(1);
+    expect(writes.inserted.find((w) => w.table === 'action_candidates')).toBeDefined();
+  });
+
+  it('queues an ineligible definition too', async () => {
+    const writes = mockDb({ signals: [signal({ kind: 'page_opportunity', impact: 'medium' })] });
+
+    const summary = await generateActionsForBrand(BRAND, {
+      now: NOW,
+      sources: new Set(['tracking']),
+    });
+
+    expect(summary.created).toBe(0);
+    expect(summary.ineligible).toBe(1);
+    expect(writes.inserted.find((w) => w.table === 'action_candidates').rows[0]).toMatchObject({
+      definition_id: 'capture_ai_traffic',
+      status: 'waiting',
+    });
+  });
+
+  it('scores every candidate it writes', async () => {
+    const writes = mockDb({ signals: [signal()] });
+
+    await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    const row = writes.inserted.find((w) => w.table === 'action_candidates').rows[0];
+    expect(Number.isFinite(row.priority)).toBe(true);
+    expect(row.priority).toBeGreaterThan(0);
   });
 });

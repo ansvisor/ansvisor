@@ -26,10 +26,20 @@
  *    still firing condition opens a NEW action beside the old one, with its
  *    own baseline, tasks and outcome.
  *
- * Three things stop an action being raised, and they are counted separately
- * so a quiet night is legible: the brand lacks the data the definition needs
- * (`ineligible`), the last cycle closed too recently (`resting`), or the
- * brand has already had its day's worth (`capped`).
+ * Two questions, answered in that order (#818 phase 6). *What did we find?*
+ * writes a candidate for every definition that matched, every night, whether
+ * or not anything can be done about it. *What should we act on?* promotes
+ * from that queue. Keeping them apart is what stopped findings disappearing:
+ * a condition detected while the slot was busy used to be linked as evidence
+ * and then forgotten, because the next cycle was built from whatever happened
+ * to be open on the night the slot freed up.
+ *
+ * Three things stop a candidate being promoted, and they are counted
+ * separately so a quiet night is legible: the brand lacks the data the
+ * definition needs (`ineligible`), the last cycle closed too recently
+ * (`resting`), or the brand has already had its day's worth (`capped`). None
+ * of them loses the finding — it stays in the queue, and its wait is what
+ * lifts it up the order.
  *
  * `baseline` snapshots the linked signals' measured values at creation —
  * the "before" half of the validation comparison (#818, phase 2).
@@ -41,6 +51,7 @@ import { resolve } from '../../config/action-engine.js';
 import { isEligible, loadDefinitions } from './definitions/index.js';
 import { resolveBrandSources } from './sources.js';
 import { planTasks } from './tasks/plan.js';
+import { orderByPriority, scoreCandidate } from './candidates.js';
 
 const DAY_MS = 86_400_000;
 
@@ -91,29 +102,11 @@ async function linkSignals(actionId, signals) {
   return unlinked.length;
 }
 
-/**
- * Which candidate gets the day's remaining room.
- *
- * The same order the Action Center sorts by: impact, then weight of
- * evidence, then something stable. Phase 6 replaces this with scoring across
- * candidates; until definitions compete for the room there is nothing for a
- * score to say that this does not.
- */
-function comparePriority(a, b) {
-  return (
-    IMPACT_RANK[b.impact] - IMPACT_RANK[a.impact] ||
-    b.signals.length - a.signals.length ||
-    a.definition.id.localeCompare(b.definition.id)
-  );
-}
-
 function startOfUtcDay(now) {
   return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 }
 
-async function openCycle({ brandId, definition, signals, impact, available }) {
-  const payload = { signalCount: signals.length, ...definition.payload(groupByKind(signals)) };
-
+async function openCycle({ brandId, definition, signals, impact, available, payload }) {
   const { data: inserted, error } = await supabaseAdmin
     .from('actions')
     .insert({
@@ -156,6 +149,7 @@ async function openCycle({ brandId, definition, signals, impact, available }) {
     taskCount: plan.length,
   });
   await linkSignals(inserted.id, signals);
+  return inserted.id;
 }
 
 export async function generateActionsForBrand(brandId, { now = new Date(), sources } = {}) {
@@ -211,10 +205,26 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
   ).length;
 
   const nowIso = now.toISOString();
-  const candidates = [];
+
+  // What the queue already holds. `first_seen_at` is the only thing here that
+  // cannot be recomputed — it is how long a finding has been waiting, which
+  // is the term that stops a low-impact one starving behind a brand with a
+  // steady stream of urgent ones.
+  const { data: waitingRows, error: waitingErr } = await supabaseAdmin
+    .from('action_candidates')
+    .select('id, definition_id, first_seen_at, signal_ids')
+    .eq('brand_id', brandId)
+    .eq('status', 'waiting')
+    .limit(1000);
+  if (waitingErr) throw new Error(waitingErr.message);
+  const waiting = new Map((waitingRows ?? []).map((row) => [row.definition_id, row]));
+
+  const ready = [];
+  const seen = new Set();
   let refreshed = 0;
   let resting = 0;
   let ineligible = 0;
+  let queued = 0;
 
   for (const definition of definitions) {
     const matched = (openSignals ?? []).filter((signal) =>
@@ -224,53 +234,136 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
 
     const current = active.get(definition.id);
     if (current) {
-      // An active action (new / in_progress / on_hold) keeps the scope it was
-      // created with. Signals that arrived since are linked as evidence —
-      // they are why this action exists — but `payload` is the work package
-      // someone may already be executing against, and rewriting it nightly
-      // turned a recovery for six prompts into a recovery for a different
-      // nine without telling anyone. New targets wait for the next cycle.
+      // An active action keeps the scope it was created with. Signals that
+      // arrived since are linked as evidence — they are why this action
+      // exists — but `payload` is the work package someone may already be
+      // executing against, and rewriting it nightly turned a recovery for six
+      // prompts into a recovery for a different nine without telling anyone.
+      //
+      // Those newcomers are not dropped any more, which is this phase: they
+      // stay in the queue below and are what the next cycle covers.
       const linked = await linkSignals(current.id, matched);
       if (linked > 0) {
         await supabaseAdmin.from('actions').update({ updated_at: nowIso }).eq('id', current.id);
         await logEvent(current.id, 'signals_linked', { count: linked });
       }
       refreshed += 1;
-      continue;
     }
 
-    // Eligibility gates opening a cycle, not maintaining one: a brand that
-    // disconnects an integration mid-cycle keeps the action it was given.
+    // A candidate covers exactly the matched signals no action has claimed.
+    // Recomputed rather than accumulated: a signal that resolved leaves the
+    // queue by itself, and one the active action has taken as evidence is
+    // already accounted for. The queue therefore cannot drift out of step
+    // with what is actually true tonight.
+    const unclaimed = matched.filter((signal) => !signal.action_id);
+    if (unclaimed.length === 0) continue;
+
+    const impact = unclaimed
+      .map((signal) => signal.impact)
+      .sort((a, b) => IMPACT_RANK[b] - IMPACT_RANK[a])[0];
+    const payload = {
+      signalCount: unclaimed.length,
+      ...definition.payload(groupByKind(unclaimed)),
+    };
+
+    const existing = waiting.get(definition.id);
+    const firstSeenAt = existing?.first_seen_at ?? nowIso;
+    const score = scoreCandidate({ impact, signalCount: unclaimed.length, firstSeenAt }, now);
+    const row = {
+      brand_id: brandId,
+      definition_id: definition.id,
+      status: 'waiting',
+      signal_ids: unclaimed.map((signal) => signal.id),
+      impact,
+      payload,
+      priority: score,
+      first_seen_at: firstSeenAt,
+      last_seen_at: nowIso,
+      updated_at: nowIso,
+    };
+
+    let candidateId = existing?.id;
+    if (candidateId) {
+      const { error } = await supabaseAdmin
+        .from('action_candidates')
+        .update(row)
+        .eq('id', candidateId);
+      if (error) throw new Error(error.message);
+    } else {
+      const { data: inserted, error } = await supabaseAdmin
+        .from('action_candidates')
+        .insert(row)
+        .select('id')
+        .single();
+      if (error) throw new Error(error.message);
+      candidateId = inserted.id;
+      queued += 1;
+    }
+    seen.add(definition.id);
+
+    // Whether it can be promoted tonight is a separate question from whether
+    // it is real, and it is asked after the queue is written — so a finding
+    // that cannot be acted on now is still recorded as found.
+    if (current) continue;
+
     if (!isEligible(definition, available)) {
       ineligible += 1;
       continue;
     }
 
-    // The slot is open. Leave it open a while after a cycle closed, so a
-    // condition that is still firing does not produce a fresh action every
-    // night — the same restraint the old reopen window provided, minus the
-    // resurrection.
     const closedAt = lastClosedAt.get(definition.id) ?? 0;
     if (closedAt && now.getTime() - closedAt < noise.restAfterCloseDays * DAY_MS) {
       resting += 1;
       continue;
     }
 
-    candidates.push({
+    ready.push({
+      candidateId,
+      definitionId: definition.id,
       definition,
-      signals: matched,
-      impact: matched
-        .map((signal) => signal.impact)
-        .sort((a, b) => IMPACT_RANK[b] - IMPACT_RANK[a])[0],
+      signals: unclaimed,
+      impact,
+      // What the score reads. Named rather than derived from `signals` inside
+      // the scorer so the same shape can be scored straight out of the
+      // database, where the signals themselves are just ids.
+      signalCount: unclaimed.length,
+      payload,
+      firstSeenAt,
     });
   }
 
+  // A candidate nothing detected tonight no longer describes anything true.
+  // Stale rather than deleted: it is the record of something the engine once
+  // found, and re-detection brings it back as a new waiting row with a fresh
+  // clock — the same lifecycle a signal has.
+  const gone = (waitingRows ?? []).filter((row) => !seen.has(row.definition_id));
+  if (gone.length > 0) {
+    const { error } = await supabaseAdmin
+      .from('action_candidates')
+      .update({ status: 'stale', updated_at: nowIso })
+      .in(
+        'id',
+        gone.map((row) => row.id),
+      );
+    if (error) throw new Error(error.message);
+  }
+
   const room = Math.max(0, noise.maxNewActionsPerDay - createdToday);
-  candidates.sort(comparePriority);
-  const opening = candidates.slice(0, room);
+  const ordered = orderByPriority(ready, now);
+  const opening = ordered.slice(0, room);
 
   for (const candidate of opening) {
-    await openCycle({ brandId, available, ...candidate });
+    const actionId = await openCycle({ brandId, available, ...candidate });
+    const { error } = await supabaseAdmin
+      .from('action_candidates')
+      .update({
+        status: 'promoted',
+        promoted_at: nowIso,
+        promoted_action_id: actionId,
+        updated_at: nowIso,
+      })
+      .eq('id', candidate.candidateId);
+    if (error) throw new Error(error.message);
   }
 
   const summary = {
@@ -278,7 +371,10 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
     refreshed,
     resting,
     ineligible,
-    capped: candidates.length - opening.length,
+    capped: ordered.length - opening.length,
+    queued,
+    waiting: (waitingRows ?? []).length - gone.length + queued - opening.length,
+    stale: gone.length,
   };
   logger.info({ brandId, ...summary }, '[actions] generated');
   return summary;
