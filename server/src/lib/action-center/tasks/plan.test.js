@@ -1,0 +1,227 @@
+import { readFileSync } from 'node:fs';
+import { describe, expect, it, vi } from 'vitest';
+
+// loadDefinitions reaches sources.js, which imports the admin client; its
+// config hard-exits without SUPABASE_* env, as in CI. Nothing here touches it.
+vi.mock('../../../config/supabase.js', () => ({ default: { from: vi.fn(), rpc: vi.fn() } }));
+
+import { planTasks } from './plan.js';
+import { TASKS, listTasks, validateTask } from './registry.js';
+import { loadDefinitions } from '../definitions/index.js';
+
+const ALL = new Set(['tracking', 'competitors', 'site_audits', 'analytics']);
+const BARE = new Set(['tracking']);
+
+const keys = (plan) => plan.map((item) => item.taskKey);
+
+/**
+ * Phase 5's exit condition, stated as a test: the same action kind, two
+ * brands, different plans. Everything else here is the machinery that makes
+ * that safe to do.
+ */
+describe('planTasks', () => {
+  const definition = {
+    id: 'recover_visibility',
+    tasks: ['analyze_losses', 'measure_traffic_impact', 'coverage_gaps', 'update_content'],
+  };
+
+  it('gives a brand with analytics the task that reads it', () => {
+    expect(keys(planTasks(definition, { sources: ALL }))).toContain('measure_traffic_impact');
+  });
+
+  it('does not ask a brand without analytics a question it cannot answer', () => {
+    const plan = planTasks(definition, { sources: BARE });
+    expect(keys(plan)).not.toContain('measure_traffic_impact');
+    expect(keys(plan)).toEqual(['analyze_losses', 'coverage_gaps', 'update_content']);
+  });
+
+  it('numbers positions over the tasks that survived, leaving no gap', () => {
+    const plan = planTasks(definition, { sources: BARE });
+    expect(plan.map((item) => item.position)).toEqual([1, 2, 3]);
+  });
+
+  /**
+   * A dependency that was never planned is not a dependency. Leaving the name
+   * behind would block a task on work nobody was asked to do.
+   */
+  it('drops a dependency on a task the brand did not get', () => {
+    const plan = planTasks(
+      { id: 'x', tasks: ['diagnose_slip', 'competitor_pressure', 'review_responses'] },
+      { sources: BARE },
+    );
+    expect(keys(plan)).not.toContain('competitor_pressure');
+    const reinforce = plan.find((item) => item.taskKey === 'review_responses');
+    expect(reinforce.dependsOn).toEqual(['diagnose_slip']);
+  });
+
+  it('keeps a dependency that is in the plan', () => {
+    const plan = planTasks(
+      { id: 'x', tasks: ['diagnose_slip', 'competitor_pressure'] },
+      { sources: ALL },
+    );
+    expect(plan.find((i) => i.taskKey === 'competitor_pressure').dependsOn).toEqual([
+      'diagnose_slip',
+    ]);
+  });
+
+  it('carries the task primitive’s mode, permission and version onto the row', () => {
+    const plan = planTasks(
+      { id: 'x', tasks: ['strengthen_sources', 'validate'] },
+      { sources: ALL },
+    );
+    expect(plan[0]).toMatchObject({ mode: 'manual', permission: 'approval', version: 1 });
+    expect(plan[1]).toMatchObject({ mode: 'agent', permission: 'none' });
+  });
+
+  it('ignores a task id that no longer exists in the registry', () => {
+    expect(
+      keys(planTasks({ id: 'x', tasks: ['validate', 'retired_task'] }, { sources: ALL })),
+    ).toEqual(['validate']);
+  });
+
+  describe('naming what the task is about', () => {
+    it('carries the values as parameters, not as resolved text', () => {
+      const plan = planTasks(
+        { id: 'x', tasks: ['compare_platforms'] },
+        { sources: ALL, payload: { platform: 'gemini-web', bestPlatform: 'chatgpt-web' } },
+      );
+      expect(plan[0].titleParams).toEqual({
+        platform: 'gemini-web',
+        bestPlatform: 'chatgpt-web',
+      });
+    });
+
+    it('names the competitor that leads, out of however many the action holds', () => {
+      const plan = planTasks(
+        { id: 'x', tasks: ['analyze_competitor'] },
+        { sources: ALL, payload: { competitorNames: ['Acme', 'Globex'] } },
+      );
+      expect(plan[0].titleParams).toEqual({ competitor: 'Acme' });
+    });
+
+    /**
+     * Half a title is worse than none: "Compare coverage against undefined"
+     * is what a partially filled payload produces if the planner does not
+     * insist on all of it.
+     */
+    it('names nothing when the payload is missing a value the text needs', () => {
+      const plan = planTasks(
+        { id: 'x', tasks: ['compare_platforms'] },
+        { sources: ALL, payload: { platform: 'gemini-web' } },
+      );
+      expect(plan[0].titleParams).toEqual({});
+    });
+
+    it('names nothing for a task that names nothing', () => {
+      const plan = planTasks({ id: 'x', tasks: ['validate'] }, { sources: ALL, payload: { a: 1 } });
+      expect(plan[0].titleParams).toEqual({});
+    });
+  });
+});
+
+describe('the task registry', () => {
+  it.each(listTasks().map((entry) => [entry.id, entry]))('%s is well formed', (_id, entry) => {
+    expect(validateTask(entry)).toEqual([]);
+  });
+
+  it('keys every entry by its own id', () => {
+    for (const [key, entry] of Object.entries(TASKS)) expect(entry.id).toBe(key);
+  });
+
+  /** A cycle would make the plan unorderable and is easy to write by accident. */
+  it('has no dependency cycles', () => {
+    const seen = new Map();
+    const walk = (id, trail) => {
+      if (trail.includes(id)) throw new Error(`cycle: ${[...trail, id].join(' -> ')}`);
+      if (seen.get(id)) return;
+      for (const next of TASKS[id].dependsOn) walk(next, [...trail, id]);
+      seen.set(id, true);
+    };
+    expect(() => listTasks().forEach((entry) => walk(entry.id, []))).not.toThrow();
+  });
+
+  /**
+   * A definition naming a task that does not exist would silently produce a
+   * shorter plan — the planner skips what it cannot find, by design, because
+   * a retired task must not break every action that still lists it. That
+   * makes a typo invisible at runtime, so it is caught here instead.
+   */
+  it('backs every task the shipped definitions ask for', async () => {
+    const definitions = await loadDefinitions();
+    for (const definition of definitions) {
+      for (const entry of definition.tasks) {
+        const id = typeof entry === 'string' ? entry : entry.id;
+        expect({ definition: definition.id, id, known: Boolean(TASKS[id]) }).toEqual({
+          definition: definition.id,
+          id,
+          known: true,
+        });
+      }
+    }
+  });
+
+  /**
+   * The web renders a task from its id. A task with no message shows its own
+   * key to the user, and a target-aware task with no `_target` variant shows
+   * the key the moment a payload resolves — which is exactly when the text
+   * mattered most. Both are silent until someone sees them, so they are
+   * caught here, against the file the web actually ships.
+   */
+  it('has a message for every task, and a target variant for every task that names one', () => {
+    const messages = JSON.parse(
+      readFileSync(new URL('../../../../../web/messages/en.json', import.meta.url), 'utf8'),
+    ).actionCenter.actionTasks;
+
+    for (const entry of listTasks()) {
+      expect({ id: entry.id, message: typeof messages[entry.id] }).toEqual({
+        id: entry.id,
+        message: 'string',
+      });
+      if (entry.titleKeys.length > 0) {
+        expect({ id: entry.id, target: typeof messages[`${entry.id}_target`] }).toEqual({
+          id: entry.id,
+          target: 'string',
+        });
+      }
+    }
+  });
+
+  /** A message naming a value the planner never supplies renders as an ICU
+   *  error in the user's face. */
+  it('only names values the planner puts in the parameters', () => {
+    const messages = JSON.parse(
+      readFileSync(new URL('../../../../../web/messages/en.json', import.meta.url), 'utf8'),
+    ).actionCenter.actionTasks;
+
+    for (const entry of listTasks()) {
+      if (entry.titleKeys.length === 0) continue;
+      // Only the top-level ICU arguments: `{promptCount, plural, ...}` names
+      // one, `one {1 prompt}` nested inside it names nothing.
+      const named = [...messages[`${entry.id}_target`].matchAll(/\{\s*(\w+)\s*[,}]/g)].map(
+        (m) => m[1],
+      );
+      for (const name of named) {
+        expect({ id: entry.id, name, declared: entry.titleKeys.includes(name) }).toEqual({
+          id: entry.id,
+          name,
+          declared: true,
+        });
+      }
+    }
+  });
+
+  /**
+   * The registry says a task can produce structured output; the planner is
+   * what has to keep the declaration reachable. A task declaring outputs
+   * nobody consumes is fine — one consuming an output nothing declares is a
+   * chain that silently breaks.
+   */
+  it('has a producer for every output a task depends on reading', () => {
+    const produced = new Set(listTasks().flatMap((entry) => entry.outputs));
+    for (const entry of listTasks()) {
+      for (const id of entry.dependsOn) {
+        for (const output of TASKS[id].outputs) expect(produced.has(output)).toBe(true);
+      }
+    }
+  });
+});

@@ -571,7 +571,17 @@
       "reinforce_content": "Reinforce the content behind the affected prompts",
       "compare_platforms": "Compare how each engine answers the affected prompts",
       "compare_citations": "Compare which sources cite the competitor and not you",
-      "identify_sources": "Identify the sources worth earning a citation from"
+      "identify_sources": "Identify the sources worth earning a citation from",
+      "analyze_losses_target": "Analyze lost citations across {promptCount, plural, one {1 prompt} other {# prompts}}",
+      "review_pages_target": "Review the {pageCount, plural, one {1 affected page} other {# affected pages}}",
+      "review_audits_target": "Review the failing findings on {pageCount, plural, one {1 page} other {# pages}}",
+      "identify_prompts_target": "Identify the {promptCount, plural, one {1 prompt} other {# prompts}} mentioning you without citation",
+      "compare_platforms_target": "Compare how {platform} answers the affected prompts against {bestPlatform}",
+      "compare_citations_target": "Compare which sources cite {competitor} and not you",
+      "analyze_competitor_target": "Analyze what {competitor} gained visibility with",
+      "measure_traffic_impact": "Measure what the drop cost in AI referral sessions",
+      "competitor_pressure": "Identify which competitors are gaining the ground you are losing",
+      "page_readiness": "Check the affected pages against their audit findings"
     },
     "taskStatus": {
       "todo": "To Do",

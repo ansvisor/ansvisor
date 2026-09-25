@@ -60,34 +60,52 @@ export type Database = {
         Row: {
           action_id: string
           created_at: string
+          depends_on: string[]
           id: string
+          mode: string
+          output: Json | null
+          permission: string
           position: number
           skip_reason: string | null
           status: string
           task_key: string | null
+          task_version: number
           title: string | null
+          title_params: Json
           updated_at: string
         }
         Insert: {
           action_id: string
           created_at?: string
+          depends_on?: string[]
           id?: string
+          mode?: string
+          output?: Json | null
+          permission?: string
           position: number
           skip_reason?: string | null
           status?: string
           task_key?: string | null
+          task_version?: number
           title?: string | null
+          title_params?: Json
           updated_at?: string
         }
         Update: {
           action_id?: string
           created_at?: string
+          depends_on?: string[]
           id?: string
+          mode?: string
+          output?: Json | null
+          permission?: string
           position?: number
           skip_reason?: string | null
           status?: string
           task_key?: string | null
+          task_version?: number
           title?: string | null
+          title_params?: Json
           updated_at?: string
         }
         Relationships: [

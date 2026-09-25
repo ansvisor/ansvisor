@@ -1,20 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { actionGoal, actionTexts, humanizeKind } from './display';
+import { actionGoal, actionTexts, humanizeKind, taskText } from './display';
 import { ACTION_KINDS } from './registry';
 import type { ActionItem } from '@/lib/actions/action-center';
 import messages from '../../../messages/en.json';
 
 /** Resolves an actionCenter.actionTexts key the way next-intl would, minus
  *  the ICU formatting — enough to prove a key exists and is reached. */
-const t = (key: string) => {
+const t = (key: string, values?: Record<string, string | number>) => {
+  const scope: Record<string, unknown> = key.includes('.')
+    ? (messages.actionCenter.actionTexts as unknown as Record<string, unknown>)
+    : (messages.actionCenter.actionTasks as unknown as Record<string, unknown>);
   const value = key
     .split('.')
-    .reduce<unknown>(
-      (node, part) => (node as Record<string, unknown> | undefined)?.[part],
-      messages.actionCenter.actionTexts,
-    );
+    .reduce<unknown>((node, part) => (node as Record<string, unknown> | undefined)?.[part], scope);
   if (typeof value !== 'string') throw new Error(`missing message: ${key}`);
-  return value;
+  // Enough ICU to prove the value reached the message; next-intl does the
+  // real formatting at runtime.
+  return value.replace(/\{\s*(\w+)\s*\}/g, (match, name) =>
+    values && name in values ? String(values[name]) : match,
+  );
 };
 
 const action = (over: Partial<ActionItem>) =>
@@ -54,5 +58,46 @@ describe('humanizeKind', () => {
 
   it('leaves a single word alone but for its capital', () => {
     expect(humanizeKind('recover')).toBe('Recover');
+  });
+});
+
+describe('taskText', () => {
+  /** Nothing about a planned task's text is stored — only which message it
+   *  is and what it names — so the plan survives translation. */
+  it('renders the target variant when the planner resolved one', () => {
+    const text = taskText(
+      {
+        taskKey: 'compare_platforms',
+        title: null,
+        titleParams: { platform: 'gemini-web', bestPlatform: 'chatgpt-web' },
+      },
+      t,
+    );
+
+    expect(text).toContain('gemini-web');
+    expect(text).toContain('chatgpt-web');
+  });
+
+  it('falls back to the plain message when nothing was resolvable', () => {
+    expect(taskText({ taskKey: 'compare_platforms', title: null, titleParams: {} }, t)).toBe(
+      messages.actionCenter.actionTasks.compare_platforms,
+    );
+  });
+
+  it('treats a task with no params at all like one with empty params', () => {
+    expect(taskText({ taskKey: 'validate', title: null }, t)).toBe(
+      messages.actionCenter.actionTasks.validate,
+    );
+  });
+
+  /** A title someone typed wins over any template, params or not. */
+  it('prefers what the user wrote', () => {
+    expect(
+      taskText({ taskKey: 'validate', title: 'Ask the agency', titleParams: { a: 1 } }, t),
+    ).toBe('Ask the agency');
+  });
+
+  it('renders nothing for a task with neither a title nor a key', () => {
+    expect(taskText({ taskKey: null, title: null }, t)).toBe('');
   });
 });

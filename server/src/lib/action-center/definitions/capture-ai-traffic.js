@@ -12,7 +12,7 @@ export default {
   signalKinds: ['page_opportunity'],
   requires: ['analytics'],
   optional: ['site_audits'],
-  tasks: ['review_pages', 'coverage_gaps', 'optimize_content', 'validate'],
+  tasks: ['review_pages', 'page_readiness', 'coverage_gaps', 'optimize_content', 'validate'],
 
   payload(byKind) {
     return { pageCount: (byKind.get('page_opportunity') ?? []).length };

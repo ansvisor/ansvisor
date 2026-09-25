@@ -14,7 +14,16 @@ export default {
   // Traffic is not needed to raise the action, but with it connected the plan
   // can show what the drop cost in sessions rather than only in points.
   optional: ['analytics'],
-  tasks: ['analyze_losses', 'coverage_gaps', 'update_content', 'internal_links', 'validate'],
+  // measure_traffic_impact requires the analytics source, so it is planned
+  // only for a brand that has one — the difference the planner exists for.
+  tasks: [
+    'analyze_losses',
+    'measure_traffic_impact',
+    'coverage_gaps',
+    'update_content',
+    'internal_links',
+    'validate',
+  ],
 
   payload(byKind) {
     const out = { promptCount: (byKind.get('lost_citations') ?? []).length };
