@@ -163,6 +163,46 @@ export const ENGINE_THRESHOLDS = Object.freeze({
     outageMinBaseline: 20,
   }),
 
+  /**
+   * How the queue of waiting findings is ordered (#818 phase 6).
+   *
+   * Everything the engine finds becomes a candidate; only some become actions
+   * tonight, because a definition's slot may be busy, resting, or the brand
+   * may already have had its day's worth. These weights decide which of the
+   * ones that can be promoted goes first.
+   *
+   * They reproduce the ordering the Action Center has always sorted by —
+   * impact, then weight of evidence — and add the one thing a queue needs
+   * that a sort does not: age. Without it a low-impact finding sitting behind
+   * a brand with a steady stream of urgent ones would never be worked on at
+   * all.
+   *
+   * The numbers are chosen so two rules hold, and the arithmetic is the only
+   * thing enforcing them:
+   *
+   *   * **Nothing starves.** A full two-week wait is worth 42, and the gap
+   *     between low and medium is 35 — so a low-impact finding that has
+   *     waited out the cap outranks a medium one detected tonight with
+   *     comparable evidence. Patience is worth one grade.
+   *   * **A high-impact finding is never outranked.** It sits at 200, out of
+   *     reach of any wait and any amount of evidence (65 + 15 + 42 = 122 at
+   *     most). A brand losing ground right now is worked on before a queue of
+   *     older, milder findings, however patient — a queue that lets forty
+   *     pages of low-impact opportunity outrank a visibility collapse is not
+   *     a priority order, it is a vote.
+   */
+  priority: Object.freeze({
+    impactHigh: 200,
+    impactMedium: 65,
+    impactLow: 30,
+    /** Per linked signal, up to `evidenceCap` signals: at most 15. */
+    evidencePerSignal: 1.5,
+    evidenceCap: 10,
+    /** Per day waited, up to `ageCapDays` days: at most 42. */
+    agePerDay: 3,
+    ageCapDays: 14,
+  }),
+
   /** How an action's effect is measured once it closes. */
   validation: Object.freeze({
     /** Length of the before and after windows. Equal, so the comparison is
