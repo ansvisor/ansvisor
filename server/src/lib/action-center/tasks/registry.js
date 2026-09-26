@@ -52,6 +52,10 @@ const task = (id, spec) =>
      *  present the planner stores them and the web renders the `_target`
      *  variant of the task's message; otherwise the plain one. */
     titleKeys: Object.freeze(spec.titleKeys ?? []),
+    /** The tool that carries this task out, if one does yet. A task with a
+     *  mode of `agent` and no tool is one we mean to automate and have not —
+     *  the runner says exactly that rather than improvising. */
+    tool: spec.tool ?? null,
   });
 
 /**
@@ -119,6 +123,7 @@ export const TASKS = Object.freeze({
     requires: ['analytics'],
     dependsOn: ['analyze_losses'],
     outputs: ['sessionsLost'],
+    tool: 'ga_traffic_window',
   }),
   competitor_pressure: task('competitor_pressure', {
     mode: 'agent',
@@ -151,7 +156,10 @@ export const TASKS = Object.freeze({
   }),
 
   // ── Checking whether it worked ───────────────────────────────────────────
-  validate: task('validate', { mode: 'agent' }),
+  // The two tasks a tool carries out today. `mode: 'agent'` says a task
+  // could be automated; `tool` says it is. The rest keep the mode and wait
+  // for a tool, the same way definitions waited for detectors.
+  validate: task('validate', { mode: 'agent', tool: 'visibility_window' }),
   revalidate: task('revalidate', { mode: 'agent', requires: ['site_audits'] }),
 });
 

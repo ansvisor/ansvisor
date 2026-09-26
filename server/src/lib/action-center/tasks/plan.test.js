@@ -8,6 +8,7 @@ vi.mock('../../../config/supabase.js', () => ({ default: { from: vi.fn(), rpc: v
 import { planTasks } from './plan.js';
 import { TASKS, listTasks, validateTask } from './registry.js';
 import { loadDefinitions } from '../definitions/index.js';
+import { TOOLS } from '../execution/tools.js';
 
 const ALL = new Set(['tracking', 'competitors', 'site_audits', 'analytics']);
 const BARE = new Set(['tracking']);
@@ -207,6 +208,37 @@ describe('the task registry', () => {
           declared: true,
         });
       }
+    }
+  });
+
+  /**
+   * A task naming a tool that does not exist is not runnable and nothing
+   * would say why — the runner would report "no tool implements this", which
+   * is true and misleading. Caught here instead.
+   */
+  it('names a real tool wherever it names one', () => {
+    for (const entry of listTasks()) {
+      if (!entry.tool) continue;
+      expect({ id: entry.id, tool: entry.tool, exists: Boolean(TOOLS[entry.tool]) }).toEqual({
+        id: entry.id,
+        tool: entry.tool,
+        exists: true,
+      });
+    }
+  });
+
+  /**
+   * A tool can only be given to a task that is meant to be automated, and the
+   * brand needs the tool's source as well as the task's own — otherwise a
+   * task is planned that can never run.
+   */
+  it('only gives tools to agent tasks, whose requirements cover the tool’s', () => {
+    for (const entry of listTasks()) {
+      if (!entry.tool) continue;
+      expect({ id: entry.id, mode: entry.mode }).toEqual({ id: entry.id, mode: 'agent' });
+      const source = TOOLS[entry.tool].source;
+      const covered = source === 'tracking' || entry.requires.includes(source);
+      expect({ id: entry.id, source, covered }).toEqual({ id: entry.id, source, covered: true });
     }
   });
 
