@@ -1309,27 +1309,12 @@ export default function OnboardingPage() {
         <div className="mx-auto w-full max-w-4xl flex-1">
           <BrandHeader name={brandName} domain={domain} />
 
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">Review your prompts</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                These prompts will be sent to AI platforms daily. Feel free to edit, add, or remove
-                any before starting.
-              </p>
-            </div>
-            <Button
-              onClick={handleSavePromptsAndContinue}
-              disabled={isLoading || totalPrompts === 0 || excessPrompts > 0}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving prompts...
-                </>
-              ) : (
-                'Continue'
-              )}
-            </Button>
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold tracking-tight">Review your prompts</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              These prompts will be sent to AI platforms daily. Feel free to edit, add, or remove
+              any before starting.
+            </p>
           </div>
 
           {promptGenError && (
@@ -1376,6 +1361,21 @@ export default function OnboardingPage() {
               </div>
             )}
           </div>
+
+          <Button
+            className="mt-6 w-full"
+            onClick={handleSavePromptsAndContinue}
+            disabled={isLoading || totalPrompts === 0 || excessPrompts > 0}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving prompts...
+              </>
+            ) : (
+              'Continue'
+            )}
+          </Button>
         </div>
 
         <div className="flex mx-auto w-full max-w-4xl items-center justify-between mt-8">
