@@ -1,16 +1,24 @@
 /**
  * One-off signal backfill (Action Center).
  *
- * Runs the nightly signal recorder once for one brand or for every active
- * brand, so the Signals page has real rows before the next tracking cycle.
- * Safe to re-run: recording dedupes on (brand, dedup_key).
+ * Runs the nightly pass once for one brand or for every active brand, so the
+ * Signals page has real rows before the next tracking cycle.
+ *
+ * Goes through `runSignalPass` rather than calling the recorder and the
+ * generator itself, so a manual recovery logs itself in `signal_runs` like any
+ * other pass. Calling them directly left the ledger saying the pass had not
+ * run when it had, which made the catch-up sweep repeat work and made the one
+ * table that answers "did it run last night" unreliable — the exact question
+ * it was added to answer.
+ *
+ * Safe to re-run: recording dedupes on (brand, dedup_key) and the ledger row
+ * is keyed to the tracking run, so a repeat updates rather than duplicates.
  *
  * Run: node src/scripts/backfill-signals.js [brandId|--all]
  */
 import 'dotenv/config';
 import supabaseAdmin from '../config/supabase.js';
-import { recordSignalsForBrand } from '../lib/signals/record.js';
-import { generateActionsForBrand } from '../lib/action-center/generate.js';
+import { runSignalPass } from '../lib/signals/pass.js';
 
 const arg = process.argv[2];
 if (!arg) {
@@ -33,11 +41,7 @@ if (arg === '--all') {
 
 for (const brandId of brandIds) {
   try {
-    const result = await recordSignalsForBrand(brandId);
-    const actions = result.skipped
-      ? { skipped: result.skipped }
-      : await generateActionsForBrand(brandId);
-    console.log(brandId, JSON.stringify({ signals: result, actions }));
+    console.log(brandId, JSON.stringify(await runSignalPass(brandId)));
   } catch (err) {
     console.error(brandId, 'FAILED:', err.message);
   }

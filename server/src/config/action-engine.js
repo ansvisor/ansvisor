@@ -154,6 +154,22 @@ export const ENGINE_THRESHOLDS = Object.freeze({
     maxNewActionsPerDay: 5,
 
     /**
+     * How many tasks the engine may carry out for itself in one nightly sweep,
+     * across every brand.
+     *
+     * A ceiling on a night that goes wrong, not a target. Every tool reads —
+     * one from our own rollups, one from the brand's analytics property — so
+     * the cost of overshooting is API calls and time rather than damage, but a
+     * detector misfiring across the base should not turn into a thousand
+     * requests to a third party before anyone is awake to see it.
+     *
+     * Sized from what exists: seven brands have analytics connected and an
+     * action carries at most two tool-backed tasks, so a normal night is well
+     * under this. Reaching it is a signal in itself, and the sweep says so.
+     */
+    maxTaskRunsPerNight: 50,
+
+    /**
      * Platform-wide result volume collapsing to this fraction of its trailing
      * daily average is a collection incident on our side, not a visibility
      * change on the customer's. Signals are suppressed rather than reported.

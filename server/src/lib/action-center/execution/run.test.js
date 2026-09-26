@@ -10,7 +10,10 @@ vi.mock('../../logger.js', () => ({
 }));
 vi.mock('../../composio.js', () => ({ runGaReport: vi.fn() }));
 
-import { blockedReason, runTask } from './run.js';
+import { blockedReason, runTask, sweepTaskExecution } from './run.js';
+import { ENGINE_THRESHOLDS } from '../../../config/action-engine.js';
+
+const { maxTaskRunsPerNight } = ENGINE_THRESHOLDS.noise;
 import { TOOLS } from './tools.js';
 
 const TASK = 'task-1';
@@ -23,7 +26,7 @@ const ALL = new Set(['tracking', 'competitors', 'site_audits', 'analytics']);
  * Enough PostgREST to drive one run. Tables answer from fixtures; every write
  * is recorded so a test can assert what the attempt actually left behind.
  */
-function mockDb({ task, action, siblings = [] }) {
+function mockDb({ task, action, siblings = [], eventsFail = false }) {
   const writes = { inserted: [], updated: [] };
   from.mockImplementation((table) => {
     const builder = {
@@ -34,7 +37,9 @@ function mockDb({ task, action, siblings = [] }) {
       single: () => Promise.resolve({ data: table === 'actions' ? action : task, error: null }),
       insert: (row) => {
         writes.inserted.push({ table, row });
-        return Promise.resolve({ error: null });
+        return Promise.resolve({
+          error: eventsFail && table === 'action_events' ? { message: 'insert denied' } : null,
+        });
       },
       update: (patch) => {
         writes.updated.push({ table, patch });
@@ -168,6 +173,73 @@ describe('runTask', () => {
     });
   });
 
+  /**
+   * Without this the layer is worse than not automating: a task marked
+   * complete that nobody remembers doing, with no trail and nobody to ask.
+   * The audit table has no interface — the drawer's History tab reads
+   * `action_events`.
+   */
+  describe('the trail the user sees', () => {
+    const events = (writes) => writes.inserted.filter((w) => w.table === 'action_events');
+
+    it('says the task was carried out, and with what', async () => {
+      const writes = mockDb({ task: task(), action });
+
+      await runTask(TASK, { now: NOW, sources: ALL });
+
+      expect(events(writes)).toHaveLength(1);
+      expect(events(writes)[0].row).toMatchObject({
+        action_id: ACTION,
+        event: 'task_ran',
+        data: { task: 'validate', tool: 'visibility_window' },
+      });
+    });
+
+    /** Null actor is already how the nightly engine records its own events:
+     *  it means the product did this, not a person. */
+    it('records no person as the actor', async () => {
+      const writes = mockDb({ task: task(), action });
+
+      await runTask(TASK, { now: NOW, sources: ALL });
+
+      expect(events(writes)[0].row.actor_id).toBeNull();
+    });
+
+    it('says so when the attempt failed', async () => {
+      rpc.mockRejectedValue(new Error('statement timeout'));
+      const writes = mockDb({ task: task(), action });
+
+      await runTask(TASK, { now: NOW, sources: ALL });
+
+      expect(events(writes)[0].row).toMatchObject({ event: 'task_run_failed' });
+    });
+
+    /**
+     * A task with no tool yet, or one waiting on another task, is operational
+     * detail. It is in the audit table; putting it in a trail people read to
+     * understand their own work would be noise.
+     */
+    it('stays out of the trail when the reason is ours, not theirs', async () => {
+      const writes = mockDb({ task: task({ task_key: 'coverage_gaps' }), action });
+
+      const result = await runTask(TASK, { now: NOW, sources: ALL });
+
+      expect(result.status).toBe('blocked');
+      expect(events(writes)).toHaveLength(0);
+      expect(writes.inserted.some((w) => w.table === 'action_task_runs')).toBe(true);
+    });
+
+    /** A completed run must not be undone by a trail that failed to write. */
+    it('does not fail the run when the trail cannot be written', async () => {
+      const writes = mockDb({ task: task(), action, eventsFail: true });
+
+      const result = await runTask(TASK, { now: NOW, sources: ALL });
+
+      expect(result.status).toBe('succeeded');
+      expect(writes.updated.find((w) => w.table === 'action_tasks').patch.status).toBe('completed');
+    });
+  });
+
   it('never stores the model’s reasoning, because nothing may put it there', async () => {
     const writes = mockDb({ task: task(), action });
 
@@ -272,5 +344,85 @@ describe('blockedReason', () => {
         siblings: [],
       }),
     ).toMatch(/is completed/);
+  });
+});
+
+/**
+ * The nightly sweep (#818 phase 7). What makes this safe to leave running is
+ * not that nothing fails — it is that a failure costs one step, and that the
+ * night has a ceiling.
+ */
+describe('sweepTaskExecution', () => {
+  /** Enough of the builder for the sweep's one query plus whatever runTask
+   *  does per task, which is already covered above. */
+  function mockSweep(tasks) {
+    const attempted = [];
+    from.mockImplementation((table) => {
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        in: () => builder,
+        not: () => builder,
+        order: () => builder,
+        limit: () => builder,
+        single: () =>
+          Promise.resolve({
+            data:
+              table === 'actions'
+                ? { id: ACTION, brand_id: BRAND, payload: {} }
+                : { ...task({ id: attempted.at(-1) }), task_key: 'validate' },
+            error: null,
+          }),
+        insert: () => Promise.resolve({ error: null }),
+        update: () => builder,
+        then: (resolve, reject) =>
+          Promise.resolve({ data: table === 'action_tasks' ? tasks : [], error: null }).then(
+            resolve,
+            reject,
+          ),
+      };
+      return builder;
+    });
+    return attempted;
+  }
+
+  it('does nothing when no task has a tool', async () => {
+    mockSweep([{ id: 't1', task_key: 'update_content', action_id: ACTION }]);
+
+    const summary = await sweepTaskExecution({ now: NOW });
+
+    expect(summary).toMatchObject({ succeeded: 0, failed: 0, blocked: 0 });
+  });
+
+  it('stops at the nightly ceiling and says it did', async () => {
+    const many = Array.from({ length: maxTaskRunsPerNight + 3 }, (_, i) => ({
+      id: `t${i}`,
+      task_key: 'validate',
+      action_id: ACTION,
+    }));
+    mockSweep(many);
+
+    const summary = await sweepTaskExecution({ now: NOW });
+
+    expect(summary.skippedForCeiling).toBe(3);
+    expect(summary.succeeded + summary.failed + summary.blocked).toBe(maxTaskRunsPerNight);
+  });
+
+  it('carries on past a task that throws unexpectedly', async () => {
+    mockSweep([
+      { id: 't1', task_key: 'validate', action_id: ACTION },
+      { id: 't2', task_key: 'validate', action_id: ACTION },
+    ]);
+    let calls = 0;
+    rpc.mockImplementation(() => {
+      calls += 1;
+      return calls <= 2
+        ? Promise.reject(new Error('boom'))
+        : Promise.resolve({ data: { answers: 1 }, error: null });
+    });
+
+    const summary = await sweepTaskExecution({ now: NOW });
+
+    expect(summary.succeeded + summary.failed).toBe(2);
   });
 });

@@ -50,6 +50,7 @@ import {
   actionContextTags,
   actionGoal,
   actionTexts,
+  eventTaskText,
   memberLabel,
   taskText,
 } from '@/lib/action-center/display';
@@ -333,6 +334,12 @@ export function ActionDrawer({
                       {t(`drawer.events.${event.event}`, {
                         to: String(event.data.to ?? ''),
                         count: Number(event.data.count ?? 0),
+                        // Work the product did itself names the task in the
+                        // reader's language and the tool as it is recorded —
+                        // the tool id is the audit fact, so it is not
+                        // translated.
+                        task: eventTaskText(event.data.task, tTasks),
+                        tool: String(event.data.tool ?? ''),
                       })}
                     </p>
                     <p className="text-xs text-muted-foreground">
