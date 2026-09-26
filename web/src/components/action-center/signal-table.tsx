@@ -21,6 +21,7 @@ import {
   X,
   Layers,
   Quote,
+  Wrench,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -40,6 +41,7 @@ import {
 import type { Signal } from '@/lib/actions/signals';
 import {
   SIGNAL_KINDS,
+  type SignalCategory,
   type SignalImpact,
   type SignalKind,
   type SignalSource,
@@ -49,7 +51,11 @@ import { signalAffected, signalTexts } from '@/lib/signals/display';
 import { formatRelative } from '@/lib/format-relative';
 import { cn } from '@/lib/utils';
 
-export const SIGNAL_ICONS: Record<SignalKind, React.ComponentType<{ className?: string }>> = {
+/** Icons for the original kinds. The library's forty-seven take their
+ *  category's — a traffic finding reads as traffic whichever detector wrote it. */
+export const SIGNAL_ICONS: Partial<
+  Record<SignalKind, React.ComponentType<{ className?: string }>>
+> = {
   sharp_drop: TrendingDown,
   visibility_slipping: TrendingDown,
   platform_gap: Layers,
@@ -140,9 +146,27 @@ function detectedLabel(iso: string, tCommon: ReturnType<typeof useTranslations>)
   return formatRelative(iso, tCommon);
 }
 
-function KindIcon({ kind }: { kind: SignalKind }) {
-  const Icon = SIGNAL_ICONS[kind];
-  return <Icon className="h-4 w-4 text-muted-foreground" />;
+/** What a kind without its own icon falls back to. */
+const SIGNAL_CATEGORY_ICONS: Record<SignalCategory, React.ComponentType<{ className?: string }>> = {
+  visibility: TrendingDown,
+  citation: Quote,
+  mention: MessageSquare,
+  traffic: MousePointerClick,
+  technical: Wrench,
+  competitor: Swords,
+};
+
+export function SignalKindIcon({
+  kind,
+  category,
+  className = 'h-4 w-4 text-muted-foreground',
+}: {
+  kind: SignalKind;
+  category: SignalCategory;
+  className?: string;
+}) {
+  const Icon = SIGNAL_ICONS[kind] ?? SIGNAL_CATEGORY_ICONS[category] ?? BarChart3;
+  return <Icon className={className} />;
 }
 
 export function SignalTable({
@@ -189,7 +213,7 @@ export function SignalTable({
                 <TableCell className="max-w-[360px]">
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-muted/40">
-                      <KindIcon kind={signal.kind} />
+                      <SignalKindIcon kind={signal.kind} category={signal.category} />
                     </div>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{texts.title}</p>

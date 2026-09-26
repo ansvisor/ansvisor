@@ -1,37 +1,48 @@
 /**
- * What a brand actually has to work with (#818, phase 4).
+ * What a brand actually has to work with (#818).
  *
  * A definition declares the data it needs; this module answers whether a
- * given brand has it. Today that answer only gates generation — a brand with
- * no analytics connection is not offered the traffic definition — but the
- * same answer is what phase 5's task planner needs in order to give two
- * brands different plans for the same action kind, so it is computed once
- * here rather than inferred twice.
+ * given brand has it. It gates generation — a brand with no Search Console
+ * connection is not offered a Search Console definition — and the task planner
+ * reads the same answer to decide which tasks a plan can contain.
  *
- * Deliberately coarse. "Does this brand have competitors configured" is a
- * stable fact about the workspace; "are there competitor rows in the last
- * seven days" is a detector's question, and detectors already ask it.
+ * Deliberately coarse. "Does this brand have X at all" is a stable fact about
+ * the workspace; whether X moved this week is a detector's question.
  */
 
 import supabaseAdmin from '../../config/supabase.js';
 
 /**
- * Every source a definition may declare. Validation rejects anything else,
- * so a typo in a definition file fails at load rather than silently making
- * that definition ineligible for every brand forever.
+ * Every source a definition may declare. Validation rejects anything else, so
+ * a typo in a definition fails at load rather than silently making that
+ * definition ineligible for every brand forever.
  */
 export const SOURCES = Object.freeze([
-  /** Our own prompt tracking. Every brand has it — a brand without it is not
-   *  a brand yet — so it is the source a definition declares when it needs
-   *  nothing beyond what the product collects by itself. */
+  /** Our own prompt tracking. Every brand has it. */
   'tracking',
   /** Competitors configured on the brand. */
   'competitors',
   /** Site Audit runs. */
   'site_audits',
-  /** An analytics integration connected for the brand's organization. */
+  /** A Google Analytics connection for the brand's organization. */
   'analytics',
+  /** A Google Search Console connection with synced query data. */
+  'search_console',
+  /** Search/AI demand estimates on at least one tracked prompt. */
+  'volumes',
+  /** AI-referred traffic from either analytics or the tracking snippet. */
+  'ai_traffic',
+  /** Prompts organised into topics. */
+  'topics',
 ]);
+
+const DAY_MS = 86_400_000;
+
+async function hasRow(query) {
+  const { data, error } = await query.limit(1);
+  if (error) throw new Error(error.message);
+  return (data ?? []).length > 0;
+}
 
 /**
  * The sources available to one brand.
@@ -41,34 +52,86 @@ export const SOURCES = Object.freeze([
  */
 export async function resolveBrandSources(brandId) {
   const available = new Set(['tracking']);
+  const recent = new Date(Date.now() - 30 * DAY_MS).toISOString();
 
-  const [competitors, audits, brand] = await Promise.all([
-    supabaseAdmin.from('competitors').select('id').eq('brand_id', brandId).limit(1),
-    supabaseAdmin.from('site_audits').select('id').eq('brand_id', brandId).limit(1),
-    supabaseAdmin.from('brands').select('organization_id').eq('id', brandId).limit(1),
-  ]);
+  const { data: brand, error: brandErr } = await supabaseAdmin
+    .from('brands')
+    .select('organization_id')
+    .eq('id', brandId)
+    .limit(1);
+  if (brandErr) throw new Error(brandErr.message);
+  const organizationId = (brand ?? [])[0]?.organization_id;
 
-  if (competitors.error) throw new Error(competitors.error.message);
-  if (audits.error) throw new Error(audits.error.message);
-  if (brand.error) throw new Error(brand.error.message);
+  const [competitors, audits, gscRows, analyticsPages, snippetRows, topics, volumes] =
+    await Promise.all([
+      hasRow(supabaseAdmin.from('competitors').select('id').eq('brand_id', brandId)),
+      hasRow(supabaseAdmin.from('site_audits').select('id').eq('brand_id', brandId)),
+      hasRow(supabaseAdmin.from('gsc_query_stats').select('id').eq('brand_id', brandId)),
+      hasRow(
+        supabaseAdmin
+          .from('ga_ai_traffic_stats')
+          .select('id')
+          .eq('brand_id', brandId)
+          .gte('date', recent.slice(0, 10)),
+      ),
+      hasRow(
+        supabaseAdmin
+          .from('ai_traffic_logs')
+          .select('id')
+          .eq('brand_id', brandId)
+          .gte('created_at', recent),
+      ),
+      hasRow(
+        supabaseAdmin.from('topics').select('id').eq('brand_id', brandId).eq('is_active', true),
+      ),
+      hasVolumes(brandId),
+    ]);
 
-  if ((competitors.data ?? []).length > 0) available.add('competitors');
-  if ((audits.data ?? []).length > 0) available.add('site_audits');
+  if (competitors) available.add('competitors');
+  if (audits) available.add('site_audits');
+  if (gscRows) available.add('search_console');
+  if (analyticsPages || snippetRows) available.add('ai_traffic');
+  if (topics) available.add('topics');
+  if (volumes) available.add('volumes');
 
-  // Integrations are connected per organization, not per brand: every brand
-  // in a workspace sees the same analytics connection.
-  const organizationId = (brand.data ?? [])[0]?.organization_id;
+  // Integrations are connected per organization, not per brand: every brand in
+  // a workspace sees the same analytics connection.
   if (organizationId) {
-    const { data, error } = await supabaseAdmin
-      .from('integration_connections')
-      .select('id')
-      .eq('organization_id', organizationId)
-      .eq('provider', 'google-analytics')
-      .eq('status', 'connected')
-      .limit(1);
-    if (error) throw new Error(error.message);
-    if ((data ?? []).length > 0) available.add('analytics');
+    const connected = await hasRow(
+      supabaseAdmin
+        .from('integration_connections')
+        .select('id')
+        .eq('organization_id', organizationId)
+        .eq('provider', 'google-analytics')
+        .eq('status', 'connected'),
+    );
+    if (connected) available.add('analytics');
   }
 
   return available;
+}
+
+/** Volumes hang off prompts, which hang off prompt sets, which hang off the
+ *  brand — so this is the one source that needs a join to answer. */
+async function hasVolumes(brandId) {
+  const { data: sets, error } = await supabaseAdmin
+    .from('prompt_sets')
+    .select('id')
+    .eq('brand_id', brandId);
+  if (error) throw new Error(error.message);
+  const setIds = (sets ?? []).map((s) => s.id);
+  if (setIds.length === 0) return false;
+
+  const { data: prompts, error: promptErr } = await supabaseAdmin
+    .from('prompts')
+    .select('id')
+    .in('prompt_set_id', setIds)
+    .limit(500);
+  if (promptErr) throw new Error(promptErr.message);
+  const promptIds = (prompts ?? []).map((p) => p.id);
+  if (promptIds.length === 0) return false;
+
+  return hasRow(
+    supabaseAdmin.from('prompt_volumes').select('id').in('prompt_id', promptIds.slice(0, 100)),
+  );
 }

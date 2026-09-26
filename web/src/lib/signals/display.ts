@@ -1,4 +1,5 @@
 import type { Signal } from '@/lib/actions/signals';
+import { isLibrarySignalKind } from '@/lib/signals/registry';
 
 /**
  * Composes the display strings a signal row shows from `kind` + `payload`.
@@ -14,7 +15,31 @@ function str(payload: Record<string, unknown>, key: string): string {
   return typeof value === 'string' ? value : String(value ?? '');
 }
 
+/**
+ * A library signal's copy: what it is about, named from its targets.
+ *
+ * The V1 library's detectors all write the same shape — an entity and a list
+ * of targets — so their copy needs two values: how many ("11 prompts") for a
+ * finding about a group, and which one ("gemini-web", a topic, a domain) for a
+ * finding about a single thing.
+ */
+function librarySignalTexts(signal: Signal, t: Translator): { title: string; description: string } {
+  const p = signal.payload ?? {};
+  const targets = Array.isArray(p.targets) ? (p.targets as Array<{ label?: string }>) : [];
+  const entity = str(p, 'entity');
+  const count = entity === '' ? 0 : Math.max(targets.length, Number(signal.currentValue ?? 0));
+  const values = {
+    targets: entity ? t(`targets.${entity}`, { count }) : '',
+    name: targets[0]?.label ?? '',
+  };
+  return {
+    title: t(`${signal.kind}.title`, values),
+    description: t(`${signal.kind}.description`, values),
+  };
+}
+
 export function signalTexts(signal: Signal, t: Translator): { title: string; description: string } {
+  if (isLibrarySignalKind(signal.kind)) return librarySignalTexts(signal, t);
   const p = signal.payload;
   const values = ((): Record<string, string | number> => {
     switch (signal.kind) {
@@ -80,6 +105,17 @@ export function signalAffected(
   t: Translator,
 ): { label: string; detail: string | null } {
   const p = signal.payload;
+  if (isLibrarySignalKind(signal.kind)) {
+    // The count for a group, the thing itself for a single finding.
+    const targets = Array.isArray(p.targets) ? (p.targets as Array<{ label?: string }>) : [];
+    const entity = str(p, 'entity');
+    const count = Math.max(targets.length, Number(signal.currentValue ?? 0));
+    if (targets.length === 1) return { label: targets[0]?.label ?? '', detail: null };
+    return {
+      label: entity ? t(`affected.${entity}`, { count }) : '',
+      detail: targets[0]?.label ?? null,
+    };
+  }
   switch (signal.kind) {
     case 'sharp_drop':
     case 'visibility_slipping':

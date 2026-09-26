@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../../config/supabase.js', () => ({ default: { from: vi.fn(), rpc: vi.fn() } }));
 
 import { planTasks } from './plan.js';
-import { TASKS, listTasks, validateTask } from './registry.js';
+import { AUTOMATABLE_MODES, TASKS, libraryTasks, listTasks, validateTask } from './registry.js';
 import { loadDefinitions } from '../definitions/index.js';
 import { TOOLS } from '../execution/tools.js';
 
@@ -67,11 +67,44 @@ describe('planTasks', () => {
 
   it('carries the task primitive’s mode, permission and version onto the row', () => {
     const plan = planTasks(
-      { id: 'x', tasks: ['strengthen_sources', 'validate'] },
+      { id: 'x', tasks: ['publish_content', 'validate_ai_visibility'] },
       { sources: ALL },
     );
-    expect(plan[0]).toMatchObject({ mode: 'manual', permission: 'approval', version: 1 });
-    expect(plan[1]).toMatchObject({ mode: 'agent', permission: 'none' });
+    expect(plan[0]).toMatchObject({ mode: 'human', permission: 'execute', version: 1 });
+    expect(plan[1]).toMatchObject({ mode: 'system', permission: 'read' });
+  });
+
+  describe('branches', () => {
+    const definition = {
+      id: 'x',
+      tasks: [{ branch: [['optimize_content'], ['create_content_brief', 'create_content_draft']] }],
+    };
+
+    it('optimises when content exists', () => {
+      expect(
+        keys(planTasks(definition, { sources: ALL, payload: { contentExists: true } })),
+      ).toEqual(['optimize_content']);
+    });
+
+    it('creates when it does not', () => {
+      expect(
+        keys(planTasks(definition, { sources: ALL, payload: { contentExists: false } })),
+      ).toEqual(['create_content_brief', 'create_content_draft']);
+    });
+
+    /** Creating a page that duplicates one is worse than improving it. */
+    it('optimises when nothing says either way', () => {
+      expect(keys(planTasks(definition, { sources: ALL }))).toEqual(['optimize_content']);
+    });
+  });
+
+  /** Task Library acceptance test 12: one task per primitive. */
+  it('plans a primitive once however many entries imply it', () => {
+    const plan = planTasks(
+      { id: 'x', tasks: ['analyze_citations', 'analyze_citations', 'validate_citations'] },
+      { sources: ALL },
+    );
+    expect(keys(plan)).toEqual(['analyze_citations', 'validate_citations']);
   });
 
   it('ignores a task id that no longer exists in the registry', () => {
@@ -121,6 +154,10 @@ describe('planTasks', () => {
 });
 
 describe('the task registry', () => {
+  it('holds the specification’s sixty-two task primitives', () => {
+    expect(libraryTasks()).toHaveLength(62);
+  });
+
   it.each(listTasks().map((entry) => [entry.id, entry]))('%s is well formed', (_id, entry) => {
     expect(validateTask(entry)).toEqual([]);
   });
@@ -150,12 +187,16 @@ describe('the task registry', () => {
   it('backs every task the shipped definitions ask for', async () => {
     const definitions = await loadDefinitions();
     for (const definition of definitions) {
-      for (const entry of definition.tasks) {
-        const id = typeof entry === 'string' ? entry : entry.id;
-        expect({ definition: definition.id, id, known: Boolean(TASKS[id]) }).toEqual({
+      const ids = definition.tasks.flatMap((entry) =>
+        typeof entry === 'string' ? [entry] : entry.branch ? entry.branch.flat() : [entry.id],
+      );
+      for (const id of ids) {
+        // Known, and from the library — legacy primitives exist only so old
+        // rows still render; no definition may plan them.
+        expect({ definition: definition.id, id, library: TASKS[id]?.legacy === false }).toEqual({
           definition: definition.id,
           id,
-          known: true,
+          library: true,
         });
       }
     }
@@ -201,8 +242,12 @@ describe('the task registry', () => {
       const named = [...messages[`${entry.id}_target`].matchAll(/\{\s*(\w+)\s*[,}]/g)].map(
         (m) => m[1],
       );
+      // `{targets}` is rendered by the web from the count and entity the
+      // planner stores ("11 prompts"), so it is declared when those are.
+      const declared = new Set(entry.titleKeys);
+      if (declared.has('count') && declared.has('entity')) declared.add('targets');
       for (const name of named) {
-        expect({ id: entry.id, name, declared: entry.titleKeys.includes(name) }).toEqual({
+        expect({ id: entry.id, name, declared: declared.has(name) }).toEqual({
           id: entry.id,
           name,
           declared: true,
@@ -232,12 +277,21 @@ describe('the task registry', () => {
    * brand needs the tool's source as well as the task's own — otherwise a
    * task is planned that can never run.
    */
-  it('only gives tools to agent tasks, whose requirements cover the tool’s', () => {
+  it('only gives tools to tasks that can run without a person, whose requirements cover the tool’s', () => {
     for (const entry of listTasks()) {
       if (!entry.tool) continue;
-      expect({ id: entry.id, mode: entry.mode }).toEqual({ id: entry.id, mode: 'agent' });
+      expect({ id: entry.id, automatable: AUTOMATABLE_MODES.includes(entry.mode) }).toEqual({
+        id: entry.id,
+        automatable: true,
+      });
+      // A tool reading analytics may sit on a task that only needs AI traffic:
+      // the runner then refuses brands whose traffic comes from the snippet,
+      // and says why.
       const source = TOOLS[entry.tool].source;
-      const covered = source === 'tracking' || entry.requires.includes(source);
+      const covered =
+        source === 'tracking' ||
+        entry.requires.includes(source) ||
+        (source === 'analytics' && entry.requires.includes('ai_traffic'));
       expect({ id: entry.id, source, covered }).toEqual({ id: entry.id, source, covered: true });
     }
   });

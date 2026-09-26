@@ -15,10 +15,14 @@ const t = (key: string, values?: Record<string, string | number>) => {
     .reduce<unknown>((node, part) => (node as Record<string, unknown> | undefined)?.[part], scope);
   if (typeof value !== 'string') throw new Error(`missing message: ${key}`);
   // Enough ICU to prove the value reached the message; next-intl does the
-  // real formatting at runtime.
-  return value.replace(/\{\s*(\w+)\s*\}/g, (match, name) =>
-    values && name in values ? String(values[name]) : match,
-  );
+  // real formatting at runtime. Plurals collapse to their `other` branch.
+  return value
+    .replace(/\{(\w+), plural, one \{[^}]*\} other \{([^}]*)\}\}/g, (_m, name, other) =>
+      String(other).replace('#', String(values?.[name] ?? '')),
+    )
+    .replace(/\{\s*(\w+)\s*\}/g, (match, name) =>
+      values && name in values ? String(values[name]) : match,
+    );
 };
 
 const action = (over: Partial<ActionItem>) =>
@@ -34,6 +38,31 @@ describe('actionTexts', () => {
   it.each(ACTION_KINDS)('has written copy for %s', (kind) => {
     expect(() => actionTexts(action({ kind }), t)).not.toThrow();
     expect(() => actionGoal(kind, t)).not.toThrow();
+  });
+
+  it('holds copy for all sixty-two definitions', () => {
+    expect(ACTION_KINDS).toHaveLength(62);
+  });
+
+  /**
+   * The specification's title rule: "Recover 7 lost citations", never
+   * "Recover citations". Every definition's title names its targets.
+   */
+  it.each(ACTION_KINDS)('%s names its targets in the title', (kind) => {
+    const texts = actionTexts(
+      action({ kind, payload: { targetCount: 7, targetEntity: 'prompts' } }),
+      t,
+    );
+    if (messages.actionCenter.actionTexts[kind].title.includes('{targets}')) {
+      expect(texts.title).toContain('7 prompts');
+    }
+  });
+
+  /** An action raised before the library has no targets on its payload, and
+   *  must not read "0 prompts". */
+  it('falls back to a title without a count', () => {
+    const texts = actionTexts(action({ kind: 'recover_lost_citations', payload: {} }), t);
+    expect(texts.title).toBe(messages.actionCenter.actionTexts.recover_lost_citations.titleGeneric);
   });
 
   /**
@@ -62,6 +91,19 @@ describe('humanizeKind', () => {
 });
 
 describe('taskText', () => {
+  it('names what a library task acts on', () => {
+    expect(
+      taskText(
+        {
+          taskKey: 'analyze_citations',
+          title: null,
+          titleParams: { count: 11, entity: 'sources' },
+        },
+        t,
+      ),
+    ).toBe('Analyze citations across 11 sources');
+  });
+
   /** Nothing about a planned task's text is stored — only which message it
    *  is and what it names — so the plan survives translation. */
   it('renders the target variant when the planner resolved one', () => {

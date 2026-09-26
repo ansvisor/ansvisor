@@ -39,6 +39,27 @@ const DIR = dirname(fileURLToPath(import.meta.url));
 export const CATEGORIES = Object.freeze(['growth', 'protect', 'recover', 'fix', 'compete']);
 
 const ID_PATTERN = /^[a-z][a-z0-9_]*$/;
+const CODE_PATTERN = /^[GPRFC]\d{2}$/;
+const CODE_FAMILY = { G: 'growth', P: 'protect', R: 'recover', F: 'fix', C: 'compete' };
+
+/**
+ * A plan is task ids, conditional entries, and `optimise | create` branches.
+ * Anything else is a typo that would plan nothing.
+ */
+function assertTaskPlan(tasks, file) {
+  if (!Array.isArray(tasks) || tasks.length === 0) fail(file, 'tasks must not be empty');
+  for (const entry of tasks) {
+    if (typeof entry === 'string') continue;
+    if (entry && Array.isArray(entry.branch) && entry.branch.length === 2) {
+      if (entry.branch.some((b) => !Array.isArray(b) || b.some((id) => typeof id !== 'string'))) {
+        fail(file, 'a branch is two lists of task ids');
+      }
+      continue;
+    }
+    if (entry && typeof entry.id === 'string') continue;
+    fail(file, 'a task entry is an id, { id, requires }, or { branch: [[…], […]] }');
+  }
+}
 
 function fail(file, message) {
   throw new Error(`[action definitions] ${file}: ${message}`);
@@ -73,11 +94,22 @@ function validate(definition, file) {
   if (typeof id !== 'string' || !ID_PATTERN.test(id)) {
     fail(file, 'id must be a lower_snake_case string');
   }
+  // The specification's stable code — G01, P04, R11 — alongside the stored id.
+  if (typeof definition.code !== 'string' || !CODE_PATTERN.test(definition.code)) {
+    fail(file, 'code must look like G01 / P01 / R01 / F01 / C01');
+  }
+  if (CODE_FAMILY[definition.code[0]] !== category) {
+    fail(file, `code ${definition.code} does not belong to the ${category} family`);
+  }
+  if (typeof definition.enabled !== 'boolean') fail(file, 'enabled must be true or false');
+  if (!definition.enabled && typeof definition.disabledReason !== 'string') {
+    fail(file, 'a disabled definition must say why');
+  }
   if (!Number.isInteger(version) || version < 1) fail(file, 'version must be a positive integer');
   if (!CATEGORIES.includes(category)) fail(file, `category "${category}" is not a known family`);
 
   assertStringList(signalKinds, { file, field: 'signalKinds' });
-  assertStringList(tasks, { file, field: 'tasks' });
+  assertTaskPlan(tasks, file);
   assertStringList(requires, { file, field: 'requires', allowed: SOURCES });
   assertStringList(optional ?? [], { file, field: 'optional', allowed: SOURCES, allowEmpty: true });
 
@@ -100,7 +132,13 @@ export async function loadDefinitions() {
   if (cache) return cache;
 
   const files = readdirSync(DIR)
-    .filter((file) => file.endsWith('.js') && file !== 'index.js' && !file.endsWith('.test.js'))
+    .filter(
+      (file) =>
+        file.endsWith('.js') &&
+        file !== 'index.js' &&
+        !file.startsWith('_') &&
+        !file.endsWith('.test.js'),
+    )
     .sort();
 
   const definitions = [];
@@ -129,5 +167,7 @@ export async function loadDefinitions() {
  * @param {Set<string>} available
  */
 export function isEligible(definition, available) {
-  return definition.requires.every((source) => available.has(source));
+  return (
+    definition.enabled !== false && definition.requires.every((source) => available.has(source))
+  );
 }

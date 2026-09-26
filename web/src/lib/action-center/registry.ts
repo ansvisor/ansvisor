@@ -36,16 +36,70 @@ export type ActionOutcome =
   | 'declined'
   | 'not_measurable';
 
-/** A kind this build has copy and an icon for. */
+/** A kind this build has copy for — the V1 library's sixty-two definitions. */
 export type ActionKind =
-  | 'recover_visibility'
-  | 'protect_visibility'
-  | 'expand_platform_visibility'
-  | 'close_citation_gap'
   | 'capture_ai_traffic'
   | 'convert_mentions'
+  | 'expand_prompt_visibility'
+  | 'capture_high_demand_prompts'
+  | 'expand_topic_visibility'
+  | 'capture_fanout_opportunities'
+  | 'increase_authority_citations'
+  | 'expand_platform_visibility'
+  | 'expand_country_visibility'
+  | 'strengthen_emerging_content'
+  | 'expand_brand_associations'
+  | 'convert_search_demand'
+  | 'expand_organic_pages'
+  | 'scale_ai_landing_pages'
+  | 'create_content_for_demand'
+  | 'create_content_for_topics'
+  | 'optimize_content_for_ai'
+  | 'earn_third_party_presence'
+  | 'earn_third_party_citations'
+  | 'protect_visibility'
+  | 'protect_valuable_citations'
+  | 'protect_ai_traffic_pages'
+  | 'defend_competitor_gains'
+  | 'protect_topic_leadership'
+  | 'protect_high_performing_content'
+  | 'protect_platform_visibility'
+  | 'protect_organic_on_ai_pages'
+  | 'protect_search_and_ai_assets'
+  | 'protect_converting_ai_pages'
+  | 'recover_visibility'
+  | 'recover_lost_citations'
+  | 'recover_ai_traffic'
+  | 'recover_lost_mentions'
+  | 'recover_topic_visibility'
+  | 'recover_platform_visibility'
+  | 'recover_after_competitor_gains'
+  | 'recover_cited_pages'
+  | 'recover_high_value_prompts'
+  | 'recover_search_performance'
+  | 'recover_traffic_after_visibility_loss'
   | 'fix_low_scores'
-  | 'close_competitor_gap';
+  | 'fix_crawler_access'
+  | 'fix_structured_data'
+  | 'fix_content_gaps'
+  | 'fix_outdated_content'
+  | 'fix_entity_signals'
+  | 'fix_broken_citation_targets'
+  | 'fix_brand_inconsistency'
+  | 'fix_underperforming_ai_landing_pages'
+  | 'fix_internal_connectivity'
+  | 'fix_prompt_content_coverage'
+  | 'improve_low_ctr_pages'
+  | 'align_search_and_ai_content'
+  | 'close_competitor_gap'
+  | 'close_citation_gap'
+  | 'capture_competitor_cited_sources'
+  | 'close_topic_coverage_gap'
+  | 'compete_on_high_value_prompts'
+  | 'capture_competitor_fanouts'
+  | 'respond_to_competitor_momentum'
+  | 'earn_competitor_source_presence'
+  | 'create_content_for_competitor_gaps';
 
 export type TaskStatus =
   | 'todo'
@@ -97,14 +151,68 @@ export const TASK_STATUSES: readonly TaskStatus[] = [
 export const UNCOUNTED_TASK_STATUSES: readonly TaskStatus[] = ['skipped', 'failed'];
 
 export const ACTION_KINDS: readonly ActionKind[] = [
-  'recover_visibility',
-  'protect_visibility',
-  'expand_platform_visibility',
-  'close_citation_gap',
   'capture_ai_traffic',
   'convert_mentions',
+  'expand_prompt_visibility',
+  'capture_high_demand_prompts',
+  'expand_topic_visibility',
+  'capture_fanout_opportunities',
+  'increase_authority_citations',
+  'expand_platform_visibility',
+  'expand_country_visibility',
+  'strengthen_emerging_content',
+  'expand_brand_associations',
+  'convert_search_demand',
+  'expand_organic_pages',
+  'scale_ai_landing_pages',
+  'create_content_for_demand',
+  'create_content_for_topics',
+  'optimize_content_for_ai',
+  'earn_third_party_presence',
+  'earn_third_party_citations',
+  'protect_visibility',
+  'protect_valuable_citations',
+  'protect_ai_traffic_pages',
+  'defend_competitor_gains',
+  'protect_topic_leadership',
+  'protect_high_performing_content',
+  'protect_platform_visibility',
+  'protect_organic_on_ai_pages',
+  'protect_search_and_ai_assets',
+  'protect_converting_ai_pages',
+  'recover_visibility',
+  'recover_lost_citations',
+  'recover_ai_traffic',
+  'recover_lost_mentions',
+  'recover_topic_visibility',
+  'recover_platform_visibility',
+  'recover_after_competitor_gains',
+  'recover_cited_pages',
+  'recover_high_value_prompts',
+  'recover_search_performance',
+  'recover_traffic_after_visibility_loss',
   'fix_low_scores',
+  'fix_crawler_access',
+  'fix_structured_data',
+  'fix_content_gaps',
+  'fix_outdated_content',
+  'fix_entity_signals',
+  'fix_broken_citation_targets',
+  'fix_brand_inconsistency',
+  'fix_underperforming_ai_landing_pages',
+  'fix_internal_connectivity',
+  'fix_prompt_content_coverage',
+  'improve_low_ctr_pages',
+  'align_search_and_ai_content',
   'close_competitor_gap',
+  'close_citation_gap',
+  'capture_competitor_cited_sources',
+  'close_topic_coverage_gap',
+  'compete_on_high_value_prompts',
+  'capture_competitor_fanouts',
+  'respond_to_competitor_momentum',
+  'earn_competitor_source_presence',
+  'create_content_for_competitor_gaps',
 ];
 
 /**
