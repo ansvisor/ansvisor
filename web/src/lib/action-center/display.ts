@@ -35,93 +35,42 @@ export function humanizeKind(kind: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+/**
+ * "11 prompts", "6 sources" — how many of what an action is about.
+ *
+ * Every payload carries `targetEntity` and `targetCount` (server
+ * definitions/_helpers.js). An action raised before the library existed has
+ * neither, and gets its title without a count rather than "0 prompts".
+ */
+export function targetLabel(payload: Record<string, unknown>, t: Translator): string {
+  const count = num(payload, 'targetCount');
+  const entity = str(payload, 'targetEntity');
+  return count > 0 && entity ? t(`targets.${entity}`, { count }) : '';
+}
+
+/**
+ * An action's title and description.
+ *
+ * One path for all sixty-two definitions: the specification asks for titles
+ * that name their targets — "Recover 7 lost citations", never "Recover
+ * citations" — and every definition's payload now says what its targets are.
+ * A kind this build has no copy for is still shown, from its id: the server's
+ * registry grows on its own release cycle, and a row nobody can read beats a
+ * row nobody sees.
+ */
 export function actionTexts(
-  action: ActionItem,
+  action: Pick<ActionItem, 'kind' | 'payload'>,
   t: Translator,
 ): { title: string; description: string } {
-  const p = action.payload;
-  const kind = action.kind;
-  if (!isActionKind(kind)) {
-    return {
-      title: humanizeKind(kind),
-      description: t('unknown.description'),
-    };
+  const p = action.payload ?? {};
+  if (!isActionKind(action.kind)) {
+    return { title: humanizeKind(action.kind), description: t('unknown.description') };
   }
-  switch (kind) {
-    case 'recover_visibility': {
-      const hasDrop = p.dropFrom !== undefined && p.dropFrom !== null;
-      return {
-        title: t('recover_visibility.title'),
-        description: hasDrop
-          ? t('recover_visibility.descriptionWithDrop', {
-              from: num(p, 'dropFrom'),
-              to: num(p, 'dropTo'),
-              prompts: num(p, 'promptCount'),
-            })
-          : t('recover_visibility.description', { prompts: num(p, 'promptCount') }),
-      };
-    }
-    case 'protect_visibility': {
-      const hasDrop = p.dropFrom !== undefined && p.dropFrom !== null;
-      return {
-        title: t('protect_visibility.title'),
-        description: hasDrop
-          ? t('protect_visibility.descriptionWithDrop', {
-              from: num(p, 'dropFrom'),
-              to: num(p, 'dropTo'),
-            })
-          : t('protect_visibility.description'),
-      };
-    }
-    case 'capture_ai_traffic':
-      return {
-        title: t('capture_ai_traffic.title', { pages: num(p, 'pageCount') }),
-        description: t('capture_ai_traffic.description'),
-      };
-    case 'expand_platform_visibility':
-      return {
-        title: t('expand_platform_visibility.title', { platform: str(p, 'platform') }),
-        description: t('expand_platform_visibility.description', {
-          platform: str(p, 'platform'),
-          best: str(p, 'bestPlatform'),
-          bestRate: num(p, 'dropFrom'),
-          rate: num(p, 'dropTo'),
-        }),
-      };
-    case 'close_citation_gap': {
-      const names = Array.isArray(p.competitorNames) ? (p.competitorNames as string[]) : [];
-      return {
-        title: t('close_citation_gap.title'),
-        description: names[0]
-          ? t('close_citation_gap.descriptionWithName', {
-              competitor: names[0],
-              theirs: num(p, 'competitorCitations'),
-              ours: num(p, 'citationCount'),
-            })
-          : t('close_citation_gap.description'),
-      };
-    }
-    case 'convert_mentions':
-      return {
-        title: t('convert_mentions.title'),
-        description: t('convert_mentions.description', { prompts: num(p, 'promptCount') }),
-      };
-    case 'fix_low_scores':
-      return {
-        title: t('fix_low_scores.title'),
-        description: t('fix_low_scores.description', { pages: num(p, 'pageCount') }),
-      };
-    case 'close_competitor_gap': {
-      const names = Array.isArray(p.competitorNames) ? (p.competitorNames as string[]) : [];
-      return {
-        title:
-          names.length === 1
-            ? t('close_competitor_gap.title', { name: names[0] })
-            : t('close_competitor_gap.titleMany'),
-        description: t('close_competitor_gap.description'),
-      };
-    }
-  }
+  const targets = targetLabel(p, t);
+  return {
+    title: targets ? t(`${action.kind}.title`, { targets }) : t(`${action.kind}.titleGeneric`),
+    description: t(`${action.kind}.description`),
+  };
 }
 
 /**
@@ -155,38 +104,10 @@ export function actionGoal(kind: string, t: Translator): string {
 /** Compact evidence chips under the title: signal count plus the kind's own
  *  count (pages, prompts, competitors). */
 export function actionContextTags(action: ActionItem, t: Translator): string[] {
-  const p = action.payload;
   const tags = [t('tags.signals', { count: action.signalCount })];
-  if (!isActionKind(action.kind)) return tags;
-  switch (action.kind) {
-    case 'recover_visibility':
-      if (num(p, 'promptCount') > 0) tags.push(t('tags.prompts', { count: num(p, 'promptCount') }));
-      break;
-    case 'protect_visibility':
-      break;
-    case 'expand_platform_visibility':
-      tags.push(str(p, 'platform'));
-      break;
-    case 'close_citation_gap': {
-      const names = Array.isArray(p.competitorNames) ? (p.competitorNames as string[]) : [];
-      if (names[0]) tags.push(names[0]);
-      break;
-    }
-    case 'capture_ai_traffic':
-      tags.push(t('tags.pages', { count: num(p, 'pageCount') }));
-      break;
-    case 'convert_mentions':
-      tags.push(t('tags.prompts', { count: num(p, 'promptCount') }));
-      break;
-    case 'fix_low_scores':
-      tags.push(t('tags.pages', { count: num(p, 'pageCount') }));
-      break;
-    case 'close_competitor_gap': {
-      const names = Array.isArray(p.competitorNames) ? (p.competitorNames as string[]) : [];
-      if (names[0]) tags.push(names[0]);
-      break;
-    }
-  }
+  const count = num(action.payload ?? {}, 'targetCount');
+  const entity = str(action.payload ?? {}, 'targetEntity');
+  if (count > 0 && entity) tags.push(t(`tags.${entity}`, { count }));
   return tags;
 }
 
@@ -234,11 +155,14 @@ export function taskText(
   if (title) return title;
   if (!task.taskKey) return '';
 
-  // A planned task that knows what it is about carries the values as
-  // parameters and is rendered from the `_target` variant of its message —
-  // "Compare gemini-web coverage against chatgpt-web" rather than "Compare
-  // platform coverage". No parameters means no target was resolvable, and
-  // the plain message is the honest one.
-  const params = task.titleParams ?? {};
+  // A planned task that knows what it acts on carries the values as
+  // parameters and is rendered from the `_target` variant of its message:
+  // "Analyze citations across 11 sources" rather than "Analyze citations".
+  // Library tasks name a count and an entity, rendered here in the reader's
+  // language; the original tasks name their own fields.
+  const params = { ...(task.titleParams ?? {}) };
+  if (params.count && params.entity) {
+    params.targets = t(`targets.${params.entity}`, { count: Number(params.count) });
+  }
   return Object.keys(params).length > 0 ? t(`${task.taskKey}_target`, params) : t(task.taskKey);
 }

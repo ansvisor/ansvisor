@@ -1,3 +1,5 @@
+import { LIBRARY_SIGNAL_KINDS, type LibrarySignalKind } from './library-kinds';
+
 /**
  * The signal registry — static product knowledge about every detector kind
  * the Signals page can render. The database stores what gets filtered and
@@ -23,7 +25,8 @@ export type SignalImpact = 'high' | 'medium' | 'low';
 
 export type SignalStatus = 'new' | 'acknowledged' | 'resolved' | 'dismissed';
 
-export type SignalKind =
+/** The original detectors' kinds, each with its own display copy. */
+export type BaseSignalKind =
   | 'sharp_drop'
   | 'visibility_slipping'
   | 'platform_gap'
@@ -38,6 +41,9 @@ export type SignalKind =
   | 'page_opportunity'
   | 'uncited_mentions'
   | 'audit_low_score';
+
+/** Every kind a signal row can carry: the originals and the V1 library's. */
+export type SignalKind = BaseSignalKind | LibrarySignalKind;
 
 export const SIGNAL_CATEGORIES: readonly SignalCategory[] = [
   'visibility',
@@ -81,7 +87,7 @@ export interface SignalKindMeta {
   positive: boolean;
 }
 
-export const SIGNAL_KINDS: Record<SignalKind, SignalKindMeta> = {
+const BASE_SIGNAL_KINDS: Record<BaseSignalKind, SignalKindMeta> = {
   sharp_drop: { kind: 'sharp_drop', stateKey: 'dropped', positive: false },
   visibility_slipping: { kind: 'visibility_slipping', stateKey: 'slipping', positive: false },
   platform_gap: { kind: 'platform_gap', stateKey: 'gap', positive: false },
@@ -97,6 +103,18 @@ export const SIGNAL_KINDS: Record<SignalKind, SignalKindMeta> = {
   uncited_mentions: { kind: 'uncited_mentions', stateKey: 'uncited', positive: false },
   audit_low_score: { kind: 'audit_low_score', stateKey: 'issue', positive: false },
 };
+
+export const SIGNAL_KINDS: Record<SignalKind, SignalKindMeta> = {
+  ...BASE_SIGNAL_KINDS,
+  ...(Object.fromEntries(
+    Object.entries(LIBRARY_SIGNAL_KINDS).map(([kind, meta]) => [kind, { kind, ...meta }]),
+  ) as Record<LibrarySignalKind, SignalKindMeta>),
+};
+
+/** A library kind: its copy is generic over targets rather than per-field. */
+export function isLibrarySignalKind(kind: string): kind is LibrarySignalKind {
+  return kind in LIBRARY_SIGNAL_KINDS;
+}
 
 export function isSignalKind(value: string): value is SignalKind {
   return value in SIGNAL_KINDS;

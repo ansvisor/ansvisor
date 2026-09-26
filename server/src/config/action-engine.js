@@ -128,6 +128,110 @@ export const ENGINE_THRESHOLDS = Object.freeze({
     pageWindowDays: 28,
   }),
 
+  /**
+   * The V1 definition library's detectors (#818).
+   *
+   * These are first settings, not calibrations. Every number that the
+   * original detectors use was measured against production before being
+   * written down; these forty-odd could not all be, in the time it took to
+   * build the definitions they feed. They are chosen to be conservative —
+   * a detector that is quiet for a week is easy to loosen, one that floods a
+   * brand's Action Center on its first night teaches people to ignore it —
+   * and the per-kind signal cap below bounds the worst case either way.
+   *
+   * Recalibrate against a few clean nights of `signals` rows, the way
+   * `platformGapPoints` and `citationGapMultiple` were.
+   */
+  library: Object.freeze({
+    /** Current and previous windows, in days. */
+    windowDays: 7,
+    /** No detector writes more than this many signals of one kind per brand
+     *  per night; the strongest are kept. A definition consolidates them into
+     *  one action anyway, so the rest would be rows nobody reads. Measured on
+     *  the first read-only run: at 10, the five citation-source kinds hit the
+     *  ceiling on most brands and wrote 730 rows between them. */
+    maxSignalsPerKind: 5,
+
+    // Prompts
+    /** Tracked on at least this many days of the window before absence counts. */
+    promptMinDays: 3,
+    /** Mentioned on at least this many days before, and not at all now, is a
+     *  lost mention rather than noise. */
+    lostMentionMinDays: 3,
+    /** Estimated AI demand at or above this makes a prompt high-value. */
+    highDemandVolume: 100,
+    /** Citation days falling below this fraction of before, but not to zero,
+     *  is a citation at risk. Zero is lost, which the original detector owns. */
+    citationRiskRatio: 0.5,
+    citationRiskMinDays: 3,
+    /** Fewer absent prompts than this is not an action's worth. */
+    promptGroupMin: 3,
+
+    // Topics
+    topicMinPrompts: 4,
+    /** Coverage bands: below `uncovered` a topic needs new content; between
+     *  that and `partial` it needs expanding. */
+    topicUncoveredCoverage: 0.2,
+    topicPartialCoverage: 0.6,
+    /** A topic worth protecting had at least this coverage before. */
+    topicLeadershipCoverage: 0.4,
+
+    // Platforms, regions and relative declines
+    platformMinAnswers: 20,
+    slipRatio: 0.1,
+    dropRatio: 0.3,
+    /** A platform or region has to have been worth something to slip. */
+    rateFloor: 0.1,
+    countryGapPoints: 0.15,
+
+    // Competitors
+    /** A competitor mentioned this many times the brand's count leads it. */
+    competitorLeadMultiple: 1.5,
+    competitorLeadMinMentions: 20,
+    /** Mentions growing by this fraction, from at least `min`, is momentum. */
+    competitorMomentumRatio: 0.5,
+    competitorMomentumMin: 10,
+    competitorTopicShare: 0.5,
+    competitorPromptMinDays: 3,
+
+    // Citation sources
+    /** A domain needs this many answers citing it before it is a source. */
+    sourceMinResults: 20,
+    sourceMinPrompts: 3,
+    /** Competitor-only share above which a source is competitor-winning. */
+    competitorSourceShare: 0.5,
+    /** A source the brand appears alongside in fewer than this share of
+     *  answers is one it has little authority on. */
+    authorityBrandShare: 0.25,
+    authorityMinResults: 25,
+
+    // Owned pages
+    ownedPageMinCitations: 5,
+    ownedPageSlipRatio: 0.7,
+
+    // Fan-outs
+    fanoutMinPrompts: 2,
+    fanoutGroupMin: 5,
+
+    // Search Console
+    gscMinImpressions: 100,
+    gscMinClicks: 10,
+    /** Word-overlap needed to map a search query to a tracked prompt. */
+    gscMatchOverlap: 0.5,
+    gscDeclineRatio: 0.3,
+    /** CTR below this fraction of what its position usually earns. */
+    gscCtrShortfall: 0.5,
+
+    // AI traffic
+    aiTrafficMinSessions: 10,
+    aiTrafficSlipRatio: 0.1,
+    aiTrafficDropRatio: 0.3,
+    /** Key events per session above this multiple of the site's rate is a
+     *  winning page; engagement below `underperform` of it is a weak one. */
+    landingWinnerMultiple: 1.5,
+    landingUnderperformMultiple: 0.6,
+  }),
+
   /** Guards against the engine talking over itself. */
   noise: Object.freeze({
     /**

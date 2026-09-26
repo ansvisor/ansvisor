@@ -35,12 +35,34 @@ import { getTask } from './registry.js';
  */
 function titleValues(payload) {
   const names = Array.isArray(payload.competitorNames) ? payload.competitorNames : [];
-  return { ...payload, competitor: names[0] };
+  const count = Number(payload.targetCount ?? 0);
+  return {
+    ...payload,
+    competitor: names[0],
+    // Library tasks name what they act on as a count and an entity. Nothing to
+    // name is no title parameters, and the plain message renders instead.
+    count: count > 0 ? count : undefined,
+    entity: count > 0 ? payload.targetEntity : undefined,
+  };
 }
 
-/** A spec entry is a bare task id, or an id with extra conditions. */
-function normalise(entry) {
-  return typeof entry === 'string' ? { id: entry, requires: [] } : { requires: [], ...entry };
+/**
+ * A plan entry, expanded into the task ids it stands for.
+ *
+ *  - `'analyze_citations'` — one task;
+ *  - `{ id, requires }` — one task, only where the brand has those sources;
+ *  - `{ branch: [[…], […]] }` — the specification's `A|B+C`: optimise the
+ *    page that exists, or brief and draft the one that does not. The first
+ *    branch unless the action says no adequate content exists (spec §7,
+ *    tests 3 and 4). Never both.
+ */
+function expand(entry, payload) {
+  if (typeof entry === 'string') return [{ id: entry, requires: [] }];
+  if (entry.branch) {
+    const chosen = payload.contentExists === false ? entry.branch[1] : entry.branch[0];
+    return chosen.map((id) => ({ id, requires: entry.requires ?? [] }));
+  }
+  return [{ requires: [], ...entry }];
 }
 
 /**
@@ -55,11 +77,15 @@ export function planTasks(definition, { sources, payload = {} }) {
   const values = titleValues(payload);
 
   const chosen = [];
-  for (const entry of definition.tasks.map(normalise)) {
+  const seen = new Set();
+  for (const entry of definition.tasks.flatMap((e) => expand(e, payload))) {
     const primitive = getTask(entry.id);
-    if (!primitive) continue;
+    if (!primitive || seen.has(primitive.id)) continue;
     const needed = [...primitive.requires, ...entry.requires];
     if (!needed.every((source) => sources.has(source))) continue;
+    // One task per primitive: two capabilities implying the same analysis are
+    // one task over the combined scope (spec §7, test 12).
+    seen.add(primitive.id);
     chosen.push(primitive);
   }
 

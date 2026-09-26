@@ -32,7 +32,7 @@
 
 import supabaseAdmin from '../../../config/supabase.js';
 import { logger } from '../../logger.js';
-import { getTask } from '../tasks/registry.js';
+import { APPROVAL_PERMISSIONS, AUTOMATABLE_MODES, getTask } from '../tasks/registry.js';
 import { resolveBrandSources } from '../sources.js';
 import { getTool } from './tools.js';
 import { resolve } from '../../../config/action-engine.js';
@@ -84,11 +84,17 @@ export function blockedReason({ task, primitive, tool, sources, siblings }) {
     return `task is ${task.status}`;
   }
   if (!primitive) return `no task primitive named ${task.task_key}`;
-  if (primitive.mode !== 'agent') return 'task is carried out by a person, not automatically';
+  if (!AUTOMATABLE_MODES.includes(primitive.mode)) {
+    return 'task is carried out by a person, not automatically';
+  }
   if (!tool) return `no tool implements ${task.task_key} yet`;
   if (!sources.has(tool.source)) return `brand has no ${tool.source} source`;
 
-  if (tool.writesExternally && !task.approved_by) {
+  // WRITE and EXECUTE need a person's approval, and so does any tool that
+  // changes something outside Ansvisor, whatever the task says (spec §5).
+  const permission = task.permission ?? primitive.permission;
+  const needsApproval = tool.writesExternally || APPROVAL_PERMISSIONS.includes(permission);
+  if (needsApproval && !task.approved_by) {
     return 'changes something outside Ansvisor and has not been approved';
   }
 
@@ -131,7 +137,7 @@ function buildInput({ action, siblings, dependsOn }) {
 export async function runTask(taskId, { now = new Date(), sources } = {}) {
   const { data: task, error: taskErr } = await supabaseAdmin
     .from('action_tasks')
-    .select('id, action_id, task_key, status, depends_on, approved_by')
+    .select('id, action_id, task_key, status, depends_on, approved_by, permission')
     .eq('id', taskId)
     .single();
   if (taskErr) throw new Error(taskErr.message);
@@ -174,7 +180,8 @@ export async function runTask(taskId, { now = new Date(), sources } = {}) {
     });
     // A task held for approval says so in its own status, so the person who
     // has to decide can find it without reading the run log.
-    if (tool?.writesExternally && !task.approved_by && task.status !== 'waiting_approval') {
+    const heldForApproval = refusal.includes('not been approved');
+    if (heldForApproval && task.status !== 'waiting_approval') {
       await supabaseAdmin
         .from('action_tasks')
         .update({ status: 'waiting_approval', updated_at: now.toISOString() })

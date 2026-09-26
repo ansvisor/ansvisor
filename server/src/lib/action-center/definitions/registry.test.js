@@ -9,6 +9,7 @@ vi.mock('../../pulse/metrics.js', () => ({ computePulseMetrics: vi.fn() }));
 import { CATEGORIES, isEligible, loadDefinitions } from './index.js';
 import { SOURCES } from '../sources.js';
 import { KIND_META } from '../../signals/record.js';
+import { LIBRARY_EMITTED_KINDS } from '../../signals/library/detect.js';
 
 const definitions = await loadDefinitions();
 
@@ -52,7 +53,7 @@ describe('the definition registry', () => {
    * would say so — it would simply be quiet forever. Cheaper to fail here
    * than to wonder in three months why a family never produced an action.
    */
-  it.each(definitions.map((definition) => [definition.id, definition]))(
+  it.each(definitions.filter((d) => d.enabled).map((definition) => [definition.id, definition]))(
     '%s only listens for signal kinds a detector emits',
     (_id, definition) => {
       for (const kind of definition.signalKinds) {
@@ -60,6 +61,41 @@ describe('the definition registry', () => {
       }
     },
   );
+
+  /**
+   * The V1 specification's library: 62 definitions, 19 Growth, 10 Protect,
+   * 11 Recover, 13 Fix, 9 Compete. Anything else is not the V1 library.
+   */
+  it('registers the specification’s sixty-two definitions', () => {
+    const byFamily = {};
+    for (const d of definitions) byFamily[d.category] = (byFamily[d.category] ?? 0) + 1;
+    expect(definitions).toHaveLength(62);
+    expect(byFamily).toEqual({ growth: 19, protect: 10, recover: 11, fix: 13, compete: 9 });
+  });
+
+  /**
+   * The reverse of "listens for kinds a detector emits": every kind the
+   * library detectors write has a definition to go to. A kind nothing consumes
+   * fills the Signals page with findings that can never become work.
+   */
+  it('gives every library signal kind a definition', () => {
+    const consumed = new Set(definitions.flatMap((d) => d.signalKinds));
+    for (const kind of LIBRARY_EMITTED_KINDS) {
+      expect({ kind, consumed: consumed.has(kind) }).toEqual({ kind, consumed: true });
+    }
+  });
+
+  it('gives every definition its own specification code', () => {
+    expect(new Set(definitions.map((d) => d.code)).size).toBe(62);
+  });
+
+  /** A disabled definition is a promise with nothing behind it; it has to
+   *  say which data it is waiting for. */
+  it('explains every definition it cannot run yet', () => {
+    for (const d of definitions.filter((x) => !x.enabled)) {
+      expect(d.disabledReason?.length ?? 0).toBeGreaterThan(40);
+    }
+  });
 
   /**
    * Two definitions consuming the same signal kind would both fire on it,

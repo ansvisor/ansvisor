@@ -30,6 +30,8 @@ import supabaseAdmin from '../../config/supabase.js';
 import { computePulseMetrics } from '../pulse/metrics.js';
 import { logger } from '../logger.js';
 import { resolve } from '../../config/action-engine.js';
+import { LIBRARY_KINDS } from './library/kinds.js';
+import { libraryCandidates } from './library/detect.js';
 
 const DAY_MS = 86_400_000;
 
@@ -42,12 +44,33 @@ function utcDay(date) {
 const { detection } = resolve();
 
 /**
+ * Library kinds that report a fall. Suppressed during a platform outage, when
+ * a fall in collected answers is ours and not the brand's.
+ */
+const DECLINE_KINDS = new Set([
+  'lost_mentions',
+  'high_value_prompt_lost',
+  'citation_at_risk',
+  'topic_slipping',
+  'topic_drop',
+  'platform_slipping',
+  'platform_drop',
+  'page_citation_slipping',
+  'owned_page_citation_lost',
+]);
+
+/**
  * Static knowledge per detector kind. Mirrored by the web registry
  * (web/src/lib/signals/registry.ts) which owns the display templates —
  * this side owns what gets STORED: category, impact, sources, KPI links,
  * and whether the condition persists.
  */
-export const KIND_META = {
+/**
+ * The original detectors' kinds. The V1 library's forty-seven are in
+ * library/kinds.js and merged below, so everything downstream — the recorder,
+ * the registry checks, the web — treats them alike.
+ */
+const BASE_KINDS = {
   sharp_drop: {
     category: 'visibility',
     impact: 'high',
@@ -137,6 +160,8 @@ export const KIND_META = {
     persistent: true,
   },
 };
+
+export const KIND_META = { ...BASE_KINDS, ...LIBRARY_KINDS };
 
 /** Pulse highlight/warning → signal candidate. Returns null for entries that
  *  describe engine health rather than the brand (degraded platforms). */
@@ -504,6 +529,18 @@ export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) 
   candidates.push(...(await platformGapCandidates(brandId)));
   candidates.push(...(await competitorCitationGapCandidates(brandId, now)));
 
+  // The V1 definition library's detectors (#818). Isolated per family inside:
+  // a read that fails costs that family's signals for the night, and its kinds
+  // are reported unread so the resolution step below does not take the
+  // silence for recovery.
+  const library = await libraryCandidates(brandId, { now });
+  // During a platform outage a fall is our collection, not the brand's
+  // visibility — the same suppression the pulse applies to its own warnings.
+  candidates.push(
+    ...library.candidates.filter((candidate) => !(outage && DECLINE_KINDS.has(candidate.kind))),
+  );
+  const unreadKinds = library.unreadKinds;
+
   // Existing rows decide insert vs update vs reopen. A brand's signal set is
   // small (tens), so reading it whole is cheaper than being clever.
   const { data: existingRows, error: readErr } = await supabaseAdmin
@@ -578,7 +615,10 @@ export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) 
         (row) =>
           KIND_META[row.kind]?.persistent &&
           (row.status === 'new' || row.status === 'acknowledged') &&
-          !detectedKeys.has(row.dedup_key),
+          !detectedKeys.has(row.dedup_key) &&
+          // A kind whose detector failed tonight was not looked at, and a
+          // condition nobody looked at has not ended.
+          !unreadKinds.has(row.kind),
       );
   for (const row of toResolve) {
     const { error } = await supabaseAdmin

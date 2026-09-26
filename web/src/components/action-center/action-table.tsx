@@ -32,7 +32,8 @@ import { cn } from '@/lib/utils';
 
 type IconComponent = React.ComponentType<{ className?: string }>;
 
-const KIND_ICONS: Record<ActionKind, IconComponent> = {
+/** Icons for the original eight kinds; everything else takes its family's. */
+const KIND_ICONS: Partial<Record<ActionKind, IconComponent>> = {
   recover_visibility: BarChart3,
   protect_visibility: ShieldCheck,
   expand_platform_visibility: Layers,

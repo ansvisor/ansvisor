@@ -227,6 +227,9 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
   let queued = 0;
 
   for (const definition of definitions) {
+    // Registered but switched off — the specification's slot exists, the data
+    // behind it does not yet. Nothing to queue and nothing to raise.
+    if (definition.enabled === false) continue;
     const matched = (openSignals ?? []).filter((signal) =>
       definition.signalKinds.includes(signal.kind),
     );
