@@ -60,6 +60,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { suggestTopics, generatePromptsFromTopics, suggestCompetitors } from '@/lib/ai-brand-setup';
+import { DashboardPreview } from '@/components/onboarding/dashboard-preview';
+import { OnboardingFrame } from '@/components/onboarding/onboarding-frame';
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
 
@@ -203,6 +205,9 @@ function TopicAccordion({
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+// Card width per step, matched to each step's content column; unlisted steps are forms.
+const STEP_FRAME_WIDTH: Record<number, 'medium' | 'wide'> = { 3: 'wide', 4: 'wide', 6: 'medium' };
+
 const TOPIC_LOADING_MESSAGES = [
   'Researching topics for your brand...',
   'Analyzing your industry landscape...',
@@ -301,6 +306,17 @@ export default function OnboardingPage() {
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [currentPlanId, setCurrentPlanId] = useState<PlanId>('starter');
 
+  // What the dashboard preview shows when the plan step is reached by resuming
+  // (a cancelled checkout, a lapsed trial) rather than by walking the steps, so
+  // the wizard state it normally reads is empty. Kept apart from that state:
+  // filling the real competitor list here would have Back → Finish save them again.
+  const [resumedPreview, setResumedPreview] = useState<{
+    brandName: string;
+    domain: string;
+    topics: string[];
+    competitors: { name: string; domain: string }[];
+  } | null>(null);
+
   const totalSteps = isCloud() ? 6 : 5;
 
   // Determine which scrapers/models are available based on the plan
@@ -384,6 +400,7 @@ export default function OnboardingPage() {
             const subStatus = org?.subscription_status;
             if (subStatus !== 'active' && subStatus !== 'trialing') {
               setOrganizationId(profile.organization_id);
+              void loadResumedPreview(profile.organization_id);
               setStep(6);
               setInitialLoading(false);
               return;
@@ -925,776 +942,833 @@ export default function OnboardingPage() {
       : null;
   const excessPrompts = promptLimit !== null ? Math.max(0, totalPrompts - promptLimit) : 0;
 
-  // ── Loading state ──
-
-  if (initialLoading) {
-    return (
-      <div className="flex min-h-svh items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+  async function loadResumedPreview(orgId: string) {
+    try {
+      const supabase = createClient();
+      const { data: brands } = await supabase
+        .from('brands')
+        .select('id, name, brand_domains(domain, is_primary)')
+        .eq('organization_id', orgId)
+        .limit(1);
+      const b = brands?.[0];
+      if (!b) return;
+      const domains = (b.brand_domains ?? []) as { domain: string; is_primary: boolean }[];
+      const [topics, competitors] = await Promise.all([getTopics(b.id), getCompetitors(b.id)]);
+      setResumedPreview({
+        brandName: b.name,
+        domain: (domains.find((d) => d.is_primary) ?? domains[0])?.domain ?? '',
+        topics: topics.map((t) => t.name),
+        competitors: competitors.map((c) => ({ name: c.name, domain: c.domain })),
+      });
+    } catch {
+      // Decoration only — the plan step works the same with an empty preview.
+    }
   }
 
-  // ── Step 1: Brand Info ──
+  const renderStep = () => {
+    // ── Loading state ──
 
-  if (step === 1) {
-    return (
-      <div className="flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
-        <div className="flex w-full max-w-md flex-col gap-6">
-          <div className="flex flex-col items-center gap-2 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <Globe className="h-6 w-6" />
+    if (initialLoading) {
+      return (
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+
+    // ── Step 1: Brand Info ──
+
+    if (step === 1) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-6 p-6 md:p-10">
+          <div className="flex w-full max-w-md flex-col gap-6">
+            <div className="flex flex-col items-center gap-2 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                <Globe className="h-6 w-6" />
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight">Set up your brand</h1>
+              <p className="text-sm text-muted-foreground">
+                See how AI platforms talk about you. Add your first brand to get started.
+              </p>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">Set up your brand</h1>
-            <p className="text-sm text-muted-foreground">
-              See how AI platforms talk about you. Add your first brand to get started.
-            </p>
-          </div>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="brandName">Brand name</Label>
-              <Input
-                id="brandName"
-                placeholder="e.g. Acme Corp"
-                value={brandName}
-                onChange={(e) => setBrandName(e.target.value)}
-                autoFocus
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="website">Website</Label>
-              <div className="flex">
-                <span className="inline-flex items-center rounded-l-md border border-r-0 bg-muted px-3 text-sm text-muted-foreground">
-                  https://
-                </span>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="brandName">Brand name</Label>
                 <Input
-                  id="website"
-                  placeholder="example.com"
-                  value={website}
-                  onChange={(e) => setWebsite(e.target.value)}
-                  className="rounded-l-none"
+                  id="brandName"
+                  placeholder="e.g. Acme Corp"
+                  value={brandName}
+                  onChange={(e) => setBrandName(e.target.value)}
+                  autoFocus
                 />
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="description">
-                Describe your brand <span className="text-muted-foreground">(optional)</span>
-              </Label>
-              <Textarea
-                id="description"
-                placeholder="A brief description helps us generate better suggestions."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-              />
-              <ul className="text-xs text-muted-foreground space-y-1 list-disc ml-4">
-                <li>What industry are you in?</li>
-                <li>Who is your target audience?</li>
-              </ul>
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="website">Website</Label>
+                <div className="flex">
+                  <span className="inline-flex items-center rounded-l-md border border-r-0 bg-muted px-3 text-sm text-muted-foreground">
+                    https://
+                  </span>
+                  <Input
+                    id="website"
+                    placeholder="example.com"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                    className="rounded-l-none"
+                  />
+                </div>
+              </div>
 
-            <Button
-              className="w-full"
-              disabled={!brandName.trim() || !website.trim()}
-              onClick={() => {
-                track('onboarding_step_completed', {
-                  step: 1,
-                  step_name: 'brand_setup',
-                  brand_name: brandName.trim(),
-                  brand_domain: domain,
-                  has_description: description.trim().length > 0,
-                });
-                setPersonProperties({
-                  company_url: domain,
-                });
-                setStep(2);
-              }}
-            >
-              Continue
-            </Button>
-          </div>
-        </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">
+                  Describe your brand <span className="text-muted-foreground">(optional)</span>
+                </Label>
+                <Textarea
+                  id="description"
+                  placeholder="A brief description helps us generate better suggestions."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={3}
+                />
+                <ul className="text-xs text-muted-foreground space-y-1 list-disc ml-4">
+                  <li>What industry are you in?</li>
+                  <li>Who is your target audience?</li>
+                </ul>
+              </div>
 
-        <StepDots current={1} total={totalSteps} />
-      </div>
-    );
-  }
-
-  // ── Step 2: Region & Language ──
-
-  if (step === 2) {
-    return (
-      <div className="flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
-        <div className="flex w-full max-w-md flex-col gap-6">
-          <BrandHeader name={brandName} domain={domain} />
-
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Select your target market</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Pick the region and language your audience uses. This helps us deliver more accurate
-              AI visibility data.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Region</Label>
-              <Select
-                value={region}
-                onValueChange={(v) => {
-                  if (!v) return;
-                  setRegion(v);
-                  if (v !== 'US') setUsState('');
+              <Button
+                className="w-full"
+                disabled={!brandName.trim() || !website.trim()}
+                onClick={() => {
+                  track('onboarding_step_completed', {
+                    step: 1,
+                    step_name: 'brand_setup',
+                    brand_name: brandName.trim(),
+                    brand_domain: domain,
+                    has_description: description.trim().length > 0,
+                  });
+                  setPersonProperties({
+                    company_url: domain,
+                  });
+                  setStep(2);
                 }}
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {REGIONS.map((r) => (
-                    <SelectItem key={r.code} value={r.code}>
-                      {r.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                Continue
+              </Button>
+            </div>
+          </div>
+
+          <StepDots current={1} total={totalSteps} />
+        </div>
+      );
+    }
+
+    // ── Step 2: Region & Language ──
+
+    if (step === 2) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-6 p-6 md:p-10">
+          <div className="flex w-full max-w-md flex-col gap-6">
+            <BrandHeader name={brandName} domain={domain} />
+
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">Select your target market</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Pick the region and language your audience uses. This helps us deliver more accurate
+                AI visibility data.
+              </p>
             </div>
 
-            {region === 'US' && (
+            <div className="space-y-4">
               <div className="space-y-2">
-                <Label>State (optional)</Label>
+                <Label>Region</Label>
                 <Select
-                  value={usState || 'nationwide'}
-                  onValueChange={(v) => setUsState(!v || v === 'nationwide' ? '' : v)}
+                  value={region}
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    setRegion(v);
+                    if (v !== 'US') setUsState('');
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="nationwide">Nationwide (no state)</SelectItem>
-                    {US_STATES.map((s) => (
-                      <SelectItem key={s.code} value={s.code}>
-                        {s.label}
+                    {REGIONS.map((r) => (
+                      <SelectItem key={r.code} value={r.code}>
+                        {r.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
-                  Localizes AI answers to this state. Leave empty for nationwide results.
-                </p>
+              </div>
+
+              {region === 'US' && (
+                <div className="space-y-2">
+                  <Label>State (optional)</Label>
+                  <Select
+                    value={usState || 'nationwide'}
+                    onValueChange={(v) => setUsState(!v || v === 'nationwide' ? '' : v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="nationwide">Nationwide (no state)</SelectItem>
+                      {US_STATES.map((s) => (
+                        <SelectItem key={s.code} value={s.code}>
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Localizes AI answers to this state. Leave empty for nationwide results.
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label>Language</Label>
+                <Select value={language} onValueChange={(v) => v && setLanguage(v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LANGUAGES.map((l) => (
+                      <SelectItem key={l.code} value={l.code}>
+                        {l.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button className="w-full" onClick={handleCreateOrgAndBrand} disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Setting up...
+                  </>
+                ) : (
+                  'Continue'
+                )}
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex w-full max-w-md items-center justify-between">
+            <button
+              onClick={() => setStep(1)}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back
+            </button>
+            <StepDots current={2} total={totalSteps} />
+            <div className="w-12" />
+          </div>
+        </div>
+      );
+    }
+
+    // ── Step 3: Topic Selection ──
+
+    if (step === 3) {
+      return (
+        <div className="flex flex-col p-6 md:p-10">
+          <div className="mx-auto w-full max-w-4xl flex-1">
+            <BrandHeader name={brandName} domain={domain} />
+
+            <div className="grid grid-cols-1 gap-10 lg:grid-cols-5">
+              <div className="lg:col-span-3 space-y-6">
+                <div>
+                  <h1 className="text-2xl font-bold tracking-tight">Choose topics to monitor</h1>
+                  <div className="flex items-center gap-2 mt-3">
+                    <span className="text-sm text-muted-foreground">Select up to 10 topics</span>
+                    <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full bg-primary rounded-full transition-all"
+                        style={{
+                          width: `${(selectedTopics.size / 10) * 100}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {loadingTopics ? (
+                  <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+                    <Sparkles className="h-5 w-5 animate-pulse" />
+                    <span key={topicLoadingMsg} className="text-sm animate-in fade-in duration-500">
+                      {topicLoadingMsg}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {topicSuggestError && (
+                      <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+                        <span>
+                          Couldn&apos;t fetch topic suggestions right now — add your own below.
+                        </span>
+                        <Button variant="outline" size="sm" onClick={fetchTopicSuggestions}>
+                          Try again
+                        </Button>
+                      </div>
+                    )}
+                    {suggestedTopics.map((topic) => {
+                      const isSelected = selectedTopics.has(topic);
+                      return (
+                        <button
+                          key={topic}
+                          onClick={() => toggleTopic(topic)}
+                          className={cn(
+                            'flex items-center gap-3 w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors',
+                            isSelected
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border hover:border-muted-foreground/30',
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              'flex h-5 w-5 shrink-0 items-center justify-center rounded border',
+                              isSelected
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-muted-foreground/30',
+                            )}
+                          >
+                            {isSelected && <Check className="h-3 w-3" />}
+                          </div>
+                          {topic}
+                        </button>
+                      );
+                    })}
+
+                    <div className="flex items-center gap-2 pt-2">
+                      <Input
+                        placeholder="Add custom topic..."
+                        value={customTopic}
+                        onChange={(e) => setCustomTopic(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && addCustomTopic()}
+                        className="text-sm"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={addCustomTopic}
+                        disabled={!customTopic.trim()}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {topicSaveError && (
+                  <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+                    Couldn&apos;t save your topics — please try again.
+                  </div>
+                )}
+
+                <Button
+                  className="w-full"
+                  disabled={selectedTopics.size === 0 || loadingPrompts || loadingTopics}
+                  onClick={handleGeneratePrompts}
+                >
+                  {loadingPrompts ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generating prompts...
+                    </>
+                  ) : (
+                    'Looks good'
+                  )}
+                </Button>
+              </div>
+
+              <div className="lg:col-span-2">
+                <div className="rounded-xl border bg-card p-5 sticky top-10">
+                  <h3 className="text-sm font-semibold mb-4">Topic Selection Tips</h3>
+                  <div className="space-y-4">
+                    <div className="flex gap-3">
+                      <Check className="h-4 w-4 text-foreground shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium">5 prompts are created per topic</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          You can select up to 10 topics for a total of 50 prompts. More can be
+                          added anytime from the dashboard.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <Check className="h-4 w-4 text-foreground shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium">Think like your customers</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Use terms your audience would search for when looking for products or
+                          services like yours.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <Check className="h-4 w-4 text-foreground shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium">Keep it short</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Topics should be concise — we&apos;ll turn them into detailed prompts in
+                          the next step.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex mx-auto w-full max-w-4xl items-center justify-between mt-8">
+            <button
+              onClick={() => setStep(2)}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back
+            </button>
+            <StepDots current={3} total={totalSteps} />
+            <div className="w-12" />
+          </div>
+        </div>
+      );
+    }
+
+    // ── Step 4: Prompt Review ──
+
+    if (step === 4) {
+      return (
+        <div className="flex flex-col p-6 md:p-10">
+          <div className="mx-auto w-full max-w-4xl flex-1">
+            <BrandHeader name={brandName} domain={domain} />
+
+            <div className="mb-6">
+              <h1 className="text-2xl font-bold tracking-tight">Review your prompts</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                These prompts will be sent to AI platforms daily. Feel free to edit, add, or remove
+                any before starting.
+              </p>
+            </div>
+
+            {promptGenError && (
+              <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+                Couldn&apos;t generate prompt suggestions right now — add your own to each topic
+                below to continue.
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label>Language</Label>
-              <Select value={language} onValueChange={(v) => v && setLanguage(v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {LANGUAGES.map((l) => (
-                    <SelectItem key={l.code} value={l.code}>
-                      {l.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {excessPrompts > 0 && (
+              <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+                Your plan includes up to {promptLimit} prompts — remove {excessPrompts} to continue.
+              </div>
+            )}
+
+            {saveError && excessPrompts === 0 && (
+              <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+                {saveError}
+              </div>
+            )}
+
+            <div className="mb-4">
+              <p className="text-sm font-medium">Your Prompt List</p>
+              <p className="text-xs text-muted-foreground">{totalPrompts} prompts total</p>
             </div>
 
-            <Button className="w-full" onClick={handleCreateOrgAndBrand} disabled={isLoading}>
+            <div className="rounded-lg border">
+              <div className="flex items-center gap-4 px-4 py-2.5 border-b bg-muted/50 text-xs font-medium text-muted-foreground">
+                <span className="flex-1">Topic</span>
+              </div>
+              {topicPrompts.map((tp, idx) => (
+                <TopicAccordion
+                  key={`${tp.topic}-${idx}`}
+                  data={tp}
+                  defaultOpen={idx === 0}
+                  onRemoveTopic={() => removeTopic(idx)}
+                  onAddPrompt={(p) => addPromptToTopic(idx, p)}
+                  onRemovePrompt={(pi) => removePromptFromTopic(idx, pi)}
+                />
+              ))}
+              {topicPrompts.length === 0 && (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  No prompts generated yet.
+                </div>
+              )}
+            </div>
+
+            <Button
+              className="mt-6 w-full"
+              onClick={handleSavePromptsAndContinue}
+              disabled={isLoading || totalPrompts === 0 || excessPrompts > 0}
+            >
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Setting up...
+                  Saving prompts...
                 </>
               ) : (
                 'Continue'
               )}
             </Button>
           </div>
+
+          <div className="flex mx-auto w-full max-w-4xl items-center justify-between mt-8">
+            <button
+              onClick={() => setStep(3)}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back
+            </button>
+            <StepDots current={4} total={totalSteps} />
+            <div className="w-12" />
+          </div>
         </div>
+      );
+    }
 
-        <div className="flex w-full max-w-md items-center justify-between">
-          <button
-            onClick={() => setStep(1)}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back
-          </button>
-          <StepDots current={2} total={totalSteps} />
-          <div className="w-12" />
-        </div>
-      </div>
-    );
-  }
+    // ── Step 5: Competitors ──
 
-  // ── Step 3: Topic Selection ──
+    if (step === 5) {
+      const selectedCompetitorCount = suggestedCompetitors.filter((c) => c.selected).length;
+      const hasSelectedCompetitors = selectedCompetitorCount > 0;
 
-  if (step === 3) {
-    return (
-      <div className="flex min-h-svh flex-col p-6 md:p-10">
-        <div className="mx-auto w-full max-w-4xl flex-1">
-          <BrandHeader name={brandName} domain={domain} />
+      return (
+        <div className="flex flex-col p-6 md:p-10">
+          <div className="mx-auto w-full max-w-lg flex-1">
+            <BrandHeader name={brandName} domain={domain} />
 
-          <div className="grid grid-cols-1 gap-10 lg:grid-cols-5">
-            <div className="lg:col-span-3 space-y-6">
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">Choose topics to monitor</h1>
-                <div className="flex items-center gap-2 mt-3">
-                  <span className="text-sm text-muted-foreground">Select up to 10 topics</span>
-                  <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full bg-primary rounded-full transition-all"
-                      style={{
-                        width: `${(selectedTopics.size / 10) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
+            <div className="mb-6">
+              <h1 className="text-2xl font-bold tracking-tight">Add your competitors</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                We&apos;ll track how often competitors appear alongside your brand in AI responses.
+              </p>
+            </div>
+
+            {loadingCompetitors ? (
+              <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
+                <Sparkles className="h-5 w-5 animate-pulse" />
+                <span
+                  key={competitorLoadingMsg}
+                  className="text-sm animate-in fade-in duration-500"
+                >
+                  {competitorLoadingMsg}
+                </span>
               </div>
-
-              {loadingTopics ? (
-                <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
-                  <Sparkles className="h-5 w-5 animate-pulse" />
-                  <span key={topicLoadingMsg} className="text-sm animate-in fade-in duration-500">
-                    {topicLoadingMsg}
-                  </span>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {topicSuggestError && (
-                    <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-                      <span>
-                        Couldn&apos;t fetch topic suggestions right now — add your own below.
-                      </span>
-                      <Button variant="outline" size="sm" onClick={fetchTopicSuggestions}>
-                        Try again
-                      </Button>
-                    </div>
-                  )}
-                  {suggestedTopics.map((topic) => {
-                    const isSelected = selectedTopics.has(topic);
-                    return (
-                      <button
-                        key={topic}
-                        onClick={() => toggleTopic(topic)}
+            ) : (
+              <div className="space-y-4">
+                {competitorSuggestError && (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+                    <span>
+                      Couldn&apos;t fetch competitor suggestions right now — add your own below.
+                    </span>
+                    <Button variant="outline" size="sm" onClick={fetchCompetitorSuggestions}>
+                      Try again
+                    </Button>
+                  </div>
+                )}
+                {suggestedCompetitors.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Suggested competitors
+                    </p>
+                    {suggestedCompetitors.map((c, idx) => (
+                      <div
+                        key={`${c.domain}-${idx}`}
                         className={cn(
-                          'flex items-center gap-3 w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors',
-                          isSelected
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border hover:border-muted-foreground/30',
+                          'flex items-center gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors',
+                          c.selected
+                            ? 'border-primary/50 bg-primary/5'
+                            : 'border-border hover:bg-muted/50',
                         )}
+                        onClick={() => toggleCompetitor(idx)}
                       >
                         <div
                           className={cn(
-                            'flex h-5 w-5 shrink-0 items-center justify-center rounded border',
-                            isSelected
-                              ? 'border-primary bg-primary text-primary-foreground'
+                            'flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors',
+                            c.selected
+                              ? 'bg-primary border-primary text-primary-foreground'
                               : 'border-muted-foreground/30',
                           )}
                         >
-                          {isSelected && <Check className="h-3 w-3" />}
+                          {c.selected && <Check className="h-3 w-3" />}
                         </div>
-                        {topic}
-                      </button>
-                    );
-                  })}
+                        {c.domain && (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={getFaviconUrl(c.domain)}
+                            alt=""
+                            className="h-5 w-5 rounded-sm"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{c.name}</p>
+                          {c.domain && (
+                            <p className="text-xs text-muted-foreground truncate">{c.domain}</p>
+                          )}
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeCompetitor(idx);
+                          }}
+                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-                  <div className="flex items-center gap-2 pt-2">
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Add manually
+                  </p>
+                  <div className="flex items-center gap-2">
                     <Input
-                      placeholder="Add custom topic..."
-                      value={customTopic}
-                      onChange={(e) => setCustomTopic(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && addCustomTopic()}
+                      placeholder="Company name"
+                      value={competitorName}
+                      onChange={(e) => setCompetitorName(e.target.value)}
+                      className="text-sm"
+                    />
+                    <Input
+                      placeholder="domain.com"
+                      value={competitorDomain}
+                      onChange={(e) => setCompetitorDomain(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addManualCompetitor()}
                       className="text-sm"
                     />
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={addCustomTopic}
-                      disabled={!customTopic.trim()}
+                      onClick={addManualCompetitor}
+                      disabled={!competitorName.trim()}
                     >
                       <Plus className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
-              )}
-
-              {topicSaveError && (
-                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-                  Couldn&apos;t save your topics — please try again.
-                </div>
-              )}
-
-              <Button
-                className="w-full"
-                disabled={selectedTopics.size === 0 || loadingPrompts || loadingTopics}
-                onClick={handleGeneratePrompts}
-              >
-                {loadingPrompts ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating prompts...
-                  </>
-                ) : (
-                  'Looks good'
-                )}
-              </Button>
-            </div>
-
-            <div className="lg:col-span-2">
-              <div className="rounded-xl border bg-card p-5 sticky top-10">
-                <h3 className="text-sm font-semibold mb-4">Topic Selection Tips</h3>
-                <div className="space-y-4">
-                  <div className="flex gap-3">
-                    <Check className="h-4 w-4 text-foreground shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium">5 prompts are created per topic</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        You can select up to 10 topics for a total of 50 prompts. More can be added
-                        anytime from the dashboard.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-3">
-                    <Check className="h-4 w-4 text-foreground shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium">Think like your customers</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Use terms your audience would search for when looking for products or
-                        services like yours.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-3">
-                    <Check className="h-4 w-4 text-foreground shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium">Keep it short</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Topics should be concise — we&apos;ll turn them into detailed prompts in the
-                        next step.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex mx-auto w-full max-w-4xl items-center justify-between mt-8">
-          <button
-            onClick={() => setStep(2)}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back
-          </button>
-          <StepDots current={3} total={totalSteps} />
-          <div className="w-12" />
-        </div>
-      </div>
-    );
-  }
-
-  // ── Step 4: Prompt Review ──
-
-  if (step === 4) {
-    return (
-      <div className="flex min-h-svh flex-col p-6 md:p-10">
-        <div className="mx-auto w-full max-w-4xl flex-1">
-          <BrandHeader name={brandName} domain={domain} />
-
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold tracking-tight">Review your prompts</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              These prompts will be sent to AI platforms daily. Feel free to edit, add, or remove
-              any before starting.
-            </p>
-          </div>
-
-          {promptGenError && (
-            <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-              Couldn&apos;t generate prompt suggestions right now — add your own to each topic below
-              to continue.
-            </div>
-          )}
-
-          {excessPrompts > 0 && (
-            <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-              Your plan includes up to {promptLimit} prompts — remove {excessPrompts} to continue.
-            </div>
-          )}
-
-          {saveError && excessPrompts === 0 && (
-            <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-              {saveError}
-            </div>
-          )}
-
-          <div className="mb-4">
-            <p className="text-sm font-medium">Your Prompt List</p>
-            <p className="text-xs text-muted-foreground">{totalPrompts} prompts total</p>
-          </div>
-
-          <div className="rounded-lg border">
-            <div className="flex items-center gap-4 px-4 py-2.5 border-b bg-muted/50 text-xs font-medium text-muted-foreground">
-              <span className="flex-1">Topic</span>
-            </div>
-            {topicPrompts.map((tp, idx) => (
-              <TopicAccordion
-                key={`${tp.topic}-${idx}`}
-                data={tp}
-                defaultOpen={idx === 0}
-                onRemoveTopic={() => removeTopic(idx)}
-                onAddPrompt={(p) => addPromptToTopic(idx, p)}
-                onRemovePrompt={(pi) => removePromptFromTopic(idx, pi)}
-              />
-            ))}
-            {topicPrompts.length === 0 && (
-              <div className="py-8 text-center text-sm text-muted-foreground">
-                No prompts generated yet.
-              </div>
-            )}
-          </div>
-
-          <Button
-            className="mt-6 w-full"
-            onClick={handleSavePromptsAndContinue}
-            disabled={isLoading || totalPrompts === 0 || excessPrompts > 0}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving prompts...
-              </>
-            ) : (
-              'Continue'
-            )}
-          </Button>
-        </div>
-
-        <div className="flex mx-auto w-full max-w-4xl items-center justify-between mt-8">
-          <button
-            onClick={() => setStep(3)}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back
-          </button>
-          <StepDots current={4} total={totalSteps} />
-          <div className="w-12" />
-        </div>
-      </div>
-    );
-  }
-
-  // ── Step 5: Competitors ──
-
-  if (step === 5) {
-    const selectedCompetitorCount = suggestedCompetitors.filter((c) => c.selected).length;
-    const hasSelectedCompetitors = selectedCompetitorCount > 0;
-
-    return (
-      <div className="flex min-h-svh flex-col p-6 md:p-10">
-        <div className="mx-auto w-full max-w-lg flex-1">
-          <BrandHeader name={brandName} domain={domain} />
-
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold tracking-tight">Add your competitors</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              We&apos;ll track how often competitors appear alongside your brand in AI responses.
-            </p>
-          </div>
-
-          {loadingCompetitors ? (
-            <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
-              <Sparkles className="h-5 w-5 animate-pulse" />
-              <span key={competitorLoadingMsg} className="text-sm animate-in fade-in duration-500">
-                {competitorLoadingMsg}
-              </span>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {competitorSuggestError && (
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-                  <span>
-                    Couldn&apos;t fetch competitor suggestions right now — add your own below.
-                  </span>
-                  <Button variant="outline" size="sm" onClick={fetchCompetitorSuggestions}>
-                    Try again
-                  </Button>
-                </div>
-              )}
-              {suggestedCompetitors.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Suggested competitors
-                  </p>
-                  {suggestedCompetitors.map((c, idx) => (
-                    <div
-                      key={`${c.domain}-${idx}`}
-                      className={cn(
-                        'flex items-center gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors',
-                        c.selected
-                          ? 'border-primary/50 bg-primary/5'
-                          : 'border-border hover:bg-muted/50',
-                      )}
-                      onClick={() => toggleCompetitor(idx)}
-                    >
-                      <div
-                        className={cn(
-                          'flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors',
-                          c.selected
-                            ? 'bg-primary border-primary text-primary-foreground'
-                            : 'border-muted-foreground/30',
-                        )}
-                      >
-                        {c.selected && <Check className="h-3 w-3" />}
-                      </div>
-                      {c.domain && (
-                        /* eslint-disable-next-line @next/next/no-img-element */
-                        <img
-                          src={getFaviconUrl(c.domain)}
-                          alt=""
-                          className="h-5 w-5 rounded-sm"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = 'none';
-                          }}
-                        />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{c.name}</p>
-                        {c.domain && (
-                          <p className="text-xs text-muted-foreground truncate">{c.domain}</p>
-                        )}
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeCompetitor(idx);
-                        }}
-                        className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Add manually
-                </p>
-                <div className="flex items-center gap-2">
-                  <Input
-                    placeholder="Company name"
-                    value={competitorName}
-                    onChange={(e) => setCompetitorName(e.target.value)}
-                    className="text-sm"
-                  />
-                  <Input
-                    placeholder="domain.com"
-                    value={competitorDomain}
-                    onChange={(e) => setCompetitorDomain(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addManualCompetitor()}
-                    className="text-sm"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={addManualCompetitor}
-                    disabled={!competitorName.trim()}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              <Button
-                className="w-full"
-                onClick={handleFinish}
-                disabled={savingCompetitors || !hasSelectedCompetitors}
-              >
-                {savingCompetitors ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Finishing setup...
-                  </>
-                ) : hasSelectedCompetitors ? (
-                  `Start tracking with ${selectedCompetitorCount} competitor${selectedCompetitorCount !== 1 ? 's' : ''}`
-                ) : (
-                  'Add a competitor to continue'
-                )}
-              </Button>
-            </div>
-          )}
-        </div>
-
-        <div className="flex mx-auto w-full max-w-lg items-center justify-between mt-8">
-          <button
-            onClick={() => setStep(4)}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back
-          </button>
-          <StepDots current={5} total={totalSteps} />
-          <div className="w-12" />
-        </div>
-      </div>
-    );
-  }
-
-  // ── Step 6: Choose Plan (cloud only) ──
-
-  if (step !== 6) return null;
-
-  return (
-    <div className="flex min-h-svh flex-col p-6 md:p-10">
-      <div className="mx-auto w-full max-w-2xl flex-1">
-        <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">Choose your plan</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Start your 14-day free trial — your card won&apos;t be charged until the trial ends.
-            Cancel anytime in Settings → Billing.
-          </p>
-        </div>
-
-        {/* Plan cards */}
-        <div className="grid gap-6 sm:grid-cols-2">
-          {SUBSCRIBABLE_PLANS.map((planId) => {
-            const plan = PLANS[planId];
-            const price = plan.pricing;
-            if (!price) return null;
-
-            const loading = checkoutLoading === planId;
-
-            return (
-              <div
-                key={planId}
-                className={cn(
-                  'relative flex flex-col rounded-2xl border bg-card p-6 shadow-sm transition-shadow hover:shadow-md',
-                  plan.highlighted && 'border-primary shadow-md ring-1 ring-primary/20',
-                )}
-              >
-                {plan.highlighted && (
-                  <Badge className="absolute -top-3 left-1/2 -translate-x-1/2">Most Popular</Badge>
-                )}
-
-                <div className="mb-4">
-                  <h3 className="text-lg font-semibold">{plan.name}</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">{plan.tagline}</p>
-                </div>
-
-                <div className="flex items-end gap-1 mb-4">
-                  <span className="text-4xl font-bold tracking-tight">${price.monthly}</span>
-                  <span className="mb-1 text-sm text-muted-foreground">/month</span>
-                </div>
 
                 <Button
                   className="w-full"
-                  variant={plan.highlighted ? 'default' : 'outline'}
-                  onClick={() => handleCheckout(planId)}
-                  disabled={checkoutLoading !== null}
+                  onClick={handleFinish}
+                  disabled={savingCompetitors || !hasSelectedCompetitors}
                 >
-                  {loading ? (
+                  {savingCompetitors ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Redirecting...
+                      Finishing setup...
                     </>
+                  ) : hasSelectedCompetitors ? (
+                    `Start tracking with ${selectedCompetitorCount} competitor${selectedCompetitorCount !== 1 ? 's' : ''}`
                   ) : (
-                    'Start Free Trial'
+                    'Add a competitor to continue'
                   )}
                 </Button>
-
-                <Separator className="my-5" />
-
-                <div className="flex-1 space-y-2.5 text-sm">
-                  <PlanFeatureItem>
-                    <strong>
-                      {plan.limits.maxBrands === -1 ? 'Unlimited' : plan.limits.maxBrands}
-                    </strong>{' '}
-                    {plan.limits.maxBrands === 1 ? 'brand' : 'brands'}
-                  </PlanFeatureItem>
-                  <PlanFeatureItem>
-                    <strong>
-                      {plan.limits.maxPrompts === -1 ? 'Unlimited' : plan.limits.maxPrompts}
-                    </strong>{' '}
-                    prompt locations tracked
-                  </PlanFeatureItem>
-                  <PlanFeatureItem>
-                    <strong>{plan.limits.maxPlatforms}</strong> answer engines
-                    {plan.limits.allowedScrapers && plan.limits.allowedScrapers.length > 0 && (
-                      <span className="text-muted-foreground font-normal">
-                        {' '}
-                        (
-                        {plan.limits.allowedScrapers
-                          .map((id) => {
-                            const s = ALL_SCRAPERS.find((s) => s.id === id);
-                            return s ? s.label.replace(/\s*\(Web\)/i, '') : id;
-                          })
-                          .join(' & ')}
-                        )
-                      </span>
-                    )}
-                  </PlanFeatureItem>
-                  <PlanFeatureItem>
-                    <strong>
-                      {plan.limits.maxTeamMembers === -1 ? 'Unlimited' : plan.limits.maxTeamMembers}
-                    </strong>{' '}
-                    team members
-                  </PlanFeatureItem>
-                  <PlanFeatureItem>
-                    {plan.limits.features.includes('daily_monitoring')
-                      ? 'Daily monitoring'
-                      : 'Weekly monitoring'}
-                  </PlanFeatureItem>
-                  {plan.limits.features.includes('competitor_tracking') && (
-                    <PlanFeatureItem>Competitor tracking</PlanFeatureItem>
-                  )}
-                  {plan.limits.features.includes('content_optimization') && (
-                    <PlanFeatureItem>Content optimization</PlanFeatureItem>
-                  )}
-                  {plan.limits.features.includes('advanced_analytics') && (
-                    <PlanFeatureItem>Advanced analytics</PlanFeatureItem>
-                  )}
-                  <PlanFeatureItem>Email support</PlanFeatureItem>
-                </div>
               </div>
-            );
-          })}
+            )}
+          </div>
+
+          <div className="flex mx-auto w-full max-w-lg items-center justify-between mt-8">
+            <button
+              onClick={() => setStep(4)}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back
+            </button>
+            <StepDots current={5} total={totalSteps} />
+            <div className="w-12" />
+          </div>
+        </div>
+      );
+    }
+
+    // ── Step 6: Choose Plan (cloud only) ──
+
+    if (step !== 6) return null;
+
+    return (
+      <div className="flex flex-col p-6 md:p-10">
+        <div className="mx-auto w-full max-w-2xl flex-1">
+          <div className="mb-8 text-center">
+            <h1 className="text-2xl font-bold tracking-tight">Choose your plan</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Start your 14-day free trial — your card won&apos;t be charged until the trial ends.
+              Cancel anytime in Settings → Billing.
+            </p>
+          </div>
+
+          {/* Plan cards */}
+          <div className="grid gap-6 sm:grid-cols-2">
+            {SUBSCRIBABLE_PLANS.map((planId) => {
+              const plan = PLANS[planId];
+              const price = plan.pricing;
+              if (!price) return null;
+
+              const loading = checkoutLoading === planId;
+
+              return (
+                <div
+                  key={planId}
+                  className={cn(
+                    'relative flex flex-col rounded-2xl border bg-card p-6 shadow-sm transition-shadow hover:shadow-md',
+                    plan.highlighted && 'border-primary shadow-md ring-1 ring-primary/20',
+                  )}
+                >
+                  {plan.highlighted && (
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      Most Popular
+                    </Badge>
+                  )}
+
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold">{plan.name}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">{plan.tagline}</p>
+                  </div>
+
+                  <div className="flex items-end gap-1 mb-4">
+                    <span className="text-4xl font-bold tracking-tight">${price.monthly}</span>
+                    <span className="mb-1 text-sm text-muted-foreground">/month</span>
+                  </div>
+
+                  <Button
+                    className="w-full"
+                    variant={plan.highlighted ? 'default' : 'outline'}
+                    onClick={() => handleCheckout(planId)}
+                    disabled={checkoutLoading !== null}
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Redirecting...
+                      </>
+                    ) : (
+                      'Start Free Trial'
+                    )}
+                  </Button>
+
+                  <Separator className="my-5" />
+
+                  <div className="flex-1 space-y-2.5 text-sm">
+                    <PlanFeatureItem>
+                      <strong>
+                        {plan.limits.maxBrands === -1 ? 'Unlimited' : plan.limits.maxBrands}
+                      </strong>{' '}
+                      {plan.limits.maxBrands === 1 ? 'brand' : 'brands'}
+                    </PlanFeatureItem>
+                    <PlanFeatureItem>
+                      <strong>
+                        {plan.limits.maxPrompts === -1 ? 'Unlimited' : plan.limits.maxPrompts}
+                      </strong>{' '}
+                      prompt locations tracked
+                    </PlanFeatureItem>
+                    <PlanFeatureItem>
+                      <strong>{plan.limits.maxPlatforms}</strong> answer engines
+                      {plan.limits.allowedScrapers && plan.limits.allowedScrapers.length > 0 && (
+                        <span className="text-muted-foreground font-normal">
+                          {' '}
+                          (
+                          {plan.limits.allowedScrapers
+                            .map((id) => {
+                              const s = ALL_SCRAPERS.find((s) => s.id === id);
+                              return s ? s.label.replace(/\s*\(Web\)/i, '') : id;
+                            })
+                            .join(' & ')}
+                          )
+                        </span>
+                      )}
+                    </PlanFeatureItem>
+                    <PlanFeatureItem>
+                      <strong>
+                        {plan.limits.maxTeamMembers === -1
+                          ? 'Unlimited'
+                          : plan.limits.maxTeamMembers}
+                      </strong>{' '}
+                      team members
+                    </PlanFeatureItem>
+                    <PlanFeatureItem>
+                      {plan.limits.features.includes('daily_monitoring')
+                        ? 'Daily monitoring'
+                        : 'Weekly monitoring'}
+                    </PlanFeatureItem>
+                    {plan.limits.features.includes('competitor_tracking') && (
+                      <PlanFeatureItem>Competitor tracking</PlanFeatureItem>
+                    )}
+                    {plan.limits.features.includes('content_optimization') && (
+                      <PlanFeatureItem>Content optimization</PlanFeatureItem>
+                    )}
+                    {plan.limits.features.includes('advanced_analytics') && (
+                      <PlanFeatureItem>Advanced analytics</PlanFeatureItem>
+                    )}
+                    <PlanFeatureItem>Email support</PlanFeatureItem>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="mt-6 text-center text-xs text-muted-foreground">
+            Need more?{' '}
+            <a href="mailto:sales@ansvisor.com" className="underline hover:text-foreground">
+              Contact sales
+            </a>{' '}
+            for Enterprise pricing.
+          </p>
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            Secure payments powered by Stripe.
+          </p>
         </div>
 
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          Need more?{' '}
-          <a href="mailto:sales@ansvisor.com" className="underline hover:text-foreground">
-            Contact sales
-          </a>{' '}
-          for Enterprise pricing.
-        </p>
-        <p className="mt-2 text-center text-xs text-muted-foreground">
-          Secure payments powered by Stripe.
-        </p>
+        <div className="flex mx-auto w-full max-w-2xl items-center justify-between mt-8">
+          <button
+            onClick={() => setStep(5)}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back
+          </button>
+          <StepDots current={6} total={totalSteps} />
+          <div className="w-12" />
+        </div>
       </div>
+    );
+  };
 
-      <div className="flex mx-auto w-full max-w-2xl items-center justify-between mt-8">
-        <button
-          onClick={() => setStep(5)}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back
-        </button>
-        <StepDots current={6} total={totalSteps} />
-        <div className="w-12" />
-      </div>
-    </div>
+  const previewTopics = step >= 4 ? topicPrompts.map((tp) => tp.topic) : Array.from(selectedTopics);
+
+  return (
+    <OnboardingFrame
+      width={initialLoading ? 'narrow' : (STEP_FRAME_WIDTH[step] ?? 'narrow')}
+      preview={
+        resumedPreview && !brandName ? (
+          <DashboardPreview {...resumedPreview} promptCount={0} />
+        ) : (
+          <DashboardPreview
+            brandName={brandName}
+            // The website field is typed live on step 1; waiting until it is
+            // submitted keeps the favicon lookup from firing on every keystroke.
+            domain={step >= 2 ? domain : ''}
+            topics={previewTopics}
+            promptCount={step >= 4 ? totalPrompts : 0}
+            competitors={suggestedCompetitors.filter((c) => c.selected)}
+          />
+        )
+      }
+    >
+      {renderStep()}
+    </OnboardingFrame>
   );
 }
 
