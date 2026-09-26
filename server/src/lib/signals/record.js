@@ -33,6 +33,10 @@ import { resolve } from '../../config/action-engine.js';
 
 const DAY_MS = 86_400_000;
 
+function utcDay(date) {
+  return date.toISOString().slice(0, 10);
+}
+
 // What counts as a signal is decided in config/action-engine.js (#818 phase
 // 2.5), alongside every other threshold the engine judges by.
 const { detection } = resolve();
@@ -361,14 +365,30 @@ export function classifyCitationGap({ brandCitations, leaderCitations }) {
  * One signal per brand, naming the weakest platform. A brand behind on three
  * engines has one condition to work on, not three rows.
  */
+/** Rows the platform comparison reads. Comfortably above the largest brand's
+ *  7-day volume; reaching it means the comparison cannot be trusted. */
+const PLATFORM_ROW_LIMIT = 20000;
+
 async function platformGapCandidates(brandId) {
   const { data, error } = await supabaseAdmin
     .from('insights_prompt_daily')
     .select('model_used, prompt_id, has_mention, has_citation')
     .eq('brand_id', brandId)
     .gte('day', new Date(Date.now() - detection.windowDays * DAY_MS).toISOString().slice(0, 10))
-    .limit(20000);
+    .limit(PLATFORM_ROW_LIMIT);
   if (error) throw new Error(error.message);
+
+  // The ceiling is generous — the largest brand uses 8k of it — but a brand
+  // that reaches it would have its platform rates computed from an arbitrary
+  // subset, and report a gap that is an artefact of where the read stopped.
+  // Say so rather than answer confidently from truncated data.
+  if ((data ?? []).length >= PLATFORM_ROW_LIMIT) {
+    logger.warn(
+      { brandId, rows: data.length, limit: PLATFORM_ROW_LIMIT },
+      '[signals] platform gap read hit its row ceiling — skipping rather than judging a subset',
+    );
+    return [];
+  }
 
   const byPlatform = new Map();
   for (const row of data ?? []) {
@@ -414,11 +434,22 @@ async function platformGapCandidates(brandId) {
  * tiny numbers.
  */
 async function competitorCitationGapCandidates(brandId, now) {
-  const from = new Date(now.getTime() - detection.windowDays * DAY_MS);
-  const { data, error } = await supabaseAdmin.rpc('ai_visibility_aggregates', {
+  // Read from the daily rollups, not the raw aggregate.
+  //
+  // #829 moved the pulse's wide windows off `ai_visibility_aggregates`
+  // because it rescans a brand's entire history and crosses the database's 8s
+  // statement timeout once a brand is large enough. This call site was missed,
+  // and it is worse placed than the ones that were fixed: the pulse's helper
+  // retries a timeout, this called the client directly, so the first timeout
+  // threw and took the whole nightly pass with it. On the largest brand it did
+  // so every night — 8.2s to fail here against 0.13s to succeed from the
+  // rollup.
+  const to = utcDay(now);
+  const from = utcDay(new Date(now.getTime() - (detection.windowDays - 1) * DAY_MS));
+  const { data, error } = await supabaseAdmin.rpc('ai_visibility_aggregates_daily', {
     p_brand_id: brandId,
-    p_date_from: from.toISOString(),
-    p_date_to: now.toISOString(),
+    p_day_from: from,
+    p_day_to: to,
   });
   if (error) throw new Error(error.message);
 
