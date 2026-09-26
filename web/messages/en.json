@@ -485,7 +485,10 @@
           "status_changed": "Status changed to {to}",
           "assigned": "Assignee changed",
           "due_date_set": "Due date updated",
-          "task_status": "Task updated"
+          "task_status": "Task updated",
+          "task_ran": "{task} — carried out automatically ({tool})",
+          "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
+          "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor"
         },
         "taskText": "Task text",
         "renameTask": "Rename task",

@@ -125,6 +125,23 @@ export function actionTexts(
 }
 
 /**
+ * A task named inside an event message.
+ *
+ * Events carry the task's key, not its text, because an event is a record of
+ * what happened and the text is a rendering choice that may change. Falls back
+ * to a humanised key so an event about a task this build has no copy for still
+ * reads as a sentence.
+ */
+export function eventTaskText(
+  key: unknown,
+  t: Translator & { has?: (key: string) => boolean },
+): string {
+  if (typeof key !== 'string' || key.length === 0) return '';
+  if (t.has && !t.has(key)) return humanizeKind(key).toLowerCase();
+  return t(key);
+}
+
+/**
  * What the drawer shows under "Goal".
  *
  * Its own helper rather than an inline `t(`${kind}.goal`)` in two components,

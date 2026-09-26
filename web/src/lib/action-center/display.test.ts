@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actionGoal, actionTexts, humanizeKind, taskText } from './display';
+import { actionGoal, actionTexts, eventTaskText, humanizeKind, taskText } from './display';
 import { ACTION_KINDS } from './registry';
 import type { ActionItem } from '@/lib/actions/action-center';
 import messages from '../../../messages/en.json';
@@ -99,5 +99,30 @@ describe('taskText', () => {
 
   it('renders nothing for a task with neither a title nor a key', () => {
     expect(taskText({ taskKey: null, title: null }, t)).toBe('');
+  });
+});
+
+/**
+ * Events carry a task's key, not its text: an event records what happened,
+ * and the text is a rendering choice that may change afterwards.
+ */
+describe('eventTaskText', () => {
+  const withHas = Object.assign((key: string) => t(key), {
+    has: (key: string) => key in messages.actionCenter.actionTasks,
+  });
+
+  it('renders the task in the reader’s language', () => {
+    expect(eventTaskText('validate', withHas)).toBe(messages.actionCenter.actionTasks.validate);
+  });
+
+  /** A task this build has no copy for still has to read as a sentence. */
+  it('humanises a key it has no copy for', () => {
+    expect(eventTaskText('seize_the_means', withHas)).toBe('seize the means');
+  });
+
+  it('renders nothing when the event named no task', () => {
+    expect(eventTaskText(undefined, withHas)).toBe('');
+    expect(eventTaskText('', withHas)).toBe('');
+    expect(eventTaskText(42, withHas)).toBe('');
   });
 });

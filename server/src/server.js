@@ -37,6 +37,7 @@ import { runGaSync } from './lib/ga-sync.js';
 import { runPageOpportunityDetection } from './lib/page-opportunities.js';
 import { runPulseCatchUp } from './lib/pulse/engine.js';
 import { runSignalCatchUp } from './lib/signals/pass.js';
+import { sweepTaskExecution } from './lib/action-center/execution/run.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -132,6 +133,16 @@ async function runDailyTracking() {
   // about why.
   runSignalCatchUp().catch((err) => {
     logger.error({ err }, '[signals] catch-up sweep crashed');
+  });
+
+  // Carry out the tasks the engine can carry out itself (#818 phase 7). Runs
+  // after the catch-up above so tonight's actions exist before anything tries
+  // to work on them. Bounded by a nightly ceiling; every attempt is recorded
+  // in action_task_runs and, where the user needs to know, in the action's own
+  // trail. Fire-and-forget like the rest — an unexecuted task is a step
+  // somebody does by hand, not a reason to hold up tracking.
+  sweepTaskExecution().catch((err) => {
+    logger.error({ err }, '[task-run] sweep crashed');
   });
 
   // Insights rollup backstop (00066). Re-refreshes the trailing days for
