@@ -853,11 +853,6 @@ function TrackingProgressBanner({
               ? 'Queued — starting automatically'
               : 'Analyzing prompts...'}
           </span>
-          {progress && (
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {progress.current}/{progress.total}
-            </span>
-          )}
         </div>
         <Button
           variant="ghost"
@@ -874,6 +869,13 @@ function TrackingProgressBanner({
         <p className="text-xs text-muted-foreground">
           Another analysis is running right now. Yours will begin the moment a slot opens up — no
           need to wait here, it&apos;ll keep going in the background.
+        </p>
+      )}
+
+      {jobStatus.status === 'active' && (
+        <p className="text-xs text-muted-foreground">
+          This can take anywhere from a few minutes to 1–2 hours at busy times. You can leave this
+          page — it keeps running in the background.
         </p>
       )}
 

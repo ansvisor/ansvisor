@@ -585,6 +585,9 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
             // Once delivery has gone quiet and only a negligible remainder is
             // left, "still processing" reads as a hang. Say what is actually
             // happening instead: the run is finishing, waiting on stragglers.
+            // The count is answers still outstanding, not platforms — keep the
+            // word "platform" away from it, or "10 platform checks" reads as
+            // ten engines on a brand that tracks six.
             const finishingUp =
               pending > 0 && quietPolls > 0 && pending <= tailRemainder(expectedSubmitted);
             job.progress({
@@ -592,10 +595,12 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
               total: totalTasks,
               promptText:
                 pending === 0
-                  ? 'All platform results received'
+                  ? 'All AI answers received'
                   : finishingUp
-                    ? `Finishing up — ${pending} platform check(s) haven't responded`
-                    : `Receiving platform results — ${pending} task(s) still processing...`,
+                    ? pending === 1
+                      ? 'Finishing up — waiting on the last answer'
+                      : `Finishing up — waiting on the last ${pending} answers`
+                    : `Receiving AI answers — ${pending} still in progress...`,
               model: null,
               platform: 'cloro',
             });
