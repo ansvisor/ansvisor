@@ -38,8 +38,18 @@ export function strongest(items, score, max) {
  * visible. Among the never-visible, demand and an existing page decide the
  * work: create content, optimise the page that exists, or map one.
  */
+/**
+ * Whether a prompt has been observed enough this window to judge: on enough
+ * days, or in enough answers. Answers only accumulate inside the window, so a
+ * prompt that qualifies on its first day still qualifies on its second — the
+ * signal it raises does not flap closed while the days catch up.
+ */
+export function isTracked(p, t) {
+  return p.cur_days >= t.promptMinDays || (p.cur_answers ?? 0) >= t.promptMinAnswers;
+}
+
 export function classifyPrompt(p, t) {
-  const tracked = p.cur_days >= t.promptMinDays;
+  const tracked = isTracked(p, t);
   const highValue = (p.volume ?? 0) >= t.highDemandVolume;
 
   if (tracked && p.cur_mention_days === 0 && p.prev_mention_days >= t.lostMentionMinDays) {
@@ -133,7 +143,7 @@ export function topicCoverage(prompts, t) {
       prompts: [],
       mapped: 0,
     };
-    if (p.cur_days >= t.promptMinDays) {
+    if (isTracked(p, t)) {
       e.tracked += 1;
       if (p.cur_mention_days > 0) e.visible += 1;
     }
@@ -207,7 +217,7 @@ export function classifyCompetitor(c, brandMentions, t) {
  * it is creating — and the specification gives those different definitions.
  */
 export function classifyCompetitorTopic(topic, competitorPresent, t) {
-  const contested = topic.prompts.filter((p) => p.cur_days >= t.promptMinDays);
+  const contested = topic.prompts.filter((p) => isTracked(p, t));
   if (contested.length < t.topicMinPrompts) return null;
   const lost = contested.filter(
     (p) => p.cur_mention_days === 0 && competitorPresent.has(p.prompt_id),

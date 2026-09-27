@@ -353,9 +353,20 @@ const FAMILIES = [
       const names = new Map((dims.competitors ?? []).map((x) => [x.key, x.name]));
       const leader = new Map();
       for (const row of compRows) {
-        if (row.cur_days < t.competitorPromptMinDays) continue;
+        if (
+          row.cur_days < t.competitorPromptMinDays &&
+          (row.cur_answers ?? 0) < t.promptMinAnswers
+        ) {
+          continue;
+        }
         const current = leader.get(row.prompt_id);
-        if (!current || row.cur_days > current.cur_days) leader.set(row.prompt_id, row);
+        // Most days, then most answers — a new brand's rows are all one day.
+        const ahead =
+          !current ||
+          row.cur_days > current.cur_days ||
+          (row.cur_days === current.cur_days &&
+            (row.cur_answers ?? 0) > (current.cur_answers ?? 0));
+        if (ahead) leader.set(row.prompt_id, row);
       }
       const present = new Set(leader.keys());
       const found = [];
@@ -364,7 +375,7 @@ const FAMILIES = [
         const contested = prompts.filter(
           (p) =>
             (p.volume ?? 0) >= t.highDemandVolume &&
-            p.cur_days >= t.promptMinDays &&
+            c.isTracked(p, t) &&
             p.cur_mention_days === 0 &&
             present.has(p.prompt_id),
         );

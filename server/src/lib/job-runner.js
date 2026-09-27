@@ -16,7 +16,7 @@ import {
 import { processTrackingJob } from '../workers/tracking-worker.js';
 import { processContentJob } from '../workers/content-worker.js';
 import { generatePulseForBrand } from './pulse/engine.js';
-import { runSignalPass } from './signals/pass.js';
+import { runFirstSignalPass, runSignalPass } from './signals/pass.js';
 import logger from './logger.js';
 
 // Concurrency counters (the default of 2 per queue is inherited from the Bull
@@ -112,6 +112,16 @@ export async function runTrackingJob(jobId, io) {
           'skipping daily pulse — tracking run was not stamped, window would be stale',
         );
       }
+    } else if (immediate && !promptId && !promptIds?.length && result?.stamped) {
+      // A new brand's first run is a manual one, and passes otherwise wait for
+      // the night. It gets one now so the Action Center is not empty until
+      // tomorrow; the function is a no-op for a brand that already had one.
+      runFirstSignalPass(brandId).catch((err) => {
+        logger.error(
+          { err, brandId },
+          '[signals] first pass failed — the nightly pass will cover it',
+        );
+      });
     }
   } catch (err) {
     if (abortController.signal.aborted) {

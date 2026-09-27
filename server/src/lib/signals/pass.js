@@ -30,16 +30,18 @@ import { generateActionsForBrand } from '../action-center/generate.js';
  */
 const CATCH_UP_WINDOW_MS = 36 * 60 * 60 * 1000;
 
-/** The brand's most recent stamped nightly run, or null. */
-async function latestStampedRun(brandId) {
-  const { data, error } = await supabaseAdmin
+/**
+ * The brand's most recent stamped run, or null. Nightly runs only unless
+ * `anySource` — a manual run is what a brand's first pass has to go on.
+ */
+async function latestStampedRun(brandId, { anySource = false } = {}) {
+  let query = supabaseAdmin
     .from('tracking_runs')
     .select('completed_at')
     .eq('brand_id', brandId)
-    .eq('source', 'cron')
-    .not('completed_at', 'is', null)
-    .order('completed_at', { ascending: false })
-    .limit(1);
+    .not('completed_at', 'is', null);
+  if (!anySource) query = query.eq('source', 'cron');
+  const { data, error } = await query.order('completed_at', { ascending: false }).limit(1);
   if (error) throw new Error(error.message);
   return data?.[0]?.completed_at ?? null;
 }
@@ -80,6 +82,34 @@ export async function runSignalPass(brandId, { runAt, now = new Date() } = {}) {
   if (error) throw new Error(error.message);
 
   return { trackingRunAt, signals: recorded, actions: generated };
+}
+
+/**
+ * A brand's first pass, straight after its first run.
+ *
+ * Passes ride the nightly run, and a brand's first run is not one: onboarding
+ * starts it by hand, so a new brand used to open an empty Action Center and
+ * wait for the next night — up to a day — before anything appeared. Its first
+ * complete run now gets a pass of its own.
+ *
+ * Only the first. Every later manual run would otherwise re-run detection on
+ * a refresh, and the nightly pass is what the rest of the engine is paced
+ * around.
+ *
+ * @param {string} brandId
+ */
+export async function runFirstSignalPass(brandId, { now = new Date() } = {}) {
+  const { data: passes, error } = await supabaseAdmin
+    .from('signal_runs')
+    .select('brand_id')
+    .eq('brand_id', brandId)
+    .limit(1);
+  if (error) throw new Error(error.message);
+  if ((passes ?? []).length > 0) return { skipped: 'not_first' };
+
+  const runAt = await latestStampedRun(brandId, { anySource: true });
+  if (!runAt) return { skipped: 'no_stamped_run' };
+  return runSignalPass(brandId, { runAt, now });
 }
 
 /**

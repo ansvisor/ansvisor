@@ -66,6 +66,39 @@ describe('classifyPrompt', () => {
   it('says nothing about a prompt tracked too few days to judge', () => {
     expect(c.classifyPrompt(prompt({ cur_days: t.promptMinDays - 1 }), t)).toBeNull();
   });
+
+  /**
+   * A new brand's first run: one day, every platform. Invisible on all of
+   * them is a finding, and waiting three days to say so left new brands with
+   * an empty Action Center.
+   */
+  it('judges a prompt answered enough times on a single day', () => {
+    expect(
+      c.classifyPrompt(prompt({ cur_days: 1, cur_answers: t.promptMinAnswers, volume: 500 }), t),
+    ).toBe('uncovered_demand');
+  });
+
+  it('still waits on a single day with too few answers', () => {
+    expect(
+      c.classifyPrompt(prompt({ cur_days: 1, cur_answers: t.promptMinAnswers - 1 }), t),
+    ).toBeNull();
+  });
+});
+
+describe('isTracked', () => {
+  it('accepts enough days, whatever the answers', () => {
+    expect(c.isTracked(prompt({ cur_days: t.promptMinDays, cur_answers: 0 }), t)).toBe(true);
+  });
+
+  it('accepts enough answers, whatever the days', () => {
+    expect(c.isTracked(prompt({ cur_days: 1, cur_answers: t.promptMinAnswers }), t)).toBe(true);
+  });
+
+  /** Rows from before the field existed read as no answers, not as an error. */
+  it('treats a missing answer count as none', () => {
+    const { cur_answers: _, ...row } = prompt({ cur_days: 1 });
+    expect(c.isTracked(row, t)).toBe(false);
+  });
 });
 
 describe('groupPrompts', () => {

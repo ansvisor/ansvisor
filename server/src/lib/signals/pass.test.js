@@ -13,7 +13,7 @@ vi.mock('../action-center/generate.js', () => ({
   generateActionsForBrand: (...a) => generateActionsForBrand(...a),
 }));
 
-import { runSignalCatchUp, runSignalPass } from './pass.js';
+import { runFirstSignalPass, runSignalCatchUp, runSignalPass } from './pass.js';
 
 const BRAND = 'brand-1';
 const NOW = new Date('2026-09-25T06:00:00Z');
@@ -25,10 +25,14 @@ const RUN_AT = '2026-09-25T02:13:00.000Z';
  */
 function mockDb({ runs = [], passes = [] } = {}) {
   const writes = [];
+  writes.filters = [];
   from.mockImplementation((table) => {
     const builder = {
       select: () => builder,
-      eq: () => builder,
+      eq: (column, value) => {
+        writes.filters.push({ table, column, value });
+        return builder;
+      },
       not: () => builder,
       gte: () => builder,
       order: () => builder,
@@ -178,5 +182,57 @@ describe('runSignalCatchUp', () => {
     });
 
     expect(await runSignalCatchUp({ now: NOW })).toEqual({ error: true });
+  });
+});
+
+/**
+ * A new brand's first run is a manual one. Passes otherwise wait for the
+ * nightly run, which left a new brand's Action Center empty for up to a day.
+ */
+describe('runFirstSignalPass', () => {
+  it('runs a pass against the manual run a brand with no passes just finished', async () => {
+    const writes = mockDb({ runs: [{ completed_at: RUN_AT }], passes: [] });
+
+    const result = await runFirstSignalPass(BRAND, { now: NOW });
+
+    expect(result.trackingRunAt).toBe(RUN_AT);
+    expect(generateActionsForBrand).toHaveBeenCalledOnce();
+    // Any source: the run it covers is not a nightly one.
+    expect(writes.filters).not.toContainEqual({
+      table: 'tracking_runs',
+      column: 'source',
+      value: 'cron',
+    });
+  });
+
+  /** Otherwise every manual refresh would re-run detection. */
+  it('does nothing for a brand that has had a pass', async () => {
+    const writes = mockDb({
+      runs: [{ completed_at: RUN_AT }],
+      passes: [{ brand_id: BRAND }],
+    });
+
+    expect(await runFirstSignalPass(BRAND, { now: NOW })).toEqual({ skipped: 'not_first' });
+    expect(recordSignalsForBrand).not.toHaveBeenCalled();
+    expect(writes).toHaveLength(0);
+  });
+
+  it('does nothing when no run has stamped', async () => {
+    mockDb({ runs: [], passes: [] });
+
+    expect(await runFirstSignalPass(BRAND, { now: NOW })).toEqual({ skipped: 'no_stamped_run' });
+    expect(recordSignalsForBrand).not.toHaveBeenCalled();
+  });
+
+  it('leaves the nightly pass reading nightly runs only', async () => {
+    const writes = mockDb({ runs: [{ completed_at: RUN_AT }] });
+
+    await runSignalPass(BRAND, { now: NOW });
+
+    expect(writes.filters).toContainEqual({
+      table: 'tracking_runs',
+      column: 'source',
+      value: 'cron',
+    });
   });
 });

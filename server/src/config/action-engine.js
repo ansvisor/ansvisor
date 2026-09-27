@@ -153,8 +153,14 @@ export const ENGINE_THRESHOLDS = Object.freeze({
     maxSignalsPerKind: 5,
 
     // Prompts
-    /** Tracked on at least this many days of the window before absence counts. */
+    /** Tracked on at least this many days of the window before absence counts… */
     promptMinDays: 3,
+    /**
+     * …or answered at least this many times, whichever days. A new brand's
+     * first run answers each prompt once per platform on a single day; this
+     * is what lets that run open actions instead of waiting three days.
+     */
+    promptMinAnswers: 5,
     /** Mentioned on at least this many days before, and not at all now, is a
      *  lost mention rather than noise. */
     lostMentionMinDays: 3,
