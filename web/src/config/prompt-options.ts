@@ -21,6 +21,9 @@ export const REGIONS = [
 
 export type RegionCode = (typeof REGIONS)[number]['code'];
 
+/** `items` for a Select over REGIONS — without it the trigger shows the raw code. */
+export const REGION_ITEMS = REGIONS.map((r) => ({ value: r.code, label: r.label }));
+
 /**
  * US states for optional state-level geo-targeting (#554). Static on purpose:
  * the UI must not depend on the scraping provider's states endpoint. Codes are
@@ -83,6 +86,8 @@ export const US_STATES = [
 
 export type UsStateCode = (typeof US_STATES)[number]['code'];
 
+export const US_STATE_ITEMS = US_STATES.map((s) => ({ value: s.code, label: s.label }));
+
 export const LANGUAGES = [
   { code: 'en', label: 'English (en)' },
   { code: 'de', label: 'German (de)' },
@@ -100,6 +105,8 @@ export const LANGUAGES = [
 ] as const;
 
 export type LanguageCode = (typeof LANGUAGES)[number]['code'];
+
+export const LANGUAGE_ITEMS = LANGUAGES.map((l) => ({ value: l.code, label: l.label }));
 
 export const MODEL_GROUPS = [
   {

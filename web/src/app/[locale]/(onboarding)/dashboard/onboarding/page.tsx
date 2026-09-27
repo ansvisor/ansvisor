@@ -12,7 +12,14 @@ import { addCompetitor, getCompetitors } from '@/lib/actions/competitor';
 import { getFaviconUrl } from '@/lib/favicon';
 import { slugify } from '@/lib/slug';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { REGIONS, US_STATES, LANGUAGES } from '@/config/prompt-options';
+import {
+  REGIONS,
+  US_STATES,
+  LANGUAGES,
+  REGION_ITEMS,
+  US_STATE_ITEMS,
+  LANGUAGE_ITEMS,
+} from '@/config/prompt-options';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
 import { isCloud, PLANS, SUBSCRIBABLE_PLANS, getPlan, type PlanId } from '@/config/plans';
 import { setPersonProperties, track } from '@/lib/analytics';
@@ -204,6 +211,9 @@ function TopicAccordion({
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
+
+// The state picker's own "no state" choice, ahead of the states themselves.
+const STATE_ITEMS = [{ value: 'nationwide', label: 'Nationwide (no state)' }, ...US_STATE_ITEMS];
 
 // Card width per step, matched to each step's content column; unlisted steps are forms.
 const STEP_FRAME_WIDTH: Record<number, 'medium' | 'wide'> = { 3: 'wide', 4: 'wide', 6: 'medium' };
@@ -1084,6 +1094,7 @@ export default function OnboardingPage() {
               <div className="space-y-2">
                 <Label>Region</Label>
                 <Select
+                  items={REGION_ITEMS}
                   value={region}
                   onValueChange={(v) => {
                     if (!v) return;
@@ -1108,6 +1119,7 @@ export default function OnboardingPage() {
                 <div className="space-y-2">
                   <Label>State (optional)</Label>
                   <Select
+                    items={STATE_ITEMS}
                     value={usState || 'nationwide'}
                     onValueChange={(v) => setUsState(!v || v === 'nationwide' ? '' : v)}
                   >
@@ -1131,7 +1143,11 @@ export default function OnboardingPage() {
 
               <div className="space-y-2">
                 <Label>Language</Label>
-                <Select value={language} onValueChange={(v) => v && setLanguage(v)}>
+                <Select
+                  items={LANGUAGE_ITEMS}
+                  value={language}
+                  onValueChange={(v) => v && setLanguage(v)}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>

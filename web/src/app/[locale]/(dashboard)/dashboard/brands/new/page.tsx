@@ -13,7 +13,14 @@ import { bootstrapBrandVolumes } from '@/lib/actions/volumes';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { getFaviconUrl } from '@/lib/favicon';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { REGIONS, US_STATES, LANGUAGES } from '@/config/prompt-options';
+import {
+  REGIONS,
+  US_STATES,
+  LANGUAGES,
+  REGION_ITEMS,
+  US_STATE_ITEMS,
+  LANGUAGE_ITEMS,
+} from '@/config/prompt-options';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
 import { getPlan, type PlanId } from '@/config/plans';
 import type { Brand } from '@/types';
@@ -191,6 +198,9 @@ function TopicAccordion({
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
+
+// The state picker's own "no state" choice, ahead of the states themselves.
+const STATE_ITEMS = [{ value: 'nationwide', label: 'Nationwide (no state)' }, ...US_STATE_ITEMS];
 
 const TOPIC_LOADING_MESSAGES = [
   'Researching topics for your brand...',
@@ -778,6 +788,7 @@ export default function NewBrandPage() {
             <div className="space-y-2">
               <Label>Region</Label>
               <Select
+                items={REGION_ITEMS}
                 value={region}
                 onValueChange={(v) => {
                   if (!v) return;
@@ -802,6 +813,7 @@ export default function NewBrandPage() {
               <div className="space-y-2">
                 <Label>State (optional)</Label>
                 <Select
+                  items={STATE_ITEMS}
                   value={usState || 'nationwide'}
                   onValueChange={(v) => setUsState(!v || v === 'nationwide' ? '' : v)}
                 >
@@ -825,7 +837,11 @@ export default function NewBrandPage() {
 
             <div className="space-y-2">
               <Label>Language</Label>
-              <Select value={language} onValueChange={(v) => v && setLanguage(v)}>
+              <Select
+                items={LANGUAGE_ITEMS}
+                value={language}
+                onValueChange={(v) => v && setLanguage(v)}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
