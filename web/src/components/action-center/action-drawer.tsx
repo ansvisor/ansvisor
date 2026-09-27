@@ -142,7 +142,7 @@ export function ActionDrawer({
 
   return (
     <Sheet open={Boolean(action)} onOpenChange={onOpenChange}>
-      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
+      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
         <SheetHeader className="border-b px-6 py-4">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge variant="outline" className="text-[10px]">
@@ -477,7 +477,9 @@ function TaskRow({
 
   return (
     <div className="rounded-md border">
-      <div className="flex items-center justify-between gap-2 px-3 py-2">
+      {/* Top-aligned so a task that wraps keeps its controls beside its first
+          line. */}
+      <div className="flex items-start justify-between gap-2 px-3 py-2">
         {isEditing ? (
           <Input
             autoFocus
@@ -505,7 +507,9 @@ function TaskRow({
             onClick={() => setDraft(text)}
             title={t('drawer.renameTask')}
             className={cn(
-              'min-w-0 flex-1 truncate rounded px-1 py-0.5 text-left text-sm hover:bg-muted/60',
+              // Wraps rather than truncates: a task is read, not scanned,
+              // and "Create a content brief for 23 prom…" says nothing.
+              'min-w-0 flex-1 rounded px-1 py-1 text-left text-sm leading-snug break-words hover:bg-muted/60',
               (task.status === 'completed' || UNCOUNTED_TASK_STATUSES.includes(task.status)) &&
                 'text-muted-foreground line-through',
             )}
