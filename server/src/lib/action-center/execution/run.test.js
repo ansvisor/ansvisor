@@ -264,7 +264,7 @@ describe('blockedReason', () => {
     expect(
       blockedReason({
         task: task(),
-        primitive: { mode: 'manual', tool: null },
+        primitive: { mode: 'human', tool: null },
         tool: null,
         sources: ALL,
         siblings: [],
