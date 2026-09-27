@@ -502,6 +502,36 @@ async function competitorCitationGapCandidates(brandId, now) {
   ];
 }
 
+const isOpen = (row) => row.status === 'new' || row.status === 'acknowledged';
+
+/**
+ * Over-cap findings that keep an open signal open. One with no open signal
+ * behind it raises nothing: the cap bounds what a night writes, and a
+ * resolved finding comes back only when it ranks again.
+ */
+export function overflowRefreshes(overflow, existing) {
+  return overflow
+    .map((candidate) => ({ candidate, current: existing.get(candidate.dedupKey) }))
+    .filter(({ current }) => current && isOpen(current));
+}
+
+/**
+ * Open, persistent signals nothing detected tonight — the ones that ended.
+ * `detected` must include over-cap findings: a finding that moved down a
+ * list has not ended. A kind whose detector failed was not looked at, and a
+ * condition nobody looked at has not ended either.
+ */
+export function signalsToResolve(existingRows, detected, unreadKinds) {
+  const detectedKeys = new Set(detected.map((candidate) => candidate.dedupKey));
+  return existingRows.filter(
+    (row) =>
+      KIND_META[row.kind]?.persistent &&
+      isOpen(row) &&
+      !detectedKeys.has(row.dedup_key) &&
+      !unreadKinds.has(row.kind),
+  );
+}
+
 export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) {
   const metrics = await computePulseMetrics(brandId, {
     windowDays: detection.windowDays,
@@ -540,6 +570,12 @@ export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) 
     ...library.candidates.filter((candidate) => !(outage && DECLINE_KINDS.has(candidate.kind))),
   );
   const unreadKinds = library.unreadKinds;
+  // Findings past their kind's cap: still true, so an open signal for one
+  // stays open and is refreshed. Nothing new is raised from them, and a
+  // resolved one is not reopened — that waits until it ranks again.
+  const overflow = library.overflow.filter(
+    (candidate) => !(outage && DECLINE_KINDS.has(candidate.kind)),
+  );
 
   // Existing rows decide insert vs update vs reopen. A brand's signal set is
   // small (tens), so reading it whole is cheaper than being clever.
@@ -555,6 +591,22 @@ export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) 
   let inserted = 0;
   let refreshed = 0;
   let reopened = 0;
+
+  for (const { candidate, current } of overflowRefreshes(overflow, existing)) {
+    const { error } = await supabaseAdmin
+      .from('signals')
+      .update({
+        last_detected_at: nowIso,
+        previous_value: candidate.previousValue,
+        current_value: candidate.currentValue,
+        change_value: candidate.changeValue,
+        payload: candidate.payload,
+        updated_at: nowIso,
+      })
+      .eq('id', current.id);
+    if (error) throw new Error(error.message);
+    refreshed += 1;
+  }
 
   for (const candidate of candidates) {
     const meta = KIND_META[candidate.kind];
@@ -608,18 +660,9 @@ export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) 
   // them. Not during an outage: the engine suppresses drop/loss warnings
   // while a platform is degraded, and treating that silence as recovery
   // would close real signals.
-  const detectedKeys = new Set(candidates.map((c) => c.dedupKey));
   const toResolve = outage
     ? []
-    : (existingRows ?? []).filter(
-        (row) =>
-          KIND_META[row.kind]?.persistent &&
-          (row.status === 'new' || row.status === 'acknowledged') &&
-          !detectedKeys.has(row.dedup_key) &&
-          // A kind whose detector failed tonight was not looked at, and a
-          // condition nobody looked at has not ended.
-          !unreadKinds.has(row.kind),
-      );
+    : signalsToResolve(existingRows ?? [], [...candidates, ...overflow], unreadKinds);
   for (const row of toResolve) {
     const { error } = await supabaseAdmin
       .from('signals')

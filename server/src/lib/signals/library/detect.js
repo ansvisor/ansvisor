@@ -98,13 +98,25 @@ function single(kind, key, entity, target, source, values = {}, extra = {}) {
   };
 }
 
-/** Keeps a kind's signals to the configured maximum, strongest first. */
-function cap(candidates, score) {
+/**
+ * Keeps a kind's signals to the configured maximum, strongest first.
+ *
+ * The rest are marked, not dropped: they were still detected, and the pass
+ * needs to know that. A finding that slips from fifth to sixth has not ended,
+ * and closing it would tell the user a problem was solved when it only moved
+ * down a list.
+ */
+export function cap(candidates, score) {
   const byKind = new Map();
   for (const candidate of candidates) {
     byKind.set(candidate.kind, [...(byKind.get(candidate.kind) ?? []), candidate]);
   }
-  return [...byKind.values()].flatMap((list) => c.strongest(list, score, t.maxSignalsPerKind));
+  return [...byKind.values()].flatMap((list) => {
+    const kept = new Set(c.strongest(list, score, t.maxSignalsPerKind));
+    return list.map((candidate) =>
+      kept.has(candidate) ? candidate : { ...candidate, overflow: true },
+    );
+  });
 }
 
 /**
@@ -725,25 +737,36 @@ export const LIBRARY_EMITTED_KINDS = Object.freeze(FAMILIES.flatMap((f) => f.kin
 /**
  * Run every family the brand has the data for.
  *
- * @returns {Promise<{ candidates: object[], unreadKinds: Set<string> }>}
+ * `overflow` holds findings still detected but past their kind's cap. They
+ * are not written as new signals; they keep open ones open.
+ *
+ * @returns {Promise<{ candidates: object[], overflow: object[], unreadKinds: Set<string> }>}
  */
 export async function libraryCandidates(brandId, { now = new Date(), sources } = {}) {
   const available = sources ?? (await resolveBrandSources(brandId));
   const ctx = context(brandId, now, available);
   const candidates = [];
+  const overflow = [];
   const unreadKinds = new Set();
 
   for (const family of FAMILIES) {
     if (!family.requires.every((s) => available.has(s))) continue;
     try {
-      candidates.push(...(await family.run(ctx)));
+      for (const found of await family.run(ctx)) {
+        if (found.overflow) {
+          const { overflow: _, ...candidate } = found;
+          overflow.push(candidate);
+        } else {
+          candidates.push(found);
+        }
+      }
     } catch (err) {
       // One family's read failing costs that family's night, not the pass.
       for (const kind of family.kinds) unreadKinds.add(kind);
       logger.error({ err, brandId, family: family.name }, '[signals] library family failed');
     }
   }
-  return { candidates, unreadKinds };
+  return { candidates, overflow, unreadKinds };
 }
 
 export { FAMILIES as LIBRARY_FAMILIES };
