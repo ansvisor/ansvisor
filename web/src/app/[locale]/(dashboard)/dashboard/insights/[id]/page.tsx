@@ -60,6 +60,13 @@ export default function ResultDetailPage() {
     };
   }, [resultId]);
 
+  // Opened in its own tab ("Open full page" on a prompt) there is no history
+  // to go back to, so Back leads to the result's prompt instead.
+  const goBack = () => {
+    if (window.history.length > 1) router.back();
+    else router.push(result ? `/dashboard/prompts/${result.promptId}` : '/dashboard/prompts');
+  };
+
   if (loading) {
     return (
       <div className="space-y-6 p-6">
@@ -78,7 +85,7 @@ export default function ResultDetailPage() {
         <p className="text-muted-foreground text-sm mt-1">
           This result may have been deleted or does not exist.
         </p>
-        <Button variant="outline" className="mt-6 gap-2" onClick={() => router.back()}>
+        <Button variant="outline" className="mt-6 gap-2" onClick={goBack}>
           <ArrowLeft className="h-4 w-4" />
           Go back
         </Button>
@@ -93,7 +100,7 @@ export default function ResultDetailPage() {
         variant="ghost"
         size="sm"
         className="gap-2 -ml-2 text-muted-foreground hover:text-foreground"
-        onClick={() => router.back()}
+        onClick={goBack}
       >
         <ArrowLeft className="h-4 w-4" />
         Back

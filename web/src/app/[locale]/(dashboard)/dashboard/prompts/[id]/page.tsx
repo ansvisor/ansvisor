@@ -600,6 +600,8 @@ function PlatformResultGroup({
                       <div className="mb-3 flex justify-end">
                         <Link
                           href={`/dashboard/insights/${result.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                         >
                           Open full page
