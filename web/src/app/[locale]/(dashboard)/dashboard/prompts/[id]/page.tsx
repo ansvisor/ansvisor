@@ -7,7 +7,6 @@ import { buildCitationDetailHref } from '@/components/citations/filter-bar';
 import {
   getPromptDetail,
   type PromptDetailData,
-  type PromptResultWithText,
   type PromptTopSource,
   type PromptTopSourceUrl,
 } from '@/lib/actions/tracking';
@@ -32,6 +31,7 @@ import {
   Clock,
   ExternalLink,
   Eye,
+  EyeOff,
   Loader2,
   MessageSquareText,
   Quote,
@@ -51,6 +51,7 @@ import {
   type PromptWorkStatus,
 } from '@/lib/actions/prompt-workflow';
 import { NotesCard, TargetUrlsCard } from './_workflow-cards';
+import { ResponseDetail } from '@/components/results/response-detail';
 import {
   CategoryBadge,
   DomainFavicon,
@@ -452,15 +453,22 @@ function PlatformResultGroup({
   group,
   expanded,
   onToggle,
-  onViewResult,
 }: {
   group: PlatformGroup;
   expanded: boolean;
   onToggle: () => void;
-  onViewResult: (result: PromptResultWithText) => void;
 }) {
   const visibleRuns = group.results.slice(0, 10);
   const hiddenCount = group.results.length - visibleRuns.length;
+  // Several answers can be open at once, so two runs can be read side by side.
+  const [openRuns, setOpenRuns] = useState<Set<string>>(new Set());
+  const toggleRun = (id: string) =>
+    setOpenRuns((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   return (
     <div className="overflow-hidden rounded-lg border">
@@ -516,63 +524,94 @@ function PlatformResultGroup({
             Runs
           </p>
           <div className="overflow-hidden rounded-md border bg-background">
-            {visibleRuns.map((result, index) => (
-              <div
-                key={result.id}
-                className={cn(
-                  'grid grid-cols-[1fr_auto] gap-3 px-3 py-2 text-xs sm:grid-cols-[1.4fr_90px_90px_100px_140px_40px] sm:items-center',
-                  index > 0 && 'border-t',
-                )}
-              >
-                <div className="min-w-0 text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {formatTimestamp(result.createdAt)}
-                  </span>
-                </div>
-                <div className="hidden text-center tabular-nums sm:block">
-                  <span className="font-semibold">{result.mentionCount}</span>
-                  <span className="text-muted-foreground"> mentions</span>
-                </div>
-                <div className="hidden text-center tabular-nums sm:block">
-                  <span className="font-semibold">{result.citationCount}</span>
-                  <span className="text-muted-foreground"> citations</span>
-                </div>
-                <div className="hidden justify-center sm:flex">
-                  <SentimentBadge sentiment={result.sentiment} />
-                </div>
-                <div className="hidden sm:block">
-                  <VisibilityBar score={result.visibilityScore} />
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 justify-self-end"
-                  title="View response detail"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onViewResult(result);
-                  }}
-                  aria-label="View response details"
-                >
-                  <Eye className="h-3.5 w-3.5" />
-                </Button>
-                <div className="col-span-2 flex flex-wrap items-center gap-2 sm:hidden">
-                  <span className="tabular-nums">
-                    <span className="font-semibold">{result.mentionCount}</span>
-                    <span className="text-muted-foreground"> mentions</span>
-                  </span>
-                  <span className="tabular-nums">
-                    <span className="font-semibold">{result.citationCount}</span>
-                    <span className="text-muted-foreground"> citations</span>
-                  </span>
-                  <SentimentBadge sentiment={result.sentiment} />
-                  <div className="w-32">
-                    <VisibilityBar score={result.visibilityScore} />
+            {visibleRuns.map((result, index) => {
+              const open = openRuns.has(result.id);
+              return (
+                <div key={result.id} className={cn(index > 0 && 'border-t')}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={open}
+                    onClick={() => toggleRun(result.id)}
+                    onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget) return;
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        toggleRun(result.id);
+                      }
+                    }}
+                    className={cn(
+                      'grid cursor-pointer grid-cols-[1fr_auto] gap-3 px-3 py-2 text-xs transition-colors hover:bg-muted/50 sm:grid-cols-[1.4fr_90px_90px_100px_140px_40px] sm:items-center',
+                      open && 'bg-muted/40',
+                    )}
+                  >
+                    <div className="min-w-0 text-muted-foreground">
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {formatTimestamp(result.createdAt)}
+                      </span>
+                    </div>
+                    <div className="hidden text-center tabular-nums sm:block">
+                      <span className="font-semibold">{result.mentionCount}</span>
+                      <span className="text-muted-foreground"> mentions</span>
+                    </div>
+                    <div className="hidden text-center tabular-nums sm:block">
+                      <span className="font-semibold">{result.citationCount}</span>
+                      <span className="text-muted-foreground"> citations</span>
+                    </div>
+                    <div className="hidden justify-center sm:flex">
+                      <SentimentBadge sentiment={result.sentiment} />
+                    </div>
+                    <div className="hidden sm:block">
+                      <VisibilityBar score={result.visibilityScore} />
+                    </div>
+                    <Button
+                      variant={open ? 'secondary' : 'ghost'}
+                      size="icon"
+                      className="h-6 w-6 justify-self-end"
+                      title={open ? 'Hide response' : 'Show response'}
+                      aria-label={open ? 'Hide response' : 'Show response'}
+                      aria-expanded={open}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleRun(result.id);
+                      }}
+                    >
+                      {open ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    </Button>
+                    <div className="col-span-2 flex flex-wrap items-center gap-2 sm:hidden">
+                      <span className="tabular-nums">
+                        <span className="font-semibold">{result.mentionCount}</span>
+                        <span className="text-muted-foreground"> mentions</span>
+                      </span>
+                      <span className="tabular-nums">
+                        <span className="font-semibold">{result.citationCount}</span>
+                        <span className="text-muted-foreground"> citations</span>
+                      </span>
+                      <SentimentBadge sentiment={result.sentiment} />
+                      <div className="w-32">
+                        <VisibilityBar score={result.visibilityScore} />
+                      </div>
+                    </div>
                   </div>
+
+                  {open && (
+                    <div className="border-t bg-background px-4 py-4">
+                      <div className="mb-3 flex justify-end">
+                        <Link
+                          href={`/dashboard/insights/${result.id}`}
+                          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          Open full page
+                          <ExternalLink className="h-3 w-3" />
+                        </Link>
+                      </div>
+                      <ResponseDetail result={result} variant="compact" />
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           {hiddenCount > 0 && (
             <p className="mt-2 text-xs text-muted-foreground">
@@ -867,7 +906,6 @@ export default function PromptDetailPage() {
                     group={group}
                     expanded={expanded.has(group.key)}
                     onToggle={() => togglePlatform(group.key)}
-                    onViewResult={(result) => router.push(`/dashboard/insights/${result.id}`)}
                   />
                 ))
               )}

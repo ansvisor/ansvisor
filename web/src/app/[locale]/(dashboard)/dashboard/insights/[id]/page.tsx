@@ -4,23 +4,14 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useRouter } from '@/i18n/navigation';
 import { getPromptResultById, type PromptResultWithText } from '@/lib/actions/tracking';
-import { Markdown } from '@/components/ui/markdown';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  ArrowLeft,
-  ExternalLink,
-  MessageSquareText,
-  Quote,
-  Eye,
-  Clock,
-  Search,
-} from 'lucide-react';
+import { ArrowLeft, ExternalLink, MessageSquareText, Quote, Eye, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
-import { formatSearchQuerySource, visibleSearchQueries } from './query-fanout';
+import { ResponseDetail } from '@/components/results/response-detail';
 
 function SentimentBadge({ sentiment }: { sentiment: 'positive' | 'neutral' | 'negative' }) {
   return (
@@ -95,8 +86,6 @@ export default function ResultDetailPage() {
     );
   }
 
-  const searchQueries = visibleSearchQueries(result.searchQueries);
-
   return (
     <div className="space-y-6 p-2 sm:p-6 max-w-5xl mx-auto">
       {/* Back button */}
@@ -162,65 +151,7 @@ export default function ResultDetailPage() {
         </Card>
       </div>
 
-      {/* AI Response */}
-      <Card>
-        <CardContent className="p-6">
-          <h2 className="text-sm font-medium mb-4">AI Response</h2>
-          <div className="prose prose-sm dark:prose-invert max-w-none">
-            <Markdown>{result.response}</Markdown>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Citations */}
-      {result.citations.length > 0 && (
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-sm font-medium mb-4">Citations ({result.citations.length})</h2>
-            <div className="space-y-2">
-              {result.citations.map((cite, i) => (
-                <a
-                  key={i}
-                  href={cite.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-start gap-3 rounded-lg border px-4 py-3 text-sm hover:bg-muted/50 transition-colors"
-                >
-                  <ExternalLink className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0">
-                    <p className="font-medium truncate">{cite.title || cite.url}</p>
-                    <p className="text-muted-foreground text-xs truncate">{cite.url}</p>
-                  </div>
-                </a>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Query fan-out */}
-      {searchQueries.length > 0 && (
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-sm font-medium mb-4">Query fan-out ({searchQueries.length})</h2>
-            <div className="space-y-2">
-              {searchQueries.map((item, i) => (
-                <div key={`${item.query}-${i}`} className="rounded-lg border px-4 py-3 text-sm">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex min-w-0 items-start gap-3">
-                      <Search className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
-                      <p className="min-w-0 break-words font-medium">{item.query.trim()}</p>
-                    </div>
-                    <Badge variant="secondary" className="w-fit shrink-0 text-xs">
-                      {formatSearchQuerySource(item, result.platform)}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <ResponseDetail result={result} variant="page" />
 
       {/* Timestamp */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground pb-6">
