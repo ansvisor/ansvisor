@@ -8,6 +8,7 @@ import { syncDomains } from '@/lib/actions/brand-domain';
 import { createTopics } from '@/lib/actions/topic';
 import { getPromptCapacity, savePromptSet } from '@/lib/actions/prompt';
 import { addCompetitor } from '@/lib/actions/competitor';
+import { addCompetitorChoice } from '@/lib/competitor-list';
 import { triggerTrackingCheck } from '@/lib/actions/tracking';
 import { bootstrapBrandVolumes } from '@/lib/actions/volumes';
 import { usePlanContext } from '@/components/providers/plan-provider';
@@ -609,15 +610,31 @@ export default function NewBrandPage() {
   };
 
   const addManualCompetitor = () => {
-    const name = competitorName.trim();
-    const d = competitorDomain
-      .trim()
-      .replace(/^https?:\/\//, '')
-      .replace(/\/+$/, '');
-    if (!name) return;
-    setSuggestedCompetitors((prev) => [...prev, { name, domain: d, selected: true }]);
+    const { list, duplicate } = addCompetitorChoice(
+      suggestedCompetitors,
+      competitorName,
+      competitorDomain,
+    );
+    if (list === suggestedCompetitors) return;
+    if (duplicate) toast.info(`${duplicate.name} is already in the list`);
+    setSuggestedCompetitors(list);
     setCompetitorName('');
     setCompetitorDomain('');
+  };
+
+  /**
+   * The list to save: a competitor still sitting in the manual fields — typed
+   * but never added with "+" — is one the user meant to track, so Finish
+   * takes it along instead of dropping it.
+   */
+  const takePendingCompetitor = () => {
+    const { list } = addCompetitorChoice(suggestedCompetitors, competitorName, competitorDomain);
+    if (list !== suggestedCompetitors) {
+      setSuggestedCompetitors(list);
+      setCompetitorName('');
+      setCompetitorDomain('');
+    }
+    return list;
   };
 
   // ── Step 5: final save ──
@@ -626,7 +643,7 @@ export default function NewBrandPage() {
     if (!createdBrand) return;
     setSavingCompetitors(true);
     try {
-      const selected = suggestedCompetitors.filter((c) => c.selected);
+      const selected = takePendingCompetitor().filter((c) => c.selected);
       if (selected.length > 0) {
         await Promise.all(
           selected.map((c) => addCompetitor(createdBrand.id, { name: c.name, domain: c.domain })),
@@ -1234,6 +1251,7 @@ export default function NewBrandPage() {
                     placeholder="Company name"
                     value={competitorName}
                     onChange={(e) => setCompetitorName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addManualCompetitor()}
                     className="text-sm"
                   />
                   <Input

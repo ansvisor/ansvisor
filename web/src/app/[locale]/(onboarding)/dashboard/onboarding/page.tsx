@@ -11,6 +11,7 @@ import { bootstrapBrandVolumes } from '@/lib/actions/volumes';
 import { addCompetitor, getCompetitors } from '@/lib/actions/competitor';
 import { getFaviconUrl } from '@/lib/favicon';
 import { slugify } from '@/lib/slug';
+import { addCompetitorChoice } from '@/lib/competitor-list';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
   REGIONS,
@@ -802,22 +803,38 @@ export default function OnboardingPage() {
   };
 
   const addManualCompetitor = () => {
-    const name = competitorName.trim();
-    const domain = competitorDomain
-      .trim()
-      .replace(/^https?:\/\//, '')
-      .replace(/\/+$/, '');
-    if (!name) return;
-    setSuggestedCompetitors((prev) => [...prev, { name, domain, selected: true }]);
+    const { list, duplicate } = addCompetitorChoice(
+      suggestedCompetitors,
+      competitorName,
+      competitorDomain,
+    );
+    if (list === suggestedCompetitors) return;
+    if (duplicate) toast.info(`${duplicate.name} is already in the list`);
+    setSuggestedCompetitors(list);
     setCompetitorName('');
     setCompetitorDomain('');
+  };
+
+  /**
+   * The list to save: a competitor still sitting in the manual fields — typed
+   * but never added with "+" — is one the user meant to track, so Finish
+   * takes it along instead of dropping it.
+   */
+  const takePendingCompetitor = () => {
+    const { list } = addCompetitorChoice(suggestedCompetitors, competitorName, competitorDomain);
+    if (list !== suggestedCompetitors) {
+      setSuggestedCompetitors(list);
+      setCompetitorName('');
+      setCompetitorDomain('');
+    }
+    return list;
   };
 
   // ── Step 5: final save ──
 
   const handleFinish = async () => {
     if (!createdBrand) return;
-    const selected = suggestedCompetitors.filter((c) => c.selected);
+    const selected = takePendingCompetitor().filter((c) => c.selected);
     if (selected.length === 0) {
       toast.error('Add at least one competitor to continue.');
       return;
@@ -1556,6 +1573,7 @@ export default function OnboardingPage() {
                       placeholder="Company name"
                       value={competitorName}
                       onChange={(e) => setCompetitorName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addManualCompetitor()}
                       className="text-sm"
                     />
                     <Input
