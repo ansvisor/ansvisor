@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +14,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Combobox,
+  ComboboxCollection,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+  ComboboxValue,
+} from '@/components/ui/combobox';
 import {
   Dialog,
   DialogClose,
@@ -53,6 +64,8 @@ import {
   generateOpportunities,
   getGenerationJobStatus,
   getOpportunities,
+  getOpportunityPrompts,
+  type OpportunityPrompt,
   updateOpportunityStatus,
   sendToWebhook,
   bulkSendToWebhook,
@@ -142,6 +155,15 @@ function KpiCard({
   );
 }
 
+const ALL_PROMPTS = '__all__';
+
+interface PromptFilterItem {
+  value: string;
+  label: string;
+  /** Opportunities for this prompt; null on the "All prompts" row. */
+  count: number | null;
+}
+
 export default function ContentPage() {
   const t = useTranslations('content');
   const tCommon = useTranslations('common');
@@ -158,6 +180,14 @@ export default function ContentPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [impactFilter, setImpactFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  // The prompt filter (#836) lives in the URL as ?prompt=<id> so a filtered
+  // view can be linked to. It is read after mount — useSearchParams would need
+  // a Suspense boundary around the page — and loading waits for it, so a
+  // linked view never flashes the unfiltered list first.
+  const [promptFilter, setPromptFilter] = useState('');
+  const [urlRead, setUrlRead] = useState(false);
+  // null until loaded for the current brand.
+  const [promptOptions, setPromptOptions] = useState<OpportunityPrompt[] | null>(null);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkSending, setBulkSending] = useState(false);
@@ -176,11 +206,12 @@ export default function ContentPage() {
   // pager instead of the length of whatever page happens to be loaded.
   const pager = usePagination(
     total,
-    `${statusFilter}|${impactFilter}|${typeFilter}|${debouncedSearch}`,
+    `${statusFilter}|${impactFilter}|${typeFilter}|${promptFilter}|${debouncedSearch}`,
   );
 
   const loadData = useCallback(
     async (silent = false, isCancelled?: () => boolean) => {
+      if (!urlRead) return;
       if (!activeBrandId) {
         setOpportunities([]);
         setTotal(0);
@@ -200,6 +231,7 @@ export default function ContentPage() {
         if (statusFilter !== 'all') filters.status = statusFilter;
         if (impactFilter !== 'all') filters.impact = impactFilter;
         if (typeFilter !== 'all') filters.type = typeFilter;
+        if (promptFilter) filters.promptId = promptFilter;
         if (debouncedSearch.trim()) {
           filters.q = debouncedSearch.trim();
         }
@@ -231,7 +263,17 @@ export default function ContentPage() {
         }
       }
     },
-    [activeBrandId, statusFilter, impactFilter, typeFilter, pager.start, debouncedSearch, t],
+    [
+      urlRead,
+      activeBrandId,
+      statusFilter,
+      impactFilter,
+      typeFilter,
+      promptFilter,
+      pager.start,
+      debouncedSearch,
+      t,
+    ],
   );
 
   useEffect(() => {
@@ -241,6 +283,49 @@ export default function ContentPage() {
 
     return () => clearTimeout(timer);
   }, [search]);
+
+  useEffect(() => {
+    setPromptFilter(new URLSearchParams(window.location.search).get('prompt') ?? '');
+    setUrlRead(true);
+  }, []);
+
+  const selectPrompt = useCallback((promptId: string) => {
+    setPromptFilter(promptId);
+    const url = new URL(window.location.href);
+    if (promptId) url.searchParams.set('prompt', promptId);
+    else url.searchParams.delete('prompt');
+    window.history.replaceState(window.history.state, '', url);
+  }, []);
+
+  const loadPromptOptions = useCallback(
+    async (isCancelled?: () => boolean) => {
+      if (!activeBrandId) return;
+      try {
+        const options = await getOpportunityPrompts(activeBrandId);
+        if (!isCancelled?.()) setPromptOptions(options);
+      } catch {
+        // The filter is a convenience; without its options it just stays hidden.
+        if (!isCancelled?.()) setPromptOptions([]);
+      }
+    },
+    [activeBrandId],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    setPromptOptions(null);
+    loadPromptOptions(() => cancelled);
+    return () => {
+      cancelled = true;
+    };
+  }, [loadPromptOptions]);
+
+  // A prompt id from another brand, or one whose prompt was deleted, would
+  // filter to nothing while the picker shows "All prompts". Drop it.
+  useEffect(() => {
+    if (!promptFilter || promptOptions === null) return;
+    if (!promptOptions.some((o) => o.promptId === promptFilter)) selectPrompt('');
+  }, [promptFilter, promptOptions, selectPrompt]);
 
   useEffect(() => {
     let cancelled = false;
@@ -270,6 +355,7 @@ export default function ContentPage() {
               setGenerating(false);
               toast.success(t('generatedToast', { count: status.result?.generated ?? 0 }));
               loadData();
+              loadPromptOptions();
               break;
             }
 
@@ -296,7 +382,7 @@ export default function ContentPage() {
 
       poll();
     },
-    [loadData, t],
+    [loadData, loadPromptOptions, t],
   );
   // Restore generation state from localStorage on mount
   useEffect(() => {
@@ -440,6 +526,19 @@ export default function ContentPage() {
       (o.description || '').toLowerCase().includes(search.toLowerCase()),
   );
 
+  // `{ value, label }` items let the Combobox filter and display on its own.
+  // One prompt has nothing to narrow, so the picker only appears for two or
+  // more — or while a filter is set, so it can still be cleared.
+  const promptItems = useMemo<PromptFilterItem[]>(
+    () => [
+      { value: ALL_PROMPTS, label: tCommon('allPrompts'), count: null },
+      ...(promptOptions ?? []).map((o) => ({ value: o.promptId, label: o.text, count: o.count })),
+    ],
+    [promptOptions, tCommon],
+  );
+  const showPromptFilter = (promptOptions?.length ?? 0) >= 2 || promptFilter !== '';
+  const promptFilterTitle = promptItems.find((item) => item.value === promptFilter)?.label;
+
   /** How many of the selected rows would lose a generated brief (#731). */
   const selectedWithBrief = opportunities.filter(
     (o) => selectedIds.has(o.id) && Boolean(o.brief),
@@ -454,12 +553,14 @@ export default function ContentPage() {
     statusFilter !== 'all' ||
     impactFilter !== 'all' ||
     typeFilter !== 'all' ||
+    promptFilter !== '' ||
     search.trim() !== '';
 
   const clearFilters = () => {
     setStatusFilter('all');
     setImpactFilter('all');
     setTypeFilter('all');
+    selectPrompt('');
     setSearch('');
   };
 
@@ -634,6 +735,40 @@ export default function ContentPage() {
                       <SelectItem value="earned">{t('type.earned')}</SelectItem>
                     </SelectContent>
                   </Select>
+                  {showPromptFilter && (
+                    <Combobox
+                      items={promptItems}
+                      value={
+                        promptItems.find((item) => item.value === (promptFilter || ALL_PROMPTS)) ??
+                        null
+                      }
+                      onValueChange={(item: PromptFilterItem | null) =>
+                        selectPrompt(!item || item.value === ALL_PROMPTS ? '' : item.value)
+                      }
+                    >
+                      <ComboboxTrigger className="h-8 w-56 text-xs" title={promptFilterTitle}>
+                        <ComboboxValue placeholder={tCommon('allPrompts')} />
+                      </ComboboxTrigger>
+                      <ComboboxContent>
+                        <ComboboxInput placeholder={tCommon('searchPrompts')} />
+                        <ComboboxList>
+                          <ComboboxEmpty>{tCommon('noPromptsMatch')}</ComboboxEmpty>
+                          <ComboboxCollection>
+                            {(item: PromptFilterItem) => (
+                              <ComboboxItem key={item.value} value={item} title={item.label}>
+                                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                                {item.count !== null && (
+                                  <span className="ml-2 shrink-0 tabular-nums text-muted-foreground">
+                                    {item.count}
+                                  </span>
+                                )}
+                              </ComboboxItem>
+                            )}
+                          </ComboboxCollection>
+                        </ComboboxList>
+                      </ComboboxContent>
+                    </Combobox>
+                  )}
                 </div>
               </div>
             </CardHeader>

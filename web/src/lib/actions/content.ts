@@ -83,6 +83,7 @@ export async function getOpportunities(
     impact?: string;
     q?: string;
     type?: string;
+    promptId?: string;
     limit?: number;
     offset?: number;
     sort?: string;
@@ -103,6 +104,7 @@ export async function getOpportunities(
   if (filters?.impact) params.set('impact', filters.impact);
   if (filters?.q) params.set('q', filters.q);
   if (filters?.type) params.set('type', filters.type);
+  if (filters?.promptId) params.set('prompt_id', filters.promptId);
   if (filters?.limit) params.set('limit', String(filters.limit));
   if (filters?.offset) params.set('offset', String(filters.offset));
   if (filters?.sort) params.set('sort', filters.sort);
@@ -121,6 +123,31 @@ export async function getOpportunities(
   }
 
   return res.json();
+}
+
+export interface OpportunityPrompt {
+  promptId: string;
+  text: string;
+  /** Opportunities generated for this prompt, across every status. */
+  count: number;
+}
+
+/** The prompts a brand's opportunities belong to, most opportunities first (#836). */
+export async function getOpportunityPrompts(brandId: string): Promise<OpportunityPrompt[]> {
+  const session = await getSession();
+
+  const res = await fetch(`${AEO_SERVER_URL}/api/content/brand/${brandId}/prompts`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error: ${res.status}`);
+  }
+
+  const body = (await res.json()) as { prompts: OpportunityPrompt[] };
+  return body.prompts;
 }
 
 export async function getOpportunity(id: string): Promise<ContentOpportunity> {

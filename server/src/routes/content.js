@@ -13,6 +13,7 @@ import { runContentJob } from '../lib/job-runner.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import { getLanguageName } from '../lib/languages.js';
 import supabaseAdmin from '../config/supabase.js';
+import { selectInChunks } from '../lib/chunked-in.js';
 import {
   assertBrandAccess,
   assertOpportunitiesAccess,
@@ -129,7 +130,17 @@ router.get('/job/:jobId', async (req, res) => {
 router.get('/brand/:brandId', async (req, res) => {
   try {
     const { brandId } = req.params;
-    const { status, impact, type, q, limit = 50, offset = 0, sort = 'score' } = req.query;
+    await assertBrandAccess(brandId, req.user.id);
+    const {
+      status,
+      impact,
+      type,
+      q,
+      prompt_id: promptId,
+      limit = 50,
+      offset = 0,
+      sort = 'score',
+    } = req.query;
 
     const search = q ? String(q).replace(/[,()]/g, ' ') : null;
     const applyFilters = (query) => {
@@ -145,6 +156,10 @@ router.get('/brand/:brandId', async (req, res) => {
 
       if (type) {
         filteredQuery = filteredQuery.eq('type', type);
+      }
+
+      if (promptId) {
+        filteredQuery = filteredQuery.eq('prompt_id', promptId);
       }
 
       if (q) {
@@ -176,6 +191,7 @@ router.get('/brand/:brandId', async (req, res) => {
       p_impact: impact ? String(impact) : null,
       p_type: type ? String(type) : null,
       p_q: search,
+      p_prompt_id: promptId ? String(promptId) : null,
     });
 
     const [{ data, error: dataError, count }, { data: aggregateData, error: aggregateError }] =
@@ -209,10 +225,59 @@ router.get('/brand/:brandId', async (req, res) => {
   } catch (error) {
     req.log.error({ err: error }, 'list opportunities error');
 
-    return res.status(500).json({
+    return res.status(error.status || 500).json({
       error: 'Failed to list opportunities',
       details: error.message,
     });
+  }
+});
+
+const FACET_PAGE_SIZE = 1000;
+
+/**
+ * GET /api/content/brand/:brandId/prompts
+ * The prompts this brand's opportunities belong to, with how many each has,
+ * most first — the options for the Content page's prompt filter (#836).
+ * Opportunities whose prompt was deleted are left out: there is nothing to
+ * name them by.
+ */
+router.get('/brand/:brandId/prompts', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    await assertBrandAccess(brandId, req.user.id);
+
+    // Paged: PostgREST caps a response at 1,000 rows and a large brand holds
+    // more opportunities than that.
+    const counts = new Map();
+    for (let from = 0; ; from += FACET_PAGE_SIZE) {
+      const { data, error } = await supabaseAdmin
+        .from('content_opportunities')
+        .select('prompt_id')
+        .eq('brand_id', brandId)
+        .not('prompt_id', 'is', null)
+        .order('id')
+        .range(from, from + FACET_PAGE_SIZE - 1);
+      if (error) throw new Error(error.message);
+      for (const row of data || []) {
+        counts.set(row.prompt_id, (counts.get(row.prompt_id) || 0) + 1);
+      }
+      if (!data || data.length < FACET_PAGE_SIZE) break;
+    }
+
+    const { data: prompts, error: promptError } = await selectInChunks(
+      [...counts.keys()],
+      (chunk) => supabaseAdmin.from('prompts').select('id, text').in('id', chunk),
+    );
+    if (promptError) throw new Error(promptError.message);
+
+    return res.json({
+      prompts: (prompts || [])
+        .map((p) => ({ promptId: p.id, text: p.text, count: counts.get(p.id) || 0 }))
+        .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text)),
+    });
+  } catch (error) {
+    req.log.error({ err: error }, 'list opportunity prompts error');
+    return res.status(error.status || 500).json({ error: 'Failed to list opportunity prompts' });
   }
 });
 
