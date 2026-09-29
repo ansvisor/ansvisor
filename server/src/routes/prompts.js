@@ -125,6 +125,18 @@ async function loadSuggestionContext(brandId) {
   };
 }
 
+/**
+ * Suggestions generated per refresh. The schema floor sits well below it: a
+ * model that returns a few short of the target should still produce a list,
+ * not fail the whole refresh on validation.
+ */
+const SUGGESTIONS_PER_REFRESH = 25;
+const MIN_SUGGESTIONS = 15;
+// Floors for suggestions drawn from the brand's own data, when it has any —
+// about two in five from Search Console and one in four from Analytics.
+const MIN_FROM_SEARCH_CONSOLE = 10;
+const MIN_FROM_ANALYTICS = 6;
+
 const newSuggestionSchema = z.object({
   suggestions: z
     .array(
@@ -171,8 +183,8 @@ const newSuggestionSchema = z.object({
           ),
       }),
     )
-    .min(6)
-    .max(12),
+    .min(MIN_SUGGESTIONS)
+    .max(SUGGESTIONS_PER_REFRESH),
 });
 
 const SUGGESTION_TTL_HOURS = 48;
@@ -198,7 +210,8 @@ async function generateSuggestions(brandId) {
   const system = `You are an AEO (Answer Engine Optimization) strategist. You suggest NEW search prompts a brand should track in AI engines (ChatGPT, Perplexity, Gemini, Claude). Current year: ${currentYear}.
 
 RULES:
-- Suggest 8 prompts that are NOT already tracked by this brand.
+- Suggest ${SUGGESTIONS_PER_REFRESH} prompts that are NOT already tracked by this brand.
+- Every suggestion must be distinct: no two may be rephrasings of the same question.
 - Each prompt: 30-100 chars, generic, no brand names, written in ${langName}.
 - Group each prompt under a short topic label (2-4 words). Reuse existing topic labels when they fit; otherwise create a clean new one.
 - Pick prompts where the brand could realistically appear AND where its competitors are already getting cited.
@@ -208,12 +221,12 @@ RULES:
 - Diversity: mix comparison, how-to, best-of, recommendation, and problem-solving intents.${
     gscCandidates.length
       ? `
-- REAL SEARCH DEMAND: a list of actual Google Search Console queries for this brand is provided — proven demand the brand does not track yet. Derive at least ${Math.min(4, gscCandidates.length)} suggestions from those queries: rephrase each raw query as a natural question a user would ask an AI assistant, preserving its intent exactly (never invent a different topic). For each such suggestion set sourceQuery to the EXACT original query string, verbatim. Never set sourceQuery on suggestions that did not come from that list.`
+- REAL SEARCH DEMAND: a list of actual Google Search Console queries for this brand is provided — proven demand the brand does not track yet. Derive at least ${Math.min(MIN_FROM_SEARCH_CONSOLE, gscCandidates.length)} suggestions from those queries: rephrase each raw query as a natural question a user would ask an AI assistant, preserving its intent exactly (never invent a different topic). For each such suggestion set sourceQuery to the EXACT original query string, verbatim. Never set sourceQuery on suggestions that did not come from that list.`
       : ''
   }${
     gaCandidates.length
       ? `
-- THE BRAND'S OWN ANALYTICS: a list of pages from this brand's Google Analytics is provided, each with what the page itself says it is about. Derive at least ${Math.min(3, gaCandidates.length)} suggestions from those pages. Write the prompt at the level of the need the page serves, NOT the page's product name or URL — a model number nobody types into an AI assistant becomes the category question that leads to it ("best noise-cancelling headphones", not "ANS-2400 Pro Black"). For each such suggestion set sourcePage to the EXACT landing page path, verbatim. Never set sourcePage on suggestions that did not come from that list, and never set both sourceQuery and sourcePage on the same suggestion.`
+- THE BRAND'S OWN ANALYTICS: a list of pages from this brand's Google Analytics is provided, each with what the page itself says it is about. Derive at least ${Math.min(MIN_FROM_ANALYTICS, gaCandidates.length)} suggestions from those pages. Write the prompt at the level of the need the page serves, NOT the page's product name or URL — a model number nobody types into an AI assistant becomes the category question that leads to it ("best noise-cancelling headphones", not "ANS-2400 Pro Black"). For each such suggestion set sourcePage to the EXACT landing page path, verbatim. Never set sourcePage on suggestions that did not come from that list, and never set both sourceQuery and sourcePage on the same suggestion.`
       : ''
   }`;
 
@@ -271,7 +284,7 @@ ${gaCandidates
       : ''
   }
 
-Suggest the next 8 prompts this brand should start tracking, with topic, reason and a calibrated monthly AI search volume (estVolume).`;
+Suggest the next ${SUGGESTIONS_PER_REFRESH} prompts this brand should start tracking, with topic, reason and a calibrated monthly AI search volume (estVolume).`;
 
   const promptModel = process.env.PROMPT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
   const aiModel = resolveModel(promptModel);
