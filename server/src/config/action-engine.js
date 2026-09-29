@@ -153,6 +153,13 @@ export const ENGINE_THRESHOLDS = Object.freeze({
     maxSignalsPerKind: 5,
 
     // Prompts
+    /**
+     * How long an open signal may go undetected before it is closed. Longer
+     * than a day, so one quiet night — a value dipping just under its
+     * threshold and back — does not close a signal and raise it again the
+     * next morning. Two missed nights close it.
+     */
+    resolveAfterHours: 36,
     /** Tracked on at least this many days of the window before absence counts… */
     promptMinDays: 3,
     /**

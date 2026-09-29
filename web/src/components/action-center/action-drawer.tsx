@@ -56,7 +56,7 @@ import {
 } from '@/lib/action-center/display';
 import { signalTexts } from '@/lib/signals/display';
 import { isKpiKey } from '@/lib/kpis/registry';
-import { ImpactDots, SignalStatusBadge } from './signal-table';
+import { ImpactDots, isSuperseded, SignalStatusBadge } from './signal-table';
 import { ActionIcon } from './action-table';
 import { cn } from '@/lib/utils';
 
@@ -317,7 +317,7 @@ export function ActionDrawer({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate text-xs font-medium">{st.title}</p>
-                      <SignalStatusBadge status={signal.status} />
+                      <SignalStatusBadge status={signal.status} superseded={isSuperseded(signal)} />
                     </div>
                     <p className="truncate text-xs text-muted-foreground">{st.description}</p>
                   </button>

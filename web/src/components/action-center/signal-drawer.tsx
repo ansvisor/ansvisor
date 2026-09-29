@@ -17,7 +17,13 @@ import type { Signal } from '@/lib/actions/signals';
 import { SIGNAL_KINDS, type SignalStatus } from '@/lib/signals/registry';
 import { signalAffected, signalTexts } from '@/lib/signals/display';
 import { isKpiKey } from '@/lib/kpis/registry';
-import { ImpactDots, SignalKindIcon, SignalStatusBadge, SourceList } from './signal-table';
+import {
+  ImpactDots,
+  isSuperseded,
+  SignalKindIcon,
+  SignalStatusBadge,
+  SourceList,
+} from './signal-table';
 
 /**
  * Signal detail: the evidence view. Deliberately light in v1 — identity,
@@ -82,7 +88,7 @@ export function SignalDrawer({
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-4 text-sm">
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             <DetailItem label={t('drawer.status')}>
-              <SignalStatusBadge status={signal.status} />
+              <SignalStatusBadge status={signal.status} superseded={isSuperseded(signal)} />
             </DetailItem>
             <DetailItem label={t('drawer.source')}>
               <SourceList sources={signal.source} />

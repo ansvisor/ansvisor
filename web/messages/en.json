@@ -253,6 +253,7 @@
         "resolved": "Resolved",
         "dismissed": "Dismissed"
       },
+      "superseded": "Changed",
       "impact": {
         "high": "High",
         "medium": "Medium",

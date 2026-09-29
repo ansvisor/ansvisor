@@ -30,7 +30,7 @@ import supabaseAdmin from '../../config/supabase.js';
 import { computePulseMetrics } from '../pulse/metrics.js';
 import { logger } from '../logger.js';
 import { resolve } from '../../config/action-engine.js';
-import { LIBRARY_KINDS } from './library/kinds.js';
+import { EXCLUSIVE_KIND_GROUPS, LIBRARY_KINDS } from './library/kinds.js';
 import { libraryCandidates } from './library/detect.js';
 
 const DAY_MS = 86_400_000;
@@ -41,7 +41,7 @@ function utcDay(date) {
 
 // What counts as a signal is decided in config/action-engine.js (#818 phase
 // 2.5), alongside every other threshold the engine judges by.
-const { detection } = resolve();
+const { detection, library: libraryThresholds } = resolve();
 
 /**
  * Library kinds that report a fall. Suppressed during a platform outage, when
@@ -515,21 +515,57 @@ export function overflowRefreshes(overflow, existing) {
     .filter(({ current }) => current && isOpen(current));
 }
 
+/** What a single-subject key is about: `topic_drop:<id>` → `<id>`. */
+const subjectOf = (dedupKey) => {
+  const at = dedupKey.indexOf(':');
+  return at < 0 ? null : dedupKey.slice(at + 1);
+};
+
+const GROUP_OF = new Map(
+  EXCLUSIVE_KIND_GROUPS.flatMap((group, i) => group.map((kind) => [kind, i])),
+);
+
 /**
- * Open, persistent signals nothing detected tonight — the ones that ended.
+ * Open, persistent signals nothing detected tonight, split by why.
+ *
+ * - `superseded`: the subject is still there under another kind of the same
+ *   exclusive group — a topic that went from slipping to dropped. Closed now,
+ *   naming what replaced it, so the list does not show the same topic twice
+ *   and does not call a worsening "resolved".
+ * - `resolved`: not detected at all, for longer than `resolveAfterHours`.
+ *   One quiet night is not an ending: values near a threshold dip under it
+ *   and back, and closing on the dip reopened the same signal a day later.
+ *
  * `detected` must include over-cap findings: a finding that moved down a
  * list has not ended. A kind whose detector failed was not looked at, and a
  * condition nobody looked at has not ended either.
  */
-export function signalsToResolve(existingRows, detected, unreadKinds) {
+export function signalsToResolve(existingRows, detected, unreadKinds, { now, graceHours }) {
   const detectedKeys = new Set(detected.map((candidate) => candidate.dedupKey));
-  return existingRows.filter(
-    (row) =>
-      KIND_META[row.kind]?.persistent &&
-      isOpen(row) &&
-      !detectedKeys.has(row.dedup_key) &&
-      !unreadKinds.has(row.kind),
-  );
+  const detectedIn = new Map();
+  for (const { kind, dedupKey } of detected) {
+    const group = GROUP_OF.get(kind);
+    const subject = subjectOf(dedupKey);
+    if (group !== undefined && subject) detectedIn.set(`${group}|${subject}`, kind);
+  }
+  const cutoff = now.getTime() - graceHours * 60 * 60 * 1000;
+
+  const superseded = [];
+  const resolved = [];
+  for (const row of existingRows) {
+    if (!KIND_META[row.kind]?.persistent || !isOpen(row)) continue;
+    if (detectedKeys.has(row.dedup_key) || unreadKinds.has(row.kind)) continue;
+
+    const group = GROUP_OF.get(row.kind);
+    const subject = subjectOf(row.dedup_key);
+    const successor = group !== undefined && subject && detectedIn.get(`${group}|${subject}`);
+    if (successor) {
+      superseded.push({ row, by: successor });
+    } else if (new Date(row.last_detected_at).getTime() < cutoff) {
+      resolved.push(row);
+    }
+  }
+  return { superseded, resolved };
 }
 
 export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) {
@@ -581,7 +617,7 @@ export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) 
   // small (tens), so reading it whole is cheaper than being clever.
   const { data: existingRows, error: readErr } = await supabaseAdmin
     .from('signals')
-    .select('id, dedup_key, kind, status')
+    .select('id, dedup_key, kind, status, last_detected_at, payload')
     .eq('brand_id', brandId)
     .limit(1000);
   if (readErr) throw new Error(readErr.message);
@@ -660,18 +696,39 @@ export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) 
   // them. Not during an outage: the engine suppresses drop/loss warnings
   // while a platform is degraded, and treating that silence as recovery
   // would close real signals.
-  const toResolve = outage
-    ? []
-    : signalsToResolve(existingRows ?? [], [...candidates, ...overflow], unreadKinds);
-  for (const row of toResolve) {
+  const closing = outage
+    ? { superseded: [], resolved: [] }
+    : signalsToResolve(existingRows ?? [], [...candidates, ...overflow], unreadKinds, {
+        now,
+        graceHours: libraryThresholds.resolveAfterHours,
+      });
+  for (const row of closing.resolved) {
     const { error } = await supabaseAdmin
       .from('signals')
       .update({ status: 'resolved', resolved_at: nowIso, updated_at: nowIso })
       .eq('id', row.id);
     if (error) throw new Error(error.message);
   }
+  for (const { row, by } of closing.superseded) {
+    const { error } = await supabaseAdmin
+      .from('signals')
+      .update({
+        status: 'resolved',
+        resolved_at: nowIso,
+        updated_at: nowIso,
+        payload: { ...(row.payload ?? {}), supersededBy: by },
+      })
+      .eq('id', row.id);
+    if (error) throw new Error(error.message);
+  }
 
-  const summary = { inserted, refreshed, reopened, autoResolved: toResolve.length };
+  const summary = {
+    inserted,
+    refreshed,
+    reopened,
+    autoResolved: closing.resolved.length,
+    superseded: closing.superseded.length,
+  };
   logger.info({ brandId, ...summary }, '[signals] recorded');
   return summary;
 }

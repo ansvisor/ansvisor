@@ -132,12 +132,27 @@ const STATE_TEXT: Record<string, string> = {
   opportunity: 'text-emerald-600 dark:text-emerald-400',
 };
 
-export function SignalStatusBadge({ status }: { status: SignalStatus }) {
+/**
+ * A signal the engine closed because its subject moved to another kind — a
+ * topic that went from slipping to dropped — reads "Changed", not "Resolved":
+ * nothing was fixed, the finding became a different one.
+ */
+export function isSuperseded(signal: Pick<Signal, 'status' | 'payload'>): boolean {
+  return signal.status === 'resolved' && typeof signal.payload?.supersededBy === 'string';
+}
+
+export function SignalStatusBadge({
+  status,
+  superseded = false,
+}: {
+  status: SignalStatus;
+  superseded?: boolean;
+}) {
   const t = useTranslations('actionCenter.signalsPage');
   return (
-    <Badge variant="outline" className={STATUS_BADGE[status]}>
+    <Badge variant="outline" className={superseded ? STATUS_BADGE.dismissed : STATUS_BADGE[status]}>
       <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
-      {t(`status.${status}`)}
+      {superseded ? t('superseded') : t(`status.${status}`)}
     </Badge>
   );
 }
@@ -259,7 +274,7 @@ export function SignalTable({
                   </p>
                 </TableCell>
                 <TableCell>
-                  <SignalStatusBadge status={signal.status} />
+                  <SignalStatusBadge status={signal.status} superseded={isSuperseded(signal)} />
                 </TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>

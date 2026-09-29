@@ -100,3 +100,25 @@ export const LIBRARY_KINDS = Object.freeze({
   weak_internal_links: meta('technical', 'low', []),
   content_gap: meta('technical', 'medium', ['ai_visibility']),
 });
+
+/**
+ * Kinds one classifier chooses between for the same subject — a topic is
+ * uncovered or slipping or dropped, never two at once. When tonight's pass
+ * files a subject under a different kind of its group, the old signal did not
+ * end: it changed. The recorder closes it as superseded rather than resolved.
+ *
+ * Only groups that are exclusive by construction belong here. A competitor
+ * can lead and gain at the same time; those stay independent.
+ */
+export const EXCLUSIVE_KIND_GROUPS = Object.freeze([
+  Object.freeze(['topic_gap', 'topic_uncovered', 'topic_slipping', 'topic_drop']),
+  Object.freeze(['platform_slipping', 'platform_drop']),
+  Object.freeze([
+    'competitor_winning_source',
+    'competitor_cited_source',
+    'third_party_presence_gap',
+    'authority_citation_gap',
+    'third_party_citation_gap',
+  ]),
+  Object.freeze(['page_citation_slipping', 'owned_page_citation_lost']),
+]);
