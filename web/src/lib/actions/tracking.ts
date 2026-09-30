@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { dbClient, withDbClient } from '@/lib/supabase/scoped';
 import { expandDateToEndOfDay } from '@/lib/dates';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import type {
@@ -324,7 +324,7 @@ async function buildResultsQuery(
   },
   selectOpts?: { count?: 'exact' },
 ) {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   // #155 — Insights aggregates exclude `chatgpt-shopping`. That model's
   // visibility numbers aren't comparable to a normal ChatGPT answer and
   // would skew brand-level visibility/mentions/citations. Shopping data
@@ -483,7 +483,7 @@ export async function getVisibilityRateKpi(
     days?: DayWindow;
   },
 ): Promise<VisibilityRateKpi> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const daily = dailyWindow(opts);
 
   const { data, error } = daily
@@ -542,7 +542,7 @@ export async function getTrackedPromptsKpi(
     days?: DayWindow;
   },
 ): Promise<TrackedPromptsKpi> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const daily = dailyWindow(opts);
 
   const { data: brand } = await supabase
@@ -608,7 +608,7 @@ export async function getBrandFilterOptions(brandId: string): Promise<InsightsFi
 }
 
 async function getInsightsFilterOptions(brandId: string): Promise<InsightsFilterOptions> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { data, error } = await supabase.rpc('insights_filter_options', { p_brand_id: brandId });
   if (error) throw new Error(error.message);
   const row = (data as { regions: string[] | null; models: string[] | null }[] | null)?.[0];
@@ -682,7 +682,7 @@ async function getInsightsRecommendations(brandId: string): Promise<InsightsReco
  * to compare the total against zero.
  */
 async function brandHasResults(brandId: string): Promise<boolean> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { data, error } = await supabase
     .from('prompt_results')
     .select('id')
@@ -732,7 +732,7 @@ export interface TrackingWindow {
  * 10:15 must not pick up yesterday's 10:20 stragglers).
  */
 export async function getTrackingWindow(brandId: string): Promise<TrackingWindow> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
 
   const [completedResp, activeResp] = await Promise.all([
     supabase
@@ -970,7 +970,7 @@ export async function exportPromptResults(
  * Fetch a single prompt result by its ID, joining prompt text.
  */
 export async function getPromptResultById(resultId: string): Promise<PromptResultWithText | null> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
 
   // #155 — Insights detail view; chatgpt-shopping is excluded here for the
   // same reason the aggregates exclude it. Shopping rows are shown by the
@@ -1022,7 +1022,7 @@ export async function getPromptDetail(
   promptId: string,
   opts?: { limit?: number; dateFrom?: string; dateTo?: string },
 ): Promise<PromptDetailData | null> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
 
   const { data: promptData, error: promptError } = await supabase
     .from('prompts')
@@ -1257,7 +1257,7 @@ export async function getInsightsSummary(
     days?: DayWindow;
   },
 ): Promise<InsightsSummary> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const p_models = modelFilterArray(opts?.model);
   const daily = dailyWindow(opts);
 
@@ -1447,7 +1447,7 @@ export async function triggerTrackingCheck(
   brandId: string,
   opts?: { promptId?: string },
 ): Promise<{ jobId: string }> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
 
   const {
     data: { session },
@@ -1496,7 +1496,7 @@ export async function analyzeNewPrompt(
   brandId: string,
   promptId: string,
 ): Promise<{ started: boolean }> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
 
   const {
     data: { session },
@@ -1549,7 +1549,7 @@ export interface TrackingJobStatus {
  * Poll a tracking job's status from the aeo-server.
  */
 export async function getJobStatus(jobId: string): Promise<TrackingJobStatus> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -1601,7 +1601,7 @@ export async function getJobStatus(jobId: string): Promise<TrackingJobStatus> {
  * Cancel/stop an active tracking job.
  */
 export async function cancelTrackingJob(jobId: string): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -1654,7 +1654,7 @@ export async function getPromptVisibilitySummaries(
   brandId: string,
   opts?: { days?: number; from?: string; to?: string; region?: string },
 ): Promise<Record<string, PromptVisibilitySummary>> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   // `from`/`to` win when given (the custom range, #713); otherwise the day
   // count keeps every existing caller on its previous behaviour.
   const days = opts?.days ?? 30;
@@ -1711,7 +1711,7 @@ export async function getPromptVisibilitySummaries(
 export async function getBrandPrompts(
   brandId: string,
 ): Promise<{ id: string; text: string; category?: string; platforms: string[] }[]> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
 
   const { data: promptSets } = await supabase
     .from('prompt_sets')
@@ -1908,7 +1908,7 @@ export async function getCompetitorComparison(
     days?: DayWindow;
   },
 ): Promise<CompetitorComparisonData> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const p_models = modelFilterArray(opts?.model);
   const daily = dailyWindow(opts);
 
@@ -2206,7 +2206,7 @@ export async function getShareOfVoiceData(
     days?: DayWindow;
   },
 ): Promise<ShareOfVoiceData> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const p_models = modelFilterArray(opts?.model);
   const daily = dailyWindow(opts);
 
@@ -2420,7 +2420,7 @@ export async function getVisibilityRateTrend(
     days?: DayWindow;
   },
 ): Promise<VisibilityRateTrendData> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const daily = dailyWindow(opts);
   // No explicit lower bound = the "All time" preset: the summary covers
   // everything (matching the leaderboard) and the chart plots an expanding
@@ -2678,7 +2678,7 @@ export async function getHeadToHeadComparison(
   brandId: string,
   competitorId: string,
 ): Promise<HeadToHeadData> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
 
   // #155 — head-to-head comparisons are a Competitors-tab feature, which
   // also lives under Insights — same isolation rule applies here.
@@ -2933,7 +2933,7 @@ export async function getInsightsBreakdown(
     topicId?: string;
   },
 ): Promise<InsightsBreakdown> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
 
   let currentFrom: Date;
   let currentTo: Date;
@@ -3216,17 +3216,36 @@ export interface TopicDetailData {
  * Output is identical to the old per-call results — this is a perf refactor.
  */
 export async function getTopicDetail(brandId: string, topicId: string): Promise<TopicDetailData> {
-  const [topic, summary, rateTrend, sov, competitors, results] = await Promise.all([
-    getTopicById(brandId, topicId),
-    getInsightsSummary(brandId, { topicId }),
-    // #685 — use the new-formula RPC so the trend sits on the same 0-100 scale
-    // as the headline AI Visibility Score. getVisibilityTrend averaged raw
-    // visibility_score over all answers (incl. 0-scored absent-brand rows).
-    getVisibilityRateTrend(brandId, { topicId }),
-    getShareOfVoiceData(brandId, { topicId }),
-    getCompetitorComparison(brandId, { topicId }),
-    getPromptResults(brandId, { topicId, limit: 50 }),
-  ]);
+  // Access first, on the caller's own client: RLS answers whether this user
+  // may see the brand, and the query ties the topic to that brand.
+  const topic = await getTopicById(brandId, topicId);
+  if (!topic) throw new Error('Topic not found');
+
+  // Topic-filtered reads cannot use the daily rollups, so they scan raw
+  // results over the topic's whole history. On a 91-prompt topic with 27k
+  // results the calls below ran 5-9s each when run together — past the
+  // authenticated role's 8s statement timeout, so the page never loaded.
+  // They run on the service-role client instead (120s, migration 00100).
+  // That skips RLS, which is safe only because the brand was checked above
+  // and every read in these loaders filters by brand_id.
+  // Imported here, not at module load: the admin client needs the service key
+  // the moment it is created, and most of this module never touches it.
+  const { supabaseAdmin } = await import('@/lib/supabase/admin');
+  const [summary, rateTrend, sov, competitors, results] = await withDbClient(
+    supabaseAdmin as unknown as Awaited<ReturnType<typeof dbClient>>,
+    () =>
+      Promise.all([
+        getInsightsSummary(brandId, { topicId }),
+        // #685 — use the new-formula RPC so the trend sits on the same 0-100
+        // scale as the headline AI Visibility Score. getVisibilityTrend
+        // averaged raw visibility_score over all answers (incl. 0-scored
+        // absent-brand rows).
+        getVisibilityRateTrend(brandId, { topicId }),
+        getShareOfVoiceData(brandId, { topicId }),
+        getCompetitorComparison(brandId, { topicId }),
+        getPromptResults(brandId, { topicId, limit: 50 }),
+      ]),
+  );
 
   // Adapt VisibilityRateTrendData → VisibilityTrendPoint[] so topic_charts.tsx
   // keeps its existing VisibilityTrendPoint shape without modification.
