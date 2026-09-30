@@ -11,7 +11,7 @@ import { bootstrapBrandVolumes } from '@/lib/actions/volumes';
 import { addCompetitor, getCompetitors } from '@/lib/actions/competitor';
 import { getFaviconUrl } from '@/lib/favicon';
 import { slugify } from '@/lib/slug';
-import { addCompetitorChoice } from '@/lib/competitor-list';
+import { addCompetitorChoice, mergeCompetitorSuggestions } from '@/lib/competitor-list';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
   REGIONS,
@@ -783,7 +783,7 @@ export default function OnboardingPage() {
         website: domain,
         language,
       });
-      setSuggestedCompetitors(competitors.map((c) => ({ ...c, selected: true })));
+      setSuggestedCompetitors((prev) => mergeCompetitorSuggestions(prev, competitors));
     } catch (err) {
       console.error('Competitor suggestion error:', err);
       setCompetitorSuggestError(true);
@@ -1243,7 +1243,7 @@ export default function OnboardingPage() {
                     {topicSuggestError && (
                       <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
                         <span>
-                          Couldn&apos;t fetch topic suggestions right now — add your own below.
+                          Couldn&apos;t fetch topic suggestions right now — add your own above.
                         </span>
                         <Button variant="outline" size="sm" onClick={fetchTopicSuggestions}>
                           Try again
@@ -1470,7 +1470,14 @@ export default function OnboardingPage() {
     // ── Step 5: Competitors ──
 
     if (step === 5) {
-      const selectedCompetitorCount = suggestedCompetitors.filter((c) => c.selected).length;
+      // Counted over the list Finish will save, which takes along a competitor
+      // still sitting in the manual fields — otherwise the button stays
+      // disabled for someone who typed theirs and never pressed "+".
+      const selectedCompetitorCount = addCompetitorChoice(
+        suggestedCompetitors,
+        competitorName,
+        competitorDomain,
+      ).list.filter((c) => c.selected).length;
       const hasSelectedCompetitors = selectedCompetitorCount > 0;
 
       return (
@@ -1483,6 +1490,36 @@ export default function OnboardingPage() {
               <p className="text-sm text-muted-foreground mt-1">
                 We&apos;ll track how often competitors appear alongside your brand in AI responses.
               </p>
+            </div>
+
+            {/* First, and outside the loading state: people arrive knowing their
+                rivals and should not have to wait for, or scroll past, ours. */}
+            <div className="mb-6 space-y-2">
+              <p className="text-sm text-muted-foreground">Know your competitors? Add them here.</p>
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Company name"
+                  value={competitorName}
+                  onChange={(e) => setCompetitorName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addManualCompetitor()}
+                  className="text-sm"
+                />
+                <Input
+                  placeholder="domain.com"
+                  value={competitorDomain}
+                  onChange={(e) => setCompetitorDomain(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addManualCompetitor()}
+                  className="text-sm"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={addManualCompetitor}
+                  disabled={!competitorName.trim()}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             {loadingCompetitors ? (
@@ -1500,7 +1537,7 @@ export default function OnboardingPage() {
                 {competitorSuggestError && (
                   <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
                     <span>
-                      Couldn&apos;t fetch competitor suggestions right now — add your own below.
+                      Couldn&apos;t fetch competitor suggestions right now — add your own above.
                     </span>
                     <Button variant="outline" size="sm" onClick={fetchCompetitorSuggestions}>
                       Try again
@@ -1510,7 +1547,7 @@ export default function OnboardingPage() {
                 {suggestedCompetitors.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Suggested competitors
+                      Competitors to track
                     </p>
                     {suggestedCompetitors.map((c, idx) => (
                       <div
@@ -1563,36 +1600,6 @@ export default function OnboardingPage() {
                     ))}
                   </div>
                 )}
-
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Add manually
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      placeholder="Company name"
-                      value={competitorName}
-                      onChange={(e) => setCompetitorName(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && addManualCompetitor()}
-                      className="text-sm"
-                    />
-                    <Input
-                      placeholder="domain.com"
-                      value={competitorDomain}
-                      onChange={(e) => setCompetitorDomain(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && addManualCompetitor()}
-                      className="text-sm"
-                    />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={addManualCompetitor}
-                      disabled={!competitorName.trim()}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
 
                 <Button
                   className="w-full"

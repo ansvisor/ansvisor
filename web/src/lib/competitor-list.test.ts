@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { addCompetitorChoice, normalizeCompetitorDomain } from './competitor-list';
+import {
+  addCompetitorChoice,
+  mergeCompetitorSuggestions,
+  normalizeCompetitorDomain,
+} from './competitor-list';
 
 const listed = [
   { name: 'Rival', domain: 'rival.com', selected: true },
@@ -14,16 +18,16 @@ describe('normalizeCompetitorDomain', () => {
 });
 
 describe('addCompetitorChoice', () => {
-  it('appends a new competitor as selected', () => {
+  it('puts a new competitor at the top, selected', () => {
     const { list, duplicate } = addCompetitorChoice(listed, ' New One ', 'https://new.io/');
     expect(duplicate).toBeNull();
-    expect(list.at(-1)).toEqual({ name: 'New One', domain: 'new.io', selected: true });
+    expect(list[0]).toEqual({ name: 'New One', domain: 'new.io', selected: true });
     expect(list).toHaveLength(3);
   });
 
   it('adds a competitor typed without a domain', () => {
     const { list } = addCompetitorChoice(listed, 'Nameless', '');
-    expect(list.at(-1)).toEqual({ name: 'Nameless', domain: '', selected: true });
+    expect(list[0]).toEqual({ name: 'Nameless', domain: '', selected: true });
   });
 
   it('ignores an empty name', () => {
@@ -49,5 +53,25 @@ describe('addCompetitorChoice', () => {
     const { list, duplicate } = addCompetitorChoice(listed, 'Rival', 'rival.de');
     expect(duplicate).toBeNull();
     expect(list).toHaveLength(3);
+  });
+});
+
+describe('mergeCompetitorSuggestions', () => {
+  it('keeps competitors typed in while suggestions loaded', () => {
+    const typed = [{ name: 'Mine', domain: 'mine.com', selected: true }];
+    const merged = mergeCompetitorSuggestions(typed, [
+      { name: 'Rival', domain: 'rival.com' },
+      { name: 'Other', domain: 'other.com' },
+    ]);
+    expect(merged.map((c) => c.name)).toEqual(['Mine', 'Rival', 'Other']);
+    expect(merged.every((c) => c.selected)).toBe(true);
+  });
+
+  it('skips a suggestion the user already listed', () => {
+    const typed = [{ name: 'Rival Co', domain: 'rival.com', selected: false }];
+    const merged = mergeCompetitorSuggestions(typed, [
+      { name: 'Rival', domain: 'https://www.rival.com/' },
+    ]);
+    expect(merged).toEqual(typed);
   });
 });

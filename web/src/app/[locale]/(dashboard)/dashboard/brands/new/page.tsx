@@ -8,7 +8,7 @@ import { syncDomains } from '@/lib/actions/brand-domain';
 import { createTopics } from '@/lib/actions/topic';
 import { getPromptCapacity, savePromptSet } from '@/lib/actions/prompt';
 import { addCompetitor } from '@/lib/actions/competitor';
-import { addCompetitorChoice } from '@/lib/competitor-list';
+import { addCompetitorChoice, mergeCompetitorSuggestions } from '@/lib/competitor-list';
 import { triggerTrackingCheck } from '@/lib/actions/tracking';
 import { bootstrapBrandVolumes } from '@/lib/actions/volumes';
 import { usePlanContext } from '@/components/providers/plan-provider';
@@ -590,7 +590,7 @@ export default function NewBrandPage() {
         website: domain,
         language,
       });
-      setSuggestedCompetitors(competitors.map((c) => ({ ...c, selected: true })));
+      setSuggestedCompetitors((prev) => mergeCompetitorSuggestions(prev, competitors));
     } catch (err) {
       console.error('Competitor suggestion error:', err);
       setCompetitorSuggestError(true);
@@ -937,7 +937,7 @@ export default function NewBrandPage() {
                   {topicSuggestError && (
                     <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
                       <span>
-                        Couldn&apos;t fetch topic suggestions right now — add your own below.
+                        Couldn&apos;t fetch topic suggestions right now — add your own above.
                       </span>
                       <Button variant="outline" size="sm" onClick={fetchTopicSuggestions}>
                         Try again
@@ -1166,6 +1166,36 @@ export default function NewBrandPage() {
             </p>
           </div>
 
+          {/* First, and outside the loading state: people arrive knowing their
+              rivals and should not have to wait for, or scroll past, ours. */}
+          <div className="mb-6 space-y-2">
+            <p className="text-sm text-muted-foreground">Know your competitors? Add them here.</p>
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="Company name"
+                value={competitorName}
+                onChange={(e) => setCompetitorName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addManualCompetitor()}
+                className="text-sm"
+              />
+              <Input
+                placeholder="domain.com"
+                value={competitorDomain}
+                onChange={(e) => setCompetitorDomain(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addManualCompetitor()}
+                className="text-sm"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={addManualCompetitor}
+                disabled={!competitorName.trim()}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
           {loadingCompetitors ? (
             <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
               <Sparkles className="h-5 w-5 animate-pulse" />
@@ -1178,7 +1208,7 @@ export default function NewBrandPage() {
               {competitorSuggestError && (
                 <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
                   <span>
-                    Couldn&apos;t fetch competitor suggestions right now — add them manually below.
+                    Couldn&apos;t fetch competitor suggestions right now — add them manually above.
                   </span>
                   <Button variant="outline" size="sm" onClick={fetchCompetitorSuggestions}>
                     Try again
@@ -1188,7 +1218,7 @@ export default function NewBrandPage() {
               {suggestedCompetitors.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Suggested competitors
+                    Competitors to track
                   </p>
                   {suggestedCompetitors.map((c, idx) => (
                     <div
@@ -1241,36 +1271,6 @@ export default function NewBrandPage() {
                   ))}
                 </div>
               )}
-
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Add manually
-                </p>
-                <div className="flex items-center gap-2">
-                  <Input
-                    placeholder="Company name"
-                    value={competitorName}
-                    onChange={(e) => setCompetitorName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addManualCompetitor()}
-                    className="text-sm"
-                  />
-                  <Input
-                    placeholder="domain.com"
-                    value={competitorDomain}
-                    onChange={(e) => setCompetitorDomain(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addManualCompetitor()}
-                    className="text-sm"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={addManualCompetitor}
-                    disabled={!competitorName.trim()}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
 
               <Button className="w-full" onClick={handleFinish} disabled={savingCompetitors}>
                 {savingCompetitors ? (
