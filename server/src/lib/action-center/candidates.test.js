@@ -47,8 +47,38 @@ describe('scoreCandidate', () => {
   });
 
   it('stops paying for evidence past the cap', () => {
-    const capped = scoreCandidate(candidate({ signalCount: priority.evidenceCap }), NOW);
-    expect(scoreCandidate(candidate({ signalCount: 500 }), NOW)).toBe(capped);
+    const base = scoreCandidate(candidate({ signalCount: 0 }), NOW);
+    expect(scoreCandidate(candidate({ reach: 100_000 }), NOW)).toBe(base + priority.evidenceMax);
+  });
+
+  /**
+   * What the queue sorted on before: signals. The library folds fifty prompts
+   * into one signal and keeps five signals a kind, so nearly every candidate
+   * scored the same and the queue promoted in id order. Reach is what tells
+   * fifty prompts from two topics.
+   */
+  it('ranks by how much the action covers, not how many signals carry it', () => {
+    const wide = scoreCandidate(candidate({ signalCount: 1, reach: 50 }), NOW);
+    const narrow = scoreCandidate(candidate({ signalCount: 5, reach: 2 }), NOW);
+    expect(wide).toBeGreaterThan(narrow);
+  });
+
+  it('separates five targets from one, and fifty from five', () => {
+    const score = (reach) => scoreCandidate(candidate({ reach }), NOW);
+    expect(score(5)).toBeGreaterThan(score(1));
+    expect(score(50)).toBeGreaterThan(score(5));
+  });
+
+  it('falls back to the signal count when the payload names no targets', () => {
+    expect(scoreCandidate(candidate({ signalCount: 4, reach: undefined }), NOW)).toBe(
+      scoreCandidate(candidate({ signalCount: 1, reach: 4 }), NOW),
+    );
+  });
+
+  /** Breadth moves a candidate within its grade, never across one. */
+  it('never lets breadth alone cross a grade', () => {
+    const widest = scoreCandidate(candidate({ impact: 'medium', reach: 100_000 }), NOW);
+    expect(widest).toBeLessThan(scoreCandidate(candidate({ impact: 'high', reach: 1 }), NOW));
   });
 
   /**

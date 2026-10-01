@@ -271,7 +271,11 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
 
     const existing = waiting.get(definition.id);
     const firstSeenAt = existing?.first_seen_at ?? nowIso;
-    const score = scoreCandidate({ impact, signalCount: unclaimed.length, firstSeenAt }, now);
+    const reach = payload.targetCount;
+    const score = scoreCandidate(
+      { impact, signalCount: unclaimed.length, reach, firstSeenAt },
+      now,
+    );
     const row = {
       brand_id: brandId,
       definition_id: definition.id,
@@ -330,6 +334,7 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
       // the scorer so the same shape can be scored straight out of the
       // database, where the signals themselves are just ids.
       signalCount: unclaimed.length,
+      reach,
       payload,
       firstSeenAt,
     });

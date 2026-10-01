@@ -328,9 +328,16 @@ export const ENGINE_THRESHOLDS = Object.freeze({
     impactHigh: 200,
     impactMedium: 65,
     impactLow: 30,
-    /** Per linked signal, up to `evidenceCap` signals: at most 15. */
-    evidencePerSignal: 1.5,
-    evidenceCap: 10,
+    /**
+     * Per doubling of the targets the action covers, up to `evidenceMax`.
+     * Targets rather than signals: the library folds a group of prompts into
+     * one signal and keeps at most five signals a kind, so counting signals
+     * scored nearly every candidate the same. Logarithmic, so fifty prompts
+     * outrank five and five outrank one, but breadth never buys a grade.
+     * 1 target → 2.5, 5 → 6.5, 11 → 9, 50 → 14.2.
+     */
+    evidencePerDoubling: 2.5,
+    evidenceMax: 15,
     /** Per day waited, up to `ageCapDays` days: at most 42. */
     agePerDay: 3,
     ageCapDays: 14,

@@ -47,10 +47,14 @@ const IMPACT_SCORE = {
  * opportunity outrank a visibility collapse is not a priority order, it is a
  * vote.
  *
- * @param {{ impact: string, signalCount: number, firstSeenAt?: string|Date }} candidate
+ * Evidence is the action's reach — how many prompts, pages, sources or
+ * topics it covers (`payload.targetCount`) — and falls back to the signal
+ * count for a definition whose payload does not name its targets.
+ *
+ * @param {{ impact: string, signalCount: number, reach?: number, firstSeenAt?: string|Date }} candidate
  * @param {Date} now
  */
-export function scoreCandidate({ impact, signalCount, firstSeenAt }, now = new Date()) {
+export function scoreCandidate({ impact, signalCount, reach, firstSeenAt }, now = new Date()) {
   const base = IMPACT_SCORE[impact] ?? IMPACT_SCORE.low;
 
   // Defensive rather than trusting: a caller that forgets to pass the count
@@ -58,7 +62,11 @@ export function scoreCandidate({ impact, signalCount, firstSeenAt }, now = new D
   // the whole queue to alphabetical order. A scoring bug that still promotes
   // something every night, just the wrong thing, is not one anybody notices.
   const count = Number.isFinite(signalCount) ? Math.max(signalCount, 0) : 0;
-  const evidence = Math.min(count, priority.evidenceCap) * priority.evidencePerSignal;
+  const breadth = Number.isFinite(reach) && reach > 0 ? reach : count;
+  const evidence = Math.min(
+    Math.log2(1 + breadth) * priority.evidencePerDoubling,
+    priority.evidenceMax,
+  );
 
   const seen = firstSeenAt ? new Date(firstSeenAt).getTime() : now.getTime();
   const waitedDays = Math.max(0, Math.floor((now.getTime() - seen) / DAY_MS));
