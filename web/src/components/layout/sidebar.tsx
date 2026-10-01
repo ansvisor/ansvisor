@@ -23,7 +23,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { BrandSwitcher } from '@/components/layout/brand-switcher';
 import { UserProfileNavItem } from '@/components/layout/user-profile-nav-item';
-import { ChevronsLeft, ChevronsRight, Crown, Lock } from 'lucide-react';
+import {
+  ChevronsLeft,
+  ChevronsRight,
+  Crown,
+  ExternalLink,
+  Lock,
+  MessageSquareHeart,
+} from 'lucide-react';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -195,7 +202,25 @@ export function Sidebar() {
         ))}
       </ScrollArea>
 
-      <div className="p-2">
+      <div className="space-y-1 p-2">
+        <a
+          href={siteConfig.links.feedback}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={isCollapsed ? t('feedback') : undefined}
+          className={cn(
+            'flex items-center gap-3 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+            isCollapsed && 'justify-center',
+          )}
+        >
+          <MessageSquareHeart className="h-4 w-4 shrink-0" />
+          {!isCollapsed && (
+            <>
+              <span className="flex-1 truncate">{t('feedback')}</span>
+              <ExternalLink className="h-3 w-3 shrink-0 opacity-60" />
+            </>
+          )}
+        </a>
         <Button
           variant="ghost"
           onClick={toggleCollapse}

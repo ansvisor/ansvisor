@@ -61,7 +61,8 @@
     "settings": "Settings",
     "analytics": "Analytics",
     "optimization": "Optimization",
-    "toggleMenu": "Toggle navigation menu"
+    "toggleMenu": "Toggle navigation menu",
+    "feedback": "Send feedback"
   },
   "actionCenter": {
     "tabs": {

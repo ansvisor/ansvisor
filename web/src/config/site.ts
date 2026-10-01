@@ -7,6 +7,7 @@ export const siteConfig = {
   links: {
     github: 'https://github.com/ansvisor/ansvisor',
     docs: 'https://docs.ansvisor.com',
+    feedback: 'https://www.ansvisor.com/feedback',
   },
   legal: {
     privacy: 'https://www.ansvisor.com/privacy-policy',

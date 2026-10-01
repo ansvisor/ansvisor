@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { UserProfileNavItem } from '@/components/layout/user-profile-nav-item';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { Crown, Menu, MessageSquareText } from 'lucide-react';
+import { Crown, ExternalLink, Menu, MessageSquareHeart, MessageSquareText } from 'lucide-react';
 import Image from 'next/image';
 import { useTheme } from 'next-themes';
 
@@ -152,6 +152,17 @@ export function MobileNav() {
           </nav>
         </div>
         <div className="border-t p-2">
+          <a
+            href={siteConfig.links.feedback}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setOpen(false)}
+            className="mb-1 flex items-center gap-3 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            <MessageSquareHeart className="h-4 w-4 shrink-0" />
+            <span className="flex-1 truncate">{t('feedback')}</span>
+            <ExternalLink className="h-3 w-3 shrink-0 opacity-60" />
+          </a>
           <UserProfileNavItem onClick={() => setOpen(false)} />
         </div>
       </SheetContent>
