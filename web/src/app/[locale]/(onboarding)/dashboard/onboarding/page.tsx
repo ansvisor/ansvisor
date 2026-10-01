@@ -23,6 +23,7 @@ import {
 } from '@/config/prompt-options';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
 import { isCloud, PLANS, SUBSCRIBABLE_PLANS, getPlan, type PlanId } from '@/config/plans';
+import { siteConfig } from '@/config/site';
 import { setPersonProperties, track } from '@/lib/analytics';
 
 const ONBOARDING_STEP_NAMES: Record<number, string> = {
@@ -215,6 +216,24 @@ function TopicAccordion({
 
 // The state picker's own "no state" choice, ahead of the states themselves.
 const STATE_ITEMS = [{ value: 'nationwide', label: 'Nationwide (no state)' }, ...US_STATE_ITEMS];
+
+// Plan-step copy, onboarding only — the plan switcher in Settings keeps the
+// taglines from config/plans. Engines are listed as offered at sign-up.
+const PLAN_STEP_COPY: Partial<
+  Record<PlanId, { tagline: string; platformFeatures: string; engines: string }>
+> = {
+  starter: {
+    tagline: 'Essential AI visibility tracking.',
+    platformFeatures: 'Core Platform Features',
+    engines: 'ChatGPT & Perplexity',
+  },
+  growth: {
+    tagline: 'Advanced AI insights to accelerate growth.',
+    platformFeatures: 'All Platform Features',
+    engines:
+      'ChatGPT, Google AI Overviews, Google AI Mode, Gemini, Microsoft Copilot, & Perplexity.',
+  },
+};
 
 // Card width per step, matched to each step's content column; unlisted steps are forms.
 const STEP_FRAME_WIDTH: Record<number, 'medium' | 'wide'> = { 3: 'wide', 4: 'wide', 6: 'medium' };
@@ -1644,11 +1663,10 @@ export default function OnboardingPage() {
       <div className="flex flex-col p-6 md:p-10">
         <div className="mx-auto w-full max-w-2xl flex-1">
           <div className="mb-8 text-center">
-            <h1 className="text-2xl font-bold tracking-tight">Choose your plan</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Start your 14-day free trial — your card won&apos;t be charged until the trial ends.
-              Cancel anytime in Settings → Billing.
-            </p>
+            <p className="text-2xl tracking-tight">Welcome to {siteConfig.name}!</p>
+            <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">
+              Start Your 14-Day Free Trial
+            </h1>
           </div>
 
           {/* Plan cards */}
@@ -1659,6 +1677,8 @@ export default function OnboardingPage() {
               if (!price) return null;
 
               const loading = checkoutLoading === planId;
+              const copy = PLAN_STEP_COPY[planId];
+              const { maxBrands, maxPrompts, maxTeamMembers } = plan.limits;
 
               return (
                 <div
@@ -1676,7 +1696,9 @@ export default function OnboardingPage() {
 
                   <div className="mb-4">
                     <h3 className="text-lg font-semibold">{plan.name}</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">{plan.tagline}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {copy?.tagline ?? plan.tagline}
+                    </p>
                   </div>
 
                   <div className="flex items-end gap-1 mb-4">
@@ -1696,80 +1718,44 @@ export default function OnboardingPage() {
                         Redirecting...
                       </>
                     ) : (
-                      'Start Free Trial'
+                      `Choose ${plan.name}`
                     )}
                   </Button>
 
                   <Separator className="my-5" />
 
-                  <div className="flex-1 space-y-2.5 text-sm">
+                  <div className="space-y-2.5 text-sm">
+                    {copy && <PlanFeatureItem>{copy.platformFeatures}</PlanFeatureItem>}
                     <PlanFeatureItem>
-                      <strong>
-                        {plan.limits.maxBrands === -1 ? 'Unlimited' : plan.limits.maxBrands}
-                      </strong>{' '}
-                      {plan.limits.maxBrands === 1 ? 'brand' : 'brands'}
+                      {maxTeamMembers === -1 ? 'Unlimited Users' : `Up to ${maxTeamMembers} Users`}
                     </PlanFeatureItem>
                     <PlanFeatureItem>
-                      <strong>
-                        {plan.limits.maxPrompts === -1 ? 'Unlimited' : plan.limits.maxPrompts}
-                      </strong>{' '}
-                      prompt locations tracked
+                      {maxBrands === -1
+                        ? 'Unlimited Brands'
+                        : maxBrands === 1
+                          ? '1 Brand'
+                          : `Up to ${maxBrands} Brands`}
                     </PlanFeatureItem>
                     <PlanFeatureItem>
-                      <strong>{plan.limits.maxPlatforms}</strong> answer engines
-                      {plan.limits.allowedScrapers && plan.limits.allowedScrapers.length > 0 && (
-                        <span className="text-muted-foreground font-normal">
-                          {' '}
-                          (
-                          {plan.limits.allowedScrapers
-                            .map((id) => {
-                              const s = ALL_SCRAPERS.find((s) => s.id === id);
-                              return s ? s.label.replace(/\s*\(Web\)/i, '') : id;
-                            })
-                            .join(' & ')}
-                          )
-                        </span>
-                      )}
+                      {maxPrompts === -1
+                        ? 'Unlimited Prompt Tracking'
+                        : `${maxPrompts} Prompt Tracking/mo`}
                     </PlanFeatureItem>
-                    <PlanFeatureItem>
-                      <strong>
-                        {plan.limits.maxTeamMembers === -1
-                          ? 'Unlimited'
-                          : plan.limits.maxTeamMembers}
-                      </strong>{' '}
-                      team members
-                    </PlanFeatureItem>
-                    <PlanFeatureItem>
-                      {plan.limits.features.includes('daily_monitoring')
-                        ? 'Daily monitoring'
-                        : 'Weekly monitoring'}
-                    </PlanFeatureItem>
-                    {plan.limits.features.includes('competitor_tracking') && (
-                      <PlanFeatureItem>Competitor tracking</PlanFeatureItem>
-                    )}
-                    {plan.limits.features.includes('content_optimization') && (
-                      <PlanFeatureItem>Content optimization</PlanFeatureItem>
-                    )}
-                    {plan.limits.features.includes('advanced_analytics') && (
-                      <PlanFeatureItem>Advanced analytics</PlanFeatureItem>
-                    )}
-                    <PlanFeatureItem>Email support</PlanFeatureItem>
+                    <PlanFeatureItem>Real-time Data → Signals → Actions → Tasks</PlanFeatureItem>
                   </div>
+
+                  {copy && (
+                    <p className="mt-auto pt-6 text-xs font-semibold leading-relaxed">
+                      For {copy.engines}
+                    </p>
+                  )}
                 </div>
               );
             })}
           </div>
 
-          <p className="mt-6 text-center text-xs text-muted-foreground">
-            Need more?{' '}
-            <a href="mailto:sales@ansvisor.com" className="underline hover:text-foreground">
-              Contact sales
-            </a>{' '}
-            for Enterprise pricing.
-          </p>
-          <p className="mt-2 text-center text-xs text-muted-foreground">
-            Secure payments powered by Stripe.
-          </p>
+          <p className="mt-8 text-center text-lg">Secure payments powered by Stripe.</p>
+          <p className="mt-1 text-center text-sm">Cancel anytime during your 14-day free trial.</p>
         </div>
 
         <div className="flex mx-auto w-full max-w-2xl items-center justify-between mt-8">
