@@ -21,7 +21,7 @@ export default async function LocaleLayout({
   const messages = await getMessages();
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
       <NextIntlClientProvider messages={messages} locale={locale}>
         {children}
         <Toaster richColors position="top-right" />

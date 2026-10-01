@@ -36,7 +36,7 @@ export function UserProfileNavItem({
       href="/dashboard/settings"
       onClick={onClick}
       className={cn(
-        'flex items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors hover:bg-accent',
+        'flex items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors hover:bg-sidebar-accent',
         collapsed && 'justify-center px-0',
         className,
       )}

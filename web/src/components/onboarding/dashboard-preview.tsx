@@ -64,7 +64,7 @@ export function DashboardPreview({
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
-      <aside className="flex h-full w-60 shrink-0 flex-col border-r bg-card">
+      <aside className="flex h-full w-60 shrink-0 flex-col border-r bg-sidebar">
         <div className="flex h-16 items-center gap-2 border-b px-3">
           <Image src={logoSrc} alt="" width={24} height={24} className="h-6 w-6 shrink-0" />
           <span className="truncate font-semibold">{siteConfig.name}</span>

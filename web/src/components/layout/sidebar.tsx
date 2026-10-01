@@ -59,7 +59,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'relative flex h-full flex-col border-r bg-card transition-all duration-300',
+        'relative flex h-full flex-col border-r bg-sidebar transition-all duration-300',
         isCollapsed ? 'w-16' : 'w-60',
       )}
     >
@@ -161,7 +161,7 @@ export function Sidebar() {
                         'flex items-center gap-3 rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors',
                         isActive
                           ? 'bg-primary/10 text-primary'
-                          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                          : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
                         isCollapsed && 'justify-center',
                       )}
                       title={

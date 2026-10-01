@@ -47,7 +47,7 @@ export function BrandSwitcher({ collapsed = false }: BrandSwitcherProps) {
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          'flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none',
+          'flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors hover:bg-sidebar-accent focus-visible:outline-none',
           collapsed && 'justify-center px-0',
         )}
         aria-label={t('switchBrand')}
