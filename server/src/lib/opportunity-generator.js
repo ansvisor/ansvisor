@@ -11,12 +11,17 @@ import supabaseAdmin from '../config/supabase.js';
 import { selectInChunks } from './chunked-in.js';
 import { logger } from './logger.js';
 import {
+  ALREADY_SUGGESTED_RULE,
   OPPORTUNITIES_PER_RUN,
   OPPORTUNITY_COUNT_RULE,
+  alreadySuggested,
   belowOpenCap,
   openCountsByPrompt,
+  openTitlesByPrompt,
+  opportunityKey,
   relatedCandidate,
 } from './opportunity-limits.js';
+import { loadOpenOpportunities } from './open-opportunities.js';
 
 const opportunitySchema = z.object({
   opportunities: z
@@ -48,7 +53,7 @@ Rules:
 - Focus on content that will improve the brand's visibility in AI-generated answers.
 - Categorize as "owned" or "earned".
 ${OPPORTUNITY_COUNT_RULE}
-- Some prompts list opportunities "Already suggested" for them. Do not repeat or reword those: suggest a genuinely different piece of content for that prompt, or choose another prompt.
+${ALREADY_SUGGESTED_RULE}
 - The bracketed [N] indexes in the prompt data exist ONLY for the relatedPromptIndex field. NEVER mention an index like "[0]" or "Prompt 3" in titles or descriptions — refer to the prompt by quoting or paraphrasing its actual text/topic instead.`;
 
 function computeScore(volume, visibility, competitorGap, intent) {
@@ -134,27 +139,9 @@ export async function generateContentOpportunities(brandId) {
 
   // Open opportunities, read before choosing candidates: prompts already at
   // the cap are skipped, and the rest show the model what they already hold.
-  // Paged — a large brand holds more than PostgREST's 1,000-row default.
-  const existing = [];
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await supabaseAdmin
-      .from('content_opportunities')
-      .select('prompt_id, title')
-      .eq('brand_id', brandId)
-      .eq('status', 'new')
-      .order('id')
-      .range(from, from + 999);
-    if (error) throw new Error(error.message);
-    existing.push(...(data || []));
-    if (!data || data.length < 1000) break;
-  }
+  const existing = await loadOpenOpportunities(brandId);
   const openCounts = openCountsByPrompt(existing);
-  const openTitles = new Map();
-  for (const o of existing) {
-    if (!o.prompt_id || !o.title) continue;
-    if (!openTitles.has(o.prompt_id)) openTitles.set(o.prompt_id, []);
-    openTitles.get(o.prompt_id).push(o.title);
-  }
+  const openTitles = openTitlesByPrompt(existing);
 
   const ranked = testedPrompts
     .map((p) => {
@@ -205,13 +192,8 @@ export async function generateContentOpportunities(brandId) {
     return;
   }
 
-  const promptLine = (p, i) => {
-    const already = openTitles.get(p.promptId) || [];
-    const suffix = already.length
-      ? ` | Already suggested: ${already.map((t) => `"${t}"`).join('; ')}`
-      : '';
-    return `[${i}] "${p.text}" | Intent: ${p.intent} | AI Vol: ${p.estAiVolume}/mo | Vis: ${p.avgVisibility}% | Gap: ${p.competitorGap}%${suffix}`;
-  };
+  const promptLine = (p, i) =>
+    `[${i}] "${p.text}" | Intent: ${p.intent} | AI Vol: ${p.estAiVolume}/mo | Vis: ${p.avgVisibility}% | Gap: ${p.competitorGap}%${alreadySuggested(openTitles.get(p.promptId))}`;
 
   const userPrompt = `Brand: ${brand.name}
 Industry: ${brand.industry || 'Not specified'}
@@ -234,18 +216,13 @@ IMPORTANT: Write every opportunity title and description in ${langName}.`;
 
   // Exact repeats are still caught here, as the last guard behind the cap and
   // the already-suggested list.
-  const seen = new Set(
-    existing.map(
-      (opportunity) =>
-        `${opportunity.prompt_id}::${(opportunity.title || '').toLowerCase().trim()}`,
-    ),
-  );
+  const seen = new Set(existing.map((o) => opportunityKey(o.prompt_id, o.title)));
 
   const rows = object.opportunities
     .map((opp) => ({ rel: relatedCandidate(scored, opp.relatedPromptIndex), opp }))
     .filter(({ rel, opp }) => {
       if (!rel) return false;
-      const key = `${rel.promptId}::${opp.title.toLowerCase().trim()}`;
+      const key = opportunityKey(rel.promptId, opp.title);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;

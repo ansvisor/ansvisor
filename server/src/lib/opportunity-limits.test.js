@@ -5,8 +5,11 @@ import {
   MAX_OPEN_PER_PROMPT,
   OPPORTUNITIES_PER_RUN,
   OPPORTUNITY_COUNT_RULE,
+  alreadySuggested,
   belowOpenCap,
   openCountsByPrompt,
+  openTitlesByPrompt,
+  opportunityKey,
   relatedCandidate,
 } from './opportunity-limits.js';
 
@@ -96,9 +99,35 @@ describe('open-opportunity cap (#837)', () => {
     expect(relatedCandidate(candidates, undefined)).toBeNull();
   });
 
-  it('the nightly generator applies the cap and shows the model what is already open', () => {
-    const code = source('./opportunity-generator.js');
-    expect(code).toContain('belowOpenCap(');
-    expect(code).toContain('Already suggested');
+  it('lists open titles per prompt and renders them for the prompt data', () => {
+    const titles = openTitlesByPrompt([
+      { prompt_id: 'a', title: 'Guide' },
+      { prompt_id: 'a', title: 'Checklist' },
+      { prompt_id: 'b', title: null },
+    ]);
+    expect(titles.get('a')).toEqual(['Guide', 'Checklist']);
+    expect(titles.has('b')).toBe(false);
+    expect(alreadySuggested(titles.get('a'))).toBe(' | Already suggested: "Guide"; "Checklist"');
+    expect(alreadySuggested(undefined)).toBe('');
+  });
+
+  it('keys duplicates by prompt and title, ignoring case and outer spaces', () => {
+    expect(opportunityKey('p', '  Guide ')).toBe(opportunityKey('p', 'guide'));
+    expect(opportunityKey('p', 'Guide')).not.toBe(opportunityKey('q', 'Guide'));
+  });
+
+  for (const [label, path] of GENERATORS) {
+    it(`the ${label} generator applies the cap and shows the model what is open`, () => {
+      const code = source(path);
+      expect(code).toContain('loadOpenOpportunities(');
+      expect(code).toContain('belowOpenCap(');
+      expect(code).toContain('${ALREADY_SUGGESTED_RULE}');
+      expect(code).toContain('opportunityKey(');
+    });
+  }
+
+  it('the Generate button adds to the open list instead of deleting it (#63)', () => {
+    const code = source('../workers/content-worker.js');
+    expect(code).not.toMatch(/\.delete\(\)/);
   });
 });

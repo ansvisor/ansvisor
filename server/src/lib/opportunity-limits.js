@@ -58,3 +58,27 @@ export function relatedCandidate(candidates, index) {
     ? candidates[index]
     : null;
 }
+
+/** The instruction that goes with the "Already suggested" lists in the prompt data. */
+export const ALREADY_SUGGESTED_RULE = `- Some prompts list opportunities "Already suggested" for them. Do not repeat or reword those: suggest a genuinely different piece of content for that prompt, or choose another prompt.`;
+
+/** Open opportunity titles per prompt id, from rows carrying `prompt_id` and `title`. */
+export function openTitlesByPrompt(rows) {
+  const titles = new Map();
+  for (const r of rows || []) {
+    if (!r.prompt_id || !r.title) continue;
+    if (!titles.has(r.prompt_id)) titles.set(r.prompt_id, []);
+    titles.get(r.prompt_id).push(r.title);
+  }
+  return titles;
+}
+
+/** The prompt-data suffix listing what a prompt already holds, or '' if nothing. */
+export function alreadySuggested(titles) {
+  return titles?.length ? ` | Already suggested: ${titles.map((t) => `"${t}"`).join('; ')}` : '';
+}
+
+/** Duplicate key: the same prompt and the same title, ignoring case and outer spaces. */
+export function opportunityKey(promptId, title) {
+  return `${promptId}::${(title || '').toLowerCase().trim()}`;
+}

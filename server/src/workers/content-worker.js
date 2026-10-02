@@ -11,10 +11,17 @@ import supabaseAdmin from '../config/supabase.js';
 import { selectInChunks } from '../lib/chunked-in.js';
 import logger from '../lib/logger.js';
 import {
+  ALREADY_SUGGESTED_RULE,
   OPPORTUNITIES_PER_RUN,
   OPPORTUNITY_COUNT_RULE,
+  alreadySuggested,
+  belowOpenCap,
+  openCountsByPrompt,
+  openTitlesByPrompt,
+  opportunityKey,
   relatedCandidate,
 } from '../lib/opportunity-limits.js';
+import { loadOpenOpportunities } from '../lib/open-opportunities.js';
 
 const opportunitySchema = z.object({
   opportunities: z
@@ -57,6 +64,7 @@ Rules:
 - Set impact based on: volume × (100 - current visibility) × competitor gap.
 ${OPPORTUNITY_COUNT_RULE}
 - Do NOT repeat the same recommendation in different wording.
+${ALREADY_SUGGESTED_RULE}
 - The bracketed [N] indexes in the prompt data exist ONLY for the relatedPromptIndex field. NEVER mention an index like "[0]" or "Prompt 3" in titles or descriptions — refer to the prompt by quoting or paraphrasing its actual text/topic instead.`;
 
 function computeOpportunityScore(volume, visibility, competitorGap, intent) {
@@ -207,15 +215,26 @@ export async function processContentJob({ brandId, model, job }) {
     };
   });
 
-  const scoredPrompts = promptDataForLLM
+  // The button adds to the open list, as the nightly run does (#63), rather
+  // than replacing it: prompts at the cap are skipped and the rest show the
+  // model what they already hold.
+  const existing = await loadOpenOpportunities(brandId);
+  const openCounts = openCountsByPrompt(existing);
+  const openTitles = openTitlesByPrompt(existing);
+
+  const ranked = promptDataForLLM
     .map((p) => ({
       ...p,
       score: computeOpportunityScore(p.estAiVolume, p.avgVisibility, p.competitorGap, p.intent),
     }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 25);
+    .sort((a, b) => b.score - a.score);
+  const scoredPrompts = belowOpenCap(ranked, openCounts).slice(0, 25);
 
   if (scoredPrompts.length === 0) {
+    logger.info(
+      { brandId, openOpportunities: existing.length },
+      'every candidate prompt is at its open cap — nothing generated',
+    );
     return { generated: 0 };
   }
 
@@ -230,7 +249,7 @@ Prompt Data (sorted by opportunity score, highest first):
 ${scoredPrompts
   .map(
     (p, i) =>
-      `[${i}] "${p.text}" | Category: ${p.category} | Intent: ${p.intent} | Est. AI Volume: ${p.estAiVolume}/mo | Visibility: ${p.avgVisibility}% | Competitor Gap: ${p.competitorGap > 0 ? '+' + p.competitorGap : p.competitorGap}% | Competitors Cited: ${p.competitorsCited.join(', ') || 'none'} | Keywords: ${p.keywords.join(', ')}`,
+      `[${i}] "${p.text}" | Category: ${p.category} | Intent: ${p.intent} | Est. AI Volume: ${p.estAiVolume}/mo | Visibility: ${p.avgVisibility}% | Competitor Gap: ${p.competitorGap > 0 ? '+' + p.competitorGap : p.competitorGap}% | Competitors Cited: ${p.competitorsCited.join(', ') || 'none'} | Keywords: ${p.keywords.join(', ')}${alreadySuggested(openTitles.get(p.promptId))}`,
   )
   .join('\n')}
 
@@ -249,15 +268,14 @@ IMPORTANT: Write every opportunity title and description in ${langName}.`;
 
   job.progress({ phase: 'saving', message: 'Saving opportunities...' });
 
-  await supabaseAdmin
-    .from('content_opportunities')
-    .delete()
-    .eq('brand_id', brandId)
-    .in('status', ['new']);
+  const seen = new Set(existing.map((o) => opportunityKey(o.prompt_id, o.title)));
 
   const rows = object.opportunities.flatMap((opp) => {
     const relatedPrompt = relatedCandidate(scoredPrompts, opp.relatedPromptIndex);
     if (!relatedPrompt) return [];
+    const key = opportunityKey(relatedPrompt.promptId, opp.title);
+    if (seen.has(key)) return [];
+    seen.add(key);
     const score = computeOpportunityScore(
       relatedPrompt.estAiVolume,
       relatedPrompt.avgVisibility,
