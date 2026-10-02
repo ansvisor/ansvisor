@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const promptResultRow = {
   id: 'result-id',
@@ -29,6 +29,11 @@ function fakeQueryBuilder(table: string) {
     select: () => builder,
     eq: () => builder,
     neq: () => builder,
+    in: () => builder,
+    order: () => builder,
+    range: () => builder,
+    // Awaiting a list query yields no rows.
+    then: (resolve: (v: unknown) => unknown) => resolve({ data: [], error: null, count: 0 }),
     single: async () => {
       if (table === 'prompt_results') return { data: promptResultRow, error: null };
       if (table === 'prompts') {
@@ -64,12 +69,34 @@ const insightsAggregatesRow = {
 
 let rpcMock = vi.fn(async () => ({ data: insightsAggregatesRow, error: null }));
 
+// Every RPC the loaders make, by name and arguments.
+let rpcCalls: { name: string; args: Record<string, unknown> }[] = [];
+
+// Empty-but-valid payloads per rollup read, for tests that drive whole loaders.
+const emptyRollups: Record<string, unknown> = {
+  insights_aggregates_daily: insightsAggregatesRow,
+  visible_prompt_stats_daily: { visible_prompts: 0, visible_results: 0, sum_visibility_visible: 0 },
+  ai_visibility_aggregates_daily: { answers: 0, by_competitor: [] },
+  competitor_aggregates_daily: { brand_row_count: 0 },
+  share_of_voice_aggregates_daily: {
+    total_brand_mentions: 0,
+    total_competitor_mentions: 0,
+    by_platform: [],
+    by_day: [],
+  },
+  visibility_rate_trend_daily: [],
+};
+let rpcByName = false;
+
 let sessionMock: { access_token: string } | null = { access_token: 'access-token' };
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     from: (table: string) => fakeQueryBuilder(table),
-    rpc: () => rpcMock(),
+    rpc: (name: string, args: Record<string, unknown>) => {
+      rpcCalls.push({ name, args });
+      return rpcByName ? Promise.resolve({ data: emptyRollups[name], error: null }) : rpcMock();
+    },
     auth: { getSession: async () => ({ data: { session: sessionMock } }) },
   }),
 }));
@@ -110,6 +137,66 @@ describe('getInsightsSummary', () => {
     const summary = await getInsightsSummary('brand-id');
 
     expect(summary.positiveSentimentPct).toBe(0);
+  });
+});
+
+describe('topic-filtered reads (00101)', () => {
+  beforeEach(() => {
+    rpcCalls = [];
+  });
+  afterEach(() => {
+    rpcByName = false;
+  });
+
+  it('serves the topic detail page from the daily rollups, every call scoped to the topic', async () => {
+    rpcByName = true;
+    const { getTopicDetail } = await import('./tracking');
+
+    await getTopicDetail('brand-id', 'topic-1');
+
+    expect(rpcCalls.length).toBeGreaterThan(0);
+    for (const call of rpcCalls) {
+      expect(call.name).toMatch(/_daily$/);
+      // Without the topic, a rollup read answers for the whole brand.
+      expect(call.args.p_topic_id).toBe('topic-1');
+    }
+  });
+
+  it('passes the topic along when a topic filter is applied with a day window', async () => {
+    rpcByName = true;
+    const { getCompetitorComparison, getShareOfVoiceData, getVisibilityRateKpi } =
+      await import('./tracking');
+    const days = { dayFrom: '2026-09-01', dayTo: '2026-09-30' };
+
+    await getCompetitorComparison('brand-id', { topicId: 'topic-1', days });
+    await getShareOfVoiceData('brand-id', { topicId: 'topic-1', days });
+    await getVisibilityRateKpi('brand-id', { topicId: 'topic-1', days });
+
+    expect(rpcCalls.map((c) => c.name)).toEqual(
+      expect.arrayContaining([
+        'competitor_aggregates_daily',
+        'ai_visibility_aggregates_daily',
+        'share_of_voice_aggregates_daily',
+        'visible_prompt_stats_daily',
+      ]),
+    );
+    for (const call of rpcCalls) {
+      expect(call.name).toMatch(/_daily$/);
+      expect(call.args.p_topic_id).toBe('topic-1');
+    }
+  });
+
+  it('leaves brand-level reads unscoped', async () => {
+    rpcByName = true;
+    const { getInsightsSummary } = await import('./tracking');
+
+    await getInsightsSummary('brand-id', { days: {} });
+
+    expect(rpcCalls.length).toBeGreaterThan(0);
+    for (const call of rpcCalls) {
+      expect(call.name).toBe('insights_aggregates_daily');
+      expect(call.args.p_topic_id).toBeUndefined();
+    }
   });
 });
 
