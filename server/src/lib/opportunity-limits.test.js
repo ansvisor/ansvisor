@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { OPPORTUNITIES_PER_RUN, OPPORTUNITY_COUNT_RULE } from './opportunity-limits.js';
+import {
+  MAX_OPEN_PER_PROMPT,
+  OPPORTUNITIES_PER_RUN,
+  OPPORTUNITY_COUNT_RULE,
+  belowOpenCap,
+  openCountsByPrompt,
+  relatedCandidate,
+} from './opportunity-limits.js';
 
 /**
  * The count rule is shared because it was duplicated (#730).
@@ -45,5 +52,53 @@ describe('opportunity count', () => {
       expect(code).toContain('${OPPORTUNITY_COUNT_RULE}');
       expect(code).not.toMatch(/Generate (between )?\d+/);
     });
+
+    it(`the ${label} generator drops an out-of-range prompt index`, () => {
+      const code = source(path);
+      expect(code).toContain('relatedCandidate(');
+      // The old fallback attached the opportunity to the top candidate.
+      expect(code).not.toMatch(/relatedPromptIndex\]\s*\|\|/);
+    });
   }
+});
+
+describe('open-opportunity cap (#837)', () => {
+  it('counts open opportunities per prompt', () => {
+    const counts = openCountsByPrompt([
+      { prompt_id: 'a' },
+      { prompt_id: 'a' },
+      { prompt_id: 'b' },
+      { prompt_id: null },
+    ]);
+    expect(counts.get('a')).toBe(2);
+    expect(counts.get('b')).toBe(1);
+    expect(counts.size).toBe(2);
+  });
+
+  it('keeps prompts under the cap and drops prompts at it', () => {
+    const counts = new Map([
+      ['full', MAX_OPEN_PER_PROMPT],
+      ['partly', MAX_OPEN_PER_PROMPT - 1],
+    ]);
+    const kept = belowOpenCap(
+      [{ promptId: 'full' }, { promptId: 'partly' }, { promptId: 'fresh' }],
+      counts,
+    );
+    expect(kept.map((c) => c.promptId)).toEqual(['partly', 'fresh']);
+  });
+
+  it('resolves an in-range index and drops anything else', () => {
+    const candidates = [{ promptId: 'a' }, { promptId: 'b' }];
+    expect(relatedCandidate(candidates, 1)).toEqual({ promptId: 'b' });
+    expect(relatedCandidate(candidates, 2)).toBeNull();
+    expect(relatedCandidate(candidates, -1)).toBeNull();
+    expect(relatedCandidate(candidates, 0.5)).toBeNull();
+    expect(relatedCandidate(candidates, undefined)).toBeNull();
+  });
+
+  it('the nightly generator applies the cap and shows the model what is already open', () => {
+    const code = source('./opportunity-generator.js');
+    expect(code).toContain('belowOpenCap(');
+    expect(code).toContain('Already suggested');
+  });
 });

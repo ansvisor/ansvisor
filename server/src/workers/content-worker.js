@@ -10,7 +10,11 @@ import { getLanguageName } from '../lib/languages.js';
 import supabaseAdmin from '../config/supabase.js';
 import { selectInChunks } from '../lib/chunked-in.js';
 import logger from '../lib/logger.js';
-import { OPPORTUNITIES_PER_RUN, OPPORTUNITY_COUNT_RULE } from '../lib/opportunity-limits.js';
+import {
+  OPPORTUNITIES_PER_RUN,
+  OPPORTUNITY_COUNT_RULE,
+  relatedCandidate,
+} from '../lib/opportunity-limits.js';
 
 const opportunitySchema = z.object({
   opportunities: z
@@ -251,8 +255,9 @@ IMPORTANT: Write every opportunity title and description in ${langName}.`;
     .eq('brand_id', brandId)
     .in('status', ['new']);
 
-  const rows = object.opportunities.map((opp) => {
-    const relatedPrompt = scoredPrompts[opp.relatedPromptIndex] || scoredPrompts[0];
+  const rows = object.opportunities.flatMap((opp) => {
+    const relatedPrompt = relatedCandidate(scoredPrompts, opp.relatedPromptIndex);
+    if (!relatedPrompt) return [];
     const score = computeOpportunityScore(
       relatedPrompt.estAiVolume,
       relatedPrompt.avgVisibility,
@@ -260,28 +265,33 @@ IMPORTANT: Write every opportunity title and description in ${langName}.`;
       relatedPrompt.intent,
     );
 
-    return {
-      brand_id: brandId,
-      prompt_id: relatedPrompt.promptId,
-      title: opp.title,
-      description: opp.description,
-      type: opp.type,
-      impact: opp.impact,
-      opportunity_score: score,
-      status: 'new',
-      source_data: {
-        promptText: relatedPrompt.text,
-        estAiVolume: relatedPrompt.estAiVolume,
-        visibilityScore: relatedPrompt.avgVisibility,
-        competitorGap: relatedPrompt.competitorGap,
-        intent: relatedPrompt.intent,
-        keywords: relatedPrompt.keywords,
-        competitorsCited: relatedPrompt.competitorsCited,
+    return [
+      {
+        brand_id: brandId,
+        prompt_id: relatedPrompt.promptId,
+        title: opp.title,
+        description: opp.description,
+        type: opp.type,
+        impact: opp.impact,
+        opportunity_score: score,
+        status: 'new',
+        source_data: {
+          promptText: relatedPrompt.text,
+          estAiVolume: relatedPrompt.estAiVolume,
+          visibilityScore: relatedPrompt.avgVisibility,
+          competitorGap: relatedPrompt.competitorGap,
+          intent: relatedPrompt.intent,
+          keywords: relatedPrompt.keywords,
+          competitorsCited: relatedPrompt.competitorsCited,
+        },
       },
-    };
+    ];
   });
 
-  const { error: insertErr } = await supabaseAdmin.from('content_opportunities').insert(rows);
+  const { error: insertErr } =
+    rows.length > 0
+      ? await supabaseAdmin.from('content_opportunities').insert(rows)
+      : { error: null };
 
   if (insertErr) {
     throw new Error(insertErr.message);
