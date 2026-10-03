@@ -19,6 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Copy, KeyRound, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { formatDate } from '@/lib/format';
 
 interface ApiKey {
   id: string;
@@ -34,15 +35,6 @@ const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ?? 
 function getMcpEndpoint(): string {
   const appUrl = configuredAppUrl || (typeof window !== 'undefined' ? window.location.origin : '');
   return `${appUrl}/api/mcp`;
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 export function ApiKeysSection() {

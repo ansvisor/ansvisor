@@ -26,19 +26,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ArrowLeft, FileDown, Loader2 } from 'lucide-react';
+import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { REPORT_TEMPLATES } from '@/lib/reports/templates';
 
 const KNOWN_TEMPLATE_IDS = new Set<string>(REPORT_TEMPLATES.map((tpl) => tpl.id));
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
 
 /** Signed percentage delta, or an explicit raw count for a new zero-base metric. */
 function Delta({ value, zeroBaseCount }: { value: number | null; zeroBaseCount?: number }) {

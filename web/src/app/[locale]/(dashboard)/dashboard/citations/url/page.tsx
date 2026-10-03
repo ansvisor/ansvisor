@@ -52,19 +52,11 @@ import {
   Target,
   TrendingUp,
 } from 'lucide-react';
+import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 const CITED_IN_PAGE_SIZE = 10;
 const DATE_PRESET_VALUES: CitationsDatePreset[] = ['24h', '7d', '30d', '90d', 'all', 'custom'];
-
-function formatDate(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
 
 function KpiCard({
   title,

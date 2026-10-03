@@ -27,6 +27,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Check, FileBarChart, Loader2, Plus, Trash2 } from 'lucide-react';
+import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import {
   Select,
@@ -59,14 +60,6 @@ function getDateRange(preset: DatePreset, custom: { from: string; to: string }) 
   const from = new Date();
   from.setDate(from.getDate() - days);
   return { dateFrom: from.toISOString(), dateTo: to.toISOString() };
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 export default function ReportsPage() {

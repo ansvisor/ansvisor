@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Loader2, Lock, Sparkles, Trash2, CheckCircle2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useUserRole } from '@/hooks/use-user-role';
+import { formatDate } from '@/lib/format';
 import {
   Dialog,
   DialogClose,
@@ -26,15 +27,6 @@ interface KeyState {
   last4: string | null;
   setAt: string | null;
   setByEmail: string | null;
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 /**

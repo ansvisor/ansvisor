@@ -23,6 +23,7 @@ import {
   Line,
 } from '@react-pdf/renderer';
 import type { Report, ReportPromptPerf } from '@/lib/actions/reports';
+import { formatDate } from '@/lib/format';
 
 Font.register({
   family: 'Inter',
@@ -226,14 +227,6 @@ function PromptTable({ title, prompts }: { title: string; prompts: ReportPromptP
       ))}
     </View>
   );
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 export function ReportPdfDocument({ report }: { report: Report }) {
