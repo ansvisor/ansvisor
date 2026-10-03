@@ -801,6 +801,7 @@ export default function OnboardingPage() {
         description: description.trim(),
         website: domain,
         language,
+        region,
       });
       setSuggestedCompetitors((prev) => mergeCompetitorSuggestions(prev, competitors));
     } catch (err) {

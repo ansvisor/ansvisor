@@ -1,11 +1,13 @@
 import { Router } from 'express';
-import { generateText, generateObject } from 'ai';
+import { generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { assertBrandAccess } from '../lib/access.js';
 import { requireFeature } from '../lib/plan-guard.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import { withRetry } from '../lib/retry.js';
+import { webResearch } from '../lib/web-research.js';
+import logger from '../lib/logger.js';
 import { getLanguageName } from '../lib/languages.js';
 
 const router = Router();
@@ -181,16 +183,17 @@ IMPORTANT: Generate all topic names in ${langName}.`;
   // phase re-runs the research too, not just the last call.
   const { object } = await withRetry(
     async () => {
-      const { text: research } = await generateText({
-        model: resolveModel(topicModel, { useSearchGrounding: true }),
-        prompt: researchPrompt,
-      });
+      const research = await webResearch(topicModel, researchPrompt);
+      logger.info(
+        { model: topicModel, searched: research.searched, sources: research.sources },
+        'topic research',
+      );
 
       return generateObject({
         model: resolveModel(topicModel),
         schema: topicSchema,
         system: `Extract AEO tracking topics from the research below. Each topic should be concise (3-8 words) and represent an area where AI assistants might mention or discuss "${brandName}". Do NOT include the brand name "${brandName}" in any topic — keep them generic. Include a mix of: competitive comparisons, product/service features, industry trends, use cases, and problem-solving topics. Each topic MUST focus on a single concept — never combine two ideas with "and" or "&". IMPORTANT: All topic names MUST be written in ${langName}.`,
-        prompt: research,
+        prompt: research.text,
       });
     },
     { attempts: 3, baseDelayMs: 500, label: 'topic-suggest' },

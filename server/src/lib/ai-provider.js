@@ -112,3 +112,31 @@ export function getGoogleProvider() {
   }
   return googleProvider;
 }
+
+/**
+ * The provider-hosted web search tool for a "provider/model" string, as a
+ * `tools` object for generateText, or null when that provider has none we can
+ * use (OpenRouter does not relay them).
+ *
+ * The suggestion routes used to ask for search with
+ * `resolveModel(model, { useSearchGrounding: true })`. That was an
+ * @ai-sdk/google v1 model setting; from v2 the provider takes only a model id
+ * and drops the second argument, so "Search the web" prompts were answered
+ * from the model's memory alone. Search is a tool now, attached per call.
+ *
+ * @param {string} modelString
+ * @returns {Record<string, unknown> | null}
+ */
+export function webSearchTools(modelString) {
+  const [providerName] = (modelString || '').split('/');
+  if (providerName === 'google' && googleProvider) {
+    return { google_search: googleProvider.tools.googleSearch({}) };
+  }
+  if (providerName === 'openai' && openaiProvider) {
+    return { web_search: openaiProvider.tools.webSearch({}) };
+  }
+  if (providerName === 'anthropic' && providers.anthropic) {
+    return { web_search: providers.anthropic.tools.webSearch_20250305({ maxUses: 5 }) };
+  }
+  return null;
+}

@@ -72,4 +72,27 @@ describe('ai-provider registry', () => {
 
     expect(() => resolveModel('mistral/large')).toThrow(/not configured.*openrouter/s);
   });
+
+  it('attaches each first-party provider its own hosted web search tool', async () => {
+    const { webSearchTools } = await loadWith({
+      GOOGLE_GENERATIVE_AI_API_KEY: 'g-test',
+      OPENAI_API_KEY: 'sk-test',
+      ANTHROPIC_API_KEY: 'sk-ant-test',
+    });
+
+    expect(webSearchTools('google/gemini-3-flash-preview').google_search.id).toBe(
+      'google.google_search',
+    );
+    expect(webSearchTools('openai/gpt-5-mini').web_search.id).toBe('openai.web_search');
+    expect(webSearchTools('anthropic/claude-haiku-4-5').web_search.id).toBe(
+      'anthropic.web_search_20250305',
+    );
+  });
+
+  it('has no search tool for openrouter or an unconfigured provider', async () => {
+    const { webSearchTools } = await loadWith({ OPENROUTER_API_KEY: 'sk-or-test' });
+
+    expect(webSearchTools('openrouter/google/gemini-3-flash')).toBeNull();
+    expect(webSearchTools('google/gemini-3-flash-preview')).toBeNull();
+  });
 });

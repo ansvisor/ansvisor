@@ -134,7 +134,7 @@ export interface SuggestCompetitorsResult {
  * Throws if the request fails.
  */
 export async function suggestCompetitors(
-  params: BrandSetupParams,
+  params: BrandSetupParams & { region?: string },
 ): Promise<SuggestCompetitorsResult> {
   const authorization = await getAuthHeader();
   const res = await fetch(`${API_BASE}/api/competitors/suggest`, {
@@ -147,6 +147,10 @@ export async function suggestCompetitors(
       brandName: params.brandName,
       industry: '',
       description: params.description,
+      // The site tells the model which company the name means, the region
+      // which market its competitors should come from.
+      website: params.website,
+      region: params.region,
       language: params.language,
     }),
   });
