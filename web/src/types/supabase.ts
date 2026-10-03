@@ -1231,39 +1231,134 @@ export type Database = {
           },
         ]
       }
-      insights_prompt_daily: {
+      insights_competitor_prompt_measures_daily: {
         Row: {
           answer_count: number
           brand_id: string
+          citation_answers: number
+          competitor_id: string
           day: string
-          has_citation: boolean
-          has_mention: boolean
+          mention_answers: number
           model_used: string | null
           platform: string | null
+          position_count: number
           prompt_id: string
           region: string | null
+          sum_inv_position: number | null
+          sum_visibility: number | null
+          total_citations: number
+          total_mentions: number
         }
         Insert: {
           answer_count: number
           brand_id: string
+          citation_answers: number
+          competitor_id: string
           day: string
-          has_citation: boolean
-          has_mention: boolean
+          mention_answers: number
           model_used?: string | null
           platform?: string | null
+          position_count: number
           prompt_id: string
           region?: string | null
+          sum_inv_position?: number | null
+          sum_visibility?: number | null
+          total_citations: number
+          total_mentions: number
         }
         Update: {
           answer_count?: number
           brand_id?: string
+          citation_answers?: number
+          competitor_id?: string
+          day?: string
+          mention_answers?: number
+          model_used?: string | null
+          platform?: string | null
+          position_count?: number
+          prompt_id?: string
+          region?: string | null
+          sum_inv_position?: number | null
+          sum_visibility?: number | null
+          total_citations?: number
+          total_mentions?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insights_competitor_prompt_measures_daily_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      insights_prompt_daily: {
+        Row: {
+          answer_count: number
+          brand_id: string
+          citation_answers: number | null
+          day: string
+          has_citation: boolean
+          has_mention: boolean
+          max_created_at: string | null
+          mention_answers: number | null
+          mentioning_answers: number | null
+          model_used: string | null
+          platform: string | null
+          position_count: number | null
+          positive_count: number | null
+          prompt_id: string
+          region: string | null
+          sum_inv_position: number | null
+          sum_visibility: number | null
+          sum_visibility_visible: number | null
+          total_citations: number | null
+          total_mentions: number | null
+        }
+        Insert: {
+          answer_count: number
+          brand_id: string
+          citation_answers?: number | null
+          day: string
+          has_citation: boolean
+          has_mention: boolean
+          max_created_at?: string | null
+          mention_answers?: number | null
+          mentioning_answers?: number | null
+          model_used?: string | null
+          platform?: string | null
+          position_count?: number | null
+          positive_count?: number | null
+          prompt_id: string
+          region?: string | null
+          sum_inv_position?: number | null
+          sum_visibility?: number | null
+          sum_visibility_visible?: number | null
+          total_citations?: number | null
+          total_mentions?: number | null
+        }
+        Update: {
+          answer_count?: number
+          brand_id?: string
+          citation_answers?: number | null
           day?: string
           has_citation?: boolean
           has_mention?: boolean
+          max_created_at?: string | null
+          mention_answers?: number | null
+          mentioning_answers?: number | null
           model_used?: string | null
           platform?: string | null
+          position_count?: number | null
+          positive_count?: number | null
           prompt_id?: string
           region?: string | null
+          sum_inv_position?: number | null
+          sum_visibility?: number | null
+          sum_visibility_visible?: number | null
+          total_citations?: number | null
+          total_mentions?: number | null
         }
         Relationships: [
           {
@@ -2722,6 +2817,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: Json
       }
@@ -2884,6 +2980,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: Json
       }
@@ -3016,6 +3113,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: Json
       }
@@ -3168,6 +3266,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: Json
       }
@@ -3224,6 +3323,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: number
       }
@@ -3248,6 +3348,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: Json
       }
@@ -3283,6 +3384,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: Json
       }

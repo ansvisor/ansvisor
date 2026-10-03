@@ -19,6 +19,10 @@
  * it redoes chunks it already wrote. Chunked by calendar month so no single
  * call parses more than ~31 days of competitor jsonb, with a pause between
  * calls because this shares the instance with live dashboards.
+ *
+ * Ends by counting insights_prompt_daily rows the refresh has not rewritten
+ * since 00101 (exit code 1 while any remain) — topic views read the columns
+ * those rows are missing.
  */
 
 import 'dotenv/config';
@@ -88,6 +92,20 @@ async function main() {
   }
   console.log(`Backfill complete: ${done} brand(s), ${failed} failure(s).`);
   if (failed > 0) process.exitCode = 1;
+
+  // 00101 added the topic-read measures to insights_prompt_daily as nullable
+  // columns: a row no refresh has rewritten since reads as NULL. Topic views
+  // read those columns, so they must not be switched on while any remain.
+  const unfilled = supabaseAdmin
+    .from('insights_prompt_daily')
+    .select('brand_id', { count: 'exact', head: true })
+    .is('max_created_at', null);
+  const { count, error: countError } = ONLY_BRAND
+    ? await unfilled.eq('brand_id', ONLY_BRAND)
+    : await unfilled;
+  if (countError) throw new Error(countError.message);
+  console.log(`insights_prompt_daily rows not yet rewritten: ${count ?? 0}`);
+  if ((count ?? 0) > 0) process.exitCode = 1;
 }
 
 main().catch((err) => {
