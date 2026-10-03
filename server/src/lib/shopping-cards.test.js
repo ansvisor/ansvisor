@@ -1,4 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// shopping-cards now imports extractDomain from citation-rows, which reaches
+// the supabase admin client at import time; its config calls process.exit(1)
+// when env vars are absent. Stub it so the module loads under test.
+vi.mock('../config/supabase.js', () => ({ default: {} }));
+
 import {
   parsePerplexityCard,
   parseAiModeCard,
@@ -122,6 +128,14 @@ describe('shopping-cards – parsePerplexityCard', () => {
     const result = parsePerplexityCard(card, 2);
     expect(result.product_title).toBe('Gadget');
     expect(result.product_brand).toBe('Acme Inc');
+  });
+
+  it('recovers merchant_domain from a scheme-less merchant URL (#874)', () => {
+    // `new URL('shop.example.com/p/1')` throws, so the old local helper stored
+    // null and the card dropped out of merchant grouping. The shared
+    // extractDomain recovers the host via its regex fallback.
+    const card = { title: 'Widget', url: 'shop.example.com/p/1' };
+    expect(parsePerplexityCard(card, 0).merchant_domain).toBe('shop.example.com');
   });
 
   it('should round prices with float-precision garbage to exactly two decimals', () => {

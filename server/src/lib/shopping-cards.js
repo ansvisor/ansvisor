@@ -25,8 +25,8 @@
  * and the cost of `?? otherName` is tiny.
  */
 
-import { URL } from 'node:url';
 import { logger } from './logger.js';
+import { extractDomain } from './citation-rows.js';
 
 // Loose set of currency codes Perplexity / Copilot embed in price strings
 // like "$29.99", "EUR 19,90", "₺499". Anything else falls back to null —
@@ -161,19 +161,6 @@ function parsePrice(value) {
 }
 
 /**
- * @param {string|null|undefined} url
- * @returns {string|null}
- */
-function extractHostname(url) {
-  if (!url || typeof url !== 'string') return null;
-  try {
-    return new URL(url).hostname.replace(/^www\./i, '').toLowerCase();
-  } catch {
-    return null;
-  }
-}
-
-/**
  * @param {unknown} value
  * @returns {number|null}
  */
@@ -224,7 +211,7 @@ export function parsePerplexityCard(card, position) {
     price_currency: price.currency,
     image_url: toStringOrNull(card.image_url ?? card.image),
     merchant_url: merchantUrl,
-    merchant_domain: extractHostname(merchantUrl),
+    merchant_domain: extractDomain(merchantUrl),
     rating: toNumber(card.rating),
     review_count: toInteger(card.review_count ?? card.reviews),
     raw: card,
@@ -250,7 +237,7 @@ export function parseAiModeCard(card, position) {
     price_currency: price.currency,
     image_url: toStringOrNull(card.imageUrl ?? card.image),
     merchant_url: merchantUrl,
-    merchant_domain: extractHostname(merchantUrl),
+    merchant_domain: extractDomain(merchantUrl),
     rating: toNumber(card.rating),
     review_count: toInteger(card.reviewCount ?? card.reviews),
     raw: card,
@@ -296,7 +283,7 @@ export function parseCopilotCard(card, position) {
     price_currency: price.currency,
     image_url: imageUrl,
     merchant_url: merchantUrl,
-    merchant_domain: extractHostname(merchantUrl),
+    merchant_domain: extractDomain(merchantUrl),
     rating: ratingObj ? toNumber(ratingObj.value) : toNumber(card.rating),
     review_count: ratingObj
       ? toInteger(ratingObj.count)
@@ -346,7 +333,7 @@ export function parseChatgptCard(card, position) {
       ? toStringOrNull(card.image_urls[0])
       : toStringOrNull(card.image_url ?? card.image),
     merchant_url: merchantUrl,
-    merchant_domain: extractHostname(merchantUrl),
+    merchant_domain: extractDomain(merchantUrl),
     rating: toNumber(card.rating),
     review_count: toInteger(card.num_reviews ?? card.review_count),
     raw: {
