@@ -102,7 +102,7 @@ export function HistoryDrawer({
 
   return (
     <Sheet open={Boolean(item)} onOpenChange={onOpenChange}>
-      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
+      <SheetContent className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-lg">
         <SheetHeader className="border-b px-6 py-4">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge variant="outline" className="text-[10px]">
