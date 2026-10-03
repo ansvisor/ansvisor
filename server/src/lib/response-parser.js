@@ -14,14 +14,36 @@ function stripUrls(text) {
   return cleaned;
 }
 
+const WORD_CHAR = /[\p{L}\p{N}_]/u;
+// Scripts written without spaces between words (Chinese, Japanese, Thai…) and
+// Korean, whose particles attach to the noun: a name there is always flanked
+// by other letters, so a boundary check would never let it match.
+const UNSPACED_SCRIPT =
+  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+
+/**
+ * Case-insensitive regex matching a name as a whole word (#871).
+ *
+ * `\b` only knows ASCII word characters, so a name starting or ending with an
+ * accented letter ("Ümit") or punctuation ("C++") never matched. The boundary
+ * is now a Unicode letter/number lookaround, applied only on a side where the
+ * name ends in a word character of a space-separated script.
+ */
+function nameRegex(term, flags) {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const needsBoundary = (ch) => WORD_CHAR.test(ch) && !UNSPACED_SCRIPT.test(ch);
+  const chars = [...term];
+  const before = needsBoundary(chars[0]) ? '(?<![\\p{L}\\p{N}_])' : '';
+  const after = needsBoundary(chars[chars.length - 1]) ? '(?![\\p{L}\\p{N}_])' : '';
+  return new RegExp(`${before}${escaped}${after}`, `${flags}u`);
+}
+
 /**
  * Count case-insensitive occurrences of a term in text.
  */
 function countOccurrences(text, term) {
   if (!term) return 0;
-  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(`\\b${escaped}\\b`, 'gi');
-  return (text.match(regex) || []).length;
+  return (text.match(nameRegex(term, 'gi')) || []).length;
 }
 
 /**
@@ -91,8 +113,7 @@ export function countBrandMentions(text, brand) {
  */
 function firstOccurrenceIndex(text, term) {
   if (!term) return -1;
-  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = new RegExp(`\\b${escaped}\\b`, 'i').exec(text);
+  const match = nameRegex(term, 'i').exec(text);
   return match ? match.index : -1;
 }
 

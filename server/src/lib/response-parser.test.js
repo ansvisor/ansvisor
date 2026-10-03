@@ -362,4 +362,58 @@ describe('response-parser', () => {
       expect(result.mentionPosition).toBe(2);
     });
   });
+
+  describe('names outside ASCII word characters (#871)', () => {
+    const count = (text, brandName) => countBrandMentions(text, { brandName, domains: [] });
+
+    it('matches names that start or end with an accented letter', () => {
+      expect(count('I like Émile Studio. Émile Studio is great.', 'Émile Studio')).toBe(2);
+      expect(count('Ümit ve Eda, Ümit en çok bilinen.', 'Ümit')).toBe(2);
+      expect(count('Çınar Bankası ve Çınar Bankası şubeleri', 'Çınar Bankası')).toBe(2);
+    });
+
+    it('matches names that start or end with punctuation', () => {
+      expect(count('I like Acme!. Acme! is great.', 'Acme!')).toBe(2);
+      expect(count('I like C++. C++ is great.', 'C++')).toBe(2);
+      expect(count('Acme, Inc. and Acme, Inc. again', 'Acme, Inc.')).toBe(2);
+    });
+
+    it('still ignores a name inside a longer word, in any Latin script', () => {
+      expect(count('Acmegroup and SuperAcme are different.', 'Acme')).toBe(0);
+      expect(count('Ümitler and Tümit are different.', 'Ümit')).toBe(0);
+      expect(count('Acmeé is not Acme.', 'Acme')).toBe(1);
+    });
+
+    it('matches names in scripts written without spaces between words', () => {
+      expect(count('我推荐星云科技，星云科技的服务很好。', '星云科技')).toBe(2);
+      expect(count('하늘랩은 좋은 회사입니다. 하늘랩의 제품', '하늘랩')).toBe(2);
+    });
+
+    it('keeps the plain ASCII behaviour', () => {
+      expect(count('I like Acme. Acme is great.', 'Acme')).toBe(2);
+      expect(count("Acme's pricing beats acme-lite.", 'Acme')).toBe(2);
+    });
+
+    it('positions a non-ASCII name among its competitors', () => {
+      const text = 'Eda öne çıkıyor, ardından Ümit ve İpek geliyor.';
+      const result = computeMentionPosition(text, { brandName: 'Ümit', domains: [] }, [
+        { id: 'c1', name: 'Eda', domain: null },
+        { id: 'c2', name: 'İpek', domain: null },
+      ]);
+      expect(result.mentionPosition).toBe(2);
+      expect(result.mentionedEntityCount).toBe(3);
+      expect(result.competitorPositions.get('c2')).toBe(3);
+    });
+
+    it('counts non-ASCII competitor names in parseResponse', () => {
+      const result = parseResponse(
+        { text: 'İpek ve Eda, İpek daha ucuz.', citations: [] },
+        { brandName: 'Acme', domains: [] },
+        'neutral',
+        [{ id: 'c1', name: 'İpek', domain: null }],
+      );
+      expect(result.competitorMentions[0].mention_count).toBe(2);
+      expect(result.competitorMentions[0].mention_position).toBe(1);
+    });
+  });
 });
