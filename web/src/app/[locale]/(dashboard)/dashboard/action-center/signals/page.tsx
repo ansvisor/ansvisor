@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { AlertCircle, Radar, Search, TrendingDown, TrendingUp, X } from 'lucide-react';
+import { AlertCircle, Download, Radar, Search, TrendingDown, TrendingUp, X } from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
 import {
@@ -26,7 +26,7 @@ import {
 } from '@/lib/signals/registry';
 import { signalAffected, signalTexts } from '@/lib/signals/display';
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
-import { SignalTable } from '@/components/action-center/signal-table';
+import { isSuperseded, SignalTable } from '@/components/action-center/signal-table';
 import { SignalDrawer } from '@/components/action-center/signal-drawer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -40,7 +40,18 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { toCsv } from '@/lib/csv';
 import type { KpiTrendPoint } from '@/lib/actions/kpis';
+
+const SIGNAL_EXPORT_HEADERS = [
+  'title',
+  'category',
+  'impact',
+  'status',
+  'sources',
+  'detected',
+  'last_detected',
+];
 
 const KpiSparkline = dynamic(() => import('@/components/action-center/kpi-sparkline'), {
   ssr: false,
@@ -81,6 +92,7 @@ export default function ActionCenterSignalsPage() {
 
 function SignalsContent({ brand }: { brand: Brand }) {
   const t = useTranslations('actionCenter.signalsPage');
+  const common = useTranslations('common');
   const tTexts = useTranslations('actionCenter.signalTexts');
   const tCategories = useTranslations('actionCenter.signalCategories');
 
@@ -167,6 +179,33 @@ function SignalsContent({ brand }: { brand: Brand }) {
       return true;
     });
   }, [signals, category, impact, status, source, search, tTexts, t]);
+
+  const handleExportCsv = useCallback(() => {
+    if (visible.length === 0) return;
+
+    const rows = visible.map((signal) => ({
+      title: signalTexts(signal, tTexts).title,
+      category: tCategories(signal.category),
+      impact: t(`impact.${signal.impact}`),
+      status: isSuperseded(signal) ? t('superseded') : t(`status.${signal.status}`),
+      sources: signal.source.map((item) => t(`sources.${item}`)).join(', '),
+      detected: signal.detectedAt,
+      last_detected: signal.lastDetectedAt,
+    }));
+
+    const csv = toCsv(rows, SIGNAL_EXPORT_HEADERS);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const date = new Date().toISOString().slice(0, 10);
+    const slug = brand.slug ?? 'brand';
+
+    link.href = url;
+    link.download = `ansvisor_${slug}_signals_${date}.csv`;
+    link.click();
+
+    URL.revokeObjectURL(url);
+  }, [brand.slug, visible, tTexts, tCategories, t]);
 
   const categoryCounts = useMemo(() => {
     const counts = new Map<SignalCategory, number>();
@@ -387,6 +426,17 @@ function SignalsContent({ brand }: { brand: Brand }) {
             {t('filters.clear')}
           </Button>
         )}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="ml-auto gap-2 text-xs"
+          onClick={handleExportCsv}
+          disabled={visible.length === 0}
+        >
+          <Download className="h-3.5 w-3.5" />
+          {common('exportCsv')}
+        </Button>
       </div>
 
       {visible.length > 0 ? (

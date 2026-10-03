@@ -6,6 +6,7 @@ import {
   AlertCircle,
   ArrowUpDown,
   CircleDot,
+  Download,
   ListChecks,
   Search,
   Shield,
@@ -48,6 +49,20 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { toCsv } from '@/lib/csv';
+
+const ACTION_EXPORT_HEADERS = [
+  'number',
+  'title',
+  'category',
+  'impact',
+  'status',
+  'assignee',
+  'due_date',
+  'tasks_done_total',
+  'signal_count',
+  'created',
+];
 
 const OPEN_STATUSES: ActionStatus[] = ['new', 'in_progress', 'on_hold'];
 
@@ -97,6 +112,7 @@ export default function ActionCenterActionsPage() {
 
 function ActionsContent({ brand }: { brand: Brand }) {
   const t = useTranslations('actionCenter.actionsPage');
+  const common = useTranslations('common');
   const tTexts = useTranslations('actionCenter.actionTexts');
   const tCategories = useTranslations('actionCenter.actionCategories');
 
@@ -191,6 +207,36 @@ function ActionsContent({ brand }: { brand: Brand }) {
       }
     });
   }, [actions, focus, category, impact, status, assignee, search, sort, tTexts, t]);
+
+  const handleExportCsv = useCallback(() => {
+    if (visible.length === 0) return;
+
+    const rows = visible.map((action) => ({
+      number: action.actionNo,
+      title: actionTexts(action, tTexts).title,
+      category: tCategories(action.category),
+      impact: t(`impact.${action.impact}`),
+      status: t(`status.${action.status}`),
+      assignee: action.assignee?.fullName ?? '',
+      due_date: action.dueDate ?? '',
+      tasks_done_total: `${action.taskCompleted} / ${action.taskTotal}`,
+      signal_count: action.signalCount,
+      created: action.createdAt,
+    }));
+
+    const csv = toCsv(rows, ACTION_EXPORT_HEADERS);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const date = new Date().toISOString().slice(0, 10);
+    const slug = brand.slug ?? 'brand';
+
+    link.href = url;
+    link.download = `ansvisor_${slug}_actions_${date}.csv`;
+    link.click();
+
+    URL.revokeObjectURL(url);
+  }, [brand.slug, visible, tTexts, tCategories, t]);
 
   const categoryCounts = useMemo(() => {
     const counts = new Map<ActionCategory, number>();
@@ -403,6 +449,17 @@ function ActionsContent({ brand }: { brand: Brand }) {
             {t('filters.clear')}
           </Button>
         )}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="ml-auto gap-2 text-xs"
+          onClick={handleExportCsv}
+          disabled={visible.length === 0}
+        >
+          <Download className="h-3.5 w-3.5" />
+          {common('exportCsv')}
+        </Button>
       </div>
 
       {visible.length > 0 ? (
