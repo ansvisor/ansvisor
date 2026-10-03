@@ -635,7 +635,7 @@ function PromptsTabContent({
       </div>
 
       <Sheet open={!!selectedPrompt} onOpenChange={(open) => !open && setSelectedPrompt(null)}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto px-4">
+        <SheetContent className="data-[side=right]:w-full data-[side=right]:sm:max-w-md overflow-y-auto px-4">
           <SheetHeader className="pb-4 border-b">
             <SheetTitle>{t('drawerTitle')}</SheetTitle>
             <SheetDescription>{t('drawerSubtitle')}</SheetDescription>
@@ -1326,7 +1326,7 @@ function ProductAppearancesDrawer({ t, product, onOpenChange }: ProductAppearanc
 
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl flex flex-col gap-0 p-0 h-full">
+      <SheetContent className="data-[side=right]:w-full data-[side=right]:sm:max-w-xl flex flex-col gap-0 p-0 h-full">
         <SheetHeader className="border-b px-5 py-4 shrink-0">
           <SheetTitle className="text-base truncate" title={product?.product_title}>
             {product?.product_title}

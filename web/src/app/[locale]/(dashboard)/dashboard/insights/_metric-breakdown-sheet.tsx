@@ -90,7 +90,7 @@ export function MetricBreakdownSheet({ brandId, metric, onOpenChange, filters }:
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full flex flex-col gap-0 p-0 sm:max-w-xl">
+      <SheetContent className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
         <SheetHeader className="border-b px-5 py-4">
           <SheetTitle className="text-base">{title} Breakdown</SheetTitle>
           <SheetDescription className="text-xs">
