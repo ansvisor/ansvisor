@@ -9,7 +9,9 @@ describe('normalizeUrlForMatch', () => {
   });
 
   it('ignores fragments, lowercases the host, and strips repeated trailing slashes', () => {
-    expect(normalizeUrlForMatch('HTTPS://WWW.Example.COM/Blog/X///#section')).toBe('example.com/Blog/X');
+    expect(normalizeUrlForMatch('HTTPS://WWW.Example.COM/Blog/X///#section')).toBe(
+      'example.com/Blog/X',
+    );
   });
 
   it('removes the root path slash', () => {
