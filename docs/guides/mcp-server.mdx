@@ -1,6 +1,6 @@
 ---
 title: "MCP server"
-description: "Connect Claude Desktop, Claude Code, Cursor, Zed, and any MCP-aware client to your Ansvisor data — zero install."
+description: "Connect Claude, Codex, Cursor, VS Code, Gemini CLI, Hermes Agent, OpenClaw and any MCP-aware client to your Ansvisor data — zero install."
 ---
 
 Ansvisor ships a [Model Context Protocol](https://modelcontextprotocol.io)
@@ -15,33 +15,202 @@ and an API key.
 2. Click **New key**, give it a memorable name (e.g. _Claude — laptop_)
 3. Copy the token. It's shown **once** — store it in your password manager
 
-## Connect Claude Desktop
+The dialog that shows the key also has a ready-to-paste setup for each client
+below, with the key filled in. The snippets on this page read the key from an
+environment variable instead, so it stays out of your config files:
 
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
-(macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+```bash
+export ANSVISOR_TOKEN=ans_...
+```
+
+Every client connects to the same URL with the same header:
+`Authorization: Bearer <your key>`. There is no OAuth sign-in.
+
+## Connect your client
+
+### Claude Code
+
+```bash
+claude mcp add --transport http ansvisor https://app.ansvisor.com/api/mcp \
+  --header "Authorization: Bearer ${ANSVISOR_TOKEN}"
+```
+
+### Claude Desktop
+
+Claude Desktop adds remote servers as **custom connectors**. The
+`claude_desktop_config.json` file only starts local servers, so a `url` entry
+there is ignored.
+
+1. Open **Settings → Connectors** and choose **Add custom connector**
+2. Name it _Ansvisor_ and enter `https://app.ansvisor.com/api/mcp` as the URL
+3. Under authentication choose **No sign in**
+4. Under **Request headers**, add `Authorization` with the value `Bearer ans_...`
+
+On Team and Enterprise plans, an owner adds the connector under
+**Organization settings → Connectors** first.
+
+### Codex CLI
+
+```bash
+codex mcp add ansvisor --url https://app.ansvisor.com/api/mcp \
+  --bearer-token-env-var ANSVISOR_TOKEN
+```
+
+Or add it to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.ansvisor]
+url = "https://app.ansvisor.com/api/mcp"
+bearer_token_env_var = "ANSVISOR_TOKEN"
+```
+
+### Cursor
+
+Add to `~/.cursor/mcp.json` (all projects) or `.cursor/mcp.json` (one project):
 
 ```json
 {
   "mcpServers": {
     "ansvisor": {
       "url": "https://app.ansvisor.com/api/mcp",
-      "headers": {
-        "Authorization": "Bearer ans_..."
+      "headers": { "Authorization": "Bearer ${env:ANSVISOR_TOKEN}" }
+    }
+  }
+}
+```
+
+### VS Code
+
+Add to `.vscode/mcp.json`, or run **MCP: Open User Configuration** from the
+Command Palette to add it for every workspace. VS Code asks for the key the
+first time it connects:
+
+```json
+{
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "ansvisor-token",
+      "description": "Ansvisor API key",
+      "password": true
+    }
+  ],
+  "servers": {
+    "ansvisor": {
+      "type": "http",
+      "url": "https://app.ansvisor.com/api/mcp",
+      "headers": { "Authorization": "Bearer ${input:ansvisor-token}" }
+    }
+  }
+}
+```
+
+### Windsurf
+
+In the Cascade panel, open **… → Open MCP config file** and add:
+
+```json
+{
+  "mcpServers": {
+    "ansvisor": {
+      "serverUrl": "https://app.ansvisor.com/api/mcp",
+      "headers": { "Authorization": "Bearer ${env:ANSVISOR_TOKEN}" }
+    }
+  }
+}
+```
+
+### Gemini CLI
+
+```bash
+gemini mcp add --transport http \
+  --header "Authorization: Bearer ${ANSVISOR_TOKEN}" \
+  ansvisor https://app.ansvisor.com/api/mcp
+```
+
+This writes the server to `~/.gemini/settings.json` with `httpUrl`. Use
+`httpUrl`, not `url`, if you edit the file by hand: `url` means the older SSE
+transport.
+
+### Hermes Agent
+
+Add to `~/.hermes/config.yaml`. Hermes reads `ANSVISOR_TOKEN` from your
+environment or from `~/.hermes/.env`:
+
+```yaml
+mcp_servers:
+  ansvisor:
+    url: "https://app.ansvisor.com/api/mcp"
+    headers:
+      Authorization: "Bearer ${ANSVISOR_TOKEN}"
+```
+
+### OpenClaw
+
+Add to `~/.openclaw/openclaw.json`:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "ansvisor": {
+        "url": "https://app.ansvisor.com/api/mcp",
+        "transport": "streamable-http",
+        "headers": { "Authorization": "Bearer ${ANSVISOR_TOKEN}" }
       }
     }
   }
 }
 ```
 
-Restart Claude Desktop. Type _"List my Ansvisor brands"_ — Claude should
-call the `list_brands` tool and show your brands inline.
+Then check the connection with `openclaw mcp probe ansvisor`.
 
-## Connect Claude Code
+### Zed
 
-```bash
-claude mcp add ansvisor --transport http https://app.ansvisor.com/api/mcp \
-  --header "Authorization: Bearer ans_..."
+Add to your Zed `settings.json`. Zed does not expand environment variables
+here, so the key goes in directly:
+
+```json
+{
+  "context_servers": {
+    "ansvisor": {
+      "url": "https://app.ansvisor.com/api/mcp",
+      "headers": { "Authorization": "Bearer ans_..." }
+    }
+  }
+}
 ```
+
+### Other clients
+
+Any client that supports remote MCP servers over Streamable HTTP works with
+the URL and the `Authorization` header above. If yours can only start local
+(stdio) servers, bridge it with [`mcp-remote`](https://github.com/geelen/mcp-remote):
+
+```json
+{
+  "mcpServers": {
+    "ansvisor": {
+      "command": "npx",
+      "args": [
+        "-y", "mcp-remote", "https://app.ansvisor.com/api/mcp",
+        "--header", "Authorization:${AUTH_HEADER}",
+        "--transport", "http-only"
+      ],
+      "env": { "AUTH_HEADER": "Bearer ans_..." }
+    }
+  }
+}
+```
+
+Keep `Authorization:${AUTH_HEADER}` without a space, with the `Bearer ...`
+value in `env`: some clients do not escape spaces inside `args`.
+
+## Check the connection
+
+Ask your client _"List my Ansvisor brands"_. It should call the `list_brands`
+tool and show your brands. If it reports a 401, the header is missing or the
+key was revoked.
 
 ## Self-host? Point at your own instance
 
