@@ -40,9 +40,9 @@ describe('applyPlanOverrides', () => {
       }),
     ).toEqual(plan);
     expect(applyPlanOverrides(plan, { plan: 'enterprise', plan_overrides: null })).toEqual(plan);
-    expect(
-      applyPlanOverrides(plan, { plan: 'enterprise', plan_overrides: 'invalid' }),
-    ).toEqual(plan);
+    expect(applyPlanOverrides(plan, { plan: 'enterprise', plan_overrides: 'invalid' })).toEqual(
+      plan,
+    );
     expect(applyPlanOverrides(plan, { plan: 'enterprise', plan_overrides: [] })).toEqual(plan);
   });
 });
