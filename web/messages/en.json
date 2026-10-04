@@ -2046,6 +2046,7 @@
     "pulseRecipients": "Recipients",
     "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
     "pulseRecipientsHint": "Comma-separated email addresses. Leave empty to send to every organization member.",
+    "pulseRecipientsInvalid": "Not a valid email address: {emails}. Fix or remove it before saving.",
     "pulseSaved": "Notification settings saved",
     "pulseSaveFailed": "Could not save notification settings. Please try again.",
     "pulseLoadFailed": "Could not load notification settings.",

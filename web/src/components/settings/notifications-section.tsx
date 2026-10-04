@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useUserRole } from '@/hooks/use-user-role';
+import { parseRecipients } from '@/lib/pulse-recipients';
 
 /**
  * Settings → Notifications: Daily Pulse delivery preferences per brand
@@ -38,6 +39,8 @@ export function NotificationsSection() {
   const { canManage } = useUserRole();
   const [brands, setBrands] = useState<BrandPulseSettings[]>([]);
   const [recipientDrafts, setRecipientDrafts] = useState<Record<string, string>>({});
+  // Addresses that failed validation, per brand, shown under the field.
+  const [invalidRecipients, setInvalidRecipients] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [savingBrand, setSavingBrand] = useState<string | null>(null);
 
@@ -68,22 +71,28 @@ export function NotificationsSection() {
 
   async function save(brandId: string, frequency: string) {
     if (savingBrand) return;
+    const { valid: recipients, invalid } = parseRecipients(
+      (recipientDrafts[brandId] ?? '').split(','),
+    );
+    setInvalidRecipients((prev) => ({ ...prev, [brandId]: invalid }));
+    if (invalid.length) return;
     setSavingBrand(brandId);
     try {
-      const recipients = (recipientDrafts[brandId] ?? '')
-        .split(',')
-        .map((r) => r.trim())
-        .filter(Boolean);
       const res = await fetch('/api/settings/pulse', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ brandId, frequency, recipients }),
       });
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      const body = (await res.json().catch(() => ({}))) as { error?: string; invalid?: string[] };
+      if (body.invalid?.length) {
+        setInvalidRecipients((prev) => ({ ...prev, [brandId]: body.invalid ?? [] }));
+        return;
+      }
       if (!res.ok) throw new Error(body.error || 'Save failed');
       setBrands((prev) =>
         prev.map((b) => (b.brandId === brandId ? { ...b, frequency, recipients } : b)),
       );
+      setRecipientDrafts((prev) => ({ ...prev, [brandId]: recipients.join(', ') }));
       toast.success(t('pulseSaved'));
     } catch {
       toast.error(t('pulseSaveFailed'));
@@ -140,13 +149,23 @@ export function NotificationsSection() {
                 <Input
                   id={`pulse-recipients-${brand.brandId}`}
                   value={recipientDrafts[brand.brandId] ?? ''}
-                  onChange={(e) =>
-                    setRecipientDrafts((prev) => ({ ...prev, [brand.brandId]: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    setRecipientDrafts((prev) => ({ ...prev, [brand.brandId]: e.target.value }));
+                    setInvalidRecipients((prev) => ({ ...prev, [brand.brandId]: [] }));
+                  }}
                   placeholder={t('pulseRecipientsPlaceholder')}
                   disabled={!canManage}
+                  aria-invalid={invalidRecipients[brand.brandId]?.length ? true : undefined}
                 />
-                <p className="text-xs text-muted-foreground">{t('pulseRecipientsHint')}</p>
+                {invalidRecipients[brand.brandId]?.length ? (
+                  <p className="text-xs text-destructive">
+                    {t('pulseRecipientsInvalid', {
+                      emails: invalidRecipients[brand.brandId].join(', '),
+                    })}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{t('pulseRecipientsHint')}</p>
+                )}
               </div>
               {canManage && (
                 <Button

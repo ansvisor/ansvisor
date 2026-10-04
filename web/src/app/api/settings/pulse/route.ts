@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { parseRecipients } from '@/lib/pulse-recipients';
 
 /**
  * GET / PUT /api/settings/pulse
@@ -105,13 +106,11 @@ export async function PUT(request: Request) {
     );
   }
 
-  const recipients = Array.isArray(body.recipients)
-    ? body.recipients
-        .filter((r): r is string => typeof r === 'string')
-        .map((r) => r.trim())
-        .filter((r) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r))
-        .slice(0, 50)
-    : [];
+  const { valid, invalid } = parseRecipients(Array.isArray(body.recipients) ? body.recipients : []);
+  if (invalid.length) {
+    return NextResponse.json({ error: 'Invalid recipient email', invalid }, { status: 400 });
+  }
+  const recipients = valid.slice(0, 50);
 
   // The brand must belong to the caller's org.
   const { data: brand } = await supabaseAdmin
