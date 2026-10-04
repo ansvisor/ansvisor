@@ -21,7 +21,12 @@ export class PlanLimitError extends Error {
  * organizations.plan_overrides (jsonb) — mirrors web getOrgPlan().
  */
 export function applyPlanOverrides(plan, org) {
-  if (org?.plan === 'enterprise' && org.plan_overrides && typeof org.plan_overrides === 'object') {
+  if (
+    org?.plan === 'enterprise' &&
+    org.plan_overrides &&
+    typeof org.plan_overrides === 'object' &&
+    !Array.isArray(org.plan_overrides)
+  ) {
     return { ...plan, limits: { ...plan.limits, ...org.plan_overrides } };
   }
   return plan;
