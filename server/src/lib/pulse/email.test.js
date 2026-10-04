@@ -67,9 +67,7 @@ describe('renderPulseEmail', () => {
       insightsUrl: 'https://example.com/insights',
       settingsUrl: 'https://example.com/settings',
     });
-    expect(degraded.html).toContain(
-      'Data collection was degraded on ChatGPT, Perplexity today',
-    );
+    expect(degraded.html).toContain('Data collection was degraded on ChatGPT, Perplexity today');
   });
 
   it('uses the rounded change when selecting the KPI trend arrow', () => {
