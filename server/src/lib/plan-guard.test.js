@@ -27,5 +27,6 @@ describe('applyPlanOverrides', () => {
     expect(applyPlanOverrides(plan, { plan: 'growth', plan_overrides: { maxPrompts: 500 } })).toEqual(plan);
     expect(applyPlanOverrides(plan, { plan: 'enterprise', plan_overrides: null })).toEqual(plan);
     expect(applyPlanOverrides(plan, { plan: 'enterprise', plan_overrides: 'invalid' })).toEqual(plan);
+    expect(applyPlanOverrides(plan, { plan: 'enterprise', plan_overrides: [] })).toEqual(plan);
   });
 });
