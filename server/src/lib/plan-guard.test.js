@@ -1,4 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+
+let applyPlanOverrides;
+
+beforeAll(async () => {
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+  ({ applyPlanOverrides } = await import('./plan-guard.js'));
+});
 
 const plan = {
   id: 'enterprise',
@@ -7,11 +15,7 @@ const plan = {
 };
 
 describe('applyPlanOverrides', () => {
-  it('merges enterprise overrides without mutating the plan', async () => {
-    process.env.SUPABASE_URL = 'https://example.supabase.co';
-    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
-    const { applyPlanOverrides } = await import('./plan-guard.js');
-
+  it('merges enterprise overrides without mutating the plan', () => {
     const result = applyPlanOverrides(plan, {
       plan: 'enterprise',
       plan_overrides: { maxPrompts: 500, allowedModels: ['claude-sonnet-5'] },
@@ -28,8 +32,7 @@ describe('applyPlanOverrides', () => {
     });
   });
 
-  it('ignores non-enterprise and invalid overrides', async () => {
-    const { applyPlanOverrides } = await import('./plan-guard.js');
+  it('ignores non-enterprise and invalid overrides', () => {
     expect(
       applyPlanOverrides(plan, {
         plan: 'growth',
@@ -37,9 +40,9 @@ describe('applyPlanOverrides', () => {
       }),
     ).toEqual(plan);
     expect(applyPlanOverrides(plan, { plan: 'enterprise', plan_overrides: null })).toEqual(plan);
-    expect(applyPlanOverrides(plan, { plan: 'enterprise', plan_overrides: 'invalid' })).toEqual(
-      plan,
-    );
+    expect(
+      applyPlanOverrides(plan, { plan: 'enterprise', plan_overrides: 'invalid' }),
+    ).toEqual(plan);
     expect(applyPlanOverrides(plan, { plan: 'enterprise', plan_overrides: [] })).toEqual(plan);
   });
 });
