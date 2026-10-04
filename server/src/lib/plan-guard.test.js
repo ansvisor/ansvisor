@@ -17,9 +17,15 @@ describe('applyPlanOverrides', () => {
       plan_overrides: { maxPrompts: 500, allowedModels: ['claude-sonnet-5'] },
     });
 
+    expect(result).not.toBe(plan);
+    expect(result.limits).not.toBe(plan.limits);
     expect(result.limits.maxPrompts).toBe(500);
     expect(result.limits.allowedModels).toEqual(['claude-sonnet-5']);
-    expect(plan.limits.maxPrompts).toBe(-1);
+    expect(plan).toEqual({
+      id: 'enterprise',
+      name: 'Enterprise',
+      limits: { maxBrands: -1, maxPrompts: -1, allowedModels: [] },
+    });
   });
 
   it('ignores non-enterprise and invalid overrides', async () => {
