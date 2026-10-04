@@ -23,6 +23,7 @@ import {
   PlanLimitError,
 } from '../lib/plan-guard.js';
 import { buildAuditContext } from '../lib/audit/context.js';
+import { normHost, normStoredDomain } from '../lib/audit/host.js';
 import { runSignals } from '../lib/audit/engine.js';
 import { evaluateLlmSignals } from '../lib/audit/llm-signals.js';
 import { evaluateBrandEntity } from '../lib/audit/external-signals.js';
@@ -242,15 +243,6 @@ router.get('/quota', async (req, res) => {
   }
 });
 
-/** Lowercased host of a URL with a leading www. stripped (null on failure). */
-function normHost(u) {
-  try {
-    return new URL(u).host.replace(/^www\./i, '').toLowerCase();
-  } catch {
-    return null;
-  }
-}
-
 // GET /api/audits/trend?brandId=… — completed audits of the brand's PRIMARY
 // domain over time (score + category scores), for the hub trend chart.
 // Registered before /:id so "trend" isn't matched as an audit id.
@@ -270,12 +262,7 @@ router.get('/trend', async (req, res) => {
       .eq('brand_id', brandId);
     const primary =
       (domainRows ?? []).find((d) => d.is_primary)?.domain ?? (domainRows ?? [])[0]?.domain ?? null;
-    const primaryHost = primary
-      ? primary
-          .replace(/^https?:\/\//, '')
-          .replace(/^www\./i, '')
-          .toLowerCase()
-      : null;
+    const primaryHost = normStoredDomain(primary);
 
     const { data: rows } = await supabaseAdmin
       .from('site_audits')
