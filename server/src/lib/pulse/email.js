@@ -40,10 +40,11 @@ function signed(n, suffix = '') {
 }
 
 function kpiCell(label, value, change) {
+  const roundedChange = change === null ? null : Math.round(change * 10) / 10;
   const changeHtml =
     change === null
       ? ''
-      : `<div style="font-size:12px;color:${change >= 0 ? '#059669' : '#dc2626'};">${escapeHtml(change >= 0 ? '▲' : '▼')} ${escapeHtml(signed(change))}</div>`;
+      : `<div style="font-size:12px;color:${roundedChange >= 0 ? '#059669' : '#dc2626'};">${escapeHtml(roundedChange >= 0 ? '▲' : '▼')} ${escapeHtml(signed(roundedChange))}</div>`;
   return `<td style="padding:12px 16px;border:1px solid #e5e7eb;border-radius:8px;text-align:center;">
     <div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">${escapeHtml(label)}</div>
     <div style="font-size:22px;font-weight:600;color:#111827;">${escapeHtml(value)}</div>
