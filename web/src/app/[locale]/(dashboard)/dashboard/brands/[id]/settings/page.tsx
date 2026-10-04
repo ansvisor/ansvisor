@@ -15,7 +15,7 @@ import { getCompetitors, addCompetitor, deleteCompetitor } from '@/lib/actions/c
 import { getFaviconUrl } from '@/lib/favicon';
 import type { Competitor } from '@/types';
 import { INDUSTRIES, type Brand, type BrandDomain } from '@/types';
-import { REGIONS, US_STATES } from '@/config/prompt-options';
+import { REGIONS, REGION_ITEMS, US_STATES, US_STATE_ITEMS } from '@/config/prompt-options';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -60,6 +60,8 @@ import { getPublicApiBaseUrl } from '@/config/api';
 interface PageProps {
   params: Promise<{ id: string }>;
 }
+
+const INDUSTRY_ITEMS = INDUSTRIES.map((industry) => ({ value: industry, label: industry }));
 
 export default function BrandSettingsPage({ params }: PageProps) {
   const { id } = use(params);
@@ -153,6 +155,7 @@ function GeneralTab({
   const [region, setRegion] = useState(brand.region ?? 'US');
   const [usState, setUsState] = useState(brand.state ?? '');
   const [isSaving, setIsSaving] = useState(false);
+  const stateItems = [{ value: 'nationwide', label: t('settings.nationwide') }, ...US_STATE_ITEMS];
 
   const handleSave = async () => {
     if (!name.trim()) return;
@@ -220,7 +223,11 @@ function GeneralTab({
 
         <div className="space-y-2">
           <Label htmlFor="industry">{t('industry')}</Label>
-          <Select value={industry} onValueChange={(v) => setIndustry(v ?? '')}>
+          <Select
+            items={INDUSTRY_ITEMS}
+            value={industry}
+            onValueChange={(v) => setIndustry(v ?? '')}
+          >
             <SelectTrigger id="industry">
               <SelectValue placeholder={t('industryPlaceholder')} />
             </SelectTrigger>
@@ -246,8 +253,9 @@ function GeneralTab({
         </div>
 
         <div className="space-y-2">
-          <Label>Region</Label>
+          <Label>{t('settings.region')}</Label>
           <Select
+            items={REGION_ITEMS}
             value={region}
             onValueChange={(v) => {
               if (!v) return;
@@ -270,8 +278,9 @@ function GeneralTab({
 
         {region === 'US' && (
           <div className="space-y-2">
-            <Label>State (optional)</Label>
+            <Label>{t('settings.stateOptional')}</Label>
             <Select
+              items={stateItems}
               value={usState || 'nationwide'}
               onValueChange={(v) => setUsState(!v || v === 'nationwide' ? '' : v)}
             >
@@ -279,7 +288,7 @@ function GeneralTab({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="nationwide">Nationwide (no state)</SelectItem>
+                <SelectItem value="nationwide">{t('settings.nationwide')}</SelectItem>
                 {US_STATES.map((s) => (
                   <SelectItem key={s.code} value={s.code}>
                     {s.label}
@@ -287,9 +296,7 @@ function GeneralTab({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">
-              Localizes AI answers to this state from the next tracking run onward.
-            </p>
+            <p className="text-xs text-muted-foreground">{t('settings.stateHint')}</p>
           </div>
         )}
 
