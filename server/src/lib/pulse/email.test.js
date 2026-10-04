@@ -30,7 +30,12 @@ describe('renderPulseEmail', () => {
         ...metrics,
         highlights: [
           { type: 'prompt_gain', promptText: '<script>alert("prompt")</script>', gain: 1.5 },
-          { type: 'competitor_overtaken', competitorName: 'Bad "Brand"', brandRate: 12, competitorRate: 8 },
+          {
+            type: 'competitor_overtaken',
+            competitorName: 'Bad "Brand"',
+            brandRate: 12,
+            competitorRate: 8,
+          },
         ],
       },
       insightsUrl: 'https://example.com/insights?a=1&b=2',
