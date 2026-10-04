@@ -57,6 +57,11 @@ instead.
 | `get_visibility_summary` | Aggregate visibility score, mentions, citations, top competitors for a brand over an optional date range / model / region. |
 | `list_topics` | List the topics on a brand with a prompt count per topic. Use for coverage audits (empty / over-concentrated topics). |
 | `list_prompts` | List the prompts tracked on a brand, optionally filtered by topic, active status, or capped via `limit`. Returns the prompt text, topic, platforms, models, regions, and active flag. |
+| `list_actions` | List a brand's Action Center actions with category, kind, impact, status, outcome, assignee, due date and task progress. Filter by status or category. |
+| `get_action` | One action in full: payload, triggering signals, task list (with each task's `mode` and `permission`) and event trail. |
+| `list_signals` | Detected signals for a brand with their previous, current and change values. Filter by status or kind. |
+| `list_action_history` | Closed actions with their outcome and the before/after values the validation sweep measured. |
+| `update_task_status` | Mark a task in_progress, completed, skipped (with a reason) or failed. Records progress; it never carries the task out. |
 
 More tools land regularly — check the [project roadmap](https://github.com/ansvisor/ansvisor#whats-next).
 

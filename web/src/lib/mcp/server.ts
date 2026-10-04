@@ -27,6 +27,12 @@ import {
   getSiteAuditFor,
   listSiteAuditsFor,
   getSiteAuditQuotaFor,
+  MCP_TASK_STATUSES,
+  getActionFor,
+  listActionHistoryFor,
+  listActionsFor,
+  listSignalsFor,
+  updateTaskStatusFor,
 } from './data';
 
 /**
@@ -839,6 +845,185 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       }
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'list_actions',
+    {
+      description:
+        'List the Action Center actions for a brand: what the product thinks should be done about its AI visibility. Each action was consolidated from one or more detected signals and carries a task plan. Returns category, kind, impact, status, outcome, assignee, due date and task progress, most recently updated first. `kind` is an opaque definition id (e.g. "close_competitor_gap"); the action payload with the specifics is on get_action. Use this to see open work ("what should we do next?") or to check what is in progress.',
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        status: z
+          .enum(['new', 'in_progress', 'on_hold', 'completed', 'dismissed'])
+          .optional()
+          .describe('Filter by action status.'),
+        category: z
+          .enum(['growth', 'protect', 'recover', 'fix', 'compete'])
+          .optional()
+          .describe('Filter by action category.'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe('Row cap limit (default 50, max 200).'),
+      },
+    },
+    async (args) => {
+      const actions = await listActionsFor(auth, {
+        brandId: args.brand_id,
+        status: args.status,
+        category: args.category,
+        limit: args.limit,
+      });
+      if (actions === null) {
+        return {
+          content: [{ type: 'text', text: 'Brand not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(actions, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'get_action',
+    {
+      description:
+        'Get one Action Center action in full: its payload (the prompts, pages, competitors or numbers it is about), the signals that triggered it, its task list and its event trail. Each task carries `mode` (who carries it out: system, agent, human or human_or_agent) and `permission` (read, write or execute). Read both before proposing to act on a task — anything beyond read needs a human to approve it in the dashboard. A task is described by `title` when someone wrote one, otherwise by `task_key` with `title_params`.',
+      inputSchema: {
+        action_id: relaxedUuid.describe('Action UUID, from list_actions or list_action_history.'),
+      },
+    },
+    async (args) => {
+      const action = await getActionFor(auth, args.action_id);
+      if (!action) {
+        return {
+          content: [{ type: 'text', text: 'Action not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(action, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'list_signals',
+    {
+      description:
+        'List the signals the Action Center detected for a brand: measured changes such as a visibility drop, a competitor gaining citations or a page losing AI traffic. Each signal carries previous_value, current_value and change_value, its payload, and the action_id it was consolidated into (null when no action covers it yet). Newest first. Use this to explain why an action exists or what has changed recently.',
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        status: z
+          .enum(['new', 'acknowledged', 'resolved', 'dismissed'])
+          .optional()
+          .describe('Filter by signal status.'),
+        kind: z
+          .string()
+          .optional()
+          .describe('Filter by signal kind, an opaque detector id as returned in earlier rows.'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe('Row cap limit (default 50, max 200).'),
+      },
+    },
+    async (args) => {
+      const signals = await listSignalsFor(auth, {
+        brandId: args.brand_id,
+        status: args.status,
+        kind: args.kind,
+        limit: args.limit,
+      });
+      if (signals === null) {
+        return {
+          content: [{ type: 'text', text: 'Brand not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(signals, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'list_action_history',
+    {
+      description:
+        'List closed Action Center actions (completed or dismissed) for a brand with their measured result, most recently closed first. `outcome` is the verdict (improved, no_meaningful_change, declined, not_measurable, or pending_measurement while the after-window is still open) and `results` holds the before/after values the validation sweep measured. Use this to answer "did what we did last month work?".',
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe('Row cap limit (default 50, max 200).'),
+      },
+    },
+    async (args) => {
+      const history = await listActionHistoryFor(auth, {
+        brandId: args.brand_id,
+        limit: args.limit,
+      });
+      if (history === null) {
+        return {
+          content: [{ type: 'text', text: 'Brand not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(history, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'update_task_status',
+    {
+      description:
+        "Record progress on one task of an Action Center action: in_progress, completed, skipped (skip_reason required) or failed. This reports work a person has done or decided; it does not carry the task out. It is a write logged under the API key's user — only fire on explicit user intent for a specific task, never as part of an exploratory query.",
+      inputSchema: {
+        task_id: relaxedUuid.describe('Task UUID, from get_action.'),
+        status: z
+          .enum(MCP_TASK_STATUSES)
+          .describe('New task status. One of: in_progress, completed, skipped, failed.'),
+        skip_reason: z
+          .string()
+          .max(200)
+          .optional()
+          .describe('Why the task was skipped. Required when status is skipped.'),
+      },
+    },
+    async (args) => {
+      if (args.status === 'skipped' && !args.skip_reason?.trim()) {
+        return {
+          content: [{ type: 'text', text: 'skip_reason is required when status is skipped' }],
+          isError: true,
+        };
+      }
+      const updated = await updateTaskStatusFor(auth, args.task_id, args.status, args.skip_reason);
+      if (!updated) {
+        return {
+          content: [{ type: 'text', text: 'Task not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(updated, null, 2) }],
       };
     },
   );

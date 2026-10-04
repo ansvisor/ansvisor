@@ -2431,3 +2431,395 @@ export async function getPromptPerformanceFor(
     prompts,
   };
 }
+
+// ── Action Center ────────────────────────────────────────────────────────────
+//
+// The engine's output: detected signals, the actions consolidated from them,
+// each action's task plan and, once closed, its measured result. Read with the
+// same field names as `lib/actions/action-center.ts`, but through the API-key
+// context rather than the signed-in user. `kind` stays an opaque string: the
+// server's definition registry grows on its own release cycle.
+
+/** Task statuses an MCP client may set. Approval and its states stay with the
+ *  dashboard, and nothing here lets an agent execute a task — only report on it. */
+export const MCP_TASK_STATUSES = ['in_progress', 'completed', 'skipped', 'failed'] as const;
+export type McpTaskStatus = (typeof MCP_TASK_STATUSES)[number];
+
+/** Skipped and failed tasks are not outstanding work, so they leave the
+ *  progress denominator — same rule as the dashboard. */
+const UNCOUNTED_TASK_STATUSES = ['skipped', 'failed'];
+
+const MCP_SIGNAL_COLUMNS =
+  'id, category, kind, impact, status, source, detected_at, last_detected_at, resolved_at, previous_value, current_value, change_value, payload, kpi_keys, action_id';
+
+async function brandInOrg(auth: McpAuthContext, brandId: string): Promise<boolean> {
+  if (!auth.organizationId) return false;
+  const { data } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('id', brandId)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  return Boolean(data);
+}
+
+async function assigneeNames(ids: (string | null)[]): Promise<Map<string, string | null>> {
+  const unique = [...new Set(ids.filter(Boolean))] as string[];
+  if (unique.length === 0) return new Map();
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, full_name')
+    .in('id', unique);
+  if (error) throw new Error(error.message);
+  return new Map((data ?? []).map((p) => [p.id as string, (p.full_name as string | null) ?? null]));
+}
+
+export interface ActionListRow {
+  id: string;
+  action_no: number;
+  category: string;
+  kind: string;
+  impact: string;
+  status: string;
+  outcome: string | null;
+  assignee: { id: string; full_name: string | null } | null;
+  due_date: string | null;
+  task_progress: { completed: number; total: number };
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListActionsParams {
+  brandId: string;
+  status?: string;
+  category?: string;
+  limit?: number;
+}
+
+export async function listActionsFor(
+  auth: McpAuthContext,
+  params: ListActionsParams,
+): Promise<ActionListRow[] | null> {
+  if (!(await brandInOrg(auth, params.brandId))) return null;
+
+  const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
+  let query = supabaseAdmin
+    .from('actions')
+    .select(
+      'id, action_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at',
+    )
+    .eq('brand_id', params.brandId)
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+  if (params.status) query = query.eq('status', params.status);
+  if (params.category) query = query.eq('category', params.category);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+  if (rows.length === 0) return [];
+
+  const { data: tasks, error: taskError } = await supabaseAdmin
+    .from('action_tasks')
+    .select('action_id, status')
+    .in(
+      'action_id',
+      rows.map((r) => r.id),
+    );
+  if (taskError) throw new Error(taskError.message);
+
+  const progress = new Map<string, { completed: number; total: number }>();
+  for (const task of tasks ?? []) {
+    if (UNCOUNTED_TASK_STATUSES.includes(task.status)) continue;
+    const acc = progress.get(task.action_id) ?? { completed: 0, total: 0 };
+    acc.total += 1;
+    if (task.status === 'completed') acc.completed += 1;
+    progress.set(task.action_id, acc);
+  }
+  const names = await assigneeNames(rows.map((r) => r.assignee_id));
+
+  return rows.map((r) => ({
+    id: r.id,
+    action_no: Number(r.action_no),
+    category: r.category,
+    kind: r.kind,
+    impact: r.impact,
+    status: r.status,
+    outcome: r.outcome ?? null,
+    assignee: r.assignee_id
+      ? { id: r.assignee_id, full_name: names.get(r.assignee_id) ?? null }
+      : null,
+    due_date: r.due_date ?? null,
+    task_progress: progress.get(r.id) ?? { completed: 0, total: 0 },
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+  }));
+}
+
+export interface ActionDetailForMcp {
+  id: string;
+  action_no: number;
+  brand_id: string;
+  category: string;
+  kind: string;
+  impact: string;
+  status: string;
+  outcome: string | null;
+  payload: Record<string, unknown>;
+  kpi_keys: string[];
+  assignee: { id: string; full_name: string | null } | null;
+  due_date: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  tasks: Array<{
+    id: string;
+    position: number;
+    task_key: string | null;
+    title: string | null;
+    title_params: Record<string, unknown>;
+    status: string;
+    skip_reason: string | null;
+    mode: string | null;
+    permission: string | null;
+    depends_on: string[];
+  }>;
+  signals: Record<string, unknown>[];
+  events: Array<{ event: string; data: Record<string, unknown>; created_at: string }>;
+}
+
+export async function getActionFor(
+  auth: McpAuthContext,
+  actionId: string,
+): Promise<ActionDetailForMcp | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: action, error } = await supabaseAdmin
+    .from('actions')
+    .select(
+      'id, action_no, brand_id, category, kind, impact, status, outcome, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, brands!inner(organization_id)',
+    )
+    .eq('id', actionId)
+    .eq('brands.organization_id', auth.organizationId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!action) return null;
+
+  const [tasksRes, signalsRes, eventsRes, names] = await Promise.all([
+    supabaseAdmin
+      .from('action_tasks')
+      .select(
+        'id, position, task_key, title, title_params, status, skip_reason, mode, permission, depends_on',
+      )
+      .eq('action_id', actionId)
+      .order('position'),
+    supabaseAdmin
+      .from('signals')
+      .select(MCP_SIGNAL_COLUMNS)
+      .eq('brand_id', action.brand_id)
+      .eq('action_id', actionId)
+      .order('detected_at', { ascending: false }),
+    supabaseAdmin
+      .from('action_events')
+      .select('event, data, created_at')
+      .eq('action_id', actionId)
+      .order('created_at'),
+    assigneeNames([action.assignee_id]),
+  ]);
+  if (tasksRes.error) throw new Error(tasksRes.error.message);
+  if (signalsRes.error) throw new Error(signalsRes.error.message);
+  if (eventsRes.error) throw new Error(eventsRes.error.message);
+
+  return {
+    id: action.id,
+    action_no: Number(action.action_no),
+    brand_id: action.brand_id,
+    category: action.category,
+    kind: action.kind,
+    impact: action.impact,
+    status: action.status,
+    outcome: action.outcome ?? null,
+    payload: (action.payload ?? {}) as Record<string, unknown>,
+    kpi_keys: action.kpi_keys ?? [],
+    assignee: action.assignee_id
+      ? { id: action.assignee_id, full_name: names.get(action.assignee_id) ?? null }
+      : null,
+    due_date: action.due_date ?? null,
+    created_at: action.created_at,
+    updated_at: action.updated_at,
+    completed_at: action.completed_at ?? null,
+    tasks: (tasksRes.data ?? []).map((t) => ({
+      id: t.id,
+      position: t.position,
+      task_key: t.task_key ?? null,
+      title: t.title ?? null,
+      title_params: (t.title_params ?? {}) as Record<string, unknown>,
+      status: t.status,
+      skip_reason: t.skip_reason ?? null,
+      mode: t.mode ?? null,
+      permission: t.permission ?? null,
+      depends_on: (t.depends_on ?? []) as string[],
+    })),
+    signals: (signalsRes.data ?? []) as Record<string, unknown>[],
+    events: (eventsRes.data ?? []).map((e) => ({
+      event: e.event,
+      data: (e.data ?? {}) as Record<string, unknown>,
+      created_at: e.created_at,
+    })),
+  };
+}
+
+export interface ListSignalsParams {
+  brandId: string;
+  status?: string;
+  kind?: string;
+  limit?: number;
+}
+
+export async function listSignalsFor(
+  auth: McpAuthContext,
+  params: ListSignalsParams,
+): Promise<Record<string, unknown>[] | null> {
+  if (!(await brandInOrg(auth, params.brandId))) return null;
+
+  const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
+  let query = supabaseAdmin
+    .from('signals')
+    .select(MCP_SIGNAL_COLUMNS)
+    .eq('brand_id', params.brandId)
+    .order('detected_at', { ascending: false })
+    .limit(limit);
+  if (params.status) query = query.eq('status', params.status);
+  if (params.kind) query = query.eq('kind', params.kind);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Record<string, unknown>[];
+}
+
+export interface ActionHistoryRow {
+  id: string;
+  action_no: number;
+  category: string;
+  kind: string;
+  impact: string;
+  status: string;
+  outcome: string | null;
+  created_at: string;
+  completed_at: string | null;
+  /** Before/after pairs the validation sweep measured; empty until it runs. */
+  results: Array<{ metric: string; unit: string; before: number; after: number }>;
+}
+
+interface ValidationMetric {
+  metric: string;
+  unit: string;
+  before: number | null;
+  after: number | null;
+}
+
+export async function listActionHistoryFor(
+  auth: McpAuthContext,
+  params: { brandId: string; limit?: number },
+): Promise<ActionHistoryRow[] | null> {
+  if (!(await brandInOrg(auth, params.brandId))) return null;
+
+  const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
+  const { data, error } = await supabaseAdmin
+    .from('actions')
+    .select(
+      'id, action_no, category, kind, impact, status, outcome, validation, created_at, completed_at',
+    )
+    .eq('brand_id', params.brandId)
+    .in('status', ['completed', 'dismissed'])
+    .order('completed_at', { ascending: false, nullsFirst: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((r) => {
+    const metrics = (r.validation as { metrics?: ValidationMetric[] } | null)?.metrics ?? [];
+    return {
+      id: r.id,
+      action_no: Number(r.action_no),
+      category: r.category,
+      kind: r.kind,
+      impact: r.impact,
+      status: r.status,
+      outcome: r.outcome ?? null,
+      created_at: r.created_at,
+      completed_at: r.completed_at ?? null,
+      // A metric missing either half was not measured; dropped, as on the dashboard.
+      results: metrics
+        .filter((m) => m.before != null && m.after != null)
+        .map((m) => ({
+          metric: m.metric,
+          unit: m.unit,
+          before: m.before as number,
+          after: m.after as number,
+        })),
+    };
+  });
+}
+
+export interface UpdatedTaskStatus {
+  id: string;
+  action_id: string;
+  status: McpTaskStatus;
+  skip_reason: string | null;
+  updated_at: string;
+}
+
+/**
+ * Move one task of an action — the MCP counterpart of the drawer's task menu.
+ *
+ * Ownership first: a task outside the caller's org returns null before any
+ * write. Then the same rules and trail as the dashboard: a skip must say why,
+ * the change is logged as a `task_status` event under the key's user, and the
+ * action's updated stamp moves.
+ */
+export async function updateTaskStatusFor(
+  auth: McpAuthContext,
+  taskId: string,
+  status: McpTaskStatus,
+  skipReason?: string,
+): Promise<UpdatedTaskStatus | null> {
+  if (!auth.organizationId) return null;
+
+  const reason = status === 'skipped' ? (skipReason ?? '').trim().slice(0, 200) : null;
+  if (status === 'skipped' && !reason) throw new Error('A skipped task needs a skip_reason');
+
+  const { data: owned } = await supabaseAdmin
+    .from('action_tasks')
+    .select('id, action_id, actions!inner(brand_id, brands!inner(organization_id))')
+    .eq('id', taskId)
+    .eq('actions.brands.organization_id', auth.organizationId)
+    .maybeSingle();
+  if (!owned) return null;
+
+  const updatedAt = new Date().toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('action_tasks')
+    .update({ status, skip_reason: reason, updated_at: updatedAt })
+    .eq('id', taskId)
+    .select('id, action_id, status, skip_reason, updated_at')
+    .single();
+  if (error) throw new Error(error.message);
+
+  // Best-effort, as on the dashboard: a missing trail entry must not fail the
+  // change it records.
+  await supabaseAdmin.from('action_events').insert({
+    action_id: owned.action_id,
+    event: 'task_status',
+    data: { taskId, to: status, ...(reason ? { reason } : {}) },
+    actor_id: auth.userId,
+  });
+  await supabaseAdmin.from('actions').update({ updated_at: updatedAt }).eq('id', owned.action_id);
+
+  return {
+    id: data.id,
+    action_id: data.action_id,
+    status: data.status as McpTaskStatus,
+    skip_reason: data.skip_reason ?? null,
+    updated_at: data.updated_at ?? updatedAt,
+  };
+}
