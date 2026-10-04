@@ -87,6 +87,14 @@ describe('helpers', () => {
   it('countPhrases counts case-insensitive occurrences', () => {
     expect(countPhrases('We tested it. Then WE TESTED again.', ['we tested'])).toBe(2);
   });
+
+  it('countPhrases matches phrases regardless of phrase casing', () => {
+    expect(countPhrases('We tested it.', ['We Tested'])).toBe(1);
+  });
+
+  it('countPhrases skips empty phrases', () => {
+    expect(countPhrases('anything', [''])).toBe(0);
+  });
 });
 
 describe('withRetry', () => {
