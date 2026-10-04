@@ -1,96 +1,100 @@
 ---
 title: "Webhooks"
-description: "Outbound webhooks for content briefs and lifecycle events."
+description: "Outbound webhooks for content opportunities and the Daily Pulse."
 ---
 
 ## Configuration
 
-Webhooks are configured per-brand via the `webhook_configs` table. The dashboard UI for this lives in **Content → Webhook settings**.
+Each brand has one webhook, set up in **Content → Configure Webhook**:
 
-Required fields:
-- `webhook_url` — your endpoint
-- `webhook_secret` — used to HMAC-sign payloads (recommended)
-- `events` — array of subscribed events (currently: `content_brief.sent`, `opportunity.created`, `opportunity.status_changed`, `daily_pulse.created`)
-- `is_active` — toggle without deleting
+- **Webhook URL** — your endpoint. Ansvisor sends `POST` requests with a JSON body.
+- **Secret key** (optional) — sent back to you in a header on every request, so your endpoint can tell that the call came from Ansvisor.
+- **Active** — pause delivery without deleting the webhook.
 
-## Payload format
+The webhook receives every event below. Check the `event` field to tell them apart.
 
-All webhooks use the same envelope:
+## Events
 
-```json
-{
-  "event": "content_brief.sent",
-  "occurredAt": "2026-05-06T10:00:00Z",
-  "brandId": "uuid",
-  "brandName": "Acme Corp",
-  "data": { ... event-specific payload ... }
-}
-```
+| Event | Sent when |
+|---|---|
+| `opportunity.sent` | A user sends a content opportunity to the workflow — from the opportunity page, or several at once from the opportunities list |
+| `daily_pulse.created` | A brand's Daily Pulse is generated (on cloud and self-host alike) |
+| `webhook.test` | **Test Webhook** is pressed in the webhook settings |
 
-## Signature verification
+## Verifying requests
 
-If `webhook_secret` is set, Ansvisor signs each payload with HMAC-SHA256:
+When a secret key is set, every request carries it unchanged in a header:
 
 ```
-X-Ansvisor-Signature: sha256=<hex digest>
-X-Ansvisor-Timestamp: <unix ms>
+Content-Type: application/json
+X-Webhook-Secret: <your secret key>
 ```
 
-Verification (Node example):
+Compare it with the secret you configured and reject the request on a mismatch. Use a constant-time comparison:
 
 ```js
 import crypto from 'crypto';
 
-function verify(rawBody, signatureHeader, timestampHeader, secret) {
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(`${timestampHeader}.${rawBody}`)
-    .digest('hex');
-  const sig = signatureHeader.replace('sha256=', '');
-  return crypto.timingSafeEqual(
-    Buffer.from(sig, 'hex'),
-    Buffer.from(expected, 'hex'),
-  );
+function isFromAnsvisor(req, secret) {
+  const received = Buffer.from(req.headers['x-webhook-secret'] ?? '');
+  const expected = Buffer.from(secret);
+  return received.length === expected.length && crypto.timingSafeEqual(received, expected);
 }
 ```
 
-Reject any payload where:
-- Signature mismatches
-- Timestamp is older than 5 minutes (replay protection)
+The secret travels in the request itself, so only use an `https://` endpoint.
 
-## Event reference
+## Event payloads
 
-### `content_brief.sent`
+Payloads are flat JSON objects with an `event` field at the top level.
 
-Fired when a user clicks "Send to workflow" on a content opportunity.
+### `opportunity.sent`
 
 ```json
 {
-  "event": "content_brief.sent",
+  "event": "opportunity.sent",
+  "opportunity": {
+    "id": "uuid",
+    "title": "Publish a comparison page for project management tools",
+    "description": "Competitors are cited for this prompt and you are not.",
+    "type": "owned",
+    "impact": "high",
+    "opportunity_score": 82.5
+  },
+  "prompt": { "text": "best project management tools for agencies", "category": "comparison" },
   "data": {
-    "opportunityId": "uuid",
-    "opportunity": { ...full opportunity object... },
-    "brief": { ...full brief object... }
-  }
+    "promptText": "best project management tools for agencies",
+    "visibilityScore": 12,
+    "competitorGap": 45,
+    "competitorsCited": ["Competitor A", "Competitor B"]
+  },
+  "brief": {
+    "suggestedTitle": "…",
+    "contentType": "comparison-page",
+    "targetWordCount": 2000,
+    "outline": [{ "heading": "…", "keyPoints": ["…"] }],
+    "targetKeywords": ["…"],
+    "competitorInsights": "…",
+    "callToAction": "…"
+  },
+  "brand": { "name": "Acme", "domain": "acme.example", "industry": "Software" },
+  "callback_url": "https://api.example.com/api/content/<opportunity id>/status"
 }
 ```
 
-### `opportunity.created`
+- `prompt` is `null` when the opportunity is not tied to a prompt.
+- `data` is the evidence behind the opportunity; its fields depend on the opportunity type.
+- `brief` is `null` until a content brief has been generated for the opportunity.
+- `callback_url` points at `PATCH /api/content/{id}/status`, which takes `{ "status": "in_progress" }` (or `new`, `sent`, `done`, `dismissed`). The endpoint authenticates with a dashboard user's access token — see [Authentication](/api-reference/authentication#bearer-token) — not with the webhook secret.
 
-Fired when the content optimization worker generates a new opportunity.
-
-### `opportunity.status_changed`
-
-Fired when an opportunity moves between statuses (`new` → `sent` → `in_progress` → `done` / `dismissed`).
+Once your endpoint responds, the opportunity is marked `sent` whatever status code you return, and that status code and the first 1,000 characters of your response body are stored on it. If the request times out or the connection fails, the opportunity keeps its previous status.
 
 ### `daily_pulse.created`
-
-Fired after a brand's daily tracking run when a Daily Pulse digest is generated. Sent as a flat payload (works on cloud and self-host):
 
 ```json
 {
   "event": "daily_pulse.created",
-  "brand": { "id": "uuid", "name": "Acme Corp" },
+  "brand": { "id": "uuid", "name": "Acme" },
   "pulse": {
     "date": "2026-07-30",
     "frequency": "daily",
@@ -99,32 +103,67 @@ Fired after a brand's daily tracking run when a Daily Pulse digest is generated.
       "visiblePrompts": 17,
       "promptCount": 40,
       "weekRate": 44.1,
+      "prevWeekRate": 45.3,
       "weekTrend": -1.2,
       "mentions": 31,
+      "mentionsChange": 4,
       "citations": 12,
-      "sentimentPct": 68
+      "citationsChange": -2,
+      "sentimentPct": 68,
+      "sentimentChange": 3,
+      "totalResults": 120
     },
-    "highlights": [{ "type": "first_citation", "url": "https://..." }],
-    "warnings": [{ "type": "competitor_surge", "competitorName": "..." }],
+    "highlights": [
+      { "type": "first_citation", "key": "first_citation:https://acme.example/guide", "url": "https://acme.example/guide", "label": "…", "promptText": "…" }
+    ],
+    "warnings": [
+      { "type": "competitor_surge", "key": "competitor_surge:<id>", "competitorName": "…", "from": 20, "to": 31 }
+    ],
     "degraded_platforms": [],
-    "insights_url": "https://app.../dashboard/insights"
+    "insights_url": "https://app.example.com/dashboard/insights"
   }
 }
 ```
 
-## Retries
+`frequency` is the brand's pulse setting (`daily`, `weekly` or `notable`); no pulse is generated when it is `off`.
 
-Failed deliveries (non-2xx response, timeout, connection error) retry with exponential backoff:
-- Attempt 1 — immediately
-- Attempt 2 — after 30 seconds
-- Attempt 3 — after 5 minutes
-- Attempt 4 — after 30 minutes
+Highlight types and their fields:
 
-After 4 failed attempts, the delivery is marked failed and logged to `webhook_response`. No further retries are attempted automatically — you can resend manually from the dashboard.
+| `type` | Fields |
+|---|---|
+| `first_citation` | `url`, `label`, `promptText` |
+| `prompt_gain` | `promptText`, `gain` |
+| `competitor_overtaken` | `competitorName`, `brandRate`, `competitorRate` |
+| `new_engine` | `platform` |
 
-## Testing
+Warning types and their fields:
 
-The Content → Webhook settings page includes a **Test webhook** button that fires a synthetic `content_brief.sent` event so you can validate your endpoint before going live.
+| `type` | Fields |
+|---|---|
+| `sharp_drop`, `visibility_slipping` | `from`, `to`, `drop` |
+| `competitor_surge` | `competitorName`, `from`, `to` |
+| `competitor_crossed` | `competitorName`, `competitorRate`, `brandRate` |
+| `lost_citations` | `promptText` |
+
+Every highlight and warning also has a `key` that identifies its subject.
+
+### `webhook.test`
+
+```json
+{
+  "event": "webhook.test",
+  "message": "This is a test webhook from AEO platform.",
+  "timestamp": "2026-07-30T10:00:00.000Z"
+}
+```
+
+The test uses the URL and secret currently in the form, so you can check an endpoint before saving it.
+
+## Delivery
+
+- Each event is sent **once**. There are no automatic retries.
+- Ansvisor waits up to 15 seconds for a response (10 seconds for `webhook.test`).
+- Respond with a 2xx status quickly and do slow work after responding.
 
 <Card title="Help center" icon="circle-question" href="/faq">
   Common questions and troubleshooting.
