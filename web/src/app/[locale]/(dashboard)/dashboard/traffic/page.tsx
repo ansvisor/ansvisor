@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { getPlatformName } from './_charts';
+import { getPlatformFilterItems, getPlatformName } from './_charts';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getPublicApiBaseUrl } from '@/config/api';
@@ -225,6 +225,7 @@ function TrafficFilterBar({
   isLoading: boolean;
 }) {
   const hasActiveFilters = filters.platform || filters.search;
+  const platformItems = getPlatformFilterItems(platforms);
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -239,15 +240,18 @@ function TrafficFilterBar({
         />
       </div>
 
-      <Select value={filters.platform || ''} onValueChange={(v) => onChange({ platform: v || '' })}>
+      <Select
+        value={filters.platform || ''}
+        onValueChange={(v) => onChange({ platform: v || '' })}
+        items={platformItems}
+      >
         <SelectTrigger className="w-40 h-9 text-sm">
           <SelectValue placeholder="All platforms" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">All platforms</SelectItem>
-          {platforms.map((p) => (
-            <SelectItem key={p} value={p}>
-              {getPlatformName(p)}
+          {platformItems.map((item) => (
+            <SelectItem key={item.value} value={item.value}>
+              {item.label}
             </SelectItem>
           ))}
         </SelectContent>
