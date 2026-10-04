@@ -29,7 +29,11 @@ describe('renderPulseEmail', () => {
       metrics: {
         ...metrics,
         highlights: [
-          { type: 'prompt_gain', promptText: '<script>alert("prompt")</script>', gain: 1.5 },
+          {
+            type: 'prompt_gain',
+            promptText: '<script>alert("prompt")</script>',
+            gain: 1.5,
+          },
           {
             type: 'competitor_overtaken',
             competitorName: 'Bad "Brand"',
@@ -63,7 +67,9 @@ describe('renderPulseEmail', () => {
       insightsUrl: 'https://example.com/insights',
       settingsUrl: 'https://example.com/settings',
     });
-    expect(degraded.html).toContain('Data collection was degraded on ChatGPT, Perplexity today');
+    expect(degraded.html).toContain(
+      'Data collection was degraded on ChatGPT, Perplexity today',
+    );
   });
 
   it('uses the rounded change when selecting the KPI trend arrow', () => {
