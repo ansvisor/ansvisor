@@ -9,10 +9,10 @@ import { getCompetitors, addCompetitor, deleteCompetitor } from '@/lib/actions/c
 import {
   getCompetitorComparison,
   getHeadToHeadComparison,
+  getHeadToHeadRuns,
   type CompetitorComparisonData,
-  type HeadToHeadData,
-  type HeadToHeadPromptRow,
 } from '@/lib/actions/tracking';
+import type { HeadToHeadData, HeadToHeadGroup, HeadToHeadRun } from '@/lib/head-to-head';
 import { getFaviconUrl } from '@/lib/favicon';
 import { MODEL_LABELS } from '@/config/platform-labels';
 import type { Competitor } from '@/types';
@@ -466,76 +466,40 @@ interface PromptComparisonGroup {
   promptId: string;
   promptText: string;
   promptCategory?: string;
-  rows: HeadToHeadData['promptRows'];
+  groups: HeadToHeadGroup[];
+  runs: number;
+  latestAt: string;
   avgBrandScore: number;
   avgCompetitorScore: number;
   avgDiff: number;
 }
 
-function groupH2HByPrompt(rows: HeadToHeadData['promptRows']): PromptComparisonGroup[] {
-  const map = new Map<string, HeadToHeadData['promptRows']>();
-  for (const r of rows) {
-    const arr = map.get(r.promptId) || [];
-    arr.push(r);
-    map.set(r.promptId, arr);
+/** Fold engine groups into one row per prompt, weighting each engine by its runs. */
+function groupH2HByPrompt(groups: HeadToHeadGroup[]): PromptComparisonGroup[] {
+  const map = new Map<string, HeadToHeadGroup[]>();
+  for (const g of groups) {
+    const arr = map.get(g.promptId) || [];
+    arr.push(g);
+    map.set(g.promptId, arr);
   }
-  return Array.from(map.entries()).map(([promptId, items]) => {
-    const avgB = Math.round(items.reduce((s, r) => s + r.brandScore, 0) / items.length);
-    const avgC = Math.round(items.reduce((s, r) => s + r.competitorScore, 0) / items.length);
-    return {
-      promptId,
-      promptText: items[0].promptText,
-      promptCategory: items[0].promptCategory,
-      rows: items,
-      avgBrandScore: avgB,
-      avgCompetitorScore: avgC,
-      avgDiff: avgB - avgC,
-    };
-  });
-}
-
-interface ModelComparisonGroup {
-  key: string;
-  platform: string;
-  modelUsed: string;
-  region?: string;
-  rows: HeadToHeadPromptRow[];
-  latest: HeadToHeadPromptRow;
-  avgBrandScore: number;
-  avgCompetitorScore: number;
-  avgDiff: number;
-}
-
-function groupH2HByModel(rows: HeadToHeadPromptRow[]): ModelComparisonGroup[] {
-  const map = new Map<string, HeadToHeadPromptRow[]>();
-  for (const r of rows) {
-    const key = `${r.platform}|${r.modelUsed ?? ''}|${r.region ?? ''}`;
-    const arr = map.get(key) || [];
-    arr.push(r);
-    map.set(key, arr);
-  }
-
   return Array.from(map.entries())
-    .map(([key, items]) => {
-      const sorted = [...items].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-      const latest = sorted[0];
-      const avgB = Math.round(sorted.reduce((s, r) => s + r.brandScore, 0) / sorted.length);
-      const avgC = Math.round(sorted.reduce((s, r) => s + r.competitorScore, 0) / sorted.length);
+    .map(([promptId, items]) => {
+      const runs = items.reduce((s, g) => s + g.runs, 0);
+      const avgB = Math.round(items.reduce((s, g) => s + g.brandScore * g.runs, 0) / runs);
+      const avgC = Math.round(items.reduce((s, g) => s + g.competitorScore * g.runs, 0) / runs);
       return {
-        key,
-        platform: latest.platform,
-        modelUsed: latest.modelUsed,
-        region: latest.region,
-        rows: sorted,
-        latest,
+        promptId,
+        promptText: items[0].promptText,
+        promptCategory: items[0].promptCategory,
+        groups: [...items].sort((a, b) => b.brandScore - a.brandScore),
+        runs,
+        latestAt: items.reduce((max, g) => (g.latestAt > max ? g.latestAt : max), ''),
         avgBrandScore: avgB,
         avgCompetitorScore: avgC,
         avgDiff: avgB - avgC,
-      } satisfies ModelComparisonGroup;
+      };
     })
-    .sort((a, b) => b.avgBrandScore - a.avgBrandScore);
+    .sort((a, b) => b.latestAt.localeCompare(a.latestAt));
 }
 
 function formatTimestamp(iso: string): string {
@@ -546,23 +510,61 @@ function formatTimestamp(iso: string): string {
   });
 }
 
+type LoadRuns = (group: HeadToHeadGroup, limit: number) => Promise<HeadToHeadRun[]>;
+
+const RUN_HISTORY_LIMIT = 50;
+
 function ModelSubGroup({
   group,
   expanded,
   onToggle,
-  onViewRow,
+  onViewResult,
+  loadRuns,
   brandName,
   competitorName,
 }: {
-  group: ModelComparisonGroup;
+  group: HeadToHeadGroup;
   expanded: boolean;
   onToggle: () => void;
-  onViewRow: (row: HeadToHeadPromptRow) => void;
+  onViewResult: (resultId: string) => void;
+  loadRuns: LoadRuns;
   brandName: string;
   competitorName: string;
 }) {
   const t = useTranslations('competitors');
-  const hasHistory = group.rows.length > 1;
+  const hasHistory = group.runs > 1;
+  const [runs, setRuns] = useState<HeadToHeadRun[] | null>(null);
+  const [runsFailed, setRunsFailed] = useState(false);
+  const [openingLatest, setOpeningLatest] = useState(false);
+
+  useEffect(() => {
+    if (!expanded || !hasHistory || runs !== null) return;
+    let cancelled = false;
+    setRunsFailed(false);
+    loadRuns(group, RUN_HISTORY_LIMIT)
+      .then((loaded) => {
+        if (!cancelled) setRuns(loaded);
+      })
+      .catch(() => {
+        if (!cancelled) setRunsFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [expanded, hasHistory, runs, group, loadRuns]);
+
+  const viewLatest = async () => {
+    if (openingLatest) return;
+    setOpeningLatest(true);
+    try {
+      const [latest] = runs ?? (await loadRuns(group, 1));
+      if (latest) onViewResult(latest.resultId);
+    } catch {
+      toast.error(t('h2h.loadError'));
+    } finally {
+      setOpeningLatest(false);
+    }
+  };
 
   return (
     <div className="rounded-md border bg-background/50">
@@ -596,35 +598,41 @@ function ModelSubGroup({
             </Badge>
           )}
           <span className="text-[10px] text-muted-foreground tabular-nums ml-1">
-            {group.rows.length} run{group.rows.length !== 1 ? 's' : ''}
+            {group.runs} run{group.runs !== 1 ? 's' : ''}
           </span>
         </div>
         <div className="flex items-center gap-4 shrink-0">
           <div className="text-right">
             <p className="text-[10px] text-muted-foreground">{t('h2h.you')}</p>
-            <p className="text-xs font-semibold tabular-nums">{group.avgBrandScore}%</p>
+            <p className="text-xs font-semibold tabular-nums">{Math.round(group.brandScore)}%</p>
           </div>
           <div className="text-right">
             <p className="text-[10px] text-muted-foreground">{t('h2h.them')}</p>
-            <p className="text-xs font-semibold tabular-nums">{group.avgCompetitorScore}%</p>
+            <p className="text-xs font-semibold tabular-nums">
+              {Math.round(group.competitorScore)}%
+            </p>
           </div>
           <div className="text-right min-w-[48px]">
             <p className="text-[10px] text-muted-foreground">{t('h2h.diff')}</p>
-            <DiffBadge diff={group.avgDiff} />
+            <DiffBadge diff={Math.round(group.brandScore) - Math.round(group.competitorScore)} />
           </div>
-          <SentimentBadge sentiment={group.latest.sentiment} />
           <Button
             variant="ghost"
             size="icon"
             className="h-7 w-7"
             title="View latest AI response"
+            disabled={openingLatest}
             onClick={(e) => {
               e.stopPropagation();
-              onViewRow(group.latest);
+              void viewLatest();
             }}
             aria-label="View latest AI response"
           >
-            <Eye className="h-3.5 w-3.5" />
+            {openingLatest ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Eye className="h-3.5 w-3.5" />
+            )}
           </Button>
         </div>
       </div>
@@ -634,54 +642,62 @@ function ModelSubGroup({
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium mb-1.5">
             Previous runs
           </p>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-[10px] h-7">Date</TableHead>
-                <TableHead className="text-[10px] h-7 text-center">{brandName}</TableHead>
-                <TableHead className="text-[10px] h-7 text-center">{competitorName}</TableHead>
-                <TableHead className="text-[10px] h-7 text-center">{t('h2h.diff')}</TableHead>
-                <TableHead className="text-[10px] h-7 text-center">Sentiment</TableHead>
-                <TableHead className="text-[10px] h-7 w-[60px]" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {group.rows.map((row) => (
-                <TableRow key={row.resultId} className="hover:bg-muted/30">
-                  <TableCell className="text-xs text-muted-foreground py-1.5">
-                    {formatTimestamp(row.createdAt)}
-                  </TableCell>
-                  <TableCell className="text-center py-1.5 text-xs font-semibold tabular-nums">
-                    {Math.round(row.brandScore)}%
-                  </TableCell>
-                  <TableCell className="text-center py-1.5 text-xs font-semibold tabular-nums">
-                    {Math.round(row.competitorScore)}%
-                  </TableCell>
-                  <TableCell className="text-center py-1.5">
-                    <DiffBadge diff={Math.round(row.brandScore - row.competitorScore)} />
-                  </TableCell>
-                  <TableCell className="text-center py-1.5">
-                    <SentimentBadge sentiment={row.sentiment} />
-                  </TableCell>
-                  <TableCell className="text-center py-1.5">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      title="View AI response"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onViewRow(row);
-                      }}
-                      aria-label="View AI response"
-                    >
-                      <Eye className="h-3 w-3" />
-                    </Button>
-                  </TableCell>
+          {runsFailed ? (
+            <p className="py-2 text-xs text-muted-foreground">{t('h2h.loadError')}</p>
+          ) : runs === null ? (
+            <div className="flex justify-center py-3">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-[10px] h-7">Date</TableHead>
+                  <TableHead className="text-[10px] h-7 text-center">{brandName}</TableHead>
+                  <TableHead className="text-[10px] h-7 text-center">{competitorName}</TableHead>
+                  <TableHead className="text-[10px] h-7 text-center">{t('h2h.diff')}</TableHead>
+                  <TableHead className="text-[10px] h-7 text-center">Sentiment</TableHead>
+                  <TableHead className="text-[10px] h-7 w-[60px]" />
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {runs.map((row) => (
+                  <TableRow key={row.resultId} className="hover:bg-muted/30">
+                    <TableCell className="text-xs text-muted-foreground py-1.5">
+                      {formatTimestamp(row.createdAt)}
+                    </TableCell>
+                    <TableCell className="text-center py-1.5 text-xs font-semibold tabular-nums">
+                      {Math.round(row.brandScore)}%
+                    </TableCell>
+                    <TableCell className="text-center py-1.5 text-xs font-semibold tabular-nums">
+                      {Math.round(row.competitorScore)}%
+                    </TableCell>
+                    <TableCell className="text-center py-1.5">
+                      <DiffBadge diff={Math.round(row.brandScore - row.competitorScore)} />
+                    </TableCell>
+                    <TableCell className="text-center py-1.5">
+                      <SentimentBadge sentiment={row.sentiment} />
+                    </TableCell>
+                    <TableCell className="text-center py-1.5">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        title="View AI response"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onViewResult(row.resultId);
+                        }}
+                        aria-label="View AI response"
+                      >
+                        <Eye className="h-3 w-3" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </div>
       )}
     </div>
@@ -689,18 +705,20 @@ function ModelSubGroup({
 }
 
 function PromptComparisonGrouped({
-  rows,
+  groups: engineGroups,
   brandName,
   competitorName,
-  onViewRow,
+  onViewResult,
+  loadRuns,
 }: {
-  rows: HeadToHeadData['promptRows'];
+  groups: HeadToHeadGroup[];
   brandName: string;
   competitorName: string;
-  onViewRow: (row: HeadToHeadPromptRow) => void;
+  onViewResult: (resultId: string) => void;
+  loadRuns: LoadRuns;
 }) {
   const t = useTranslations('competitors');
-  const groups = groupH2HByPrompt(rows);
+  const groups = groupH2HByPrompt(engineGroups);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
 
@@ -732,7 +750,7 @@ function PromptComparisonGrouped({
     <div className="space-y-2">
       {groups.map((group) => {
         const isOpen = expanded.has(group.promptId);
-        const modelGroups = groupH2HByModel(group.rows);
+        const modelGroups = group.groups;
         return (
           <div key={group.promptId} className="rounded-lg border overflow-hidden">
             {/* Group Header */}
@@ -764,8 +782,8 @@ function PromptComparisonGrouped({
                   )}
                   <span className="text-[11px] text-muted-foreground">
                     {modelGroups.length} platform
-                    {modelGroups.length !== 1 ? 's' : ''} · {group.rows.length} result
-                    {group.rows.length !== 1 ? 's' : ''}
+                    {modelGroups.length !== 1 ? 's' : ''} · {group.runs} result
+                    {group.runs !== 1 ? 's' : ''}
                   </span>
                 </div>
               </div>
@@ -789,14 +807,15 @@ function PromptComparisonGrouped({
             {isOpen && (
               <div className="border-t px-3 py-2 space-y-1.5 bg-muted/10">
                 {modelGroups.map((mg) => {
-                  const compositeKey = `${group.promptId}::${mg.key}`;
+                  const compositeKey = `${group.promptId}::${mg.rawPlatform ?? ''}|${mg.rawModelUsed ?? ''}|${mg.region ?? ''}`;
                   return (
                     <ModelSubGroup
                       key={compositeKey}
                       group={mg}
                       expanded={expandedModels.has(compositeKey)}
                       onToggle={() => toggleModel(compositeKey)}
-                      onViewRow={onViewRow}
+                      onViewResult={onViewResult}
+                      loadRuns={loadRuns}
                       brandName={brandName}
                       competitorName={competitorName}
                     />
@@ -816,14 +835,14 @@ function PromptComparisonGrouped({
 interface GapStrengthGroup {
   promptId: string;
   promptText: string;
-  items: HeadToHeadData['gaps'];
+  items: HeadToHeadGroup[];
   avgBrandScore: number;
   avgCompetitorScore: number;
   avgDiff: number;
 }
 
-function groupGapStrengthByPrompt(items: HeadToHeadData['gaps']): GapStrengthGroup[] {
-  const map = new Map<string, HeadToHeadData['gaps']>();
+function groupGapStrengthByPrompt(items: HeadToHeadGroup[]): GapStrengthGroup[] {
+  const map = new Map<string, HeadToHeadGroup[]>();
   for (const item of items) {
     const arr = map.get(item.promptId) || [];
     arr.push(item);
@@ -847,13 +866,7 @@ function groupGapStrengthByPrompt(items: HeadToHeadData['gaps']): GapStrengthGro
     .sort((a, b) => a.avgDiff - b.avgDiff);
 }
 
-function GapStrengthList({
-  items,
-  type,
-}: {
-  items: HeadToHeadData['gaps'];
-  type: 'gap' | 'strength';
-}) {
+function GapStrengthList({ items, type }: { items: HeadToHeadGroup[]; type: 'gap' | 'strength' }) {
   const t = useTranslations('competitors');
   const isGap = type === 'gap';
   const groups = groupGapStrengthByPrompt(items);
@@ -950,9 +963,9 @@ function GapStrengthList({
                   ) : (
                     <span className="text-xs text-muted-foreground">—</span>
                   )}
-                  {!hasMultiple && group.items[0].createdAt && (
+                  {!hasMultiple && group.items[0].latestAt && (
                     <span className="text-muted-foreground">
-                      {new Date(group.items[0].createdAt).toLocaleDateString(undefined, {
+                      {new Date(group.items[0].latestAt).toLocaleDateString(undefined, {
                         day: 'numeric',
                         month: 'short',
                         year: 'numeric',
@@ -1000,9 +1013,9 @@ function GapStrengthList({
                     <span className="tabular-nums text-muted-foreground">
                       {t('h2h.them')}: {Math.round(item.competitorScore)}%
                     </span>
-                    {item.createdAt && (
+                    {item.latestAt && (
                       <span className="text-muted-foreground whitespace-nowrap">
-                        {new Date(item.createdAt).toLocaleDateString(undefined, {
+                        {new Date(item.latestAt).toLocaleDateString(undefined, {
                           day: 'numeric',
                           month: 'short',
                         })}
@@ -1026,10 +1039,12 @@ function HeadToHeadSection({
   data,
   brandName,
   competitorName,
+  loadRuns,
 }: {
   data: HeadToHeadData;
   brandName: string;
   competitorName: string;
+  loadRuns: LoadRuns;
 }) {
   const t = useTranslations('competitors');
   const router = useRouter();
@@ -1118,10 +1133,11 @@ function HeadToHeadSection({
         </CardHeader>
         <CardContent className="pt-0">
           <PromptComparisonGrouped
-            rows={data.promptRows}
+            groups={data.groups}
             brandName={brandName}
             competitorName={competitorName}
-            onViewRow={(row) => router.push(`/dashboard/insights/${row.resultId}`)}
+            onViewResult={(resultId) => router.push(`/dashboard/insights/${resultId}`)}
+            loadRuns={loadRuns}
           />
         </CardContent>
       </Card>
@@ -1197,6 +1213,24 @@ export default function CompetitorsPage() {
       setH2hData(null);
     }
   }, [selectedCompetitorId, loadH2H]);
+
+  const loadRuns = useCallback(
+    (group: HeadToHeadGroup, limit: number) => {
+      if (!brand || !selectedCompetitorId) return Promise.resolve([]);
+      return getHeadToHeadRuns(
+        brand.id,
+        selectedCompetitorId,
+        {
+          promptId: group.promptId,
+          rawPlatform: group.rawPlatform,
+          rawModelUsed: group.rawModelUsed,
+          region: group.region ?? null,
+        },
+        limit,
+      );
+    },
+    [brand, selectedCompetitorId],
+  );
 
   if (isCloud && !canUse('competitor_tracking')) {
     return <PlanGateOverlay />;
@@ -1342,11 +1376,12 @@ export default function CompetitorsPage() {
                 <div className="flex items-center justify-center py-16">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
-              ) : h2hData && h2hData.promptRows.length > 0 ? (
+              ) : h2hData && h2hData.groups.length > 0 ? (
                 <HeadToHeadSection
                   data={h2hData}
                   brandName={brand.name}
                   competitorName={selectedCompetitor?.name ?? ''}
+                  loadRuns={loadRuns}
                 />
               ) : (
                 <Card>

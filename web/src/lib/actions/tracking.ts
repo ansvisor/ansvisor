@@ -28,6 +28,14 @@ import { getPromptSuggestions } from '@/lib/actions/prompt-suggestions';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import { percentageChange } from '@/lib/metrics';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
+import {
+  aggregateHeadToHead,
+  competitorScoreIn,
+  emptyHeadToHead,
+  type HeadToHeadData,
+  type HeadToHeadResultRow,
+  type HeadToHeadRun,
+} from '@/lib/head-to-head';
 
 /** Round to one decimal place (keeps sub-1 averages visible instead of flooring to 0). */
 function roundTo1(n: number): number {
@@ -2633,46 +2641,11 @@ export async function getVisibilityRateTrend(
 
 // ─── Head-to-Head Competitor Comparison ─────────────────────────────────────
 
-export interface HeadToHeadPromptRow {
-  resultId: string;
-  promptId: string;
-  promptText: string;
-  promptCategory?: string;
-  brandScore: number;
-  competitorScore: number;
-  diff: number;
-  platform: string;
-  modelUsed: string;
-  region?: string;
-  response: string;
-  citations: Citation[];
-  sentiment: Sentiment;
-  brandMentionCount: number;
-  brandCitationCount: number;
-  compMentionCount: number;
-  compCitationCount: number;
-  createdAt: string;
-}
-
-export interface HeadToHeadPlatformRow {
-  platform: string;
-  brandScore: number;
-  competitorScore: number;
-  diff: number;
-}
-
-export interface HeadToHeadData {
-  promptRows: HeadToHeadPromptRow[];
-  platformRows: HeadToHeadPlatformRow[];
-  brandAvg: number;
-  competitorAvg: number;
-  gaps: HeadToHeadPromptRow[];
-  strengths: HeadToHeadPromptRow[];
-}
-
 /**
- * Compare a brand vs a single competitor prompt-by-prompt.
- * Returns per-prompt scores, per-platform breakdown, gaps and strengths.
+ * Compare a brand vs a single competitor (#923): one summary per (prompt,
+ * engine, model, region), the per-engine breakdown, and the largest gaps and
+ * strengths. A group's individual runs load separately via
+ * `getHeadToHeadRuns`, so no answer text is sent up front.
  */
 export async function getHeadToHeadComparison(
   brandId: string,
@@ -2682,132 +2655,79 @@ export async function getHeadToHeadComparison(
 
   // #155 — head-to-head comparisons are a Competitors-tab feature, which
   // also lives under Insights — same isolation rule applies here.
+  // Still a single page of raw results (PostgREST caps it at 1,000), so
+  // large brands are summarised from their newest answers only; #923 moves
+  // this onto the daily rollups.
   const { data: results, error } = await supabase
     .from('prompt_results')
-    .select('*')
+    .select(
+      'prompt_id, platform, model_used, region, visibility_score, competitor_mentions, created_at',
+    )
     .eq('brand_id', brandId)
     .neq('platform', 'chatgpt-shopping')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false });
 
   if (error) throw new Error(error.message);
-  const rows = (results ?? []) as Record<string, unknown>[];
-  if (rows.length === 0) {
-    return {
-      promptRows: [],
-      platformRows: [],
-      brandAvg: 0,
-      competitorAvg: 0,
-      gaps: [],
-      strengths: [],
-    };
-  }
+  const rows = (results ?? []) as HeadToHeadResultRow[];
+  if (rows.length === 0) return emptyHeadToHead();
 
-  const promptIds = [...new Set(rows.map((r) => r.prompt_id as string))];
+  const promptIds = [...new Set(rows.map((r) => r.prompt_id).filter((id): id is string => !!id))];
   const { data: promptData } =
     promptIds.length > 0
       ? await supabase.from('prompts').select('id, text, category').in('id', promptIds)
       : { data: [] };
-  const promptMap = new Map(
+  const prompts = new Map(
     (promptData ?? []).map((p) => [
-      p.id,
-      {
-        text: p.text as string,
-        category: (p.category as string | null) ?? undefined,
-      },
+      p.id as string,
+      { text: p.text as string, category: (p.category as string | null) ?? undefined },
     ]),
   );
 
-  const promptRows: HeadToHeadPromptRow[] = [];
+  return aggregateHeadToHead(rows, competitorId, prompts, resolveProvider);
+}
 
-  type PlatAgg = {
-    brandTotal: number;
-    brandCount: number;
-    compTotal: number;
-    compCount: number;
-  };
-  const platMap = new Map<string, PlatAgg>();
+/**
+ * The individual runs behind one head-to-head group, newest first, loaded when
+ * the user opens the group. Bounded by `limit` (max 100).
+ */
+export async function getHeadToHeadRuns(
+  brandId: string,
+  competitorId: string,
+  group: {
+    promptId: string;
+    rawPlatform: string | null;
+    rawModelUsed: string | null;
+    region: string | null;
+  },
+  limit = 50,
+): Promise<HeadToHeadRun[]> {
+  const supabase = await dbClient();
 
-  let brandTotalScore = 0;
-  let brandCount = 0;
-  let compTotalScore = 0;
-  let compCount = 0;
+  let query = supabase
+    .from('prompt_results')
+    .select('id, created_at, visibility_score, sentiment, competitor_mentions')
+    .eq('brand_id', brandId)
+    .eq('prompt_id', group.promptId);
+  query = group.rawPlatform ? query.eq('platform', group.rawPlatform) : query.is('platform', null);
+  query = group.rawModelUsed
+    ? query.eq('model_used', group.rawModelUsed)
+    : query.is('model_used', null);
+  query = group.region ? query.eq('region', group.region) : query.is('region', null);
 
-  for (const row of rows) {
-    const brandScore = row.visibility_score as number;
-    const platform = resolveProvider(
-      row.model_used as string | null,
-      row.platform as string | null,
-    );
-    const mentions = (row.competitor_mentions as CompetitorMention[] | null) ?? [];
-    const comp = mentions.find((cm) => cm.competitor_id === competitorId);
-    const compScore = comp?.visibility_score ?? 0;
+  const { data, error } = await query
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(Math.min(Math.max(limit, 1), 100));
+  if (error) throw new Error(error.message);
 
-    const pm = promptMap.get(row.prompt_id as string);
-
-    const modelUsed = (row.model_used as string | null) ?? '';
-
-    promptRows.push({
-      resultId: row.id as string,
-      promptId: row.prompt_id as string,
-      promptText: pm?.text ?? '',
-      promptCategory: pm?.category,
-      brandScore,
-      competitorScore: compScore,
-      diff: brandScore - compScore,
-      platform,
-      modelUsed,
-      region: (row.region as string | null) ?? undefined,
-      response: (row.response as string) ?? '',
-      citations: (row.citations as Citation[]) ?? [],
-      sentiment: (row.sentiment as Sentiment) ?? 'neutral',
-      brandMentionCount: row.mention_count as number,
-      brandCitationCount: row.citation_count as number,
-      compMentionCount: comp?.mention_count ?? 0,
-      compCitationCount: comp?.citation_count ?? 0,
-      createdAt: row.created_at as string,
-    });
-
-    brandTotalScore += brandScore;
-    brandCount += 1;
-    if (comp) {
-      compTotalScore += compScore;
-      compCount += 1;
-    }
-
-    const pa = platMap.get(platform) ?? {
-      brandTotal: 0,
-      brandCount: 0,
-      compTotal: 0,
-      compCount: 0,
-    };
-    pa.brandTotal += brandScore;
-    pa.brandCount += 1;
-    if (comp) {
-      pa.compTotal += compScore;
-      pa.compCount += 1;
-    }
-    platMap.set(platform, pa);
-  }
-
-  const platformRows: HeadToHeadPlatformRow[] = [...platMap.entries()]
-    .map(([platform, a]) => {
-      const bs = a.brandCount > 0 ? Math.round(a.brandTotal / a.brandCount) : 0;
-      const cs = a.compCount > 0 ? Math.round(a.compTotal / a.compCount) : 0;
-      return { platform, brandScore: bs, competitorScore: cs, diff: bs - cs };
-    })
-    .sort((a, b) => a.platform.localeCompare(b.platform));
-
-  const brandAvg = brandCount > 0 ? Math.round(brandTotalScore / brandCount) : 0;
-  const competitorAvg = compCount > 0 ? Math.round(compTotalScore / compCount) : 0;
-
-  const sorted = [...promptRows].sort((a, b) => a.diff - b.diff);
-  const gaps = sorted.filter((r) => r.diff < 0).slice(0, 10);
-  const strengths = sorted
-    .filter((r) => r.diff > 0)
-    .reverse()
-    .slice(0, 10);
-
-  return { promptRows, platformRows, brandAvg, competitorAvg, gaps, strengths };
+  return (data ?? []).map((row) => ({
+    resultId: row.id as string,
+    createdAt: row.created_at as string,
+    brandScore: (row.visibility_score as number | null) ?? 0,
+    competitorScore: competitorScoreIn(row.competitor_mentions, competitorId) ?? 0,
+    sentiment: ((row.sentiment as Sentiment | null) ?? 'neutral') as Sentiment,
+  }));
 }
 
 // ─── Insights Metric Breakdown (Root-Cause Drilldown) ─────────────────────────
