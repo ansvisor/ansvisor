@@ -51,7 +51,7 @@ describe('fetchHeadToHeadResults', () => {
     const rows = Array.from({ length: 1001 }, (_, i) => makeRow(i));
     const { client, ranges, selects } = makeClient([rows.slice(0, 1000), rows.slice(1000)]);
 
-    const result = await fetchHeadToHeadResults(client, 'brand-1');
+    const result = await fetchHeadToHeadResults(client as never, 'brand-1');
 
     expect(result).toHaveLength(1001);
     expect(ranges).toEqual([
@@ -68,7 +68,7 @@ describe('fetchHeadToHeadResults', () => {
     const rows = Array.from({ length: 17 }, (_, i) => makeRow(i));
     const { client, ranges } = makeClient([rows]);
 
-    const result = await fetchHeadToHeadResults(client, 'brand-1');
+    const result = await fetchHeadToHeadResults(client as never, 'brand-1');
 
     expect(result).toHaveLength(17);
     expect(ranges).toEqual([[0, 999]]);
@@ -77,7 +77,7 @@ describe('fetchHeadToHeadResults', () => {
   it('surfaces database errors', async () => {
     const { client } = makeClient([[]], { message: 'database unavailable' });
 
-    await expect(fetchHeadToHeadResults(client, 'brand-1')).rejects.toThrow(
+    await expect(fetchHeadToHeadResults(client as never, 'brand-1')).rejects.toThrow(
       'database unavailable',
     );
   });

@@ -16,20 +16,9 @@ export interface HeadToHeadResultRow {
   created_at: string;
 }
 
-interface HeadToHeadQuery {
-  select(columns: string): HeadToHeadQuery;
-  eq(column: string, value: string): HeadToHeadQuery;
-  neq(column: string, value: string): HeadToHeadQuery;
-  order(column: string, options: { ascending: boolean }): HeadToHeadQuery;
-  range(from: number, to: number): Promise<{
-    data: HeadToHeadResultRow[] | null;
-    error: { message: string } | null;
-  }>;
-}
+import type { createClient } from './supabase/server';
 
-interface HeadToHeadClient {
-  from(table: string): HeadToHeadQuery;
-}
+type HeadToHeadClient = Awaited<ReturnType<typeof createClient>>;
 
 /**
  * Load every prompt result used by the competitor head-to-head calculation.
