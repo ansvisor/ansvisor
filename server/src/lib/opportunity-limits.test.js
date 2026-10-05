@@ -97,7 +97,7 @@ describe('cluster selection', () => {
   });
 
   it('takes the best uncovered clusters that have answers', () => {
-    const cand = (id, score, tested = 1) => ({ id, score, metrics: { tested } });
+    const cand = (id, score, tested = 1) => ({ id, score, topicId: id, metrics: { tested } });
     const picked = pickClusters(
       [
         cand('low', 10),
@@ -110,6 +110,21 @@ describe('cluster selection', () => {
       2,
     );
     expect(picked.map((c) => c.id)).toEqual(['high', 'mid']);
+  });
+
+  it('takes at most one cluster per topic, the no-topic scope included', () => {
+    const cand = (id, score, topicId) => ({ id, score, topicId, metrics: { tested: 1 } });
+    const picked = pickClusters(
+      [
+        cand('a1', 95, 'a'),
+        cand('a2', 90, 'a'),
+        cand('none1', 85, null),
+        cand('none2', 80, null),
+        cand('b1', 50, 'b'),
+      ],
+      new Set(),
+    );
+    expect(picked.map((c) => c.id)).toEqual(['a1', 'none1', 'b1']);
   });
 });
 

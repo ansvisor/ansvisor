@@ -131,10 +131,23 @@ export function coveredClusterIds(rows) {
   return ids;
 }
 
-/** The highest-scoring clusters with answers and no opportunity yet. */
+/**
+ * The highest-scoring clusters with answers and no opportunity yet, at most
+ * one per topic, so a run's few suggestions spread across the brand's topics
+ * instead of all landing in its strongest one. The no-topic scope (null)
+ * counts as one topic.
+ */
 export function pickClusters(candidates, covered, count = OPPORTUNITIES_PER_RUN) {
-  return candidates
+  const topics = new Set();
+  const picked = [];
+  for (const c of [...candidates]
     .filter((c) => c.metrics.tested > 0 && !covered.has(c.id))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, count);
+    .sort((a, b) => b.score - a.score)) {
+    const topic = c.topicId ?? null;
+    if (topics.has(topic)) continue;
+    topics.add(topic);
+    picked.push(c);
+    if (picked.length === count) break;
+  }
+  return picked;
 }

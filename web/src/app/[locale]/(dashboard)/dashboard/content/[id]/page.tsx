@@ -22,6 +22,7 @@ import {
   Target,
   ListOrdered,
   Crown,
+  RotateCcw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Link } from '@/i18n/navigation';
@@ -50,6 +51,7 @@ const STATUS_COLORS: Record<string, string> = {
   in_progress: 'border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400',
   done: 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400',
   dismissed: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-500 dark:text-zinc-400',
+  archived: 'border-zinc-500/30 bg-zinc-500/5 text-zinc-500 dark:text-zinc-400',
 };
 
 const INTENT_LABELS: Record<string, string> = {
@@ -166,6 +168,16 @@ export default function ContentDetailPage() {
     }
   };
 
+  const handleRestore = async () => {
+    try {
+      await updateOpportunityStatus(id, 'new');
+      setOpportunity(await getOpportunity(id));
+      toast.success(t('restoredToast'));
+    } catch {
+      toast.error(t('restoreError'));
+    }
+  };
+
   const handleGenerateBrief = async () => {
     setGeneratingBrief(true);
     try {
@@ -220,6 +232,12 @@ export default function ContentDetailPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {opportunity.status === 'archived' && (
+            <Button variant="outline" size="sm" onClick={handleRestore} className="gap-2">
+              <RotateCcw className="h-4 w-4" />
+              {t('restore')}
+            </Button>
+          )}
           {opportunity.status === 'new' && (
             <>
               <Button

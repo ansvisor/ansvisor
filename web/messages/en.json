@@ -1634,7 +1634,8 @@
       "sent": "Sent to Workflow",
       "in_progress": "In Progress",
       "done": "Done",
-      "dismissed": "Dismissed"
+      "dismissed": "Dismissed",
+      "archived": "Archived"
     },
     "impact": {
       "high": "High",
@@ -1653,12 +1654,14 @@
       "shown": "{count} shown",
       "opportunities": "opportunities",
       "outOf100": "out of 100",
-      "sentOrInProgress": "sent or in progress"
+      "sentOrInProgress": "sent or in progress",
+      "fromSignals": "from {count, plural, one {# signal} other {# signals}} analyzed"
     },
     "filters": {
       "allStatuses": "All Statuses",
       "allImpacts": "All Impacts",
-      "allTypes": "All Types"
+      "allTypes": "All Types",
+      "allTopics": "All Topics"
     },
     "bulk": {
       "selected": "{count} selected",
@@ -1750,7 +1753,10 @@
     "bulkDismissError": "Bulk dismiss failed",
     "bulkDeleteError": "Bulk delete failed",
     "briefGeneratedToast": "Content brief generated!",
-    "briefGenerateError": "Failed to generate brief"
+    "briefGenerateError": "Failed to generate brief",
+    "restore": "Restore",
+    "restoredToast": "Restored to New",
+    "restoreError": "Failed to restore the opportunity"
   },
   "traffic": {
     "title": "AI Traffic Analytics",

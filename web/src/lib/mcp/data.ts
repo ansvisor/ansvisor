@@ -607,7 +607,7 @@ export interface ContentOpportunityRow {
 
 export interface ListContentOpportunitiesParams {
   brandId: string;
-  status?: 'new' | 'sent' | 'in_progress' | 'done' | 'dismissed';
+  status?: 'new' | 'sent' | 'in_progress' | 'done' | 'dismissed' | 'archived';
   impact?: 'high' | 'medium' | 'low';
   type?: 'owned' | 'earned';
   limit?: number;
@@ -640,7 +640,8 @@ export async function listContentOpportunitiesFor(
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  if (params.status) query = query.eq('status', params.status);
+  // The archived per-prompt backlog (#857) only when asked for by status.
+  query = params.status ? query.eq('status', params.status) : query.neq('status', 'archived');
   if (params.impact) query = query.eq('impact', params.impact);
   if (params.type) query = query.eq('type', params.type);
 

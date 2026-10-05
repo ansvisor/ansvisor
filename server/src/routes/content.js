@@ -19,6 +19,7 @@ import {
   assertOpportunitiesAccess,
   assertOpportunityAccess,
 } from '../lib/access.js';
+import { loadClusters } from '../lib/prompt-clusters.js';
 
 const router = Router();
 
@@ -125,6 +126,37 @@ router.get('/job/:jobId', async (req, res) => {
 });
 
 /**
+ * The cluster a filtered prompt belongs to, and the clusters of a filtered
+ * topic, so the list can match opportunities through their clusters (#857).
+ * Both are scoped to the brand, so ids from another brand match nothing.
+ */
+async function clusterScope(brandId, promptId, topicId) {
+  const [memberRes, topicRes] = await Promise.all([
+    promptId
+      ? supabaseAdmin
+          .from('prompt_cluster_members')
+          .select('cluster_id, prompt_clusters!inner(brand_id)')
+          .eq('prompt_id', promptId)
+          .eq('prompt_clusters.brand_id', brandId)
+          .maybeSingle()
+      : { data: null },
+    topicId
+      ? supabaseAdmin
+          .from('prompt_clusters')
+          .select('id')
+          .eq('brand_id', brandId)
+          .eq('topic_id', topicId)
+      : { data: [] },
+  ]);
+  if (memberRes.error) throw new Error(memberRes.error.message);
+  if (topicRes.error) throw new Error(topicRes.error.message);
+  return {
+    promptCluster: memberRes.data?.cluster_id ?? null,
+    topicClusters: (topicRes.data || []).map((c) => c.id),
+  };
+}
+
+/**
  * GET /api/content/brand/:brandId
  * List opportunities for a brand with optional filters.
  */
@@ -138,18 +170,25 @@ router.get('/brand/:brandId', async (req, res) => {
       type,
       q,
       prompt_id: promptId,
+      topic_id: topicId,
       limit = 50,
       offset = 0,
       sort = 'score',
     } = req.query;
 
     const search = q ? String(q).replace(/[,()]/g, ' ') : null;
+    const { promptCluster, topicClusters } = await clusterScope(
+      brandId,
+      promptId ? String(promptId) : null,
+      topicId ? String(topicId) : null,
+    );
     const applyFilters = (query) => {
       let filteredQuery = query.eq('brand_id', brandId);
 
-      if (status) {
-        filteredQuery = filteredQuery.eq('status', status);
-      }
+      // Archived opportunities (the per-prompt backlog, #857) show only when asked for.
+      filteredQuery = status
+        ? filteredQuery.eq('status', status)
+        : filteredQuery.neq('status', 'archived');
 
       if (impact) {
         filteredQuery = filteredQuery.eq('impact', impact);
@@ -159,8 +198,22 @@ router.get('/brand/:brandId', async (req, res) => {
         filteredQuery = filteredQuery.eq('type', type);
       }
 
+      // A prompt matches its cluster's opportunities, own or merged, and any
+      // older opportunity written for the prompt itself.
       if (promptId) {
-        filteredQuery = filteredQuery.eq('prompt_id', promptId);
+        filteredQuery = promptCluster
+          ? filteredQuery.or(
+              `prompt_id.eq.${promptId},cluster_id.eq.${promptCluster},related_cluster_ids.cs.{${promptCluster}}`,
+            )
+          : filteredQuery.eq('prompt_id', promptId);
+      }
+
+      if (topicId) {
+        filteredQuery = topicClusters.length
+          ? filteredQuery.or(
+              `cluster_id.in.(${topicClusters.join(',')}),related_cluster_ids.ov.{${topicClusters.join(',')}}`,
+            )
+          : filteredQuery.in('id', []);
       }
 
       if (q) {
@@ -193,6 +246,7 @@ router.get('/brand/:brandId', async (req, res) => {
       p_type: type ? String(type) : null,
       p_q: search,
       p_prompt_id: promptId ? String(promptId) : null,
+      p_topic_id: topicId ? String(topicId) : null,
     });
 
     const [{ data, error: dataError, count }, { data: aggregateData, error: aggregateError }] =
@@ -210,6 +264,7 @@ router.get('/brand/:brandId', async (req, res) => {
       avg_score: 0,
       high_impact_count: 0,
       sent_count: 0,
+      signal_count: 0,
     };
 
     return res.json({
@@ -221,6 +276,7 @@ router.get('/brand/:brandId', async (req, res) => {
         avgScore: Math.round(Number(aggregates.avg_score) || 0),
         highImpactCount: Number(aggregates.high_impact_count) || 0,
         sentCount: Number(aggregates.sent_count) || 0,
+        signalCount: Number(aggregates.signal_count) || 0,
       },
     });
   } catch (error) {
@@ -236,8 +292,47 @@ router.get('/brand/:brandId', async (req, res) => {
 const FACET_PAGE_SIZE = 1000;
 
 /**
+ * A brand's listed (not archived) opportunities with the prompts each one
+ * answers: its cluster's members, merged clusters included, or for an older
+ * per-prompt opportunity its prompt_id (#857). Paged: PostgREST caps a
+ * response at 1,000 rows and a large brand holds more opportunities.
+ */
+async function opportunityPrompts(brandId) {
+  const opportunities = [];
+  for (let from = 0; ; from += FACET_PAGE_SIZE) {
+    const { data, error } = await supabaseAdmin
+      .from('content_opportunities')
+      .select('prompt_id, cluster_id, related_cluster_ids')
+      .eq('brand_id', brandId)
+      .neq('status', 'archived')
+      .order('id')
+      .range(from, from + FACET_PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    opportunities.push(...(data || []));
+    if (!data || data.length < FACET_PAGE_SIZE) break;
+  }
+
+  const clusters = await loadClusters(brandId);
+  const byCluster = new Map(clusters.map((c) => [c.id, c]));
+  return {
+    clusters: byCluster,
+    rows: opportunities.map((o) => {
+      const ids = [o.cluster_id, ...(o.related_cluster_ids || [])].filter((id) =>
+        byCluster.has(id),
+      );
+      return {
+        clusterIds: ids,
+        promptIds: ids.length
+          ? ids.flatMap((id) => byCluster.get(id).prompt_ids)
+          : [o.prompt_id].filter(Boolean),
+      };
+    }),
+  };
+}
+
+/**
  * GET /api/content/brand/:brandId/prompts
- * The prompts this brand's opportunities belong to, with how many each has,
+ * The prompts this brand's opportunities answer, with how many each has,
  * most first — the options for the Content page's prompt filter (#836).
  * Opportunities whose prompt was deleted are left out: there is nothing to
  * name them by.
@@ -247,22 +342,10 @@ router.get('/brand/:brandId/prompts', async (req, res) => {
     const { brandId } = req.params;
     await assertBrandAccess(brandId, req.user.id);
 
-    // Paged: PostgREST caps a response at 1,000 rows and a large brand holds
-    // more opportunities than that.
+    const { rows } = await opportunityPrompts(brandId);
     const counts = new Map();
-    for (let from = 0; ; from += FACET_PAGE_SIZE) {
-      const { data, error } = await supabaseAdmin
-        .from('content_opportunities')
-        .select('prompt_id')
-        .eq('brand_id', brandId)
-        .not('prompt_id', 'is', null)
-        .order('id')
-        .range(from, from + FACET_PAGE_SIZE - 1);
-      if (error) throw new Error(error.message);
-      for (const row of data || []) {
-        counts.set(row.prompt_id, (counts.get(row.prompt_id) || 0) + 1);
-      }
-      if (!data || data.length < FACET_PAGE_SIZE) break;
+    for (const row of rows) {
+      for (const id of new Set(row.promptIds)) counts.set(id, (counts.get(id) || 0) + 1);
     }
 
     const { data: prompts, error: promptError } = await selectInChunks(
@@ -279,6 +362,41 @@ router.get('/brand/:brandId/prompts', async (req, res) => {
   } catch (error) {
     req.log.error({ err: error }, 'list opportunity prompts error');
     return res.status(error.status || 500).json({ error: 'Failed to list opportunity prompts' });
+  }
+});
+
+/**
+ * GET /api/content/brand/:brandId/topics
+ * The topics this brand's opportunities belong to, through their own or
+ * merged clusters, with how many each has — the topic filter's options.
+ */
+router.get('/brand/:brandId/topics', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    await assertBrandAccess(brandId, req.user.id);
+
+    const { rows, clusters } = await opportunityPrompts(brandId);
+    const counts = new Map();
+    for (const row of rows) {
+      const topics = new Set(row.clusterIds.map((id) => clusters.get(id).topic_id).filter(Boolean));
+      for (const id of topics) counts.set(id, (counts.get(id) || 0) + 1);
+    }
+
+    const { data: topics, error } = await supabaseAdmin
+      .from('topics')
+      .select('id, name')
+      .eq('brand_id', brandId);
+    if (error) throw new Error(error.message);
+
+    return res.json({
+      topics: (topics || [])
+        .filter((t) => counts.has(t.id))
+        .map((t) => ({ topicId: t.id, name: t.name, count: counts.get(t.id) }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+    });
+  } catch (error) {
+    req.log.error({ err: error }, 'list opportunity topics error');
+    return res.status(error.status || 500).json({ error: 'Failed to list opportunity topics' });
   }
 });
 

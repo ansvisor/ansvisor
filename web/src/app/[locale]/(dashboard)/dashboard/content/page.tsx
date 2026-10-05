@@ -65,7 +65,9 @@ import {
   getGenerationJobStatus,
   getOpportunities,
   getOpportunityPrompts,
+  getOpportunityTopics,
   type OpportunityPrompt,
+  type OpportunityTopic,
   updateOpportunityStatus,
   sendToWebhook,
   bulkSendToWebhook,
@@ -126,6 +128,7 @@ const STATUS_COLORS: Record<string, string> = {
   in_progress: 'border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400',
   done: 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400',
   dismissed: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-500 dark:text-zinc-400',
+  archived: 'border-zinc-500/30 bg-zinc-500/5 text-zinc-500 dark:text-zinc-400',
 };
 
 function KpiCard({
@@ -188,6 +191,9 @@ export default function ContentPage() {
   const [urlRead, setUrlRead] = useState(false);
   // null until loaded for the current brand.
   const [promptOptions, setPromptOptions] = useState<OpportunityPrompt[] | null>(null);
+  // Topic filter (#857): matches opportunities through their clusters.
+  const [topicFilter, setTopicFilter] = useState('');
+  const [topicOptions, setTopicOptions] = useState<OpportunityTopic[]>([]);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkSending, setBulkSending] = useState(false);
@@ -199,6 +205,7 @@ export default function ContentPage() {
     avgScore: 0,
     highImpactCount: 0,
     sentCount: 0,
+    signalCount: 0,
   });
 
   // Server-side paging (#610) — the list can hold far more than one page's
@@ -206,7 +213,7 @@ export default function ContentPage() {
   // pager instead of the length of whatever page happens to be loaded.
   const pager = usePagination(
     total,
-    `${statusFilter}|${impactFilter}|${typeFilter}|${promptFilter}|${debouncedSearch}`,
+    `${statusFilter}|${impactFilter}|${typeFilter}|${promptFilter}|${topicFilter}|${debouncedSearch}`,
   );
 
   const loadData = useCallback(
@@ -219,6 +226,7 @@ export default function ContentPage() {
           avgScore: 0,
           highImpactCount: 0,
           sentCount: 0,
+          signalCount: 0,
         });
         setLoading(false);
         return;
@@ -232,6 +240,7 @@ export default function ContentPage() {
         if (impactFilter !== 'all') filters.impact = impactFilter;
         if (typeFilter !== 'all') filters.type = typeFilter;
         if (promptFilter) filters.promptId = promptFilter;
+        if (topicFilter) filters.topicId = topicFilter;
         if (debouncedSearch.trim()) {
           filters.q = debouncedSearch.trim();
         }
@@ -250,6 +259,7 @@ export default function ContentPage() {
             avgScore: 0,
             highImpactCount: 0,
             sentCount: 0,
+            signalCount: 0,
           },
         );
         return data.total;
@@ -270,6 +280,7 @@ export default function ContentPage() {
       impactFilter,
       typeFilter,
       promptFilter,
+      topicFilter,
       pager.start,
       debouncedSearch,
       t,
@@ -319,6 +330,20 @@ export default function ContentPage() {
       cancelled = true;
     };
   }, [loadPromptOptions]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setTopicFilter('');
+    setTopicOptions([]);
+    if (!activeBrandId) return;
+    getOpportunityTopics(activeBrandId)
+      .then((options) => !cancelled && setTopicOptions(options))
+      // Like the prompt filter, it just stays hidden without its options.
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrandId]);
 
   // A prompt id from another brand, or one whose prompt was deleted, would
   // filter to nothing while the picker shows "All prompts". Drop it.
@@ -554,6 +579,7 @@ export default function ContentPage() {
     impactFilter !== 'all' ||
     typeFilter !== 'all' ||
     promptFilter !== '' ||
+    topicFilter !== '' ||
     search.trim() !== '';
 
   const clearFilters = () => {
@@ -561,6 +587,7 @@ export default function ContentPage() {
     setImpactFilter('all');
     setTypeFilter('all');
     selectPrompt('');
+    setTopicFilter('');
     setSearch('');
   };
 
@@ -646,7 +673,11 @@ export default function ContentPage() {
               title={t('kpi.total')}
               icon={Lightbulb}
               value={total}
-              sub={t('kpi.shown', { count: filtered.length })}
+              sub={
+                aggregates.signalCount > 0
+                  ? t('kpi.fromSignals', { count: aggregates.signalCount })
+                  : t('kpi.shown', { count: filtered.length })
+              }
             />
             <KpiCard
               title={t('kpi.highImpact')}
@@ -706,6 +737,7 @@ export default function ContentPage() {
                       <SelectItem value="in_progress">{t('status.in_progress')}</SelectItem>
                       <SelectItem value="done">{t('status.done')}</SelectItem>
                       <SelectItem value="dismissed">{t('status.dismissed')}</SelectItem>
+                      <SelectItem value="archived">{t('status.archived')}</SelectItem>
                     </SelectContent>
                   </Select>
                   <Select value={impactFilter} onValueChange={(v) => v && setImpactFilter(v)}>
@@ -735,6 +767,31 @@ export default function ContentPage() {
                       <SelectItem value="earned">{t('type.earned')}</SelectItem>
                     </SelectContent>
                   </Select>
+                  {(topicOptions.length >= 2 || topicFilter !== '') && (
+                    <Select
+                      items={[
+                        { value: 'all', label: t('filters.allTopics') },
+                        ...topicOptions.map((o) => ({ value: o.topicId, label: o.name })),
+                      ]}
+                      value={topicFilter || 'all'}
+                      onValueChange={(v) => setTopicFilter(!v || v === 'all' ? '' : v)}
+                    >
+                      <SelectTrigger className="h-8 w-44 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t('filters.allTopics')}</SelectItem>
+                        {topicOptions.map((o) => (
+                          <SelectItem key={o.topicId} value={o.topicId}>
+                            <span className="min-w-0 flex-1 truncate">{o.name}</span>
+                            <span className="ml-2 shrink-0 tabular-nums text-muted-foreground">
+                              {o.count}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   {showPromptFilter && (
                     <Combobox
                       items={promptItems}

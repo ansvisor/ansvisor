@@ -177,7 +177,7 @@ export async function generateContentOpportunities(brandId, { model, onProgress 
     return { metrics, components, score: opportunityScore(components) };
   };
 
-  const candidates = clusters.map((c) => ({ id: c.id, ...measure([c.id]) }));
+  const candidates = clusters.map((c) => ({ id: c.id, topicId: c.topic_id, ...measure([c.id]) }));
   const picked = pickClusters(candidates, coveredClusterIds(existing));
   if (!picked.length) {
     logger.info(

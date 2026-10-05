@@ -267,9 +267,11 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         status: z
-          .enum(['new', 'sent', 'in_progress', 'done', 'dismissed'])
+          .enum(['new', 'sent', 'in_progress', 'done', 'dismissed', 'archived'])
           .optional()
-          .describe('Filter by progress status of the opportunity.'),
+          .describe(
+            'Filter by progress status of the opportunity. Archived ones (an older per-prompt backlog) are left out unless asked for.',
+          ),
         impact: z
           .enum(['high', 'medium', 'low'])
           .optional()

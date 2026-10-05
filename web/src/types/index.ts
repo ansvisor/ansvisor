@@ -174,7 +174,13 @@ export interface PromptVolume {
   fetchedAt: string;
 }
 
-export type ContentOpportunityStatus = 'new' | 'sent' | 'in_progress' | 'done' | 'dismissed';
+export type ContentOpportunityStatus =
+  | 'new'
+  | 'sent'
+  | 'in_progress'
+  | 'done'
+  | 'dismissed'
+  | 'archived';
 
 export type ContentOpportunityImpact = 'high' | 'medium' | 'low';
 

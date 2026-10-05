@@ -84,6 +84,7 @@ export async function getOpportunities(
     q?: string;
     type?: string;
     promptId?: string;
+    topicId?: string;
     limit?: number;
     offset?: number;
     sort?: string;
@@ -95,6 +96,7 @@ export async function getOpportunities(
     avgScore: number;
     highImpactCount: number;
     sentCount: number;
+    signalCount: number;
   };
 }> {
   const session = await getSession();
@@ -105,6 +107,7 @@ export async function getOpportunities(
   if (filters?.q) params.set('q', filters.q);
   if (filters?.type) params.set('type', filters.type);
   if (filters?.promptId) params.set('prompt_id', filters.promptId);
+  if (filters?.topicId) params.set('topic_id', filters.topicId);
   if (filters?.limit) params.set('limit', String(filters.limit));
   if (filters?.offset) params.set('offset', String(filters.offset));
   if (filters?.sort) params.set('sort', filters.sort);
@@ -148,6 +151,29 @@ export async function getOpportunityPrompts(brandId: string): Promise<Opportunit
 
   const body = (await res.json()) as { prompts: OpportunityPrompt[] };
   return body.prompts;
+}
+
+export interface OpportunityTopic {
+  topicId: string;
+  name: string;
+  count: number;
+}
+
+export async function getOpportunityTopics(brandId: string): Promise<OpportunityTopic[]> {
+  const session = await getSession();
+
+  const res = await fetch(`${AEO_SERVER_URL}/api/content/brand/${brandId}/topics`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error: ${res.status}`);
+  }
+
+  const body = (await res.json()) as { topics: OpportunityTopic[] };
+  return body.topics;
 }
 
 export async function getOpportunity(id: string): Promise<ContentOpportunity> {
