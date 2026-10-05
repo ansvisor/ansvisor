@@ -153,6 +153,29 @@ export async function getOpportunityPrompts(brandId: string): Promise<Opportunit
   return body.prompts;
 }
 
+export async function sendOpportunityToActionCenter(
+  id: string,
+  assetKey?: string,
+): Promise<{ actionId: string; created: boolean } | { error: string }> {
+  const session = await getSession();
+
+  const res = await fetch(`${AEO_SERVER_URL}/api/content/${id}/action`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ assetKey: assetKey ?? null }),
+  });
+
+  // Returned, not thrown: a thrown error's message is masked in production.
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return { error: body.details || body.error || `Server error: ${res.status}` };
+  }
+  return res.json();
+}
+
 export interface OpportunityTopic {
   topicId: string;
   name: string;

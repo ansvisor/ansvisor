@@ -20,6 +20,7 @@ import {
   assertOpportunityAccess,
 } from '../lib/access.js';
 import { loadClusters } from '../lib/prompt-clusters.js';
+import { sendToActionCenter } from '../lib/action-center/from-opportunity.js';
 
 const router = Router();
 
@@ -1098,6 +1099,26 @@ router.post('/:id/brief', async (req, res) => {
  * GET /api/content/:id
  * Get a single opportunity by ID.
  */
+/**
+ * POST /api/content/:id/action
+ * Send the opportunity, or one of its assets ({ assetKey }), to the Action
+ * Center. Sending the same thing again returns the action already open.
+ */
+router.post('/:id/action', async (req, res) => {
+  try {
+    const opp = await assertOpportunityAccess(req.params.id, req.user.id);
+    const assetKey = typeof req.body?.assetKey === 'string' ? req.body.assetKey : null;
+    const result = await sendToActionCenter(opp, { assetKey, userId: req.user.id });
+    return res.status(result.created ? 201 : 200).json(result);
+  } catch (error) {
+    req.log.error({ err: error }, 'send opportunity to action center error');
+    return res.status(error.status || 500).json({
+      error: 'Failed to send to the Action Center',
+      details: error.message,
+    });
+  }
+});
+
 router.get('/:id/basket', async (req, res) => {
   try {
     const opp = await assertOpportunityAccess(req.params.id, req.user.id);

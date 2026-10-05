@@ -32,6 +32,7 @@ import {
   sendToWebhook,
   generateBrief,
   getBriefQuota,
+  sendOpportunityToActionCenter,
   type BriefQuota,
 } from '@/lib/actions/content';
 import type { ContentBrief, ContentOpportunity } from '@/types';
@@ -173,6 +174,25 @@ export default function ContentDetailPage() {
     }
   };
 
+  // Action Center (#857): the whole opportunity, or one asset by its key.
+  const [sendingAction, setSendingAction] = useState<string | null>(null);
+  const handleSendToActionCenter = async (assetKey?: string) => {
+    setSendingAction(assetKey ?? 'all');
+    try {
+      const result = await sendOpportunityToActionCenter(id, assetKey);
+      if ('error' in result) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(result.created ? t('sentToActionCenter') : t('alreadyInActionCenter'));
+      setOpportunity(await getOpportunity(id));
+    } catch {
+      toast.error(t('sendToActionCenterError'));
+    } finally {
+      setSendingAction(null);
+    }
+  };
+
   const handleRestore = async () => {
     try {
       await updateOpportunityStatus(id, 'new');
@@ -219,6 +239,7 @@ export default function ContentDetailPage() {
   }
 
   const sd = opportunity.sourceData;
+  const canSendToActionCenter = !['dismissed', 'archived', 'done'].includes(opportunity.status);
   const quotaLimited = quota !== null && quota.limit !== -1;
   const quotaExhausted = quotaLimited && quota.remaining <= 0;
 
@@ -237,6 +258,33 @@ export default function ContentDetailPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {opportunity.clusterId &&
+            (sd.actions?.all ? (
+              <Link href={`/dashboard/action-center/actions?action=${sd.actions.all}`}>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Target className="h-4 w-4" />
+                  {t('openInActionCenter')}
+                </Button>
+              </Link>
+            ) : (
+              canSendToActionCenter &&
+              !Object.keys(sd.actions ?? {}).length && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleSendToActionCenter()}
+                  disabled={sendingAction !== null}
+                  className="gap-2"
+                >
+                  {sendingAction === 'all' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Target className="h-4 w-4" />
+                  )}
+                  {t('sendToActionCenter')}
+                </Button>
+              )
+            ))}
           {opportunity.status === 'archived' && (
             <Button variant="outline" size="sm" onClick={handleRestore} className="gap-2">
               <RotateCcw className="h-4 w-4" />
@@ -296,7 +344,11 @@ export default function ContentDetailPage() {
             {opportunity.decision && (
               <TargetPagesCard decision={opportunity.decision} sourceData={sd} />
             )}
-            <AssetsCard sourceData={sd} />
+            <AssetsCard
+              sourceData={sd}
+              onSend={canSendToActionCenter ? handleSendToActionCenter : undefined}
+              sendingKey={sendingAction}
+            />
             <OpportunityBasketCard opportunityId={opportunity.id} />
           </div>
           <ScoreBreakdown sourceData={sd} />

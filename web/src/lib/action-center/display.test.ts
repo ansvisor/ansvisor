@@ -40,8 +40,16 @@ describe('actionTexts', () => {
     expect(() => actionGoal(kind, t)).not.toThrow();
   });
 
-  it('holds copy for all sixty-two definitions', () => {
-    expect(ACTION_KINDS).toHaveLength(62);
+  it('holds copy for all sixty-two definitions and opportunity actions', () => {
+    expect(ACTION_KINDS).toHaveLength(63);
+  });
+
+  it('names an opportunity action after the work it was sent for', () => {
+    const texts = actionTexts(
+      action({ kind: 'content_opportunity', payload: { title: 'Expand the tool list' } }),
+      t,
+    );
+    expect(texts.title).toBe('Expand the tool list');
   });
 
   /**

@@ -222,6 +222,8 @@ export interface ContentOpportunitySourceData {
   windowDays?: number;
   targetPages?: OpportunityPage[];
   assets?: OpportunityAsset[];
+  /** Action Center actions sent from this opportunity, by asset key ('all' for the whole). */
+  actions?: Record<string, string>;
 }
 
 export interface OpportunityPage {

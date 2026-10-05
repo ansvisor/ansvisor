@@ -1102,6 +1102,12 @@
         "platforms": "{count, plural, one {# platform} other {# platforms}}",
         "regions": "{count, plural, one {# region} other {# regions}}",
         "competitors": "{count, plural, one {# competitor} other {# competitors}}"
+      },
+      "content_opportunity": {
+        "title": "Act on a content opportunity for {targets}",
+        "titleGeneric": "Act on a content opportunity",
+        "description": "Sent from Content Optimization: a piece of content, or work on an existing page, that answers a group of related prompts.",
+        "goal": "Get the brand into AI answers for these prompts with the content this opportunity calls for."
       }
     },
     "actionTasks": {
@@ -1788,7 +1794,13 @@
       "category_page": "Category page",
       "third_party_article": "Third-party article",
       "backlink": "Backlink"
-    }
+    },
+    "sendToActionCenter": "Send to Action Center",
+    "sendAsset": "Send",
+    "openInActionCenter": "Open in Action Center",
+    "sentToActionCenter": "Sent to the Action Center",
+    "alreadyInActionCenter": "Already in the Action Center",
+    "sendToActionCenterError": "Failed to send to the Action Center"
   },
   "traffic": {
     "title": "AI Traffic Analytics",

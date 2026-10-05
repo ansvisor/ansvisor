@@ -66,6 +66,10 @@ export function actionTexts(
   if (!isActionKind(action.kind)) {
     return { title: humanizeKind(action.kind), description: t('unknown.description') };
   }
+  // An action sent from a content opportunity is named after the work itself.
+  if (action.kind === 'content_opportunity' && typeof p.title === 'string' && p.title) {
+    return { title: p.title, description: t(`${action.kind}.description`) };
+  }
   const targets = targetLabel(p, t);
   return {
     title: targets ? t(`${action.kind}.title`, { targets }) : t(`${action.kind}.titleGeneric`),

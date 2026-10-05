@@ -36,7 +36,8 @@ export type ActionOutcome =
   | 'declined'
   | 'not_measurable';
 
-/** A kind this build has copy for — the V1 library's sixty-two definitions. */
+/** A kind this build has copy for — the V1 library's sixty-two definitions, plus
+ *  actions sent from a content opportunity. */
 export type ActionKind =
   | 'capture_ai_traffic'
   | 'convert_mentions'
@@ -99,7 +100,9 @@ export type ActionKind =
   | 'capture_competitor_fanouts'
   | 'respond_to_competitor_momentum'
   | 'earn_competitor_source_presence'
-  | 'create_content_for_competitor_gaps';
+  | 'create_content_for_competitor_gaps'
+  // Sent by a person from a content opportunity, not raised by a definition.
+  | 'content_opportunity';
 
 export type TaskStatus =
   | 'todo'
@@ -213,6 +216,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'respond_to_competitor_momentum',
   'earn_competitor_source_presence',
   'create_content_for_competitor_gaps',
+  'content_opportunity',
 ];
 
 /**

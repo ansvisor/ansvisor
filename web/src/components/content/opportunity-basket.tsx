@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Boxes, ExternalLink, FileText, Layers, Search } from 'lucide-react';
+import { Boxes, ExternalLink, FileText, Layers, Loader2, Search } from 'lucide-react';
+import { Link } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -232,9 +233,19 @@ export function TargetPagesCard({
 }
 
 /** Everything the opportunity asks for: the primary content first, then supporting work. */
-export function AssetsCard({ sourceData }: { sourceData: ContentOpportunitySourceData }) {
+export function AssetsCard({
+  sourceData,
+  onSend,
+  sendingKey,
+}: {
+  sourceData: ContentOpportunitySourceData;
+  /** Sends one asset to the Action Center; omitted when sending is not offered. */
+  onSend?: (assetKey: string) => void;
+  sendingKey?: string | null;
+}) {
   const t = useTranslations('content');
   const assets = sourceData.assets ?? [];
+  const actions = sourceData.actions ?? {};
   if (assets.length < 2) return null;
 
   return (
@@ -264,7 +275,34 @@ export function AssetsCard({ sourceData }: { sourceData: ContentOpportunitySourc
                 {t(`decision.${a.decision}`)}
               </Badge>
             </div>
-            <p className="text-sm">{a.title}</p>
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-sm">{a.title}</p>
+              {actions[a.key] ? (
+                <Link
+                  href={`/dashboard/action-center/actions?action=${actions[a.key]}`}
+                  className="shrink-0 text-xs text-primary hover:underline"
+                >
+                  {t('openInActionCenter')}
+                </Link>
+              ) : (
+                onSend &&
+                !actions.all && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 shrink-0 px-2 text-xs"
+                    disabled={sendingKey !== null && sendingKey !== undefined}
+                    onClick={() => onSend(a.key)}
+                  >
+                    {sendingKey === a.key ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      t('sendAsset')
+                    )}
+                  </Button>
+                )
+              )}
+            </div>
             {a.pages.map((p) => (
               <a
                 key={p.url}
