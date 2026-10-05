@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fetchHeadToHeadResults } from './head-to-head';
+import { fetchHeadToHeadResults, type HeadToHeadResultRow } from './head-to-head';
 
 function makeRow(id: number) {
   return {
@@ -19,7 +19,7 @@ function makeRow(id: number) {
   };
 }
 
-function makeClient(pages: Array<unknown[]>, error?: { message: string }) {
+function makeClient(pages: HeadToHeadResultRow[][], error?: { message: string }) {
   let pageIndex = 0;
   const ranges: Array<[number, number]> = [];
   const selects: string[] = [];
