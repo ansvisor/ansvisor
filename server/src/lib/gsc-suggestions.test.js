@@ -105,4 +105,20 @@ describe('composeCandidates', () => {
     const out2 = composeCandidates([...rows, row('tiny query', 15)], []);
     expect(out2.some((c) => c.query === 'tiny query')).toBe(false);
   });
+
+  it('keeps quiet rows out of the head but lets long-tail ones through', () => {
+    // A small site: one head query, everything else between the long-tail
+    // floor (10) and the head floor (30) — what the RPC now returns.
+    const rows = [
+      row('consultancy official website', 2900),
+      row('who to hire first for go to market', 22),
+      row('outbound stopped working', 18), // 3 words → not long-tail
+      row('gtm diagnostic', 12), // 2 words, below head floor → dropped
+    ];
+    const out = composeCandidates(rows, []);
+    expect(out.map((c) => c.query)).toEqual([
+      'consultancy official website',
+      'who to hire first for go to market',
+    ]);
+  });
 });
