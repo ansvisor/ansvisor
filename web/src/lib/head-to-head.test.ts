@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fetchHeadToHeadResults } from './head-to-head';
 
 function makeRow(id: number) {
@@ -19,34 +19,37 @@ function makeRow(id: number) {
   };
 }
 
+function makeClient(pages: Array<unknown[]>, error?: { message: string }) {
+  let pageIndex = 0;
+  const ranges: Array<[number, number]> = [];
+  const selects: string[] = [];
+
+  const query = {
+    select: vi.fn((columns: string) => {
+      selects.push(columns);
+      return query;
+    }),
+    eq: vi.fn(() => query),
+    neq: vi.fn(() => query),
+    order: vi.fn(() => query),
+    range: vi.fn(async (from: number, to: number) => {
+      ranges.push([from, to]);
+      const data = pages[pageIndex++] ?? [];
+      return { data, error: pageIndex === 1 && error ? error : null };
+    }),
+  };
+
+  return {
+    client: { from: vi.fn(() => query) },
+    ranges,
+    selects,
+  };
+}
+
 describe('fetchHeadToHeadResults', () => {
   it('fetches beyond the 1,000-row PostgREST limit', async () => {
     const rows = Array.from({ length: 1001 }, (_, i) => makeRow(i));
-    const ranges: Array<[number, number]> = [];
-    const selects: string[] = [];
-
-    const client = {
-      from: () => ({
-        select: (columns: string) => {
-          selects.push(columns);
-          return {
-            eq: () => ({
-              neq: () => ({
-                order: () => ({
-                  range: async (from: number, to: number) => {
-                    ranges.push([from, to]);
-                    return {
-                      data: rows.slice(from, to + 1),
-                      error: null,
-                    };
-                  },
-                }),
-              }),
-            }),
-          };
-        },
-      }),
-    };
+    const { client, ranges, selects } = makeClient([rows.slice(0, 1000), rows.slice(1000)]);
 
     const result = await fetchHeadToHeadResults(client, 'brand-1');
 
@@ -63,48 +66,16 @@ describe('fetchHeadToHeadResults', () => {
 
   it('stops after a short page', async () => {
     const rows = Array.from({ length: 17 }, (_, i) => makeRow(i));
-    let calls = 0;
-
-    const client = {
-      from: () => ({
-        select: () => ({
-          eq: () => ({
-            neq: () => ({
-              order: () => ({
-                range: async () => {
-                  calls += 1;
-                  return { data: rows, error: null };
-                },
-              }),
-            }),
-          }),
-        }),
-      }),
-    };
+    const { client, ranges } = makeClient([rows]);
 
     const result = await fetchHeadToHeadResults(client, 'brand-1');
 
     expect(result).toHaveLength(17);
-    expect(calls).toBe(1);
+    expect(ranges).toEqual([[0, 999]]);
   });
 
   it('surfaces database errors', async () => {
-    const client = {
-      from: () => ({
-        select: () => ({
-          eq: () => ({
-            neq: () => ({
-              order: () => ({
-                range: async () => ({
-                  data: null,
-                  error: { message: 'database unavailable' },
-                }),
-              }),
-            }),
-          }),
-        }),
-      }),
-    };
+    const { client } = makeClient([[]], { message: 'database unavailable' });
 
     await expect(fetchHeadToHeadResults(client, 'brand-1')).rejects.toThrow(
       'database unavailable',
