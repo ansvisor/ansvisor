@@ -990,9 +990,16 @@ export default function ContentPage() {
                         </Link>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline" className="text-xs">
-                          {t(`type.${opp.type}` as 'type.owned' | 'type.earned')}
-                        </Badge>
+                        <div className="flex flex-col items-center gap-1">
+                          <Badge variant="outline" className="text-xs">
+                            {t(`type.${opp.type}` as 'type.owned' | 'type.earned')}
+                          </Badge>
+                          {opp.decision && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              {t(`decision.${opp.decision}`)}
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge

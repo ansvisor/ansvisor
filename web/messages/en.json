@@ -1711,7 +1711,9 @@
         "visibilityGap": "Visibility gap",
         "competitorGap": "Competitor gap",
         "intent": "Intent"
-      }
+      },
+      "targetTitle": "Your Site",
+      "targetStats": "{citations, plural, one {# AI citation} other {# AI citations}} · {sessions, plural, one {# session} other {# sessions}} in the last 30 days"
     },
     "webhook": {
       "title": "Webhook Settings",
@@ -1756,7 +1758,23 @@
     "briefGenerateError": "Failed to generate brief",
     "restore": "Restore",
     "restoredToast": "Restored to New",
-    "restoreError": "Failed to restore the opportunity"
+    "restoreError": "Failed to restore the opportunity",
+    "decision": {
+      "create": "Create",
+      "optimize": "Optimize",
+      "expand": "Expand",
+      "refresh": "Refresh",
+      "consolidate": "Consolidate",
+      "defend": "Defend"
+    },
+    "decisionHint": {
+      "create": "No page on your site answers this yet. Write a new one.",
+      "optimize": "A page on your site already targets this. Make it the answer AI engines pick.",
+      "expand": "A page on your site covers part of this. Add the angles it misses.",
+      "refresh": "A page on your site covers this but is out of date. Update it.",
+      "consolidate": "Several pages on your site target this and split its signals. Merge them into one.",
+      "defend": "You are already visible here. Keep this page ahead of competitors."
+    }
   },
   "traffic": {
     "title": "AI Traffic Analytics",

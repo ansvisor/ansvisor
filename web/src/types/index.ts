@@ -186,6 +186,14 @@ export type ContentOpportunityImpact = 'high' | 'medium' | 'low';
 
 export type ContentOpportunityType = 'owned' | 'earned';
 
+export type ContentOpportunityDecision =
+  | 'create'
+  | 'optimize'
+  | 'expand'
+  | 'refresh'
+  | 'consolidate'
+  | 'defend';
+
 export interface ContentOpportunitySourceData {
   promptText?: string;
   estAiVolume?: number;
@@ -212,6 +220,13 @@ export interface ContentOpportunitySourceData {
     intent: number;
   };
   windowDays?: number;
+  targetPages?: {
+    url: string;
+    title: string | null;
+    aiCitations: number;
+    gaSessions: number;
+    lastmod: string | null;
+  }[];
 }
 
 export interface OpportunityBasket {
@@ -240,6 +255,7 @@ export interface ContentOpportunity {
   brandId: string;
   promptId?: string;
   clusterId?: string | null;
+  decision?: ContentOpportunityDecision | null;
   title: string;
   description?: string;
   type: ContentOpportunityType;

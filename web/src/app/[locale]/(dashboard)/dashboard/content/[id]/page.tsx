@@ -36,7 +36,11 @@ import {
 } from '@/lib/actions/content';
 import type { ContentBrief, ContentOpportunity } from '@/types';
 import { getPromptFanout, type FanoutSubQuery } from '@/lib/actions/fanout';
-import { OpportunityBasketCard, ScoreBreakdown } from '@/components/content/opportunity-basket';
+import {
+  OpportunityBasketCard,
+  ScoreBreakdown,
+  TargetPagesCard,
+} from '@/components/content/opportunity-basket';
 import { toast } from 'sonner';
 
 const IMPACT_COLORS: Record<string, string> = {
@@ -287,7 +291,10 @@ export default function ContentDetailPage() {
 
       {opportunity.clusterId && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-2">
+          <div className="space-y-4 lg:col-span-2">
+            {opportunity.decision && (
+              <TargetPagesCard decision={opportunity.decision} sourceData={sd} />
+            )}
             <OpportunityBasketCard opportunityId={opportunity.id} />
           </div>
           <ScoreBreakdown sourceData={sd} />

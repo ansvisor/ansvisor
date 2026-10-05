@@ -29,6 +29,7 @@ function mapOpportunityRow(row) {
     brandId: row.brand_id,
     promptId: row.prompt_id,
     clusterId: row.cluster_id ?? null,
+    decision: row.decision ?? null,
     title: row.title,
     description: row.description,
     type: row.type,
@@ -930,6 +931,19 @@ export async function generateBriefForOpportunity(opportunityId, { force = false
   // A cluster opportunity (#857) answers several prompts: the brief treats
   // them as the questions the piece must answer, and the searches AI engines
   // ran for them as the related searches to cover.
+  // What to do with the brand's existing pages (#857, Phase 2): the brief
+  // works on the named page instead of drafting a new one beside it.
+  const targetPages = sourceData.targetPages || [];
+  const decisionContext =
+    opportunity.decision && opportunity.decision !== 'create' && targetPages.length
+      ? `
+Decision: ${opportunity.decision} the existing page${targetPages.length > 1 ? 's' : ''} below rather than writing a new one.
+${targetPages.map((p) => `- ${p.title || p.url} (${p.url})`).join('\n')}
+`
+      : opportunity.decision === 'create'
+        ? '\nDecision: create a new page; the site has none for this need.\n'
+        : '';
+
   const clusterContext = sourceData.prompts?.length
     ? `
 Questions this content must answer (the cluster's prompts):
@@ -952,7 +966,7 @@ Opportunity:
 - Score: ${opportunity.opportunity_score}
 
 Related Prompt: "${promptText}"
-${clusterContext}Intent: ${sourceData.intent || 'unknown'}
+${clusterContext}${decisionContext}Intent: ${sourceData.intent || 'unknown'}
 Est. AI Volume: ${sourceData.estAiVolume || 0}/mo
 Current Visibility: ${sourceData.visibilityScore || 0}%
 Competitor Gap: ${sourceData.competitorGap || 0}%

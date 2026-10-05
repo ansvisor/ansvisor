@@ -2,13 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Layers, Search } from 'lucide-react';
+import { ExternalLink, FileText, Layers, Search } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getOpportunityBasket } from '@/lib/actions/content';
-import type { ContentOpportunitySourceData, OpportunityBasket } from '@/types';
+import type {
+  ContentOpportunityDecision,
+  ContentOpportunitySourceData,
+  OpportunityBasket,
+} from '@/types';
 
 const SCORE_PARTS = [
   ['demand', 40],
@@ -171,6 +175,58 @@ export function OpportunityBasketCard({ opportunityId }: { opportunityId: string
           </>
         )}
       </CardContent>
+    </Card>
+  );
+}
+
+/** The brand's existing pages an opportunity is about, and what to do with them. */
+export function TargetPagesCard({
+  decision,
+  sourceData,
+}: {
+  decision: ContentOpportunityDecision;
+  sourceData: ContentOpportunitySourceData;
+}) {
+  const t = useTranslations('content');
+  const pages = sourceData.targetPages ?? [];
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <FileText className="h-4 w-4 text-primary" />
+          <CardTitle className="text-sm font-medium">{t('detail.targetTitle')}</CardTitle>
+          <Badge variant="secondary" className="text-[10px]">
+            {t(`decision.${decision}`)}
+          </Badge>
+        </div>
+        <p className="text-xs text-muted-foreground">{t(`decisionHint.${decision}`)}</p>
+      </CardHeader>
+      {pages.length > 0 && (
+        <CardContent className="space-y-2">
+          {pages.map((p) => (
+            <a
+              key={p.url}
+              href={p.url}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-start justify-between gap-3 rounded-md border p-2.5 hover:bg-muted/50"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium line-clamp-1">{p.title || p.url}</p>
+                <p className="text-xs text-muted-foreground truncate">{p.url}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {t('detail.targetStats', {
+                    citations: p.aiCitations,
+                    sessions: p.gaSessions,
+                  })}
+                </p>
+              </div>
+              <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground mt-1" />
+            </a>
+          ))}
+        </CardContent>
+      )}
     </Card>
   );
 }

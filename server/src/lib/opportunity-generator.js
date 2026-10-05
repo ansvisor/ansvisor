@@ -25,9 +25,16 @@ import {
 } from './opportunity-limits.js';
 import { loadClusterOpportunities } from './open-opportunities.js';
 import { loadClusters } from './prompt-clusters.js';
+import { DECISIONS, candidatePages, resolveDecision } from './page-matching.js';
 
 /** Existing opportunities shown to the model for the cross-topic check. */
 const EXISTING_SHOWN = 60;
+/**
+ * Clusters an opportunity may absorb from other topics. Past this it stops
+ * being offered as a merge target: one opportunity that keeps absorbing
+ * neighbouring needs turns into a catch-all no single page can answer.
+ */
+export const MAX_MERGED_CLUSTERS = 3;
 /** Included fan-out queries kept on an opportunity, most searched first. */
 const QUERIES_KEPT = 15;
 const PROMPTS_SHOWN = 12;
@@ -38,7 +45,15 @@ Rules:
 - One opportunity per cluster, for the content that answers all of its prompts. Name the need, not a single prompt.
 - Be concrete and actionable, and reference the data: volume, visibility, the strongest competitor's visibility, competitors.
 - Categorize as "owned" (content the brand controls) or "earned" (third-party content, PR, reviews).
-- Existing opportunities from other topics are listed. If a cluster needs the same content as one of them — the same user need and the same piece of content — set sameAs to its bracketed E index. Otherwise set sameAs to null. Sharing words or a topic is not enough.
+- Existing opportunities from other topics are listed. If a cluster needs the same content as one of them — the same user need and the same piece of content, answering the cluster's prompts without becoming a different page — set sameAs to its bracketed E index. Otherwise set sameAs to null. Sharing words, a topic or a product category is not enough.
+- Decide what the content is, given the brand's pages listed under each cluster:
+  - create: no listed page answers this need. Write a new page.
+  - optimize: a listed page already targets this need. Make it the answer AI engines pick: structure, evidence, direct answers, FAQ.
+  - expand: a listed page covers part of the need. Add the angles it misses.
+  - refresh: a listed page covers the need but is out of date (old year, old last-modified date, stale facts).
+  - consolidate: two or more listed pages are each mainly about this same need, close to duplicates, and split its signals. Merge them into one. Pages of different kinds (a head-to-head comparison and a general list, a glossary entry and a guide) are not duplicates: pick the page closest to the need and expand or optimize it instead.
+  - defend: the brand is already visible for this need and a listed page answers it. Keep it ahead of competitors.
+  Set pageIndexes to the bracketed P indexes of the pages the decision is about, and leave it empty for create. The title should say what to do with which page, for example "Expand the AI rank tracker comparison with Google AI Overviews coverage".
 - Write for the brand's marketing team: do not use the words "cluster" or "prompt" in titles or descriptions.
 - Refer to clusters and existing opportunities only through clusterIndex and sameAs. Never mention a bracketed index in a title or description.`;
 
@@ -58,6 +73,10 @@ function buildSchema(count) {
             .describe('1-2 sentences on why it matters, referencing the metrics'),
           type: z.enum(['owned', 'earned']),
           impact: z.enum(['high', 'medium', 'low']),
+          decision: z.enum(DECISIONS),
+          pageIndexes: z
+            .array(z.number())
+            .describe('The P indexes of the existing pages the decision is about'),
         }),
       )
       .max(count),
@@ -132,20 +151,31 @@ export async function generateContentOpportunities(brandId, { model, onProgress 
     .toISOString()
     .slice(0, 10);
   const memberIds = clusters.flatMap((c) => c.prompt_ids);
-  const [prompts, volumes, metricsRes, topicsRes, domainsRes, existing] = await Promise.all([
-    loadPromptTexts(memberIds),
-    selectInChunks(memberIds, (chunk) =>
+  const [prompts, volumes, metricsRes, topicsRes, domainsRes, existing, pagesRes] =
+    await Promise.all([
+      loadPromptTexts(memberIds),
+      selectInChunks(memberIds, (chunk) =>
+        supabaseAdmin
+          .from('prompt_volumes')
+          .select('prompt_id, est_ai_volume, intent, keywords')
+          .in('prompt_id', chunk),
+      ),
+      supabaseAdmin.rpc('brand_prompt_opportunity_metrics', {
+        p_brand_id: brandId,
+        p_since: since,
+      }),
+      supabaseAdmin.from('topics').select('id, name').eq('brand_id', brandId),
+      supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', brandId),
+      loadClusterOpportunities(brandId),
+      // Pages that answered when last read; a 404 is not a page to work on.
       supabaseAdmin
-        .from('prompt_volumes')
-        .select('prompt_id, est_ai_volume, intent, keywords')
-        .in('prompt_id', chunk),
-    ),
-    supabaseAdmin.rpc('brand_prompt_opportunity_metrics', { p_brand_id: brandId, p_since: since }),
-    supabaseAdmin.from('topics').select('id, name').eq('brand_id', brandId),
-    supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', brandId),
-    loadClusterOpportunities(brandId),
-  ]);
+        .from('site_pages')
+        .select('url, title, h1, description, lastmod, ai_citations, ga_sessions')
+        .eq('brand_id', brandId)
+        .eq('fetch_status', 200),
+    ]);
   if (volumes.error) throw new Error(volumes.error.message);
+  if (pagesRes.error) throw new Error(pagesRes.error.message);
   if (metricsRes.error) throw new Error(metricsRes.error.message);
 
   const byPrompt = new Map(prompts.map((p) => [p.id, { text: p.text }]));
@@ -197,14 +227,32 @@ export async function generateContentOpportunities(brandId, { model, onProgress 
   if (basketErr) throw new Error(basketErr.message);
 
   const shown = existing
-    .filter((o) => o.status !== 'dismissed' && clusterById.has(o.cluster_id))
+    .filter(
+      (o) =>
+        o.status !== 'dismissed' &&
+        clusterById.has(o.cluster_id) &&
+        (o.related_cluster_ids || []).length < MAX_MERGED_CLUSTERS,
+    )
     .sort((a, b) => b.opportunity_score - a.opportunity_score)
     .slice(0, EXISTING_SHOWN);
+
+  // Each cluster's candidate pages, by the words its need shares with them.
+  const pagesFor = new Map(
+    picked.map((cand) => {
+      const c = clusterById.get(cand.id);
+      const basket = basketSummary([c.id], basketRows || []);
+      const need = [c.label, c.primary_intent, ...c.promptTexts, ...basket.top.map((q) => q.query)];
+      return [cand.id, candidatePages(need.join(' '), pagesRes.data || [])];
+    }),
+  );
+  const pageLine = (p, i) =>
+    `[P${i}] ${p.title || p.h1 || p.url} — ${p.url} | AI citations (30d): ${p.ai_citations} | GA sessions (30d): ${p.ga_sessions} | Last modified: ${p.lastmod ? p.lastmod.slice(0, 10) : 'unknown'}`;
 
   const clusterLine = (cand, i) => {
     const c = clusterById.get(cand.id);
     const m = cand.metrics;
     const basket = basketSummary([c.id], basketRows || []);
+    const pages = pagesFor.get(cand.id);
     return `[${i}] ${c.label} (topic: ${topicName(c) || 'none'})
 Need: ${c.primary_intent}
 Prompts:
@@ -213,7 +261,9 @@ ${c.promptTexts
   .map((t) => `- ${t}`)
   .join('\n')}
 Searches AI engines ran for these prompts: ${basket.top.map((q) => q.query).join('; ') || 'none recorded'}
-Est. AI volume: ${m.demand}/mo | Brand visibility: ${m.visibility}% | Strongest competitor: ${m.topCompetitorVisibility}% | Competitors visible: ${m.competitorsCited.join(', ') || 'none'}`;
+Est. AI volume: ${m.demand}/mo | Brand visibility: ${m.visibility}% | Strongest competitor: ${m.topCompetitorVisibility}% | Competitors visible: ${m.competitorsCited.join(', ') || 'none'}
+Brand pages that may cover this need:
+${pages.map(pageLine).join('\n') || 'none found'}`;
   };
 
   const userPrompt = `Brand: ${brand.name}
@@ -258,13 +308,17 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
         .update({
           related_cluster_ids: ids.slice(1),
           opportunity_score: score,
-          source_data: sourceData({
-            clusters: ids.map((id) => clusterById.get(id)),
-            topicName,
-            metrics,
-            components,
-            queries: basketSummary(ids, basketRows || []),
-          }),
+          source_data: {
+            ...sourceData({
+              clusters: ids.map((id) => clusterById.get(id)),
+              topicName,
+              metrics,
+              components,
+              queries: basketSummary(ids, basketRows || []),
+            }),
+            // The decision and its pages stay as first made.
+            ...(target.targetPages ? { targetPages: target.targetPages } : {}),
+          },
           updated_at: new Date().toISOString(),
         })
         .eq('id', target.id);
@@ -276,6 +330,11 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
     }
 
     const c = clusterById.get(cand.id);
+    const { decision, pages } = resolveDecision(
+      opp.decision,
+      opp.pageIndexes,
+      pagesFor.get(cand.id),
+    );
     inserts.push({
       brand_id: brandId,
       cluster_id: c.id,
@@ -286,13 +345,23 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
       impact: opp.impact,
       opportunity_score: cand.score,
       status: 'new',
-      source_data: sourceData({
-        clusters: [c],
-        topicName,
-        metrics: cand.metrics,
-        components: cand.components,
-        queries: basketSummary([c.id], basketRows || []),
-      }),
+      decision,
+      source_data: {
+        ...sourceData({
+          clusters: [c],
+          topicName,
+          metrics: cand.metrics,
+          components: cand.components,
+          queries: basketSummary([c.id], basketRows || []),
+        }),
+        targetPages: pages.map((p) => ({
+          url: p.url,
+          title: p.title || p.h1 || null,
+          aiCitations: p.ai_citations,
+          gaSessions: p.ga_sessions,
+          lastmod: p.lastmod,
+        })),
+      },
     });
   }
 
