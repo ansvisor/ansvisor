@@ -11,6 +11,7 @@ import { hasFeature, getPlan, isCloud } from '../config/plans.js';
 import { applyPlanOverrides } from '../lib/plan-guard.js';
 import { generateContentOpportunities } from '../lib/opportunity-generator.js';
 import { refreshPromptClusters } from '../lib/prompt-clusters.js';
+import { refreshSitePages } from '../lib/site-pages.js';
 import { updateTargetUrlStats } from '../lib/target-url-stats.js';
 import { persistCitationRows } from '../lib/citation-rows.js';
 import { parseLocation, locationsForScraper } from '../lib/locations.js';
@@ -850,6 +851,10 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
         refreshPromptClusters(brandId)
           .catch((err) => {
             logger.error({ err, brandId }, 'prompt cluster refresh failed');
+          })
+          .then(() => refreshSitePages(brandId))
+          .catch((err) => {
+            logger.error({ err, brandId }, 'site page inventory refresh failed');
           })
           .then(() => generateContentOpportunities(brandId))
           .catch((err) => {
