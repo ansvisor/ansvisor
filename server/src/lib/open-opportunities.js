@@ -4,7 +4,7 @@ const PAGE = 1000;
 
 /**
  * A brand's cluster opportunities, every status, as { id, title, status,
- * cluster_id, related_cluster_ids, opportunity_score, targetPages }. Paged: a
+ * cluster_id, related_cluster_ids, opportunity_score, targetPages, assets }. Paged: a
  * large brand can hold more than PostgREST's 1,000-row default, and a short
  * read would let a covered cluster be suggested again.
  */
@@ -14,7 +14,7 @@ export async function loadClusterOpportunities(brandId) {
     const { data, error } = await supabaseAdmin
       .from('content_opportunities')
       .select(
-        'id, title, status, cluster_id, related_cluster_ids, opportunity_score, targetPages:source_data->targetPages',
+        'id, title, status, cluster_id, related_cluster_ids, opportunity_score, targetPages:source_data->targetPages, assets:source_data->assets',
       )
       .eq('brand_id', brandId)
       .not('cluster_id', 'is', null)

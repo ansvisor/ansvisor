@@ -37,6 +37,7 @@ import {
 import type { ContentBrief, ContentOpportunity } from '@/types';
 import { getPromptFanout, type FanoutSubQuery } from '@/lib/actions/fanout';
 import {
+  AssetsCard,
   OpportunityBasketCard,
   ScoreBreakdown,
   TargetPagesCard,
@@ -295,6 +296,7 @@ export default function ContentDetailPage() {
             {opportunity.decision && (
               <TargetPagesCard decision={opportunity.decision} sourceData={sd} />
             )}
+            <AssetsCard sourceData={sd} />
             <OpportunityBasketCard opportunityId={opportunity.id} />
           </div>
           <ScoreBreakdown sourceData={sd} />

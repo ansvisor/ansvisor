@@ -220,13 +220,37 @@ export interface ContentOpportunitySourceData {
     intent: number;
   };
   windowDays?: number;
-  targetPages?: {
-    url: string;
-    title: string | null;
-    aiCitations: number;
-    gaSessions: number;
-    lastmod: string | null;
-  }[];
+  targetPages?: OpportunityPage[];
+  assets?: OpportunityAsset[];
+}
+
+export interface OpportunityPage {
+  url: string;
+  title: string | null;
+  aiCitations: number;
+  gaSessions: number;
+  lastmod: string | null;
+}
+
+export type OpportunityAssetType =
+  | 'blog_post'
+  | 'pillar_guide'
+  | 'landing_page'
+  | 'comparison_page'
+  | 'glossary_page'
+  | 'faq_page'
+  | 'product_page'
+  | 'category_page'
+  | 'third_party_article'
+  | 'backlink';
+
+export interface OpportunityAsset {
+  key: string;
+  type: OpportunityAssetType;
+  channel: ContentOpportunityType;
+  decision: ContentOpportunityDecision;
+  title: string;
+  pages: OpportunityPage[];
 }
 
 export interface OpportunityBasket {

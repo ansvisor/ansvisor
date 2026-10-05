@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { candidatePages, resolveDecision, tokens } from './page-matching.js';
+import { buildAssets, candidatePages, resolveDecision, tokens } from './page-matching.js';
 
 describe('tokens', () => {
   it('keeps meaningful words, folds plain plurals and handles any script', () => {
@@ -66,5 +66,60 @@ describe('resolveDecision', () => {
     expect(resolveDecision('consolidate', [0], candidates).decision).toBe('optimize');
     expect(resolveDecision('create', [0], candidates)).toEqual({ decision: 'create', pages: [] });
     expect(resolveDecision('rewrite', [0], candidates).decision).toBe('create');
+  });
+});
+
+describe('buildAssets', () => {
+  const candidates = [
+    { url: 'https://example.com/list', title: 'Tool list', ai_citations: 3, ga_sessions: 9 },
+    { url: 'https://example.com/vs', title: 'A vs B', ai_citations: 0, ga_sessions: 1 },
+  ];
+
+  it('keeps the primary first and resolves each asset on its own', () => {
+    const assets = buildAssets(
+      { type: 'blog_post', channel: 'owned', decision: 'expand', pageIndexes: [0], title: 'Main' },
+      [
+        {
+          type: 'comparison_page',
+          channel: 'owned',
+          decision: 'optimize',
+          pageIndexes: [1],
+          title: 'Cmp',
+        },
+        { type: 'backlink', channel: 'earned', decision: 'optimize', pageIndexes: [0], title: 'L' },
+      ],
+      candidates,
+    );
+    expect(
+      assets.map((a) => [a.key, a.type, a.channel, a.decision, a.pages.map((p) => p.url)]),
+    ).toEqual([
+      ['a1', 'blog_post', 'owned', 'expand', ['https://example.com/list']],
+      ['a2', 'comparison_page', 'owned', 'optimize', ['https://example.com/vs']],
+      // Earned work lives on other sites: always new, no page of ours.
+      ['a3', 'backlink', 'earned', 'create', []],
+    ]);
+    expect(assets[0].pages[0]).toEqual({
+      url: 'https://example.com/list',
+      title: 'Tool list',
+      aiCitations: 3,
+      gaSessions: 9,
+      lastmod: undefined,
+    });
+  });
+
+  it('drops unknown types, repeats of the same work and anything past the cap', () => {
+    const extra = (type) => ({
+      type,
+      channel: 'owned',
+      decision: 'create',
+      pageIndexes: [],
+      title: type,
+    });
+    const assets = buildAssets(
+      { type: 'faq_page', channel: 'owned', decision: 'create', pageIndexes: [], title: 'FAQ' },
+      [extra('podcast'), extra('faq_page'), extra('glossary_page'), extra('landing_page')],
+      candidates,
+    );
+    expect(assets.map((a) => a.type)).toEqual(['faq_page', 'glossary_page']);
   });
 });

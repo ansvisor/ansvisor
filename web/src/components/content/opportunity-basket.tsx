@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { ExternalLink, FileText, Layers, Search } from 'lucide-react';
+import { Boxes, ExternalLink, FileText, Layers, Search } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -227,6 +227,59 @@ export function TargetPagesCard({
           ))}
         </CardContent>
       )}
+    </Card>
+  );
+}
+
+/** Everything the opportunity asks for: the primary content first, then supporting work. */
+export function AssetsCard({ sourceData }: { sourceData: ContentOpportunitySourceData }) {
+  const t = useTranslations('content');
+  const assets = sourceData.assets ?? [];
+  if (assets.length < 2) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <Boxes className="h-4 w-4 text-primary" />
+          <CardTitle className="text-sm font-medium">{t('detail.assetsTitle')}</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {assets.map((a, i) => (
+          <div key={a.key} className="rounded-md border p-2.5 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {i === 0 && (
+                <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">
+                  {t('detail.primaryAsset')}
+                </Badge>
+              )}
+              <Badge variant="outline" className="text-[10px]">
+                {t(`assetType.${a.type}`)}
+              </Badge>
+              <Badge variant="outline" className="text-[10px]">
+                {t(`type.${a.channel}`)}
+              </Badge>
+              <Badge variant="secondary" className="text-[10px]">
+                {t(`decision.${a.decision}`)}
+              </Badge>
+            </div>
+            <p className="text-sm">{a.title}</p>
+            {a.pages.map((p) => (
+              <a
+                key={p.url}
+                href={p.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:underline"
+              >
+                <ExternalLink className="h-3 w-3 shrink-0" />
+                <span className="truncate">{p.title || p.url}</span>
+              </a>
+            ))}
+          </div>
+        ))}
+      </CardContent>
     </Card>
   );
 }

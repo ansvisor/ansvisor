@@ -1713,7 +1713,9 @@
         "intent": "Intent"
       },
       "targetTitle": "Your Site",
-      "targetStats": "{citations, plural, one {# AI citation} other {# AI citations}} · {sessions, plural, one {# session} other {# sessions}} in the last 30 days"
+      "targetStats": "{citations, plural, one {# AI citation} other {# AI citations}} · {sessions, plural, one {# session} other {# sessions}} in the last 30 days",
+      "assetsTitle": "Recommended Assets",
+      "primaryAsset": "Primary"
     },
     "webhook": {
       "title": "Webhook Settings",
@@ -1774,6 +1776,18 @@
       "refresh": "A page on your site covers this but is out of date. Update it.",
       "consolidate": "Several pages on your site target this and split its signals. Merge them into one.",
       "defend": "You are already visible here. Keep this page ahead of competitors."
+    },
+    "assetType": {
+      "blog_post": "Blog post",
+      "pillar_guide": "Pillar guide",
+      "landing_page": "Landing page",
+      "comparison_page": "Comparison page",
+      "glossary_page": "Glossary page",
+      "faq_page": "FAQ page",
+      "product_page": "Product page",
+      "category_page": "Category page",
+      "third_party_article": "Third-party article",
+      "backlink": "Backlink"
     }
   },
   "traffic": {

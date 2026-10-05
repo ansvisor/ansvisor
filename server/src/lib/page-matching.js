@@ -98,3 +98,65 @@ export function resolveDecision(decision, pageIndexes, candidates) {
   if (valid === 'consolidate' && pages.length < 2) return { decision: 'optimize', pages };
   return { decision: valid, pages };
 }
+
+/** What an asset is. Owned types are pages on the brand's site; earned ones live elsewhere. */
+export const ASSET_TYPES = [
+  'blog_post',
+  'pillar_guide',
+  'landing_page',
+  'comparison_page',
+  'glossary_page',
+  'faq_page',
+  'product_page',
+  'category_page',
+  'third_party_article',
+  'backlink',
+];
+
+/** Supporting assets an opportunity may add to its primary one. */
+export const MAX_SUPPORTING_ASSETS = 3;
+
+const toPage = (p) => ({
+  url: p.url,
+  title: p.title || p.h1 || null,
+  aiCitations: p.ai_citations,
+  gaSessions: p.ga_sessions,
+  lastmod: p.lastmod,
+});
+
+/**
+ * An opportunity's assets, primary first, each with a stable key, its type,
+ * channel, decision, title and the existing pages it works on. Earned assets
+ * live off the brand's site, so they are always new and carry no page. A
+ * supporting asset of an unknown type, or one repeating the primary's type
+ * and decision, is dropped; so is anything past MAX_SUPPORTING_ASSETS.
+ *
+ * @param {{type: string, channel: string, decision: string, title: string, pageIndexes: number[]}} primary
+ * @param {typeof primary[]} supporting
+ * @param {object[]} candidates - the cluster's candidate pages
+ */
+export function buildAssets(primary, supporting, candidates) {
+  const assets = [];
+  const seen = new Set();
+  for (const a of [primary, ...(supporting || []).slice(0, MAX_SUPPORTING_ASSETS)]) {
+    if (!a || (assets.length && !ASSET_TYPES.includes(a.type))) continue;
+    const channel = a.channel === 'earned' ? 'earned' : 'owned';
+    const { decision, pages } =
+      channel === 'earned'
+        ? { decision: 'create', pages: [] }
+        : resolveDecision(a.decision, a.pageIndexes, candidates);
+    const type = ASSET_TYPES.includes(a.type) ? a.type : 'blog_post';
+    const id = `${type}:${decision}:${pages.map((p) => p.url).join(',')}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    assets.push({
+      key: `a${assets.length + 1}`,
+      type,
+      channel,
+      decision,
+      title: a.title,
+      pages: pages.map(toPage),
+    });
+  }
+  return assets;
+}

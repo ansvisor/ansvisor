@@ -25,7 +25,13 @@ import {
 } from './opportunity-limits.js';
 import { loadClusterOpportunities } from './open-opportunities.js';
 import { loadClusters } from './prompt-clusters.js';
-import { DECISIONS, candidatePages, resolveDecision } from './page-matching.js';
+import {
+  ASSET_TYPES,
+  DECISIONS,
+  MAX_SUPPORTING_ASSETS,
+  buildAssets,
+  candidatePages,
+} from './page-matching.js';
 
 /** Existing opportunities shown to the model for the cross-topic check. */
 const EXISTING_SHOWN = 60;
@@ -54,6 +60,9 @@ Rules:
   - consolidate: two or more listed pages are each mainly about this same need, close to duplicates, and split its signals. Merge them into one. Pages of different kinds (a head-to-head comparison and a general list, a glossary entry and a guide) are not duplicates: pick the page closest to the need and expand or optimize it instead.
   - defend: the brand is already visible for this need and a listed page answers it. Keep it ahead of competitors.
   Set pageIndexes to the bracketed P indexes of the pages the decision is about, and leave it empty for create. The title should say what to do with which page, for example "Expand the AI rank tracker comparison with Google AI Overviews coverage".
+- The opportunity is the primary asset above. Set assetType to what that content is.
+- Add supporting assets only when the data calls for them, up to ${MAX_SUPPORTING_ASSETS}, each a different piece of work. For example: a comparison page when people compare named products; a glossary or FAQ page for a definition the main content relies on; an earned third-party article when competitors are visible and the brand is not; a backlink when the brand's page exists but is not cited. Give each a short title saying what to make or do. Most opportunities need none or one.
+- Earned assets (third_party_article, backlink) live on other sites: set their channel to "earned", decision to "create" and pageIndexes to empty.
 - Write for the brand's marketing team: do not use the words "cluster" or "prompt" in titles or descriptions.
 - Refer to clusters and existing opportunities only through clusterIndex and sameAs. Never mention a bracketed index in a title or description.`;
 
@@ -77,6 +86,18 @@ function buildSchema(count) {
           pageIndexes: z
             .array(z.number())
             .describe('The P indexes of the existing pages the decision is about'),
+          assetType: z.enum(ASSET_TYPES).describe('What the primary content is'),
+          supportingAssets: z
+            .array(
+              z.object({
+                type: z.enum(ASSET_TYPES),
+                channel: z.enum(['owned', 'earned']),
+                decision: z.enum(DECISIONS),
+                pageIndexes: z.array(z.number()),
+                title: z.string().describe('What to make or do, in a few words'),
+              }),
+            )
+            .describe('Further assets the data calls for; often empty'),
         }),
       )
       .max(count),
@@ -316,8 +337,9 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
               components,
               queries: basketSummary(ids, basketRows || []),
             }),
-            // The decision and its pages stay as first made.
+            // The decision, its pages and the assets stay as first made.
             ...(target.targetPages ? { targetPages: target.targetPages } : {}),
+            ...(target.assets ? { assets: target.assets } : {}),
           },
           updated_at: new Date().toISOString(),
         })
@@ -330,11 +352,18 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
     }
 
     const c = clusterById.get(cand.id);
-    const { decision, pages } = resolveDecision(
-      opp.decision,
-      opp.pageIndexes,
+    const assets = buildAssets(
+      {
+        type: opp.assetType,
+        channel: opp.type,
+        decision: opp.decision,
+        pageIndexes: opp.pageIndexes,
+        title: opp.title,
+      },
+      opp.supportingAssets,
       pagesFor.get(cand.id),
     );
+    const [primary] = assets;
     inserts.push({
       brand_id: brandId,
       cluster_id: c.id,
@@ -345,7 +374,7 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
       impact: opp.impact,
       opportunity_score: cand.score,
       status: 'new',
-      decision,
+      decision: primary.decision,
       source_data: {
         ...sourceData({
           clusters: [c],
@@ -354,13 +383,8 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
           components: cand.components,
           queries: basketSummary([c.id], basketRows || []),
         }),
-        targetPages: pages.map((p) => ({
-          url: p.url,
-          title: p.title || p.h1 || null,
-          aiCitations: p.ai_citations,
-          gaSessions: p.ga_sessions,
-          lastmod: p.lastmod,
-        })),
+        targetPages: primary.pages,
+        assets,
       },
     });
   }
