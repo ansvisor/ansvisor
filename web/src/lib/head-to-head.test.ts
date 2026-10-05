@@ -1,0 +1,113 @@
+import { describe, expect, it } from 'vitest';
+import { fetchHeadToHeadResults } from './head-to-head';
+
+function makeRow(id: number) {
+  return {
+    id: String(id),
+    prompt_id: `prompt-${id}`,
+    visibility_score: id,
+    model_used: 'gpt-test',
+    platform: 'chatgpt-web',
+    competitor_mentions: [],
+    region: null,
+    response: null,
+    citations: [],
+    sentiment: 'neutral',
+    mention_count: 0,
+    citation_count: 0,
+    created_at: new Date(1_000_000 + id).toISOString(),
+  };
+}
+
+describe('fetchHeadToHeadResults', () => {
+  it('fetches beyond the 1,000-row PostgREST limit', async () => {
+    const rows = Array.from({ length: 1001 }, (_, i) => makeRow(i));
+    const ranges: Array<[number, number]> = [];
+    const selects: string[] = [];
+
+    const client = {
+      from: () => ({
+        select: (columns: string) => {
+          selects.push(columns);
+          return {
+            eq: () => ({
+              neq: () => ({
+                order: () => ({
+                  range: async (from: number, to: number) => {
+                    ranges.push([from, to]);
+                    return {
+                      data: rows.slice(from, to + 1),
+                      error: null,
+                    };
+                  },
+                }),
+              }),
+            }),
+          };
+        },
+      }),
+    };
+
+    const result = await fetchHeadToHeadResults(client, 'brand-1');
+
+    expect(result).toHaveLength(1001);
+    expect(ranges).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ]);
+    expect(selects).toEqual([
+      'id,prompt_id,visibility_score,model_used,platform,competitor_mentions,region,response,citations,sentiment,mention_count,citation_count,created_at',
+      'id,prompt_id,visibility_score,model_used,platform,competitor_mentions,region,response,citations,sentiment,mention_count,citation_count,created_at',
+    ]);
+  });
+
+  it('stops after a short page', async () => {
+    const rows = Array.from({ length: 17 }, (_, i) => makeRow(i));
+    let calls = 0;
+
+    const client = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            neq: () => ({
+              order: () => ({
+                range: async () => {
+                  calls += 1;
+                  return { data: rows, error: null };
+                },
+              }),
+            }),
+          }),
+        }),
+      }),
+    };
+
+    const result = await fetchHeadToHeadResults(client, 'brand-1');
+
+    expect(result).toHaveLength(17);
+    expect(calls).toBe(1);
+  });
+
+  it('surfaces database errors', async () => {
+    const client = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            neq: () => ({
+              order: () => ({
+                range: async () => ({
+                  data: null,
+                  error: { message: 'database unavailable' },
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    };
+
+    await expect(fetchHeadToHeadResults(client, 'brand-1')).rejects.toThrow(
+      'database unavailable',
+    );
+  });
+});
