@@ -28,6 +28,7 @@ import { getPromptSuggestions } from '@/lib/actions/prompt-suggestions';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import { percentageChange } from '@/lib/metrics';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
+import { fetchHeadToHeadResults } from '@/lib/head-to-head';
 
 /** Round to one decimal place (keeps sub-1 averages visible instead of flooring to 0). */
 function roundTo1(n: number): number {
@@ -2682,15 +2683,7 @@ export async function getHeadToHeadComparison(
 
   // #155 — head-to-head comparisons are a Competitors-tab feature, which
   // also lives under Insights — same isolation rule applies here.
-  const { data: results, error } = await supabase
-    .from('prompt_results')
-    .select('*')
-    .eq('brand_id', brandId)
-    .neq('platform', 'chatgpt-shopping')
-    .order('created_at', { ascending: false });
-
-  if (error) throw new Error(error.message);
-  const rows = (results ?? []) as Record<string, unknown>[];
+  const rows = await fetchHeadToHeadResults(supabase, brandId);
   if (rows.length === 0) {
     return {
       promptRows: [],
