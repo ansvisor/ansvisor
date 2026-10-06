@@ -12367,16 +12367,19 @@ grant execute on function public.citations_domains(
 -- ─────────────────────────────────────────────────────────────────────────
 -- Daily health report: time the dashboard's heaviest reads.
 --
--- The Citations page once failed for days before anyone noticed: one read had
--- drifted past the 8 s statement timeout on the largest brand. The daily
+-- The Citations page once stopped opening on the largest brand: one read had
+-- drifted past the 8 s statement timeout, and only a user noticed. The daily
 -- health report (server/src/lib/health) times those reads every morning and
 -- flags any that are getting close.
 --
 -- Most of them check membership through auth.uid(), so a service-role call
--- would return nothing in no time. health_probe runs one read as a given
--- organization member — the claims are set for this transaction only — and
--- returns how long it took. Only the server's service role may call it, and
--- only for the reads named below.
+-- would return nothing in no time. health_probe runs one read the way the
+-- page does — as the `authenticated` role, with a given organization
+-- member's claims, both for this transaction only — and returns how long it
+-- took. The role matters as much as the claims: run with row security
+-- bypassed, the Competitors read planned differently and ran past 120 s,
+-- against 6.9 s as the page runs it. Only the server's service role may call
+-- it, and only for the reads named below.
 
 create or replace function public.health_probe(
   p_user_id uuid,
@@ -12387,7 +12390,7 @@ create or replace function public.health_probe(
 returns numeric
 language plpgsql
 volatile
-security definer
+security invoker
 set search_path = public
 as $$
 declare
@@ -12396,6 +12399,7 @@ declare
   day_from date := (now() at time zone 'utc')::date - coalesce(p_days, 0);
   n bigint;
 begin
+  perform set_config('role', 'authenticated', true);
   perform set_config(
     'request.jwt.claims',
     json_build_object('sub', p_user_id, 'role', 'authenticated')::text,
