@@ -19,7 +19,7 @@ import {
   cleanupOldJobs,
   cleanupStalePendingTasks,
 } from './lib/job-manager.js';
-import { runTrackingJob } from './lib/job-runner.js';
+import { runTrackingJob, recoverWaitingJobs } from './lib/job-runner.js';
 import { sweepInsightsRollups } from './lib/insights-rollups.js';
 import { sweepActionValidation } from './lib/action-center/validate.js';
 import { parseScraperResponse } from './lib/cloro-scraper.js';
@@ -611,6 +611,13 @@ server.listen(PORT, async () => {
 
   await cleanupStaleJobs();
   await cleanupStalePendingTasks();
+
+  // The job queue lives in memory: restart waiting jobs whose run chain was
+  // lost (a restart, an error before they got a slot), now and every minute.
+  const recover = () =>
+    recoverWaitingJobs(io).catch((err) => logger.error({ err }, 'waiting-job recovery failed'));
+  await recover();
+  setInterval(recover, 60_000);
 
   if (!isCloud()) {
     const schedule = process.env.DAILY_CRON_SCHEDULE || '0 6 * * *';
