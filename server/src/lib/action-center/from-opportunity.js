@@ -122,6 +122,18 @@ export async function sendToActionCenter(opportunity, { assetKey = null, userId 
 
   const sd = opportunity.source_data || {};
   const prompts = sd.prompts || [];
+  // The prompts the action is measured on (basket-metrics.js), fixed at send
+  // time so a later re-clustering does not change what it is judged by.
+  const clusterIds = [opportunity.cluster_id, ...(opportunity.related_cluster_ids || [])].filter(
+    Boolean,
+  );
+  const { data: members, error: membersErr } = clusterIds.length
+    ? await supabaseAdmin
+        .from('prompt_cluster_members')
+        .select('prompt_id')
+        .in('cluster_id', clusterIds)
+    : { data: [], error: null };
+  if (membersErr) throw new Error(membersErr.message);
   const payload = {
     source: OPPORTUNITY_ACTION_KIND,
     opportunityId: opportunity.id,
@@ -136,6 +148,7 @@ export async function sendToActionCenter(opportunity, { assetKey = null, userId 
       title,
     })),
     pages: [...new Set(chosen.flatMap((a) => (a.pages || []).map((p) => p.url)))],
+    promptIds: (members || []).map((m) => m.prompt_id),
     targetEntity: 'prompts',
     targetCount: prompts.length,
     targets: prompts.slice(0, 50),

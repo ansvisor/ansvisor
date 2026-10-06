@@ -330,7 +330,13 @@ export function AssetsCard({
 const MEASURE_AFTER_DAYS = 31;
 
 const formatMetric = (value: number | null, unit: string) =>
-  value === null ? '—' : unit === 'percent' ? `${Math.round(value * 10) / 10}%` : String(value);
+  value === null
+    ? '—'
+    : unit === 'percent'
+      ? `${Math.round(value * 10) / 10}%`
+      : unit === 'points'
+        ? `${value > 0 ? '+' : ''}${Math.round(value * 10) / 10} pts`
+        : String(value);
 
 /**
  * Where the work sent from this opportunity stands, and what it moved once

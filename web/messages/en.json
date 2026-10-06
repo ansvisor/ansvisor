@@ -204,6 +204,10 @@
       "ai_referral_traffic": {
         "name": "AI Referral Traffic",
         "description": "Visits arriving from AI platforms"
+      },
+      "competitor_lead": {
+        "name": "Lead over top competitor",
+        "description": "Your visibility minus the strongest competitor's on the same prompts, in points"
       }
     },
     "signalCategories": {

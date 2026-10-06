@@ -27,6 +27,7 @@ import supabaseAdmin from '../../config/supabase.js';
 import { computeAiVisibilityScore } from '../../config/visibility-score.js';
 import { logger } from '../logger.js';
 import { resolve } from '../../config/action-engine.js';
+import { BASKET_KPIS, basketScope, measureBasket } from './basket-metrics.js';
 
 const DAY_MS = 86_400_000;
 
@@ -233,6 +234,36 @@ export async function validateAction(action, { now = new Date() } = {}) {
   // action, and would file most recent work as a decline.
   if (afterWindow.to >= utcDay(now)) return null;
 
+  // An action sent from a content opportunity is measured on its own prompts
+  // and pages; the brand-wide numbers would bury a single piece of content.
+  if (action.kind === 'content_opportunity') {
+    const scope = await basketScope(action);
+    const [before, after] = await Promise.all([
+      measureBasket(action.brand_id, scope, beforeWindow.from, beforeWindow.to),
+      measureBasket(action.brand_id, scope, afterWindow.from, afterWindow.to),
+    ]);
+    const metrics = Object.entries(BASKET_KPIS).map(([metric, unit]) => ({
+      metric,
+      unit,
+      before: before[metric],
+      after: after[metric],
+    }));
+    const outcome = deriveOutcome(metrics);
+    await write(
+      action.id,
+      {
+        measuredAt: now.toISOString(),
+        beforeWindow,
+        afterWindow,
+        metrics,
+        scope: { kind: 'basket', prompts: scope.promptIds.length, pages: scope.pages.length },
+      },
+      outcome,
+      now,
+    );
+    return outcome;
+  }
+
   const kpiKeys = (action.kpi_keys ?? []).filter((key) => key in MEASURABLE_KPIS);
 
   // An action with no success metrics has nothing to measure. That is a gap
@@ -289,7 +320,7 @@ export async function sweepActionValidation({ now = new Date() } = {}) {
   const cutoff = new Date(now.getTime() - VALIDATION_WAIT_DAYS * DAY_MS).toISOString();
   const { data, error } = await supabaseAdmin
     .from('actions')
-    .select('id, brand_id, kpi_keys, created_at, completed_at')
+    .select('id, brand_id, kind, payload, kpi_keys, created_at, completed_at')
     .eq('status', 'completed')
     .eq('outcome', 'pending_measurement')
     .not('completed_at', 'is', null)
