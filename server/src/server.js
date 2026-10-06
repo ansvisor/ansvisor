@@ -609,6 +609,18 @@ const PORT = process.env.PORT || 80;
 server.listen(PORT, async () => {
   logger.info({ port: PORT, env: process.env.NODE_ENV }, 'server running');
 
+  // Startup job maintenance acts on every job in the database: it fails all
+  // 'active' jobs as interrupted, deletes old Cloro tasks and takes over
+  // 'waiting' jobs. Only the deployed server owns those. A development
+  // server pointed at the production database (nodemon restarting on every
+  // save) was failing the live nightly runs in the middle of their work.
+  // Keyed on 'development' rather than on 'production', so a deployment
+  // whose env file leaves NODE_ENV unset still runs it.
+  if (process.env.NODE_ENV === 'development') {
+    logger.info('development: skipping job cleanup, recovery and the daily cron');
+    return;
+  }
+
   await cleanupStaleJobs();
   await cleanupStalePendingTasks();
 
