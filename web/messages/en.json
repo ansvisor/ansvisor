@@ -1829,7 +1829,10 @@
     "totalVolume": "Total Volume",
     "trending": "Trending",
     "presenceRate": "Presence Rate",
-    "gaps": "Content Gaps"
+    "gaps": "Content Gaps",
+    "suggestions": {
+      "measuredSuggestionsKept": "Search Console and Analytics suggestions were kept — dismiss them individually to hide them for 30 days."
+    }
   },
   "competitors": {
     "title": "Competitors",

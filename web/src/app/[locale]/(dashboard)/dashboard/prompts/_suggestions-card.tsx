@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useTransition, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -202,6 +203,10 @@ const SOURCE_FILTER_LABELS: Record<SourceFilter, string> = {
   agents: 'Ansvisor Agents only',
 };
 
+function isMeasuredSuggestion(s: PromptSuggestion): boolean {
+  return s.source === 'gsc' || s.source === 'ga';
+}
+
 interface Props {
   brandId: string;
   onAccepted?: () => void;
@@ -251,6 +256,7 @@ function sourceNotice(
 }
 
 export function SuggestionsCard({ brandId, onAccepted, sourceStates }: Props) {
+  const t = useTranslations('prompts.suggestions');
   const [suggestions, setSuggestions] = useState<PromptSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -330,14 +336,16 @@ export function SuggestionsCard({ brandId, onAccepted, sourceStates }: Props) {
   );
 
   /**
-   * Dismiss everything on screen. Kept to what is actually listed rather than
-   * "every suggestion for this brand": dismissing a Search Console or
-   * Analytics row keeps that query or page out of the pool for 30 days, so
-   * clearing a filtered view must not silently suppress rows the user never
-   * looked at.
+   * Dismiss only generated rows on screen. Search Console and Analytics rows
+   * carry a 30-day cooldown, so bulk clear keeps them visible unless the user
+   * explicitly dismisses each one.
    */
   const handleClearAll = () => {
-    const doomed = visible;
+    const preserved = visible.filter(isMeasuredSuggestion);
+    const doomed = visible.filter((s) => !isMeasuredSuggestion(s));
+    if (preserved.length > 0) {
+      toast.info(t('measuredSuggestionsKept'));
+    }
     if (doomed.length === 0) return;
     setClearing(true);
     const ids = new Set(doomed.map((d) => d.id));
