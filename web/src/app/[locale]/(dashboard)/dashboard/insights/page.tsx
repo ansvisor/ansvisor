@@ -43,7 +43,6 @@ import { FormulaDialog } from './_formula-dialog';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
   getInsightsData,
-  getVisibilityRateTrend,
   getTrackingWindow,
   type TrackingWindow,
   type VisibilityRateTrendData,
@@ -989,34 +988,19 @@ export default function InsightsPage() {
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
+  // Keyed on the id, not the brand object: the store hands out a new object
+  // for the same brand, and a new loadData re-runs the load effect below.
+  const brandId = brand?.id;
   const loadData = useCallback(
     async (overrideFilters?: InsightsFilters, { silent = false } = {}) => {
-      if (!brand) return;
+      if (!brandId) return;
       if (!silent) setIsLoading(true);
       try {
         const f = overrideFilters ?? filtersRef.current;
-        // eslint-disable-next-line prefer-const -- dateFrom/dateTo are reassigned by the 24h anchor below
-        let { dateFrom, dateTo, days } = getDateRange(f.datePreset, {
+        const { dateFrom, dateTo, days } = getDateRange(f.datePreset, {
           from: f.dateFrom,
           to: f.dateTo,
         });
-
-        // Stable 24h window (00044): anchor to the last COMPLETED tracking
-        // run so the morning refresh can't flash "no results" or shrink the
-        // counts while today's run streams in. Brands with no completed run
-        // yet (fresh onboarding) keep the live rolling window — nothing of
-        // theirs is old enough to age out, so it can't regress.
-        if (f.datePreset === '24h') {
-          const win = await getTrackingWindow(brand.id).catch(() => null);
-          if (win) {
-            cronRunRef.current = win.activeRun;
-            setCronRun(win.activeRun);
-            if (win.anchored) {
-              dateFrom = win.anchored.dateFrom;
-              dateTo = win.anchored.dateTo;
-            }
-          }
-        }
 
         const filterOpts = {
           model: f.model || undefined,
@@ -1032,20 +1016,25 @@ export default function InsightsPage() {
 
         const hasFilters = Boolean(f.datePreset !== 'all' || f.model || f.region || f.topic);
 
-        // One consolidated server action (#313): summary + competitor + SoV
-        // run in a real server-side Promise.all (one round trip instead of
-        // five serialized POSTs), and "has any data" comes from a cheap
-        // count instead of an unbounded full-table scan.
-        // The trend chart follows the page filters exactly — same window as
-        // every other number on the page, so the headline rate never
-        // contradicts the KPI header.
-        const [insights, trend] = await Promise.all([
-          getInsightsData(brand.id, {
-            ...filterOpts,
-            checkUnfiltered: hasFilters,
-          }),
-          getVisibilityRateTrend(brand.id, filterOpts).catch(() => null),
-        ]);
+        // One consolidated server action (#313). Next.js queues server actions
+        // one after another, so everything the first paint needs — summary,
+        // competitors, SoV, KPIs and the trend chart — runs in one
+        // server-side Promise.all instead of as separate requests, and "has
+        // any data" comes from a cheap count.
+        // The 24h preset is anchored to the last completed tracking run
+        // (00044) so the morning refresh can't flash "no results" while
+        // today's run streams in; the action resolves that window itself.
+        // The trend chart follows the same window as every other number.
+        const insights = await getInsightsData(brandId, {
+          ...filterOpts,
+          checkUnfiltered: hasFilters,
+          anchor24h: f.datePreset === '24h',
+        });
+        if (insights.trackingWindow) {
+          cronRunRef.current = insights.trackingWindow.activeRun;
+          setCronRun(insights.trackingWindow.activeRun);
+        }
+        const trend = insights.trend;
         setRateTrend(trend && trend.points.length > 0 ? trend : null);
         setSummary(insights.summary);
         setTrackedPrompts(insights.trackedPrompts);
@@ -1107,7 +1096,7 @@ export default function InsightsPage() {
         setIsLoading(false);
       }
     },
-    [brand],
+    [brandId],
   );
 
   useEffect(() => {

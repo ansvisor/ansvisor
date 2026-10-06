@@ -712,6 +712,10 @@ export interface InsightsData {
   filterOptions: InsightsFilterOptions;
   recommendations: InsightsRecommendations;
   hasAnyData: boolean;
+  /** The visibility-rate chart for the same window; null when its read failed. */
+  trend: VisibilityRateTrendData | null;
+  /** The run ledger, when the 24h window was anchored to it (`anchor24h`). */
+  trackingWindow: TrackingWindow | null;
 }
 
 export interface TrackingWindow {
@@ -804,14 +808,23 @@ export async function getInsightsData(
     days?: DayWindow;
     /** When the current view is filtered, check unfiltered data existence too. */
     checkUnfiltered?: boolean;
+    /**
+     * The 24h preset: anchor dateFrom/dateTo to the last completed tracking
+     * run (see getTrackingWindow). Resolved here rather than by a separate
+     * client call, because each server action is its own queued request.
+     */
+    anchor24h?: boolean;
   },
 ): Promise<InsightsData> {
+  const trackingWindow = opts.anchor24h ? await getTrackingWindow(brandId).catch(() => null) : null;
+  const anchored = trackingWindow?.anchored;
+
   const filterOpts = {
     model: opts.model,
     region: opts.region,
     topicId: opts.topicId,
-    dateFrom: opts.dateFrom,
-    dateTo: opts.dateTo,
+    dateFrom: anchored?.dateFrom ?? opts.dateFrom,
+    dateTo: anchored?.dateTo ?? opts.dateTo,
     days: opts.days,
   };
 
@@ -830,6 +843,7 @@ export async function getInsightsData(
     filterOptions,
     recommendations,
     unfilteredHasData,
+    trend,
   ] = await Promise.all([
     getInsightsSummary(brandId, filterOpts),
     getCompetitorComparison(brandId, filterOpts).catch((err) => {
@@ -850,6 +864,11 @@ export async function getInsightsData(
     getInsightsFilterOptions(brandId),
     getInsightsRecommendations(brandId),
     opts.checkUnfiltered ? brandHasResults(brandId) : Promise.resolve(null),
+    // The chart follows the same window as every other number on the page.
+    getVisibilityRateTrend(brandId, filterOpts).catch((err) => {
+      console.error('[insights] visibility trend failed', err);
+      return null;
+    }),
   ]);
 
   // insights_aggregates counts the same filtered set the summary shows, so it
@@ -865,6 +884,8 @@ export async function getInsightsData(
     filterOptions,
     recommendations,
     hasAnyData,
+    trend,
+    trackingWindow,
   };
 }
 
