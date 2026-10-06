@@ -23,6 +23,7 @@ import {
   ListOrdered,
   Crown,
   RotateCcw,
+  CheckCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Link } from '@/i18n/navigation';
@@ -39,6 +40,7 @@ import type { ContentBrief, ContentOpportunity } from '@/types';
 import { getPromptFanout, type FanoutSubQuery } from '@/lib/actions/fanout';
 import {
   AssetsCard,
+  OpportunityResultsCard,
   OpportunityBasketCard,
   ScoreBreakdown,
   TargetPagesCard,
@@ -53,6 +55,7 @@ const IMPACT_COLORS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   new: 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  reviewed: 'border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400',
   sent: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   in_progress: 'border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400',
   done: 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400',
@@ -147,6 +150,15 @@ export default function ContentDetailPage() {
       toast.error(t('sendError'));
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleReviewed = async () => {
+    try {
+      await updateOpportunityStatus(id, 'reviewed');
+      setOpportunity(await getOpportunity(id));
+    } catch {
+      toast.error(t('reviewedError'));
     }
   };
 
@@ -292,6 +304,12 @@ export default function ContentDetailPage() {
             </Button>
           )}
           {opportunity.status === 'new' && (
+            <Button variant="outline" size="sm" onClick={handleReviewed} className="gap-2">
+              <CheckCheck className="h-4 w-4" />
+              {t('markReviewed')}
+            </Button>
+          )}
+          {opportunity.status === 'new' && (
             <>
               <Button
                 variant="outline"
@@ -351,7 +369,12 @@ export default function ContentDetailPage() {
             />
             <OpportunityBasketCard opportunityId={opportunity.id} />
           </div>
-          <ScoreBreakdown sourceData={sd} />
+          <div className="space-y-4">
+            {sd.actions && Object.keys(sd.actions).length > 0 && (
+              <OpportunityResultsCard actionIds={Object.values(sd.actions)} />
+            )}
+            <ScoreBreakdown sourceData={sd} />
+          </div>
         </div>
       )}
 

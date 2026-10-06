@@ -607,7 +607,7 @@ export interface ContentOpportunityRow {
 
 export interface ListContentOpportunitiesParams {
   brandId: string;
-  status?: 'new' | 'sent' | 'in_progress' | 'done' | 'dismissed' | 'archived';
+  status?: 'new' | 'reviewed' | 'sent' | 'in_progress' | 'done' | 'dismissed' | 'archived';
   impact?: 'high' | 'medium' | 'low';
   type?: 'owned' | 'earned';
   limit?: number;
@@ -1064,6 +1064,7 @@ export async function getContentOpportunityFor(
 
 export const CONTENT_OPPORTUNITY_STATUSES = [
   'new',
+  'reviewed',
   'sent',
   'in_progress',
   'done',

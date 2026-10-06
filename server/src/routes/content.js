@@ -414,7 +414,7 @@ router.post('/bulk/status', async (req, res) => {
       return res.status(400).json({ error: 'ids must be a non-empty array' });
     }
 
-    const validStatuses = ['new', 'sent', 'in_progress', 'done', 'dismissed'];
+    const validStatuses = ['new', 'reviewed', 'sent', 'in_progress', 'done', 'dismissed'];
     if (!validStatuses.includes(status)) {
       return res
         .status(400)
@@ -622,7 +622,7 @@ router.patch('/:id/status', async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    const validStatuses = ['new', 'sent', 'in_progress', 'done', 'dismissed'];
+    const validStatuses = ['new', 'reviewed', 'sent', 'in_progress', 'done', 'dismissed'];
     if (!validStatuses.includes(status)) {
       return res
         .status(400)

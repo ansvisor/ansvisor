@@ -124,6 +124,7 @@ const IMPACT_COLORS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   new: 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  reviewed: 'border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400',
   sent: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   in_progress: 'border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400',
   done: 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400',
@@ -733,6 +734,7 @@ export default function ContentPage() {
                     <SelectContent>
                       <SelectItem value="all">{t('filters.allStatuses')}</SelectItem>
                       <SelectItem value="new">{t('status.new')}</SelectItem>
+                      <SelectItem value="reviewed">{t('status.reviewed')}</SelectItem>
                       <SelectItem value="sent">{t('status.sent')}</SelectItem>
                       <SelectItem value="in_progress">{t('status.in_progress')}</SelectItem>
                       <SelectItem value="done">{t('status.done')}</SelectItem>

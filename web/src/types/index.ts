@@ -176,6 +176,7 @@ export interface PromptVolume {
 
 export type ContentOpportunityStatus =
   | 'new'
+  | 'reviewed'
   | 'sent'
   | 'in_progress'
   | 'done'

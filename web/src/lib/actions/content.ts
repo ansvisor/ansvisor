@@ -176,6 +176,48 @@ export async function sendOpportunityToActionCenter(
   return res.json();
 }
 
+export interface OpportunityActionResult {
+  id: string;
+  actionNo: number;
+  title: string | null;
+  status: string;
+  outcome: string;
+  completedAt: string | null;
+  validatedAt: string | null;
+  metrics: { metric: string; unit: string; before: number | null; after: number | null }[];
+}
+
+/**
+ * The Action Center actions sent from an opportunity, with what they measured.
+ * Read with the user's session, so RLS keeps it to their organization.
+ */
+export async function getOpportunityActions(ids: string[]): Promise<OpportunityActionResult[]> {
+  if (!ids.length) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('actions')
+    .select('id, action_no, status, outcome, completed_at, validated_at, validation, payload')
+    .in('id', ids)
+    .order('created_at');
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => {
+    const payload = (row.payload ?? {}) as { title?: string };
+    const validation = (row.validation ?? null) as {
+      metrics?: OpportunityActionResult['metrics'];
+    } | null;
+    return {
+      id: row.id,
+      actionNo: Number(row.action_no),
+      title: payload.title ?? null,
+      status: row.status,
+      outcome: row.outcome,
+      completedAt: row.completed_at,
+      validatedAt: row.validated_at,
+      metrics: validation?.metrics ?? [],
+    };
+  });
+}
+
 export interface OpportunityTopic {
   topicId: string;
   name: string;

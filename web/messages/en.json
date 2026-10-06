@@ -1654,7 +1654,8 @@
       "in_progress": "In Progress",
       "done": "Done",
       "dismissed": "Dismissed",
-      "archived": "Archived"
+      "archived": "Archived",
+      "reviewed": "Reviewed"
     },
     "impact": {
       "high": "High",
@@ -1734,7 +1735,10 @@
       "targetTitle": "Your Site",
       "targetStats": "{citations, plural, one {# AI citation} other {# AI citations}} · {sessions, plural, one {# session} other {# sessions}} in the last 30 days",
       "assetsTitle": "Recommended Assets",
-      "primaryAsset": "Primary"
+      "primaryAsset": "Primary",
+      "resultsTitle": "Results",
+      "resultsPending": "Completed. Measured from {date}, once a full window has passed.",
+      "resultsUnavailable": "The actions sent from this opportunity are no longer available."
     },
     "webhook": {
       "title": "Webhook Settings",
@@ -1813,7 +1817,9 @@
     "openInActionCenter": "Open in Action Center",
     "sentToActionCenter": "Sent to the Action Center",
     "alreadyInActionCenter": "Already in the Action Center",
-    "sendToActionCenterError": "Failed to send to the Action Center"
+    "sendToActionCenterError": "Failed to send to the Action Center",
+    "markReviewed": "Mark as reviewed",
+    "reviewedError": "Failed to mark as reviewed"
   },
   "traffic": {
     "title": "AI Traffic Analytics",

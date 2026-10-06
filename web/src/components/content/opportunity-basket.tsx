@@ -2,13 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Boxes, ExternalLink, FileText, Layers, Loader2, Search } from 'lucide-react';
+import { Boxes, ExternalLink, FileText, Gauge, Layers, Loader2, Search } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getOpportunityBasket } from '@/lib/actions/content';
+import {
+  getOpportunityActions,
+  getOpportunityBasket,
+  type OpportunityActionResult,
+} from '@/lib/actions/content';
 import type {
   ContentOpportunityDecision,
   ContentOpportunitySourceData,
@@ -317,6 +321,94 @@ export function AssetsCard({
             ))}
           </div>
         ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Days after an action closes before its "after" window can be read (validate.js). */
+const MEASURE_AFTER_DAYS = 31;
+
+const formatMetric = (value: number | null, unit: string) =>
+  value === null ? '—' : unit === 'percent' ? `${Math.round(value * 10) / 10}%` : String(value);
+
+/**
+ * Where the work sent from this opportunity stands, and what it moved once
+ * measured (#857, Phase 4). The measurement is the Action Center's own.
+ */
+export function OpportunityResultsCard({ actionIds }: { actionIds: string[] }) {
+  const t = useTranslations('content.detail');
+  const tStatus = useTranslations('actionCenter.actionsPage.status');
+  const tOutcome = useTranslations('actionCenter.actionOutcome');
+  const tKpi = useTranslations('actionCenter.registry');
+  const [actions, setActions] = useState<OpportunityActionResult[] | null>(null);
+  const key = actionIds.join(',');
+
+  useEffect(() => {
+    let cancelled = false;
+    getOpportunityActions(key.split(','))
+      .then((rows) => !cancelled && setActions(rows))
+      .catch(() => !cancelled && setActions([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <Gauge className="h-4 w-4 text-primary" />
+          <CardTitle className="text-sm font-medium">{t('resultsTitle')}</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {!actions ? (
+          <Skeleton className="h-16 w-full" />
+        ) : actions.length === 0 ? (
+          <p className="text-xs text-muted-foreground">{t('resultsUnavailable')}</p>
+        ) : (
+          actions.map((a) => {
+            const measureFrom =
+              a.completedAt &&
+              new Date(Date.parse(a.completedAt) + MEASURE_AFTER_DAYS * 86_400_000);
+            return (
+              <div key={a.id} className="space-y-1.5 rounded-md border p-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <Link
+                    href={`/dashboard/action-center/actions?action=${a.id}`}
+                    className="text-xs font-medium hover:underline"
+                  >
+                    AC-{a.actionNo}
+                  </Link>
+                  <Badge variant="outline" className="text-[10px]">
+                    {tStatus(a.status)}
+                  </Badge>
+                </div>
+                {a.title && <p className="text-xs text-muted-foreground line-clamp-2">{a.title}</p>}
+                {a.status === 'completed' && a.outcome === 'pending_measurement' && measureFrom ? (
+                  <p className="text-xs text-muted-foreground">
+                    {t('resultsPending', { date: measureFrom.toLocaleDateString() })}
+                  </p>
+                ) : a.status === 'completed' ? (
+                  <div className="space-y-1">
+                    <Badge variant="secondary" className="text-[10px]">
+                      {tOutcome(a.outcome)}
+                    </Badge>
+                    {a.metrics.map((m) => (
+                      <div key={m.metric} className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">{tKpi(`${m.metric}.name`)}</span>
+                        <span className="tabular-nums">
+                          {formatMetric(m.before, m.unit)} → {formatMetric(m.after, m.unit)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })
+        )}
       </CardContent>
     </Card>
   );

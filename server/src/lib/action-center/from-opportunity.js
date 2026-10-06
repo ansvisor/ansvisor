@@ -94,7 +94,7 @@ export function initialTaskStatus(taskKey, opportunity) {
 
 /**
  * Creates the action, or returns the open one if this opportunity or asset
- * was already sent. Records the action on the opportunity and marks it sent.
+ * was already sent, and records the action on the opportunity.
  *
  * @param {object} opportunity - the content_opportunities row
  * @param {{ assetKey?: string|null, userId: string }} opts
@@ -195,8 +195,8 @@ export async function sendToActionCenter(opportunity, { assetKey = null, userId 
   const { error: oppErr } = await supabaseAdmin
     .from('content_opportunities')
     .update({
+      // Status follows the action through a trigger (00106).
       source_data: { ...sd, actions: { ...(sd.actions || {}), [key]: action.id } },
-      ...(opportunity.status === 'new' ? { status: 'sent' } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq('id', opportunity.id);
