@@ -28,7 +28,7 @@ export const PROBES = [
   { probe: 'citations_domains', days: 30 },
   { probe: 'citations_urls', days: 30 },
   { probe: 'insights_aggregates_daily', days: 30 },
-  { probe: 'competitor_aggregates_daily', days: null },
+  { probe: 'competitor_aggregates_daily', days: 30 },
   { probe: 'topics_overview_aggregates', days: null },
 ];
 

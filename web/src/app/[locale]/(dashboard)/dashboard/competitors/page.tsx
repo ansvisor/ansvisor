@@ -1145,6 +1145,15 @@ function HeadToHeadSection({
   );
 }
 
+/** The trailing 30 calendar days ending today (UTC), as Insights' 30d preset. */
+function last30Days() {
+  const dayTo = new Date().toISOString().slice(0, 10);
+  const from = new Date(`${dayTo}T00:00:00Z`);
+  from.setUTCDate(from.getUTCDate() - 29);
+  const dayFrom = from.toISOString().slice(0, 10);
+  return { dateFrom: `${dayFrom}T00:00:00.000Z`, days: { dayFrom, dayTo } };
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function CompetitorsPage() {
@@ -1170,10 +1179,10 @@ export default function CompetitorsPage() {
     try {
       const [comps, comparison] = await Promise.all([
         getCompetitors(brand.id),
-        // Empty day window = all-time served from the daily rollups; without
-        // it the raw all-time scan exceeds the 8s statement timeout on
-        // brands with a large result history.
-        getCompetitorComparison(brand.id, { days: {} }),
+        // The last 30 days, served from the daily rollups. All-time read
+        // every rollup row the brand ever had and was nearing the 8s
+        // statement timeout on the largest brand.
+        getCompetitorComparison(brand.id, last30Days()),
       ]);
       setCompetitors(comps);
       setComparisonData(comparison.brands.length > 1 ? comparison : null);
@@ -1338,7 +1347,9 @@ export default function CompetitorsPage() {
                   {competitors.length}
                 </Badge>
               </CardTitle>
-              <p className="text-xs text-muted-foreground">{t('selectToCompare')}</p>
+              <p className="text-xs text-muted-foreground">
+                {t('selectToCompare')} {t('windowLast30Days')}
+              </p>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
