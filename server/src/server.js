@@ -38,6 +38,7 @@ import { runPageOpportunityDetection } from './lib/page-opportunities.js';
 import { runPulseCatchUp } from './lib/pulse/engine.js';
 import { runSignalCatchUp } from './lib/signals/pass.js';
 import { sweepTaskExecution } from './lib/action-center/execution/run.js';
+import { sendHealthReport } from './lib/health/report.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -248,6 +249,19 @@ async function runDailyTracking() {
 
   return { triggered, total: brands.length };
 }
+
+// --- Daily health report (CRON_SECRET auth, Vercel Cron) ---
+// Answers at once and reports in the background: timing the page reads can
+// take longer than a cron request may stay open.
+app.post('/api/internal/health-report', (req, res) => {
+  const secret = req.headers.authorization?.replace('Bearer ', '');
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  sendHealthReport().catch((err) => logger.error({ err }, '[health] daily report failed'));
+  return res.status(202).json({ success: true });
+});
 
 // --- Internal cron endpoint (CRON_SECRET auth, used by Vercel Cron in cloud mode) ---
 app.post('/api/internal/daily-tracking', async (req, res) => {

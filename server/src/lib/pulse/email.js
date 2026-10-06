@@ -1,4 +1,4 @@
-import { logger } from '../logger.js';
+import { sendEmail } from '../email.js';
 
 /**
  * Daily Pulse email rendering + delivery via the Resend HTTP API (#540).
@@ -173,35 +173,6 @@ export function renderPulseEmail({ brandName, metrics, insightsUrl, settingsUrl 
  * Send a pulse email through the Resend HTTP API.
  * Returns true when accepted, false otherwise (missing key, HTTP error).
  */
-export async function sendPulseEmail({ to, subject, html, settingsUrl }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL;
-  if (!apiKey || !from || !to.length) return false;
-
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from,
-        to,
-        subject,
-        html,
-        headers: { 'List-Unsubscribe': `<${settingsUrl}>` },
-      }),
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      logger.warn({ status: res.status, body: body.slice(0, 500) }, 'resend send failed');
-      return false;
-    }
-    return true;
-  } catch (err) {
-    logger.warn({ err }, 'resend send errored');
-    return false;
-  }
+export function sendPulseEmail({ to, subject, html, settingsUrl }) {
+  return sendEmail({ to, subject, html, headers: { 'List-Unsubscribe': `<${settingsUrl}>` } });
 }
