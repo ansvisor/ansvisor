@@ -12644,21 +12644,24 @@ alter function public.competitor_aggregates_daily(uuid, text, text[], text, date
 -- ─────────────────────────────────────────────────────────────────────────
 -- Citations page: ignore an end bound that excludes nothing.
 --
--- The Citations server action sends every preset window with p_date_to set to
--- the end of today. That bound excludes nothing, since no result is newer than
--- now. But with both bounds on created_at, the planner estimates about one row
--- for a recent window: the column statistics end before the newest days. It
--- then joins the materialized results to the citations with a nested loop.
+-- The Citations server action sent every preset window with p_date_to = the
+-- request's own timestamp. That bound excludes nothing. But with both bounds
+-- on created_at, the planner estimates about one row for a recent window,
+-- because the column statistics end before the newest days. It then joins the
+-- materialized results to the citations with a nested loop.
 --
 -- On the largest brand's default 24-hour view this turned a 0.2 s
--- citations_domains into one past 30 s, and the page failed to open. Without
--- the bound the same call runs in 0.2 s. The Competitor Gaps reads failed the
--- same way.
+-- citations_domains into one past 30 s, and the page failed to open. The
+-- Competitor Gaps reads failed the same way.
 --
--- Each of these functions now treats an end bound at or after now() as no end
--- bound. A custom range that ends in the past is unchanged. Bodies are
--- otherwise as in 00077 (gap functions), 00107 and 00109. CREATE OR REPLACE
--- keeps the signatures, settings and grants.
+-- Each of these functions now treats an end bound within the last five
+-- minutes, or later, as no end bound. The bound arrives a few milliseconds
+-- before the query starts, so `>= now()` alone missed it. A custom range that
+-- ends earlier is unchanged. The server action also stops sending the bound
+-- for presets.
+--
+-- Bodies are otherwise as in 00077 (gap functions), 00107 and 00109.
+-- CREATE OR REPLACE keeps the signatures, settings and grants.
 
 create or replace function public.citations_domains(
   p_brand_id uuid,
@@ -12679,9 +12682,9 @@ set plan_cache_mode = force_custom_plan
 as $$
 #variable_conflict use_column
 begin
-  -- An end bound at or after now() excludes nothing, but it makes the
-  -- planner estimate ~1 row for recent windows (see the header).
-  if p_date_to >= now() then
+  -- An end bound at (or a moment before) now excludes nothing, but it
+  -- makes the planner estimate ~1 row for recent windows (see the header).
+  if p_date_to >= now() - interval '5 minutes' then
     p_date_to := null;
   end if;
 
@@ -12768,9 +12771,9 @@ set plan_cache_mode = force_custom_plan
 as $$
 #variable_conflict use_column
 begin
-  -- An end bound at or after now() excludes nothing, but it makes the
-  -- planner estimate ~1 row for recent windows (see the header).
-  if p_date_to >= now() then
+  -- An end bound at (or a moment before) now excludes nothing, but it
+  -- makes the planner estimate ~1 row for recent windows (see the header).
+  if p_date_to >= now() - interval '5 minutes' then
     p_date_to := null;
   end if;
 
@@ -12864,9 +12867,9 @@ set plan_cache_mode to 'force_custom_plan'
 as $$
 #variable_conflict use_column
 begin
-  -- An end bound at or after now() excludes nothing, but it makes the
-  -- planner estimate ~1 row for recent windows (see the header).
-  if p_date_to >= now() then
+  -- An end bound at (or a moment before) now excludes nothing, but it
+  -- makes the planner estimate ~1 row for recent windows (see the header).
+  if p_date_to >= now() - interval '5 minutes' then
     p_date_to := null;
   end if;
 
@@ -13000,9 +13003,9 @@ set plan_cache_mode to 'force_custom_plan'
 as $$
 #variable_conflict use_column
 begin
-  -- An end bound at or after now() excludes nothing, but it makes the
-  -- planner estimate ~1 row for recent windows (see the header).
-  if p_date_to >= now() then
+  -- An end bound at (or a moment before) now excludes nothing, but it
+  -- makes the planner estimate ~1 row for recent windows (see the header).
+  if p_date_to >= now() - interval '5 minutes' then
     p_date_to := null;
   end if;
 

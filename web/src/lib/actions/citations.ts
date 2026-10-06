@@ -102,7 +102,9 @@ function resolveDateRange(filters: CitationsFilters): { from?: string; to?: stri
   if (filters.datePreset === 'all') {
     return {};
   }
-  const to = new Date();
+  // A preset window runs up to now, so it gets no end bound: one at the
+  // request's own timestamp excludes nothing, and it made the planner
+  // estimate ~1 row for recent windows (00111).
   const from = new Date();
   switch (filters.datePreset) {
     case '24h':
@@ -118,7 +120,7 @@ function resolveDateRange(filters: CitationsFilters): { from?: string; to?: stri
       from.setDate(from.getDate() - 90);
       break;
   }
-  return { from: from.toISOString(), to: to.toISOString() };
+  return { from: from.toISOString() };
 }
 
 // ─── Main action ──────────────────────────────────────────────────────────────
