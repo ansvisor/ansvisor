@@ -108,7 +108,10 @@ export function actionGoal(kind: string, t: Translator): string {
 /** Compact evidence chips under the title: signal count plus the kind's own
  *  count (pages, prompts, competitors). */
 export function actionContextTags(action: ActionItem, t: Translator): string[] {
-  const tags = [t('tags.signals', { count: action.signalCount })];
+  // An action sent from a content opportunity has no detection signals by
+  // design; "0 signals" would read as missing evidence.
+  const tags =
+    action.kind === 'content_opportunity' ? [] : [t('tags.signals', { count: action.signalCount })];
   const count = num(action.payload ?? {}, 'targetCount');
   const entity = str(action.payload ?? {}, 'targetEntity');
   if (count > 0 && entity) tags.push(t(`tags.${entity}`, { count }));

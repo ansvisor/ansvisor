@@ -58,6 +58,7 @@ import { signalTexts } from '@/lib/signals/display';
 import { isKpiKey } from '@/lib/kpis/registry';
 import { ImpactDots, isSuperseded, SignalStatusBadge } from './signal-table';
 import { ActionIcon } from './action-table';
+import { OpportunityContext } from './opportunity-context';
 import { cn } from '@/lib/utils';
 
 type DrawerTab = 'overview' | 'tasks' | 'signals' | 'history';
@@ -126,6 +127,15 @@ export function ActionDrawer({
   const texts = actionTexts(action, tTexts);
   const tags = actionContextTags(action, t);
   const relatedKpis: string[] = action.kpiKeys.filter(isKpiKey);
+  // Sent by a person from Content Optimization (#857): its evidence is the
+  // opportunity, not detection signals.
+  const opportunityId =
+    action.kind === 'content_opportunity' && typeof action.payload?.opportunityId === 'string'
+      ? action.payload.opportunityId
+      : null;
+  const opportunityPages = Array.isArray(action.payload?.pages)
+    ? (action.payload.pages as unknown[]).filter((u): u is string => typeof u === 'string')
+    : [];
 
   const mutate = async (fn: () => Promise<void>) => {
     setIsBusy(true);
@@ -237,30 +247,37 @@ export function ActionDrawer({
                 )}
               </section>
               <Separator />
-              <section>
-                <p className="text-xs font-medium text-muted-foreground">
-                  {t('drawer.primarySignals')}
-                </p>
-                <div className="mt-2 space-y-2">
-                  {detail.signals.slice(0, 3).map((signal) => {
-                    const st = signalTexts(signal, tSignalTexts);
-                    return (
-                      <button
-                        key={signal.id}
-                        type="button"
-                        onClick={() => openSignal(signal.id)}
-                        className="block w-full rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted/40"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-xs font-medium">{st.title}</p>
-                          <ImpactDots impact={signal.impact} />
-                        </div>
-                        <p className="truncate text-xs text-muted-foreground">{st.description}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
+              {opportunityId ? (
+                <OpportunityContext
+                  opportunityId={opportunityId}
+                  pageUrls={action.payload?.assetKey ? opportunityPages : undefined}
+                />
+              ) : (
+                <section>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {t('drawer.primarySignals')}
+                  </p>
+                  <div className="mt-2 space-y-2">
+                    {detail.signals.slice(0, 3).map((signal) => {
+                      const st = signalTexts(signal, tSignalTexts);
+                      return (
+                        <button
+                          key={signal.id}
+                          type="button"
+                          onClick={() => openSignal(signal.id)}
+                          className="block w-full rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted/40"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="truncate text-xs font-medium">{st.title}</p>
+                            <ImpactDots impact={signal.impact} />
+                          </div>
+                          <p className="truncate text-xs text-muted-foreground">{st.description}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
             </>
           ) : tab === 'tasks' ? (
             <section>
@@ -304,7 +321,9 @@ export function ActionDrawer({
           ) : tab === 'signals' ? (
             <section className="space-y-2">
               {detail.signals.length === 0 && (
-                <p className="text-xs text-muted-foreground">{t('drawer.noSignals')}</p>
+                <p className="text-xs text-muted-foreground">
+                  {opportunityId ? t('drawer.noSignalsOpportunity') : t('drawer.noSignals')}
+                </p>
               )}
               {detail.signals.map((signal) => {
                 const st = signalTexts(signal, tSignalTexts);

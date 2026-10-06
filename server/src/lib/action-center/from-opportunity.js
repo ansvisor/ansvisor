@@ -83,6 +83,16 @@ export function opportunityAssets(opportunity) {
 const ACTIVE = ['new', 'in_progress', 'on_hold'];
 
 /**
+ * A task's status when the action opens. The brief task starts completed when
+ * the opportunity already has a brief: the work is done, and the brief is
+ * shown on the action. Every row states its status: a bulk insert sends the
+ * union of the rows' keys, so a row without one would send null.
+ */
+export function initialTaskStatus(taskKey, opportunity) {
+  return taskKey === 'create_content_brief' && opportunity.brief ? 'completed' : 'todo';
+}
+
+/**
  * Creates the action, or returns the open one if this opportunity or asset
  * was already sent. Records the action on the opportunity and marks it sent.
  *
@@ -164,6 +174,7 @@ export async function sendToActionCenter(opportunity, { assetKey = null, userId 
       permission: item.permission,
       depends_on: item.dependsOn,
       title_params: item.titleParams,
+      status: initialTaskStatus(item.taskKey, opportunity),
     })),
   );
   if (tasksErr) throw new Error(tasksErr.message);

@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
-const { assetTasks, combinedTasks, opportunityAssets } = await import('./from-opportunity.js');
+const { assetTasks, combinedTasks, initialTaskStatus, opportunityAssets } =
+  await import('./from-opportunity.js');
 const { getTask } = await import('./tasks/registry.js');
 
 const owned = (decision) => ({ type: 'blog_post', channel: 'owned', decision });
@@ -63,6 +64,14 @@ describe('combinedTasks', () => {
       'validate_third_party_presence',
       'measure_action_outcome',
     ]);
+  });
+});
+
+describe('initialTaskStatus', () => {
+  it('starts the brief task completed when the opportunity has a brief', () => {
+    expect(initialTaskStatus('create_content_brief', { brief: { outline: [] } })).toBe('completed');
+    expect(initialTaskStatus('create_content_brief', { brief: null })).toBe('todo');
+    expect(initialTaskStatus('create_content_draft', { brief: { outline: [] } })).toBe('todo');
   });
 });
 

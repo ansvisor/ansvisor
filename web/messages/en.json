@@ -713,7 +713,20 @@
         "skipReason": "Why was this skipped?",
         "skipReasonPlaceholder": "e.g. handled elsewhere, no longer relevant",
         "skipConfirm": "Skip task",
-        "skipCancel": "Cancel"
+        "skipCancel": "Cancel",
+        "noSignalsOpportunity": "This action was sent from Content Optimization. Its evidence is the opportunity on the Overview tab, not detection signals.",
+        "opportunity": {
+          "title": "Content opportunity",
+          "open": "Open opportunity",
+          "brief": "Brief & outline",
+          "words": "~{count} words",
+          "noBrief": "No brief yet. <link>Generate one on the opportunity.</link>",
+          "prompts": "{count, plural, one {# prompt to answer} other {# prompts to answer}}",
+          "queries": "{count, plural, one {# search AI engines ran} other {# searches AI engines ran}}",
+          "allQueries": "Show all {count}",
+          "fewerQueries": "Show fewer",
+          "unavailable": "The opportunity this action was sent from is no longer available."
+        }
       }
     },
     "actionTexts": {
