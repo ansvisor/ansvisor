@@ -1244,7 +1244,9 @@ export default function CitationsPage() {
                       page={domainPager.page}
                       onPage={domainPager.setPage}
                       filters={filters}
-                      onResetFilters={() => setFilters({ ...DEFAULT_FILTERS, datePreset: 'all' })}
+                      onResetFilters={() =>
+                        setFilters({ ...DEFAULT_FILTERS, datePreset: 'all', sourceScope: 'all' })
+                      }
                       hasAnyCitations={hasAnyCitations}
                       loadFailed={loadFailed}
                       onRetry={loadData}
@@ -1256,7 +1258,9 @@ export default function CitationsPage() {
                       page={urlPager.page}
                       onPage={urlPager.setPage}
                       filters={filters}
-                      onResetFilters={() => setFilters({ ...DEFAULT_FILTERS, datePreset: 'all' })}
+                      onResetFilters={() =>
+                        setFilters({ ...DEFAULT_FILTERS, datePreset: 'all', sourceScope: 'all' })
+                      }
                       hasAnyCitations={hasAnyCitations}
                       loadFailed={loadFailed}
                       onRetry={loadData}

@@ -55,7 +55,7 @@ export const DEFAULT_CITATIONS_FILTERS: CitationsUIFilters = {
   region: '',
   topic: '',
   prompt: '',
-  sourceScope: 'all',
+  sourceScope: 'own',
 };
 
 export type SourceScope = CitationsUIFilters['sourceScope'];
