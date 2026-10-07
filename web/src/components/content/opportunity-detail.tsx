@@ -23,6 +23,10 @@ import {
   Crown,
   RotateCcw,
   CheckCheck,
+  Check,
+  Copy,
+  ExternalLink,
+  MoreHorizontal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Link } from '@/i18n/navigation';
@@ -44,6 +48,13 @@ import {
   ScoreBreakdown,
   TargetPagesCard,
 } from '@/components/content/opportunity-basket';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { opportunityToMarkdown } from '@/lib/content/opportunity-markdown';
 import { toast } from 'sonner';
 
 const IMPACT_COLORS: Record<string, string> = {
@@ -273,85 +284,181 @@ export function OpportunityDetail({
   const canSendToActionCenter = !['dismissed', 'archived', 'done'].includes(opportunity.status);
   const quotaLimited = quota !== null && quota.limit !== -1;
   const quotaExhausted = quotaLimited && quota.remaining <= 0;
+  const actionId = sd.actions?.all ?? Object.values(sd.actions ?? {})[0];
+  const canSendToWorkflow = !['dismissed', 'archived'].includes(opportunity.status);
+  const hasMenu = opportunity.status === 'new' || opportunity.status === 'archived';
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(opportunityToMarkdown(opportunity, brief, fanoutQueries));
+      toast.success(t('copiedToast'));
+    } catch {
+      toast.error(t('copyError'));
+    }
+  };
 
   return (
     // A container, so the layout follows the space it is given — the page's
     // full width or the drawer's — rather than the viewport.
     <div className="@container space-y-6">
-      <div className="flex flex-wrap items-center gap-4">
-        {!inDrawer && (
-          <Link href="/dashboard/content">
-            <Button variant="ghost" size="icon" aria-label="Go back to content list">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-        )}
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl font-bold tracking-tight">{opportunity.title}</h1>
-          {opportunity.description && (
-            <p className="text-sm text-muted-foreground mt-1">{opportunity.description}</p>
+      <div className="space-y-3">
+        <div className="flex items-start gap-3">
+          {!inDrawer && (
+            <Link href="/dashboard/content">
+              <Button variant="ghost" size="icon" aria-label="Go back to content list">
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </Link>
           )}
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-bold tracking-tight">{opportunity.title}</h1>
+            {opportunity.description && (
+              <p className="text-sm text-muted-foreground mt-1">{opportunity.description}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge
+            variant="outline"
+            className="text-xs"
+            title={t(`typeHint.${opportunity.type}` as 'typeHint.owned' | 'typeHint.earned')}
+          >
+            {t(`type.${opportunity.type}` as 'type.owned' | 'type.earned')}
+          </Badge>
+          <Badge variant="outline" className={cn('text-xs', IMPACT_COLORS[opportunity.impact])}>
+            {t(`impact.${opportunity.impact}` as 'impact.high' | 'impact.medium' | 'impact.low')}
+          </Badge>
+          <Badge variant="outline" className={cn('text-xs', STATUS_COLORS[opportunity.status])}>
+            {t(`status.${opportunity.status}` as `status.${typeof opportunity.status}`)}
+          </Badge>
+          <Badge variant="outline" className="text-xs tabular-nums">
+            Score: {Math.round(opportunity.opportunityScore)}
+          </Badge>
+          <span className="text-xs text-muted-foreground ml-auto flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5" />
+            {new Date(opportunity.createdAt).toLocaleDateString(undefined, {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+            })}
+          </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {brief ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled
+              className="min-w-40 flex-1 gap-2 disabled:opacity-100"
+            >
+              <Check className="h-4 w-4" />
+              {t('briefGenerated')}
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              onClick={handleGenerateBrief}
+              disabled={generatingBrief || quotaExhausted}
+              title={quotaExhausted ? t('briefLimitReached') : undefined}
+              className="min-w-40 flex-1 gap-2"
+            >
+              {generatingBrief ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              {generatingBrief ? t('generatingBrief') : t('generateBrief')}
+            </Button>
+          )}
           {opportunity.clusterId &&
-            (sd.actions?.all ? (
-              <Link href={`/dashboard/action-center/actions?action=${sd.actions.all}`}>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <Target className="h-4 w-4" />
-                  {t('openInActionCenter')}
+            (actionId ? (
+              <Link
+                href={`/dashboard/action-center/actions?action=${actionId}`}
+                className="min-w-40 flex-1"
+              >
+                <Button variant="outline" size="sm" className="w-full gap-2">
+                  <ExternalLink className="h-4 w-4" />
+                  {t('openInActions')}
                 </Button>
               </Link>
             ) : (
-              canSendToActionCenter &&
-              !Object.keys(sd.actions ?? {}).length && (
+              canSendToActionCenter && (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handleSendToActionCenter()}
                   disabled={sendingAction !== null}
-                  className="gap-2"
+                  className="min-w-40 flex-1 gap-2"
                 >
                   {sendingAction === 'all' ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Target className="h-4 w-4" />
                   )}
-                  {t('sendToActionCenter')}
+                  {t('sendToActions')}
                 </Button>
               )
             ))}
-          {opportunity.status === 'archived' && (
-            <Button variant="outline" size="sm" onClick={handleRestore} className="gap-2">
-              <RotateCcw className="h-4 w-4" />
-              {t('restore')}
+          {canSendToWorkflow && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSend}
+              disabled={sending}
+              className="min-w-40 flex-1 gap-2"
+            >
+              {sending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              {sending
+                ? t('sending')
+                : opportunity.webhookSentAt
+                  ? t('sendAgain')
+                  : t('sendToWorkflow')}
             </Button>
           )}
-          {opportunity.status === 'new' && (
-            <Button variant="outline" size="sm" onClick={handleReviewed} className="gap-2">
-              <CheckCheck className="h-4 w-4" />
-              {t('markReviewed')}
-            </Button>
-          )}
-          {opportunity.status === 'new' && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleDismiss}
-                className="gap-2 text-muted-foreground"
-              >
-                <X className="h-4 w-4" />
-                {t('dismiss')}
-              </Button>
-              <Button size="sm" onClick={handleSend} disabled={sending} className="gap-2">
-                {sending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCopy}
+            className="min-w-40 flex-1 gap-2"
+          >
+            <Copy className="h-4 w-4" />
+            {t('copyAllData')}
+          </Button>
+          {hasMenu && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button variant="outline" size="icon-sm" aria-label={t('moreActions')}>
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end">
+                {opportunity.status === 'new' && (
+                  <DropdownMenuItem onClick={handleReviewed}>
+                    <CheckCheck className="h-4 w-4" />
+                    {t('markReviewed')}
+                  </DropdownMenuItem>
                 )}
-                {sending ? t('sending') : t('sendToWorkflow')}
-              </Button>
-            </>
+                {opportunity.status === 'archived' && (
+                  <DropdownMenuItem onClick={handleRestore}>
+                    <RotateCcw className="h-4 w-4" />
+                    {t('restore')}
+                  </DropdownMenuItem>
+                )}
+                {opportunity.status === 'new' && (
+                  <DropdownMenuItem variant="destructive" onClick={handleDismiss}>
+                    <X className="h-4 w-4" />
+                    {t('dismiss')}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>
@@ -372,33 +479,6 @@ export function OpportunityDetail({
           </p>
         </div>
       )}
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge
-          variant="outline"
-          className="text-xs"
-          title={t(`typeHint.${opportunity.type}` as 'typeHint.owned' | 'typeHint.earned')}
-        >
-          {t(`type.${opportunity.type}` as 'type.owned' | 'type.earned')}
-        </Badge>
-        <Badge variant="outline" className={cn('text-xs', IMPACT_COLORS[opportunity.impact])}>
-          {t(`impact.${opportunity.impact}` as 'impact.high' | 'impact.medium' | 'impact.low')}
-        </Badge>
-        <Badge variant="outline" className={cn('text-xs', STATUS_COLORS[opportunity.status])}>
-          {t(`status.${opportunity.status}` as `status.${typeof opportunity.status}`)}
-        </Badge>
-        <Badge variant="outline" className="text-xs tabular-nums">
-          Score: {Math.round(opportunity.opportunityScore)}
-        </Badge>
-        <span className="text-xs text-muted-foreground ml-auto flex items-center gap-1.5">
-          <Clock className="h-3.5 w-3.5" />
-          {new Date(opportunity.createdAt).toLocaleDateString(undefined, {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-          })}
-        </span>
-      </div>
 
       {opportunity.clusterId && (
         <div className="grid grid-cols-1 gap-4 @5xl:grid-cols-3">
