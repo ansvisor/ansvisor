@@ -1,5 +1,6 @@
 'use server';
 
+import { unstable_cache } from 'next/cache';
 import { dbClient, withDbClient } from '@/lib/supabase/scoped';
 import { expandDateToEndOfDay } from '@/lib/dates';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
@@ -797,6 +798,114 @@ export async function getTrackingWindow(brandId: string): Promise<TrackingWindow
  * The raw prompt_results rows are no longer part of the payload — the
  * "Prompt Results by Topic" tree they fed was removed in #458.
  */
+/** The part of the Insights page that depends only on the brand and the window. */
+type WindowedInsights = Pick<
+  InsightsData,
+  'summary' | 'competitors' | 'sov' | 'visibilityRate' | 'filterOptions' | 'trend'
+>;
+
+type InsightsFilterArgs = {
+  model?: string;
+  region?: string;
+  topicId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  days?: DayWindow;
+};
+
+const EMPTY_COMPETITORS: CompetitorComparisonData = { brands: [], providerRows: [] };
+const EMPTY_SOV: ShareOfVoiceData = {
+  overallSov: 0,
+  overallSovChange: null,
+  byPlatform: [],
+  trend: [],
+};
+
+/**
+ * Read the windowed sections in parallel. Lenient mode is the page's normal
+ * behaviour: a competitor, SoV or trend error costs its own card (the empty
+ * shapes are what the page maps to "section hidden"), while the summary and
+ * KPI reads stay fatal. Strict mode lets every error through, so a result
+ * with a silently emptied section is never cached.
+ */
+async function loadWindowedInsights(
+  brandId: string,
+  filterOpts: InsightsFilterArgs,
+  { strict }: { strict: boolean },
+): Promise<WindowedInsights> {
+  const lenient = <T>(promise: Promise<T>, fallback: T, label: string): Promise<T> =>
+    strict
+      ? promise
+      : promise.catch((err) => {
+          console.error(`[insights] ${label} failed`, err);
+          return fallback;
+        });
+
+  const [summary, competitors, sov, visibilityRate, filterOptions, trend] = await Promise.all([
+    getInsightsSummary(brandId, filterOpts),
+    lenient(
+      getCompetitorComparison(brandId, filterOpts),
+      EMPTY_COMPETITORS,
+      'competitor comparison',
+    ),
+    lenient(getShareOfVoiceData(brandId, filterOpts), EMPTY_SOV, 'share of voice'),
+    getVisibilityRateKpi(brandId, filterOpts),
+    getInsightsFilterOptions(brandId),
+    // The chart follows the same window as every other number on the page.
+    lenient<VisibilityRateTrendData | null>(
+      getVisibilityRateTrend(brandId, filterOpts),
+      null,
+      'visibility trend',
+    ),
+  ]);
+  return { summary, competitors, sov, visibilityRate, filterOptions, trend };
+}
+
+/**
+ * The anchored 24h view only changes when a tracking run completes, yet each
+ * page open recomputed it from raw results: ~10 reads over the same answers,
+ * 6-8 s on the largest brand once they contend. Cache it per brand, filters
+ * and anchored window; the next completed run moves the window and so the key.
+ *
+ * Computed with the service-role client because the cache cannot read the
+ * caller's cookies; every loader scopes its reads by brand, and the caller's
+ * access to the brand is checked on each call before the cache is read.
+ */
+async function cachedAnchoredInsights(
+  brandId: string,
+  filterOpts: InsightsFilterArgs,
+  anchored: { dateFrom: string; dateTo: string },
+): Promise<WindowedInsights> {
+  const { data: brand, error } = await (await dbClient())
+    .from('brands')
+    .select('id')
+    .eq('id', brandId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!brand) throw new Error('Brand not found');
+
+  // Imported here: the admin client is created at module load and needs the
+  // service-role env, which only this path uses.
+  const { supabaseAdmin } = await import('@/lib/supabase/admin');
+  const compute = unstable_cache(
+    () =>
+      withDbClient(supabaseAdmin as unknown as Awaited<ReturnType<typeof dbClient>>, () =>
+        loadWindowedInsights(brandId, filterOpts, { strict: true }),
+      ),
+    [
+      'insights-24h',
+      brandId,
+      anchored.dateFrom,
+      anchored.dateTo,
+      filterOpts.model ?? '',
+      filterOpts.region ?? '',
+      filterOpts.topicId ?? '',
+    ],
+    { revalidate: 2 * 24 * 60 * 60, tags: [`insights:${brandId}`] },
+  );
+  return compute();
+}
+
 export async function getInsightsData(
   brandId: string,
   opts: {
@@ -817,9 +926,9 @@ export async function getInsightsData(
   },
 ): Promise<InsightsData> {
   const trackingWindow = opts.anchor24h ? await getTrackingWindow(brandId).catch(() => null) : null;
-  const anchored = trackingWindow?.anchored;
+  const anchored = trackingWindow?.anchored ?? null;
 
-  const filterOpts = {
+  const filterOpts: InsightsFilterArgs = {
     model: opts.model,
     region: opts.region,
     topicId: opts.topicId,
@@ -828,63 +937,34 @@ export async function getInsightsData(
     days: opts.days,
   };
 
-  // The two heavyweight sections degrade instead of failing the page: a
-  // competitor or SoV error costs its own card, never the KPI header. Their
-  // empty shapes are exactly what the page already maps to "section hidden"
-  // (brands.length <= 1, byPlatform.length === 0). The summary and KPI reads
-  // stay fatal — the page is meaningless without them, and on the rollup
-  // path they are the cheap ones.
-  const [
-    summary,
-    competitors,
-    sov,
-    trackedPrompts,
-    visibilityRate,
-    filterOptions,
-    recommendations,
-    unfilteredHasData,
-    trend,
-  ] = await Promise.all([
-    getInsightsSummary(brandId, filterOpts),
-    getCompetitorComparison(brandId, filterOpts).catch((err) => {
-      console.error('[insights] competitor comparison failed', err);
-      return { brands: [], providerRows: [] } satisfies CompetitorComparisonData;
-    }),
-    getShareOfVoiceData(brandId, filterOpts).catch((err) => {
-      console.error('[insights] share of voice failed', err);
-      return {
-        overallSov: 0,
-        overallSovChange: null,
-        byPlatform: [],
-        trend: [],
-      } satisfies ShareOfVoiceData;
-    }),
+  // An anchored window is served from the cache; a failure there (including a
+  // section that would have degraded) falls back to the live, lenient read.
+  const windowedRead = anchored
+    ? cachedAnchoredInsights(brandId, filterOpts, anchored).catch((err) => {
+        console.error('[insights] cached 24h read failed, reading live', err);
+        return loadWindowedInsights(brandId, filterOpts, { strict: false });
+      })
+    : loadWindowedInsights(brandId, filterOpts, { strict: false });
+
+  // Quota (tracked prompts), recommendations and the unfiltered check depend
+  // on the caller's org and session, so they are read live on every open.
+  const [windowed, trackedPrompts, recommendations, unfilteredHasData] = await Promise.all([
+    windowedRead,
     getTrackedPromptsKpi(brandId, filterOpts),
-    getVisibilityRateKpi(brandId, filterOpts),
-    getInsightsFilterOptions(brandId),
     getInsightsRecommendations(brandId),
     opts.checkUnfiltered ? brandHasResults(brandId) : Promise.resolve(null),
-    // The chart follows the same window as every other number on the page.
-    getVisibilityRateTrend(brandId, filterOpts).catch((err) => {
-      console.error('[insights] visibility trend failed', err);
-      return null;
-    }),
   ]);
 
   // insights_aggregates counts the same filtered set the summary shows, so it
   // stands in for the removed results fetch when no unfiltered check ran.
-  const hasAnyData = unfilteredHasData !== null ? unfilteredHasData : summary.totalResults > 0;
+  const hasAnyData =
+    unfilteredHasData !== null ? unfilteredHasData : windowed.summary.totalResults > 0;
 
   return {
-    summary,
-    competitors,
-    sov,
+    ...windowed,
     trackedPrompts,
-    visibilityRate,
-    filterOptions,
     recommendations,
     hasAnyData,
-    trend,
     trackingWindow,
   };
 }
