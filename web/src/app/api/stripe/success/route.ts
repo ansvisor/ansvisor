@@ -40,7 +40,9 @@ export async function GET(req: NextRequest) {
         const { error: updateError } = await supabaseAdmin
           .from('organizations')
           .update({
-            subscription_status: 'trialing',
+            // What Stripe reports: trialing for a first subscription, active
+            // for one started without a trial.
+            subscription_status: subscription?.status ?? 'trialing',
             plan: planId || 'starter',
             stripe_customer_id: customerId,
             stripe_subscription_id: subscriptionId,
