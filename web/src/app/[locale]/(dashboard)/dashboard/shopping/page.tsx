@@ -35,9 +35,8 @@ import {
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import {
-  getShoppingChartData,
   getShoppingFilterOptions,
-  getShoppingKpis,
+  getShoppingOverview,
   getOwnProducts,
   getCompetitorProducts,
   getCompetitorSummary,
@@ -167,10 +166,10 @@ export default function ShoppingPage() {
       setTableLoading(true);
     }
     try {
-      const promises: [Promise<ShoppingKpis>, Promise<ShoppingChartData>, ...Promise<unknown>[]] = [
-        getShoppingKpis(activeBrandId, filters),
-        getShoppingChartData(activeBrandId, filters),
-      ];
+      const promises: [
+        Promise<{ kpis: ShoppingKpis; charts: ShoppingChartData }>,
+        ...Promise<unknown>[],
+      ] = [getShoppingOverview(activeBrandId, filters)];
 
       if (hasFullAccess) {
         promises.push(
@@ -184,13 +183,14 @@ export default function ShoppingPage() {
       const results = await Promise.all(promises);
 
       if (reqId === reqIdRef.current) {
-        setKpis(results[0]);
-        setCharts(results[1]);
-        if (hasFullAccess && results.length >= 6) {
-          setOwnProducts(results[2] as ShoppingProduct[]);
-          setCompetitorProducts(results[3] as ShoppingProduct[]);
-          setCompetitorSummary(results[4] as CompetitorShoppingSummary[]);
-          setPromptsData(results[5] as CardEligiblePromptsResponse);
+        const overview = results[0] as { kpis: ShoppingKpis; charts: ShoppingChartData };
+        setKpis(overview.kpis);
+        setCharts(overview.charts);
+        if (hasFullAccess && results.length >= 5) {
+          setOwnProducts(results[1] as ShoppingProduct[]);
+          setCompetitorProducts(results[2] as ShoppingProduct[]);
+          setCompetitorSummary(results[3] as CompetitorShoppingSummary[]);
+          setPromptsData(results[4] as CardEligiblePromptsResponse);
         }
       }
     } finally {

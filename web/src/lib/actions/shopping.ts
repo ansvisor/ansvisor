@@ -71,106 +71,55 @@ function daysAgoIso(days: number): string {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
-// ── KPI query ─────────────────────────────────────────────────────────────────
+// ── Overview (KPIs + charts) ──────────────────────────────────────────────────
 
-/**
- * Build the four overview KPIs in a single round-trip per metric.
- *
- * `shoppingCardRate` is the only KPI that needs to know about prompts
- * that returned *zero* cards, so it queries `prompt_results` directly to
- * get the denominator. Everything else aggregates over the normalized
- * `prompt_result_shopping_cards` table.
- */
-export async function getShoppingKpis(
-  brandId: string,
-  filters: ShoppingFilters,
-): Promise<ShoppingKpis> {
-  const supabase = await createClient();
-  const { from, to } = resolveDateRange(filters);
-  const expandedTo = expandDateToEndOfDay(to);
-
-  // ── 1. Shopping card rate ──
-  //   numerator   = prompt_results with at least one card
-  //   denominator = prompt_results in the window
-  // Both queries hit only `prompt_results.id` so they stay cheap.
-  let totalQuery = supabase
-    .from('prompt_results')
-    .select('id', { count: 'exact', head: true })
-    .eq('brand_id', brandId);
-  if (from) totalQuery = totalQuery.gte('created_at', from);
-  if (expandedTo) totalQuery = totalQuery.lte('created_at', expandedTo);
-  if (filters.platforms?.length) totalQuery = totalQuery.in('platform', filters.platforms);
-  if (filters.regions?.length) totalQuery = totalQuery.in('region', filters.regions);
-
-  let cardBearingQuery = supabase
-    .from('prompt_results')
-    .select('id', { count: 'exact', head: true })
-    .eq('brand_id', brandId)
-    .not('shopping_cards', 'is', null)
-    .filter('shopping_cards', 'neq', '[]');
-  if (from) cardBearingQuery = cardBearingQuery.gte('created_at', from);
-  if (expandedTo) cardBearingQuery = cardBearingQuery.lte('created_at', expandedTo);
-  if (filters.platforms?.length)
-    cardBearingQuery = cardBearingQuery.in('platform', filters.platforms);
-  if (filters.regions?.length) cardBearingQuery = cardBearingQuery.in('region', filters.regions);
-
-  // ── 2-3. Cards by role for products surfaced + SoV ──
-  let cardsQuery = supabase
-    .from('prompt_result_shopping_cards')
-    .select('matched_brand_role, merchant_domain', { count: 'exact' })
-    .eq('brand_id', brandId);
-  if (from) cardsQuery = cardsQuery.gte('created_at', from);
-  if (expandedTo) cardsQuery = cardsQuery.lte('created_at', expandedTo);
-  if (filters.platforms?.length) cardsQuery = cardsQuery.in('platform', filters.platforms);
-  if (filters.regions?.length) cardsQuery = cardsQuery.in('region', filters.regions);
-
-  const [
-    { count: totalResults },
-    { count: cardBearingResults },
-    { data: cards, error: cardsError },
-  ] = await Promise.all([totalQuery, cardBearingQuery, cardsQuery]);
-
-  if (cardsError) throw new Error(cardsError.message);
-
-  const shoppingCardRate =
-    totalResults && totalResults > 0 ? (cardBearingResults ?? 0) / totalResults : 0;
-
-  const rows = (cards ?? []) as Array<{
-    matched_brand_role: 'own' | 'competitor' | 'other';
-    merchant_domain: string | null;
-  }>;
-
-  let ownCount = 0;
-  const merchantTotals = new Map<string, number>();
-  for (const row of rows) {
-    if (row.matched_brand_role === 'own') {
-      ownCount += 1;
-      if (row.merchant_domain) {
-        merchantTotals.set(row.merchant_domain, (merchantTotals.get(row.merchant_domain) ?? 0) + 1);
-      }
-    }
-  }
-
-  const totalCards = rows.length;
-  const shoppingSov = totalCards > 0 ? ownCount / totalCards : 0;
-
-  let topMerchant: { domain: string; cardCount: number } | null = null;
-  for (const [domain, count] of merchantTotals.entries()) {
-    if (!topMerchant || count > topMerchant.cardCount) {
-      topMerchant = { domain, cardCount: count };
-    }
-  }
-
-  return {
-    shoppingCardRate,
-    shoppingCardRateSampleSize: totalResults ?? 0,
-    productsSurfaced: ownCount,
-    shoppingSov,
-    topMerchant,
-  };
+interface ShoppingOverviewRow {
+  total_results: number;
+  results_with_cards: number;
+  total_cards: number;
+  own_cards: number;
+  top_merchant: { domain: string; card_count: number } | null;
+  by_platform: Array<{ platform: string; total_results: number; results_with_cards: number }>;
+  trend: Array<{ day: string; own_cards: number; total_cards: number }>;
 }
 
-// ── Chart query ───────────────────────────────────────────────────────────────
+/**
+ * One `shopping_overview` call (#922). The KPIs and charts are aggregated in
+ * Postgres: fetched as rows they were cut off at PostgREST's 1,000-row cap.
+ * `trendFrom` is omitted when the caller doesn't need the trend.
+ */
+async function loadShoppingOverview(
+  brandId: string,
+  filters: ShoppingFilters,
+  trendFrom?: string,
+): Promise<ShoppingOverviewRow> {
+  const supabase = await createClient();
+  const { from, to } = resolveDateRange(filters);
+  const { data, error } = await supabase.rpc('shopping_overview', {
+    p_brand_id: brandId,
+    p_from: from,
+    p_to: expandDateToEndOfDay(to),
+    p_platforms: filters.platforms?.length ? filters.platforms : undefined,
+    p_regions: filters.regions?.length ? filters.regions : undefined,
+    p_trend_from: trendFrom,
+  });
+  if (error) throw new Error(error.message);
+  return data as unknown as ShoppingOverviewRow;
+}
+
+function toKpis(row: ShoppingOverviewRow): ShoppingKpis {
+  const totalResults = Number(row.total_results);
+  const totalCards = Number(row.total_cards);
+  return {
+    shoppingCardRate: totalResults > 0 ? Number(row.results_with_cards) / totalResults : 0,
+    shoppingCardRateSampleSize: totalResults,
+    productsSurfaced: Number(row.own_cards),
+    shoppingSov: totalCards > 0 ? Number(row.own_cards) / totalCards : 0,
+    topMerchant: row.top_merchant
+      ? { domain: row.top_merchant.domain, cardCount: Number(row.top_merchant.card_count) }
+      : null,
+  };
+}
 
 /**
  * Two compact chart payloads for the Overview tab:
@@ -180,117 +129,136 @@ export async function getShoppingKpis(
  *  - `ownPresenceTrend` — line chart, one bucket per UTC day for the
  *    last 30 days, with own + total card counts.
  */
-export async function getShoppingChartData(
-  brandId: string,
-  filters: ShoppingFilters,
-): Promise<ShoppingChartData> {
-  const supabase = await createClient();
-  const { from, to } = resolveDateRange(filters);
-  const expandedTo = expandDateToEndOfDay(to);
-
-  // ── Platform card rate ──
-  // Pulls platform + a boolean "has cards" off prompt_results. Aggregating
-  // in JS is cheap at this row count and avoids defining another RPC.
-  let pageQuery = supabase
-    .from('prompt_results')
-    .select('platform, shopping_cards')
-    .eq('brand_id', brandId);
-  if (from) pageQuery = pageQuery.gte('created_at', from);
-  if (expandedTo) pageQuery = pageQuery.lte('created_at', expandedTo);
-  if (filters.platforms?.length) pageQuery = pageQuery.in('platform', filters.platforms);
-  if (filters.regions?.length) pageQuery = pageQuery.in('region', filters.regions);
-
-  const { data: platformRows, error: platformError } = await pageQuery;
-  if (platformError) throw new Error(platformError.message);
-
-  const perPlatform = new Map<string, { total: number; withCards: number }>();
-  for (const row of (platformRows ?? []) as Array<{
-    platform: string;
-    shopping_cards: unknown;
-  }>) {
-    const slot = perPlatform.get(row.platform) ?? { total: 0, withCards: 0 };
-    slot.total += 1;
-    if (Array.isArray(row.shopping_cards) && row.shopping_cards.length > 0) {
-      slot.withCards += 1;
-    }
-    perPlatform.set(row.platform, slot);
-  }
-  const platformCardRate: PlatformCardRatePoint[] = [...perPlatform.entries()]
-    .filter(([, slot]) => slot.total > 0)
-    .map(([platform, slot]) => ({
-      platform,
-      cardRate: slot.withCards / slot.total,
-      totalResults: slot.total,
+function toChartData(row: ShoppingOverviewRow): ShoppingChartData {
+  const platformCardRate: PlatformCardRatePoint[] = row.by_platform
+    .filter((p) => Number(p.total_results) > 0)
+    .map((p) => ({
+      platform: p.platform,
+      cardRate: Number(p.results_with_cards) / Number(p.total_results),
+      totalResults: Number(p.total_results),
     }))
     .sort((a, b) => b.cardRate - a.cardRate);
 
-  // ── 30-day own-presence trend ──
-  // Always 30d regardless of filter so the trend chart shows a stable
-  // window. Same brand + platform + region filters apply.
-  const trendFrom = daysAgoIso(30);
-  let trendQuery = supabase
-    .from('prompt_result_shopping_cards')
-    .select('matched_brand_role, created_at')
-    .eq('brand_id', brandId)
-    .gte('created_at', trendFrom);
-  if (filters.platforms?.length) trendQuery = trendQuery.in('platform', filters.platforms);
-  if (filters.regions?.length) trendQuery = trendQuery.in('region', filters.regions);
-
-  const { data: trendRows, error: trendError } = await trendQuery;
-  if (trendError) throw new Error(trendError.message);
-
-  // Bucket by UTC day.
-  const buckets = new Map<string, { ownCards: number; totalCards: number }>();
-  for (const row of (trendRows ?? []) as Array<{
-    matched_brand_role: 'own' | 'competitor' | 'other';
-    created_at: string;
-  }>) {
-    const day = row.created_at.slice(0, 10);
-    const slot = buckets.get(day) ?? { ownCards: 0, totalCards: 0 };
-    slot.totalCards += 1;
-    if (row.matched_brand_role === 'own') slot.ownCards += 1;
-    buckets.set(day, slot);
-  }
-
+  const buckets = new Map(row.trend.map((d) => [d.day, d]));
   // Fill in zero buckets so the line chart doesn't skip empty days.
   const ownPresenceTrend: OwnPresenceTrendPoint[] = [];
   for (let i = 29; i >= 0; i--) {
     const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const slot = buckets.get(date) ?? { ownCards: 0, totalCards: 0 };
+    const slot = buckets.get(date);
     ownPresenceTrend.push({
       date,
-      ownCards: slot.ownCards,
-      totalCards: slot.totalCards,
+      ownCards: Number(slot?.own_cards ?? 0),
+      totalCards: Number(slot?.total_cards ?? 0),
     });
   }
 
   return { platformCardRate, ownPresenceTrend };
 }
 
+/** The four overview KPIs for a window (also used by reports). */
+export async function getShoppingKpis(
+  brandId: string,
+  filters: ShoppingFilters,
+): Promise<ShoppingKpis> {
+  return toKpis(await loadShoppingOverview(brandId, filters));
+}
+
+/**
+ * The Overview tab in one round trip: KPIs plus charts. The trend is always
+ * the last 30 days regardless of the date filter, so the chart shows a stable
+ * window; the platform and region filters still apply.
+ */
+export async function getShoppingOverview(
+  brandId: string,
+  filters: ShoppingFilters,
+): Promise<{ kpis: ShoppingKpis; charts: ShoppingChartData }> {
+  const row = await loadShoppingOverview(brandId, filters, daysAgoIso(30));
+  return { kpis: toKpis(row), charts: toChartData(row) };
+}
+
 /**
  * Collected once at page load so the filter bar shows only platform / region
- * values that actually appear in this brand's data.
+ * values that actually appear in this brand's data — all of it, not the first
+ * 1,000 results.
  */
 export async function getShoppingFilterOptions(brandId: string): Promise<{
   platforms: string[];
   regions: string[];
 }> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('prompt_results')
-    .select('platform, region')
-    .eq('brand_id', brandId)
-    .limit(2000);
-
-  if (error || !data) {
-    return { platforms: [], regions: [] };
-  }
-
-  const platforms = Array.from(new Set(data.map((d) => d.platform).filter(Boolean))) as string[];
-  const regions = Array.from(new Set(data.map((d) => d.region).filter(Boolean))) as string[];
-
-  return { platforms, regions };
+  const { data, error } = await supabase.rpc('shopping_filter_options', { p_brand_id: brandId });
+  if (error) return { platforms: [], regions: [] };
+  const row = (data as { platforms: string[] | null; regions: string[] | null }[] | null)?.[0];
+  return { platforms: row?.platforms ?? [], regions: row?.regions ?? [] };
 }
+
+// ── Paged card reads ──────────────────────────────────────────────────────────
+
+const CARD_PAGE_SIZE = 1000;
+const CARD_MAX_ROWS = 50_000;
+
+/**
+ * Every row a card query matches, read in `.range()` pages: an unpaged select
+ * stops at PostgREST's 1,000-row cap (#922). `build` returns a fresh, filtered
+ * query per page; the order makes the pages deterministic. Bounded by
+ * CARD_MAX_ROWS so a pathological brand can't pin the server action.
+ */
+async function fetchAllCards<T>(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostgREST builder generics
+  build: () => any,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let start = 0; start < CARD_MAX_ROWS; start += CARD_PAGE_SIZE) {
+    const { data, error } = await build()
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(start, start + CARD_PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as T[];
+    rows.push(...batch);
+    if (batch.length < CARD_PAGE_SIZE) break;
+  }
+  return rows;
+}
+
+/** A card query over the filter window: brand, dates, platforms and regions. */
+function cardsInWindow(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  filters: ShoppingFilters,
+  columns: string,
+) {
+  const { from, to } = resolveDateRange(filters);
+  const expandedTo = expandDateToEndOfDay(to);
+  let query = supabase.from('prompt_result_shopping_cards').select(columns).eq('brand_id', brandId);
+  if (from) query = query.gte('created_at', from);
+  if (expandedTo) query = query.lte('created_at', expandedTo);
+  if (filters.platforms?.length) query = query.in('platform', filters.platforms);
+  if (filters.regions?.length) query = query.in('region', filters.regions);
+  return query;
+}
+
+const PRODUCT_CARD_COLUMNS = `
+      id,
+      created_at,
+      platform,
+      region,
+      product_title,
+      product_brand,
+      price_amount,
+      price_currency,
+      image_url,
+      merchant_url,
+      merchant_domain,
+      raw,
+      matched_brand_id,
+      prompt_results:prompt_result_id (
+        prompt:prompt_id (
+          id,
+          text
+        )
+      )
+    `;
 
 // ── My Products / Competitors tab actions ──────────────────────────────────────
 
@@ -472,46 +440,12 @@ export async function getOwnProducts(
   filters: ShoppingFilters,
 ): Promise<ShoppingProduct[]> {
   const supabase = await createClient();
-  const { from, to } = resolveDateRange(filters);
-  const expandedTo = expandDateToEndOfDay(to);
 
-  let query = supabase
-    .from('prompt_result_shopping_cards')
-    .select(
-      `
-      id,
-      created_at,
-      platform,
-      region,
-      product_title,
-      product_brand,
-      price_amount,
-      price_currency,
-      image_url,
-      merchant_url,
-      merchant_domain,
-      raw,
-      matched_brand_id,
-      prompt_results:prompt_result_id (
-        prompt:prompt_id (
-          id,
-          text
-        )
-      )
-    `,
-    )
-    .eq('brand_id', brandId)
-    .eq('matched_brand_role', 'own');
+  const data = await fetchAllCards<CardRow>(() =>
+    cardsInWindow(supabase, brandId, filters, PRODUCT_CARD_COLUMNS).eq('matched_brand_role', 'own'),
+  );
 
-  if (from) query = query.gte('created_at', from);
-  if (expandedTo) query = query.lte('created_at', expandedTo);
-  if (filters.platforms?.length) query = query.in('platform', filters.platforms);
-  if (filters.regions?.length) query = query.in('region', filters.regions);
-
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-
-  return aggregateProducts(data || []);
+  return aggregateProducts(data);
 }
 
 export async function getCompetitorProducts(
@@ -519,8 +453,6 @@ export async function getCompetitorProducts(
   filters: ShoppingFilters,
 ): Promise<ShoppingProduct[]> {
   const supabase = await createClient();
-  const { from, to } = resolveDateRange(filters);
-  const expandedTo = expandDateToEndOfDay(to);
 
   const { data: competitorsData, error: compError } = await supabase
     .from('competitors')
@@ -530,43 +462,14 @@ export async function getCompetitorProducts(
   if (compError) throw new Error(compError.message);
   const competitorMap = new Map((competitorsData ?? []).map((c) => [c.id, c]));
 
-  let query = supabase
-    .from('prompt_result_shopping_cards')
-    .select(
-      `
-      id,
-      created_at,
-      platform,
-      region,
-      product_title,
-      product_brand,
-      price_amount,
-      price_currency,
-      image_url,
-      merchant_url,
-      merchant_domain,
-      raw,
-      matched_brand_id,
-      prompt_results:prompt_result_id (
-        prompt:prompt_id (
-          id,
-          text
-        )
-      )
-    `,
-    )
-    .eq('brand_id', brandId)
-    .eq('matched_brand_role', 'competitor');
+  const data = await fetchAllCards<CardRow>(() =>
+    cardsInWindow(supabase, brandId, filters, PRODUCT_CARD_COLUMNS).eq(
+      'matched_brand_role',
+      'competitor',
+    ),
+  );
 
-  if (from) query = query.gte('created_at', from);
-  if (expandedTo) query = query.lte('created_at', expandedTo);
-  if (filters.platforms?.length) query = query.in('platform', filters.platforms);
-  if (filters.regions?.length) query = query.in('region', filters.regions);
-
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-
-  return aggregateProducts(data || [], competitorMap);
+  return aggregateProducts(data, competitorMap);
 }
 
 export async function getCompetitorSummary(
@@ -588,31 +491,25 @@ export async function getCompetitorSummary(
     totalCardsQuery = totalCardsQuery.in('platform', filters.platforms);
   if (filters.regions?.length) totalCardsQuery = totalCardsQuery.in('region', filters.regions);
 
-  let competitorCardsQuery = supabase
-    .from('prompt_result_shopping_cards')
-    .select('matched_brand_id, product_title, product_brand')
-    .eq('brand_id', brandId)
-    .eq('matched_brand_role', 'competitor');
-
-  if (from) competitorCardsQuery = competitorCardsQuery.gte('created_at', from);
-  if (expandedTo) competitorCardsQuery = competitorCardsQuery.lte('created_at', expandedTo);
-  if (filters.platforms?.length)
-    competitorCardsQuery = competitorCardsQuery.in('platform', filters.platforms);
-  if (filters.regions?.length)
-    competitorCardsQuery = competitorCardsQuery.in('region', filters.regions);
+  const competitorCardsQuery = fetchAllCards<{
+    matched_brand_id: string | null;
+    product_title: string | null;
+    product_brand: string | null;
+  }>(() =>
+    cardsInWindow(supabase, brandId, filters, 'matched_brand_id, product_title, product_brand').eq(
+      'matched_brand_role',
+      'competitor',
+    ),
+  );
 
   const competitorsQuery = supabase
     .from('competitors')
     .select('id, name, domain')
     .eq('brand_id', brandId);
 
-  const [
-    { count: totalCount },
-    { data: competitorCards, error: cardsError },
-    { data: competitors, error: compError },
-  ] = await Promise.all([totalCardsQuery, competitorCardsQuery, competitorsQuery]);
+  const [{ count: totalCount }, competitorCards, { data: competitors, error: compError }] =
+    await Promise.all([totalCardsQuery, competitorCardsQuery, competitorsQuery]);
 
-  if (cardsError) throw new Error(cardsError.message);
   if (compError) throw new Error(compError.message);
 
   const total = totalCount || 0;
@@ -705,27 +602,7 @@ function formatPrice(amount: number | null, currency: string | null): string {
   return isSymbolWord ? `${formattedAmount} ${symbol}` : `${symbol}${formattedAmount}`;
 }
 
-export async function getCardEligiblePrompts(
-  brandId: string,
-  filters: ShoppingFilters,
-): Promise<CardEligiblePromptsResponse> {
-  const supabase = await createClient();
-  const { from, to } = resolveDateRange(filters);
-  const expandedTo = expandDateToEndOfDay(to);
-
-  // 1. Get total number of tracked prompts for the brand
-  const { count: totalTrackedPrompts, error: countError } = await supabase
-    .from('prompts')
-    .select('id, prompt_sets!inner(brand_id)', { count: 'exact', head: true })
-    .eq('prompt_sets.brand_id', brandId);
-
-  if (countError) throw new Error(countError.message);
-
-  // 2. Fetch all normalized shopping cards matching the brand and filters
-  let query = supabase
-    .from('prompt_result_shopping_cards')
-    .select(
-      `
+const ELIGIBLE_CARD_COLUMNS = `
       id,
       matched_brand_role,
       platform,
@@ -750,17 +627,26 @@ export async function getCardEligiblePrompts(
           )
         )
       )
-    `,
-    )
-    .eq('brand_id', brandId);
+    `;
 
-  if (from) query = query.gte('created_at', from);
-  if (expandedTo) query = query.lte('created_at', expandedTo);
-  if (filters.platforms?.length) query = query.in('platform', filters.platforms);
-  if (filters.regions?.length) query = query.in('region', filters.regions);
+export async function getCardEligiblePrompts(
+  brandId: string,
+  filters: ShoppingFilters,
+): Promise<CardEligiblePromptsResponse> {
+  const supabase = await createClient();
 
-  const { data: cards, error: cardsError } = await query;
-  if (cardsError) throw new Error(cardsError.message);
+  // 1. Get total number of tracked prompts for the brand
+  const { count: totalTrackedPrompts, error: countError } = await supabase
+    .from('prompts')
+    .select('id, prompt_sets!inner(brand_id)', { count: 'exact', head: true })
+    .eq('prompt_sets.brand_id', brandId);
+
+  if (countError) throw new Error(countError.message);
+
+  // 2. Fetch all normalized shopping cards matching the brand and filters
+  const cards = await fetchAllCards<unknown>(() =>
+    cardsInWindow(supabase, brandId, filters, ELIGIBLE_CARD_COLUMNS),
+  );
 
   const promptMap = new Map<
     string,

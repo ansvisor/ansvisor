@@ -3171,6 +3171,24 @@ export type Database = {
         }
         Returns: Json
       }
+      shopping_filter_options: {
+        Args: { p_brand_id: string }
+        Returns: {
+          platforms: string[]
+          regions: string[]
+        }[]
+      }
+      shopping_overview: {
+        Args: {
+          p_brand_id: string
+          p_from?: string
+          p_platforms?: string[]
+          p_regions?: string[]
+          p_to?: string
+          p_trend_from?: string
+        }
+        Returns: Json
+      }
       signals_summary: {
         Args: { p_brand_id: string; p_from: string; p_to: string }
         Returns: Json
