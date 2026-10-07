@@ -25,6 +25,7 @@ import {
 } from './opportunity-limits.js';
 import { loadClusterOpportunities } from './open-opportunities.js';
 import { loadClusters } from './prompt-clusters.js';
+import { reopenStrengthened } from './opportunity-reopen.js';
 import {
   ASSET_TYPES,
   DECISIONS,
@@ -153,7 +154,7 @@ async function loadPromptTexts(promptIds) {
 /**
  * @param {string} brandId
  * @param {{ model?: string, onProgress?: (p: {phase: string, message: string}) => void }} [opts]
- * @returns {Promise<{ generated: number, merged: number }>}
+ * @returns {Promise<{ generated: number, merged: number, reopened?: number }>}
  */
 export async function generateContentOpportunities(brandId, { model, onProgress } = {}) {
   onProgress?.({ phase: 'collecting_data', message: 'Fetching clusters and metrics...' });
@@ -228,14 +229,23 @@ export async function generateContentOpportunities(brandId, { model, onProgress 
     return { metrics, components, score: opportunityScore(components) };
   };
 
+  // Finished opportunities whose signals moved go back to New before any new
+  // ones are written; they keep their clusters, so nothing is duplicated.
+  let reopened = 0;
+  try {
+    reopened = await reopenStrengthened(brandId, existing, measure);
+  } catch (err) {
+    logger.error({ err, brandId }, '[opportunities] re-opening finished opportunities failed');
+  }
+
   const candidates = clusters.map((c) => ({ id: c.id, topicId: c.topic_id, ...measure([c.id]) }));
   const picked = pickClusters(candidates, coveredClusterIds(existing));
   if (!picked.length) {
     logger.info(
-      { brandId, clusters: clusters.length, opportunities: existing.length },
+      { brandId, clusters: clusters.length, opportunities: existing.length, reopened },
       '[opportunities] every cluster with answers already has an opportunity',
     );
-    return { generated: 0, merged: 0 };
+    return { generated: 0, merged: 0, reopened };
   }
 
   const { data: basketRows, error: basketErr } = await supabaseAdmin
@@ -394,8 +404,8 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
     if (error) throw new Error(error.message);
   }
   logger.info(
-    { brandId, generated: inserts.length, merged, clusters: clusters.length },
+    { brandId, generated: inserts.length, merged, reopened, clusters: clusters.length },
     '[opportunities] generated',
   );
-  return { generated: inserts.length, merged };
+  return { generated: inserts.length, merged, reopened };
 }

@@ -225,6 +225,17 @@ export interface ContentOpportunitySourceData {
   assets?: OpportunityAsset[];
   /** Action Center actions sent from this opportunity, by asset key ('all' for the whole). */
   actions?: Record<string, string>;
+  /** Actions from before the opportunity was re-opened. */
+  pastActions?: string[];
+  /** Why a finished opportunity went back to New (#857, Phase 4). */
+  reopened?: {
+    at: string;
+    reason: 'score_rose' | 'gain_lost';
+    previousScore: number;
+    score: number;
+    visibilityAfter: number | null;
+    visibility: number;
+  };
 }
 
 export interface OpportunityPage {

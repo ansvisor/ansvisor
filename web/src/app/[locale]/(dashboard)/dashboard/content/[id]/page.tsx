@@ -333,6 +333,23 @@ export default function ContentDetailPage() {
         </div>
       </div>
 
+      {sd.reopened && ['new', 'reviewed'].includes(opportunity.status) && (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
+          <p className="font-medium text-amber-700 dark:text-amber-400">{t('newSignal')}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {sd.reopened.reason === 'score_rose'
+              ? t('newSignalScoreRose', {
+                  from: Math.round(sd.reopened.previousScore),
+                  to: Math.round(sd.reopened.score),
+                })
+              : t('newSignalGainLost', {
+                  after: Math.round((sd.reopened.visibilityAfter ?? 0) * 10) / 10,
+                  now: Math.round(sd.reopened.visibility * 10) / 10,
+                })}
+          </p>
+        </div>
+      )}
+
       <div className="flex items-center gap-2">
         <Badge variant="outline" className="text-xs">
           {t(`type.${opportunity.type}` as 'type.owned' | 'type.earned')}
@@ -370,8 +387,10 @@ export default function ContentDetailPage() {
             <OpportunityBasketCard opportunityId={opportunity.id} />
           </div>
           <div className="space-y-4">
-            {sd.actions && Object.keys(sd.actions).length > 0 && (
-              <OpportunityResultsCard actionIds={Object.values(sd.actions)} />
+            {(Object.keys(sd.actions ?? {}).length > 0 || (sd.pastActions ?? []).length > 0) && (
+              <OpportunityResultsCard
+                actionIds={[...(sd.pastActions ?? []), ...Object.values(sd.actions ?? {})]}
+              />
             )}
             <ScoreBreakdown sourceData={sd} />
           </div>

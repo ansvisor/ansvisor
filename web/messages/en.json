@@ -1823,7 +1823,10 @@
     "alreadyInActionCenter": "Already in the Action Center",
     "sendToActionCenterError": "Failed to send to the Action Center",
     "markReviewed": "Mark as reviewed",
-    "reviewedError": "Failed to mark as reviewed"
+    "reviewedError": "Failed to mark as reviewed",
+    "newSignal": "New signal detected",
+    "newSignalScoreRose": "Completed earlier, and its opportunity has grown since: the score rose from {from} to {to}.",
+    "newSignalGainLost": "Completed earlier, but the gain did not hold: visibility on these prompts was {after}% after the work and is {now}% now."
   },
   "traffic": {
     "title": "AI Traffic Analytics",

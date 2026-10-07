@@ -983,7 +983,17 @@ export default function ContentPage() {
                           href={`/dashboard/content/${opp.id}`}
                           className="block hover:underline"
                         >
-                          <p className="text-sm font-medium line-clamp-1">{opp.title}</p>
+                          <p className="text-sm font-medium line-clamp-1">
+                            {opp.sourceData?.reopened && opp.status === 'new' && (
+                              <Badge
+                                variant="outline"
+                                className="mr-1.5 border-amber-500/30 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-400"
+                              >
+                                {t('newSignal')}
+                              </Badge>
+                            )}
+                            {opp.title}
+                          </p>
                           {opp.description && (
                             <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
                               {opp.description}
