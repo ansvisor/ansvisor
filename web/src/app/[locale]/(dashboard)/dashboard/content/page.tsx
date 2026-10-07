@@ -781,11 +781,24 @@ export default function ContentPage() {
                       <SelectTrigger className="h-8 w-44 text-xs">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      {/* Wider than the trigger, so topic names fit; the item
+                          text may shrink so a longer name truncates instead of
+                          running past the edge, and the count stays aligned. */}
+                      <SelectContent
+                        align="start"
+                        alignItemWithTrigger={false}
+                        className="w-auto min-w-(--anchor-width) max-w-80"
+                      >
                         <SelectItem value="all">{t('filters.allTopics')}</SelectItem>
                         {topicOptions.map((o) => (
-                          <SelectItem key={o.topicId} value={o.topicId}>
-                            <span className="min-w-0 flex-1 truncate">{o.name}</span>
+                          <SelectItem
+                            key={o.topicId}
+                            value={o.topicId}
+                            className="[&>div]:min-w-0 [&>div]:shrink"
+                          >
+                            <span className="min-w-0 flex-1 truncate" title={o.name}>
+                              {o.name}
+                            </span>
                             <span className="ml-2 shrink-0 tabular-nums text-muted-foreground">
                               {o.count}
                             </span>
