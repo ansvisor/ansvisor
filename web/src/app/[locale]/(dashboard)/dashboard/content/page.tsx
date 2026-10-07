@@ -78,6 +78,8 @@ import type { ContentOpportunity, ContentOpportunityStatus } from '@/types';
 import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
 import { WebhookSettingsDialog } from './_webhook-settings';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { OpportunityDetail } from '@/components/content/opportunity-detail';
 import { PAGE_SIZE, TablePager, usePagination } from '@/components/table-pager';
 
 const GENERATION_STORAGE_KEY = 'aeo:content-generation';
@@ -296,9 +298,24 @@ export default function ContentPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  // The open opportunity lives in the URL (?opportunity=<id>), like the
+  // Action Center's drawers: a refresh or a shared link reopens it, and
+  // opening one never navigates away from the filtered list.
+  const [openOpportunityId, setOpenOpportunityId] = useState<string | null>(null);
+
   useEffect(() => {
-    setPromptFilter(new URLSearchParams(window.location.search).get('prompt') ?? '');
+    const params = new URLSearchParams(window.location.search);
+    setPromptFilter(params.get('prompt') ?? '');
+    setOpenOpportunityId(params.get('opportunity'));
     setUrlRead(true);
+  }, []);
+
+  const selectOpportunity = useCallback((opportunityId: string | null) => {
+    setOpenOpportunityId(opportunityId);
+    const url = new URL(window.location.href);
+    if (opportunityId) url.searchParams.set('opportunity', opportunityId);
+    else url.searchParams.delete('opportunity');
+    window.history.replaceState(window.history.state, '', url);
   }, []);
 
   const selectPrompt = useCallback((promptId: string) => {
@@ -723,52 +740,6 @@ export default function ContentPage() {
                       className="pl-8 h-8 text-xs"
                     />
                   </div>
-                  <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
-                    <SelectTrigger className="h-8 w-[130px] text-xs">
-                      <SelectValue>
-                        {(value) =>
-                          value === 'all' ? t('filters.allStatuses') : t(`status.${value}`)
-                        }
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t('filters.allStatuses')}</SelectItem>
-                      <SelectItem value="new">{t('status.new')}</SelectItem>
-                      <SelectItem value="reviewed">{t('status.reviewed')}</SelectItem>
-                      <SelectItem value="sent">{t('status.sent')}</SelectItem>
-                      <SelectItem value="in_progress">{t('status.in_progress')}</SelectItem>
-                      <SelectItem value="done">{t('status.done')}</SelectItem>
-                      <SelectItem value="dismissed">{t('status.dismissed')}</SelectItem>
-                      <SelectItem value="archived">{t('status.archived')}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={impactFilter} onValueChange={(v) => v && setImpactFilter(v)}>
-                    <SelectTrigger className="h-8 w-[120px] text-xs">
-                      <SelectValue>
-                        {(value) =>
-                          value === 'all' ? t('filters.allImpacts') : t(`impact.${value}`)
-                        }
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t('filters.allImpacts')}</SelectItem>
-                      <SelectItem value="high">{t('impact.high')}</SelectItem>
-                      <SelectItem value="medium">{t('impact.medium')}</SelectItem>
-                      <SelectItem value="low">{t('impact.low')}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={typeFilter} onValueChange={(v) => v && setTypeFilter(v)}>
-                    <SelectTrigger className="h-8 w-[110px] text-xs">
-                      <SelectValue>
-                        {(value) => (value === 'all' ? t('filters.allTypes') : t(`type.${value}`))}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t('filters.allTypes')}</SelectItem>
-                      <SelectItem value="owned">{t('type.owned')}</SelectItem>
-                      <SelectItem value="earned">{t('type.earned')}</SelectItem>
-                    </SelectContent>
-                  </Select>
                   {(topicOptions.length >= 2 || topicFilter !== '') && (
                     <Select
                       items={[
@@ -841,6 +812,64 @@ export default function ContentPage() {
                       </ComboboxContent>
                     </Combobox>
                   )}
+                  <Select value={typeFilter} onValueChange={(v) => v && setTypeFilter(v)}>
+                    <SelectTrigger className="h-8 w-[110px] text-xs">
+                      <SelectValue>
+                        {(value) => (value === 'all' ? t('filters.allTypes') : t(`type.${value}`))}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent
+                      align="start"
+                      alignItemWithTrigger={false}
+                      className="w-auto min-w-(--anchor-width)"
+                    >
+                      <SelectItem value="all">{t('filters.allTypes')}</SelectItem>
+                      {(['owned', 'earned'] as const).map((type) => (
+                        <SelectItem key={type} value={type}>
+                          <span className="flex flex-col">
+                            <span>{t(`type.${type}`)}</span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {t(`typeHint.${type}`)}
+                            </span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={impactFilter} onValueChange={(v) => v && setImpactFilter(v)}>
+                    <SelectTrigger className="h-8 w-[120px] text-xs">
+                      <SelectValue>
+                        {(value) =>
+                          value === 'all' ? t('filters.allImpacts') : t(`impact.${value}`)
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t('filters.allImpacts')}</SelectItem>
+                      <SelectItem value="high">{t('impact.high')}</SelectItem>
+                      <SelectItem value="medium">{t('impact.medium')}</SelectItem>
+                      <SelectItem value="low">{t('impact.low')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
+                    <SelectTrigger className="h-8 w-[130px] text-xs">
+                      <SelectValue>
+                        {(value) =>
+                          value === 'all' ? t('filters.allStatuses') : t(`status.${value}`)
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t('filters.allStatuses')}</SelectItem>
+                      <SelectItem value="new">{t('status.new')}</SelectItem>
+                      <SelectItem value="reviewed">{t('status.reviewed')}</SelectItem>
+                      <SelectItem value="sent">{t('status.sent')}</SelectItem>
+                      <SelectItem value="in_progress">{t('status.in_progress')}</SelectItem>
+                      <SelectItem value="done">{t('status.done')}</SelectItem>
+                      <SelectItem value="dismissed">{t('status.dismissed')}</SelectItem>
+                      <SelectItem value="archived">{t('status.archived')}</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </CardHeader>
@@ -992,9 +1021,10 @@ export default function ContentPage() {
                         />
                       </TableCell>
                       <TableCell className="pl-6 max-w-0">
-                        <Link
-                          href={`/dashboard/content/${opp.id}`}
-                          className="block hover:underline"
+                        <button
+                          type="button"
+                          onClick={() => selectOpportunity(opp.id)}
+                          className="block w-full text-left hover:underline"
                         >
                           <p className="text-sm font-medium line-clamp-1">
                             {opp.sourceData?.reopened && opp.status === 'new' && (
@@ -1012,11 +1042,17 @@ export default function ContentPage() {
                               {opp.description}
                             </p>
                           )}
-                        </Link>
+                        </button>
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex flex-col items-center gap-1">
-                          <Badge variant="outline" className="text-xs">
+                          <Badge
+                            variant="outline"
+                            className="text-xs"
+                            title={t(
+                              `typeHint.${opp.type}` as 'typeHint.owned' | 'typeHint.earned',
+                            )}
+                          >
                             {t(`type.${opp.type}` as 'type.owned' | 'type.earned')}
                           </Badge>
                           {opp.decision && (
@@ -1081,12 +1117,18 @@ export default function ContentPage() {
                               </Button>
                             </>
                           )}
-                          <Link href={`/dashboard/content/${opp.id}`}>
+                          {/* The full page, in a new tab so the list stays put. */}
+                          <Link
+                            href={`/dashboard/content/${opp.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-7 px-2 text-xs"
-                              aria-label={t('viewDetails')}
+                              aria-label={t('openInNewTab')}
+                              title={t('openInNewTab')}
                             >
                               <ExternalLink className="h-3 w-3" />
                             </Button>
@@ -1120,6 +1162,27 @@ export default function ContentPage() {
           </Card>
         </>
       )}
+
+      <Sheet
+        open={openOpportunityId !== null}
+        onOpenChange={(open) => {
+          if (!open) selectOpportunity(null);
+        }}
+      >
+        <SheetContent className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-4xl">
+          <SheetTitle className="sr-only">{t('viewDetails')}</SheetTitle>
+          <div className="flex-1 overflow-y-auto p-6">
+            {openOpportunityId && (
+              <OpportunityDetail
+                key={openOpportunityId}
+                id={openOpportunityId}
+                inDrawer
+                onChanged={() => loadData(true)}
+              />
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <WebhookSettingsDialog
         open={webhookOpen}

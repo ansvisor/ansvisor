@@ -1647,6 +1647,7 @@
     "undoFailed": "Failed to undo",
     "cancel": "Cancel",
     "viewDetails": "View Details",
+    "openInNewTab": "Open in new tab",
     "configureWebhook": "Configure Webhook",
     "noOpportunities": "No content opportunities yet",
     "noOpportunitiesHint": "Generate opportunities to get AI-powered content recommendations based on your prompt data.",
@@ -1669,6 +1670,10 @@
     "type": {
       "owned": "Owned",
       "earned": "Earned"
+    },
+    "typeHint": {
+      "owned": "Content on your own site",
+      "earned": "Coverage on other sites: articles, reviews, links"
     },
     "kpi": {
       "total": "Total Opportunities",
