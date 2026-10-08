@@ -1954,6 +1954,8 @@ export interface CompetitorComparisonEntry {
   totalCitations: number;
   resultCount: number;
   isOwnBrand: boolean;
+  /** The competitor's id; absent on the brand's own entry. */
+  competitorId?: string;
 }
 
 export interface ProviderComparisonRow {
@@ -2225,6 +2227,7 @@ export async function getCompetitorComparison(
       totalCitations: c.total_citations,
       resultCount: c.row_count,
       isOwnBrand: false,
+      competitorId: c.competitor_id,
     });
   }
 

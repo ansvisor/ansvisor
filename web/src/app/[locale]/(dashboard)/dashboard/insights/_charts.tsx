@@ -28,6 +28,7 @@ import type {
 } from '@/lib/actions/tracking';
 import { getFaviconUrl } from '@/lib/favicon';
 import { formatCompactNumber } from '@/lib/format';
+import { Link } from '@/i18n/navigation';
 
 // ─── Adaptive Y-axis ─────────────────────────────────────────────────────────
 // Visibility scores are theoretically 0–100 but realistic values for most
@@ -425,7 +426,16 @@ function LeaderboardEntry({ entry, rank }: { entry: CompetitorComparisonEntry; r
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium truncate">{entry.name}</span>
+          {entry.competitorId ? (
+            <Link
+              href={`/dashboard/competitors?competitor=${entry.competitorId}`}
+              className="text-sm font-medium truncate hover:underline"
+            >
+              {entry.name}
+            </Link>
+          ) : (
+            <span className="text-sm font-medium truncate">{entry.name}</span>
+          )}
           {entry.isOwnBrand && <span className="text-[10px] font-medium text-primary">YOU</span>}
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
