@@ -13,7 +13,9 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).toContain("The conversation's default brand is **Acme**");
     expect(prompt).toContain('id: `11111111-1111-1111-1111-111111111111`');
     expect(prompt).toContain('Use this brand for questions that do not name a brand explicitly.');
-    expect(prompt).toContain('If the user explicitly asks about another brand, use that brand instead.');
+    expect(prompt).toContain(
+      'If the user explicitly asks about another brand, use that brand instead.',
+    );
     expect(prompt).toContain('Do not call list_brands just to resolve the default brand.');
   });
 
@@ -22,6 +24,8 @@ describe('buildAgentSystemPrompt', () => {
 
     expect(prompt).toContain('This conversation has no default brand.');
     expect(prompt).toContain('resolve the available brands with `list_brands`');
-    expect(prompt).toContain("If there is no default brand and the user doesn't name one, call list_brands.");
+    expect(prompt).toContain(
+      "If there is no default brand and the user doesn't name one, call list_brands.",
+    );
   });
-}
+});
