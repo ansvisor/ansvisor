@@ -1455,6 +1455,7 @@
     "runAudit": "Run Audit",
     "running": "Auditing…",
     "recent": "Recent Audits",
+    "loadMore": "Load more",
     "retry": "Retry",
     "deleteAudit": "Delete audit",
     "loadFailed": "Couldn't load this audit",

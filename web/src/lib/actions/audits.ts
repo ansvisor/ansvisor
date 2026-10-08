@@ -181,11 +181,22 @@ export async function getAuditTrend(brandId: string): Promise<AuditTrend> {
   return { primaryDomain: data.primaryDomain ?? null, points: data.points ?? [] };
 }
 
-/** List recent audits for a brand (summaries, no signal detail). */
-export async function getAudits(brandId: string): Promise<AuditSummary[]> {
+export interface AuditPage {
+  audits: AuditSummary[];
+  /** Total audits for the brand, across all pages. */
+  total: number;
+}
+
+/** List a page of a brand's audits, newest first (summaries, no signal detail). */
+export async function getAudits(brandId: string, offset = 0, limit = 50): Promise<AuditPage> {
   const session = await getSession();
 
-  const res = await fetch(`${AEO_SERVER_URL}/api/audits?brandId=${encodeURIComponent(brandId)}`, {
+  const params = new URLSearchParams({
+    brandId,
+    limit: String(limit),
+    offset: String(offset),
+  });
+  const res = await fetch(`${AEO_SERVER_URL}/api/audits?${params}`, {
     headers: { Authorization: `Bearer ${session.access_token}` },
   });
 
@@ -195,5 +206,6 @@ export async function getAudits(brandId: string): Promise<AuditSummary[]> {
   }
 
   const data = await res.json();
-  return data.audits ?? [];
+  const audits: AuditSummary[] = data.audits ?? [];
+  return { audits, total: data.total ?? audits.length };
 }

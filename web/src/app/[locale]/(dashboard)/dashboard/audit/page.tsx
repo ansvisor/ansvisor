@@ -70,6 +70,8 @@ export default function SiteAuditPage() {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [history, setHistory] = useState<AuditSummary[]>([]);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [quota, setQuota] = useState<AuditQuota | null>(null);
   const [trend, setTrend] = useState<AuditTrend | null>(null);
   const [range, setRange] = useState<RangePreset>('30d');
@@ -92,7 +94,8 @@ export default function SiteAuditPage() {
           getAuditTrend(activeBrandId),
         ]);
         if (!cancelled) {
-          setHistory(data);
+          setHistory(data.audits);
+          setHistoryTotal(data.total);
           setQuota(q);
           setTrend(tr);
         }
@@ -175,6 +178,25 @@ export default function SiteAuditPage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('failed'));
       setRunning(false);
+    }
+  };
+
+  // Append the next page of Recent audits. Dedupe by id: an audit started
+  // since the first page shifts offsets by one.
+  const handleLoadMore = async () => {
+    if (!activeBrandId) return;
+    setLoadingMore(true);
+    try {
+      const next = await getAudits(activeBrandId, history.length);
+      setHistory((h) => {
+        const seen = new Set(h.map((a) => a.id));
+        return [...h, ...next.audits.filter((a) => !seen.has(a.id))];
+      });
+      setHistoryTotal(next.total);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('failed'));
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -445,6 +467,14 @@ export default function SiteAuditPage() {
                 </Dialog>
               </div>
             ))}
+            {history.length < historyTotal && (
+              <div className="flex justify-center pt-3">
+                <Button variant="outline" size="sm" onClick={handleLoadMore} disabled={loadingMore}>
+                  {loadingMore && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {t('loadMore')}
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
