@@ -220,19 +220,75 @@ instead.
 
 ## Available tools
 
-| Tool | What it does |
-| --- | --- |
-| `list_brands` | List brands the authenticated user can access. |
-| `get_visibility_summary` | Aggregate visibility score, mentions, citations, top competitors for a brand over an optional date range / model / region. |
-| `list_topics` | List the topics on a brand with a prompt count per topic. Use for coverage audits (empty / over-concentrated topics). |
-| `list_prompts` | List the prompts tracked on a brand, optionally filtered by topic, active status, or capped via `limit`. Returns the prompt text, topic, platforms, models, regions, and active flag. |
-| `list_actions` | List a brand's Action Center actions with category, kind, impact, status, outcome, assignee, due date and task progress. Filter by status or category. |
-| `get_action` | One action in full: payload, triggering signals, task list (with each task's `mode` and `permission`) and event trail. |
-| `list_signals` | Detected signals for a brand with their previous, current and change values. Filter by status or kind. |
-| `list_action_history` | Closed actions with their outcome and the before/after values the validation sweep measured. |
-| `update_task_status` | Mark a task in_progress, completed, skipped (with a reason) or failed. Records progress; it never carries the task out. |
+The MCP server exposes **28 tools**. Descriptions below match
+[`web/src/lib/mcp/server.ts`](https://github.com/ansvisor/ansvisor/blob/main/web/src/lib/mcp/server.ts).
+Tools that change data are marked **writes** — only call them on explicit user
+intent, not during exploratory queries.
 
-More tools land regularly — check the [project roadmap](https://github.com/ansvisor/ansvisor#whats-next).
+### Brands
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `list_brands` | List the brands the authenticated user can access (id, name, slug, industry, region). Call first to resolve a `brand_id`. | |
+
+### Visibility & analytics
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `get_visibility_summary` | Aggregate visibility metrics for a brand over an optional date range and filters — headline `aiVisibilityScore`, mentions, citations, competitors. | |
+| `get_visibility_trend` | Visibility over time (day or week buckets) with mentions, citations, and competitor scores for trend questions. | |
+| `get_competitor_comparison` | Competitor benchmark and share of voice for a window, comparable visibility rates and per-model/platform splits. | |
+| `list_citations` | URLs and domains AI engines cite alongside a brand, by source type, with top domains/URLs and usage stats. | |
+| `get_ai_traffic` | AI-referral traffic (visits by engine, landing pages, countries) for an optional date range. | |
+| `get_prompt_performance` | Per-prompt performance (visibility, mentions, citations, appearances) over a date range for ranking prompts. | |
+
+### Topics & prompts
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `list_topics` | Topics on a brand with prompt counts — for coverage audits before drilling into prompts. | |
+| `list_prompts` | Tracked prompts with text, topic, platforms, models, regions, and active flag; filter by topic or status. | |
+| `list_topic_suggestions` | Pending AI-generated topic suggestions awaiting accept or dismiss. | |
+| `accept_topic_suggestion` | Accept one pending suggestion: creates a topic and marks the suggestion added. | **yes** |
+| `dismiss_topic_suggestion` | Dismiss one pending suggestion so it does not reappear in future batches. | **yes** |
+| `get_prompt_volumes` | Per-prompt Google and estimated AI search demand and competition for prompts that already have analysis. | |
+
+### Content opportunities
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `list_content_opportunities` | Content gaps ranked by opportunity score — where the brand is losing visibility. | |
+| `get_content_opportunity` | Full details for one opportunity, including metrics, intent, competitors, and any existing brief. | |
+| `generate_content_brief` | Generate or overwrite an AI content brief for an opportunity (LLM cost/latency). | **yes** |
+| `update_opportunity_status` | Move an opportunity through workflow states (`new`, `sent`, `in_progress`, `done`, `dismissed`). | **yes** |
+
+### Site audit
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `get_site_audit_quota` | Monthly Site Audit allowance (`used`, `limit`, `remaining`) before starting a run. | |
+| `list_site_audits` | Recent audits for a brand (id, url, status, score) to find a past run without the id. | |
+| `run_site_audit` | Start an AEO/GEO page audit for a URL (consumes a monthly credit; poll `get_site_audit` for results). | **yes** |
+| `get_site_audit` | Fetch one audit by id — status, scores, signals, and fix recommendations (read-only). | |
+
+### Shopping
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `list_shopping_cards` | Shopping cards surfaced in AI commercial contexts; filter by role, platform, and region. | |
+| `get_product_visibility` | Aggregate visibility for one product title across platforms, regions, and dates. | |
+
+### Action Center
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `list_actions` | Recommended actions for a brand with status, impact, assignee, due date, and task progress. | |
+| `get_action` | One action in full: payload, triggering signals, tasks (`mode`, `permission`), and event trail. | |
+| `list_signals` | Detected changes (visibility, citations, traffic) with before/after values and linked `action_id`. | |
+| `list_action_history` | Closed actions with measured outcomes and before/after validation results. | |
+| `update_task_status` | Record progress on a task (`in_progress`, `completed`, `skipped`, `failed`); does not execute the task. | **yes** |
+
+New tools may ship between releases — see `server.ts` and the [project roadmap](https://github.com/ansvisor/ansvisor#whats-next).
 
 ## Try it
 
