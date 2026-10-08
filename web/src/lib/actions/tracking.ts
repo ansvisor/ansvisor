@@ -1089,9 +1089,12 @@ export async function getPromptResultById(resultId: string): Promise<PromptResul
     .select('*')
     .eq('id', resultId)
     .neq('platform', 'chatgpt-shopping')
-    .single();
+    .maybeSingle();
 
-  if (error || !data) return null;
+  // A failed read throws, so the page can offer a retry instead of reporting
+  // the result as missing.
+  if (error) throw new Error(error.message);
+  if (!data) return null;
 
   const row = data as Record<string, unknown>;
   const { data: promptData } = await supabase

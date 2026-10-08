@@ -1584,7 +1584,17 @@
     "positiveSentiment": "Positive Sentiment",
     "neutral": "Neutral",
     "negative": "Negative",
-    "sovByPlatform": "Share of Voice by Platform"
+    "sovByPlatform": "Share of Voice by Platform",
+    "resultDetail": {
+      "notFoundTitle": "Result not found",
+      "notFoundDescription": "This result may have been deleted or does not exist.",
+      "loadFailedTitle": "Couldn't load this result",
+      "loadFailedDescription": "Something went wrong while loading this result. Please try again.",
+      "goBack": "Go back",
+      "brandCitations": "Brand Citations",
+      "totalCitations": "Total Citations",
+      "checkedAt": "Checked: {date}"
+    }
   },
   "topics": {
     "addTopic": "Add Topic",

@@ -24,11 +24,17 @@ const promptResultRow = {
   created_at: '2026-07-07T00:00:00.000Z',
 };
 
+let promptResultRead: { data: unknown; error: { message: string } | null } = {
+  data: promptResultRow,
+  error: null,
+};
+
 function fakeQueryBuilder(table: string) {
   const builder = {
     select: () => builder,
     eq: () => builder,
     neq: () => builder,
+    maybeSingle: async () => promptResultRead,
     single: async () => {
       if (table === 'prompt_results') return { data: promptResultRow, error: null };
       if (table === 'prompts') {
@@ -79,6 +85,24 @@ vi.mock('@/lib/actions/topic', () => ({
 }));
 
 describe('getPromptResultById', () => {
+  afterEach(() => {
+    promptResultRead = { data: promptResultRow, error: null };
+  });
+
+  it('returns null for a result that does not exist', async () => {
+    promptResultRead = { data: null, error: null };
+    const { getPromptResultById } = await import('./tracking');
+
+    await expect(getPromptResultById('missing-id')).resolves.toBeNull();
+  });
+
+  it('throws when the read fails, so the page can offer a retry (#908)', async () => {
+    promptResultRead = { data: null, error: { message: 'statement timeout' } };
+    const { getPromptResultById } = await import('./tracking');
+
+    await expect(getPromptResultById('result-id')).rejects.toThrow('statement timeout');
+  });
+
   it('carries observed search queries through to prompt result details', async () => {
     const { getPromptResultById } = await import('./tracking');
 
