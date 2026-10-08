@@ -25,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ArrowLeft, FileDown, Loader2 } from 'lucide-react';
+import { ArrowLeft, FileDown, Loader2, RotateCw } from 'lucide-react';
 import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
@@ -81,30 +81,52 @@ export default function ReportDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const t = useTranslations('reports');
+  const tCommon = useTranslations('common');
 
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setLoadFailed(false);
     getReport(id)
       .then((r) => {
         if (!cancelled) setReport(r);
       })
-      .catch((err) => console.error('Failed to load report:', err))
+      .catch((err) => {
+        console.error('Failed to load report:', err);
+        if (!cancelled) setLoadFailed(true);
+      })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, attempt]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // A failed load is not a missing report: offer a retry instead of
+  // reporting it as not found.
+  if (loadFailed) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-24 text-center">
+        <p className="text-sm text-muted-foreground">{t('loadReportFailed')}</p>
+        <Button variant="outline" className="gap-2" onClick={() => setAttempt((n) => n + 1)}>
+          <RotateCw className="h-4 w-4" />
+          {tCommon('retry')}
+        </Button>
       </div>
     );
   }
