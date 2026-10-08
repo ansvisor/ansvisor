@@ -16,6 +16,7 @@ import type { HeadToHeadData, HeadToHeadGroup, HeadToHeadRun } from '@/lib/head-
 import { getFaviconUrl } from '@/lib/favicon';
 import { toCsv } from '@/lib/csv';
 import { slugify } from '@/lib/slug';
+import { readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { MODEL_LABELS } from '@/config/platform-labels';
 import type { Competitor } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1208,6 +1209,19 @@ export default function CompetitorsPage() {
 
   // Head-to-head
   const [selectedCompetitorId, setSelectedCompetitorId] = useState<string | null>(null);
+  // ?competitor=<id> (#893): the head-to-head selection survives a refresh and
+  // can be linked to, e.g. from the Insights leaderboard. Read after mount;
+  // applied once the brand's competitors are known, so an unknown id is ignored.
+  const [linkedCompetitorId, setLinkedCompetitorId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLinkedCompetitorId(readUrlParam('competitor') || null);
+  }, []);
+
+  const selectCompetitor = useCallback((id: string | null) => {
+    setSelectedCompetitorId(id);
+    writeUrlParams({ competitor: id });
+  }, []);
   const [h2hData, setH2hData] = useState<HeadToHeadData | null>(null);
   const [h2hLoading, setH2hLoading] = useState(false);
 
@@ -1234,6 +1248,14 @@ export default function CompetitorsPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (!linkedCompetitorId || loading) return;
+    selectCompetitor(
+      competitors.some((c) => c.id === linkedCompetitorId) ? linkedCompetitorId : null,
+    );
+    setLinkedCompetitorId(null);
+  }, [linkedCompetitorId, loading, competitors, selectCompetitor]);
 
   // Load head-to-head when a competitor is selected
   const loadH2H = useCallback(
@@ -1331,7 +1353,7 @@ export default function CompetitorsPage() {
       await deleteCompetitor(id);
       toast.success(t('deleteSuccess'));
       if (selectedCompetitorId === id) {
-        setSelectedCompetitorId(null);
+        selectCompetitor(null);
       }
       loadData();
     } catch {
@@ -1449,7 +1471,7 @@ export default function CompetitorsPage() {
                     stats={scoreMap.get(comp.name) ?? null}
                     isSelected={selectedCompetitorId === comp.id}
                     onSelect={() =>
-                      setSelectedCompetitorId(selectedCompetitorId === comp.id ? null : comp.id)
+                      selectCompetitor(selectedCompetitorId === comp.id ? null : comp.id)
                     }
                     onDelete={() => setConfirmDelete(comp)}
                     deleting={deleting === comp.id}
