@@ -78,13 +78,16 @@ export async function POST(req: Request) {
 
   let brandId: string | null = null;
   if (body.brandId) {
-    const { data: brand } = await supabaseAdmin
+    const { data: brand, error: brandError } = await supabaseAdmin
       .from('brands')
       .select('id')
       .eq('id', body.brandId)
       .eq('organization_id', organizationId)
       .maybeSingle();
 
+    if (brandError) {
+      return NextResponse.json({ error: brandError.message }, { status: 500 });
+    }
     if (!brand) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 400 });
     }
