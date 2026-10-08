@@ -570,19 +570,38 @@ app.post('/cloro/callback', async (req, res) => {
       domain: c.domain || '',
     }));
 
-    const aiResponse = parseScraperResponse(response, pending.scraper_id);
+    // A completed task with nothing to store — google-aio for a query Google
+    // shows no AI Overview for — is a finished task, not a failed delivery.
+    // Leaving its pending row behind held every tracking run open: the worker
+    // waited out its stall window and the run's stamp its late deadline, for
+    // answers that had arrived seconds after submission.
+    let aiResponse;
+    try {
+      aiResponse = parseScraperResponse(response, pending.scraper_id);
+    } catch (err) {
+      req.log.info(
+        { taskId, scraperId: pending.scraper_id, reason: err.message },
+        'cloro callback: task completed with no answer to store',
+      );
+      await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
+      return;
+    }
 
-    await handleScraperResult({
-      aiResponse,
-      scraperId: pending.scraper_id,
-      promptId: pending.prompt_id,
-      brandId: pending.brand_id,
-      region: pending.region,
-      brandInfo,
-      competitors,
-    });
-
-    await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
+    try {
+      await handleScraperResult({
+        aiResponse,
+        scraperId: pending.scraper_id,
+        promptId: pending.prompt_id,
+        brandId: pending.brand_id,
+        region: pending.region,
+        brandInfo,
+        competitors,
+      });
+    } finally {
+      // Cloro does not deliver again after our 200, so a task that failed to
+      // store will never come back; keeping its row only holds the run open.
+      await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
+    }
 
     req.log.info(
       { taskId, scraperId: pending.scraper_id },
