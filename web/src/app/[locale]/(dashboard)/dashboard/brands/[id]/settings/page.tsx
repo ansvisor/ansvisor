@@ -126,9 +126,13 @@ export default function BrandSettingsPage({ params }: PageProps) {
         <TabsContent value="danger">
           <DangerTab
             brand={brand}
-            onDelete={async () => {
+            onDelete={async (pending) => {
               removeBrand(brand.id);
-              toast.success('Brand deleted.');
+              toast.success(
+                pending
+                  ? 'Deleting the brand. It has a lot of data, so this can take a few minutes.'
+                  : 'Brand deleted.',
+              );
               router.push('/dashboard/brands');
             }}
           />
@@ -938,7 +942,13 @@ function TrackingTab({ brand }: { brand: Brand }) {
 
 // ─── Danger Tab ───────────────────────────────────────────────────────────────
 
-function DangerTab({ brand, onDelete }: { brand: Brand; onDelete: () => Promise<void> }) {
+function DangerTab({
+  brand,
+  onDelete,
+}: {
+  brand: Brand;
+  onDelete: (pending: boolean) => Promise<void>;
+}) {
   const t = useTranslations('brands');
   const [confirmValue, setConfirmValue] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
@@ -949,8 +959,13 @@ function DangerTab({ brand, onDelete }: { brand: Brand; onDelete: () => Promise<
     if (!canDelete) return;
     setIsDeleting(true);
     try {
-      await deleteBrand(brand.id);
-      await onDelete();
+      const result = await deleteBrand(brand.id);
+      if ('error' in result) {
+        toast.error(result.error);
+        setIsDeleting(false);
+        return;
+      }
+      await onDelete(Boolean(result.pending));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete brand.');
       setIsDeleting(false);

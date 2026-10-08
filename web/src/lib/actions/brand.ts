@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
 import { isWithinLimit } from '@/config/plans';
 import { slugify } from '@/lib/slug';
+import { API_BASE_URL } from '@/config/api';
 import type { Brand, BrandDomain } from '@/types';
 
 function mapDomainRow(d: Record<string, unknown>): BrandDomain {
@@ -195,13 +196,37 @@ export async function updateBrand(id: string, updates: UpdateBrandInput): Promis
   );
 }
 
-export async function deleteBrand(id: string): Promise<void> {
+/**
+ * Deletes a brand through the server, which removes its answers in batches
+ * before the brand row: in one statement, a brand of any size outran the
+ * database's 8-second limit for signed-in requests and was never deleted.
+ *
+ * `pending` means the server is still deleting a large brand; it finishes on
+ * its own within minutes. Failures are returned rather than thrown, since a
+ * thrown server-action error reaches the browser without its message.
+ */
+export async function deleteBrand(
+  id: string,
+): Promise<{ deleted: boolean; pending?: boolean } | { error: string }> {
   const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'Not authenticated' };
 
-  const { error } = await supabase.from('brands').delete().eq('id', id);
+  const res = await fetch(`${API_BASE_URL}/api/brands/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    deleted?: boolean;
+    pending?: boolean;
+    error?: string;
+  };
+  if (!res.ok) return { error: body.error || 'Failed to delete the brand.' };
 
-  if (error) throw new Error(error.message);
   revalidatePath('/dashboard/brands');
+  return { deleted: Boolean(body.deleted), pending: Boolean(body.pending) };
 }
 
 /**
