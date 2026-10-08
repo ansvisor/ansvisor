@@ -1793,6 +1793,7 @@
       "saveError": "Failed to save webhook config"
     },
     "loadError": "Failed to load content opportunities",
+    "exportError": "Failed to export opportunities",
     "loadOpportunityError": "Failed to load opportunity",
     "generatedToast": "Generated {count} opportunities",
     "generationFailed": "Generation failed — please try again",

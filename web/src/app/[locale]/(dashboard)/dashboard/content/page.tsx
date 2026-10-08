@@ -56,6 +56,7 @@ import {
   X,
   Settings2,
   Trash2,
+  Download,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -81,8 +82,23 @@ import { WebhookSettingsDialog } from './_webhook-settings';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { OpportunityDetail } from '@/components/content/opportunity-detail';
 import { PAGE_SIZE, TablePager, usePagination } from '@/components/table-pager';
+import { toCsv } from '@/lib/csv';
 
 const GENERATION_STORAGE_KEY = 'aeo:content-generation';
+
+const OPPORTUNITY_EXPORT_HEADERS = [
+  'title',
+  'type',
+  'impact',
+  'score',
+  'status',
+  'related_prompt',
+  'created_at',
+];
+// The export pages through the filtered list; the cap keeps a runaway brand
+// from pinning the browser.
+const EXPORT_PAGE_SIZE = 200;
+const EXPORT_MAX_ROWS = 10_000;
 const GENERATION_TIMEOUT_MS = 3 * 60 * 1000;
 
 interface GenerationJob {
@@ -174,12 +190,14 @@ export default function ContentPage() {
   const t = useTranslations('content');
   const tCommon = useTranslations('common');
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
+  const activeBrandSlug = useBrandStore((s) => s.getActiveBrand()?.slug);
   const { isCloud } = usePlanContext();
 
   const [opportunities, setOpportunities] = useState<ContentOpportunity[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
@@ -219,6 +237,18 @@ export default function ContentPage() {
     `${statusFilter}|${impactFilter}|${typeFilter}|${promptFilter}|${topicFilter}|${debouncedSearch}`,
   );
 
+  // The list's filters and search, shared by the page load and the CSV export.
+  const listFilters = useMemo(() => {
+    const filters: Record<string, string> = {};
+    if (statusFilter !== 'all') filters.status = statusFilter;
+    if (impactFilter !== 'all') filters.impact = impactFilter;
+    if (typeFilter !== 'all') filters.type = typeFilter;
+    if (promptFilter) filters.promptId = promptFilter;
+    if (topicFilter) filters.topicId = topicFilter;
+    if (debouncedSearch.trim()) filters.q = debouncedSearch.trim();
+    return filters;
+  }, [statusFilter, impactFilter, typeFilter, promptFilter, topicFilter, debouncedSearch]);
+
   const loadData = useCallback(
     async (silent = false, isCancelled?: () => boolean) => {
       if (!urlRead) return;
@@ -238,18 +268,8 @@ export default function ContentPage() {
       if (!silent) setLoading(true);
       setSelectedIds(new Set());
       try {
-        const filters: Record<string, string> = {};
-        if (statusFilter !== 'all') filters.status = statusFilter;
-        if (impactFilter !== 'all') filters.impact = impactFilter;
-        if (typeFilter !== 'all') filters.type = typeFilter;
-        if (promptFilter) filters.promptId = promptFilter;
-        if (topicFilter) filters.topicId = topicFilter;
-        if (debouncedSearch.trim()) {
-          filters.q = debouncedSearch.trim();
-        }
-
         const data = await getOpportunities(activeBrandId, {
-          ...filters,
+          ...listFilters,
           limit: PAGE_SIZE,
           offset: pager.start,
           sort: 'score',
@@ -276,18 +296,7 @@ export default function ContentPage() {
         }
       }
     },
-    [
-      urlRead,
-      activeBrandId,
-      statusFilter,
-      impactFilter,
-      typeFilter,
-      promptFilter,
-      topicFilter,
-      pager.start,
-      debouncedSearch,
-      t,
-    ],
+    [urlRead, activeBrandId, listFilters, pager.start, t],
   );
 
   useEffect(() => {
@@ -438,6 +447,51 @@ export default function ContentPage() {
       pollRef.current = false;
     };
   }, [activeBrandId, pollJob]);
+
+  // Every opportunity matching the filters and search, not just this page (#915).
+  const handleExportCsv = async () => {
+    if (!activeBrandId) return;
+    setExporting(true);
+    try {
+      const rows: ContentOpportunity[] = [];
+      for (let offset = 0; offset < EXPORT_MAX_ROWS; offset += EXPORT_PAGE_SIZE) {
+        const page = await getOpportunities(activeBrandId, {
+          ...listFilters,
+          limit: EXPORT_PAGE_SIZE,
+          offset,
+          sort: 'score',
+        });
+        rows.push(...page.opportunities);
+        if (page.opportunities.length < EXPORT_PAGE_SIZE) break;
+      }
+
+      const csv = toCsv(
+        rows.map((o) => ({
+          title: o.title,
+          type: o.type,
+          impact: o.impact,
+          score: Math.round(o.opportunityScore),
+          status: o.status,
+          related_prompt: o.sourceData.promptText ?? (o.sourceData.prompts ?? []).join(' | '),
+          created_at: o.createdAt,
+        })),
+        OPPORTUNITY_EXPORT_HEADERS,
+      );
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const date = new Date().toISOString().slice(0, 10);
+      link.href = url;
+      link.download = `ansvisor_${activeBrandSlug ?? 'brand'}_content-opportunities_${date}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to export opportunities:', err);
+      toast.error(t('exportError'));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleGenerate = async () => {
     if (!activeBrandId) return;
@@ -625,6 +679,20 @@ export default function ContentPage() {
           <p className="text-muted-foreground text-sm">{t('description')}</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            onClick={handleExportCsv}
+            disabled={exporting || loading || total === 0}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+          >
+            {exporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            {tCommon('exportCsv')}
+          </Button>
           <Button
             onClick={() => setWebhookOpen(true)}
             variant="outline"
