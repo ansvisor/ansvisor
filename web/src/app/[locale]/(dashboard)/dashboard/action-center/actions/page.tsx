@@ -18,6 +18,7 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
 import { getActions, type ActionItem } from '@/lib/actions/action-center';
 import { listMembers, type TeamMember } from '@/lib/actions/team';
+import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import {
   ACTION_CATEGORIES,
   ACTION_IMPACTS,
@@ -129,6 +130,35 @@ function ActionsContent({ brand }: { brand: Brand }) {
   const [search, setSearch] = useState('');
   const [focus, setFocus] = useState<CardFocus | null>(null);
 
+  // Filters, sort and search live in the URL (#896) so a refresh keeps them
+  // and a filtered view can be shared. Read after mount; defaults stay out.
+  const [urlRead, setUrlRead] = useState(false);
+  useEffect(() => {
+    setCategory(
+      readUrlChoice<ActionCategory | 'all'>('category', ['all', ...ACTION_CATEGORIES], 'all'),
+    );
+    setImpact(readUrlChoice<ActionImpact | 'all'>('impact', ['all', ...ACTION_IMPACTS], 'all'));
+    setStatus(readUrlChoice<ActionStatus | 'all'>('status', ['all', ...ACTION_STATUSES], 'all'));
+    setAssignee(readUrlParam('assignee') || 'all');
+    setSort(readUrlChoice<ActionSort>('sort', ACTION_SORTS, 'priority'));
+    setSearch(readUrlParam('q'));
+    setUrlRead(true);
+  }, []);
+
+  useEffect(() => {
+    if (!urlRead) return;
+    // Debounced, so typing in search doesn't rewrite the URL on every key.
+    const timer = setTimeout(
+      () =>
+        writeUrlParams(
+          { category, impact, status, assignee, sort, q: search.trim() },
+          { category: 'all', impact: 'all', status: 'all', assignee: 'all', sort: 'priority' },
+        ),
+      300,
+    );
+    return () => clearTimeout(timer);
+  }, [urlRead, category, impact, status, assignee, sort, search]);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // The open drawer lives in the URL (?action=<id>) so that coming BACK from
@@ -160,6 +190,12 @@ function ActionsContent({ brand }: { brand: Brand }) {
       .then(setMembers)
       .catch(() => setMembers([]));
   }, [load]);
+
+  // An assignee from the URL who is no longer on the team falls back to all.
+  useEffect(() => {
+    if (members.length === 0 || assignee === 'all' || assignee === 'unassigned') return;
+    if (!members.some((m) => m.userId === assignee)) setAssignee('all');
+  }, [members, assignee]);
 
   // Restore the drawer named by the URL once the list is in.
   useEffect(() => {

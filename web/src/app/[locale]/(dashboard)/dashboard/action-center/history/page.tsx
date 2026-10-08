@@ -16,6 +16,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { getActionHistory } from '@/lib/actions/action-history';
+import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { actionTexts } from '@/lib/action-center/display';
 import {
   HISTORY_PAGE_SIZE,
@@ -74,6 +75,41 @@ export default function ActionCenterHistoryPage() {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<ActionHistoryItem | null>(null);
 
+  // Filters, sort and search live in the URL (#896) so a refresh keeps them
+  // and a filtered view can be shared. Read after mount, before the first load.
+  const [urlRead, setUrlRead] = useState(false);
+  useEffect(() => {
+    setRange(readUrlChoice('range', RANGE_PRESETS, '30d'));
+    setStatus(readUrlChoice<ActionStatus | 'all'>('status', ['all', ...HISTORY_STATUSES], 'all'));
+    setType(readUrlChoice<ActionCategory | 'all'>('type', ['all', ...ACTION_CATEGORIES], 'all'));
+    setImpact(readUrlChoice<ActionImpact | 'all'>('impact', ['all', ...ACTION_IMPACTS], 'all'));
+    setSource(readUrlChoice<SignalSource | 'all'>('source', ['all', ...SIGNAL_SOURCES], 'all'));
+    setSort(readUrlChoice('sort', HISTORY_SORTS, 'newest'));
+    setSearch(readUrlParam('q'));
+    setUrlRead(true);
+  }, []);
+
+  useEffect(() => {
+    if (!urlRead) return;
+    // Debounced, so typing in search doesn't rewrite the URL on every key.
+    const timer = setTimeout(
+      () =>
+        writeUrlParams(
+          { range, status, type, impact, source, sort, q: search.trim() },
+          {
+            range: '30d',
+            status: 'all',
+            type: 'all',
+            impact: 'all',
+            source: 'all',
+            sort: 'newest',
+          },
+        ),
+      300,
+    );
+    return () => clearTimeout(timer);
+  }, [urlRead, range, status, type, impact, source, sort, search]);
+
   const load = useCallback(async () => {
     if (!brandId) {
       setItems([]);
@@ -94,8 +130,8 @@ export default function ActionCenterHistoryPage() {
   }, [brandId, range]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (urlRead) void load();
+  }, [load, urlRead]);
 
   // Any narrowing puts the reader back on page 1; staying on page 4 of a list
   // that now has one page shows nothing and looks like a failure.

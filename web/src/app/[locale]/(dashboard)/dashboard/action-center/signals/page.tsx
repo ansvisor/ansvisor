@@ -41,6 +41,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { toCsv } from '@/lib/csv';
+import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import type { KpiTrendPoint } from '@/lib/actions/kpis';
 
 const SIGNAL_EXPORT_HEADERS = [
@@ -108,6 +109,35 @@ function SignalsContent({ brand }: { brand: Brand }) {
   const [source, setSource] = useState<SignalSource | 'all'>('all');
   const [search, setSearch] = useState('');
 
+  // Filters and search live in the URL (#896) so a refresh keeps them and a
+  // filtered view can be shared. Read after mount, before the first load.
+  const [urlRead, setUrlRead] = useState(false);
+  useEffect(() => {
+    setDatePreset(readUrlChoice('range', DATE_PRESETS, '30d'));
+    setCategory(
+      readUrlChoice<SignalCategory | 'all'>('category', ['all', ...SIGNAL_CATEGORIES], 'all'),
+    );
+    setImpact(readUrlChoice<SignalImpact | 'all'>('impact', ['all', ...SIGNAL_IMPACTS], 'all'));
+    setStatus(readUrlChoice<SignalStatus | 'all'>('status', ['all', ...SIGNAL_STATUSES], 'all'));
+    setSource(readUrlChoice<SignalSource | 'all'>('source', ['all', ...SIGNAL_SOURCES], 'all'));
+    setSearch(readUrlParam('q'));
+    setUrlRead(true);
+  }, []);
+
+  useEffect(() => {
+    if (!urlRead) return;
+    // Debounced, so typing in search doesn't rewrite the URL on every key.
+    const timer = setTimeout(
+      () =>
+        writeUrlParams(
+          { range: datePreset, category, impact, status, source, q: search.trim() },
+          { range: '30d', category: 'all', impact: 'all', status: 'all', source: 'all' },
+        ),
+      300,
+    );
+    return () => clearTimeout(timer);
+  }, [urlRead, datePreset, category, impact, status, source, search]);
+
   const [selected, setSelected] = useState<Signal | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -145,8 +175,8 @@ function SignalsContent({ brand }: { brand: Brand }) {
   }, [brand.id, dayFrom, dayTo]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (urlRead) void load();
+  }, [load, urlRead]);
 
   // Restore the drawer named by the URL once the list is in. Read via
   // window.location rather than useSearchParams to keep the page out of a
