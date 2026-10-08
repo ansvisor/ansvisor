@@ -1860,7 +1860,13 @@
     "presenceRate": "Presence Rate",
     "gaps": "Content Gaps",
     "suggestions": {
-      "measuredSuggestionsKept": "Search Console and Analytics suggestions were kept — dismiss them individually to hide them for 30 days."
+      "measuredSuggestionsKept": "Search Console and Analytics suggestions were kept — dismiss them individually to hide them for 30 days.",
+      "include": "Include this prompt",
+      "topic": "Topic",
+      "selectTopic": "Select a topic",
+      "platformsAndModels": "Platform & Models",
+      "selectPlatformsAndModels": "Select platform & models",
+      "selectedCount": "{count} selected"
     }
   },
   "competitors": {
