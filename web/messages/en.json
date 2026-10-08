@@ -1714,6 +1714,11 @@
       "allTypes": "All Types",
       "allTopics": "All Topics"
     },
+    "sort": {
+      "label": "Sort",
+      "score": "Highest score",
+      "newest": "Newest"
+    },
     "bulk": {
       "selected": "{count} selected",
       "sendAll": "Send All",

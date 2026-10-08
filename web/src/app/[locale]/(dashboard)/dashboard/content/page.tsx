@@ -83,8 +83,25 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { OpportunityDetail } from '@/components/content/opportunity-detail';
 import { PAGE_SIZE, TablePager, usePagination } from '@/components/table-pager';
 import { toCsv } from '@/lib/csv';
+import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 
 const GENERATION_STORAGE_KEY = 'aeo:content-generation';
+
+// Filters and sort kept in the URL (#897); defaults are left out of it.
+const STATUS_VALUES = [
+  'all',
+  'new',
+  'reviewed',
+  'sent',
+  'in_progress',
+  'done',
+  'dismissed',
+  'archived',
+] as const;
+const IMPACT_VALUES = ['all', 'high', 'medium', 'low'] as const;
+const TYPE_VALUES = ['all', 'owned', 'earned'] as const;
+const SORT_VALUES = ['score', 'newest'] as const;
+const URL_DEFAULTS = { status: 'all', impact: 'all', type: 'all', sort: 'score' };
 
 const OPPORTUNITY_EXPORT_HEADERS = [
   'title',
@@ -204,6 +221,7 @@ export default function ContentPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [impactFilter, setImpactFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [sortOrder, setSortOrder] = useState<string>('score');
   // The prompt filter (#836) lives in the URL as ?prompt=<id> so a filtered
   // view can be linked to. It is read after mount — useSearchParams would need
   // a Suspense boundary around the page — and loading waits for it, so a
@@ -234,7 +252,7 @@ export default function ContentPage() {
   // pager instead of the length of whatever page happens to be loaded.
   const pager = usePagination(
     total,
-    `${statusFilter}|${impactFilter}|${typeFilter}|${promptFilter}|${topicFilter}|${debouncedSearch}`,
+    `${statusFilter}|${impactFilter}|${typeFilter}|${promptFilter}|${topicFilter}|${debouncedSearch}|${sortOrder}`,
   );
 
   // The list's filters and search, shared by the page load and the CSV export.
@@ -246,8 +264,17 @@ export default function ContentPage() {
     if (promptFilter) filters.promptId = promptFilter;
     if (topicFilter) filters.topicId = topicFilter;
     if (debouncedSearch.trim()) filters.q = debouncedSearch.trim();
+    filters.sort = sortOrder;
     return filters;
-  }, [statusFilter, impactFilter, typeFilter, promptFilter, topicFilter, debouncedSearch]);
+  }, [
+    statusFilter,
+    impactFilter,
+    typeFilter,
+    promptFilter,
+    topicFilter,
+    debouncedSearch,
+    sortOrder,
+  ]);
 
   const loadData = useCallback(
     async (silent = false, isCancelled?: () => boolean) => {
@@ -272,7 +299,6 @@ export default function ContentPage() {
           ...listFilters,
           limit: PAGE_SIZE,
           offset: pager.start,
-          sort: 'score',
         });
         if (isCancelled?.()) return;
         setOpportunities(data.opportunities);
@@ -316,8 +342,22 @@ export default function ContentPage() {
     const params = new URLSearchParams(window.location.search);
     setPromptFilter(params.get('prompt') ?? '');
     setOpenOpportunityId(params.get('opportunity'));
+    setStatusFilter(readUrlChoice('status', STATUS_VALUES, 'all'));
+    setImpactFilter(readUrlChoice('impact', IMPACT_VALUES, 'all'));
+    setTypeFilter(readUrlChoice('type', TYPE_VALUES, 'all'));
+    setSortOrder(readUrlChoice('sort', SORT_VALUES, 'score'));
     setUrlRead(true);
   }, []);
+
+  // Keep the filters and sort in the URL once it has been read, so a refresh
+  // or a shared link restores the same view.
+  useEffect(() => {
+    if (!urlRead) return;
+    writeUrlParams(
+      { status: statusFilter, impact: impactFilter, type: typeFilter, sort: sortOrder },
+      URL_DEFAULTS,
+    );
+  }, [urlRead, statusFilter, impactFilter, typeFilter, sortOrder]);
 
   const selectOpportunity = useCallback((opportunityId: string | null) => {
     setOpenOpportunityId(opportunityId);
@@ -459,7 +499,6 @@ export default function ContentPage() {
           ...listFilters,
           limit: EXPORT_PAGE_SIZE,
           offset,
-          sort: 'score',
         });
         rows.push(...page.opportunities);
         if (page.opportunities.length < EXPORT_PAGE_SIZE) break;
@@ -936,6 +975,20 @@ export default function ContentPage() {
                       <SelectItem value="done">{t('status.done')}</SelectItem>
                       <SelectItem value="dismissed">{t('status.dismissed')}</SelectItem>
                       <SelectItem value="archived">{t('status.archived')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={sortOrder} onValueChange={(v) => v && setSortOrder(v)}>
+                    <SelectTrigger className="h-8 w-[130px] text-xs" aria-label={t('sort.label')}>
+                      <SelectValue>
+                        {(value) => t(`sort.${value as 'score' | 'newest'}`)}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SORT_VALUES.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {t(`sort.${value}`)}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
