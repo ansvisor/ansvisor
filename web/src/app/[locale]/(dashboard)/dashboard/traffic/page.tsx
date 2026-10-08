@@ -156,6 +156,7 @@ function DeltaBadge({ current, previous }: { current: number; previous: number }
 }
 
 function SnippetBanner({ trackingCode }: { trackingCode?: string }) {
+  const t = useTranslations('traffic');
   const [copied, setCopied] = useState(false);
   const apiUrl = getPublicApiBaseUrl();
   const snippet = `<script src="${apiUrl}/t.js" data-t="${trackingCode || 'YOUR_TRACKING_CODE'}" defer></script>`;
@@ -173,10 +174,12 @@ function SnippetBanner({ trackingCode }: { trackingCode?: string }) {
       <CardContent className="py-3 px-4 flex items-start gap-3">
         <Code className="h-4 w-4 mt-0.5 shrink-0 text-blue-500" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium">Add this snippet to your website</p>
+          <p className="text-sm font-medium">{t('snippetTitle')}</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Paste this before the closing <code className="text-[11px]">&lt;/head&gt;</code> tag to
-            track AI-referred visits.
+            {t.rich('snippetDescription', {
+              tag: '</head>',
+              code: (chunks) => <code className="text-[11px]">{chunks}</code>,
+            })}
           </p>
           <div className="mt-2 relative">
             <pre className="text-[11px] bg-muted/50 rounded-md px-3 py-2 overflow-x-auto font-mono">
@@ -189,7 +192,7 @@ function SnippetBanner({ trackingCode }: { trackingCode?: string }) {
           size="icon"
           className="shrink-0 h-8 w-8"
           onClick={handleCopy}
-          aria-label="Copy tracking script"
+          aria-label={t('copySnippet')}
         >
           {copied ? (
             <Check className="h-3.5 w-3.5 text-green-500" />
@@ -224,8 +227,9 @@ function TrafficFilterBar({
   platforms: string[];
   isLoading: boolean;
 }) {
+  const t = useTranslations('traffic');
   const hasActiveFilters = filters.platform || filters.search;
-  const platformItems = getPlatformFilterItems(platforms);
+  const platformItems = getPlatformFilterItems(platforms, t('allPlatforms'));
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -233,7 +237,7 @@ function TrafficFilterBar({
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
         <Input
           type="text"
-          placeholder="Search by URL or path..."
+          placeholder={t('searchPlaceholder')}
           value={searchInput}
           onChange={(e) => onSearchInputChange(e.target.value)}
           className="pl-9 h-9 text-sm"
@@ -246,7 +250,7 @@ function TrafficFilterBar({
         items={platformItems}
       >
         <SelectTrigger className="w-40 h-9 text-sm">
-          <SelectValue placeholder="All platforms" />
+          <SelectValue placeholder={t('allPlatforms')} />
         </SelectTrigger>
         <SelectContent>
           {platformItems.map((item) => (
@@ -269,7 +273,7 @@ function TrafficFilterBar({
           disabled={isLoading}
         >
           <X className="h-3.5 w-3.5" />
-          Clear filters
+          {t('clearFilters')}
         </Button>
       )}
     </div>
@@ -332,13 +336,14 @@ function TablePager({
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
 function EmptyLogsState({ hasFilters }: { hasFilters: boolean }) {
+  const t = useTranslations('traffic');
   if (hasFilters) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <Search className="h-10 w-10 text-muted-foreground/40 mb-3" />
-        <h3 className="text-sm font-medium">No matching visits</h3>
+        <h3 className="text-sm font-medium">{t('noMatchingVisitsTitle')}</h3>
         <p className="text-xs text-muted-foreground mt-1 max-w-md">
-          Try adjusting your filters or search terms.
+          {t('noMatchingVisitsDescription')}
         </p>
       </div>
     );
@@ -346,26 +351,25 @@ function EmptyLogsState({ hasFilters }: { hasFilters: boolean }) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <LayoutList className="h-10 w-10 text-muted-foreground/40 mb-3" />
-        <h3 className="text-sm font-medium">No visits yet</h3>
-        <p className="text-xs text-muted-foreground mt-1 max-w-md">
-          Once visitors arrive from AI platforms, their visits will appear here.
-        </p>
+        <h3 className="text-sm font-medium">{t('noVisitsTitle')}</h3>
+        <p className="text-xs text-muted-foreground mt-1 max-w-md">{t('noVisitsDescription')}</p>
       </div>
     );
   }
 }
 
 function NoTrafficForPeriod({ rangeLabel, onReset }: { rangeLabel: string; onReset: () => void }) {
+  const t = useTranslations('traffic');
   return (
     <Card>
       <CardContent className="py-16 text-center">
         <CalendarX2 className="h-10 w-10 mx-auto text-muted-foreground/50" />
-        <h3 className="text-lg font-semibold mt-4">No traffic in this period</h3>
+        <h3 className="text-lg font-semibold mt-4">{t('noTrafficInPeriodTitle')}</h3>
         <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-          No AI-referred visits in the {rangeLabel}. There is traffic data in other time periods.
+          {t('noTrafficInPeriodDescription', { range: rangeLabel })}
         </p>
         <Button variant="outline" size="sm" className="mt-4" onClick={onReset}>
-          Show all data
+          {t('showAllData')}
         </Button>
       </CardContent>
     </Card>
@@ -439,14 +443,13 @@ function getTrendTitle(preset: DatePreset, custom: { from: string; to: string })
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function TrafficPage() {
+  const t = useTranslations('traffic');
   const brand = useBrandStore((s) => s.getActiveBrand());
   if (!brand) {
     return (
       <div className="flex flex-col justify-center items-center py-20 text-center">
-        <h2 className="font-semibold text-lg">No brand selected</h2>
-        <p className="mt-1 text-muted-foreground text-sm">
-          Select a brand to view AI traffic analytics.
-        </p>
+        <h2 className="font-semibold text-lg">{t('noBrandTitle')}</h2>
+        <p className="mt-1 text-muted-foreground text-sm">{t('noBrandDescription')}</p>
       </div>
     );
   }
@@ -454,6 +457,7 @@ export default function TrafficPage() {
 }
 
 function TrafficPageContent({ brand }: { brand: Brand }) {
+  const t = useTranslations('traffic');
   const tCommon = useTranslations('common');
   const [datePreset, setDatePreset] = useState<DatePreset>('7d');
   const [customFrom, setCustomFrom] = useState('');
@@ -559,11 +563,11 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
 
       URL.revokeObjectURL(url);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to export CSV');
+      toast.error(err instanceof Error ? err.message : t('exportError'));
     } finally {
       setIsExporting(false);
     }
-  }, [brand.id, brand.slug, filters.platform, filters.search, dateWindow]);
+  }, [brand.id, brand.slug, filters.platform, filters.search, dateWindow, t]);
 
   const handleFiltersChange = useCallback((patch: Partial<TrafficFilters>) => {
     setPage(0);
@@ -671,11 +675,9 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
         <Card>
           <CardContent className="py-16 text-center">
             <Globe className="h-10 w-10 mx-auto text-muted-foreground/50" />
-            <h3 className="text-lg font-semibold mt-4">No traffic data yet</h3>
+            <h3 className="text-lg font-semibold mt-4">{t('noDataTitle')}</h3>
             <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-              {brand.trackingCode
-                ? 'Once visitors arrive from AI platforms, their visits will appear here.'
-                : 'Add the tracking snippet to your website to start collecting AI-referred traffic data.'}
+              {brand.trackingCode ? t('noVisitsDescription') : t('noDataDescriptionNoSnippet')}
             </p>
           </CardContent>
         </Card>

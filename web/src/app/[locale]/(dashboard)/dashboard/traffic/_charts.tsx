@@ -101,9 +101,12 @@ export function getPlatformName(platform: string): string {
  * show the label of the picked option in its trigger when it is given the options as `items`;
  * without them the trigger shows the raw value, the platform's domain (for example `chatgpt.com`).
  */
-export function getPlatformFilterItems(platforms: string[]): { value: string; label: string }[] {
+export function getPlatformFilterItems(
+  platforms: string[],
+  allLabel: string,
+): { value: string; label: string }[] {
   return [
-    { value: '', label: 'All platforms' },
+    { value: '', label: allLabel },
     ...platforms.map((platform) => ({ value: platform, label: getPlatformName(platform) })),
   ];
 }
