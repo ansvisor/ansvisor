@@ -76,12 +76,28 @@ export async function POST(req: Request) {
     // Empty body is fine — the form may not send one.
   }
 
+  let brandId: string | null = null;
+  if (body.brandId) {
+    const { data: brand } = await supabaseAdmin
+      .from('brands')
+      .select('id')
+      .eq('id', body.brandId)
+      .eq('organization_id', organizationId)
+      .maybeSingle();
+
+    if (!brand) {
+      return NextResponse.json({ error: 'Brand not found' }, { status: 400 });
+    }
+
+    brandId = brand.id;
+  }
+
   const { data, error } = await supabaseAdmin
     .from('agent_conversations')
     .insert({
       user_id: auth.userId,
       organization_id: auth.organizationId,
-      brand_id: body.brandId ?? null,
+      brand_id: brandId,
       title: body.title ?? 'New conversation',
     })
     .select('id, title, brand_id, created_at, updated_at')
