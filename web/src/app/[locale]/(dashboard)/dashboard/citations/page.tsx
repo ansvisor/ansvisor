@@ -23,6 +23,7 @@ import {
   RotateCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { Link } from '@/i18n/navigation';
 import { AddCompetitorButton } from '@/components/citations/add-competitor-button';
@@ -30,6 +31,7 @@ import {
   CitationsFilterBar,
   SourceScopeFilter,
   DEFAULT_CITATIONS_FILTERS as DEFAULT_FILTERS,
+  DATE_PRESETS,
   buildPlatformOptions,
   buildCitationDetailHref,
   getDateRange,
@@ -802,6 +804,45 @@ function triggerDownload(csv: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+const SOURCE_SCOPE_VALUES = ['own', 'competitors', 'third_party', 'all'] as const;
+
+/**
+ * The filters as kept in the URL (#917). The names match the ones the per-URL
+ * detail page reads (buildCitationDetailHref): ?preset=, ?from=/&to= for a
+ * custom range, ?platform=, ?region=, plus ?topic=, ?prompt= and ?scope=.
+ * Defaults are left out; an unknown preset or scope falls back to the default.
+ */
+function filtersFromUrl(): UIFilters {
+  const datePreset = readUrlChoice('preset', DATE_PRESETS, DEFAULT_FILTERS.datePreset);
+  return {
+    datePreset,
+    dateFrom: datePreset === 'custom' ? readUrlParam('from') : '',
+    dateTo: datePreset === 'custom' ? readUrlParam('to') : '',
+    platform: readUrlParam('platform'),
+    region: readUrlParam('region'),
+    topic: readUrlParam('topic'),
+    prompt: readUrlParam('prompt'),
+    sourceScope: readUrlChoice('scope', SOURCE_SCOPE_VALUES, DEFAULT_FILTERS.sourceScope),
+  };
+}
+
+function writeFiltersToUrl(f: UIFilters) {
+  const custom = f.datePreset === 'custom';
+  writeUrlParams(
+    {
+      preset: f.datePreset,
+      from: custom ? f.dateFrom : null,
+      to: custom ? f.dateTo : null,
+      platform: f.platform,
+      region: f.region,
+      topic: f.topic,
+      prompt: f.prompt,
+      scope: f.sourceScope,
+    },
+    { preset: DEFAULT_FILTERS.datePreset, scope: DEFAULT_FILTERS.sourceScope },
+  );
+}
+
 export default function CitationsPage() {
   const t = useTranslations('citations');
   const tCommon = useTranslations('common');
@@ -809,6 +850,17 @@ export default function CitationsPage() {
   const brand = getActiveBrand();
 
   const [filters, setFilters] = useState<UIFilters>(DEFAULT_FILTERS);
+  // Read after mount (window isn't available during the server render); the
+  // loads below wait for it so a linked view doesn't load the defaults first.
+  const [urlRead, setUrlRead] = useState(false);
+  useEffect(() => {
+    setFilters(filtersFromUrl());
+    setUrlRead(true);
+  }, []);
+
+  useEffect(() => {
+    if (urlRead) writeFiltersToUrl(filters);
+  }, [urlRead, filters]);
   const [data, setData] = useState<CitationsOverview | null>(null);
   const [hasAnyCitations, setHasAnyCitations] = useState<boolean | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -987,6 +1039,7 @@ export default function CitationsPage() {
   }, [activeBrandId]);
 
   useEffect(() => {
+    if (!urlRead) return;
     loadData();
     // Invalidate whatever is in flight when the filters change or the page
     // unmounts, so a slow earlier response can't overwrite newer data.
@@ -999,13 +1052,13 @@ export default function CitationsPage() {
       // eslint-disable-next-line react-hooks/exhaustive-deps
       loadGen.current++;
     };
-  }, [loadData]);
+  }, [loadData, urlRead]);
 
   // Lazy-load Competitor Gaps only when its tab is active; re-fetch when the
   // shared scoping filters change while it's open. Uses `gapFilters` (not
   // `apiFilters`) so the domain-list flags don't trigger a no-op refetch.
   useEffect(() => {
-    if (sourceTab !== 'gaps' || !activeBrandId) return;
+    if (sourceTab !== 'gaps' || !activeBrandId || !urlRead) return;
     let cancelled = false;
     setGapsLoading(true);
     getCitationGaps(activeBrandId, gapFilters)
@@ -1021,7 +1074,7 @@ export default function CitationsPage() {
     return () => {
       cancelled = true;
     };
-  }, [sourceTab, activeBrandId, gapFilters]);
+  }, [sourceTab, activeBrandId, gapFilters, urlRead]);
 
   const totals = data?.totals;
   const kpis = useMemo(

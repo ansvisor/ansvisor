@@ -111,6 +111,7 @@ import { getAIProviderDisplayName, resolveAIProvider } from '@/components/ai-pro
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { formatCompactNumber } from '@/lib/format';
 import { toast } from 'sonner';
+import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 
 // ─── Filter Types ─────────────────────────────────────────────────────────────
 
@@ -135,6 +136,42 @@ const DEFAULT_FILTERS: InsightsFilters = {
   model: '',
   topic: '',
 };
+
+/**
+ * The filters as kept in the URL (#917): ?range=, plus ?from=/&to= for a
+ * custom range, and ?region=, ?model=, ?topic=. Defaults are left out, and an
+ * unknown range falls back to the default.
+ */
+function filtersFromUrl(): InsightsFilters {
+  const datePreset = readUrlChoice<DatePreset>(
+    'range',
+    ALL_DATE_PRESETS as readonly DatePreset[],
+    DEFAULT_FILTERS.datePreset,
+  );
+  return {
+    datePreset,
+    dateFrom: datePreset === 'custom' ? readUrlParam('from') : '',
+    dateTo: datePreset === 'custom' ? readUrlParam('to') : '',
+    region: readUrlParam('region'),
+    model: readUrlParam('model'),
+    topic: readUrlParam('topic'),
+  };
+}
+
+function writeFiltersToUrl(f: InsightsFilters) {
+  const custom = f.datePreset === 'custom';
+  writeUrlParams(
+    {
+      range: f.datePreset,
+      from: custom ? f.dateFrom : null,
+      to: custom ? f.dateTo : null,
+      region: f.region,
+      model: f.model,
+      topic: f.topic,
+    },
+    { range: DEFAULT_FILTERS.datePreset },
+  );
+}
 
 const INSIGHT_EXPORT_HEADERS = [
   'created_at',
@@ -988,6 +1025,20 @@ export default function InsightsPage() {
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
+  // The filters are read from the URL after mount (window isn't available
+  // during the server render), and the first load waits for them.
+  const [urlRead, setUrlRead] = useState(false);
+  useEffect(() => {
+    const fromUrl = filtersFromUrl();
+    filtersRef.current = fromUrl;
+    setFilters(fromUrl);
+    setUrlRead(true);
+  }, []);
+
+  useEffect(() => {
+    if (urlRead) writeFiltersToUrl(filters);
+  }, [urlRead, filters]);
+
   // Keyed on the id, not the brand object: the store hands out a new object
   // for the same brand, and a new loadData re-runs the load effect below.
   const brandId = brand?.id;
@@ -1099,22 +1150,28 @@ export default function InsightsPage() {
     [brandId],
   );
 
+  // A brand switch clears the brand-specific filters. Not on the first brand,
+  // so filters linked in the URL survive the initial load.
+  const filteredBrandRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!brand?.id) return;
     setAvailableRegions([]);
     setAvailableModels([]);
     setAvailableTopics([]);
-    const next = { ...filtersRef.current, region: '', model: '', topic: '' };
-    filtersRef.current = next;
-    setFilters(next);
+    if (filteredBrandRef.current && filteredBrandRef.current !== brand.id) {
+      const next = { ...filtersRef.current, region: '', model: '', topic: '' };
+      filtersRef.current = next;
+      setFilters(next);
+    }
+    filteredBrandRef.current = brand.id;
     getTopics(brand.id)
       .then(setAvailableTopics)
       .catch(() => {});
   }, [brand?.id]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (urlRead) loadData();
+  }, [loadData, urlRead]);
 
   // Watch the tracking-run ledger so server-started (cron) runs surface too:
   // the job banner below only knows about jobs this browser started via
@@ -1154,7 +1211,7 @@ export default function InsightsPage() {
       saveTrackingJob({ jobId: urlJobId, brandId: brand.id, startedAt: Date.now() });
       setActiveJobId(urlJobId);
       setIsRunning(true);
-      window.history.replaceState({}, '', window.location.pathname);
+      writeUrlParams({ jobId: null });
       return;
     }
 
