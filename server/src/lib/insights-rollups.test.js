@@ -8,6 +8,15 @@ vi.mock('../config/supabase.js', () => ({
   default: { rpc: (...a) => rpc(...a), from: (...a) => from(...a) },
 }));
 
+// The Citations rollups ride on the same callers; their own behavior is
+// covered in citations-rollups.test.js.
+const refreshCitationsDaily = vi.fn();
+const rebuildQueuedCitationRollups = vi.fn();
+vi.mock('./citations-rollups.js', () => ({
+  refreshCitationsDaily: (...a) => refreshCitationsDaily(...a),
+  rebuildQueuedCitationRollups: (...a) => rebuildQueuedCitationRollups(...a),
+}));
+
 import {
   refreshInsightsDaily,
   refreshForCompletedRun,
@@ -19,6 +28,8 @@ import {
 beforeEach(() => {
   rpc.mockReset();
   from.mockReset();
+  refreshCitationsDaily.mockReset().mockResolvedValue(true);
+  rebuildQueuedCitationRollups.mockReset().mockResolvedValue({ rebuilt: 0, failed: 0 });
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-08-21T05:30:00Z'));
 });
@@ -87,6 +98,12 @@ describe('refreshForCompletedRun', () => {
       p_day_to: '2026-08-21',
     });
   });
+
+  it('refreshes the Citations rollups for the same days', async () => {
+    rpc.mockResolvedValue({ error: null });
+    await refreshForCompletedRun('brand-1', '2026-08-20T23:45:00Z');
+    expect(refreshCitationsDaily).toHaveBeenCalledWith('brand-1', '2026-08-20', '2026-08-21');
+  });
 });
 
 describe('sweepInsightsRollups', () => {
@@ -109,6 +126,18 @@ describe('sweepInsightsRollups', () => {
       p_day_to: '2026-08-21',
     });
     expect(SWEEP_DAYS).toBe(3);
+    expect(refreshCitationsDaily).toHaveBeenCalledWith('b', '2026-08-19', '2026-08-21');
+    expect(rebuildQueuedCitationRollups).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts a brand whose Citations refresh failed', async () => {
+    brandsList([{ id: 'a' }, { id: 'b' }]);
+    rpc.mockResolvedValue({ error: null });
+    refreshCitationsDaily.mockResolvedValueOnce(false);
+
+    const res = await sweepInsightsRollups();
+
+    expect(res).toEqual({ refreshed: 1, failed: 1 });
   });
 
   // One brand's failure must not stop the sweep — the whole point of the

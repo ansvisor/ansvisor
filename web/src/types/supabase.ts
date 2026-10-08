@@ -2825,6 +2825,22 @@ export type Database = {
           total_citations: number
         }[]
       }
+      citations_domains_daily: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_regions?: string[]
+          p_topic_ids?: string[]
+        }
+        Returns: {
+          domain: string
+          models: string[]
+          results_citing: number
+          total_citations: number
+        }[]
+      }
       citations_urls: {
         Args: {
           p_brand_id: string
@@ -2848,6 +2864,28 @@ export type Database = {
           url: string
         }[]
       }
+      citations_urls_daily: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_domains?: string[]
+          p_exclude_domains?: string[]
+          p_limit?: number
+          p_models?: string[]
+          p_regions?: string[]
+          p_topic_ids?: string[]
+        }
+        Returns: {
+          domain: string
+          models: string[]
+          results_citing: number
+          title: string
+          total_citations: number
+          total_urls: number
+          url: string
+        }[]
+      }
       citations_window_stats: {
         Args: {
           p_brand_id: string
@@ -2855,6 +2893,20 @@ export type Database = {
           p_date_to?: string
           p_models?: string[]
           p_prompt_ids?: string[]
+          p_regions?: string[]
+          p_topic_ids?: string[]
+        }
+        Returns: {
+          regions: string[]
+          results: number
+        }[]
+      }
+      citations_window_stats_daily: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
           p_regions?: string[]
           p_topic_ids?: string[]
         }

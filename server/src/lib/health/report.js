@@ -20,16 +20,19 @@ import { sendEmail } from '../email.js';
 export const READ_BUDGET_S = 8;
 export const WARN_AT_S = 4;
 
-/** Reads timed against the probe brand: the page default, then a long window. */
+/**
+ * Reads timed against the probe brand: the page default, then a long window.
+ * Topics goes first: it reads raw results, and timed after the long Citations
+ * windows it measured their cache eviction rather than its own cost.
+ */
 export const PROBES = [
-  { probe: 'citations_window_stats', days: 1 },
-  { probe: 'citations_domains', days: 1 },
-  { probe: 'citations_urls', days: 1 },
-  { probe: 'citations_domains', days: 30 },
-  { probe: 'citations_urls', days: 30 },
+  { probe: 'topics_overview_aggregates', days: null },
+  { probe: 'citations_domains_daily', days: 1 },
+  { probe: 'citations_urls_daily', days: 1 },
+  { probe: 'citations_domains_daily', days: 30 },
+  { probe: 'citations_urls_daily', days: 30 },
   { probe: 'insights_aggregates_daily', days: 30 },
   { probe: 'competitor_aggregates_daily', days: 30 },
-  { probe: 'topics_overview_aggregates', days: null },
 ];
 
 const DAY_MS = 24 * 60 * 60 * 1000;

@@ -62,7 +62,7 @@ describe('collectHealthReport', () => {
     expect(db.rpc).toHaveBeenCalledWith('health_probe', {
       p_user_id: 'user-probe',
       p_brand_id: 'brand-probe',
-      p_probe: 'citations_domains',
+      p_probe: 'citations_domains_daily',
       p_days: 1,
     });
     expect(report.probes.results.every((r) => r.status === 'green')).toBe(true);

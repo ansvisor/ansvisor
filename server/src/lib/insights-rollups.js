@@ -19,6 +19,7 @@
 
 import supabaseAdmin from '../config/supabase.js';
 import { logger } from './logger.js';
+import { rebuildQueuedCitationRollups, refreshCitationsDaily } from './citations-rollups.js';
 
 /** How many trailing days the daily sweep recomputes, today included. */
 export const SWEEP_DAYS = 3;
@@ -49,13 +50,19 @@ export async function refreshInsightsDaily(brandId, dayFrom, dayTo) {
 /**
  * Refresh the days a completed tracking run touched: from the run's start
  * day through today (a run crossing UTC midnight lands rows on two days).
+ * The Citations rollups (00118) are refreshed for the same days.
  */
 export async function refreshForCompletedRun(brandId, runStartedAtIso) {
-  return refreshInsightsDaily(brandId, utcDay(runStartedAtIso), utcDay());
+  const dayFrom = utcDay(runStartedAtIso);
+  const dayTo = utcDay();
+  const ok = await refreshInsightsDaily(brandId, dayFrom, dayTo);
+  await refreshCitationsDaily(brandId, dayFrom, dayTo);
+  return ok;
 }
 
 /**
- * Daily backstop: refresh the trailing SWEEP_DAYS for every brand.
+ * Daily backstop: refresh the trailing SWEEP_DAYS for every brand, Insights
+ * and Citations rollups alike, then rebuild the brands queued by topic moves.
  *
  * Deliberately every brand rather than "brands with recent results" — a
  * refresh over days with no rows deletes nothing and inserts nothing, so the
@@ -80,10 +87,14 @@ export async function sweepInsightsRollups({ days = SWEEP_DAYS } = {}) {
   let failed = 0;
   for (const brand of brands ?? []) {
     const ok = await refreshInsightsDaily(brand.id, dayFrom, dayTo);
-    if (ok) refreshed++;
+    const citationsOk = await refreshCitationsDaily(brand.id, dayFrom, dayTo);
+    if (ok && citationsOk) refreshed++;
     else failed++;
   }
 
   logger.info({ refreshed, failed, dayFrom, dayTo }, '[insights-rollups] sweep complete');
+
+  // Brands whose prompts changed topic get their citation history rebuilt.
+  await rebuildQueuedCitationRollups();
   return { refreshed, failed };
 }

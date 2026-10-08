@@ -12,6 +12,7 @@ import {
 import { classifyArticleType } from '@/lib/citations/article-type';
 import { scopeDomainArgs, type CitationsSourceScope } from '@/lib/citations/scope';
 import { citationUrlMatchKey, normalizeCitationUrl } from '@/lib/citations/normalize';
+import { rollupDayWindow, runDayWindow, type DayWindow } from '@/lib/citations/rollup-window';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -121,6 +122,44 @@ function resolveDateRange(filters: CitationsFilters): { from?: string; to?: stri
   return { from: from.toISOString(), to: to.toISOString() };
 }
 
+// ─── Daily rollups (00118) ────────────────────────────────────────────────────
+
+/**
+ * The UTC day window the daily rollups answer these filters with, or null when
+ * the raw functions must (see rollupDayWindow). The 24h view is the latest
+ * completed run's day(s); before a brand's first run it stays on the raw path.
+ */
+async function rollupWindow(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  filters: CitationsFilters,
+): Promise<DayWindow | null> {
+  const window = rollupDayWindow(filters);
+  if (window !== 'latest-run') return window;
+
+  const { data } = await supabase
+    .from('tracking_runs')
+    .select('started_at, completed_at')
+    .eq('brand_id', brandId)
+    .not('completed_at', 'is', null)
+    .order('completed_at', { ascending: false })
+    .limit(1);
+  const run = data?.[0] as { started_at: string; completed_at: string } | undefined;
+  return run ? runDayWindow(run) : null;
+}
+
+/** Arguments shared by the three daily functions. */
+function dailyArgs(brandId: string, filters: CitationsFilters, window: DayWindow) {
+  return {
+    p_brand_id: brandId,
+    p_day_from: window.dayFrom,
+    p_day_to: window.dayTo,
+    p_models: modelFilterList(filters.platforms) ?? undefined,
+    p_regions: filters.regions && filters.regions.length > 0 ? filters.regions : undefined,
+    p_topic_ids: filters.topicIds && filters.topicIds.length > 0 ? filters.topicIds : undefined,
+  };
+}
+
 // ─── Main action ──────────────────────────────────────────────────────────────
 
 /** URL rows the overview asks for. The table paginates a hundred at a time. */
@@ -208,10 +247,10 @@ export async function getCitationsOverview(
 ): Promise<CitationsOverview> {
   const supabase = await createClient();
 
-  const [{ data: brandDomainRows }, { data: competitorRows }, topicPromptIds] = await Promise.all([
+  const [{ data: brandDomainRows }, { data: competitorRows }, window] = await Promise.all([
     supabase.from('brand_domains').select('domain').eq('brand_id', brandId),
     supabase.from('competitors').select('domain').eq('brand_id', brandId),
-    resolveTopicPromptIds(supabase, filters),
+    rollupWindow(supabase, brandId, filters),
   ]);
 
   const brandDomains = (brandDomainRows ?? [])
@@ -222,7 +261,24 @@ export async function getCitationsOverview(
     .filter(Boolean);
   const classifyCtx = { brandDomains, competitorDomains };
 
-  const args = overviewArgs(brandId, filters, topicPromptIds);
+  // Daily rollups unless the filters need the raw rows (see rollupWindow).
+  // The raw path resolves a topic to its prompts; the rollups carry topic.
+  const rawArgs = window
+    ? null
+    : overviewArgs(brandId, filters, await resolveTopicPromptIds(supabase, filters));
+  const daily = window ? dailyArgs(brandId, filters, window) : null;
+  const readDomains = () =>
+    daily
+      ? supabase.rpc('citations_domains_daily', daily)
+      : supabase.rpc('citations_domains', rawArgs!);
+  const readStats = () =>
+    daily
+      ? supabase.rpc('citations_window_stats_daily', daily)
+      : supabase.rpc('citations_window_stats', rawArgs!);
+  const readUrls = (extra: { p_domains?: string[]; p_exclude_domains?: string[] } = {}) =>
+    daily
+      ? supabase.rpc('citations_urls_daily', { ...daily, p_limit: CITATIONS_URL_LIMIT, ...extra })
+      : supabase.rpc('citations_urls', { ...rawArgs!, p_limit: CITATIONS_URL_LIMIT, ...extra });
   const scoped = Boolean(filters.sourceScope && filters.sourceScope !== 'all');
 
   // A scope is resolved from the classified domain list, so a scoped URL query
@@ -230,9 +286,9 @@ export async function getCitationsOverview(
   // page open starts on — keeps all three in flight, because serializing it
   // would double the default load for a filter nobody selected.
   const [domainRes, statsRes, parallelUrlRes] = await Promise.all([
-    supabase.rpc('citations_domains', args),
-    supabase.rpc('citations_window_stats', args),
-    scoped ? null : supabase.rpc('citations_urls', { ...args, p_limit: CITATIONS_URL_LIMIT }),
+    readDomains(),
+    readStats(),
+    scoped ? null : readUrls(),
   ]);
 
   if (domainRes.error) throw new Error(domainRes.error.message);
@@ -273,13 +329,7 @@ export async function getCitationsOverview(
       };
     });
 
-  const urlRes =
-    parallelUrlRes ??
-    (await supabase.rpc('citations_urls', {
-      ...args,
-      p_limit: CITATIONS_URL_LIMIT,
-      ...scopeDomainArgs(filters.sourceScope, rows),
-    }));
+  const urlRes = parallelUrlRes ?? (await readUrls(scopeDomainArgs(filters.sourceScope, rows)));
   if (urlRes.error) throw new Error(urlRes.error.message);
 
   const urlRowsRaw = (urlRes.data as UrlAggRow[] | null) ?? [];
