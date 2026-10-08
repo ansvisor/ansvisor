@@ -9,7 +9,7 @@
  *   - never invent numbers; always go through a tool first
  *   - respond in plain language, not JSON dumps; act like a 30-second
  *     marketing standup
- *   - if the user doesn't name a brand, ask (single-line clarification)
+ *   - if there is no default brand and the user doesn't name one, ask (single-line clarification)
  *   - acknowledge tool gaps explicitly rather than faking the answer
  *
  * The system prompt is built per-request so today's date can be
