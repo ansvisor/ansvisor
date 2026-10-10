@@ -1513,8 +1513,11 @@
   "auth": {
     "signIn": "Sign in",
     "signUp": "Sign up",
+    "signInSubtitle": "Welcome back! Continue to your workspace.",
+    "signUpSubtitle": "Create your account to start tracking your brand across AI platforms.",
     "signOut": "Sign out",
     "email": "Email",
+    "workEmail": "Work email",
     "password": "Password",
     "forgotPassword": "Forgot password?",
     "noAccount": "Don't have an account?",
@@ -1524,6 +1527,7 @@
     "signingUp": "Creating account...",
     "emailPlaceholder": "you@company.com",
     "passwordPlaceholder": "••••••••",
+    "passwordRuleLength": "At least 8 characters",
     "fullName": "Full name",
     "fullNamePlaceholder": "John Doe",
     "magicLink": "Send magic link",
@@ -1544,7 +1548,7 @@
     "updatingPassword": "Updating...",
     "passwordUpdated": "Your password has been updated. You can now sign in.",
     "orContinueWith": "Or continue with",
-    "termsAgreement": "By continuing, you agree to our",
+    "termsAgreement": "By creating an account, you agree to our",
     "termsOfService": "Terms of Service",
     "and": "and",
     "privacyPolicy": "Privacy Policy",
@@ -1557,6 +1561,32 @@
       "generic": "An error occurred. Please try again.",
       "emailNotConfirmed": "Please verify your email address first. Check your inbox for the confirmation link.",
       "signOutError": "Failed to sign out. Please try again."
+    },
+    "pitch": {
+      "eyebrow": "AI visibility platform",
+      "titleLead": "Improve AI Visibility and",
+      "titleAccent": "Drive Growth.",
+      "subtitle": "Track your brand's presence across ChatGPT, Google AI, Perplexity and more.",
+      "features": {
+        "monitor": {
+          "title": "Monitor brand mentions and citations",
+          "body": "See how and where your brand appears across AI search."
+        },
+        "discover": {
+          "title": "Discover new opportunities",
+          "body": "Find high-potential topics and prompts to grow visibility."
+        },
+        "act": {
+          "title": "Turn insights into growth strategies",
+          "body": "Prioritize actions and track your impact over time."
+        }
+      }
+    },
+    "footer": {
+      "openSource": "Open source under",
+      "mitLicense": "MIT license",
+      "terms": "Terms",
+      "privacy": "Privacy"
     }
   },
   "dashboard": {

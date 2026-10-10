@@ -1,12 +1,5 @@
-import { MarketingHeader } from '@/components/marketing/marketing-header';
-import { MarketingFooter } from '@/components/marketing/marketing-footer';
-
+// Each auth page renders its own frame (AuthShell), since the header's
+// button points at a different page on each.
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex min-h-screen flex-col">
-      <MarketingHeader />
-      <main className="flex-1">{children}</main>
-      <MarketingFooter />
-    </div>
-  );
+  return children;
 }
