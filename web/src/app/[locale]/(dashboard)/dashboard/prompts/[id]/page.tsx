@@ -41,6 +41,9 @@ import { cn } from '@/lib/utils';
 import { formatRegionDisplay } from '@/lib/region';
 import { toast } from 'sonner';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useBrandStore } from '@/stores/use-brand-store';
+import { getOpportunities } from '@/lib/actions/content';
+import type { ContentOpportunity } from '@/types';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { WorkStatusBadge } from '@/components/prompts/work-status';
 import {
@@ -50,7 +53,7 @@ import {
   type PromptTargetUrl,
   type PromptWorkStatus,
 } from '@/lib/actions/prompt-workflow';
-import { NotesCard, TargetUrlsCard } from './_workflow-cards';
+import { NotesCard, TargetUrlsCard, ContentOpportunitiesCard } from './_workflow-cards';
 import { ResponseDetail } from '@/components/results/response-detail';
 import {
   CategoryBadge,
@@ -632,6 +635,10 @@ export default function PromptDetailPage() {
   const promptId = params.id as string;
 
   const { canManage } = useUserRole();
+  const activeBrandId = useBrandStore((s) => s.activeBrandId);
+  const [opportunities, setOpportunities] = useState<ContentOpportunity[]>([]);
+  const [opportunitiesTotal, setOpportunitiesTotal] = useState(0);
+  const [opportunitiesLoading, setOpportunitiesLoading] = useState(true);
 
   const [data, setData] = useState<PromptDetailData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -661,6 +668,32 @@ export default function PromptDetailPage() {
       cancelled = true;
     };
   }, [promptId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (activeBrandId) {
+      setOpportunitiesLoading(true);
+      getOpportunities(activeBrandId, { promptId, status: 'new', limit: 5 })
+        .then((res) => {
+          if (cancelled) return;
+          setOpportunities(res.opportunities);
+          setOpportunitiesTotal(res.total);
+        })
+        .catch((err) => {
+          console.error('Failed to load opportunities:', err);
+          if (cancelled) return;
+          toast.error('Failed to load content opportunities');
+        })
+        .finally(() => {
+          if (!cancelled) setOpportunitiesLoading(false);
+        });
+    } else {
+      setOpportunitiesLoading(false);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrandId, promptId]);
 
   const handleStatusChange = (status: PromptWorkStatus | null) => {
     const previous = workStatus;
@@ -922,18 +955,26 @@ export default function PromptDetailPage() {
 
       {/* Workflow — outside the refetch overlay: notes and target URLs are
           date-window independent. */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <NotesCard
+      <div className="space-y-4">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <NotesCard
+            promptId={promptId}
+            notes={notes}
+            onNotesChange={setNotes}
+            canManage={canManage}
+          />
+          <TargetUrlsCard
+            promptId={promptId}
+            urls={targetUrls}
+            onUrlsChange={setTargetUrls}
+            canManage={canManage}
+          />
+        </div>
+        <ContentOpportunitiesCard
           promptId={promptId}
-          notes={notes}
-          onNotesChange={setNotes}
-          canManage={canManage}
-        />
-        <TargetUrlsCard
-          promptId={promptId}
-          urls={targetUrls}
-          onUrlsChange={setTargetUrls}
-          canManage={canManage}
+          opportunities={opportunities}
+          total={opportunitiesTotal}
+          loading={opportunitiesLoading}
         />
       </div>
     </div>

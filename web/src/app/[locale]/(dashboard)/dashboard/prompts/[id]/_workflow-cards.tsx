@@ -6,6 +6,8 @@
  * the Active badge); these two cards carry the collaboration surface.
  */
 
+import { Link } from '@/i18n/navigation';
+import type { ContentOpportunity } from '@/types';
 import { useCallback, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +16,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
   CheckCircle2,
+  FileText,
+  Lightbulb,
   ExternalLink,
   Link2,
   Loader2,
@@ -340,6 +344,93 @@ export function TargetUrlsCard({
               </li>
             ))}
           </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function ContentOpportunitiesCard({
+  promptId,
+  opportunities,
+  total,
+  loading,
+}: {
+  promptId: string;
+  opportunities: ContentOpportunity[];
+  total: number;
+  loading: boolean;
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm font-medium">
+          <Lightbulb className="h-4 w-4" />
+          Content opportunities
+          {total > 0 && (
+            <Badge variant="secondary" className="text-xs tabular-nums">
+              {total}
+            </Badge>
+          )}
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Opportunities identified for this prompt that are waiting for action.
+        </p>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex justify-center py-4">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          </div>
+        ) : opportunities.length === 0 ? (
+          <p className="py-4 text-center text-xs text-muted-foreground">
+            No open opportunities for this prompt.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <ul className="space-y-1.5">
+              {opportunities.slice(0, 5).map((opp) => (
+                <li
+                  key={opp.id}
+                  className="group flex flex-col gap-1.5 rounded-lg border bg-muted/20 px-3 py-2"
+                >
+                  <Link
+                    href={`/dashboard/content/${opp.id}`}
+                    className="text-sm font-medium hover:underline flex items-center justify-between gap-4"
+                  >
+                    <span className="truncate">{opp.title}</span>
+                  </Link>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-[10px] uppercase">
+                      {opp.impact}
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px] uppercase">
+                      {opp.type}
+                    </Badge>
+                    {opp.brief && (
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] gap-1 bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20"
+                      >
+                        <FileText className="h-3 w-3" />
+                        Brief ready
+                      </Badge>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {total > 5 && (
+              <div className="flex justify-center pt-2">
+                <Link
+                  href={`/dashboard/content?prompt=${promptId}`}
+                  className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  View all {total}
+                </Link>
+              </div>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>
