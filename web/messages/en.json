@@ -62,6 +62,8 @@
     "analytics": "Analytics",
     "optimization": "Optimization",
     "toggleMenu": "Toggle navigation menu",
+    "keepSidebarOpen": "Keep sidebar open",
+    "collapseSidebar": "Collapse sidebar",
     "feedback": "Send feedback"
   },
   "actionCenter": {
