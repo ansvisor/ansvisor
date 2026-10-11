@@ -133,11 +133,39 @@ export function getAIProviderDisplayName(provider: AIProviderKey): string {
 export function AIProviderAvatar({
   provider,
   className,
+  plain = false,
 }: {
   provider: AIProviderKey;
   className?: string;
+  /**
+   * Just the logo, without the round badge, for rows where it stands beside
+   * the platform's name. The ChatGPT mark is drawn white for the dark badge,
+   * so it is inverted to black on a light background.
+   */
+  plain?: boolean;
 }) {
   const meta = AI_PROVIDER_META[provider];
+
+  if (plain && meta.icon) {
+    return (
+      <span
+        title={meta.label}
+        aria-label={meta.label}
+        className={cn('flex h-5 w-5 shrink-0 items-center justify-center', className)}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- same static logo files as the badge below */}
+        <img
+          src={meta.icon}
+          alt=""
+          aria-hidden="true"
+          className={cn(
+            'h-full w-full object-contain',
+            provider === 'openai' && 'invert dark:invert-0',
+          )}
+        />
+      </span>
+    );
+  }
 
   if (!meta.icon) {
     return (

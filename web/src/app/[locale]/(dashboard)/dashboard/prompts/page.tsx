@@ -111,6 +111,10 @@ import { formatRelative } from '@/lib/format-relative';
 import { compareNullsLast, type SortDir } from './prompt-sort';
 import { formatCompactNumber } from '@/lib/format';
 import { usePagination, TablePager } from '@/components/table-pager';
+import {
+  PromptPositionsSheet,
+  type PositionsPrompt,
+} from '@/components/prompts/prompt-positions-sheet';
 
 // ─── Info Tooltip ─────────────────────────────────────────────────────────────
 
@@ -1015,6 +1019,10 @@ export default function PromptsPage() {
     [rangePreset, customFrom, customTo],
   );
   const rangeLabel = promptRangeLabel(rangePreset);
+  // The Positions panel reads the window the table's columns were computed
+  // over. An empty custom range loads the table's 30-day default, so the
+  // panel follows it there too.
+  const positionsWindow = useMemo(() => range ?? resolvePromptRange('30d'), [range]);
 
   // Keep the URL in sync with the active tab so deep links / refreshes land
   // back on the same view. Shallow history update on purpose: the tab is pure
@@ -1620,6 +1628,9 @@ export default function PromptsPage() {
                 volumeByPromptId={volumeByPromptId}
                 visibility={visibility}
                 rangeLabel={rangeLabel}
+                positionsWindow={positionsWindow}
+                positionsPreset={range ? rangePreset : '30d'}
+                regionFilter={regionFilter}
                 onAddPrompt={canManage ? () => setAddPromptOpen(true) : undefined}
                 onEditPrompt={canManage ? setEditingPrompt : undefined}
               />
@@ -2023,6 +2034,9 @@ function AllPromptsTab({
   volumeByPromptId,
   visibility,
   rangeLabel,
+  positionsWindow,
+  positionsPreset,
+  regionFilter,
   onAddPrompt,
   onEditPrompt,
 }: {
@@ -2033,6 +2047,11 @@ function AllPromptsTab({
   visibility: Record<string, PromptVisibilitySummary>;
   /** Selected window, so the column tooltips describe the data on screen. */
   rangeLabel: string;
+  /** Bounds the table's columns were computed over, for the Positions panel. */
+  positionsWindow: { from: string; to?: string };
+  positionsPreset: PromptRangePreset;
+  /** Selected location; empty means every location. */
+  regionFilter: string;
   /** Opens the Add Prompt dialog; undefined when the user can't write (member role). */
   onAddPrompt?: () => void;
   /** Opens the Edit Prompt dialog for a row; undefined hides the pencil (member role). */
@@ -2048,6 +2067,12 @@ function AllPromptsTab({
     new Map(),
   );
   const searchParams = useSearchParams();
+  // The row whose Positions panel is open. It lives here, beside the table,
+  // so closing the panel leaves search, sort, page and scroll as they were.
+  const [positionsFor, setPositionsFor] = useState<PositionsPrompt | null>(null);
+  // A brand switch or reload that drops the prompt must not leave its panel up.
+  const openPositions =
+    positionsFor && prompts.some((p) => p.id === positionsFor.id) ? positionsFor : null;
 
   const statusOf = useCallback(
     (p: Prompt) => (statusOverrides.has(p.id) ? statusOverrides.get(p.id)! : p.workStatus),
@@ -2255,6 +2280,12 @@ function AllPromptsTab({
               >
                 Citations
               </SortableHead>
+              <ColHead
+                className="text-center"
+                tooltip={`Where the brand was mentioned and cited, per AI platform, over the ${rangeLabel}. Available when the prompt has a mention or citation in that window.`}
+              >
+                Positions
+              </ColHead>
               <SortableHead
                 className="text-right"
                 tooltip="Estimated monthly AI prompt volume, from keyword analysis. Empty until analysed."
@@ -2395,6 +2426,22 @@ function AllPromptsTab({
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </TableCell>
+                  <TableCell className="text-center">
+                    {vis && (vis.mentionAnswers > 0 || vis.citationAnswers > 0) ? (
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="outline"
+                        aria-label={`View positions for ${p.text}`}
+                        onClick={() => setPositionsFor({ id: p.id, text: p.text })}
+                      >
+                        <BarChart3 />
+                        See
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">
                     {vol ? (
                       <VolumePill value={vol.estAiVolume} />
@@ -2452,6 +2499,13 @@ function AllPromptsTab({
           </div>
         )}
       </CardContent>
+      <PromptPositionsSheet
+        prompt={openPositions}
+        window={positionsWindow}
+        preset={positionsPreset}
+        region={regionFilter}
+        onClose={() => setPositionsFor(null)}
+      />
     </Card>
   );
 }
