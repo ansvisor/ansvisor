@@ -2238,7 +2238,7 @@ function AllPromptsTab({
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <Table>
+        <Table stickyHeader stickyFirstColumn>
           <TableHeader>
             <TableRow>
               <TableHead className="pl-6">Prompt</TableHead>
