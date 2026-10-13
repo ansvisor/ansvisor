@@ -26,7 +26,6 @@ import {
   Check,
   Copy,
   ExternalLink,
-  MoreHorizontal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Link } from '@/i18n/navigation';
@@ -48,12 +47,6 @@ import {
   ScoreBreakdown,
   TargetPagesCard,
 } from '@/components/content/opportunity-basket';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { opportunityToMarkdown } from '@/lib/content/opportunity-markdown';
 import { toast } from 'sonner';
 
@@ -286,7 +279,6 @@ export function OpportunityDetail({
   const quotaExhausted = quotaLimited && quota.remaining <= 0;
   const actionId = sd.actions?.all ?? Object.values(sd.actions ?? {})[0];
   const canSendToWorkflow = !['dismissed', 'archived'].includes(opportunity.status);
-  const hasMenu = opportunity.status === 'new' || opportunity.status === 'archived';
 
   const handleCopy = async () => {
     try {
@@ -346,12 +338,7 @@ export function OpportunityDetail({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {brief ? (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled
-              className="min-w-40 flex-1 gap-2 disabled:opacity-100"
-            >
+            <Button variant="outline" size="sm" disabled className="gap-2 disabled:opacity-100">
               <Check className="h-4 w-4" />
               {t('briefGenerated')}
             </Button>
@@ -361,7 +348,7 @@ export function OpportunityDetail({
               onClick={handleGenerateBrief}
               disabled={generatingBrief || quotaExhausted}
               title={quotaExhausted ? t('briefLimitReached') : undefined}
-              className="min-w-40 flex-1 gap-2"
+              className="gap-2"
             >
               {generatingBrief ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -373,11 +360,8 @@ export function OpportunityDetail({
           )}
           {opportunity.clusterId &&
             (actionId ? (
-              <Link
-                href={`/dashboard/action-center/actions?action=${actionId}`}
-                className="min-w-40 flex-1"
-              >
-                <Button variant="outline" size="sm" className="w-full gap-2">
+              <Link href={`/dashboard/action-center/actions?action=${actionId}`}>
+                <Button variant="outline" size="sm" className="gap-2">
                   <ExternalLink className="h-4 w-4" />
                   {t('openInActions')}
                 </Button>
@@ -389,7 +373,7 @@ export function OpportunityDetail({
                   size="sm"
                   onClick={() => handleSendToActionCenter()}
                   disabled={sendingAction !== null}
-                  className="min-w-40 flex-1 gap-2"
+                  className="gap-2"
                 >
                   {sendingAction === 'all' ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -406,7 +390,7 @@ export function OpportunityDetail({
               size="sm"
               onClick={handleSend}
               disabled={sending}
-              className="min-w-40 flex-1 gap-2"
+              className="gap-2"
             >
               {sending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -420,45 +404,33 @@ export function OpportunityDetail({
                   : t('sendToWorkflow')}
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCopy}
-            className="min-w-40 flex-1 gap-2"
-          >
+          <Button variant="outline" size="sm" onClick={handleCopy} className="gap-2">
             <Copy className="h-4 w-4" />
             {t('copyAllData')}
           </Button>
-          {hasMenu && (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button variant="outline" size="icon-sm" aria-label={t('moreActions')}>
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                }
-              />
-              <DropdownMenuContent align="end">
-                {opportunity.status === 'new' && (
-                  <DropdownMenuItem onClick={handleReviewed}>
-                    <CheckCheck className="h-4 w-4" />
-                    {t('markReviewed')}
-                  </DropdownMenuItem>
-                )}
-                {opportunity.status === 'archived' && (
-                  <DropdownMenuItem onClick={handleRestore}>
-                    <RotateCcw className="h-4 w-4" />
-                    {t('restore')}
-                  </DropdownMenuItem>
-                )}
-                {opportunity.status === 'new' && (
-                  <DropdownMenuItem variant="destructive" onClick={handleDismiss}>
-                    <X className="h-4 w-4" />
-                    {t('dismiss')}
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+          {/* Status actions sit beside the others: the row has room for them. */}
+          {opportunity.status === 'new' && (
+            <Button variant="outline" size="sm" onClick={handleReviewed} className="gap-2">
+              <CheckCheck className="h-4 w-4" />
+              {t('markReviewed')}
+            </Button>
+          )}
+          {opportunity.status === 'archived' && (
+            <Button variant="outline" size="sm" onClick={handleRestore} className="gap-2">
+              <RotateCcw className="h-4 w-4" />
+              {t('restore')}
+            </Button>
+          )}
+          {opportunity.status === 'new' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDismiss}
+              className="gap-2 text-muted-foreground hover:text-destructive"
+            >
+              <X className="h-4 w-4" />
+              {t('dismiss')}
+            </Button>
           )}
         </div>
       </div>
