@@ -1499,7 +1499,7 @@ export default function PromptsPage() {
             which area, which list, then which period. */}
         {tab === 'all' && (
           <div
-            className="mt-4 inline-flex rounded-lg border p-1"
+            className="mt-4 inline-flex w-fit rounded-lg border p-1"
             role="tablist"
             aria-label="Prompt view"
           >
