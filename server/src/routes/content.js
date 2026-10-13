@@ -270,12 +270,17 @@ router.get('/brand/:brandId', async (req, res) => {
       prompt_id: promptId,
       topic_id: topicId,
       source,
+      created_from: createdFrom,
+      created_to: createdTo,
       limit = 50,
       offset = 0,
       sort = 'score',
     } = req.query;
 
     const search = q ? String(q).replace(/[,()]/g, ' ') : null;
+    const isoOrNull = (v) => (v && Number.isFinite(Date.parse(String(v))) ? String(v) : null);
+    const fromBound = isoOrNull(createdFrom);
+    const toBound = isoOrNull(createdTo);
     const { promptCluster, topicClusters } = await clusterScope(
       brandId,
       promptId ? String(promptId) : null,
@@ -301,6 +306,10 @@ router.get('/brand/:brandId', async (req, res) => {
       if (source) {
         filteredQuery = filteredQuery.eq('source', source);
       }
+
+      // When it was suggested (CONTENT-002's date filter).
+      if (fromBound) filteredQuery = filteredQuery.gte('created_at', fromBound);
+      if (toBound) filteredQuery = filteredQuery.lte('created_at', toBound);
 
       // A prompt matches its cluster's opportunities, own or merged, and any
       // older opportunity written for the prompt itself.
@@ -335,9 +344,9 @@ router.get('/brand/:brandId', async (req, res) => {
       dataQuery = dataQuery.order('opportunity_score', {
         ascending: false,
       });
-    } else if (sort === 'newest') {
+    } else if (sort === 'newest' || sort === 'oldest') {
       dataQuery = dataQuery.order('created_at', {
-        ascending: false,
+        ascending: sort === 'oldest',
       });
     }
 
@@ -352,6 +361,8 @@ router.get('/brand/:brandId', async (req, res) => {
       p_prompt_id: promptId ? String(promptId) : null,
       p_topic_id: topicId ? String(topicId) : null,
       p_source: source ? String(source) : null,
+      p_created_from: fromBound,
+      p_created_to: toBound,
     });
 
     const [{ data, error: dataError, count }, { data: aggregateData, error: aggregateError }] =

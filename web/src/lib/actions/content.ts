@@ -114,6 +114,9 @@ export async function getOpportunities(
     promptId?: string;
     topicId?: string;
     source?: string;
+    /** Suggested on or after / before (ISO), CONTENT-002. */
+    createdFrom?: string;
+    createdTo?: string;
     limit?: number;
     offset?: number;
     sort?: string;
@@ -138,6 +141,8 @@ export async function getOpportunities(
   if (filters?.promptId) params.set('prompt_id', filters.promptId);
   if (filters?.topicId) params.set('topic_id', filters.topicId);
   if (filters?.source) params.set('source', filters.source);
+  if (filters?.createdFrom) params.set('created_from', filters.createdFrom);
+  if (filters?.createdTo) params.set('created_to', filters.createdTo);
   if (filters?.limit) params.set('limit', String(filters.limit));
   if (filters?.offset) params.set('offset', String(filters.offset));
   if (filters?.sort) params.set('sort', filters.sort);

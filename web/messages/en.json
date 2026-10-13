@@ -1757,6 +1757,23 @@
       "allTopics": "All Topics",
       "allSources": "All Sources"
     },
+    "suggestedRange": {
+      "label": "Suggested",
+      "all": "All time",
+      "month": "This month",
+      "last30": "Last 30 days",
+      "custom": "Custom",
+      "from": "From",
+      "to": "To"
+    },
+    "newSinceVisit": "New since your last visit",
+    "scope": {
+      "group": "{topic} · {count, plural, one {# prompt} other {# prompts}}",
+      "groupNoTopic": "{count, plural, one {# prompt} other {# prompts}}",
+      "single": "Single prompt",
+      "groupHint": "Built for a group of related prompts that one piece of content can answer",
+      "singleHint": "Built for one prompt"
+    },
     "source": {
       "label": "Source",
       "system": "System",
@@ -1801,7 +1818,8 @@
     "sort": {
       "label": "Sort",
       "score": "Highest score",
-      "newest": "Newest"
+      "newest": "Newest",
+      "oldest": "Oldest"
     },
     "bulk": {
       "selected": "{count} selected",
@@ -1817,6 +1835,7 @@
     },
     "table": {
       "action": "Action",
+      "suggested": "Suggested",
       "type": "Type",
       "impact": "Impact",
       "score": "Score",

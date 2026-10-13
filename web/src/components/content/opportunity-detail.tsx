@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -57,6 +57,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { opportunityToMarkdown } from '@/lib/content/opportunity-markdown';
 import { toast } from 'sonner';
+import { suggestedDate } from '@/lib/suggested-date';
 
 export const IMPACT_COLORS: Record<string, string> = {
   high: 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
@@ -124,6 +125,7 @@ export function OpportunityDetail({
   onChanged?: () => void;
 }) {
   const t = useTranslations('content');
+  const locale = useLocale();
 
   const [opportunity, setOpportunity] = useState<ContentOpportunity | null>(null);
   const [loading, setLoading] = useState(true);
@@ -336,9 +338,13 @@ export function OpportunityDetail({
           <Badge variant="outline" className="text-xs tabular-nums">
             Score: {Math.round(opportunity.opportunityScore)}
           </Badge>
-          <span className="text-xs text-muted-foreground ml-auto flex items-center gap-1.5">
+          {/* The UI's language, not the browser's: an English page showed "25 Eyl". */}
+          <span
+            className="text-xs text-muted-foreground ml-auto flex items-center gap-1.5"
+            title={suggestedDate(opportunity.createdAt, locale).full}
+          >
             <Clock className="h-3.5 w-3.5" />
-            {new Date(opportunity.createdAt).toLocaleDateString(undefined, {
+            {new Date(opportunity.createdAt).toLocaleDateString(locale, {
               day: 'numeric',
               month: 'short',
               year: 'numeric',

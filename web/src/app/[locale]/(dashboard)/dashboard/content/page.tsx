@@ -83,6 +83,7 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { OpportunityDetail } from '@/components/content/opportunity-detail';
 import { ContentUsageCard } from '@/components/content/content-usage-card';
 import { hasContentQuota, onDemandMax, type ContentUsage } from '@/lib/content-usage';
+import { suggestedBounds, suggestedDate, type SuggestedRange } from '@/lib/suggested-date';
 import {
   NewOpportunitiesDialog,
   type NewOpportunitiesInput,
@@ -108,8 +109,40 @@ const STATUS_VALUES = [
 const IMPACT_VALUES = ['all', 'high', 'medium', 'low'] as const;
 const TYPE_VALUES = ['all', 'owned', 'earned'] as const;
 const SOURCE_VALUES = ['all', 'system', 'manual', 'prompt'] as const;
-const SORT_VALUES = ['score', 'newest'] as const;
-const URL_DEFAULTS = { status: 'all', impact: 'all', type: 'all', source: 'all', sort: 'score' };
+const SORT_VALUES = ['score', 'newest', 'oldest'] as const;
+const SUGGESTED_VALUES = ['all', 'month', 'last30', 'custom'] as const;
+const URL_DEFAULTS = {
+  status: 'all',
+  impact: 'all',
+  type: 'all',
+  source: 'all',
+  suggested: 'all',
+  from: '',
+  to: '',
+  sort: 'score',
+};
+
+/** When the list was last opened, per brand: rows suggested since get a dot. */
+const LAST_VISIT_KEY = 'aeo:content-last-visit:';
+
+/**
+ * The visit before this one, read once per brand per page load and cached,
+ * so running the effect twice (React's development mode does) doesn't read
+ * back the visit it just recorded.
+ */
+const visitBefore = new Map<string, number | null>();
+function previousVisit(brandId: string): number | null {
+  if (!visitBefore.has(brandId)) {
+    let previous: number | null = null;
+    try {
+      const key = LAST_VISIT_KEY + brandId;
+      previous = Number(localStorage.getItem(key)) || null;
+      localStorage.setItem(key, String(Date.now()));
+    } catch {}
+    visitBefore.set(brandId, previous);
+  }
+  return visitBefore.get(brandId) ?? null;
+}
 
 /** Used when the month's usage couldn't be read; the server still caps it. */
 const FALLBACK_REQUEST_MAX = 3;
@@ -121,7 +154,7 @@ const OPPORTUNITY_EXPORT_HEADERS = [
   'score',
   'status',
   'related_prompt',
-  'created_at',
+  'suggested_at',
 ];
 // The export pages through the filtered list; the cap keeps a runaway brand
 // from pinning the browser.
@@ -207,6 +240,57 @@ function KpiCard({
   );
 }
 
+/** When it was suggested, relative for a week, with the full date on hover. */
+function SuggestedCell({
+  createdAt,
+  locale,
+  isNew,
+  newLabel,
+}: {
+  createdAt: string;
+  locale: string;
+  isNew: boolean;
+  newLabel: string;
+}) {
+  const { label, full } = suggestedDate(createdAt, locale);
+  return (
+    <span className="inline-flex items-center gap-1.5" title={full}>
+      {isNew && (
+        <span
+          className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
+          role="img"
+          aria-label={newLabel}
+          title={newLabel}
+        />
+      )}
+      {label}
+    </span>
+  );
+}
+
+/**
+ * What an opportunity was built for: a group of related prompts in a topic
+ * (cluster opportunities, #857) or a single prompt (the older generator).
+ */
+function OpportunityScope({ opp }: { opp: ContentOpportunity }) {
+  const t = useTranslations('content.scope');
+  const count = opp.sourceData?.prompts?.length ?? 0;
+  const group = !!opp.clusterId;
+  const label = group
+    ? opp.sourceData?.topicName
+      ? t('group', { topic: opp.sourceData.topicName, count })
+      : t('groupNoTopic', { count })
+    : t('single');
+  return (
+    <span
+      className="mr-1.5 font-medium text-foreground/70"
+      title={group ? t('groupHint') : t('singleHint')}
+    >
+      {label} ·
+    </span>
+  );
+}
+
 const ALL_PROMPTS = '__all__';
 
 interface PromptFilterItem {
@@ -235,6 +319,12 @@ export default function ContentPage() {
   const [impactFilter, setImpactFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
+  // When it was suggested (CONTENT-002); custom takes YYYY-MM-DD bounds.
+  const [suggestedRange, setSuggestedRange] = useState<SuggestedRange>('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  // The previous visit, read once per brand before this one is recorded.
+  const [lastVisit, setLastVisit] = useState<number | null>(null);
   const [sortOrder, setSortOrder] = useState<string>('score');
   // The prompt filter (#836) lives in the URL as ?prompt=<id> so a filtered
   // view can be linked to. It is read after mount — useSearchParams would need
@@ -275,7 +365,7 @@ export default function ContentPage() {
   // pager instead of the length of whatever page happens to be loaded.
   const pager = usePagination(
     total,
-    `${statusFilter}|${impactFilter}|${typeFilter}|${sourceFilter}|${promptFilter}|${topicFilter}|${debouncedSearch}|${sortOrder}`,
+    `${statusFilter}|${impactFilter}|${typeFilter}|${sourceFilter}|${suggestedRange}|${customFrom}|${customTo}|${promptFilter}|${topicFilter}|${debouncedSearch}|${sortOrder}`,
   );
 
   // The list's filters and search, shared by the page load and the CSV export.
@@ -285,6 +375,9 @@ export default function ContentPage() {
     if (impactFilter !== 'all') filters.impact = impactFilter;
     if (typeFilter !== 'all') filters.type = typeFilter;
     if (sourceFilter !== 'all') filters.source = sourceFilter;
+    const bounds = suggestedBounds(suggestedRange, { from: customFrom, to: customTo });
+    if (bounds.from) filters.createdFrom = bounds.from;
+    if (bounds.to) filters.createdTo = bounds.to;
     if (promptFilter) filters.promptId = promptFilter;
     if (topicFilter) filters.topicId = topicFilter;
     if (debouncedSearch.trim()) filters.q = debouncedSearch.trim();
@@ -295,6 +388,9 @@ export default function ContentPage() {
     impactFilter,
     typeFilter,
     sourceFilter,
+    suggestedRange,
+    customFrom,
+    customTo,
     promptFilter,
     topicFilter,
     debouncedSearch,
@@ -371,6 +467,9 @@ export default function ContentPage() {
     setImpactFilter(readUrlChoice('impact', IMPACT_VALUES, 'all'));
     setTypeFilter(readUrlChoice('type', TYPE_VALUES, 'all'));
     setSourceFilter(readUrlChoice('source', SOURCE_VALUES, 'all'));
+    setSuggestedRange(readUrlChoice('suggested', SUGGESTED_VALUES, 'all'));
+    setCustomFrom(params.get('from') ?? '');
+    setCustomTo(params.get('to') ?? '');
     setSortOrder(readUrlChoice('sort', SORT_VALUES, 'score'));
     setUrlRead(true);
   }, []);
@@ -385,11 +484,31 @@ export default function ContentPage() {
         impact: impactFilter,
         type: typeFilter,
         source: sourceFilter,
+        suggested: suggestedRange,
+        from: suggestedRange === 'custom' ? customFrom : '',
+        to: suggestedRange === 'custom' ? customTo : '',
         sort: sortOrder,
       },
       URL_DEFAULTS,
     );
-  }, [urlRead, statusFilter, impactFilter, typeFilter, sourceFilter, sortOrder]);
+  }, [
+    urlRead,
+    statusFilter,
+    impactFilter,
+    typeFilter,
+    sourceFilter,
+    suggestedRange,
+    customFrom,
+    customTo,
+    sortOrder,
+  ]);
+
+  // Rows suggested since the previous visit get a dot; this visit is
+  // recorded for the next one. Storage failures only lose the dots.
+  useEffect(() => {
+    if (!activeBrandId) return;
+    setLastVisit(previousVisit(activeBrandId));
+  }, [activeBrandId]);
 
   const selectOpportunity = useCallback((opportunityId: string | null) => {
     setOpenOpportunityId(opportunityId);
@@ -569,7 +688,8 @@ export default function ContentPage() {
           score: Math.round(o.opportunityScore),
           status: o.status,
           related_prompt: o.sourceData.promptText ?? (o.sourceData.prompts ?? []).join(' | '),
-          created_at: o.createdAt,
+          // ISO 8601, whatever the UI language (CONTENT-002).
+          suggested_at: new Date(o.createdAt).toISOString(),
         })),
         OPPORTUNITY_EXPORT_HEADERS,
       );
@@ -793,6 +913,7 @@ export default function ContentPage() {
     impactFilter !== 'all' ||
     typeFilter !== 'all' ||
     sourceFilter !== 'all' ||
+    suggestedRange !== 'all' ||
     promptFilter !== '' ||
     topicFilter !== '' ||
     search.trim() !== '';
@@ -802,6 +923,9 @@ export default function ContentPage() {
     setImpactFilter('all');
     setTypeFilter('all');
     setSourceFilter('all');
+    setSuggestedRange('all');
+    setCustomFrom('');
+    setCustomTo('');
     selectPrompt('');
     setTopicFilter('');
     setSearch('');
@@ -1066,6 +1190,47 @@ export default function ContentPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <Select
+                    value={suggestedRange}
+                    onValueChange={(v) => v && setSuggestedRange(v as SuggestedRange)}
+                  >
+                    <SelectTrigger
+                      className="h-8 w-[130px] text-xs"
+                      aria-label={t('suggestedRange.label')}
+                    >
+                      <SelectValue>
+                        {(value) => t(`suggestedRange.${value as SuggestedRange}`)}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SUGGESTED_VALUES.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {t(`suggestedRange.${value}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {suggestedRange === 'custom' && (
+                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Input
+                        type="date"
+                        aria-label={t('suggestedRange.from')}
+                        value={customFrom}
+                        max={customTo || undefined}
+                        onChange={(e) => setCustomFrom(e.target.value)}
+                        className="h-8 w-[140px] text-xs"
+                      />
+                      –
+                      <Input
+                        type="date"
+                        aria-label={t('suggestedRange.to')}
+                        value={customTo}
+                        min={customFrom || undefined}
+                        onChange={(e) => setCustomTo(e.target.value)}
+                        className="h-8 w-[140px] text-xs"
+                      />
+                    </span>
+                  )}
                   <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
                     <SelectTrigger className="h-8 w-[130px] text-xs">
                       <SelectValue>
@@ -1088,7 +1253,7 @@ export default function ContentPage() {
                   <Select value={sortOrder} onValueChange={(v) => v && setSortOrder(v)}>
                     <SelectTrigger className="h-8 w-[130px] text-xs" aria-label={t('sort.label')}>
                       <SelectValue>
-                        {(value) => t(`sort.${value as 'score' | 'newest'}`)}
+                        {(value) => t(`sort.${value as 'score' | 'newest' | 'oldest'}`)}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
@@ -1228,6 +1393,10 @@ export default function ContentPage() {
                       />
                     </TableHead>
                     <TableHead className="pl-6 w-[40%]">{t('table.action')}</TableHead>
+                    {/* Hidden on narrower screens, where the action column needs the room. */}
+                    <TableHead className="hidden whitespace-nowrap xl:table-cell">
+                      {t('table.suggested')}
+                    </TableHead>
                     <TableHead className="text-center">{t('table.type')}</TableHead>
                     <TableHead className="text-center">{t('table.impact')}</TableHead>
                     <TableHead className="text-center">{t('table.score')}</TableHead>
@@ -1242,6 +1411,9 @@ export default function ContentPage() {
                       <TableCell className="pl-6">
                         <Skeleton className="h-4 w-4/5" />
                         <Skeleton className="mt-1.5 h-3 w-3/5" />
+                      </TableCell>
+                      <TableCell className="hidden xl:table-cell">
+                        <Skeleton className="h-3 w-12" />
                       </TableCell>
                       <TableCell className="text-center">
                         <Skeleton className="mx-auto h-5 w-14" />
@@ -1300,12 +1472,19 @@ export default function ContentPage() {
                             )}
                             {opp.title}
                           </p>
-                          {opp.description && (
-                            <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
-                              {opp.description}
-                            </p>
-                          )}
+                          <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                            <OpportunityScope opp={opp} />
+                            {opp.description}
+                          </p>
                         </button>
+                      </TableCell>
+                      <TableCell className="hidden whitespace-nowrap text-xs text-muted-foreground xl:table-cell">
+                        <SuggestedCell
+                          createdAt={opp.createdAt}
+                          locale={locale}
+                          isNew={lastVisit !== null && Date.parse(opp.createdAt) > lastVisit}
+                          newLabel={t('newSinceVisit')}
+                        />
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex flex-col items-center gap-1">
