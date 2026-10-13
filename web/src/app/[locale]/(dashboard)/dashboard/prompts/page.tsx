@@ -4,7 +4,8 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
-import { Link } from '@/i18n/navigation';
+import { Link, usePathname } from '@/i18n/navigation';
+import { PROMPTS_BASE, sectionFor, sectionFromPath } from '@/lib/prompts-routes';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -970,8 +971,12 @@ export default function PromptsPage() {
     (s) => s.brands.find((brand) => brand.id === s.activeBrandId) ?? null,
   );
   const searchParams = useSearchParams();
+  // On /dashboard/prompts/{tracked,suggestions,fan-outs,insights} the route
+  // names the view (PROMPT-001); ?tab= / ?view= are the older links' shape.
+  const section = sectionFromPath(usePathname());
 
   const initialTab: TabId = (() => {
+    if (section) return section.tab;
     const raw = searchParams.get('tab');
     if ((VALID_TABS as readonly string[]).includes(raw ?? '')) return raw as TabId;
     return 'all';
@@ -982,6 +987,7 @@ export default function PromptsPage() {
   // what could be. A sub-tab rather than a fourth top-level tab, because the
   // date range, the Add prompt action and the export all belong to both.
   const initialView: PromptsView = (() => {
+    if (section) return section.view;
     const raw = searchParams.get('view');
     if ((PROMPT_VIEWS as readonly string[]).includes(raw ?? '')) return raw as PromptsView;
     // Links written before the split point at the suggestions card's anchor.
@@ -1003,7 +1009,9 @@ export default function PromptsPage() {
   const [rangePreset, setRangePreset] = useState<PromptRangePreset>(initialRange);
   // Which tracked location the health columns describe. Empty = every
   // location blended, which is what the table has always shown (#691).
-  const [regionFilter, setRegionFilter] = useState('');
+  // In the URL like the range, so it survives moving between the Prompts
+  // routes from the sidebar (PROMPT-001).
+  const [regionFilter, setRegionFilter] = useState(() => searchParams.get('region') ?? '');
   const [availableRegions, setAvailableRegions] = useState<string[]>([]);
   const [customFrom, setCustomFrom] = useState(() => searchParams.get('from') ?? '');
   const [customTo, setCustomTo] = useState(() => searchParams.get('to') ?? '');
@@ -1031,38 +1039,37 @@ export default function PromptsPage() {
   // blocked Next's server-action queue, so the page's data fetch never even
   // dispatched (the "prompts table spins forever" bug). replaceState updates
   // the URL with no server request; Next's router syncs with the History API.
+  //
+  // The tab and view live in the path (PROMPT-001): /dashboard/prompts/tracked,
+  // /suggestions, /fan-outs, /insights — the routes the sidebar's Prompts
+  // submenu links to, so the sidebar and these tabs always agree. The path is
+  // rewritten in place under any locale prefix.
   useEffect(() => {
-    const currentTab = searchParams.get('tab');
-    const currentRange = searchParams.get('range');
     // The default range stays out of the URL so shared links keep their
     // existing shape unless the user actually picked a different window.
-    const wantRange = rangePreset === DEFAULT_PROMPT_RANGE_PRESET ? null : rangePreset;
-    const wantView = view === 'tracked' ? null : view;
-    const wantFrom = rangePreset === 'custom' && customFrom ? customFrom : null;
-    const wantTo = rangePreset === 'custom' && customTo ? customTo : null;
-    if (
-      currentTab === tab &&
-      searchParams.get('view') === wantView &&
-      currentRange === wantRange &&
-      searchParams.get('from') === wantFrom &&
-      searchParams.get('to') === wantTo
-    ) {
+    const want: Record<string, string | null> = {
+      range: rangePreset === DEFAULT_PROMPT_RANGE_PRESET ? null : rangePreset,
+      from: rangePreset === 'custom' && customFrom ? customFrom : null,
+      to: rangePreset === 'custom' && customTo ? customTo : null,
+      region: regionFilter || null,
+      tab: null,
+      view: null,
+    };
+    const { pathname, search, hash } = window.location;
+    const at = pathname.indexOf(PROMPTS_BASE);
+    const wantPath = `${at > 0 ? pathname.slice(0, at) : ''}${sectionFor(tab, view).href}`;
+    const params = new URLSearchParams(search);
+    if (pathname === wantPath && Object.entries(want).every(([k, v]) => params.get(k) === v)) {
       return;
     }
-    const params = new URLSearchParams(Array.from(searchParams.entries()));
-    params.set('tab', tab);
-    if (wantView) params.set('view', wantView);
-    else params.delete('view');
-    if (wantRange) params.set('range', wantRange);
-    else params.delete('range');
-    if (wantFrom) params.set('from', wantFrom);
-    else params.delete('from');
-    if (wantTo) params.set('to', wantTo);
-    else params.delete('to');
-    // Keep the hash: deep links like #prompt-opportunities arrive without a
-    // tab param, and this sync must not strip their anchor from the URL.
-    window.history.replaceState(null, '', `?${params.toString()}${window.location.hash}`);
-  }, [tab, view, rangePreset, customFrom, customTo, searchParams]);
+    for (const [k, v] of Object.entries(want)) {
+      if (v) params.set(k, v);
+      else params.delete(k);
+    }
+    const query = params.toString();
+    // Keep the hash: deep links like #prompt-opportunities must keep their anchor.
+    window.history.replaceState(null, '', `${wantPath}${query ? `?${query}` : ''}${hash}`);
+  }, [tab, view, rangePreset, customFrom, customTo, regionFilter, searchParams]);
 
   // Deep link from the Insights Recommendations row (#459): the target card
   // only exists once the Insights tab's volume data has rendered, so a bare

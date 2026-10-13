@@ -64,7 +64,12 @@
     "toggleMenu": "Toggle navigation menu",
     "keepSidebarOpen": "Keep sidebar open",
     "collapseSidebar": "Collapse sidebar",
-    "feedback": "Send feedback"
+    "feedback": "Send feedback",
+    "trackedPrompts": "Tracked Prompts",
+    "promptSuggestions": "Prompt Suggestions",
+    "queryFanouts": "Query Fan-outs",
+    "promptsInsights": "Insights",
+    "toggleSubmenu": "Show or hide {label}"
   },
   "actionCenter": {
     "tabs": {

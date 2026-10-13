@@ -24,9 +24,17 @@ import type { Feature } from '@/config/plans';
  */
 export type BrandPrefKey = 'shoppingModeEnabled';
 
+/** A submenu entry under a NavItem (PROMPT-001). */
+export interface NavChild {
+  title: string;
+  href: string;
+}
+
 export interface NavItem {
   title: string;
   href: string;
+  /** Opens as a submenu under the item; the item itself then toggles it. */
+  children?: NavChild[];
   icon: React.ComponentType<{ className?: string }>;
   badge?: string;
   disabled?: boolean;
@@ -68,6 +76,12 @@ export const dashboardNav: NavGroup[] = [
         title: 'Prompts',
         href: '/dashboard/prompts',
         icon: Globe,
+        children: [
+          { title: 'Tracked Prompts', href: '/dashboard/prompts/tracked' },
+          { title: 'Prompt Suggestions', href: '/dashboard/prompts/suggestions' },
+          { title: 'Query Fan-outs', href: '/dashboard/prompts/fan-outs' },
+          { title: 'Prompts Insights', href: '/dashboard/prompts/insights' },
+        ],
       },
       {
         title: 'Topics',

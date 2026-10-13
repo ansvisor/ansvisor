@@ -703,6 +703,17 @@ export async function addPromptToBrand(
   return { prompt: result.prompt };
 }
 
+/** How many prompts the brand tracks — the count beside Tracked Prompts in the sidebar (PROMPT-001). */
+export async function getTrackedPromptCount(brandId: string): Promise<number> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from('prompts')
+    .select('id, prompt_sets!inner(brand_id)', { count: 'exact', head: true })
+    .eq('prompt_sets.brand_id', brandId);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
 export async function deletePrompt(id: string): Promise<void> {
   const supabase = await createClient();
 
