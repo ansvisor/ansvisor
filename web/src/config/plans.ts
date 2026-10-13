@@ -41,6 +41,12 @@ export interface PlanLimits {
    */
   maxBriefGenerations: number;
   /**
+   * New content opportunities per month (CONTENT-001), counted separately
+   * from briefs. -1 = unlimited. Enterprise is -1 by default and set per
+   * customer via organizations.plan_overrides.maxOpportunitiesPerMonth.
+   */
+  maxOpportunitiesPerMonth: number;
+  /**
    * Monthly Site Audit runs. -1 = unlimited (self-hosted / enterprise).
    * Starter 100, Growth 500.
    */
@@ -81,6 +87,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxDomainsPerBrand: -1,
       maxVolumeAnalyses: -1,
       maxBriefGenerations: -1,
+      maxOpportunitiesPerMonth: -1,
       maxSiteAudits: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
@@ -115,6 +122,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxDomainsPerBrand: 3,
       maxVolumeAnalyses: 4,
       maxBriefGenerations: 10,
+      maxOpportunitiesPerMonth: 10,
       maxSiteAudits: 100,
       maxDailyOnDemand: 3,
       onDemandCooldownMinutes: 15,
@@ -153,6 +161,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxDomainsPerBrand: 10,
       maxVolumeAnalyses: 10,
       maxBriefGenerations: 50,
+      maxOpportunitiesPerMonth: 50,
       maxSiteAudits: 500,
       maxDailyOnDemand: 10,
       onDemandCooldownMinutes: 5,
@@ -189,6 +198,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxVolumeAnalyses: -1,
       // Per-customer: override via organizations.plan_overrides in the DB.
       maxBriefGenerations: -1,
+      maxOpportunitiesPerMonth: -1,
       maxSiteAudits: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,

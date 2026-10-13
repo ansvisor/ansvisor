@@ -27,6 +27,11 @@ import { loadClusterOpportunities } from './open-opportunities.js';
 import { loadClusters } from './prompt-clusters.js';
 import { reopenStrengthened } from './opportunity-reopen.js';
 import {
+  claimOpportunitySlots,
+  linkOpportunitySlots,
+  releaseOpportunitySlots,
+} from './plan-guard.js';
+import {
   ASSET_TYPES,
   DECISIONS,
   MAX_SUPPORTING_ASSETS,
@@ -161,7 +166,7 @@ export async function generateContentOpportunities(brandId, { model, onProgress 
 
   const { data: brand } = await supabaseAdmin
     .from('brands')
-    .select('id, name, industry, language')
+    .select('id, name, industry, language, organization_id')
     .eq('id', brandId)
     .single();
   if (!brand) return { generated: 0, merged: 0 };
@@ -239,14 +244,28 @@ export async function generateContentOpportunities(brandId, { model, onProgress 
   }
 
   const candidates = clusters.map((c) => ({ id: c.id, topicId: c.topic_id, ...measure([c.id]) }));
-  const picked = pickClusters(candidates, coveredClusterIds(existing));
-  if (!picked.length) {
+  const wanted = pickClusters(candidates, coveredClusterIds(existing));
+  if (!wanted.length) {
     logger.info(
       { brandId, clusters: clusters.length, opportunities: existing.length, reopened },
       '[opportunities] every cluster with answers already has an opportunity',
     );
     return { generated: 0, merged: 0, reopened };
   }
+
+  // Each new opportunity takes one of the organization's monthly slots
+  // (CONTENT-001). They are claimed before the model call, so two runs at
+  // once can't overshoot; whatever this run doesn't use is handed back.
+  const slots = await claimOpportunitySlots(brand.organization_id, wanted.length);
+  const picked = slots.unlimited ? wanted : wanted.slice(0, slots.ids.length);
+  if (!picked.length) {
+    logger.info({ brandId }, '[opportunities] monthly opportunity limit reached');
+    return { generated: 0, merged: 0, reopened, limited: true };
+  }
+  const releaseAll = () =>
+    releaseOpportunitySlots(slots.ids).catch((err) =>
+      logger.error({ err, brandId }, '[opportunities] handing back slots failed'),
+    );
 
   const { data: basketRows, error: basketErr } = await supabaseAdmin
     .from('prompt_cluster_queries')
@@ -255,7 +274,10 @@ export async function generateContentOpportunities(brandId, { model, onProgress 
       'cluster_id',
       picked.map((c) => c.id),
     );
-  if (basketErr) throw new Error(basketErr.message);
+  if (basketErr) {
+    await releaseAll();
+    throw new Error(basketErr.message);
+  }
 
   const shown = existing
     .filter(
@@ -315,6 +337,10 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
     schema: buildSchema(picked.length),
     system: SYSTEM_PROMPT,
     prompt: userPrompt,
+  }).catch(async (err) => {
+    // A failed generation creates nothing, so it uses none of the quota.
+    await releaseAll();
+    throw err;
   });
 
   onProgress?.({ phase: 'saving', message: 'Saving opportunities...' });
@@ -399,9 +425,24 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
     });
   }
 
+  let created = [];
   if (inserts.length) {
-    const { error } = await supabaseAdmin.from('content_opportunities').insert(inserts);
-    if (error) throw new Error(error.message);
+    const { data, error } = await supabaseAdmin
+      .from('content_opportunities')
+      .insert(inserts)
+      .select('id');
+    if (error) {
+      await releaseAll();
+      throw new Error(error.message);
+    }
+    created = data || [];
+  }
+  if (!slots.unlimited) {
+    await linkOpportunitySlots(
+      created.map((row, i) => ({ usageId: slots.ids[i], opportunityId: row.id })),
+    );
+    // Merged or skipped clusters created nothing: their slots go back.
+    await releaseOpportunitySlots(slots.ids.slice(created.length));
   }
   logger.info(
     { brandId, generated: inserts.length, merged, reopened, clusters: clusters.length },

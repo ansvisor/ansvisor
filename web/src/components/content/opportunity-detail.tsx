@@ -660,7 +660,8 @@ export function OpportunityDetail({
                   <h3 className="text-sm font-medium mb-1">Monthly Brief Limit Reached</h3>
                   <p className="text-xs text-muted-foreground mb-4 max-w-sm">
                     You&apos;ve used all {quota.limit} content briefs included in your plan this
-                    month. Upgrade for a higher limit, or wait until the 1st when your quota resets.
+                    billing period. Upgrade for a higher limit, or wait until your subscription
+                    renews and the quota resets.
                   </p>
                   <Link href="/dashboard/settings?tab=billing">
                     <Button className="gap-2">
@@ -691,7 +692,7 @@ export function OpportunityDetail({
                   </Button>
                   {quotaLimited && (
                     <p className="text-xs text-muted-foreground mt-3 tabular-nums">
-                      {quota.remaining}/{quota.limit} briefs remaining this month
+                      {quota.remaining}/{quota.limit} briefs remaining this billing period
                     </p>
                   )}
                 </>
