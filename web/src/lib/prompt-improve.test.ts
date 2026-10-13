@@ -8,6 +8,7 @@
 import { describe, expect, test } from 'vitest';
 import {
   hasUnsentEdits,
+  mentionRateLabel,
   selectionSummary,
   sourceChipLabel,
   toDrafts,
@@ -70,5 +71,12 @@ describe('sourceChipLabel', () => {
       'Your page: acme.com',
     );
     expect(sourceChipLabel({ type: 'domain', ref: 'reddit.com' })).toBe('reddit.com');
+  });
+});
+
+describe('mentionRateLabel', () => {
+  test('says how many runs mention the brand', () => {
+    expect(mentionRateLabel({ runs: 120, mentionedRuns: 8 })).toBe('mentioned in 8 of 120 runs');
+    expect(mentionRateLabel({ runs: 1, mentionedRuns: 0 })).toBe('mentioned in 0 of 1 run');
   });
 });

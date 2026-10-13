@@ -4,8 +4,16 @@ import { describe, expect, it, vi } from 'vitest';
 // SUPABASE_* env is absent (as in CI) — stub it before the import chain.
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
-const { improveBaseline, improveGoal, improveImpact, improveTaskRows, improveWhy, volumeTier } =
-  await import('./from-prompt-improve.js');
+const {
+  improveBaseline,
+  improveGoal,
+  improveImpact,
+  improveKpiKeys,
+  improvePages,
+  improveTaskRows,
+  improveWhy,
+  volumeTier,
+} = await import('./from-prompt-improve.js');
 
 const P = (id, state, extra = {}) => ({ id, state, ...extra });
 
@@ -124,5 +132,29 @@ describe('improveTaskRows', () => {
         details: { body: '', platform: 'chatgpt-web', platformLabel: 'ChatGPT', sources: [] },
       }),
     ]);
+  });
+});
+
+describe('improvePages', () => {
+  it('collects the brand pages the suggestions name, once each', () => {
+    const suggestions = [
+      {
+        sources: [
+          { type: 'brand_page', ref: 'https://acme.com/plans' },
+          { type: 'fanout', ref: 'best coffee subscription' },
+        ],
+      },
+      { sources: [{ type: 'brand_page', ref: 'https://acme.com/plans' }] },
+      { sources: [{ type: 'competitor_url', ref: 'https://rival.com/x' }] },
+      {},
+    ];
+    expect(improvePages(suggestions)).toEqual(['https://acme.com/plans']);
+  });
+});
+
+describe('improveKpiKeys', () => {
+  it('measures citations only when the action names brand pages', () => {
+    expect(improveKpiKeys(['https://acme.com/plans'])).toContain('citations');
+    expect(improveKpiKeys([])).toEqual(['ai_visibility', 'mentions']);
   });
 });
