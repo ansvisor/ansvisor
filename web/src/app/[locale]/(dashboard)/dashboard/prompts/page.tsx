@@ -1492,6 +1492,43 @@ export default function PromptsPage() {
           </div>
         </div>
 
+        {/* Tracked vs suggested: two views of the same roster. A segmented
+            control rather than a second Tabs, so it reads as a filter on
+            this panel and not as another level of page navigation. It sits
+            above the filter bar so the controls go from general to specific:
+            which area, which list, then which period. */}
+        {tab === 'all' && (
+          <div
+            className="mt-4 inline-flex rounded-lg border p-1"
+            role="tablist"
+            aria-label="Prompt view"
+          >
+            {(
+              [
+                { id: 'tracked' as const, label: 'Tracked Prompts', Icon: ListChecks },
+                { id: 'suggestions' as const, label: 'Prompt Suggestions', Icon: Sparkles },
+              ] satisfies { id: PromptsView; label: string; Icon: typeof ListChecks }[]
+            ).map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={view === id}
+                onClick={() => setView(id)}
+                className={cn(
+                  'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                  view === id
+                    ? 'bg-muted text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Filter bar — same shape and position as Visibility and Citations
             (#713). It sits outside the tab panels because the range governs
             both All Prompts and Query Fan-out.
@@ -1544,39 +1581,6 @@ export default function PromptsPage() {
 
         {/* ─── All Prompts tab ─────────────────────────────────────────── */}
         <TabsContent value="all" className="mt-4 space-y-4">
-          {/* Tracked vs suggested: two views of the same roster. A segmented
-              control rather than a second Tabs, so it reads as a filter on
-              this panel and not as another level of page navigation. */}
-          <div
-            className="inline-flex rounded-lg border p-1"
-            role="tablist"
-            aria-label="Prompt view"
-          >
-            {(
-              [
-                { id: 'tracked' as const, label: 'Tracked Prompts', Icon: ListChecks },
-                { id: 'suggestions' as const, label: 'Prompt Suggestions', Icon: Sparkles },
-              ] satisfies { id: PromptsView; label: string; Icon: typeof ListChecks }[]
-            ).map(({ id, label, Icon }) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={view === id}
-                onClick={() => setView(id)}
-                className={cn(
-                  'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                  view === id
-                    ? 'bg-muted text-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </button>
-            ))}
-          </div>
-
           {view === 'suggestions' ? (
             activeBrandId && (
               <>
