@@ -22,6 +22,7 @@ import {
 import { runTrackingJob, recoverWaitingJobs } from './lib/job-runner.js';
 import { sweepInsightsRollups } from './lib/insights-rollups.js';
 import { sweepActionValidation } from './lib/action-center/validate.js';
+import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
 import { parseScraperResponse } from './lib/cloro-scraper.js';
 import { handleScraperResult } from './lib/cloro-result-handler.js';
 import { verifyCloroWebhook } from './lib/cloro-webhook-verify.js';
@@ -161,6 +162,12 @@ async function runDailyTracking() {
   // hold up tonight's tracking.
   sweepActionValidation().catch((err) => {
     logger.error({ err }, '[action-validation] daily sweep crashed');
+  });
+
+  // Today's 7-day positions for every Improve action still being tracked
+  // (PROMPT-008): the Outcome card, the Positions panel and History read them.
+  sweepImproveOutcomes().catch((err) => {
+    logger.error({ err }, '[improve-outcome] daily sweep crashed');
   });
 
   // Skip paused brands (is_active = false): the user has explicitly suspended

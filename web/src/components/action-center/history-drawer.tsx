@@ -18,6 +18,8 @@ import { UNCOUNTED_TASK_STATUSES } from '@/lib/action-center/registry';
 import { ImpactDots } from './signal-table';
 import { ActionIcon } from './action-table';
 import { HistoryStatusBadge } from './history-table';
+import { ImproveOutcomeCard } from './improve-outcome-card';
+import { improvePlatformLabels } from '@/lib/improve-outcome';
 import { cn } from '@/lib/utils';
 
 /**
@@ -193,6 +195,16 @@ export function HistoryDrawer({
           </section>
 
           <Separator />
+
+          {item.positionOutcome && (
+            <>
+              <ImproveOutcomeCard
+                outcome={item.positionOutcome}
+                labels={improvePlatformLabels(item.payload)}
+              />
+              <Separator />
+            </>
+          )}
 
           <section>
             <p className="text-xs font-medium text-muted-foreground">{t('drawer.affected')}</p>

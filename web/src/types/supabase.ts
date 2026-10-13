@@ -138,6 +138,7 @@ export type Database = {
           kpi_keys: string[]
           outcome: string
           payload: Json
+          position_outcome: Json | null
           status: string
           updated_at: string
           validated_at: string | null
@@ -159,6 +160,7 @@ export type Database = {
           kpi_keys?: string[]
           outcome?: string
           payload?: Json
+          position_outcome?: Json | null
           status?: string
           updated_at?: string
           validated_at?: string | null
@@ -180,6 +182,7 @@ export type Database = {
           kpi_keys?: string[]
           outcome?: string
           payload?: Json
+          position_outcome?: Json | null
           status?: string
           updated_at?: string
           validated_at?: string | null
