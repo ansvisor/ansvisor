@@ -2,7 +2,8 @@
 
 /**
  * Positions panel for one tracked prompt: per-platform mention and citation
- * results over the Prompts table's window and location.
+ * results over a window and the Prompts table's location. The window opens on
+ * the table's and can be changed inside the panel without touching the table.
  *
  * The 24h window shows each platform's latest answer; longer windows show
  * days — how many were tracked, mentioned and cited, with a block per day and
@@ -39,7 +40,9 @@ import { cn } from '@/lib/utils';
 import { formatRegionDisplay } from '@/lib/region';
 import { positionTone } from '@/lib/position-tone';
 import { CONTACT_SALES_URL, type PlanId } from '@/config/plans';
-import type { PromptRangePreset } from '@/config/prompt-options';
+import { PROMPT_RANGE_PRESETS, type PromptRangePreset } from '@/config/prompt-options';
+import type { PositionsRange } from '@/lib/positions-range';
+import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { getPromptPositions, type PromptPositionsData } from '@/lib/actions/prompt-positions';
 import type {
   AnswerView,
@@ -49,6 +52,8 @@ import type {
 } from '@/lib/prompt-positions';
 import type { Sentiment } from '@/types';
 
+export type { PositionsRange } from '@/lib/positions-range';
+
 export interface PositionsPrompt {
   id: string;
   text: string;
@@ -57,9 +62,12 @@ export interface PositionsPrompt {
 interface Props {
   /** The prompt to show; null keeps the panel closed. */
   prompt: PositionsPrompt | null;
-  /** The table's window: the same bounds its Mentions / Citations columns read. */
+  /** The panel's selected range; it opens on the table's. */
+  range: PositionsRange;
+  /** `range` resolved to the bounds the data is read over. */
   window: { from: string; to?: string };
-  preset: PromptRangePreset;
+  /** Changes the panel's range only; the table keeps its own. */
+  onRangeChange: (range: PositionsRange) => void;
   /** The table's location; empty means every location. */
   region: string;
   onClose: () => void;
@@ -93,13 +101,20 @@ const formatDateTime = (iso: string) =>
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const pct = (n: number, of: number) => (of > 0 ? `${Math.round((n / of) * 100)}%` : '—');
 
-function windowTitle(preset: PromptRangePreset, window: { from: string; to?: string }): string {
-  if (preset !== 'custom') return `Last ${preset}`;
-  const to = window.to ?? new Date().toISOString();
-  return `Custom: ${SHORT_DATE_FMT.format(new Date(window.from))} – ${DATE_FMT.format(new Date(to))}`;
+// The resolved dates follow in the caption, so a custom range isn't spelled out twice.
+function windowTitle(preset: PromptRangePreset): string {
+  return preset === 'custom' ? 'Custom range' : `Last ${preset}`;
 }
 
-export function PromptPositionsSheet({ prompt, window, preset, region, onClose }: Props) {
+export function PromptPositionsSheet({
+  prompt,
+  range,
+  window,
+  onRangeChange,
+  region,
+  onClose,
+}: Props) {
+  const preset = range.preset;
   // Everything the data depends on. A response is shown only while its key
   // still matches, so another prompt's (or window's) numbers never linger.
   const key = prompt ? `${prompt.id}|${window.from}|${window.to ?? ''}|${region}` : '';
@@ -161,7 +176,7 @@ export function PromptPositionsSheet({ prompt, window, preset, region, onClose }
           )}
           <SheetDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
             <CalendarDays className="h-3.5 w-3.5" />
-            <span className="font-medium text-foreground">{windowTitle(preset, window)}</span>
+            <span className="font-medium text-foreground">{windowTitle(preset)}</span>
             {data && latestMode && (
               <span>
                 Last run:{' '}
@@ -181,6 +196,18 @@ export function PromptPositionsSheet({ prompt, window, preset, region, onClose }
               </Badge>
             )}
           </SheetDescription>
+          <div className="flex flex-wrap items-end gap-3 pt-1">
+            <DateRangeFilter
+              label="Period"
+              value={preset}
+              presets={PROMPT_RANGE_PRESETS}
+              onChange={(next) => onRangeChange({ ...range, preset: next })}
+              from={range.from}
+              to={range.to}
+              onFromChange={(from) => onRangeChange({ ...range, from })}
+              onToChange={(to) => onRangeChange({ ...range, to })}
+            />
+          </div>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">

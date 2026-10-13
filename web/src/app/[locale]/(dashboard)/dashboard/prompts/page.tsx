@@ -111,10 +111,12 @@ import { formatRelative } from '@/lib/format-relative';
 import { compareNullsLast, type SortDir } from './prompt-sort';
 import { formatCompactNumber } from '@/lib/format';
 import { usePagination, TablePager } from '@/components/table-pager';
+import { PromptPositionsSheet } from '@/components/prompts/prompt-positions-sheet';
 import {
-  PromptPositionsSheet,
-  type PositionsPrompt,
-} from '@/components/prompts/prompt-positions-sheet';
+  parsePositionsRange,
+  positionsUrlParams,
+  type PositionsRange,
+} from '@/lib/positions-range';
 
 // ─── Info Tooltip ─────────────────────────────────────────────────────────────
 
@@ -2067,12 +2069,59 @@ function AllPromptsTab({
     new Map(),
   );
   const searchParams = useSearchParams();
-  // The row whose Positions panel is open. It lives here, beside the table,
-  // so closing the panel leaves search, sort, page and scroll as they were.
-  const [positionsFor, setPositionsFor] = useState<PositionsPrompt | null>(null);
+  // The row whose Positions panel is open, and the panel's own range. They
+  // live here, beside the table, so closing the panel leaves search, sort,
+  // page and scroll as they were. Both are mirrored to the URL
+  // (?positions=<id>&positionsRange=7d) so an open panel can be shared.
+  const [positionsId, setPositionsId] = useState<string | null>(() =>
+    searchParams.get('positions'),
+  );
+  const [positionsRange, setPositionsRange] = useState<PositionsRange>(() =>
+    parsePositionsRange(searchParams, positionsPreset),
+  );
+  const panelWindow = useMemo(
+    () =>
+      resolvePromptRange(positionsRange.preset, {
+        from: positionsRange.from,
+        to: positionsRange.to,
+      }),
+    [positionsRange],
+  );
   // A brand switch or reload that drops the prompt must not leave its panel up.
-  const openPositions =
-    positionsFor && prompts.some((p) => p.id === positionsFor.id) ? positionsFor : null;
+  const openPositions = useMemo(() => {
+    const p = positionsId ? prompts.find((row) => row.id === positionsId) : undefined;
+    return p ? { id: p.id, text: p.text } : null;
+  }, [positionsId, prompts]);
+  // Adjust-state-during-render (as in usePagination): clear the id once the
+  // list has loaded without it, so the URL drops it too.
+  if (!loading && positionsId && !openPositions) setPositionsId(null);
+
+  // The panel opens on the table's window; changing it there only moves the panel.
+  const openPositionsPanel = useCallback(
+    (promptId: string) => {
+      setPositionsRange({
+        preset: positionsPreset,
+        from: positionsPreset === 'custom' ? positionsWindow.from.slice(0, 10) : '',
+        to: positionsPreset === 'custom' ? (positionsWindow.to?.slice(0, 10) ?? '') : '',
+      });
+      setPositionsId(promptId);
+    },
+    [positionsPreset, positionsWindow],
+  );
+
+  // Shallow URL sync, same reasoning as the page's tab sync. Reads the live
+  // location rather than `searchParams`, which can lag a sibling effect's
+  // replaceState in the same commit and would drop its params.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const want = positionsUrlParams(positionsId, positionsRange);
+    if (Object.entries(want).every(([k, v]) => params.get(k) === v)) return;
+    for (const [k, v] of Object.entries(want)) {
+      if (v) params.set(k, v);
+      else params.delete(k);
+    }
+    window.history.replaceState(null, '', `?${params.toString()}${window.location.hash}`);
+  }, [positionsId, positionsRange]);
 
   const statusOf = useCallback(
     (p: Prompt) => (statusOverrides.has(p.id) ? statusOverrides.get(p.id)! : p.workStatus),
@@ -2433,7 +2482,7 @@ function AllPromptsTab({
                         size="xs"
                         variant="outline"
                         aria-label={`View positions for ${p.text}`}
-                        onClick={() => setPositionsFor({ id: p.id, text: p.text })}
+                        onClick={() => openPositionsPanel(p.id)}
                       >
                         <BarChart3 />
                         See
@@ -2501,10 +2550,11 @@ function AllPromptsTab({
       </CardContent>
       <PromptPositionsSheet
         prompt={openPositions}
-        window={positionsWindow}
-        preset={positionsPreset}
+        range={positionsRange}
+        window={panelWindow}
+        onRangeChange={setPositionsRange}
         region={regionFilter}
-        onClose={() => setPositionsFor(null)}
+        onClose={() => setPositionsId(null)}
       />
     </Card>
   );
