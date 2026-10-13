@@ -14,7 +14,11 @@ import { ALL_MODELS, ALL_SCRAPERS, DEFAULT_PROMPT_RANGE_DAYS } from '@/config/pr
 import { isValidLocation, locationCode } from '@/lib/region';
 import type { Plan, PlanId } from '@/config/plans';
 import { getPromptVolumes, type VolumeQuota } from '@/lib/actions/volumes';
-import { getPromptVisibilitySummaries, type PromptVisibilitySummary } from '@/lib/actions/tracking';
+import {
+  analyzeNewPrompts,
+  getPromptVisibilitySummaries,
+  type PromptVisibilitySummary,
+} from '@/lib/actions/tracking';
 
 function filterByPlan(plan: Plan, platforms: string[], models: string[]) {
   const allowedScrapers = plan.limits.allowedScrapers
@@ -713,6 +717,131 @@ export async function addPromptToBrand(
 
   revalidatePath('/dashboard/prompts');
   return { prompt: result.prompt };
+}
+
+export interface ImportPromptRow {
+  /** Index in the preview's importable list, echoed back for the imported ones. */
+  idx: number;
+  text: string;
+  topic: string | null;
+  platforms: string[];
+  models: string[];
+  regions: string[];
+}
+
+export type ImportPromptsResult =
+  | { importedIdx: number[]; promptIds: string[]; analysisStarted: boolean }
+  | { error: string };
+
+/**
+ * Bulk import (PROMPT-005). The rows are the preview's importable ones, in
+ * file order; they are checked again here (text, locations, duplicates, plan
+ * engines) because the client is not trusted, then written by one locked
+ * database call that stops at the plan's tracked-location cap
+ * (import_prompts, 00122). New topics are created first, without touching the
+ * brand's existing ones. The imported prompts are submitted for their first
+ * run in one request.
+ */
+export async function importPrompts(
+  brandId: string,
+  rows: ImportPromptRow[],
+): Promise<ImportPromptsResult> {
+  if (rows.length === 0) return { importedIdx: [], promptIds: [], analysisStarted: false };
+  if (rows.length > 1000) return { error: 'Import at most 1,000 prompts at a time.' };
+  const supabase = await createClient();
+
+  let promptSetId: string;
+  {
+    const { data: ps, error } = await supabase
+      .from('prompt_sets')
+      .select('id')
+      .eq('brand_id', brandId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (error) return { error: error.message };
+    if (ps?.id) promptSetId = ps.id as string;
+    else {
+      const { data: created, error: setErr } = await supabase
+        .from('prompt_sets')
+        .insert({ brand_id: brandId, name: 'Prompts' })
+        .select('id')
+        .single();
+      if (setErr || !created) return { error: setErr?.message ?? 'Failed to create a prompt set.' };
+      promptSetId = created.id as string;
+    }
+  }
+
+  const { organizationId: orgId } = await getBrandContext(supabase, brandId);
+  const [plan, { data: brandRow }, { data: existing }, { data: topicRows }] = await Promise.all([
+    getOrgPlan(orgId),
+    supabase.from('brands').select('shopping_mode_enabled').eq('id', brandId).single(),
+    supabase
+      .from('prompts')
+      .select('text, prompt_sets!inner(brand_id)')
+      .eq('prompt_sets.brand_id', brandId),
+    supabase.from('topics').select('id, name').eq('brand_id', brandId),
+  ]);
+  const shopping = !!brandRow?.shopping_mode_enabled;
+  const keyOf = (t: string) => t.trim().toLowerCase().replace(/\s+/g, ' ');
+  const seen = new Set((existing ?? []).map((p) => keyOf(p.text as string)));
+  const topicIds = new Map((topicRows ?? []).map((t) => [keyOf(t.name as string), t.id as string]));
+
+  const clean = rows.flatMap((r) => {
+    const text = r.text.trim().replace(/\s+/g, ' ');
+    if (!text || text.length > 500) return [];
+    if (seen.has(keyOf(text))) return [];
+    seen.add(keyOf(text));
+    const regions = [...new Set(r.regions.map((c) => c.trim().toUpperCase()))].filter(
+      isValidLocation,
+    );
+    if (regions.length === 0) return [];
+    const filtered = filterByPlan(plan, r.platforms, r.models);
+    const platforms = shopping
+      ? Array.from(new Set([...filtered.platforms, 'chatgpt-shopping']))
+      : stripShoppingWhenDisabled(filtered.platforms, false);
+    if (platforms.length === 0 && filtered.models.length === 0) return [];
+    return [{ ...r, text, regions, platforms, models: filtered.models }];
+  });
+
+  // New topics, once each, alongside the brand's existing ones.
+  const newTopics = [
+    ...new Map(
+      clean
+        .filter((r) => r.topic && !topicIds.has(keyOf(r.topic)))
+        .map((r) => [keyOf(r.topic!), r.topic!.trim().slice(0, 60)]),
+    ).values(),
+  ];
+  if (newTopics.length) {
+    const { data: created, error } = await supabase
+      .from('topics')
+      .insert(newTopics.map((name) => ({ brand_id: brandId, name, is_active: true })))
+      .select('id, name');
+    if (error) return { error: error.message };
+    for (const t of created ?? []) topicIds.set(keyOf(t.name as string), t.id as string);
+  }
+
+  const { data: inserted, error } = await supabase.rpc('import_prompts', {
+    p_prompt_set_id: promptSetId,
+    p_organization_id: orgId,
+    p_max_locations: plan.limits.maxPrompts,
+    p_rows: clean.map((r) => ({
+      idx: r.idx,
+      text: r.text,
+      category: r.topic?.trim() ?? '',
+      topic_id: r.topic ? (topicIds.get(keyOf(r.topic)) ?? '') : '',
+      platforms: r.platforms,
+      models: r.models,
+      regions: r.regions,
+    })),
+  });
+  if (error) return { error: error.message };
+
+  const imported = (inserted ?? []) as { idx: number; id: string }[];
+  const promptIds = imported.map((r) => r.id);
+  const { started } = await analyzeNewPrompts(brandId, promptIds);
+  revalidatePath('/dashboard/prompts');
+  return { importedIdx: imported.map((r) => r.idx), promptIds, analysisStarted: started };
 }
 
 export async function deletePrompt(id: string): Promise<void> {

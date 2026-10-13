@@ -77,9 +77,9 @@ import {
   type VolumeErrorCode,
 } from '@/lib/actions/volumes';
 import {
-  addPromptToBrand,
   deletePrompt,
   getPromptsPageData,
+  importPrompts,
   updatePrompt,
   type LocationQuota,
 } from '@/lib/actions/prompt';
@@ -100,12 +100,12 @@ import {
 } from '@/config/prompt-options';
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { getBrandFilterOptions } from '@/lib/actions/tracking';
-import { formatRegionDisplay } from '@/lib/region';
+import { formatRegionDisplay, isValidLocation, locationCode } from '@/lib/region';
 import { SuggestionsTab } from './_suggestions-tab';
 import { CONTACT_SALES_URL, PLANS } from '@/config/plans';
 import { getPromptUsage, isPromptLimitReached } from '@/lib/prompt-usage';
 import { getTopics } from '@/lib/actions/topic';
-import { analyzeNewPrompt, type PromptVisibilitySummary } from '@/lib/actions/tracking';
+import type { PromptVisibilitySummary } from '@/lib/actions/tracking';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import type { PromptVolume, Prompt, Topic } from '@/types';
 import { toast } from 'sonner';
@@ -114,6 +114,8 @@ import { formatRelative } from '@/lib/format-relative';
 import { compareNullsLast, type SortDir } from './prompt-sort';
 import { formatCompactNumber } from '@/lib/format';
 import { usePagination, TablePager } from '@/components/table-pager';
+import { BulkImportPrompts } from '@/components/prompts/bulk-import-prompts';
+import { promptKey } from '@/lib/prompt-import';
 import {
   PromptPositionsSheet,
   type PositionsPrompt,
@@ -500,6 +502,13 @@ function PromptFormFields({
   );
 }
 
+/** The brand's tracking location, as new prompts get it (addPromptToSet). */
+function brandLocation(region: string | undefined, state: string | undefined): string {
+  const country = region ?? 'US';
+  const candidate = locationCode(country, state ?? null);
+  return isValidLocation(candidate) ? candidate : country;
+}
+
 // ─── Tracked prompt limit (PROMPT-009) ────────────────────────────────────────
 
 const PROMPT_USAGE_TOOLTIP =
@@ -606,12 +615,18 @@ function AddPromptDialog({
   brandId,
   shoppingEnabled,
   locationQuota,
+  existingTexts,
+  defaultRegion,
   open,
   onClose,
   onAdded,
 }: {
   brandId: string;
   shoppingEnabled: boolean;
+  /** Texts the brand already tracks, for Bulk import's duplicate check. */
+  existingTexts: string[];
+  /** The brand's location, for Bulk import rows that name none. */
+  defaultRegion: string;
   /** When the plan limit is already reached, the dialog explains it instead of the form. */
   locationQuota: LocationQuota | null;
   open: boolean;
@@ -631,6 +646,12 @@ function AddPromptDialog({
   const [topics, setTopics] = useState<Topic[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [mode, setMode] = useState<'single' | 'bulk'>('single');
+  // Prompts queued with "Add to list", not saved yet: each keeps the topic and
+  // engines chosen when it was queued.
+  const [staged, setStaged] = useState<
+    { key: string; text: string; category: string; platforms: string[]; models: string[] }[]
+  >([]);
 
   // Reset to a fresh form on every open: all allowed engines pre-selected
   // (matching the brand page's defaults) and topics fetched lazily — the
@@ -639,6 +660,8 @@ function AddPromptDialog({
     if (!open) return;
     setText('');
     setError(null);
+    setMode('single');
+    setStaged([]);
     setScrapers(allowedScraperIds);
     setModels(allowedModelIds);
     let cancelled = false;
@@ -660,35 +683,83 @@ function AddPromptDialog({
     onClose();
   };
 
-  const handleAdd = async () => {
-    if (!text.trim() || (scrapers.length === 0 && models.length === 0) || saving) return;
+  const enginesChosen = scrapers.length > 0 || models.length > 0;
+  const takenKeys = new Set([...existingTexts, ...staged.map((s) => s.text)].map(promptKey));
+
+  /** Queue the typed prompt below the form and clear the field for the next one. */
+  const addToList = () => {
+    const value = text.trim().replace(/\s+/g, ' ');
+    if (!value || !enginesChosen || saving) return;
+    if (takenKeys.has(promptKey(value))) {
+      setError('This prompt is already tracked or in the list.');
+      return;
+    }
+    setStaged((list) => [
+      ...list,
+      { key: `${Date.now()}-${list.length}`, text: value, category, platforms: scrapers, models },
+    ]);
+    setText('');
+    setError(null);
+  };
+
+  // What a save writes: the list, plus a typed prompt not queued yet.
+  const typed = text.trim().replace(/\s+/g, ' ');
+  const typedCounts = !!typed && enginesChosen && !takenKeys.has(promptKey(typed));
+  const toSave = [
+    ...staged,
+    ...(typedCounts ? [{ key: 'typed', text: typed, category, platforms: scrapers, models }] : []),
+  ];
+
+  /**
+   * Save the list in one locked call (the same path as Bulk import, so the
+   * plan limit holds the same way), then close or stay open for more.
+   */
+  const handleSave = async (closeAfter: boolean) => {
+    if (toSave.length === 0 || saving) return;
+    if (typed && !typedCounts && staged.length === 0) {
+      setError('This prompt is already tracked or in the list.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      const result = await addPromptToBrand(brandId, {
-        text,
-        category: category || undefined,
-        platforms: scrapers,
-        models,
-      });
+      const result = await importPrompts(
+        brandId,
+        toSave.map((s, idx) => ({
+          idx,
+          text: s.text,
+          topic: s.category || null,
+          platforms: s.platforms,
+          models: s.models,
+          regions: [defaultRegion],
+        })),
+      );
       if ('error' in result) {
         setError(result.error);
         return;
       }
-      // Send the prompt off to be analyzed straight away instead of leaving it
-      // idle until tomorrow's scheduled run. Only this prompt is submitted, and
-      // a refusal (daily cap, cooldown, paused brand) is not an error — the
-      // prompt is saved either way, so the message just says which happened.
-      const { started } = await analyzeNewPrompt(brandId, result.prompt.id);
-      onClose();
+      const added = result.importedIdx.length;
+      const skipped = toSave.length - added;
+      if (added === 0) {
+        setError(
+          'Nothing was added: your plan limit is reached, or these prompts are already tracked.',
+        );
+        return;
+      }
       toast.success(
-        started
-          ? 'Prompt added — analyzing it now.'
-          : 'Prompt added — it will be picked up by the next tracking run.',
+        `${added} prompt${added === 1 ? '' : 's'} added${skipped ? ` · ${skipped} not added (plan limit or duplicate)` : ''}`,
+        {
+          description: result.analysisStarted
+            ? 'Analyzing them now.'
+            : 'They will be picked up by the next tracking run.',
+        },
       );
+      setStaged([]);
+      setText('');
+      if (closeAfter) onClose();
       onAdded();
     } catch {
-      setError('Failed to add prompt. Please try again.');
+      setError('Failed to add prompts. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -696,7 +767,12 @@ function AddPromptDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+      <DialogContent
+        className={cn(
+          'max-h-[85vh] overflow-y-auto',
+          mode === 'bulk' && !limitReached ? 'sm:max-w-3xl' : 'sm:max-w-md',
+        )}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
             <Plus className="h-4 w-4" />
@@ -732,53 +808,126 @@ function AddPromptDialog({
             </DialogFooter>
           </>
         ) : (
-          <>
-            <div className="space-y-3">
-              <PromptFormFields
-                autoFocus
-                text={text}
-                onTextChange={(value) => {
-                  setText(value);
-                  if (error) setError(null);
-                }}
-                onSubmit={handleAdd}
-                category={category}
-                onCategoryChange={setCategory}
-                topics={topics}
-                scrapers={scrapers}
-                models={models}
-                setScrapers={setScrapers}
-                setModels={setModels}
-                visibleScrapers={visibleScrapers}
-                visibleModels={visibleModels}
-                saving={saving}
-              />
+          <Tabs value={mode} onValueChange={(v) => setMode(v as 'single' | 'bulk')}>
+            <TabsList>
+              <TabsTrigger value="single">Single</TabsTrigger>
+              <TabsTrigger value="bulk">Bulk import</TabsTrigger>
+            </TabsList>
+            <TabsContent value="single" className="mt-3 space-y-4">
+              <div className="space-y-3">
+                <PromptFormFields
+                  autoFocus
+                  text={text}
+                  onTextChange={(value) => {
+                    setText(value);
+                    if (error) setError(null);
+                  }}
+                  onSubmit={addToList}
+                  category={category}
+                  onCategoryChange={setCategory}
+                  topics={topics}
+                  scrapers={scrapers}
+                  models={models}
+                  setScrapers={setScrapers}
+                  setModels={setModels}
+                  visibleScrapers={visibleScrapers}
+                  visibleModels={visibleModels}
+                  saving={saving}
+                />
 
-              {error && <p className="text-xs text-red-500">{error}</p>}
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={handleClose} disabled={saving}>
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={handleAdd}
-                disabled={saving || !text.trim() || (scrapers.length === 0 && models.length === 0)}
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Adding…
-                  </>
-                ) : (
-                  <>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Prompt
-                  </>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addToList}
+                  disabled={saving || !text.trim() || !enginesChosen}
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Add to list
+                </Button>
+
+                {error && <p className="text-xs text-red-500">{error}</p>}
+
+                {staged.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Ready to save ({staged.length})
+                    </p>
+                    <ul className="max-h-48 divide-y overflow-y-auto rounded-md border">
+                      {staged.map((s) => (
+                        <li key={s.key} className="flex items-start gap-2 px-3 py-2 text-sm">
+                          <div className="min-w-0 flex-1">
+                            <p className="break-words">{s.text}</p>
+                            {s.category && (
+                              <p className="text-xs text-muted-foreground">{s.category}</p>
+                            )}
+                          </div>
+                          <Button
+                            type="button"
+                            size="icon-xs"
+                            variant="ghost"
+                            aria-label={`Remove "${s.text}" from the list`}
+                            disabled={saving}
+                            onClick={() =>
+                              setStaged((list) => list.filter((item) => item.key !== s.key))
+                            }
+                          >
+                            <X />
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
-              </Button>
-            </DialogFooter>
-          </>
+              </div>
+              <DialogFooter className="gap-2 sm:gap-2">
+                <Button type="button" variant="outline" onClick={handleClose} disabled={saving}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleSave(false)}
+                  disabled={saving || toSave.length === 0}
+                >
+                  Save &amp; add more
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => handleSave(true)}
+                  disabled={saving || toSave.length === 0}
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      {toSave.length > 1 ? `Save ${toSave.length} & close` : 'Save & close'}
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </TabsContent>
+            <TabsContent value="bulk" className="mt-3">
+              <BulkImportPrompts
+                brandId={brandId}
+                existingTexts={existingTexts}
+                defaults={{ platforms: scrapers, models }}
+                defaultRegion={defaultRegion}
+                quota={locationQuota}
+                limitActions={
+                  locationQuota ? <PromptLimitActions planId={locationQuota.planId} /> : null
+                }
+                onImported={() => {
+                  onClose();
+                  onAdded();
+                }}
+              />
+            </TabsContent>
+          </Tabs>
         )}
       </DialogContent>
     </Dialog>
@@ -2134,6 +2283,8 @@ export default function PromptsPage() {
           brandId={activeBrandId}
           shoppingEnabled={!!activeBrand?.shoppingModeEnabled}
           locationQuota={locationQuota}
+          existingTexts={allPrompts.map((p) => p.text)}
+          defaultRegion={brandLocation(activeBrand?.region, activeBrand?.state)}
           open={addPromptOpen}
           onClose={() => setAddPromptOpen(false)}
           onAdded={loadData}
