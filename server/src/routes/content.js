@@ -1123,7 +1123,31 @@ router.get('/:id/basket', async (req, res) => {
   try {
     const opp = await assertOpportunityAccess(req.params.id, req.user.id);
     const clusterIds = [opp.cluster_id, ...(opp.related_cluster_ids || [])].filter(Boolean);
-    if (!clusterIds.length) return res.json({ clusters: [], queries: [] });
+    if (!clusterIds.length) {
+      // An opportunity from the per-prompt generator rests on its one prompt:
+      // the Action Center lists it like a one-prompt group.
+      if (!opp.prompt_id) return res.json({ clusters: [], queries: [] });
+      const { data: prompt, error: promptErr } = await supabaseAdmin
+        .from('prompts')
+        .select('id, text')
+        .eq('id', opp.prompt_id)
+        .maybeSingle();
+      if (promptErr) throw new Error(promptErr.message);
+      return res.json({
+        clusters: prompt
+          ? [
+              {
+                id: `prompt:${prompt.id}`,
+                label: prompt.text,
+                need: '',
+                topicName: null,
+                prompts: [prompt],
+              },
+            ]
+          : [],
+        queries: [],
+      });
+    }
 
     const [clustersRes, membersRes, queriesRes] = await Promise.all([
       supabaseAdmin

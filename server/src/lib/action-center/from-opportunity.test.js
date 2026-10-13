@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
-const { assetTasks, combinedTasks, initialTaskStatus, opportunityAssets } =
+const { actionPromptScope, assetTasks, combinedTasks, initialTaskStatus, opportunityAssets } =
   await import('./from-opportunity.js');
 const { getTask } = await import('./tasks/registry.js');
 
@@ -97,6 +97,36 @@ describe('opportunityAssets', () => {
     expect(opportunityAssets({ title: 'T', type: 'earned', source_data: {} })[0]).toMatchObject({
       channel: 'earned',
       decision: 'create',
+    });
+  });
+});
+
+describe('actionPromptScope', () => {
+  it("measures a cluster opportunity on its clusters' prompts", () => {
+    expect(
+      actionPromptScope({ prompt_id: 'p1', source_data: { prompts: ['A', 'B'] } }, ['p1', 'p2']),
+    ).toEqual({ promptIds: ['p1', 'p2'], prompts: ['A', 'B'] });
+  });
+
+  it('measures a single-prompt opportunity on its own prompt', () => {
+    expect(
+      actionPromptScope({ prompt_id: 'p9', source_data: { promptText: 'Best espresso?' } }, []),
+    ).toEqual({ promptIds: ['p9'], prompts: ['Best espresso?'] });
+  });
+
+  it('names only the prompt it measures when the clusters are gone', () => {
+    expect(
+      actionPromptScope(
+        { prompt_id: 'p1', source_data: { promptText: 'A', prompts: ['A', 'B', 'C'] } },
+        [],
+      ),
+    ).toEqual({ promptIds: ['p1'], prompts: ['A'] });
+  });
+
+  it('has nothing to measure when neither is known', () => {
+    expect(actionPromptScope({ prompt_id: null, source_data: {} }, [])).toEqual({
+      promptIds: [],
+      prompts: [],
     });
   });
 });

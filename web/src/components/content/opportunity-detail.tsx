@@ -358,32 +358,32 @@ export function OpportunityDetail({
               {generatingBrief ? t('generatingBrief') : t('generateBrief')}
             </Button>
           )}
-          {opportunity.clusterId &&
-            (actionId ? (
-              <Link href={`/dashboard/action-center/actions?action=${actionId}`}>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <ExternalLink className="h-4 w-4" />
-                  {t('openInActions')}
-                </Button>
-              </Link>
-            ) : (
-              canSendToActionCenter && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleSendToActionCenter()}
-                  disabled={sendingAction !== null}
-                  className="gap-2"
-                >
-                  {sendingAction === 'all' ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Target className="h-4 w-4" />
-                  )}
-                  {t('sendToActions')}
-                </Button>
-              )
-            ))}
+          {/* Every opportunity can go to the Action Center, cluster or single prompt. */}
+          {actionId ? (
+            <Link href={`/dashboard/action-center/actions?action=${actionId}`}>
+              <Button variant="outline" size="sm" className="gap-2">
+                <ExternalLink className="h-4 w-4" />
+                {t('openInActions')}
+              </Button>
+            </Link>
+          ) : (
+            canSendToActionCenter && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleSendToActionCenter()}
+                disabled={sendingAction !== null}
+                className="gap-2"
+              >
+                {sendingAction === 'all' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Target className="h-4 w-4" />
+                )}
+                {t('sendToActions')}
+              </Button>
+            )
+          )}
           {canSendToWorkflow && (
             <Button
               variant="outline"
