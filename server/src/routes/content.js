@@ -25,8 +25,41 @@ import { loadClusters } from '../lib/prompt-clusters.js';
 import { sendToActionCenter } from '../lib/action-center/from-opportunity.js';
 import { IDEA_MAX_LENGTH } from '../lib/opportunity-generator.js';
 import { cleanStoredOpportunity } from '../lib/opportunity-text.js';
+import { sourceDataForStatus } from '../lib/opportunity-status.js';
 
 const router = Router();
+
+/** The job a repeated "+ New" or alternative request already started. */
+async function startedJob(brandId, idempotencyKey) {
+  const since = new Date(Date.now() - IDEMPOTENCY_WINDOW_MS).toISOString();
+  const { data } = await supabaseAdmin
+    .from('jobs')
+    .select('id, data')
+    .eq('type', 'content')
+    .eq('brand_id', brandId)
+    .eq('data->request->>idempotencyKey', idempotencyKey)
+    .gte('created_at', since)
+    .limit(1)
+    .maybeSingle();
+  return data;
+}
+
+/** What one request may ask for; self-hosted setups without an org have no quota. */
+function requestAllowance(orgId) {
+  return orgId
+    ? getOpportunityRequestAllowance(orgId)
+    : { perRequest: 5, remaining: -1, max: 5, periodEnd: null, planId: 'self_hosted' };
+}
+
+function quotaExhausted(res, allowance) {
+  return res.status(429).json({
+    success: false,
+    error: 'quota_exhausted',
+    message: 'Monthly opportunity limit reached.',
+    periodEnd: allowance.periodEnd,
+    plan: allowance.planId,
+  });
+}
 
 /**
  * The brand's competitor names, which opportunity text is checked against
@@ -153,32 +186,13 @@ router.post('/opportunities/generate', requireFeature('content_optimization'), a
   try {
     const { orgId } = await assertBrandAccess(brandId, req.user.id);
 
-    const since = new Date(Date.now() - IDEMPOTENCY_WINDOW_MS).toISOString();
-    const { data: previous } = await supabaseAdmin
-      .from('jobs')
-      .select('id, data')
-      .eq('type', 'content')
-      .eq('brand_id', brandId)
-      .eq('data->request->>idempotencyKey', idempotencyKey)
-      .gte('created_at', since)
-      .limit(1)
-      .maybeSingle();
+    const previous = await startedJob(brandId, idempotencyKey);
     if (previous) {
       return res.status(202).json({ jobId: previous.id, count: previous.data.request.count });
     }
 
-    const allowance = orgId
-      ? await getOpportunityRequestAllowance(orgId)
-      : { perRequest: 5, remaining: -1, max: 5, periodEnd: null, planId: 'self_hosted' };
-    if (allowance.max <= 0) {
-      return res.status(429).json({
-        success: false,
-        error: 'quota_exhausted',
-        message: 'Monthly opportunity limit reached.',
-        periodEnd: allowance.periodEnd,
-        plan: allowance.planId,
-      });
-    }
+    const allowance = await requestAllowance(orgId);
+    if (allowance.max <= 0) return quotaExhausted(res, allowance);
 
     const request = {
       count: Math.min(count, allowance.max),
@@ -206,6 +220,96 @@ router.post('/opportunities/generate', requireFeature('content_optimization'), a
     }
     if (error.status) return res.status(error.status).json({ error: error.message });
     req.log.error({ err: error }, 'on-demand opportunity generation error');
+    return res.status(500).json({ error: 'Failed to start generation' });
+  }
+});
+
+const alternativeSchema = z.object({
+  direction: z.string().trim().max(IDEA_MAX_LENGTH).nullish(),
+  idempotencyKey: z.string().min(8).max(100),
+});
+
+/**
+ * The cluster an alternative is written for: the opportunity's own, or, for
+ * one from the per-prompt generator, the cluster its prompt is in today.
+ */
+async function alternativeCluster(opp) {
+  if (opp.cluster_id) return opp.cluster_id;
+  if (!opp.prompt_id) return null;
+  const { data } = await supabaseAdmin
+    .from('prompt_cluster_members')
+    .select('cluster_id')
+    .eq('prompt_id', opp.prompt_id)
+    .maybeSingle();
+  return data?.cluster_id ?? null;
+}
+
+/**
+ * POST /api/content/:id/alternative
+ * "Another angle" (CONTENT-006): one more opportunity for the same need with
+ * a different angle, optionally steered by `direction`. It stands beside the
+ * original (source_data.alternativeOf), uses one quota slot (handed back on
+ * failure) and skips the duplicate check, since the user asked for it.
+ * Body: { direction?, idempotencyKey }. Returns { jobId } (202); 409
+ * 'no_cluster' when the prompt isn't in any cluster; 429 'quota_exhausted'.
+ */
+router.post('/:id/alternative', requireFeature('content_optimization'), async (req, res) => {
+  const parsed = alternativeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Invalid request', details: parsed.error.issues });
+  }
+  const { direction, idempotencyKey } = parsed.data;
+
+  try {
+    const opp = await assertOpportunityAccess(req.params.id, req.user.id);
+    const previous = await startedJob(opp.brand_id, idempotencyKey);
+    if (previous) return res.status(202).json({ jobId: previous.id });
+
+    const clusterId = await alternativeCluster(opp);
+    if (!clusterId) {
+      return res.status(409).json({
+        error: 'no_cluster',
+        message:
+          "This opportunity's prompt isn't grouped yet, so there's no need to write another angle for.",
+      });
+    }
+
+    const allowance = await requestAllowance(await getOrgIdForUser(req.user.id));
+    if (allowance.max <= 0) return quotaExhausted(res, allowance);
+
+    // The model sees the original as users read it.
+    const readable = cleanStoredOpportunity(opp, await competitorNames(opp.brand_id));
+    const request = {
+      count: 1,
+      idea: direction || null,
+      alternativeOf: {
+        id: opp.id,
+        title: readable.title,
+        description: readable.description ?? null,
+        decision: opp.decision ?? null,
+        clusterId,
+      },
+      idempotencyKey,
+    };
+    const job = await createJob({
+      type: 'content',
+      brandId: opp.brand_id,
+      data: { brandId: opp.brand_id, model: null, request },
+      maxAttempts: 2,
+    });
+    runContentJob(job.id, req.app.get('io'));
+
+    return res.status(202).json({ jobId: job.id });
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        error: 'plan_limit',
+        message: error.message,
+      });
+    }
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    req.log.error({ err: error }, 'alternative opportunity error');
     return res.status(500).json({ error: 'Failed to start generation' });
   }
 });
@@ -755,7 +859,7 @@ router.post('/bulk/send-webhook', async (req, res) => {
 router.patch('/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, reason } = req.body;
 
     const validStatuses = ['new', 'reviewed', 'sent', 'in_progress', 'done', 'dismissed'];
     if (!validStatuses.includes(status)) {
@@ -764,14 +868,37 @@ router.patch('/:id/status', async (req, res) => {
         .json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
     }
 
-    await assertOpportunityAccess(id, req.user.id);
+    let current = await assertOpportunityAccess(id, req.user.id);
 
-    const { data, error } = await supabaseAdmin
-      .from('content_opportunities')
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single();
+    // Why it was dismissed (CONTENT-006) rides in source_data, which other
+    // writers touch too (an Action Center send, a duplicate merge). The row
+    // is written only if it hasn't changed since it was read; otherwise it is
+    // read again and the change applied once more on the fresh copy.
+    let data = null;
+    let error = null;
+    for (let attempt = 0; attempt < 2 && !data && !error; attempt++) {
+      if (attempt > 0) {
+        const fresh = await supabaseAdmin
+          .from('content_opportunities')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle();
+        if (fresh.error) throw new Error(fresh.error.message);
+        if (!fresh.data) break;
+        current = fresh.data;
+      }
+      const sourceData = sourceDataForStatus(current.source_data, status, reason);
+      let update = supabaseAdmin
+        .from('content_opportunities')
+        .update({
+          status,
+          updated_at: new Date().toISOString(),
+          ...(sourceData ? { source_data: sourceData } : {}),
+        })
+        .eq('id', id);
+      if (sourceData) update = update.eq('updated_at', current.updated_at);
+      ({ data, error } = await update.select().maybeSingle());
+    }
 
     if (error) throw new Error(error.message);
     if (!data) return res.status(404).json({ error: 'Opportunity not found' });

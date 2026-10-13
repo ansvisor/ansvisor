@@ -232,6 +232,10 @@ export interface ContentOpportunitySourceData {
    * (CONTENT-004): clusters whose prompt and fan-out baskets matched its own.
    */
   duplicatesMerged?: number;
+  /** The opportunity this one is another angle on (CONTENT-006). */
+  alternativeOf?: { id: string; title: string };
+  /** Why it was dismissed, when the user said (CONTENT-006). */
+  dismissReason?: 'not_relevant' | 'wrong_angle';
   /** Why a finished opportunity went back to New (#857, Phase 4). */
   reopened?: {
     at: string;

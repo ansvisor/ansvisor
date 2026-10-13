@@ -28,6 +28,7 @@ import {
   ExternalLink,
   MoreHorizontal,
   Info,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Link } from '@/i18n/navigation';
@@ -38,8 +39,15 @@ import {
   generateBrief,
   getBriefQuota,
   sendOpportunityToActionCenter,
+  suggestAlternative,
+  getGenerationJobStatus,
   type BriefQuota,
 } from '@/lib/actions/content';
+import {
+  AlternativeDialog,
+  DismissReasonDialog,
+  type DismissReason,
+} from '@/components/content/opportunity-angle-dialogs';
 import type { ContentBrief, ContentOpportunity } from '@/types';
 import { getPromptFanout, type FanoutSubQuery } from '@/lib/actions/fanout';
 import {
@@ -113,6 +121,9 @@ function StatCard({
  * actions. Rendered as its own page (/dashboard/content/[id]) and inside the
  * list's drawer, so reviewing one never loses the list's filters.
  */
+/** How long the panel follows an "Another angle" job before giving up. */
+const ALTERNATIVE_TIMEOUT_MS = 3 * 60 * 1000;
+
 export function OpportunityDetail({
   id,
   inDrawer = false,
@@ -190,12 +201,67 @@ export function OpportunityDetail({
     }
   };
 
-  const handleDismiss = async () => {
+  // "Another angle" (CONTENT-006): generation runs as a content job; the
+  // panel follows it and says when the alternative is in the list.
+  const [alternativeOpen, setAlternativeOpen] = useState(false);
+  const [dismissOpen, setDismissOpen] = useState(false);
+  const [alternativeRunning, setAlternativeRunning] = useState(false);
+
+  const followAlternative = async (jobId: string) => {
+    setAlternativeRunning(true);
+    const startedAt = Date.now();
     try {
-      await updateOpportunityStatus(id, 'dismissed');
+      while (Date.now() - startedAt < ALTERNATIVE_TIMEOUT_MS) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const job = await getGenerationJobStatus(jobId);
+        if (job.status === 'completed') {
+          if (job.result?.limited) toast.error(t('newLimitReached'));
+          else if ((job.result?.generated ?? 0) > 0) toast.success(t('alternative.done'));
+          else toast(t('alternative.none'));
+          onChanged?.();
+          return;
+        }
+        if (job.status === 'failed') {
+          toast.error(job.failedReason || t('alternative.failed'), {
+            description: t('newRefunded'),
+          });
+          return;
+        }
+      }
+      // The job may still finish (and use its slot), so don't promise a refund.
+      toast(t('alternative.stillRunning'));
+    } finally {
+      setAlternativeRunning(false);
+    }
+  };
+
+  const handleAlternative = async (direction: string | null): Promise<boolean> => {
+    const result = await suggestAlternative(id, {
+      direction,
+      idempotencyKey: crypto.randomUUID(),
+    }).catch((err: unknown) => ({
+      ok: false as const,
+      error: err instanceof Error ? err.message : t('alternative.failed'),
+      quotaExhausted: false,
+      noCluster: false,
+    }));
+    if (!result.ok) {
+      toast.error(result.quotaExhausted ? t('newLimitReached') : result.error);
+      return false;
+    }
+    toast(t('alternative.started'));
+    void followAlternative(result.jobId);
+    return true;
+  };
+
+  const handleDismiss = async (reason?: DismissReason) => {
+    try {
+      await updateOpportunityStatus(id, 'dismissed', reason);
       const updated = await getOpportunity(id);
       setOpportunity(updated);
       onChanged?.();
+      // The topic is right, the angle wrong: offer the other angle straight away.
+      if (reason === 'wrong_angle') setAlternativeOpen(true);
       toast.success(t('dismissedToast'), {
         action: {
           label: t('undo'),
@@ -315,6 +381,20 @@ export function OpportunityDetail({
           )}
           <div className="min-w-0 flex-1">
             <h1 className="text-xl font-bold tracking-tight">{opportunity.title}</h1>
+            {sd.alternativeOf && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                <Badge variant="outline" className="mr-1.5 text-[10px] font-normal">
+                  {t('alternative.badge')}
+                </Badge>
+                {t('alternative.of')}{' '}
+                <Link
+                  href={`/dashboard/content?opportunity=${sd.alternativeOf.id}`}
+                  className="text-primary hover:underline"
+                >
+                  {sd.alternativeOf.title}
+                </Link>
+              </p>
+            )}
             {opportunity.description && (
               <p className="text-sm text-muted-foreground mt-1">{opportunity.description}</p>
             )}
@@ -338,9 +418,25 @@ export function OpportunityDetail({
           <Badge variant="outline" className="text-xs tabular-nums">
             Score: {Math.round(opportunity.opportunityScore)}
           </Badge>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="ml-auto gap-1 text-xs text-muted-foreground"
+            onClick={() => setAlternativeOpen(true)}
+            disabled={alternativeRunning}
+            title={t('alternative.hint')}
+          >
+            {alternativeRunning ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3 w-3" />
+            )}
+            {alternativeRunning ? t('alternative.running') : t('alternative.button')}
+          </Button>
           {/* The UI's language, not the browser's: an English page showed "25 Eyl". */}
           <span
-            className="text-xs text-muted-foreground ml-auto flex items-center gap-1.5"
+            className="text-xs text-muted-foreground flex items-center gap-1.5"
             title={suggestedDate(opportunity.createdAt, locale).full}
           >
             <Clock className="h-3.5 w-3.5" />
@@ -459,7 +555,7 @@ export function OpportunityDetail({
                   </DropdownMenuItem>
                 )}
                 {opportunity.status === 'new' && (
-                  <DropdownMenuItem variant="destructive" onClick={handleDismiss}>
+                  <DropdownMenuItem variant="destructive" onClick={() => setDismissOpen(true)}>
                     <X className="h-4 w-4" />
                     {t('dismiss')}
                   </DropdownMenuItem>
@@ -760,6 +856,16 @@ export function OpportunityDetail({
           </CardContent>
         </Card>
       )}
+      <AlternativeDialog
+        open={alternativeOpen}
+        onOpenChange={setAlternativeOpen}
+        onSubmit={handleAlternative}
+      />
+      <DismissReasonDialog
+        open={dismissOpen}
+        onOpenChange={setDismissOpen}
+        onChoose={(reason) => void handleDismiss(reason)}
+      />
     </div>
   );
 }

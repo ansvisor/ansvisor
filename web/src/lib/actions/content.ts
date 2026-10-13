@@ -374,6 +374,8 @@ export async function generateBrief(
 export async function updateOpportunityStatus(
   id: string,
   status: string,
+  /** Why it was dismissed (CONTENT-006); only read with status 'dismissed'. */
+  reason?: 'not_relevant' | 'wrong_angle',
 ): Promise<ContentOpportunity> {
   const session = await getSession();
 
@@ -383,7 +385,7 @@ export async function updateOpportunityStatus(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status, ...(reason ? { reason } : {}) }),
   });
 
   if (!res.ok) {
@@ -598,4 +600,39 @@ export async function saveWebhookConfig(
     createdAt: data.created_at ?? new Date().toISOString(),
     updatedAt: data.updated_at ?? new Date().toISOString(),
   };
+}
+
+export type AlternativeResult =
+  | { ok: true; jobId: string }
+  | { ok: false; error: string; quotaExhausted?: boolean; noCluster?: boolean };
+
+/**
+ * "Another angle" (CONTENT-006): starts generating one more opportunity for
+ * the same need with a different angle. Errors come back as values.
+ */
+export async function suggestAlternative(
+  id: string,
+  { direction, idempotencyKey }: { direction?: string | null; idempotencyKey: string },
+): Promise<AlternativeResult> {
+  const session = await getSession();
+
+  const res = await fetch(`${AEO_SERVER_URL}/api/content/${id}/alternative`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ direction: direction || null, idempotencyKey }),
+  });
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: body.message || body.error || `Server error: ${res.status}`,
+      quotaExhausted: body.error === 'quota_exhausted',
+      noCluster: body.error === 'no_cluster',
+    };
+  }
+  return { ok: true, jobId: body.jobId };
 }

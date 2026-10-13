@@ -220,6 +220,22 @@ async function loadPromptTexts(promptIds) {
   return data || [];
 }
 
+/**
+ * What the model is told when the user asks for another angle on an existing
+ * opportunity (CONTENT-006): the original, and that this one must differ in
+ * kind, not just in wording.
+ */
+export function alternativeInstruction({ title, description, decision }) {
+  const about = [
+    `"${title}"`,
+    description ? `(${description})` : null,
+    decision ? `decided as "${decision}"` : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return `This cluster already has the opportunity ${about}. The user wants a different angle on the same need: write one opportunity that differs clearly in content type, format, audience or decision. Don't repeat its title or approach.`;
+}
+
 /** Longest idea a "+ New" request may carry into the model prompt. */
 export const IDEA_MAX_LENGTH = 500;
 
@@ -233,8 +249,13 @@ export const IDEA_MAX_LENGTH = 500;
  *   promptId?: string | null,
  *   idea?: string | null,
  *   source?: 'system' | 'manual' | 'prompt',
+ *   alternativeOf?: { id: string, title: string, description?: string|null, decision?: string|null, clusterId: string } | null,
  * }} [opts] - `count`, the focus (`topicId` / `promptId`) and `idea` come from
  *   an on-demand request (CONTENT-003); the nightly run passes none of them.
+ *   `alternativeOf` asks for one more opportunity on that opportunity's
+ *   cluster with a different angle (CONTENT-006): the user wants a second
+ *   take on a need that's already covered, so neither coverage nor the
+ *   duplicate check stands in its way, and it isn't merged into anything.
  * @returns {Promise<{ generated: number, merged: number, reopened?: number, duplicates?: number, limited?: boolean }>}
  */
 export async function generateContentOpportunities(
@@ -247,6 +268,7 @@ export async function generateContentOpportunities(
     promptId = null,
     idea = null,
     source = 'system',
+    alternativeOf = null,
   } = {},
 ) {
   onProgress?.({ phase: 'collecting_data', message: 'Fetching clusters and metrics...' });
@@ -341,7 +363,9 @@ export async function generateContentOpportunities(
   const inFocus = (c) =>
     (!topicId || c.topicId === topicId) &&
     (!promptId || clusterById.get(c.id).prompt_ids.includes(promptId));
-  const open = candidates.filter((c) => c.metrics.tested > 0 && !covered.has(c.id) && inFocus(c));
+  const open = alternativeOf
+    ? candidates.filter((c) => c.id === alternativeOf.clusterId)
+    : candidates.filter((c) => c.metrics.tested > 0 && !covered.has(c.id) && inFocus(c));
   const { data: basketRows, error: basketErr } = await selectInChunks(
     open.map((c) => c.id),
     (chunk) =>
@@ -357,15 +381,19 @@ export async function generateContentOpportunities(
   // that opportunity again. It is never written, so it costs neither a model
   // call nor a slot of the quota; an open match takes it in as a related
   // cluster, so it is covered from now on.
-  const duplicates = await skipDuplicates(brandId, open, {
-    clusterById,
-    basketRows: basketRows || [],
-    covered,
-  });
+  const duplicates = alternativeOf
+    ? 0
+    : await skipDuplicates(brandId, open, {
+        clusterById,
+        basketRows: basketRows || [],
+        covered,
+      });
 
-  const wanted = pickClusters(open, covered, count ?? OPPORTUNITIES_PER_RUN, {
-    fill: count !== undefined,
-  });
+  const wanted = alternativeOf
+    ? open.slice(0, 1)
+    : pickClusters(open, covered, count ?? OPPORTUNITIES_PER_RUN, {
+        fill: count !== undefined,
+      });
   if (!wanted.length) {
     logger.info(
       { brandId, clusters: clusters.length, opportunities: existing.length, reopened, duplicates },
@@ -388,7 +416,8 @@ export async function generateContentOpportunities(
       logger.error({ err, brandId }, '[opportunities] handing back slots failed'),
     );
 
-  const shown = existing
+  // An alternative is its own take, never folded into another opportunity.
+  const shown = (alternativeOf ? [] : existing)
     .filter(
       (o) =>
         o.status !== 'dismissed' &&
@@ -438,11 +467,11 @@ ${picked.map(clusterLine).join('\n\n')}
 Existing opportunities in other topics:
 ${shown.map((o, i) => `[E${i}] ${o.title} (topic: ${topicName(clusterById.get(o.cluster_id)) || 'none'})`).join('\n') || 'none'}
 
-${
-  idea
-    ? `The user asked for ideas around: "${idea.slice(0, IDEA_MAX_LENGTH)}". Shape the opportunities toward it wherever the clusters' prompts allow; never invent a need the data doesn't show.\n\n`
-    : ''
-}Write every title and description in ${getLanguageName(brand.language)}.`;
+${alternativeOf ? `${alternativeInstruction(alternativeOf)}\n\n` : ''}${
+    idea
+      ? `The user asked for ideas around: "${idea.slice(0, IDEA_MAX_LENGTH)}". Shape the opportunities toward it wherever the clusters' prompts allow; never invent a need the data doesn't show.\n\n`
+      : ''
+  }Write every title and description in ${getLanguageName(brand.language)}.`;
 
   onProgress?.({ phase: 'analyzing', message: 'Generating opportunities with AI...' });
   const { object } = await generateObject({
@@ -553,6 +582,9 @@ ${
         }),
         targetPages: primary.pages,
         assets,
+        ...(alternativeOf
+          ? { alternativeOf: { id: alternativeOf.id, title: alternativeOf.title } }
+          : {}),
       },
     });
   }

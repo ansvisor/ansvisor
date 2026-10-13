@@ -17,11 +17,15 @@ import { refreshPromptClusters } from '../lib/prompt-clusters.js';
  * @param {{ brandId: string, model?: string, job: { progress: function }, request?: object | null }} opts
  */
 export async function processContentJob({ brandId, model, job, request = null }) {
-  job.progress({ phase: 'collecting_data', message: 'Grouping prompts into clusters...' });
-  try {
-    await refreshPromptClusters(brandId);
-  } catch (err) {
-    logger.error({ err, brandId }, 'prompt cluster refresh failed before generation');
+  // An alternative (CONTENT-006) is asked for one known cluster; regrouping
+  // first could replace that cluster before it's read.
+  if (!request?.alternativeOf) {
+    job.progress({ phase: 'collecting_data', message: 'Grouping prompts into clusters...' });
+    try {
+      await refreshPromptClusters(brandId);
+    } catch (err) {
+      logger.error({ err, brandId }, 'prompt cluster refresh failed before generation');
+    }
   }
 
   // A "+ New" request (CONTENT-003) carries its count, focus and idea, and
@@ -35,6 +39,7 @@ export async function processContentJob({ brandId, model, job, request = null })
           topicId: request.topicId ?? null,
           promptId: request.promptId ?? null,
           idea: request.idea ?? null,
+          alternativeOf: request.alternativeOf ?? null,
           source: 'manual',
         }
       : {}),
