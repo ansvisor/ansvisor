@@ -220,7 +220,7 @@ instead.
 
 ## Available tools
 
-The MCP server exposes **28 tools**. Descriptions below match
+The MCP server exposes **29 tools**. Descriptions below match
 [`web/src/lib/mcp/server.ts`](https://github.com/ansvisor/ansvisor/blob/main/web/src/lib/mcp/server.ts).
 Tools that change data are marked **writes** — only call them on explicit user
 intent, not during exploratory queries.
@@ -287,6 +287,7 @@ intent, not during exploratory queries.
 | `list_signals` | Detected changes (visibility, citations, traffic) with before/after values and linked `action_id`. | |
 | `list_action_history` | Closed actions with measured outcomes and before/after validation results. | |
 | `update_task_status` | Record progress on a task (`in_progress`, `completed`, `skipped`, `failed`); does not execute the task. | **yes** |
+| `create_improve_action` | Send a prompt's Improve suggestions to Action Center as a `prompt_improve` action (needs a generated suggestion set for the range and a plan with Improve; idempotent on `idempotency_key`). | **yes** |
 
 New tools may ship between releases — see `server.ts` and the [project roadmap](https://github.com/ansvisor/ansvisor#whats-next).
 

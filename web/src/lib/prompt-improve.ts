@@ -117,6 +117,11 @@ export const STATE_ORDER: ImproveState[] = [
   'no_runs',
 ];
 
+/** "mentioned in 8 of 120 runs": why a platform's state is what it is. */
+export function mentionRateLabel(p: Pick<ImprovePlatform, 'runs' | 'mentionedRuns'>): string {
+  return `mentioned in ${p.mentionedRuns} of ${p.runs} run${p.runs === 1 ? '' : 's'}`;
+}
+
 export function toDrafts(suggestions: ImproveSuggestion[]): DraftSuggestion[] {
   return suggestions.map((s) => ({ ...s, checked: true, removed: false }));
 }

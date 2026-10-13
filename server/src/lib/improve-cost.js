@@ -27,8 +27,13 @@ export const IMPROVE_BUDGET_SHARE = 0.01;
  */
 const TYPICAL_TOKENS = { input: 7000, output: 2000 };
 
+/**
+ * OpenRouter ids carry the provider id after an `openrouter/` prefix
+ * (`openrouter/google/gemini-3-flash-preview`); they're priced as that model.
+ */
 export function priceFor(modelId) {
-  return MODEL_PRICES[modelId] ?? FALLBACK_PRICE;
+  const id = String(modelId ?? '').replace(/^openrouter\//, '');
+  return MODEL_PRICES[id] ?? FALLBACK_PRICE;
 }
 
 /** USD cost of one call from the AI SDK's `usage`. */
