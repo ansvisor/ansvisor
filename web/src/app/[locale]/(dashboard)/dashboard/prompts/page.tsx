@@ -44,6 +44,8 @@ import {
 } from '@/components/ui/select';
 import { CompetitionBars } from '@/components/ui/competition-bars';
 import { WorkStatusBadge } from '@/components/prompts/work-status';
+import { BulkImportPrompts } from '@/components/prompts/bulk-import-prompts';
+import { promptKey } from '@/lib/prompt-import';
 import { setPromptWorkStatus, type PromptWorkStatus } from '@/lib/actions/prompt-workflow';
 import {
   TrendingUp,
@@ -114,8 +116,6 @@ import { formatRelative } from '@/lib/format-relative';
 import { compareNullsLast, type SortDir } from './prompt-sort';
 import { formatCompactNumber } from '@/lib/format';
 import { usePagination, TablePager } from '@/components/table-pager';
-import { BulkImportPrompts } from '@/components/prompts/bulk-import-prompts';
-import { promptKey } from '@/lib/prompt-import';
 import {
   PromptPositionsSheet,
   type PositionsPrompt,
