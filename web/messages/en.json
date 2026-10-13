@@ -732,6 +732,21 @@
           "allQueries": "Show all {count}",
           "fewerQueries": "Show fewer",
           "unavailable": "The opportunity this action was sent from is no longer available."
+        },
+        "noSignalsImprove": "This action was sent from the Prompts Improve tab, so it has no detection signals. Its evidence is the prompt and platforms below.",
+        "improve": {
+          "source": "Source",
+          "sourceValue": "Prompts › Improve",
+          "openPanel": "Open in Prompts",
+          "prompt": "Prompt",
+          "platforms": "Platforms at send time",
+          "states": {
+            "not_mentioned": "Not mentioned",
+            "mentioned_late": "Mentioned · Late",
+            "not_cited": "Mentioned early · not cited",
+            "doing_well": "Doing well",
+            "no_runs": "No runs"
+          }
         }
       }
     },
@@ -1127,6 +1142,12 @@
         "titleGeneric": "Act on a content opportunity",
         "description": "Sent from Content Optimization: a piece of content, or work on an existing page, that answers a group of related prompts.",
         "goal": "Get the brand into AI answers for these prompts with the content this opportunity calls for."
+      },
+      "prompt_improve": {
+        "title": "Improve position for {targets}",
+        "titleGeneric": "Improve a prompt's position",
+        "description": "Sent from the Prompts Improve tab: platform-specific changes to get the brand mentioned earlier and cited for one prompt.",
+        "goal": "Get the brand mentioned early and cited for this prompt on the platforms it covers."
       }
     },
     "actionTasks": {

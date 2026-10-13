@@ -61,6 +61,7 @@ export type Database = {
           action_id: string
           created_at: string
           depends_on: string[]
+          details: Json | null
           id: string
           mode: string
           output: Json | null
@@ -78,6 +79,7 @@ export type Database = {
           action_id: string
           created_at?: string
           depends_on?: string[]
+          details?: Json | null
           id?: string
           mode?: string
           output?: Json | null
@@ -95,6 +97,7 @@ export type Database = {
           action_id?: string
           created_at?: string
           depends_on?: string[]
+          details?: Json | null
           id?: string
           mode?: string
           output?: Json | null

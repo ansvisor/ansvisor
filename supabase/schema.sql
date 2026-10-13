@@ -14231,6 +14231,106 @@ grant execute on function public.citations_urls_daily(uuid, date, date, text[], 
   to authenticated, service_role;
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00120_prompt_improve_suggestions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Positions panel → Improve tab (PROMPT-003): AI-generated, platform-specific
+-- suggestions to improve one prompt's position.
+--
+-- One row per (prompt, range, location): the whole generated set for every
+-- platform the prompt was tracked on in that window. Generating costs a model
+-- call, so the panel reads this row first and only regenerates when the user
+-- asks or when newer answers have arrived since it was built
+-- (latest_result_at).
+--
+-- range_key is the panel's range as the user picked it: a preset ('24h', '7d',
+-- '30d', '90d') or 'custom:<from>:<to>'. Presets slide with the clock; keying
+-- on the preset rather than the resolved bounds is what lets "30d" be reused
+-- across a day instead of missing the cache every minute.
+--
+-- Edits, removals and the user's own suggestions are not stored here: they
+-- live in the panel until sent to Action Center (PROMPT-004).
+
+create table if not exists public.prompt_improve_suggestions (
+  id uuid primary key default gen_random_uuid(),
+  prompt_id uuid not null references public.prompts(id) on delete cascade,
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  range_key text not null,
+  -- '' = every location, matching the Prompts table's location filter.
+  region text not null default '',
+
+  -- Per platform: { platform, state, runs, mentionPosition, citationRank, inputs }.
+  platform_states jsonb not null default '[]'::jsonb,
+  -- [{ id, platform, state, title, body, sources: [{ type, ref }], confidence }].
+  suggestions jsonb not null default '[]'::jsonb,
+
+  -- Newest answer the set was built from. A newer answer in the window marks
+  -- the set stale, so it is rebuilt on the next open.
+  latest_result_at timestamptz,
+  model text,
+  generated_at timestamptz not null default now()
+);
+
+create unique index if not exists prompt_improve_suggestions_key_idx
+  on public.prompt_improve_suggestions (prompt_id, range_key, region);
+
+create index if not exists prompt_improve_suggestions_brand_idx
+  on public.prompt_improve_suggestions (brand_id);
+
+-- Service-role only, like action_candidates (00089): the server reads and
+-- writes it after checking the caller's brand access. No policy on purpose.
+alter table public.prompt_improve_suggestions enable row level security;
+
+comment on table public.prompt_improve_suggestions is
+  'Cached Improve-tab suggestions per (prompt, range, location). Rebuilt on Regenerate or when an answer newer than latest_result_at arrives.';
+
+-- Monthly Improve budget: one row per model call with its real token cost,
+-- summed per organization over the subscription period against
+-- plan.limits.improveMonthlyBudgetUsd, 1% of the plan price (Starter 0,
+-- Growth $2.49, Enterprise $4.99 or 1% of plan_overrides.contractMonthlyUsd).
+-- Charging the real cost keeps the share fixed whichever model is
+-- configured. Same posture as brief_usage (00015): reading a cached set
+-- costs nothing. Self-hosted bypasses the budget.
+
+create table if not exists public.prompt_improve_usage (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  prompt_id uuid references public.prompts(id) on delete set null,
+  model text,
+  input_tokens integer,
+  output_tokens integer,
+  cost_usd numeric(12, 6) not null default 0,
+  used_at timestamptz not null default now()
+);
+
+create index if not exists prompt_improve_usage_org_used_idx
+  on public.prompt_improve_usage (organization_id, used_at);
+
+-- Service-role only, no policy (as brief_usage).
+alter table public.prompt_improve_usage enable row level security;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00121_prompt_improve_actions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Positions panel → Improve → Send Actions (PROMPT-004): the selected
+-- suggestions become one Action Center action with a task each.
+--
+-- action_tasks.details: what a task sent from a suggestion carries beyond its
+-- title — the body the user wrote or kept, the platform it is for, and the
+-- evidence it was based on: { body, platform, platformLabel, sources: [{ type,
+-- ref }] }. Null for library and hand-added tasks, which render as before.
+alter table public.action_tasks add column if not exists details jsonb;
+
+comment on column public.action_tasks.details is
+  'Extra content for a task sent from the Improve tab (PROMPT-004): { body, platform, platformLabel, sources: [{ type, ref }] }. Null otherwise.';
+
+-- prompt_improve_suggestions.sent_actions: every send of this set, newest
+-- last — [{ actionId, actionNo, sentAt, setGeneratedAt, suggestionIds }]. The
+-- panel shows "Open in Actions" for the newest send of the current set while
+-- its action is still open, and marks the suggestions it carried.
+alter table public.prompt_improve_suggestions
+  add column if not exists sent_actions jsonb not null default '[]'::jsonb;
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00122_import_prompts.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- Bulk import of prompts from a spreadsheet (PROMPT-005), capped at the plan

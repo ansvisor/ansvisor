@@ -2,7 +2,8 @@
 
 /**
  * Positions panel for one tracked prompt: per-platform mention and citation
- * results over the Prompts table's window and location.
+ * results over a window and the Prompts table's location. The window opens on
+ * the table's and can be changed inside the panel without touching the table.
  *
  * The 24h window shows each platform's latest answer; longer windows show
  * days — how many were tracked, mentioned and cited, with a block per day and
@@ -39,7 +40,10 @@ import { cn } from '@/lib/utils';
 import { formatRegionDisplay } from '@/lib/region';
 import { positionTone } from '@/lib/position-tone';
 import { CONTACT_SALES_URL, type PlanId } from '@/config/plans';
-import type { PromptRangePreset } from '@/config/prompt-options';
+import { PROMPT_RANGE_PRESETS, type PromptRangePreset } from '@/config/prompt-options';
+import type { PositionsRange } from '@/lib/positions-range';
+import { DateRangeFilter } from '@/components/filters/date-range-filter';
+import { ImproveTab, useImprove, type ImproveController } from './prompt-improve-tab';
 import { getPromptPositions, type PromptPositionsData } from '@/lib/actions/prompt-positions';
 import type {
   AnswerView,
@@ -49,6 +53,8 @@ import type {
 } from '@/lib/prompt-positions';
 import type { Sentiment } from '@/types';
 
+export type { PositionsRange } from '@/lib/positions-range';
+
 export interface PositionsPrompt {
   id: string;
   text: string;
@@ -57,9 +63,12 @@ export interface PositionsPrompt {
 interface Props {
   /** The prompt to show; null keeps the panel closed. */
   prompt: PositionsPrompt | null;
-  /** The table's window: the same bounds its Mentions / Citations columns read. */
+  /** The panel's selected range; it opens on the table's. */
+  range: PositionsRange;
+  /** `range` resolved to the bounds the data is read over. */
   window: { from: string; to?: string };
-  preset: PromptRangePreset;
+  /** Changes the panel's range only; the table keeps its own. */
+  onRangeChange: (range: PositionsRange) => void;
   /** The table's location; empty means every location. */
   region: string;
   onClose: () => void;
@@ -93,13 +102,23 @@ const formatDateTime = (iso: string) =>
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const pct = (n: number, of: number) => (of > 0 ? `${Math.round((n / of) * 100)}%` : '—');
 
-function windowTitle(preset: PromptRangePreset, window: { from: string; to?: string }): string {
-  if (preset !== 'custom') return `Last ${preset}`;
-  const to = window.to ?? new Date().toISOString();
-  return `Custom: ${SHORT_DATE_FMT.format(new Date(window.from))} – ${DATE_FMT.format(new Date(to))}`;
+// The resolved dates follow in the caption, so a custom range isn't spelled out twice.
+function windowTitle(preset: PromptRangePreset): string {
+  return preset === 'custom' ? 'Custom range' : `Last ${preset}`;
 }
 
-export function PromptPositionsSheet({ prompt, window, preset, region, onClose }: Props) {
+export function PromptPositionsSheet({
+  prompt,
+  range,
+  window,
+  onRangeChange,
+  region,
+  onClose,
+}: Props) {
+  const preset = range.preset;
+  // A range change asked for while the Improve tab has unsent edits waits here
+  // until the user confirms discarding them.
+  const [pendingRange, setPendingRange] = useState<PositionsRange | null>(null);
   // Everything the data depends on. A response is shown only while its key
   // still matches, so another prompt's (or window's) numbers never linger.
   const key = prompt ? `${prompt.id}|${window.from}|${window.to ?? ''}|${region}` : '';
@@ -137,6 +156,23 @@ export function PromptPositionsSheet({ prompt, window, preset, region, onClose }
   const data = current?.data ?? null;
   const latestMode = preset === '24h';
 
+  const improve = useImprove({
+    promptId: prompt?.id ?? null,
+    range: {
+      preset,
+      from: window.from,
+      to: window.to,
+      customFrom: preset === 'custom' ? range.from : undefined,
+      customTo: preset === 'custom' ? range.to : undefined,
+      region,
+    },
+    planId: data?.planId ?? null,
+  });
+  const changeRange = (next: PositionsRange) => {
+    if (improve.dirty) setPendingRange(next);
+    else onRangeChange(next);
+  };
+
   const retry = () => {
     setLoaded(null);
     setAttempt((n) => n + 1);
@@ -161,7 +197,7 @@ export function PromptPositionsSheet({ prompt, window, preset, region, onClose }
           )}
           <SheetDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
             <CalendarDays className="h-3.5 w-3.5" />
-            <span className="font-medium text-foreground">{windowTitle(preset, window)}</span>
+            <span className="font-medium text-foreground">{windowTitle(preset)}</span>
             {data && latestMode && (
               <span>
                 Last run:{' '}
@@ -181,12 +217,48 @@ export function PromptPositionsSheet({ prompt, window, preset, region, onClose }
               </Badge>
             )}
           </SheetDescription>
+          <div className="flex flex-wrap items-end gap-3 pt-1">
+            <DateRangeFilter
+              label="Period"
+              value={preset}
+              presets={PROMPT_RANGE_PRESETS}
+              onChange={(next) => changeRange({ ...range, preset: next })}
+              from={range.from}
+              to={range.to}
+              onFromChange={(from) => changeRange({ ...range, from })}
+              onToChange={(to) => changeRange({ ...range, to })}
+            />
+          </div>
+          {pendingRange && (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs dark:border-amber-900/50 dark:bg-amber-950/30">
+              <span className="text-amber-900 dark:text-amber-200">
+                Changing the period discards your unsent Improve edits.
+              </span>
+              <Button size="xs" variant="outline" onClick={() => setPendingRange(null)}>
+                Keep editing
+              </Button>
+              <Button
+                size="xs"
+                onClick={() => {
+                  onRangeChange(pendingRange);
+                  setPendingRange(null);
+                }}
+              >
+                Discard & change
+              </Button>
+            </div>
+          )}
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {prompt && !current && <PositionsSkeleton />}
           {current?.error && <LoadError message={current.error} onRetry={retry} />}
-          {data && (latestMode ? <LatestView data={data} /> : <PeriodView data={data} />)}
+          {data &&
+            (latestMode ? (
+              <LatestView data={data} improve={improve} />
+            ) : (
+              <PeriodView data={data} improve={improve} />
+            ))}
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t px-5 py-3">
@@ -378,7 +450,20 @@ function avgLabel(stats: PositionStats | null): string {
 
 // ─── 24h: each platform's latest answer ───────────────────────────────────────
 
-function LatestView({ data }: { data: PromptPositionsData }) {
+function ImproveTrigger({ improve }: { improve: ImproveController }) {
+  return (
+    <TabsTrigger value="improve">
+      Improve
+      {improve.count !== null && improve.count > 0 && (
+        <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">
+          {improve.count}
+        </Badge>
+      )}
+    </TabsTrigger>
+  );
+}
+
+function LatestView({ data, improve }: { data: PromptPositionsData; improve: ImproveController }) {
   const included = data.platforms.filter((p) => p.access.state === 'included');
   const answered = included.filter((p) => p.latest);
   const mentioned = answered.filter((p) => p.latest!.mentioned).length;
@@ -404,15 +489,26 @@ function LatestView({ data }: { data: PromptPositionsData }) {
         <Stat label="Avg. position" value={avg} sub="when mentioned" />
       </div>
 
-      <div className="divide-y rounded-lg border">
-        {data.platforms.map((p) =>
-          p.access.state === 'locked' ? (
-            <LockedRow key={p.id} platform={p} planId={data.planId} />
-          ) : (
-            <LatestRow key={p.id} platform={p} />
-          ),
-        )}
-      </div>
+      <Tabs defaultValue="platforms">
+        <TabsList>
+          <TabsTrigger value="platforms">Platform results</TabsTrigger>
+          <ImproveTrigger improve={improve} />
+        </TabsList>
+        <TabsContent value="platforms" className="mt-3">
+          <div className="divide-y rounded-lg border">
+            {data.platforms.map((p) =>
+              p.access.state === 'locked' ? (
+                <LockedRow key={p.id} platform={p} planId={data.planId} />
+              ) : (
+                <LatestRow key={p.id} platform={p} />
+              ),
+            )}
+          </div>
+        </TabsContent>
+        <TabsContent value="improve" className="mt-3">
+          <ImproveTab improve={improve} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -464,7 +560,7 @@ function LatestRow({ platform: p }: { platform: PlatformPositions }) {
 
 // ─── 7d / 30d / 90d / custom: days ────────────────────────────────────────────
 
-function PeriodView({ data }: { data: PromptPositionsData }) {
+function PeriodView({ data, improve }: { data: PromptPositionsData; improve: ImproveController }) {
   const s = data.summary;
   return (
     <div className="space-y-4">
@@ -505,6 +601,7 @@ function PeriodView({ data }: { data: PromptPositionsData }) {
         <TabsList>
           <TabsTrigger value="platforms">Platform results</TabsTrigger>
           <TabsTrigger value="history">Daily history ({s.trackedDays})</TabsTrigger>
+          <ImproveTrigger improve={improve} />
         </TabsList>
         <TabsContent value="platforms" className="mt-3 space-y-3">
           <HeatmapLegend />
@@ -524,6 +621,9 @@ function PeriodView({ data }: { data: PromptPositionsData }) {
         </TabsContent>
         <TabsContent value="history" className="mt-3">
           <DailyHistory platforms={data.platforms} />
+        </TabsContent>
+        <TabsContent value="improve" className="mt-3">
+          <ImproveTab improve={improve} />
         </TabsContent>
       </Tabs>
     </div>
