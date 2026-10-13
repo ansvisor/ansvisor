@@ -27,6 +27,7 @@ import {
 import { loadClusterOpportunities, loadOpportunityBaskets } from './open-opportunities.js';
 import { basket, duplicateThreshold, findDuplicate, storedBasket } from './opportunity-dedup.js';
 import { loadClusters } from './prompt-clusters.js';
+import { cleanOpportunityText } from './opportunity-text.js';
 import { reopenStrengthened } from './opportunity-reopen.js';
 import {
   claimOpportunitySlots,
@@ -264,7 +265,7 @@ export async function generateContentOpportunities(
     .toISOString()
     .slice(0, 10);
   const memberIds = clusters.flatMap((c) => c.prompt_ids);
-  const [prompts, volumes, metricsRes, topicsRes, domainsRes, existing, pagesRes] =
+  const [prompts, volumes, metricsRes, topicsRes, domainsRes, existing, pagesRes, competitorsRes] =
     await Promise.all([
       loadPromptTexts(memberIds),
       selectInChunks(memberIds, (chunk) =>
@@ -286,9 +287,11 @@ export async function generateContentOpportunities(
         .select('url, title, h1, description, lastmod, ai_citations, ga_sessions')
         .eq('brand_id', brandId)
         .eq('fetch_status', 200),
+      supabaseAdmin.from('competitors').select('name').eq('brand_id', brandId),
     ]);
   if (volumes.error) throw new Error(volumes.error.message);
   if (pagesRes.error) throw new Error(pagesRes.error.message);
+  const competitorNamesList = (competitorsRes.data || []).map((c) => c.name);
   if (metricsRes.error) throw new Error(metricsRes.error.message);
 
   const byPrompt = new Map(prompts.map((p) => [p.id, { text: p.text }]));
@@ -462,6 +465,24 @@ ${
     const cand = picked[opp.clusterIndex];
     if (!Number.isInteger(opp.clusterIndex) || !cand || done.has(cand.id)) continue;
     done.add(cand.id);
+
+    // CONTENT-005: any bracketed index the model repeated becomes what it
+    // stood for in this run, and misspelled competitors their real names.
+    const clean = (text) =>
+      cleanOpportunityText(text, {
+        clusters: picked.map((p) => clusterById.get(p.id).label),
+        pages: pagesFor.get(cand.id),
+        existing: shown.map((o) => o.title),
+        competitors: competitorNamesList,
+        // The prompt numbered clusters [0], [1]…: a lone index is one of them.
+        bare: true,
+      });
+    opp.title = clean(opp.title);
+    opp.description = clean(opp.description);
+    opp.supportingAssets = (opp.supportingAssets || []).map((a) => ({
+      ...a,
+      title: clean(a.title),
+    }));
 
     const target = Number.isInteger(opp.sameAs) ? shown[opp.sameAs] : null;
     if (target) {

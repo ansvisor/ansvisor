@@ -24,10 +24,25 @@ import {
 import { loadClusters } from '../lib/prompt-clusters.js';
 import { sendToActionCenter } from '../lib/action-center/from-opportunity.js';
 import { IDEA_MAX_LENGTH } from '../lib/opportunity-generator.js';
+import { cleanStoredOpportunity } from '../lib/opportunity-text.js';
 
 const router = Router();
 
-function mapOpportunityRow(row) {
+/**
+ * The brand's competitor names, which opportunity text is checked against
+ * when it's read (CONTENT-005).
+ */
+async function competitorNames(brandId) {
+  const { data } = await supabaseAdmin.from('competitors').select('name').eq('brand_id', brandId);
+  return (data || []).map((c) => c.name);
+}
+
+/**
+ * The API's opportunity. Text is shown cleaned of leaked internal indexes and
+ * misspelled competitor names; the stored row is left as it is.
+ */
+function mapOpportunityRow(stored, competitors = []) {
+  const row = cleanStoredOpportunity(stored, competitors);
   return {
     id: row.id,
     brandId: row.brand_id,
@@ -365,8 +380,11 @@ router.get('/brand/:brandId', async (req, res) => {
       p_created_to: toBound,
     });
 
-    const [{ data, error: dataError, count }, { data: aggregateData, error: aggregateError }] =
-      await Promise.all([dataQuery, aggregateQuery]);
+    const [
+      { data, error: dataError, count },
+      { data: aggregateData, error: aggregateError },
+      competitors,
+    ] = await Promise.all([dataQuery, aggregateQuery, competitorNames(brandId)]);
 
     if (dataError) {
       throw new Error(dataError.message);
@@ -384,7 +402,7 @@ router.get('/brand/:brandId', async (req, res) => {
     };
 
     return res.json({
-      opportunities: (data || []).map(mapOpportunityRow),
+      opportunities: (data || []).map((row) => mapOpportunityRow(row, competitors)),
 
       total: count || 0,
 
@@ -655,8 +673,11 @@ router.post('/bulk/send-webhook', async (req, res) => {
 
     let sent = 0;
     let failed = 0;
+    // What the workflow receives reads the way the page shows it.
+    const competitors = await competitorNames(brandId);
 
-    for (const opportunity of opportunities) {
+    for (const stored of opportunities) {
+      const opportunity = cleanStoredOpportunity(stored, competitors);
       try {
         let prompt = null;
         if (opportunity.prompt_id) {
@@ -755,7 +776,7 @@ router.patch('/:id/status', async (req, res) => {
     if (error) throw new Error(error.message);
     if (!data) return res.status(404).json({ error: 'Opportunity not found' });
 
-    return res.json(mapOpportunityRow(data));
+    return res.json(mapOpportunityRow(data, await competitorNames(data.brand_id)));
   } catch (error) {
     req.log.error({ err: error }, 'update opportunity status error');
     return res.status(error.status || 500).json({
@@ -773,7 +794,9 @@ router.post('/:id/send-webhook', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const opportunity = await assertOpportunityAccess(id, req.user.id);
+    // What the workflow receives reads the way the page shows it.
+    const stored = await assertOpportunityAccess(id, req.user.id);
+    const opportunity = cleanStoredOpportunity(stored, await competitorNames(stored.brand_id));
 
     const { data: webhookConfig } = await supabaseAdmin
       .from('webhook_configs')
@@ -1067,6 +1090,11 @@ Searches AI engines ran while answering them: ${(sourceData.queries?.top || []).
 `
     : '';
 
+  // The brief is written from the text as users read it, not leaked indexes.
+  const readable = cleanStoredOpportunity(
+    opportunity,
+    (competitors || []).map((c) => c.name),
+  );
   const userPrompt = `Brand: ${brand?.name || 'Unknown'}
 Industry: ${brand?.industry || 'Not specified'}
 Description: ${brand?.description || 'N/A'}
@@ -1074,8 +1102,8 @@ Domain: ${(domains || []).map((d) => d.domain).join(', ') || 'N/A'}
 Competitors: ${(competitors || []).map((c) => `${c.name} (${c.domain})`).join(', ') || 'None'}
 
 Opportunity:
-- Title: ${opportunity.title}
-- Description: ${opportunity.description}
+- Title: ${readable.title}
+- Description: ${readable.description}
 - Type: ${opportunity.type}
 - Impact: ${opportunity.impact}
 - Score: ${opportunity.opportunity_score}
@@ -1258,7 +1286,10 @@ router.post('/:id/action', async (req, res) => {
   try {
     const opp = await assertOpportunityAccess(req.params.id, req.user.id);
     const assetKey = typeof req.body?.assetKey === 'string' ? req.body.assetKey : null;
-    const result = await sendToActionCenter(opp, { assetKey, userId: req.user.id });
+    // The action's title and assets read the way the page shows them; the
+    // opportunity's own stored text is left as it is.
+    const readable = cleanStoredOpportunity(opp, await competitorNames(opp.brand_id));
+    const result = await sendToActionCenter(opp, { assetKey, userId: req.user.id, readable });
     return res.status(result.created ? 201 : 200).json(result);
   } catch (error) {
     req.log.error({ err: error }, 'send opportunity to action center error');
@@ -1334,7 +1365,7 @@ router.get('/:id', async (req, res) => {
 
     const opp = await assertOpportunityAccess(id, req.user.id);
 
-    return res.json(mapOpportunityRow(opp));
+    return res.json(mapOpportunityRow(opp, await competitorNames(opp.brand_id)));
   } catch (error) {
     req.log.error({ err: error }, 'get opportunity error');
     return res.status(error.status || 500).json({
