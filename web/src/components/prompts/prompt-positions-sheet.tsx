@@ -43,6 +43,7 @@ import { CONTACT_SALES_URL, type PlanId } from '@/config/plans';
 import { PROMPT_RANGE_PRESETS, type PromptRangePreset } from '@/config/prompt-options';
 import type { PositionsRange } from '@/lib/positions-range';
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
+import { ImproveTab, useImprove, type ImproveController } from './prompt-improve-tab';
 import { getPromptPositions, type PromptPositionsData } from '@/lib/actions/prompt-positions';
 import type {
   AnswerView,
@@ -115,6 +116,9 @@ export function PromptPositionsSheet({
   onClose,
 }: Props) {
   const preset = range.preset;
+  // A range change asked for while the Improve tab has unsent edits waits here
+  // until the user confirms discarding them.
+  const [pendingRange, setPendingRange] = useState<PositionsRange | null>(null);
   // Everything the data depends on. A response is shown only while its key
   // still matches, so another prompt's (or window's) numbers never linger.
   const key = prompt ? `${prompt.id}|${window.from}|${window.to ?? ''}|${region}` : '';
@@ -151,6 +155,23 @@ export function PromptPositionsSheet({
   const current = loaded?.key === key && key !== '' ? loaded : null;
   const data = current?.data ?? null;
   const latestMode = preset === '24h';
+
+  const improve = useImprove({
+    promptId: prompt?.id ?? null,
+    range: {
+      preset,
+      from: window.from,
+      to: window.to,
+      customFrom: preset === 'custom' ? range.from : undefined,
+      customTo: preset === 'custom' ? range.to : undefined,
+      region,
+    },
+    planId: data?.planId ?? null,
+  });
+  const changeRange = (next: PositionsRange) => {
+    if (improve.dirty) setPendingRange(next);
+    else onRangeChange(next);
+  };
 
   const retry = () => {
     setLoaded(null);
@@ -201,19 +222,43 @@ export function PromptPositionsSheet({
               label="Period"
               value={preset}
               presets={PROMPT_RANGE_PRESETS}
-              onChange={(next) => onRangeChange({ ...range, preset: next })}
+              onChange={(next) => changeRange({ ...range, preset: next })}
               from={range.from}
               to={range.to}
-              onFromChange={(from) => onRangeChange({ ...range, from })}
-              onToChange={(to) => onRangeChange({ ...range, to })}
+              onFromChange={(from) => changeRange({ ...range, from })}
+              onToChange={(to) => changeRange({ ...range, to })}
             />
           </div>
+          {pendingRange && (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs dark:border-amber-900/50 dark:bg-amber-950/30">
+              <span className="text-amber-900 dark:text-amber-200">
+                Changing the period discards your unsent Improve edits.
+              </span>
+              <Button size="xs" variant="outline" onClick={() => setPendingRange(null)}>
+                Keep editing
+              </Button>
+              <Button
+                size="xs"
+                onClick={() => {
+                  onRangeChange(pendingRange);
+                  setPendingRange(null);
+                }}
+              >
+                Discard & change
+              </Button>
+            </div>
+          )}
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {prompt && !current && <PositionsSkeleton />}
           {current?.error && <LoadError message={current.error} onRetry={retry} />}
-          {data && (latestMode ? <LatestView data={data} /> : <PeriodView data={data} />)}
+          {data &&
+            (latestMode ? (
+              <LatestView data={data} improve={improve} />
+            ) : (
+              <PeriodView data={data} improve={improve} />
+            ))}
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t px-5 py-3">
@@ -405,7 +450,20 @@ function avgLabel(stats: PositionStats | null): string {
 
 // ─── 24h: each platform's latest answer ───────────────────────────────────────
 
-function LatestView({ data }: { data: PromptPositionsData }) {
+function ImproveTrigger({ improve }: { improve: ImproveController }) {
+  return (
+    <TabsTrigger value="improve">
+      Improve
+      {improve.count !== null && improve.count > 0 && (
+        <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">
+          {improve.count}
+        </Badge>
+      )}
+    </TabsTrigger>
+  );
+}
+
+function LatestView({ data, improve }: { data: PromptPositionsData; improve: ImproveController }) {
   const included = data.platforms.filter((p) => p.access.state === 'included');
   const answered = included.filter((p) => p.latest);
   const mentioned = answered.filter((p) => p.latest!.mentioned).length;
@@ -431,15 +489,26 @@ function LatestView({ data }: { data: PromptPositionsData }) {
         <Stat label="Avg. position" value={avg} sub="when mentioned" />
       </div>
 
-      <div className="divide-y rounded-lg border">
-        {data.platforms.map((p) =>
-          p.access.state === 'locked' ? (
-            <LockedRow key={p.id} platform={p} planId={data.planId} />
-          ) : (
-            <LatestRow key={p.id} platform={p} />
-          ),
-        )}
-      </div>
+      <Tabs defaultValue="platforms">
+        <TabsList>
+          <TabsTrigger value="platforms">Platform results</TabsTrigger>
+          <ImproveTrigger improve={improve} />
+        </TabsList>
+        <TabsContent value="platforms" className="mt-3">
+          <div className="divide-y rounded-lg border">
+            {data.platforms.map((p) =>
+              p.access.state === 'locked' ? (
+                <LockedRow key={p.id} platform={p} planId={data.planId} />
+              ) : (
+                <LatestRow key={p.id} platform={p} />
+              ),
+            )}
+          </div>
+        </TabsContent>
+        <TabsContent value="improve" className="mt-3">
+          <ImproveTab improve={improve} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -491,7 +560,7 @@ function LatestRow({ platform: p }: { platform: PlatformPositions }) {
 
 // ─── 7d / 30d / 90d / custom: days ────────────────────────────────────────────
 
-function PeriodView({ data }: { data: PromptPositionsData }) {
+function PeriodView({ data, improve }: { data: PromptPositionsData; improve: ImproveController }) {
   const s = data.summary;
   return (
     <div className="space-y-4">
@@ -532,6 +601,7 @@ function PeriodView({ data }: { data: PromptPositionsData }) {
         <TabsList>
           <TabsTrigger value="platforms">Platform results</TabsTrigger>
           <TabsTrigger value="history">Daily history ({s.trackedDays})</TabsTrigger>
+          <ImproveTrigger improve={improve} />
         </TabsList>
         <TabsContent value="platforms" className="mt-3 space-y-3">
           <HeatmapLegend />
@@ -551,6 +621,9 @@ function PeriodView({ data }: { data: PromptPositionsData }) {
         </TabsContent>
         <TabsContent value="history" className="mt-3">
           <DailyHistory platforms={data.platforms} />
+        </TabsContent>
+        <TabsContent value="improve" className="mt-3">
+          <ImproveTab improve={improve} />
         </TabsContent>
       </Tabs>
     </div>

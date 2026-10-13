@@ -5,10 +5,26 @@ import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import { classifyPromptIntent } from '../lib/intent-extraction.js';
 import { getLanguageName } from '../lib/languages.js';
-import { requireFeature } from '../lib/plan-guard.js';
+import {
+  PlanLimitError,
+  enforceImproveQuota,
+  getImproveQuotaStatus,
+  requireFeature,
+} from '../lib/plan-guard.js';
 import { withRetry } from '../lib/retry.js';
 import { getGscSuggestionCandidates } from '../lib/gsc-suggestions.js';
 import { getGaSuggestionCandidates } from '../lib/ga-suggestions.js';
+import {
+  ACTIONABLE_STATES,
+  IMPROVE_PLATFORM_LABELS,
+  buildImprovePrompt,
+  classifyPlatform,
+  collectEvidence,
+  improveRangeKey,
+  improveSchema,
+  sanitizeSuggestions,
+} from '../lib/prompt-improve.js';
+import { generationCostUsd } from '../lib/improve-cost.js';
 
 const router = Router();
 
@@ -740,6 +756,267 @@ router.post('/fanout-intents', async (req, res) => {
   } catch (error) {
     req.log.error({ err: error }, 'fanout intents classification error');
     return res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── Positions panel → Improve tab (PROMPT-003) ───────────────────────────────
+
+const IMPROVE_PLATFORM_ORDER = Object.keys(IMPROVE_PLATFORM_LABELS);
+const IMPROVE_PRESETS = ['24h', '7d', '30d', '90d', 'custom'];
+
+/**
+ * The panel's range as the request states it. `from` / `to` are the resolved
+ * ISO bounds the web read the Positions numbers over; the key is what the set
+ * is cached under.
+ */
+function parseImproveRange(input) {
+  const preset = IMPROVE_PRESETS.includes(input?.preset) ? input.preset : null;
+  const from =
+    typeof input?.from === 'string' && !Number.isNaN(Date.parse(input.from)) ? input.from : null;
+  const to = typeof input?.to === 'string' && !Number.isNaN(Date.parse(input.to)) ? input.to : null;
+  if (!preset || !from) {
+    const err = new Error('A valid range (preset and from) is required');
+    err.status = 400;
+    throw err;
+  }
+  const region = typeof input?.region === 'string' ? input.region.trim() : '';
+  const key = improveRangeKey({
+    preset,
+    from: input.customFrom ?? from.slice(0, 10),
+    to: input.customTo ?? to?.slice(0, 10),
+  });
+  return { preset, from, to, region, key };
+}
+
+async function loadImprovePrompt(promptId, userId) {
+  const { data: prompt } = await supabaseAdmin
+    .from('prompts')
+    .select('id, text, platforms, prompt_sets!inner(brand_id)')
+    .eq('id', promptId)
+    .maybeSingle();
+  if (!prompt) {
+    const err = new Error('Prompt not found');
+    err.status = 404;
+    throw err;
+  }
+  const brandId = prompt.prompt_sets.brand_id;
+  const { brand } = await assertBrandAccess(brandId, userId);
+  return { prompt, brand, brandId };
+}
+
+function improveResultsQuery(columns, { promptId, brandId, range }) {
+  let q = supabaseAdmin
+    .from('prompt_results')
+    .select(columns)
+    .eq('prompt_id', promptId)
+    .eq('brand_id', brandId)
+    .gte('created_at', range.from);
+  if (range.to) q = q.lte('created_at', range.to);
+  if (range.region) q = q.eq('region', range.region);
+  return q.order('created_at', { ascending: false });
+}
+
+function improveResponse(row, newestAt) {
+  if (!row) return null;
+  return {
+    rangeKey: row.range_key,
+    region: row.region,
+    platforms: row.platform_states,
+    suggestions: row.suggestions,
+    latestResultAt: row.latest_result_at,
+    generatedAt: row.generated_at,
+    // Newer answers than the set was built from: the panel rebuilds it.
+    stale: !!newestAt && (!row.latest_result_at || newestAt > row.latest_result_at),
+  };
+}
+
+// What the panel shows: an estimate of generations left, never dollars.
+function publicQuota(q) {
+  if (q.unlimited) {
+    return { unlimited: true, exhausted: false, generationsLeft: null, percentLeft: null };
+  }
+  return {
+    unlimited: false,
+    exhausted: q.remainingUsd <= 0,
+    generationsLeft: q.generationsLeft,
+    percentLeft: q.percentLeft,
+  };
+}
+
+function improveModelId() {
+  return (
+    process.env.IMPROVE_SUGGESTION_MODEL ||
+    process.env.DEFAULT_SUGGESTION_MODEL ||
+    'google/gemini-3-flash-preview'
+  );
+}
+
+// Read the cached set; never generates.
+router.get('/:promptId/improve', requireFeature('prompt_improve'), async (req, res) => {
+  try {
+    const range = parseImproveRange(req.query);
+    const { brand, brandId } = await loadImprovePrompt(req.params.promptId, req.user.id);
+    const [{ data: cached }, { data: newest }, quota] = await Promise.all([
+      supabaseAdmin
+        .from('prompt_improve_suggestions')
+        .select('*')
+        .eq('prompt_id', req.params.promptId)
+        .eq('range_key', range.key)
+        .eq('region', range.region)
+        .maybeSingle(),
+      improveResultsQuery('created_at', { promptId: req.params.promptId, brandId, range }).limit(1),
+      getImproveQuotaStatus(brand.organization_id, improveModelId()),
+    ]);
+    return res.json({
+      improve: improveResponse(cached, newest?.[0]?.created_at ?? null),
+      quota: publicQuota(quota),
+    });
+  } catch (error) {
+    req.log.error({ err: error }, 'prompt improve read error');
+    return res
+      .status(error.status || 500)
+      .json({ error: error.message || 'Failed to load suggestions' });
+  }
+});
+
+// Build (or rebuild) the set for the range and cache it.
+router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, res) => {
+  try {
+    const range = parseImproveRange(req.body);
+    const promptId = req.params.promptId;
+    const { prompt, brand, brandId } = await loadImprovePrompt(promptId, req.user.id);
+
+    const [{ data: rows, error: rowsError }, { data: domainRows }, { data: competitors }] =
+      await Promise.all([
+        improveResultsQuery(
+          'id, platform, created_at, mention_count, mention_position, mentioned_entity_count, citations, search_queries, competitor_mentions',
+          { promptId, brandId, range },
+        ).limit(600),
+        supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', brandId),
+        supabaseAdmin.from('competitors').select('name, domain').eq('brand_id', brandId),
+      ]);
+    if (rowsError) throw rowsError;
+    const brandDomains = (domainRows ?? []).map((r) => r.domain);
+
+    const byPlatform = new Map();
+    for (const r of rows ?? []) {
+      if (!byPlatform.has(r.platform)) byPlatform.set(r.platform, []);
+      byPlatform.get(r.platform).push(r);
+    }
+    const platformIds = IMPROVE_PLATFORM_ORDER.filter(
+      (id) => byPlatform.has(id) || (prompt.platforms ?? []).includes(id),
+    );
+
+    const states = platformIds.map((id) => ({
+      id,
+      label: IMPROVE_PLATFORM_LABELS[id],
+      ...classifyPlatform(byPlatform.get(id) ?? [], brandDomains),
+    }));
+    const actionable = states.filter((p) => ACTIONABLE_STATES.includes(p.state));
+
+    // The newest answer's text, per actionable platform, for the excerpt.
+    const latestIds = actionable.map((p) => byPlatform.get(p.id)[0].id);
+    const { data: responses } = latestIds.length
+      ? await supabaseAdmin.from('prompt_results').select('id, response').in('id', latestIds)
+      : { data: [] };
+    const responseById = new Map((responses ?? []).map((r) => [r.id, r.response]));
+
+    const withEvidence = actionable.map((p) => ({
+      ...p,
+      evidence: collectEvidence(byPlatform.get(p.id), {
+        brandName: brand.name,
+        brandDomains,
+        competitors: competitors ?? [],
+        latestResponse: responseById.get(byPlatform.get(p.id)[0].id),
+      }),
+    }));
+
+    const modelId = improveModelId();
+    let suggestions = [];
+    // Only a model call is metered; a range with nothing to improve is free.
+    if (withEvidence.length > 0) await enforceImproveQuota(brand.organization_id, modelId);
+    if (withEvidence.length > 0) {
+      const { system, prompt: userPrompt } = buildImprovePrompt({
+        promptText: prompt.text,
+        brand: { name: brand.name, description: brand.description, domains: brandDomains },
+        platforms: withEvidence,
+      });
+      const { object, usage } = await withRetry(
+        () =>
+          generateObject({
+            model: resolveModel(modelId),
+            schema: improveSchema,
+            system,
+            prompt: userPrompt,
+          }),
+        { attempts: 3, baseDelayMs: 500, label: 'prompt-improve' },
+      );
+      suggestions = sanitizeSuggestions(object.suggestions, withEvidence);
+      // Charged at the call's real token cost, so the budget holds for any model.
+      await supabaseAdmin.from('prompt_improve_usage').insert({
+        organization_id: brand.organization_id,
+        prompt_id: promptId,
+        model: modelId,
+        input_tokens: usage?.inputTokens ?? null,
+        output_tokens: usage?.outputTokens ?? null,
+        cost_usd: generationCostUsd(modelId, usage),
+      });
+    }
+
+    // What each platform's group header shows: why it's there and which
+    // inputs the suggestions could draw on.
+    const evidenceById = new Map(withEvidence.map((p) => [p.id, p.evidence]));
+    const platformStates = states.map((p) => {
+      const ev = evidenceById.get(p.id);
+      return {
+        ...p,
+        inputs: ev
+          ? {
+              fanouts: ev.fanouts.length,
+              citedDomains: ev.citedDomains.length,
+              competitorUrls: ev.competitorUrls.length,
+              answer: !!ev.excerpt,
+            }
+          : null,
+      };
+    });
+
+    const { data: saved, error: saveError } = await supabaseAdmin
+      .from('prompt_improve_suggestions')
+      .upsert(
+        {
+          prompt_id: promptId,
+          brand_id: brandId,
+          range_key: range.key,
+          region: range.region,
+          platform_states: platformStates,
+          suggestions,
+          latest_result_at: rows?.[0]?.created_at ?? null,
+          model: withEvidence.length > 0 ? modelId : null,
+          generated_at: new Date().toISOString(),
+        },
+        { onConflict: 'prompt_id,range_key,region' },
+      )
+      .select('*')
+      .single();
+    if (saveError) throw saveError;
+
+    const quota = await getImproveQuotaStatus(brand.organization_id, modelId);
+    return res.json({
+      improve: improveResponse(saved, rows?.[0]?.created_at ?? null),
+      quota: publicQuota(quota),
+    });
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      return res.status(error.statusCode).json({
+        error: error.statusCode === 429 ? 'quota_exceeded' : 'plan_limit',
+        message: error.message,
+      });
+    }
+    req.log.error({ err: error }, 'prompt improve generate error');
+    return res
+      .status(error.status || 500)
+      .json({ error: error.message || 'Failed to generate suggestions' });
   }
 });
 
