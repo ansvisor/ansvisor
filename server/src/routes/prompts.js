@@ -17,6 +17,7 @@ import { getGaSuggestionCandidates } from '../lib/ga-suggestions.js';
 import {
   ACTIONABLE_STATES,
   IMPROVE_PLATFORM_LABELS,
+  SOURCE_TYPES,
   buildImprovePrompt,
   classifyPlatform,
   collectEvidence,
@@ -25,6 +26,10 @@ import {
   sanitizeSuggestions,
 } from '../lib/prompt-improve.js';
 import { generationCostUsd } from '../lib/improve-cost.js';
+import {
+  liveImproveSends,
+  sendImproveToActionCenter,
+} from '../lib/action-center/from-prompt-improve.js';
 
 const router = Router();
 
@@ -816,9 +821,10 @@ function improveResultsQuery(columns, { promptId, brandId, range }) {
   return q.order('created_at', { ascending: false });
 }
 
-function improveResponse(row, newestAt) {
+function improveResponse(row, newestAt, sent = { latest: null, sentSuggestionIds: [] }) {
   if (!row) return null;
   return {
+    sent,
     rangeKey: row.range_key,
     region: row.region,
     platforms: row.platform_states,
@@ -868,7 +874,11 @@ router.get('/:promptId/improve', requireFeature('prompt_improve'), async (req, r
       getImproveQuotaStatus(brand.organization_id, improveModelId()),
     ]);
     return res.json({
-      improve: improveResponse(cached, newest?.[0]?.created_at ?? null),
+      improve: improveResponse(
+        cached,
+        newest?.[0]?.created_at ?? null,
+        cached ? await liveImproveSends(cached) : undefined,
+      ),
       quota: publicQuota(quota),
     });
   } catch (error) {
@@ -1017,6 +1027,113 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
     return res
       .status(error.status || 500)
       .json({ error: error.message || 'Failed to generate suggestions' });
+  }
+});
+
+// Send the selected suggestions, as edited, to Action Center (PROMPT-004).
+const sendImproveSchema = z.object({
+  idempotencyKey: z.string().min(8).max(64),
+  suggestions: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(120),
+        platform: z.enum(Object.keys(IMPROVE_PLATFORM_LABELS)),
+        title: z.string().trim().min(1).max(200),
+        body: z.string().max(1000).optional().default(''),
+        sources: z
+          .array(z.object({ type: z.enum(SOURCE_TYPES), ref: z.string().min(1).max(300) }))
+          .max(6)
+          .optional()
+          .default([]),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
+
+function positionsPanelLink(promptId, range) {
+  const params = new URLSearchParams({
+    tab: 'all',
+    positions: promptId,
+    positionsRange: range.preset,
+  });
+  if (range.preset === 'custom') {
+    const [, from, to] = range.key.split(':');
+    if (from) params.set('positionsFrom', from);
+    if (to) params.set('positionsTo', to);
+  }
+  return `/dashboard/prompts?${params.toString()}`;
+}
+
+router.post('/:promptId/improve/action', requireFeature('prompt_improve'), async (req, res) => {
+  try {
+    const range = parseImproveRange(req.body);
+    const parsed = sendImproveSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid suggestions', details: parsed.error.issues });
+    }
+    const promptId = req.params.promptId;
+    const { prompt, brandId } = await loadImprovePrompt(promptId, req.user.id);
+
+    const { data: set } = await supabaseAdmin
+      .from('prompt_improve_suggestions')
+      .select('*')
+      .eq('prompt_id', promptId)
+      .eq('range_key', range.key)
+      .eq('region', range.region)
+      .maybeSingle();
+    if (!set) {
+      return res.status(404).json({ error: 'Generate suggestions for this range first' });
+    }
+
+    const { suggestions, idempotencyKey } = parsed.data;
+    const result = await sendImproveToActionCenter({
+      prompt,
+      brandId,
+      set,
+      suggestions,
+      idempotencyKey,
+      panelLink: positionsPanelLink(promptId, range),
+      userId: req.user.id,
+    });
+
+    // Record the send on the set, once, so the panel can show it after a reload.
+    const sends = set.sent_actions ?? [];
+    let updated = set;
+    if (!sends.some((s) => s.actionId === result.actionId)) {
+      const { data, error } = await supabaseAdmin
+        .from('prompt_improve_suggestions')
+        .update({
+          sent_actions: [
+            ...sends,
+            {
+              actionId: result.actionId,
+              actionNo: result.actionNo,
+              sentAt: new Date().toISOString(),
+              setGeneratedAt: set.generated_at,
+              suggestionIds: suggestions.map((s) => s.id),
+            },
+          ],
+        })
+        .eq('id', set.id)
+        .select('*')
+        .single();
+      if (error) throw error;
+      updated = data;
+    }
+
+    return res.json({
+      actionId: result.actionId,
+      actionNo: result.actionNo,
+      created: result.created,
+      taskCount: suggestions.length,
+      sent: await liveImproveSends(updated),
+    });
+  } catch (error) {
+    req.log.error({ err: error }, 'prompt improve send error');
+    return res
+      .status(error.status || 500)
+      .json({ error: error.message || 'Failed to send to Action Center' });
   }
 });
 

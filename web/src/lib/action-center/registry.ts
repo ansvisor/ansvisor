@@ -102,7 +102,9 @@ export type ActionKind =
   | 'earn_competitor_source_presence'
   | 'create_content_for_competitor_gaps'
   // Sent by a person from a content opportunity, not raised by a definition.
-  | 'content_opportunity';
+  | 'content_opportunity'
+  // Sent by a person from the Prompts Positions panel's Improve tab (PROMPT-004).
+  | 'prompt_improve';
 
 export type TaskStatus =
   | 'todo'
@@ -217,6 +219,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'earn_competitor_source_presence',
   'create_content_for_competitor_gaps',
   'content_opportunity',
+  'prompt_improve',
 ];
 
 /**

@@ -3,7 +3,13 @@
 import { createClient } from '@/lib/supabase/server';
 import { API_BASE_URL } from '@/config/api';
 // Types only — the helpers that go with them live in a plain module.
-import type { ImproveQuota, ImproveRangeInput, ImproveSet } from '@/lib/prompt-improve';
+import type {
+  ImproveQuota,
+  ImproveRangeInput,
+  ImproveSent,
+  ImproveSet,
+  ImproveSource,
+} from '@/lib/prompt-improve';
 
 /**
  * Failures come back as a value, not a throw, so the panel can show the real
@@ -78,4 +84,52 @@ export async function generateImproveSuggestions(
   range: ImproveRangeInput,
 ): Promise<ImproveResult> {
   return call(promptId, range, 'POST');
+}
+
+export interface SendImproveInput {
+  /** One per send, so a double click or a retry creates one action. */
+  idempotencyKey: string;
+  suggestions: {
+    id: string;
+    platform: string;
+    title: string;
+    body: string;
+    sources: ImproveSource[];
+  }[];
+}
+
+type SendResult =
+  | { actionId: string; actionNo: number; created: boolean; taskCount: number; sent: ImproveSent }
+  | { error: string };
+
+/** Send the selected suggestions, as edited, to Action Center as one action (PROMPT-004). */
+export async function sendImproveToActionCenter(
+  promptId: string,
+  range: ImproveRangeInput,
+  input: SendImproveInput,
+): Promise<SendResult> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'Not authenticated' };
+  const range_: Record<string, string> = {};
+  for (const [k, v] of Object.entries(range)) if (typeof v === 'string' && v) range_[k] = v;
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/prompts/${promptId}/improve/action`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ...range_, ...input }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(30_000),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.message || data.error || `Server error: ${res.status}` };
+    return data as SendResult;
+  } catch {
+    return { error: 'Could not reach the server. Please try again.' };
+  }
 }

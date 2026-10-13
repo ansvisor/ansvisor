@@ -12,7 +12,20 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Loader2, Lock, Pencil, Plus, RefreshCw, Sparkles, X } from 'lucide-react';
+import {
+  ArrowUpRight,
+  Check,
+  CircleCheck,
+  Loader2,
+  Lock,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Send,
+  Sparkles,
+  X,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,10 +37,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { cn } from '@/lib/utils';
 import { PLANS, hasFeature, type PlanId } from '@/config/plans';
-import { generateImproveSuggestions, getImproveSuggestions } from '@/lib/actions/prompt-improve';
+import {
+  generateImproveSuggestions,
+  getImproveSuggestions,
+  sendImproveToActionCenter,
+} from '@/lib/actions/prompt-improve';
 import {
   STATE_LABEL,
   STATE_ORDER,
+  actionCenterLink,
   hasUnsentEdits,
   selectionSummary,
   sourceChipLabel,
@@ -55,6 +73,9 @@ export interface ImproveController {
   count: number | null;
   /** Builds (or rebuilds) the set; one metered model call. */
   generate: () => void;
+  /** Sends the checked drafts to Action Center as one action (PROMPT-004). */
+  send: () => void;
+  sending: boolean;
 }
 
 /**
@@ -82,6 +103,10 @@ export function useImprove({
     error: string | null;
   }>({ key: '', status: 'idle', set: null, error: null });
   const [quota, setQuota] = useState<ImproveQuota | null>(null);
+  const [sending, setSending] = useState(false);
+  // One key per send: kept across a retry of the same send, so a double click
+  // or a repeated request creates one action; cleared once a send lands.
+  const sendKeyRef = useRef<string | null>(null);
   const [drafts, setDrafts] = useState<DraftSuggestion[]>([]);
   // The latest key, so a response for a range the user already left is dropped.
   const keyRef = useRef(key);
@@ -133,6 +158,45 @@ export function useImprove({
   const status: Status = locked ? 'locked' : (current?.status ?? 'idle');
   const set = current?.set ?? null;
 
+  const send = useCallback(() => {
+    if (!promptId || !state.set || sending) return;
+    const selected = drafts.filter((d) => d.checked && !d.removed && d.title.trim());
+    if (selected.length === 0) return;
+    const forKey = keyRef.current;
+    sendKeyRef.current ??= crypto.randomUUID();
+    setSending(true);
+    sendImproveToActionCenter(promptId, range, {
+      idempotencyKey: sendKeyRef.current,
+      suggestions: selected.map((d) => ({
+        id: d.id,
+        platform: d.platform,
+        title: d.title.trim(),
+        body: d.body.trim(),
+        sources: d.sources,
+      })),
+    })
+      .then((result) => {
+        if ('error' in result) {
+          toast.error(result.error);
+          return;
+        }
+        sendKeyRef.current = null;
+        if (keyRef.current === forKey) {
+          setState((s) => (s.set ? { ...s, set: { ...s.set, sent: result.sent } } : s));
+        }
+        toast.success(
+          `Action created with ${result.taskCount} task${result.taskCount === 1 ? '' : 's'}`,
+          {
+            action: {
+              label: 'Open',
+              onClick: () => window.open(actionCenterLink(result.actionId), '_self'),
+            },
+          },
+        );
+      })
+      .finally(() => setSending(false));
+  }, [promptId, range, drafts, sending, state.set]);
+
   const dirty = useMemo(() => !!set && hasUnsentEdits(drafts, set.suggestions), [drafts, set]);
 
   return {
@@ -146,13 +210,15 @@ export function useImprove({
     // A locked plan shows no count, even when a set was read before the plan was known.
     count: set && !locked ? drafts.filter((d) => !d.removed).length : null,
     generate,
+    send,
+    sending,
   };
 }
 
 // ─── Tab ──────────────────────────────────────────────────────────────────────
 
 export function ImproveTab({ improve }: { improve: ImproveController }) {
-  const { status, set, quota, drafts, setDrafts, error, dirty, generate } = improve;
+  const { status, set, quota, drafts, setDrafts, error, dirty, generate, send, sending } = improve;
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   const outOfQuota = !!quota?.exhausted;
 
@@ -200,6 +266,7 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
   const tracked = set.platforms.filter((p) => p.state !== 'no_runs');
   const actionable = tracked.filter((p) => p.state !== 'doing_well');
   const summary = selectionSummary(drafts);
+  const sentLatest = set.sent?.latest ?? null;
 
   const update = (id: string, patch: Partial<DraftSuggestion>) =>
     setDrafts((ds) => ds.map((d) => (d.id === id ? { ...d, ...patch } : d)));
@@ -253,6 +320,7 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
           <PlatformGroup
             key={p.id}
             platform={p}
+            sentIds={set.sent.sentSuggestionIds}
             drafts={drafts.filter((d) => d.platform === p.id)}
             onUpdate={update}
             onAddOwn={() => addOwn(p)}
@@ -268,34 +336,56 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
             Generated {new Date(set.generatedAt).toLocaleString()}
           </span>
           <QuotaNote quota={quota} className="ml-2" />
+          {sentLatest && (
+            <span className="mt-1 flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+              <CircleCheck className="h-3.5 w-3.5" />
+              Sent {new Date(sentLatest.sentAt).toLocaleDateString()} · AC-{sentLatest.actionNo}
+            </span>
+          )}
         </span>
-        {confirmRegenerate ? (
-          <span className="flex items-center gap-2 text-xs">
-            Discard your edits?
-            <Button size="xs" variant="outline" onClick={() => setConfirmRegenerate(false)}>
-              Keep editing
-            </Button>
+        <span className="flex flex-wrap items-center gap-2">
+          {confirmRegenerate ? (
+            <span className="flex items-center gap-2 text-xs">
+              Discard your edits?
+              <Button size="xs" variant="outline" onClick={() => setConfirmRegenerate(false)}>
+                Keep editing
+              </Button>
+              <Button
+                size="xs"
+                onClick={() => {
+                  setConfirmRegenerate(false);
+                  generate();
+                }}
+              >
+                Discard & regenerate
+              </Button>
+            </span>
+          ) : (
             <Button
-              size="xs"
-              onClick={() => {
-                setConfirmRegenerate(false);
-                generate();
-              }}
+              size="sm"
+              variant="outline"
+              disabled={outOfQuota}
+              onClick={() => (dirty ? setConfirmRegenerate(true) : generate())}
             >
-              Discard & regenerate
+              <RefreshCw />
+              Regenerate
             </Button>
-          </span>
-        ) : (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={outOfQuota}
-            onClick={() => (dirty ? setConfirmRegenerate(true) : generate())}
-          >
-            <RefreshCw />
-            Regenerate
-          </Button>
-        )}
+          )}
+          {sentLatest ? (
+            <Link
+              href={actionCenterLink(sentLatest.actionId)}
+              className={buttonVariants({ size: 'sm' })}
+            >
+              Open in Actions
+              <ArrowUpRight />
+            </Link>
+          ) : (
+            <Button size="sm" onClick={send} disabled={sending || summary.selected === 0}>
+              {sending ? <Loader2 className="animate-spin" /> : <Send />}
+              Send Actions
+            </Button>
+          )}
+        </span>
       </div>
     </div>
   );
@@ -379,11 +469,14 @@ function inputsNote(p: ImprovePlatform): string | null {
 
 function PlatformGroup({
   platform: p,
+  sentIds,
   drafts,
   onUpdate,
   onAddOwn,
 }: {
   platform: ImprovePlatform;
+  /** Suggestions a live send of this set carried. */
+  sentIds: string[];
   drafts: DraftSuggestion[];
   onUpdate: (id: string, patch: Partial<DraftSuggestion>) => void;
   onAddOwn: () => void;
@@ -417,7 +510,12 @@ function PlatformGroup({
         )}
 
       {drafts.map((d) => (
-        <SuggestionCard key={d.id} draft={d} onUpdate={(patch) => onUpdate(d.id, patch)} />
+        <SuggestionCard
+          key={d.id}
+          draft={d}
+          sent={sentIds.includes(d.id)}
+          onUpdate={(patch) => onUpdate(d.id, patch)}
+        />
       ))}
 
       {canSuggest && (
@@ -436,9 +534,11 @@ function PlatformGroup({
 
 function SuggestionCard({
   draft: d,
+  sent,
   onUpdate,
 }: {
   draft: DraftSuggestion;
+  sent: boolean;
   onUpdate: (patch: Partial<DraftSuggestion>) => void;
 }) {
   // A new own suggestion opens straight into editing.
@@ -537,8 +637,16 @@ function SuggestionCard({
           </span>
         </div>
         {d.body && <p className="text-xs leading-relaxed text-muted-foreground">{d.body}</p>}
-        {(d.sources.length > 0 || d.own) && (
+        {(d.sources.length > 0 || d.own || sent) && (
           <div className="flex flex-wrap gap-1">
+            {sent && (
+              <Badge
+                variant="outline"
+                className="border-emerald-500/30 bg-emerald-500/10 text-[10px] text-emerald-700 dark:text-emerald-300"
+              >
+                Already sent
+              </Badge>
+            )}
             {d.own && (
               <Badge variant="secondary" className="text-[10px]">
                 Your suggestion

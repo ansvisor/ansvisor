@@ -43,7 +43,23 @@ export interface ImprovePlatform {
   inputs: { fanouts: number; citedDomains: number; competitorUrls: number; answer: boolean } | null;
 }
 
+/** A send of this set to Action Center that is still live (PROMPT-004). */
+export interface ImproveSend {
+  actionId: string;
+  actionNo: number;
+  sentAt: string;
+  suggestionIds: string[];
+}
+
+export interface ImproveSent {
+  /** The newest live send of the current set; decides "Open in Actions". */
+  latest: ImproveSend | null;
+  /** Suggestions any live send of this set carried ("Already sent"). */
+  sentSuggestionIds: string[];
+}
+
 export interface ImproveSet {
+  sent: ImproveSent;
   rangeKey: string;
   region: string;
   platforms: ImprovePlatform[];
@@ -154,4 +170,9 @@ function shortUrl(url: string): string {
   } catch {
     return url;
   }
+}
+
+/** Where "Open in Actions" goes: the Actions tab with this action's panel open. */
+export function actionCenterLink(actionId: string): string {
+  return `/dashboard/action-center/actions?action=${actionId}`;
 }
