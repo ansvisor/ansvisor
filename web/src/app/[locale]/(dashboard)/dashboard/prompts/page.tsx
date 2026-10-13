@@ -65,8 +65,11 @@ import {
   X,
   ListChecks,
   Sparkles,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { PlatformDotState, PromptPositionCell } from '@/lib/prompt-position-summary';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
   startPromptVolumeAnalysis,
@@ -172,12 +175,20 @@ function ColHead({
 
 // ─── Sortable column header (All Prompts) ─────────────────────────────────────
 
-type AllPromptsSortKey = 'visibility' | 'mentions' | 'citations' | 'volume' | 'runs' | 'lastRun';
+type AllPromptsSortKey =
+  | 'visibility'
+  | 'mentions'
+  | 'citations'
+  | 'position'
+  | 'volume'
+  | 'runs'
+  | 'lastRun';
 
 const ALL_PROMPTS_SORT_KEYS: AllPromptsSortKey[] = [
   'visibility',
   'mentions',
   'citations',
+  'position',
   'volume',
   'runs',
   'lastRun',
@@ -949,6 +960,7 @@ export default function PromptsPage() {
   const [volumes, setVolumes] = useState<PromptVolume[]>([]);
   const [allPrompts, setAllPrompts] = useState<Prompt[]>([]);
   const [visibility, setVisibility] = useState<Record<string, PromptVisibilitySummary>>({});
+  const [positions, setPositions] = useState<Record<string, PromptPositionCell>>({});
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState<{
@@ -1081,6 +1093,7 @@ export default function PromptsPage() {
         setVolumes([]);
         setAllPrompts([]);
         setVisibility({});
+        setPositions({});
         setLoading(false);
         return;
       }
@@ -1102,6 +1115,7 @@ export default function PromptsPage() {
         const prompts = page.promptSets.flatMap((ps) => ps.prompts);
         setAllPrompts(prompts);
         setVisibility(page.visibility);
+        setPositions(page.positions);
         if (page.volumesDegraded) {
           toast.warning('Volume data is temporarily unavailable — showing prompts without it.');
         }
@@ -1627,6 +1641,7 @@ export default function PromptsPage() {
                 activeBrandId={activeBrandId}
                 volumeByPromptId={volumeByPromptId}
                 visibility={visibility}
+                positions={positions}
                 rangeLabel={rangeLabel}
                 positionsWindow={positionsWindow}
                 positionsPreset={range ? rangePreset : '30d'}
@@ -2017,6 +2032,70 @@ export default function PromptsPage() {
   );
 }
 
+// ─── Positions cell (All Prompts) ─────────────────────────────────────────────
+
+/** Average position with its trend against the previous period. */
+function PositionValue({ cell }: { cell: PromptPositionCell | undefined }) {
+  if (!cell || cell.avg === null) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  const delta = cell.delta;
+  return (
+    <span className="inline-flex items-center gap-1 tabular-nums">
+      <span className="text-sm font-semibold">#{cell.avg.toFixed(1)}</span>
+      {delta !== null && delta !== 0 && (
+        <span
+          className={cn(
+            'inline-flex items-center text-[10px] font-medium',
+            delta > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
+          )}
+          title={`${delta > 0 ? 'Up' : 'Down'} ${Math.abs(delta).toFixed(1)} against the previous period`}
+        >
+          {delta > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+          {Math.abs(delta).toFixed(1)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+const DOT_CLASS: Record<PlatformDotState, string> = {
+  early: 'bg-emerald-500',
+  late: 'bg-amber-500',
+  mentioned: 'bg-emerald-500/40',
+  missing: 'bg-red-500',
+  no_runs: 'bg-muted-foreground/30',
+};
+
+const DOT_LABEL: Record<PlatformDotState, string> = {
+  early: 'named early',
+  late: 'named further down',
+  mentioned: 'mentioned, position unknown',
+  missing: 'not mentioned',
+  no_runs: 'no runs',
+};
+
+/** One dot per platform, its state on hover. */
+function PlatformDots({ cell }: { cell: PromptPositionCell | undefined }) {
+  if (!cell || cell.dots.length === 0) return null;
+  return (
+    <span className="inline-flex items-center gap-1">
+      {cell.dots.map((d) => {
+        const label = `${d.label}: ${DOT_LABEL[d.state]}${d.avg !== null ? ` (#${d.avg.toFixed(1)})` : ''}`;
+        return (
+          <span
+            key={d.id}
+            title={label}
+            aria-label={label}
+            role="img"
+            className={cn('h-1.5 w-1.5 rounded-full', DOT_CLASS[d.state])}
+          />
+        );
+      })}
+    </span>
+  );
+}
+
 // ─── All Prompts Tab ──────────────────────────────────────────────────────────
 
 const WORK_FILTER_LABELS: Record<string, string> = {
@@ -2033,6 +2112,7 @@ function AllPromptsTab({
   activeBrandId,
   volumeByPromptId,
   visibility,
+  positions,
   rangeLabel,
   positionsWindow,
   positionsPreset,
@@ -2045,6 +2125,8 @@ function AllPromptsTab({
   activeBrandId: string;
   volumeByPromptId: Map<string, PromptVolume>;
   visibility: Record<string, PromptVisibilitySummary>;
+  /** The Positions column per prompt id. */
+  positions: Record<string, PromptPositionCell>;
   /** Selected window, so the column tooltips describe the data on screen. */
   rangeLabel: string;
   /** Bounds the table's columns were computed over, for the Positions panel. */
@@ -2060,6 +2142,8 @@ function AllPromptsTab({
   const tCommon = useTranslations('common');
   const [search, setSearch] = useState('');
   const [workFilter, setWorkFilter] = useState<'all' | 'none' | PromptWorkStatus>('all');
+  // Quick filter: prompts late or missing on at least one engine.
+  const [lateOnly, setLateOnly] = useState(false);
   // Optimistic per-row status overrides — the prompts prop belongs to the
   // parent's load cycle; a full reload for a one-column change would flash
   // the whole table.
@@ -2105,7 +2189,15 @@ function AllPromptsTab({
   const handleSort = useCallback(
     (key: AllPromptsSortKey) => {
       const params = new URLSearchParams(Array.from(searchParams.entries()));
-      const nextDir: SortDir = activeSort === key && dir === 'desc' ? 'asc' : 'desc';
+      // Position is best when lowest, so it starts at asc (#1 first).
+      const nextDir: SortDir =
+        activeSort === key
+          ? dir === 'desc'
+            ? 'asc'
+            : 'desc'
+          : key === 'position'
+            ? 'asc'
+            : 'desc';
       params.set('tab', 'all');
       params.set('sort', key);
       params.set('dir', nextDir);
@@ -2127,6 +2219,7 @@ function AllPromptsTab({
         workFilter === 'none' ? statusOf(p) === null : statusOf(p) === workFilter,
       );
     }
+    if (lateOnly) list = list.filter((p) => positions[p.id]?.lateOrMissing);
 
     const valueOf = (p: Prompt): number | null => {
       const vis = visibility[p.id];
@@ -2138,6 +2231,8 @@ function AllPromptsTab({
           return vis ? vis.totalMentions : null;
         case 'citations':
           return vis ? vis.totalCitations : null;
+        case 'position':
+          return positions[p.id]?.avg ?? null;
         case 'volume':
           return vol ? vol.estAiVolume : null;
         case 'runs':
@@ -2148,13 +2243,24 @@ function AllPromptsTab({
     };
 
     return list.sort((a, b) => compareNullsLast(valueOf(a), valueOf(b), dir));
-  }, [prompts, search, workFilter, statusOf, activeSort, dir, visibility, volumeByPromptId]);
+  }, [
+    prompts,
+    search,
+    workFilter,
+    lateOnly,
+    statusOf,
+    activeSort,
+    dir,
+    visibility,
+    positions,
+    volumeByPromptId,
+  ]);
 
   // Pagination for the main prompt list.  resetKey encodes every variable that
   // changes the visible row set (search text, sort column, sort direction, work
   // status filter) so usePagination jumps back to page 0 automatically when
   // any filter or sort changes — satisfying the issue's acceptance criteria.
-  const promptsResetKey = `${search}::${workFilter}::${activeSort}::${dir}`;
+  const promptsResetKey = `${search}::${workFilter}::${lateOnly}::${activeSort}::${dir}`;
   const promptsPager = usePagination(filtered.length, promptsResetKey);
 
   if (loading) {
@@ -2225,6 +2331,17 @@ function AllPromptsTab({
                 <SelectItem value="none">No status</SelectItem>
               </SelectContent>
             </Select>
+            <Button
+              type="button"
+              size="sm"
+              variant={lateOnly ? 'default' : 'outline'}
+              className="h-8 text-xs"
+              aria-pressed={lateOnly}
+              title="Prompts named late, or not at all, on at least one AI platform"
+              onClick={() => setLateOnly((v) => !v)}
+            >
+              Late or missing
+            </Button>
             <div className="relative w-60">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
@@ -2280,12 +2397,16 @@ function AllPromptsTab({
               >
                 Citations
               </SortableHead>
-              <ColHead
+              <SortableHead
                 className="text-center"
-                tooltip={`Where the brand was mentioned and cited, per AI platform, over the ${rangeLabel}. Available when the prompt has a mention or citation in that window.`}
+                tooltip={`Average position the brand is named at in AI answers over the ${rangeLabel}, with the change against the previous period of the same length. Each dot is a platform: green early, amber further down, red not mentioned, grey no runs. See opens the details.`}
+                sortKey="position"
+                activeSort={activeSort}
+                dir={dir}
+                onSort={handleSort}
               >
                 Positions
-              </ColHead>
+              </SortableHead>
               <SortableHead
                 className="text-right"
                 tooltip="Estimated monthly AI prompt volume, from keyword analysis. Empty until analysed."
@@ -2427,20 +2548,24 @@ function AllPromptsTab({
                     )}
                   </TableCell>
                   <TableCell className="text-center">
-                    {vis && (vis.mentionAnswers > 0 || vis.citationAnswers > 0) ? (
-                      <Button
-                        type="button"
-                        size="xs"
-                        variant="outline"
-                        aria-label={`View positions for ${p.text}`}
-                        onClick={() => setPositionsFor({ id: p.id, text: p.text })}
-                      >
-                        <BarChart3 />
-                        See
-                      </Button>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
+                    <div className="inline-flex flex-col items-center gap-1">
+                      <div className="inline-flex items-center gap-2">
+                        <PositionValue cell={positions[p.id]} />
+                        {vis && (vis.mentionAnswers > 0 || vis.citationAnswers > 0) && (
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            aria-label={`View positions for ${p.text}`}
+                            onClick={() => setPositionsFor({ id: p.id, text: p.text })}
+                          >
+                            <BarChart3 />
+                            See
+                          </Button>
+                        )}
+                      </div>
+                      {vis && <PlatformDots cell={positions[p.id]} />}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     {vol ? (
