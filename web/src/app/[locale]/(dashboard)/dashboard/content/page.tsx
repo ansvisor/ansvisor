@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -51,18 +51,17 @@ import {
   BarChart3,
   Search,
   Loader2,
-  RefreshCw,
   ExternalLink,
   X,
   Settings2,
   Trash2,
   Download,
+  Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { usePlanContext } from '@/components/providers/plan-provider';
 import {
-  generateOpportunities,
+  generateOpportunitiesOnDemand,
   getGenerationJobStatus,
   getContentUsage,
   getOpportunities,
@@ -83,7 +82,12 @@ import { WebhookSettingsDialog } from './_webhook-settings';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { OpportunityDetail } from '@/components/content/opportunity-detail';
 import { ContentUsageCard } from '@/components/content/content-usage-card';
-import { hasContentQuota, type ContentUsage } from '@/lib/content-usage';
+import { hasContentQuota, onDemandMax, type ContentUsage } from '@/lib/content-usage';
+import {
+  NewOpportunitiesDialog,
+  type NewOpportunitiesInput,
+} from '@/components/content/new-opportunities-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 import { PAGE_SIZE, TablePager, usePagination } from '@/components/table-pager';
 import { toCsv } from '@/lib/csv';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
@@ -103,8 +107,12 @@ const STATUS_VALUES = [
 ] as const;
 const IMPACT_VALUES = ['all', 'high', 'medium', 'low'] as const;
 const TYPE_VALUES = ['all', 'owned', 'earned'] as const;
+const SOURCE_VALUES = ['all', 'system', 'manual', 'prompt'] as const;
 const SORT_VALUES = ['score', 'newest'] as const;
-const URL_DEFAULTS = { status: 'all', impact: 'all', type: 'all', sort: 'score' };
+const URL_DEFAULTS = { status: 'all', impact: 'all', type: 'all', source: 'all', sort: 'score' };
+
+/** Used when the month's usage couldn't be read; the server still caps it. */
+const FALLBACK_REQUEST_MAX = 3;
 
 const OPPORTUNITY_EXPORT_HEADERS = [
   'title',
@@ -125,6 +133,8 @@ interface GenerationJob {
   brandId: string;
   jobId: string;
   startedAt: number;
+  /** How many a "+ New" request asked for: the placeholder rows shown meanwhile. */
+  count?: number;
 }
 
 function saveGenerationJob(job: GenerationJob) {
@@ -209,9 +219,9 @@ interface PromptFilterItem {
 export default function ContentPage() {
   const t = useTranslations('content');
   const tCommon = useTranslations('common');
+  const locale = useLocale();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrandSlug = useBrandStore((s) => s.getActiveBrand()?.slug);
-  const { isCloud } = usePlanContext();
 
   const [opportunities, setOpportunities] = useState<ContentOpportunity[]>([]);
   const [total, setTotal] = useState(0);
@@ -224,6 +234,7 @@ export default function ContentPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [impactFilter, setImpactFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [sortOrder, setSortOrder] = useState<string>('score');
   // The prompt filter (#836) lives in the URL as ?prompt=<id> so a filtered
   // view can be linked to. It is read after mount — useSearchParams would need
@@ -243,6 +254,13 @@ export default function ContentPage() {
   const [webhookOpen, setWebhookOpen] = useState(false);
   // This billing period's content usage (CONTENT-001); null hides the card.
   const [contentUsage, setContentUsage] = useState<ContentUsage | null>(null);
+  // Bumped after a "+ New" run, which may use quota without changing the total.
+  const [usageVersion, setUsageVersion] = useState(0);
+  const [newOpen, setNewOpen] = useState(false);
+  // Placeholder rows while a "+ New" request runs (CONTENT-003).
+  const [pendingCount, setPendingCount] = useState(0);
+  const lastRequestRef = useRef<NewOpportunitiesInput | null>(null);
+  const retryRef = useRef<(() => void) | null>(null);
   const pollRef = useRef(false);
   const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [aggregates, setAggregates] = useState({
@@ -257,7 +275,7 @@ export default function ContentPage() {
   // pager instead of the length of whatever page happens to be loaded.
   const pager = usePagination(
     total,
-    `${statusFilter}|${impactFilter}|${typeFilter}|${promptFilter}|${topicFilter}|${debouncedSearch}|${sortOrder}`,
+    `${statusFilter}|${impactFilter}|${typeFilter}|${sourceFilter}|${promptFilter}|${topicFilter}|${debouncedSearch}|${sortOrder}`,
   );
 
   // The list's filters and search, shared by the page load and the CSV export.
@@ -266,6 +284,7 @@ export default function ContentPage() {
     if (statusFilter !== 'all') filters.status = statusFilter;
     if (impactFilter !== 'all') filters.impact = impactFilter;
     if (typeFilter !== 'all') filters.type = typeFilter;
+    if (sourceFilter !== 'all') filters.source = sourceFilter;
     if (promptFilter) filters.promptId = promptFilter;
     if (topicFilter) filters.topicId = topicFilter;
     if (debouncedSearch.trim()) filters.q = debouncedSearch.trim();
@@ -275,6 +294,7 @@ export default function ContentPage() {
     statusFilter,
     impactFilter,
     typeFilter,
+    sourceFilter,
     promptFilter,
     topicFilter,
     debouncedSearch,
@@ -350,6 +370,7 @@ export default function ContentPage() {
     setStatusFilter(readUrlChoice('status', STATUS_VALUES, 'all'));
     setImpactFilter(readUrlChoice('impact', IMPACT_VALUES, 'all'));
     setTypeFilter(readUrlChoice('type', TYPE_VALUES, 'all'));
+    setSourceFilter(readUrlChoice('source', SOURCE_VALUES, 'all'));
     setSortOrder(readUrlChoice('sort', SORT_VALUES, 'score'));
     setUrlRead(true);
   }, []);
@@ -359,10 +380,16 @@ export default function ContentPage() {
   useEffect(() => {
     if (!urlRead) return;
     writeUrlParams(
-      { status: statusFilter, impact: impactFilter, type: typeFilter, sort: sortOrder },
+      {
+        status: statusFilter,
+        impact: impactFilter,
+        type: typeFilter,
+        source: sourceFilter,
+        sort: sortOrder,
+      },
       URL_DEFAULTS,
     );
-  }, [urlRead, statusFilter, impactFilter, typeFilter, sortOrder]);
+  }, [urlRead, statusFilter, impactFilter, typeFilter, sourceFilter, sortOrder]);
 
   const selectOpportunity = useCallback((opportunityId: string | null) => {
     setOpenOpportunityId(opportunityId);
@@ -445,7 +472,7 @@ export default function ContentPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId, total]);
+  }, [activeBrandId, total, usageVersion]);
 
   const pollJob = useCallback(
     (jobId: string, startedAt: number) => {
@@ -463,25 +490,36 @@ export default function ContentPage() {
               pollRef.current = false;
               clearGenerationJob();
               setGenerating(false);
-              toast.success(t('generatedToast', { count: status.result?.generated ?? 0 }));
+              setPendingCount(0);
+              const generated = status.result?.generated ?? 0;
+              const duplicates = status.result?.duplicates ?? 0;
+              if (status.result?.limited) toast.error(t('newLimitReached'));
+              else if (generated === 0 && duplicates === 0) toast(t('newNothing'));
+              else toast.success(t('newDone', { generated, duplicates }));
               loadData();
               loadPromptOptions();
+              setUsageVersion((v) => v + 1);
               break;
             }
 
-            if (status.status === 'failed') {
+            if (status.status === 'failed' || Date.now() - startedAt > GENERATION_TIMEOUT_MS) {
               pollRef.current = false;
               clearGenerationJob();
               setGenerating(false);
-              toast.error(status.failedReason || t('generationFailed'));
-              break;
-            }
-
-            if (Date.now() - startedAt > GENERATION_TIMEOUT_MS) {
-              pollRef.current = false;
-              clearGenerationJob();
-              setGenerating(false);
-              toast.error(t('generationTimedOut'));
+              setPendingCount(0);
+              // Slots it didn't use are handed back on the server; say so.
+              toast.error(
+                status.status === 'failed'
+                  ? status.failedReason || t('generationFailed')
+                  : t('generationTimedOut'),
+                {
+                  description: t('newRefunded'),
+                  action: lastRequestRef.current
+                    ? { label: t('retry'), onClick: () => retryRef.current?.() }
+                    : undefined,
+                },
+              );
+              setUsageVersion((v) => v + 1);
               break;
             }
           } catch {
@@ -500,6 +538,7 @@ export default function ContentPage() {
     const saved = loadGenerationJob();
     if (!saved || saved.brandId !== activeBrandId) return;
 
+    setPendingCount(saved.count ?? 0);
     pollJob(saved.jobId, saved.startedAt);
     return () => {
       pollRef.current = false;
@@ -550,19 +589,65 @@ export default function ContentPage() {
     }
   };
 
-  const handleGenerate = async () => {
-    if (!activeBrandId) return;
-    try {
-      const { jobId } = await generateOpportunities(activeBrandId);
-      const startedAt = Date.now();
-      saveGenerationJob({ brandId: activeBrandId, jobId, startedAt });
-      pollJob(jobId, startedAt);
-    } catch (err) {
-      console.error('Generate failed:', err);
-      toast.error(err instanceof Error ? err.message : t('generateError'));
-      setGenerating(false);
+  // "+ New" (CONTENT-003). One idempotency key per submit, so a double click
+  // or a retried request starts one job; returns whether it started.
+  const handleNew = async (input: NewOpportunitiesInput): Promise<boolean> => {
+    if (!activeBrandId) return false;
+    lastRequestRef.current = input;
+    const result = await generateOpportunitiesOnDemand({
+      brandId: activeBrandId,
+      ...input,
+      idempotencyKey: crypto.randomUUID(),
+    }).catch((err: unknown) => ({
+      ok: false as const,
+      error: err instanceof Error ? err.message : t('generateError'),
+      quotaExhausted: false,
+      periodEnd: null,
+    }));
+    if (!result.ok) {
+      toast.error(result.quotaExhausted ? t('newLimitReached') : result.error);
+      setUsageVersion((v) => v + 1);
+      return false;
     }
+    const startedAt = Date.now();
+    saveGenerationJob({
+      brandId: activeBrandId,
+      jobId: result.jobId,
+      startedAt,
+      count: result.count,
+    });
+    setPendingCount(result.count);
+    pollJob(result.jobId, startedAt);
+    return true;
   };
+  // The failure toast's Retry sends the last request again, with a new key.
+  useEffect(() => {
+    retryRef.current = () => {
+      if (lastRequestRef.current) void handleNew(lastRequestRef.current);
+    };
+  });
+
+  const requestMax = contentUsage ? onDemandMax(contentUsage) : FALLBACK_REQUEST_MAX;
+  const limitReached = hasContentQuota(contentUsage) && requestMax === 0;
+  const resetsOn = contentUsage?.periodEnd
+    ? new Date(contentUsage.periodEnd).toLocaleDateString(locale, {
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'UTC',
+      })
+    : '';
+  const newButton = (
+    <Button
+      onClick={() => setNewOpen(true)}
+      disabled={generating || loading || limitReached}
+      size="sm"
+      className="gap-2"
+      title={limitReached ? t('newLimitTooltip', { date: resetsOn }) : undefined}
+    >
+      {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+      {generating ? t('generating') : t('new')}
+    </Button>
+  );
 
   const handleSendWebhook = async (id: string) => {
     setSendingId(id);
@@ -707,6 +792,7 @@ export default function ContentPage() {
     statusFilter !== 'all' ||
     impactFilter !== 'all' ||
     typeFilter !== 'all' ||
+    sourceFilter !== 'all' ||
     promptFilter !== '' ||
     topicFilter !== '' ||
     search.trim() !== '';
@@ -715,6 +801,7 @@ export default function ContentPage() {
     setStatusFilter('all');
     setImpactFilter('all');
     setTypeFilter('all');
+    setSourceFilter('all');
     selectPrompt('');
     setTopicFilter('');
     setSearch('');
@@ -736,6 +823,7 @@ export default function ContentPage() {
           <p className="text-muted-foreground text-sm">{t('description')}</p>
         </div>
         <div className="flex items-center gap-2">
+          {newButton}
           <Button
             onClick={handleExportCsv}
             disabled={exporting || loading || total === 0}
@@ -759,27 +847,6 @@ export default function ContentPage() {
             <Settings2 className="h-4 w-4" />
             {t('webhook.title')}
           </Button>
-          {!isCloud && (
-            <Button
-              onClick={handleGenerate}
-              disabled={generating || loading}
-              size="sm"
-              className="gap-2"
-            >
-              {generating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : opportunities.length > 0 ? (
-                <RefreshCw className="h-4 w-4" />
-              ) : (
-                <Lightbulb className="h-4 w-4" />
-              )}
-              {generating
-                ? t('generating')
-                : opportunities.length > 0
-                  ? t('regenerate')
-                  : t('generate')}
-            </Button>
-          )}
         </div>
       </div>
 
@@ -795,18 +862,8 @@ export default function ContentPage() {
               <p className="text-sm font-medium">{t('noOpportunities')}</p>
               <p className="text-xs text-muted-foreground">{t('noOpportunitiesHint')}</p>
             </div>
-            {!isCloud ? (
-              <Button onClick={handleGenerate} disabled={generating} size="sm" className="gap-2">
-                {generating ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Lightbulb className="h-4 w-4" />
-                )}
-                {generating ? t('generating') : t('generate')}
-              </Button>
-            ) : (
-              <p className="text-xs text-muted-foreground">{t('autoGeneratedHint')}</p>
-            )}
+            {newButton}
+            <p className="text-xs text-muted-foreground">{t('autoGeneratedHint')}</p>
           </CardContent>
         </Card>
       ) : (
@@ -985,6 +1042,30 @@ export default function ContentPage() {
                       <SelectItem value="low">{t('impact.low')}</SelectItem>
                     </SelectContent>
                   </Select>
+                  <Select value={sourceFilter} onValueChange={(v) => v && setSourceFilter(v)}>
+                    <SelectTrigger className="h-8 w-[130px] text-xs" aria-label={t('source.label')}>
+                      <SelectValue>
+                        {(value) =>
+                          value === 'all'
+                            ? t('filters.allSources')
+                            : t(`source.${value as 'system' | 'manual' | 'prompt'}`)
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t('filters.allSources')}</SelectItem>
+                      {(['system', 'manual', 'prompt'] as const).map((value) => (
+                        <SelectItem key={value} value={value}>
+                          <span className="flex flex-col">
+                            <span>{t(`source.${value}`)}</span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {t(`sourceHint.${value}`)}
+                            </span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
                     <SelectTrigger className="h-8 w-[130px] text-xs">
                       <SelectValue>
@@ -1155,6 +1236,30 @@ export default function ContentPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {Array.from({ length: pendingCount }, (_, i) => (
+                    <TableRow key={`pending-${i}`} aria-busy="true">
+                      <TableCell className="w-10 pl-4" />
+                      <TableCell className="pl-6">
+                        <Skeleton className="h-4 w-4/5" />
+                        <Skeleton className="mt-1.5 h-3 w-3/5" />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Skeleton className="mx-auto h-5 w-14" />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Skeleton className="mx-auto h-5 w-14" />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Skeleton className="mx-auto h-4 w-6" />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="text-xs text-muted-foreground">
+                          {t('generatingRow')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell />
+                    </TableRow>
+                  ))}
                   {filtered.map((opp) => (
                     <TableRow key={opp.id} className="hover:bg-muted/50">
                       <TableCell className="w-10 pl-4">
@@ -1181,6 +1286,16 @@ export default function ContentPage() {
                                 className="mr-1.5 border-amber-500/30 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-400"
                               >
                                 {t('newSignal')}
+                              </Badge>
+                            )}
+                            {/* Before the title, which is clamped to one line. */}
+                            {opp.source && opp.source !== 'system' && (
+                              <Badge
+                                variant="outline"
+                                className="mr-1.5 align-middle text-[10px] font-normal text-muted-foreground"
+                                title={t(`sourceHint.${opp.source}`)}
+                              >
+                                {t(`source.${opp.source}`)}
                               </Badge>
                             )}
                             {opp.title}
@@ -1336,6 +1451,14 @@ export default function ContentPage() {
         open={webhookOpen}
         onOpenChange={setWebhookOpen}
         brandId={activeBrandId}
+      />
+      <NewOpportunitiesDialog
+        open={newOpen}
+        onOpenChange={setNewOpen}
+        brandId={activeBrandId}
+        max={requestMax}
+        remaining={contentUsage?.opportunities.remaining ?? -1}
+        onSubmit={handleNew}
       />
     </div>
   );

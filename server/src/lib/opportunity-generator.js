@@ -16,6 +16,7 @@ import supabaseAdmin from '../config/supabase.js';
 import { selectInChunks } from './chunked-in.js';
 import { logger } from './logger.js';
 import {
+  OPPORTUNITIES_PER_RUN,
   OPPORTUNITY_WINDOW_DAYS,
   clusterMetrics,
   coveredClusterIds,
@@ -218,12 +219,35 @@ async function loadPromptTexts(promptIds) {
   return data || [];
 }
 
+/** Longest idea a "+ New" request may carry into the model prompt. */
+export const IDEA_MAX_LENGTH = 500;
+
 /**
  * @param {string} brandId
- * @param {{ model?: string, onProgress?: (p: {phase: string, message: string}) => void }} [opts]
- * @returns {Promise<{ generated: number, merged: number, reopened?: number }>}
+ * @param {{
+ *   model?: string,
+ *   onProgress?: (p: {phase: string, message: string}) => void,
+ *   count?: number,
+ *   topicId?: string | null,
+ *   promptId?: string | null,
+ *   idea?: string | null,
+ *   source?: 'system' | 'manual' | 'prompt',
+ * }} [opts] - `count`, the focus (`topicId` / `promptId`) and `idea` come from
+ *   an on-demand request (CONTENT-003); the nightly run passes none of them.
+ * @returns {Promise<{ generated: number, merged: number, reopened?: number, duplicates?: number, limited?: boolean }>}
  */
-export async function generateContentOpportunities(brandId, { model, onProgress } = {}) {
+export async function generateContentOpportunities(
+  brandId,
+  {
+    model,
+    onProgress,
+    count,
+    topicId = null,
+    promptId = null,
+    idea = null,
+    source = 'system',
+  } = {},
+) {
   onProgress?.({ phase: 'collecting_data', message: 'Fetching clusters and metrics...' });
 
   const { data: brand } = await supabaseAdmin
@@ -310,7 +334,11 @@ export async function generateContentOpportunities(brandId, { model, onProgress 
 
   // The fan-out baskets of every cluster still open for an opportunity: the
   // duplicate check compares them, and the prompt shows the picked ones'.
-  const open = candidates.filter((c) => c.metrics.tested > 0 && !covered.has(c.id));
+  // A focused request only considers its topic's clusters or its prompt's.
+  const inFocus = (c) =>
+    (!topicId || c.topicId === topicId) &&
+    (!promptId || clusterById.get(c.id).prompt_ids.includes(promptId));
+  const open = candidates.filter((c) => c.metrics.tested > 0 && !covered.has(c.id) && inFocus(c));
   const { data: basketRows, error: basketErr } = await selectInChunks(
     open.map((c) => c.id),
     (chunk) =>
@@ -332,7 +360,9 @@ export async function generateContentOpportunities(brandId, { model, onProgress 
     covered,
   });
 
-  const wanted = pickClusters(candidates, covered);
+  const wanted = pickClusters(open, covered, count ?? OPPORTUNITIES_PER_RUN, {
+    fill: count !== undefined,
+  });
   if (!wanted.length) {
     logger.info(
       { brandId, clusters: clusters.length, opportunities: existing.length, reopened, duplicates },
@@ -405,7 +435,11 @@ ${picked.map(clusterLine).join('\n\n')}
 Existing opportunities in other topics:
 ${shown.map((o, i) => `[E${i}] ${o.title} (topic: ${topicName(clusterById.get(o.cluster_id)) || 'none'})`).join('\n') || 'none'}
 
-Write every title and description in ${getLanguageName(brand.language)}.`;
+${
+  idea
+    ? `The user asked for ideas around: "${idea.slice(0, IDEA_MAX_LENGTH)}". Shape the opportunities toward it wherever the clusters' prompts allow; never invent a need the data doesn't show.\n\n`
+    : ''
+}Write every title and description in ${getLanguageName(brand.language)}.`;
 
   onProgress?.({ phase: 'analyzing', message: 'Generating opportunities with AI...' });
   const { object } = await generateObject({
@@ -486,6 +520,7 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
       impact: opp.impact,
       opportunity_score: cand.score,
       status: 'new',
+      source,
       decision: primary.decision,
       source_data: {
         ...sourceData({

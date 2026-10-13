@@ -16,31 +16,58 @@ async function getSession() {
   return session;
 }
 
-export async function generateOpportunities(brandId: string): Promise<{ jobId: string }> {
+/** What a "+ New" request asks for (CONTENT-003). */
+export interface OnDemandRequest {
+  brandId: string;
+  count: number;
+  topicId?: string | null;
+  promptId?: string | null;
+  idea?: string | null;
+  /** One per submit, so a double click or a retried request starts one job. */
+  idempotencyKey: string;
+}
+
+export type OnDemandResult =
+  | { ok: true; jobId: string; count: number }
+  | { ok: false; error: string; quotaExhausted?: boolean; periodEnd?: string | null };
+
+/** Starts generating opportunities now ("+ New"); errors come back as values. */
+export async function generateOpportunitiesOnDemand(
+  request: OnDemandRequest,
+): Promise<OnDemandResult> {
   const session = await getSession();
 
-  const res = await fetch(`${AEO_SERVER_URL}/api/content/generate`, {
+  const res = await fetch(`${AEO_SERVER_URL}/api/content/opportunities/generate`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ brandId }),
+    body: JSON.stringify(request),
   });
 
+  const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Server error: ${res.status}`);
+    return {
+      ok: false,
+      error: body.message || body.error || `Server error: ${res.status}`,
+      quotaExhausted: body.error === 'quota_exhausted',
+      periodEnd: body.periodEnd ?? null,
+    };
   }
-
-  const data = await res.json();
-  return { jobId: data.jobId };
+  return { ok: true, jobId: body.jobId, count: body.count };
 }
 
 export interface GenerationJobStatus {
   status: 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'not_found';
   progress: { phase: string; message: string } | null;
-  result: { generated: number } | null;
+  result: {
+    generated: number;
+    /** Skipped as duplicates of existing opportunities (CONTENT-004); not counted. */
+    duplicates?: number;
+    /** The month's quota ran out before anything could be generated. */
+    limited?: boolean;
+  } | null;
   failedReason: string | null;
 }
 
@@ -86,6 +113,7 @@ export async function getOpportunities(
     type?: string;
     promptId?: string;
     topicId?: string;
+    source?: string;
     limit?: number;
     offset?: number;
     sort?: string;
@@ -109,6 +137,7 @@ export async function getOpportunities(
   if (filters?.type) params.set('type', filters.type);
   if (filters?.promptId) params.set('prompt_id', filters.promptId);
   if (filters?.topicId) params.set('topic_id', filters.topicId);
+  if (filters?.source) params.set('source', filters.source);
   if (filters?.limit) params.set('limit', String(filters.limit));
   if (filters?.offset) params.set('offset', String(filters.offset));
   if (filters?.sort) params.set('sort', filters.sort);

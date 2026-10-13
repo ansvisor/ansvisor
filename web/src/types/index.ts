@@ -293,6 +293,8 @@ export interface ContentBrief {
   callToAction: string;
 }
 
+export type ContentOpportunitySource = 'system' | 'manual' | 'prompt';
+
 export interface ContentOpportunity {
   id: string;
   brandId: string;
@@ -305,6 +307,8 @@ export interface ContentOpportunity {
   impact: ContentOpportunityImpact;
   opportunityScore: number;
   status: ContentOpportunityStatus;
+  /** Where it came from: the nightly run, "+ New", or a prompt (CONTENT-003). */
+  source?: ContentOpportunitySource;
   sourceData: ContentOpportunitySourceData;
   brief?: ContentBrief;
   webhookSentAt?: string;

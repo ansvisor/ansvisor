@@ -17,8 +17,21 @@ export interface ContentUsage {
   planName: string | null;
   periodStart: string | null;
   periodEnd: string | null;
-  opportunities: UsageCounter;
+  opportunities: UsageCounter & {
+    /** Most one "+ New" request may ask for: Starter 3, Growth 5. */
+    perRequest: number;
+  };
   briefs: UsageCounter;
+}
+
+/**
+ * How many one "+ New" request may ask for (CONTENT-003): the plan's
+ * per-request cap, never more than is left of the month.
+ */
+export function onDemandMax(usage: ContentUsage | null): number {
+  if (!usage) return 0;
+  const { perRequest, remaining, limit } = usage.opportunities;
+  return limit === -1 ? perRequest : Math.max(0, Math.min(perRequest, remaining));
 }
 
 export type UsageTone = 'normal' | 'warning' | 'exhausted' | 'unlimited';

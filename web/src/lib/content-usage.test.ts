@@ -5,7 +5,13 @@
  */
 
 import { describe, expect, test } from 'vitest';
-import { hasContentQuota, usagePercent, usageTone, type ContentUsage } from './content-usage';
+import {
+  hasContentQuota,
+  onDemandMax,
+  usagePercent,
+  usageTone,
+  type ContentUsage,
+} from './content-usage';
 
 const c = (used: number, limit: number) => ({ used, limit, remaining: Math.max(0, limit - used) });
 
@@ -37,7 +43,7 @@ describe('hasContentQuota', () => {
     planName: 'Starter',
     periodStart: null,
     periodEnd: null,
-    opportunities: c(0, o),
+    opportunities: { ...c(0, o), perRequest: 3 },
     briefs: c(0, b),
   });
 
@@ -46,5 +52,24 @@ describe('hasContentQuota', () => {
     expect(hasContentQuota(usage(-1, 10))).toBe(true);
     expect(hasContentQuota(usage(-1, -1))).toBe(false);
     expect(hasContentQuota(null)).toBe(false);
+  });
+});
+
+describe('onDemandMax', () => {
+  const usage = (used: number, limit: number, perRequest: number): ContentUsage => ({
+    plan: 'growth',
+    planName: 'Growth',
+    periodStart: null,
+    periodEnd: null,
+    opportunities: { ...c(used, limit), perRequest },
+    briefs: c(0, 50),
+  });
+
+  test('is the per-request cap, never more than what is left', () => {
+    expect(onDemandMax(usage(10, 50, 5))).toBe(5);
+    expect(onDemandMax(usage(48, 50, 5))).toBe(2);
+    expect(onDemandMax(usage(10, 10, 3))).toBe(0);
+    expect(onDemandMax(usage(0, -1, 5))).toBe(5);
+    expect(onDemandMax(null)).toBe(0);
   });
 });

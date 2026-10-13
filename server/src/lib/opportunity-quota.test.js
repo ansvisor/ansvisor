@@ -12,8 +12,12 @@ vi.mock('../config/supabase.js', () => ({
   },
 }));
 
-const { claimOpportunitySlots, getContentUsage, getOpportunityQuotaStatus } =
-  await import('./plan-guard.js');
+const {
+  claimOpportunitySlots,
+  getContentUsage,
+  getOpportunityQuotaStatus,
+  getOpportunityRequestAllowance,
+} = await import('./plan-guard.js');
 
 /** A query builder that resolves to `result` however it is chained. */
 function chain(result) {
@@ -107,11 +111,35 @@ describe('getContentUsage', () => {
         planName: expect.any(String),
         periodStart: '2026-10-12T00:00:00.000Z',
         periodEnd: '2026-11-12T00:00:00.000Z',
-        opportunities: { used: 32, limit: 50, remaining: 18 },
+        opportunities: { used: 32, limit: 50, remaining: 18, perRequest: 5 },
         briefs: { used: 5, limit: 50, remaining: 45 },
       });
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('getOpportunityRequestAllowance', () => {
+  it('caps a "+ New" request at 3 on Starter and 5 on Growth', async () => {
+    org('starter');
+    used(0);
+    expect(await getOpportunityRequestAllowance('o1')).toMatchObject({ perRequest: 3, max: 3 });
+    org('growth');
+    used(0);
+    expect(await getOpportunityRequestAllowance('o1')).toMatchObject({ perRequest: 5, max: 5 });
+  });
+
+  it('never asks for more than is left of the month', async () => {
+    org('growth');
+    used(48);
+    expect(await getOpportunityRequestAllowance('o1')).toMatchObject({ remaining: 2, max: 2 });
+    used(50);
+    expect(await getOpportunityRequestAllowance('o1')).toMatchObject({ remaining: 0, max: 0 });
+  });
+
+  it('is the per-request cap alone when the month is unlimited', async () => {
+    delete process.env.IS_CLOUD;
+    expect(await getOpportunityRequestAllowance('o1')).toMatchObject({ remaining: -1, max: 5 });
   });
 });

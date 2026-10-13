@@ -6,6 +6,7 @@ import {
   enforceBriefQuota,
   getBriefQuotaStatus,
   getContentUsage,
+  getOpportunityRequestAllowance,
   getOrgIdForUser,
   PlanLimitError,
 } from '../lib/plan-guard.js';
@@ -22,6 +23,7 @@ import {
 } from '../lib/access.js';
 import { loadClusters } from '../lib/prompt-clusters.js';
 import { sendToActionCenter } from '../lib/action-center/from-opportunity.js';
+import { IDEA_MAX_LENGTH } from '../lib/opportunity-generator.js';
 
 const router = Router();
 
@@ -38,6 +40,7 @@ function mapOpportunityRow(row) {
     impact: row.impact,
     opportunityScore: parseFloat(row.opportunity_score),
     status: row.status,
+    source: row.source ?? 'system',
     sourceData: row.source_data || {},
     brief: row.brief || null,
     webhookSentAt: row.webhook_sent_at,
@@ -97,6 +100,98 @@ router.post('/generate', requireFeature('content_optimization'), async (req, res
   } catch (error) {
     req.log.error({ err: error }, 'content enqueue error');
     return res.status(500).json({ error: error.message });
+  }
+});
+
+const onDemandSchema = z.object({
+  brandId: z.guid(),
+  count: z.number().int().min(1).max(20),
+  topicId: z.guid().nullish(),
+  promptId: z.guid().nullish(),
+  idea: z.string().trim().max(IDEA_MAX_LENGTH).nullish(),
+  idempotencyKey: z.string().min(8).max(100),
+});
+
+/** How long a repeated idempotency key returns the job it first started. */
+const IDEMPOTENCY_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * POST /api/content/opportunities/generate
+ * "+ New" (CONTENT-003): generate opportunities now instead of waiting for
+ * the nightly run, optionally around a topic, a prompt or a free-text idea.
+ * Body: { brandId, count, topicId?, promptId?, idea?, idempotencyKey }.
+ *
+ * The count is capped by the plan (Starter 3, Growth 5 per request) and by
+ * what is left of the month; the generation claims its quota slots
+ * atomically, so neither a double click nor two tabs can overshoot, and it
+ * hands back whatever it doesn't create. A repeated idempotency key returns
+ * the job it already started. Returns { jobId, count } (202), or 429 with
+ * error 'quota_exhausted' and the reset date when nothing is left.
+ */
+router.post('/opportunities/generate', requireFeature('content_optimization'), async (req, res) => {
+  const parsed = onDemandSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Invalid request', details: parsed.error.issues });
+  }
+  const { brandId, count, topicId, promptId, idea, idempotencyKey } = parsed.data;
+
+  try {
+    const { orgId } = await assertBrandAccess(brandId, req.user.id);
+
+    const since = new Date(Date.now() - IDEMPOTENCY_WINDOW_MS).toISOString();
+    const { data: previous } = await supabaseAdmin
+      .from('jobs')
+      .select('id, data')
+      .eq('type', 'content')
+      .eq('brand_id', brandId)
+      .eq('data->request->>idempotencyKey', idempotencyKey)
+      .gte('created_at', since)
+      .limit(1)
+      .maybeSingle();
+    if (previous) {
+      return res.status(202).json({ jobId: previous.id, count: previous.data.request.count });
+    }
+
+    const allowance = orgId
+      ? await getOpportunityRequestAllowance(orgId)
+      : { perRequest: 5, remaining: -1, max: 5, periodEnd: null, planId: 'self_hosted' };
+    if (allowance.max <= 0) {
+      return res.status(429).json({
+        success: false,
+        error: 'quota_exhausted',
+        message: 'Monthly opportunity limit reached.',
+        periodEnd: allowance.periodEnd,
+        plan: allowance.planId,
+      });
+    }
+
+    const request = {
+      count: Math.min(count, allowance.max),
+      topicId: topicId ?? null,
+      promptId: promptId ?? null,
+      idea: idea || null,
+      idempotencyKey,
+    };
+    const job = await createJob({
+      type: 'content',
+      brandId,
+      data: { brandId, model: null, request },
+      maxAttempts: 2,
+    });
+    runContentJob(job.id, req.app.get('io'));
+
+    return res.status(202).json({ jobId: job.id, count: request.count });
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        error: 'plan_limit',
+        message: error.message,
+      });
+    }
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    req.log.error({ err: error }, 'on-demand opportunity generation error');
+    return res.status(500).json({ error: 'Failed to start generation' });
   }
 });
 
@@ -174,6 +269,7 @@ router.get('/brand/:brandId', async (req, res) => {
       q,
       prompt_id: promptId,
       topic_id: topicId,
+      source,
       limit = 50,
       offset = 0,
       sort = 'score',
@@ -199,6 +295,11 @@ router.get('/brand/:brandId', async (req, res) => {
 
       if (type) {
         filteredQuery = filteredQuery.eq('type', type);
+      }
+
+      // system (nightly), manual ("+ New") or prompt ("Suggest Content").
+      if (source) {
+        filteredQuery = filteredQuery.eq('source', source);
       }
 
       // A prompt matches its cluster's opportunities, own or merged, and any
@@ -250,6 +351,7 @@ router.get('/brand/:brandId', async (req, res) => {
       p_q: search,
       p_prompt_id: promptId ? String(promptId) : null,
       p_topic_id: topicId ? String(topicId) : null,
+      p_source: source ? String(source) : null,
     });
 
     const [{ data, error: dataError, count }, { data: aggregateData, error: aggregateError }] =
@@ -1053,7 +1155,7 @@ router.get('/usage', async (req, res) => {
         planName: null,
         periodStart: null,
         periodEnd: null,
-        opportunities: unlimited,
+        opportunities: { ...unlimited, perRequest: 5 },
         briefs: unlimited,
       });
     }

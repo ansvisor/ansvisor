@@ -47,6 +47,11 @@ export interface PlanLimits {
    */
   maxOpportunitiesPerMonth: number;
   /**
+   * Opportunities one "+ New" request may ask for (CONTENT-003), always capped
+   * by what is left of the month. Starter 3, Growth 5.
+   */
+  maxOpportunitiesPerRequest: number;
+  /**
    * Monthly Site Audit runs. -1 = unlimited (self-hosted / enterprise).
    * Starter 100, Growth 500.
    */
@@ -88,6 +93,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxVolumeAnalyses: -1,
       maxBriefGenerations: -1,
       maxOpportunitiesPerMonth: -1,
+      maxOpportunitiesPerRequest: 5,
       maxSiteAudits: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
@@ -123,6 +129,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxVolumeAnalyses: 4,
       maxBriefGenerations: 10,
       maxOpportunitiesPerMonth: 10,
+      maxOpportunitiesPerRequest: 3,
       maxSiteAudits: 100,
       maxDailyOnDemand: 3,
       onDemandCooldownMinutes: 15,
@@ -162,6 +169,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxVolumeAnalyses: 10,
       maxBriefGenerations: 50,
       maxOpportunitiesPerMonth: 50,
+      maxOpportunitiesPerRequest: 5,
       maxSiteAudits: 500,
       maxDailyOnDemand: 10,
       onDemandCooldownMinutes: 5,
@@ -199,6 +207,7 @@ export const PLANS: Record<PlanId, Plan> = {
       // Per-customer: override via organizations.plan_overrides in the DB.
       maxBriefGenerations: -1,
       maxOpportunitiesPerMonth: -1,
+      maxOpportunitiesPerRequest: 5,
       maxSiteAudits: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
