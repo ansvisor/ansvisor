@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { generateObject } from 'ai';
+import { NoObjectGeneratedError, generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from '../lib/ai-provider.js';
@@ -804,6 +804,57 @@ async function loadImprovePrompt(promptId, userId) {
   return { prompt, brand, brandId };
 }
 
+// States read every answer in the window, as the Positions tab does; the
+// heavy evidence columns come from the newest IMPROVE_EVIDENCE_ROWS only.
+const IMPROVE_MAX_ROWS = 5000;
+const IMPROVE_PAGE_SIZE = 1000;
+const IMPROVE_EVIDENCE_ROWS = 600;
+const IMPROVE_ID_CHUNK = 100;
+
+/**
+ * The light columns of every answer in the window, newest first, plus the
+ * source lists of the cited ones: what classifyPlatform needs.
+ */
+async function loadImproveStateRows({ promptId, brandId, range }) {
+  const rows = [];
+  for (let offset = 0; offset < IMPROVE_MAX_ROWS; offset += IMPROVE_PAGE_SIZE) {
+    const { data, error } = await improveResultsQuery(
+      'id, platform, created_at, mention_count, mention_position, mentioned_entity_count, citation_count',
+      { promptId, brandId, range },
+    ).range(offset, offset + IMPROVE_PAGE_SIZE - 1);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if ((data ?? []).length < IMPROVE_PAGE_SIZE) break;
+  }
+  const citedIds = rows.filter((r) => Number(r.citation_count ?? 0) > 0).map((r) => r.id);
+  const citationsById = new Map();
+  for (let i = 0; i < citedIds.length; i += IMPROVE_ID_CHUNK) {
+    const { data, error } = await supabaseAdmin
+      .from('prompt_results')
+      .select('id, citations')
+      .in('id', citedIds.slice(i, i + IMPROVE_ID_CHUNK));
+    if (error) throw error;
+    for (const r of data ?? []) citationsById.set(r.id, r.citations);
+  }
+  return rows.map((r) => ({ ...r, citations: citationsById.get(r.id) ?? [] }));
+}
+
+/**
+ * Charges one model attempt to the org's Improve budget. A failed insert is
+ * logged, not thrown: the suggestions the user paid for still go out.
+ */
+async function recordImproveUsage(log, { organizationId, promptId, modelId, usage }) {
+  const { error } = await supabaseAdmin.from('prompt_improve_usage').insert({
+    organization_id: organizationId,
+    prompt_id: promptId,
+    model: modelId,
+    input_tokens: usage?.inputTokens ?? null,
+    output_tokens: usage?.outputTokens ?? null,
+    cost_usd: generationCostUsd(modelId, usage),
+  });
+  if (error) log.error({ err: error, promptId }, 'prompt improve usage insert error');
+}
+
 function improveResultsQuery(columns, { promptId, brandId, range }) {
   let q = supabaseAdmin
     .from('prompt_results')
@@ -886,23 +937,33 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
     const promptId = req.params.promptId;
     const { prompt, brand, brandId } = await loadImprovePrompt(promptId, req.user.id);
 
-    const [{ data: rows, error: rowsError }, { data: domainRows }, { data: competitors }] =
-      await Promise.all([
-        improveResultsQuery(
-          'id, platform, created_at, mention_count, mention_position, mentioned_entity_count, citations, search_queries, competitor_mentions',
-          { promptId, brandId, range },
-        ).limit(600),
-        supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', brandId),
-        supabaseAdmin.from('competitors').select('name, domain').eq('brand_id', brandId),
-      ]);
-    if (rowsError) throw rowsError;
+    const [
+      rows,
+      { data: evidenceRows, error: evidenceError },
+      { data: domainRows },
+      { data: competitors },
+    ] = await Promise.all([
+      loadImproveStateRows({ promptId, brandId, range }),
+      improveResultsQuery(
+        'id, platform, created_at, citations, search_queries, competitor_mentions',
+        { promptId, brandId, range },
+      ).limit(IMPROVE_EVIDENCE_ROWS),
+      supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', brandId),
+      supabaseAdmin.from('competitors').select('name, domain').eq('brand_id', brandId),
+    ]);
+    if (evidenceError) throw evidenceError;
     const brandDomains = (domainRows ?? []).map((r) => r.domain);
 
-    const byPlatform = new Map();
-    for (const r of rows ?? []) {
-      if (!byPlatform.has(r.platform)) byPlatform.set(r.platform, []);
-      byPlatform.get(r.platform).push(r);
-    }
+    const groupByPlatform = (list) => {
+      const map = new Map();
+      for (const r of list ?? []) {
+        if (!map.has(r.platform)) map.set(r.platform, []);
+        map.get(r.platform).push(r);
+      }
+      return map;
+    };
+    const byPlatform = groupByPlatform(rows);
+    const evidenceByPlatform = groupByPlatform(evidenceRows);
     const platformIds = IMPROVE_PLATFORM_ORDER.filter(
       (id) => byPlatform.has(id) || (prompt.platforms ?? []).includes(id),
     );
@@ -923,7 +984,7 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
 
     const withEvidence = actionable.map((p) => ({
       ...p,
-      evidence: collectEvidence(byPlatform.get(p.id), {
+      evidence: collectEvidence(evidenceByPlatform.get(p.id) ?? [], {
         brandName: brand.name,
         brandDomains,
         competitors: competitors ?? [],
@@ -941,26 +1002,34 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
         brand: { name: brand.name, description: brand.description, domains: brandDomains },
         platforms: withEvidence,
       });
-      const { object, usage } = await withRetry(
-        () =>
-          generateObject({
-            model: resolveModel(modelId),
-            schema: improveSchema,
-            system,
-            prompt: userPrompt,
-          }),
+      // Every attempt is charged at its real token cost, so the budget holds
+      // for any model, including attempts withRetry repeats after a schema miss.
+      const charge = (usage) =>
+        recordImproveUsage(req.log, {
+          organizationId: brand.organization_id,
+          promptId,
+          modelId,
+          usage,
+        });
+      const { object } = await withRetry(
+        async () => {
+          try {
+            const result = await generateObject({
+              model: resolveModel(modelId),
+              schema: improveSchema,
+              system,
+              prompt: userPrompt,
+            });
+            await charge(result.usage);
+            return result;
+          } catch (err) {
+            if (NoObjectGeneratedError.isInstance(err) && err.usage) await charge(err.usage);
+            throw err;
+          }
+        },
         { attempts: 3, baseDelayMs: 500, label: 'prompt-improve' },
       );
       suggestions = sanitizeSuggestions(object.suggestions, withEvidence);
-      // Charged at the call's real token cost, so the budget holds for any model.
-      await supabaseAdmin.from('prompt_improve_usage').insert({
-        organization_id: brand.organization_id,
-        prompt_id: promptId,
-        model: modelId,
-        input_tokens: usage?.inputTokens ?? null,
-        output_tokens: usage?.outputTokens ?? null,
-        cost_usd: generationCostUsd(modelId, usage),
-      });
     }
 
     // What each platform's group header shows: why it's there and which

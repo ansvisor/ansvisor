@@ -29,6 +29,7 @@ import {
   STATE_LABEL,
   STATE_ORDER,
   hasUnsentEdits,
+  mentionRateLabel,
   selectionSummary,
   sourceChipLabel,
   toDrafts,
@@ -55,6 +56,8 @@ export interface ImproveController {
   count: number | null;
   /** Builds (or rebuilds) the set; one metered model call. */
   generate: () => void;
+  /** Reads the cached set again; never generates. */
+  reload: () => void;
 }
 
 /**
@@ -88,13 +91,24 @@ export function useImprove({
   keyRef.current = key;
 
   const apply = useCallback(
-    (forKey: string, result: Awaited<ReturnType<typeof getImproveSuggestions>>) => {
+    (
+      forKey: string,
+      op: 'read' | 'generate',
+      result: Awaited<ReturnType<typeof getImproveSuggestions>>,
+    ) => {
       if (keyRef.current !== forKey) return;
       if ('error' in result) {
-        // A spent quota keeps the set the user already has on screen.
-        if (result.code === 'quota_exceeded') {
+        // A failed generate keeps the set (and edits) the user already has on
+        // screen, and shows the error next to Generate / Regenerate. Only a
+        // failed read lands on the error state, whose Retry reads again: a
+        // retry should never be a paid call the user didn't ask for.
+        if (op === 'generate' && result.code !== 'plan_limit') {
           setState((s) => ({ ...s, key: forKey, status: 'ready', error: result.error }));
-          setQuota((q) => (q ? { ...q, exhausted: true, generationsLeft: 0, percentLeft: 0 } : q));
+          if (result.code === 'quota_exceeded') {
+            setQuota((q) =>
+              q ? { ...q, exhausted: true, generationsLeft: 0, percentLeft: 0 } : q,
+            );
+          }
           return;
         }
         setState({
@@ -112,12 +126,17 @@ export function useImprove({
     [],
   );
 
-  useEffect(() => {
-    if (!promptId || locked) return;
-    const forKey = key;
+  const reload = useCallback(() => {
+    if (!promptId) return;
+    const forKey = keyRef.current;
     setState({ key: forKey, status: 'loading', set: null, error: null });
     setDrafts([]);
-    getImproveSuggestions(promptId, range).then((r) => apply(forKey, r));
+    getImproveSuggestions(promptId, range).then((r) => apply(forKey, 'read', r));
+  }, [promptId, range, apply]);
+
+  useEffect(() => {
+    if (!promptId || locked) return;
+    reload();
     // `key` covers the prompt and the range.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, locked]);
@@ -126,7 +145,7 @@ export function useImprove({
     if (!promptId) return;
     const forKey = keyRef.current;
     setState((s) => ({ ...s, key: forKey, status: 'generating', error: null }));
-    generateImproveSuggestions(promptId, range).then((r) => apply(forKey, r));
+    generateImproveSuggestions(promptId, range).then((r) => apply(forKey, 'generate', r));
   }, [promptId, range, apply]);
 
   const current = state.key === key ? state : null;
@@ -146,13 +165,14 @@ export function useImprove({
     // A locked plan shows no count, even when a set was read before the plan was known.
     count: set && !locked ? drafts.filter((d) => !d.removed).length : null,
     generate,
+    reload,
   };
 }
 
 // ─── Tab ──────────────────────────────────────────────────────────────────────
 
 export function ImproveTab({ improve }: { improve: ImproveController }) {
-  const { status, set, quota, drafts, setDrafts, error, dirty, generate } = improve;
+  const { status, set, quota, drafts, setDrafts, error, dirty, generate, reload } = improve;
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   const outOfQuota = !!quota?.exhausted;
 
@@ -160,8 +180,10 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
   if (status === 'error') {
     return (
       <div className="flex flex-col items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm dark:border-red-900/50 dark:bg-red-950/30">
-        <p className="text-red-900 dark:text-red-200">{friendlyError(error)}</p>
-        <Button size="sm" variant="outline" onClick={generate}>
+        <p className="text-red-900 dark:text-red-200">
+          {friendlyError(error, 'Failed to load suggestions.')}
+        </p>
+        <Button size="sm" variant="outline" onClick={reload}>
           <RefreshCw />
           Retry
         </Button>
@@ -182,7 +204,7 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
           sources they cited and the competitors ranked above you) and suggests what to do where the
           brand is missing or ranked late.
         </p>
-        {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p className="text-xs text-red-600 dark:text-red-400">{friendlyError(error)}</p>}
         <div className="flex flex-wrap items-center gap-3">
           <Button size="sm" onClick={generate} disabled={outOfQuota}>
             <Sparkles />
@@ -238,7 +260,7 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
           </Button>
         </div>
       )}
-      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="text-xs text-red-600 dark:text-red-400">{friendlyError(error)}</p>}
       {tracked.length === 0 ? (
         <EmptyNote>No runs in this period, so there is nothing to improve yet.</EmptyNote>
       ) : actionable.length === 0 ? (
@@ -301,11 +323,11 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
   );
 }
 
-function friendlyError(error: string | null): string {
+function friendlyError(error: string | null, fallback = 'Failed to generate suggestions.'): string {
   if (error && /not configured|api key/i.test(error)) {
     return 'AI suggestions are not set up on this server yet: an AI provider key is missing.';
   }
-  return error || 'Failed to generate suggestions.';
+  return error || fallback;
 }
 
 /** "About 185 generations left this month"; nothing on unlimited plans. */
@@ -346,18 +368,23 @@ const STATE_TONE: Record<ImprovePlatform['state'], string> = {
   no_runs: '',
 };
 
-/** Why the platform is in the list: its state, where it ranks, and the inputs used. */
+/**
+ * Why the platform is in the list: how often the brand is mentioned (a
+ * platform mentioned in under half its runs counts as not mentioned), and
+ * where it ranks.
+ */
 function stateDetail(p: ImprovePlatform): string | null {
+  if (p.state === 'no_runs') return null;
+  const rate = mentionRateLabel(p);
   if (p.state === 'mentioned_late' && p.mentionPosition) {
-    return `avg #${p.mentionPosition}${p.mentionTotal ? ` of ${p.mentionTotal}` : ''} · ${p.mentionedRuns} of ${p.runs} runs`;
+    return `avg #${p.mentionPosition}${p.mentionTotal ? ` of ${p.mentionTotal}` : ''} · ${rate}`;
   }
   if (p.state === 'not_cited') {
     return p.citationRank
-      ? `cited at avg #${p.citationRank.rank} of ${p.citationRank.total} sources`
-      : `not cited in ${p.runs} run${p.runs === 1 ? '' : 's'}`;
+      ? `cited at avg #${p.citationRank.rank} of ${p.citationRank.total} sources · ${rate}`
+      : `not cited · ${rate}`;
   }
-  if (p.state === 'not_mentioned') return `0 of ${p.runs} run${p.runs === 1 ? '' : 's'}`;
-  return null;
+  return rate;
 }
 
 const countLabel = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;

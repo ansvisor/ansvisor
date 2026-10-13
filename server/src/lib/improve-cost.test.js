@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   FALLBACK_PRICE,
+  MODEL_PRICES,
   estimateGenerationsLeft,
   generationCostUsd,
   medianCost,
@@ -22,8 +23,15 @@ describe('generationCostUsd', () => {
 
   it('charges an unknown model at the expensive fallback, never at zero', () => {
     expect(priceFor('someone/new-model')).toBe(FALLBACK_PRICE);
+    expect(priceFor('openrouter/someone/new-model')).toBe(FALLBACK_PRICE);
     expect(generationCostUsd('someone/new-model', { inputTokens: 1000, outputTokens: 1000 })).toBe(
       0.03,
+    );
+  });
+
+  it('prices an OpenRouter id as the model it routes to', () => {
+    expect(priceFor('openrouter/google/gemini-3-flash-preview')).toBe(
+      MODEL_PRICES['google/gemini-3-flash-preview'],
     );
   });
 
