@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/select';
 import { CompetitionBars } from '@/components/ui/competition-bars';
 import { WorkStatusBadge } from '@/components/prompts/work-status';
+import { setPromptWorkStatus, type PromptWorkStatus } from '@/lib/actions/prompt-workflow';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,7 +52,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { setPromptWorkStatus, type PromptWorkStatus } from '@/lib/actions/prompt-workflow';
 import {
   MoreHorizontal,
   Pause,
