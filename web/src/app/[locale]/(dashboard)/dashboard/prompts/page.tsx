@@ -65,6 +65,7 @@ import {
   X,
   ListChecks,
   Sparkles,
+  ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -80,6 +81,7 @@ import {
   deletePrompt,
   getPromptsPageData,
   updatePrompt,
+  type LocationQuota,
 } from '@/lib/actions/prompt';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUserRole } from '@/hooks/use-user-role';
@@ -100,7 +102,8 @@ import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { getBrandFilterOptions } from '@/lib/actions/tracking';
 import { formatRegionDisplay } from '@/lib/region';
 import { SuggestionsTab } from './_suggestions-tab';
-import { PLANS } from '@/config/plans';
+import { CONTACT_SALES_URL, PLANS } from '@/config/plans';
+import { getPromptUsage, isPromptLimitReached } from '@/lib/prompt-usage';
 import { getTopics } from '@/lib/actions/topic';
 import { analyzeNewPrompt, type PromptVisibilitySummary } from '@/lib/actions/tracking';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
@@ -499,6 +502,100 @@ function PromptFormFields({
   );
 }
 
+// ─── Tracked prompt limit (PROMPT-009) ────────────────────────────────────────
+
+const PROMPT_USAGE_TOOLTIP =
+  'Your plan limits tracked prompt locations across every brand in your organization. ' +
+  'Each prompt counts once per location it targets, and paused prompts count too. ' +
+  'Remove prompts or locations to free slots.';
+
+/**
+ * "187 / 200 prompt locations · Growth plan" with a thin progress bar. The
+ * numbers are the ones the plan-limit guard enforces (getLocationQuota), so
+ * the counter can't promise a slot that a save would then reject.
+ */
+function PromptUsageMeter({ quota }: { quota: LocationQuota }) {
+  const usage = getPromptUsage(quota.used, quota.maxPrompts);
+
+  if (usage.state === 'unlimited') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+        <span className="tabular-nums">{quota.used}</span> prompt locations tracked · Unlimited
+        <InfoTip content={PROMPT_USAGE_TOOLTIP} />
+      </span>
+    );
+  }
+
+  const tone =
+    usage.state === 'warning'
+      ? { text: 'text-amber-600 dark:text-amber-500', bar: 'bg-amber-500' }
+      : usage.state === 'full' || usage.state === 'over'
+        ? { text: 'text-red-600 dark:text-red-500', bar: 'bg-red-500' }
+        : { text: 'text-muted-foreground', bar: 'bg-primary' };
+  const status =
+    usage.state === 'full'
+      ? 'Limit reached'
+      : usage.state === 'over'
+        ? 'Over limit'
+        : `${usage.remaining} slot${usage.remaining === 1 ? '' : 's'} left`;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+      <span className="text-muted-foreground">
+        <span className={cn('font-medium tabular-nums', tone.text)}>
+          {quota.used} / {quota.maxPrompts}
+        </span>{' '}
+        prompt locations · {quota.planName} plan
+      </span>
+      <div
+        className="h-1.5 w-24 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-label="Tracked prompt locations used"
+        aria-valuemin={0}
+        aria-valuemax={quota.maxPrompts}
+        aria-valuenow={Math.min(quota.used, quota.maxPrompts)}
+      >
+        <div
+          className={cn('h-full rounded-full', tone.bar)}
+          style={{ width: `${usage.percent}%` }}
+        />
+      </div>
+      <span className={cn('font-medium', tone.text)}>{status}</span>
+      <InfoTip content={PROMPT_USAGE_TOOLTIP} />
+    </div>
+  );
+}
+
+/**
+ * Where to go when the limit is reached. Starter can upgrade to Growth in
+ * billing; Growth and Enterprise (custom limits) are raised by Ansvisor.
+ */
+function PromptLimitActions({ planId }: { planId: LocationQuota['planId'] }) {
+  const contact = (
+    <a
+      href={CONTACT_SALES_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={buttonVariants({
+        variant: planId === 'starter' ? 'outline' : 'default',
+        size: 'sm',
+      })}
+    >
+      Contact us
+      <ExternalLink />
+    </a>
+  );
+  if (planId !== 'starter') return contact;
+  return (
+    <>
+      <Link href="/dashboard/settings?tab=billing" className={buttonVariants({ size: 'sm' })}>
+        Upgrade plan
+      </Link>
+      {contact}
+    </>
+  );
+}
+
 /**
  * Quick-add dialog for the active brand (#460). Same mechanism as the Add
  * Prompt card on brands/[id]/prompts: topic select + the grouped
@@ -510,16 +607,22 @@ function PromptFormFields({
 function AddPromptDialog({
   brandId,
   shoppingEnabled,
+  locationQuota,
   open,
   onClose,
   onAdded,
 }: {
   brandId: string;
   shoppingEnabled: boolean;
+  /** When the plan limit is already reached, the dialog explains it instead of the form. */
+  locationQuota: LocationQuota | null;
   open: boolean;
   onClose: () => void;
   onAdded: () => void;
 }) {
+  const limitReached =
+    !!locationQuota &&
+    isPromptLimitReached(getPromptUsage(locationQuota.used, locationQuota.maxPrompts));
   const { allowedScraperIds, allowedModelIds, visibleScrapers, visibleModels } =
     useAllowedEngines(shoppingEnabled);
 
@@ -605,51 +708,80 @@ function AddPromptDialog({
             Track a new prompt for this brand across the selected platforms.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
-          <PromptFormFields
-            autoFocus
-            text={text}
-            onTextChange={(value) => {
-              setText(value);
-              if (error) setError(null);
-            }}
-            onSubmit={handleAdd}
-            category={category}
-            onCategoryChange={setCategory}
-            topics={topics}
-            scrapers={scrapers}
-            models={models}
-            setScrapers={setScrapers}
-            setModels={setModels}
-            visibleScrapers={visibleScrapers}
-            visibleModels={visibleModels}
-            saving={saving}
-          />
+        {limitReached && locationQuota ? (
+          <>
+            <div className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm dark:border-red-900/50 dark:bg-red-950/30">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-500" />
+              <div className="space-y-1">
+                <p className="font-medium text-red-900 dark:text-red-200">
+                  You&apos;ve reached your prompt limit
+                </p>
+                <p className="text-red-800/80 dark:text-red-300/80">
+                  Your {locationQuota.planName} plan tracks up to {locationQuota.maxPrompts} prompt
+                  locations and {locationQuota.used} are in use. Each prompt counts once per
+                  location it targets, and paused prompts count too. Remove prompts or locations to
+                  free a slot, or{' '}
+                  {locationQuota.planId === 'starter' ? 'upgrade your plan' : 'contact us'} to track
+                  more.
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={handleClose}>
+                Close
+              </Button>
+              <PromptLimitActions planId={locationQuota.planId} />
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <div className="space-y-3">
+              <PromptFormFields
+                autoFocus
+                text={text}
+                onTextChange={(value) => {
+                  setText(value);
+                  if (error) setError(null);
+                }}
+                onSubmit={handleAdd}
+                category={category}
+                onCategoryChange={setCategory}
+                topics={topics}
+                scrapers={scrapers}
+                models={models}
+                setScrapers={setScrapers}
+                setModels={setModels}
+                visibleScrapers={visibleScrapers}
+                visibleModels={visibleModels}
+                saving={saving}
+              />
 
-          {error && <p className="text-xs text-red-500">{error}</p>}
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={handleClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={handleAdd}
-            disabled={saving || !text.trim() || (scrapers.length === 0 && models.length === 0)}
-          >
-            {saving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Adding…
-              </>
-            ) : (
-              <>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Prompt
-              </>
-            )}
-          </Button>
-        </DialogFooter>
+              {error && <p className="text-xs text-red-500">{error}</p>}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={handleClose} disabled={saving}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleAdd}
+                disabled={saving || !text.trim() || (scrapers.length === 0 && models.length === 0)}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Adding…
+                  </>
+                ) : (
+                  <>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Prompt
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -962,6 +1094,7 @@ export default function PromptsPage() {
   const analysisGenRef = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
   const [quota, setQuota] = useState<VolumeQuota | null>(null);
+  const [locationQuota, setLocationQuota] = useState<LocationQuota | null>(null);
   const [addPromptOpen, setAddPromptOpen] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
   const { canManage } = useUserRole();
@@ -1101,6 +1234,7 @@ export default function PromptsPage() {
         if (isCancelled?.()) return;
         setVolumes(page.volumes);
         if (page.quota) setQuota(page.quota);
+        setLocationQuota(page.locationQuota);
         const prompts = page.promptSets.flatMap((ps) => ps.prompts);
         setAllPrompts(prompts);
         setVisibility(page.visibility);
@@ -1494,6 +1628,43 @@ export default function PromptsPage() {
           </div>
         </div>
 
+        {/* Tracked vs suggested: two views of the same roster. A segmented
+            control rather than a second Tabs, so it reads as a filter on
+            this panel and not as another level of page navigation. It sits
+            above the filter bar so the controls go from general to specific:
+            which area, which list, then which period. */}
+        {tab === 'all' && (
+          <div
+            className="mt-4 inline-flex w-fit rounded-lg border p-1"
+            role="tablist"
+            aria-label="Prompt view"
+          >
+            {(
+              [
+                { id: 'tracked' as const, label: 'Tracked Prompts', Icon: ListChecks },
+                { id: 'suggestions' as const, label: 'Prompt Suggestions', Icon: Sparkles },
+              ] satisfies { id: PromptsView; label: string; Icon: typeof ListChecks }[]
+            ).map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={view === id}
+                onClick={() => setView(id)}
+                className={cn(
+                  'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                  view === id
+                    ? 'bg-muted text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Filter bar — same shape and position as Visibility and Citations
             (#713). It sits outside the tab panels because the range governs
             both All Prompts and Query Fan-out.
@@ -1546,39 +1717,6 @@ export default function PromptsPage() {
 
         {/* ─── All Prompts tab ─────────────────────────────────────────── */}
         <TabsContent value="all" className="mt-4 space-y-4">
-          {/* Tracked vs suggested: two views of the same roster. A segmented
-              control rather than a second Tabs, so it reads as a filter on
-              this panel and not as another level of page navigation. */}
-          <div
-            className="inline-flex rounded-lg border p-1"
-            role="tablist"
-            aria-label="Prompt view"
-          >
-            {(
-              [
-                { id: 'tracked' as const, label: 'Tracked Prompts', Icon: ListChecks },
-                { id: 'suggestions' as const, label: 'Prompt Suggestions', Icon: Sparkles },
-              ] satisfies { id: PromptsView; label: string; Icon: typeof ListChecks }[]
-            ).map(({ id, label, Icon }) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={view === id}
-                onClick={() => setView(id)}
-                className={cn(
-                  'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                  view === id
-                    ? 'bg-muted text-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </button>
-            ))}
-          </div>
-
           {view === 'suggestions' ? (
             activeBrandId && (
               <>
@@ -1633,6 +1771,7 @@ export default function PromptsPage() {
                 positionsWindow={positionsWindow}
                 positionsPreset={range ? rangePreset : '30d'}
                 regionFilter={regionFilter}
+                locationQuota={locationQuota}
                 onAddPrompt={canManage ? () => setAddPromptOpen(true) : undefined}
                 onEditPrompt={canManage ? setEditingPrompt : undefined}
               />
@@ -2000,6 +2139,7 @@ export default function PromptsPage() {
         <AddPromptDialog
           brandId={activeBrandId}
           shoppingEnabled={!!activeBrand?.shoppingModeEnabled}
+          locationQuota={locationQuota}
           open={addPromptOpen}
           onClose={() => setAddPromptOpen(false)}
           onAdded={loadData}
@@ -2039,6 +2179,7 @@ function AllPromptsTab({
   positionsWindow,
   positionsPreset,
   regionFilter,
+  locationQuota,
   onAddPrompt,
   onEditPrompt,
 }: {
@@ -2054,6 +2195,8 @@ function AllPromptsTab({
   positionsPreset: PromptRangePreset;
   /** Selected location; empty means every location. */
   regionFilter: string;
+  /** Org-wide tracked-location usage for the header counter; null hides it. */
+  locationQuota: LocationQuota | null;
   /** Opens the Add Prompt dialog; undefined when the user can't write (member role). */
   onAddPrompt?: () => void;
   /** Opens the Edit Prompt dialog for a row; undefined hides the pencil (member role). */
@@ -2250,6 +2393,11 @@ function AllPromptsTab({
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <CardTitle className="text-sm font-medium">All Prompts ({prompts.length})</CardTitle>
+            {locationQuota && (
+              <div className="mt-1">
+                <PromptUsageMeter quota={locationQuota} />
+              </div>
+            )}
             <p className="text-xs text-muted-foreground mt-0.5">
               {onEditPrompt
                 ? 'Every tracked prompt for this brand · edit or pause any row in place'
@@ -2287,7 +2435,7 @@ function AllPromptsTab({
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <Table>
+        <Table stickyHeader stickyFirstColumn>
           <TableHeader>
             <TableRow>
               <TableHead className="pl-6">Prompt</TableHead>
