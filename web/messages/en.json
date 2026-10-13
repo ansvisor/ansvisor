@@ -1901,6 +1901,8 @@
     "sendToActionCenterError": "Failed to send to the Action Center",
     "markReviewed": "Mark as reviewed",
     "reviewedError": "Failed to mark as reviewed",
+    "duplicatesMerged": "{count, plural, one {1 similar suggestion was merged into this one.} other {# similar suggestions were merged into this one.}}",
+    "duplicatesMergedHint": "They rested on the same prompts and AI searches, so they weren't created and didn't use your quota.",
     "newSignal": "New signal detected",
     "newSignalScoreRose": "Completed earlier, and its opportunity has grown since: the score rose from {from} to {to}.",
     "newSignalGainLost": "Completed earlier, but the gain did not hold: visibility on these prompts was {after}% after the work and is {now}% now."

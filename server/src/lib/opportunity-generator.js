@@ -23,7 +23,8 @@ import {
   pickClusters,
   scoreComponents,
 } from './opportunity-limits.js';
-import { loadClusterOpportunities } from './open-opportunities.js';
+import { loadClusterOpportunities, loadOpportunityBaskets } from './open-opportunities.js';
+import { basket, duplicateThreshold, findDuplicate, storedBasket } from './opportunity-dedup.js';
 import { loadClusters } from './prompt-clusters.js';
 import { reopenStrengthened } from './opportunity-reopen.js';
 import {
@@ -148,6 +149,67 @@ function basketSummary(clusterIds, basketRows) {
   };
 }
 
+/** Clusters per basket request; a cluster can hold dozens of fan-out queries. */
+const BASKET_CHUNK = 10;
+
+/**
+ * Drops the open clusters that duplicate an existing opportunity (CONTENT-004)
+ * by adding them to `covered`, and folds each into its match when the match
+ * is still open and has room, counting it on the match as `duplicatesMerged`
+ * for the detail panel. A dismissed match only keeps the cluster out; after
+ * DISMISSED_BLOCK_DAYS it may be suggested again. Returns how many were
+ * skipped.
+ */
+async function skipDuplicates(brandId, open, { clusterById, basketRows, covered }) {
+  if (!open.length) return 0;
+  const existing = (await loadOpportunityBaskets(brandId)).map((row) => ({
+    ...row,
+    basket: storedBasket(row.source_data),
+  }));
+  if (!existing.length) return 0;
+
+  const threshold = duplicateThreshold();
+  let skipped = 0;
+  for (const cand of open) {
+    const c = clusterById.get(cand.id);
+    const candidate = basket({
+      prompts: c.promptTexts,
+      queries: basketSummary([c.id], basketRows).top.map((q) => q.query),
+    });
+    const match = findDuplicate(candidate, existing, { threshold });
+    if (!match) continue;
+    covered.add(cand.id);
+    skipped += 1;
+
+    const row = match.row;
+    const related = row.related_cluster_ids || [];
+    if (
+      row.status === 'dismissed' ||
+      !row.cluster_id ||
+      related.length >= MAX_MERGED_CLUSTERS ||
+      related.includes(cand.id)
+    ) {
+      continue;
+    }
+    row.related_cluster_ids = [...related, cand.id];
+    row.source_data = {
+      ...(row.source_data || {}),
+      duplicatesMerged: (row.source_data?.duplicatesMerged || 0) + 1,
+    };
+    const { error } = await supabaseAdmin
+      .from('content_opportunities')
+      .update({
+        related_cluster_ids: row.related_cluster_ids,
+        source_data: row.source_data,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', row.id);
+    if (error) throw new Error(error.message);
+  }
+  if (skipped) logger.info({ brandId, skipped }, '[opportunities] duplicates skipped');
+  return skipped;
+}
+
 async function loadPromptTexts(promptIds) {
   const { data, error } = await selectInChunks(promptIds, (chunk) =>
     supabaseAdmin.from('prompts').select('id, text').in('id', chunk),
@@ -244,13 +306,39 @@ export async function generateContentOpportunities(brandId, { model, onProgress 
   }
 
   const candidates = clusters.map((c) => ({ id: c.id, topicId: c.topic_id, ...measure([c.id]) }));
-  const wanted = pickClusters(candidates, coveredClusterIds(existing));
+  const covered = coveredClusterIds(existing);
+
+  // The fan-out baskets of every cluster still open for an opportunity: the
+  // duplicate check compares them, and the prompt shows the picked ones'.
+  const open = candidates.filter((c) => c.metrics.tested > 0 && !covered.has(c.id));
+  const { data: basketRows, error: basketErr } = await selectInChunks(
+    open.map((c) => c.id),
+    (chunk) =>
+      supabaseAdmin
+        .from('prompt_cluster_queries')
+        .select('cluster_id, query, times_searched, included')
+        .in('cluster_id', chunk),
+    BASKET_CHUNK,
+  );
+  if (basketErr) throw new Error(basketErr.message);
+
+  // CONTENT-004: a cluster whose baskets match an existing opportunity is
+  // that opportunity again. It is never written, so it costs neither a model
+  // call nor a slot of the quota; an open match takes it in as a related
+  // cluster, so it is covered from now on.
+  const duplicates = await skipDuplicates(brandId, open, {
+    clusterById,
+    basketRows: basketRows || [],
+    covered,
+  });
+
+  const wanted = pickClusters(candidates, covered);
   if (!wanted.length) {
     logger.info(
-      { brandId, clusters: clusters.length, opportunities: existing.length, reopened },
+      { brandId, clusters: clusters.length, opportunities: existing.length, reopened, duplicates },
       '[opportunities] every cluster with answers already has an opportunity',
     );
-    return { generated: 0, merged: 0, reopened };
+    return { generated: 0, merged: 0, reopened, duplicates };
   }
 
   // Each new opportunity takes one of the organization's monthly slots
@@ -266,18 +354,6 @@ export async function generateContentOpportunities(brandId, { model, onProgress 
     releaseOpportunitySlots(slots.ids).catch((err) =>
       logger.error({ err, brandId }, '[opportunities] handing back slots failed'),
     );
-
-  const { data: basketRows, error: basketErr } = await supabaseAdmin
-    .from('prompt_cluster_queries')
-    .select('cluster_id, query, times_searched, included')
-    .in(
-      'cluster_id',
-      picked.map((c) => c.id),
-    );
-  if (basketErr) {
-    await releaseAll();
-    throw new Error(basketErr.message);
-  }
 
   const shown = existing
     .filter(
@@ -445,8 +521,8 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
     await releaseOpportunitySlots(slots.ids.slice(created.length));
   }
   logger.info(
-    { brandId, generated: inserts.length, merged, reopened, clusters: clusters.length },
+    { brandId, generated: inserts.length, merged, reopened, duplicates, clusters: clusters.length },
     '[opportunities] generated',
   );
-  return { generated: inserts.length, merged, reopened };
+  return { generated: inserts.length, merged, reopened, duplicates };
 }

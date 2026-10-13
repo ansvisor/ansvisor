@@ -27,6 +27,7 @@ import {
   Copy,
   ExternalLink,
   MoreHorizontal,
+  Info,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Link } from '@/i18n/navigation';
@@ -476,6 +477,18 @@ export function OpportunityDetail({
                   after: Math.round((sd.reopened.visibilityAfter ?? 0) * 10) / 10,
                   now: Math.round(sd.reopened.visibility * 10) / 10,
                 })}
+          </p>
+        </div>
+      )}
+
+      {(sd.duplicatesMerged ?? 0) > 0 && (
+        <div className="flex items-start gap-2 rounded-md border bg-muted/40 px-4 py-3 text-xs">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <p>
+            <span className="font-medium">
+              {t('duplicatesMerged', { count: sd.duplicatesMerged ?? 0 })}
+            </span>{' '}
+            <span className="text-muted-foreground">{t('duplicatesMergedHint')}</span>
           </p>
         </div>
       )}
