@@ -26,7 +26,7 @@ export const IMPROVE_PLATFORM_LABELS = {
 
 /**
  * - no_runs        — nothing tracked on this platform in the window
- * - not_mentioned  — tracked, the brand never appears
+ * - not_mentioned  — tracked, the brand appears in fewer than half the runs
  * - mentioned_late — appears, but not first (or with no stored position)
  * - not_cited      — appears first, but its pages aren't cited, or cited late
  * - doing_well     — first, and cited early: nothing to suggest
@@ -50,6 +50,13 @@ const MAX_COMPETITOR_URLS = 8;
 const MAX_COMPETITORS = 6;
 const MAX_BRAND_PAGES = 6;
 const EXCERPT_CHARS = 1200;
+
+/**
+ * Below this share of runs mentioning the brand, the platform counts as not
+ * mentioned: a brand in 8 of 120 answers is mostly missing there, and needs
+ * coverage advice, not positioning advice, however high those 8 ranked.
+ */
+export const MIN_MENTION_RATE = 0.5;
 
 /** Same split as web/src/lib/position-tone.ts: first third Early, last third Late. */
 export function positionTone(rank, total) {
@@ -93,10 +100,11 @@ const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : nul
 const round1 = (n) => (n === null ? null : Math.round(n * 10) / 10);
 
 /**
- * One platform's state over the window. Positions are averaged over the runs
- * that mention the brand, so one lucky #1 among many #4s still reads "late".
- * Rows: prompt_results with mention_count, mention_position,
- * mentioned_entity_count and citations.
+ * One platform's state over the window. A platform where the brand appears in
+ * fewer than MIN_MENTION_RATE of the runs is not mentioned. Otherwise
+ * positions are averaged over the runs that mention the brand, so one lucky
+ * #1 among many #4s still reads "late". Rows: prompt_results with
+ * mention_count, mention_position, mentioned_entity_count and citations.
  */
 export function classifyPlatform(rows, brandDomains) {
   const runs = rows.length;
@@ -130,7 +138,7 @@ export function classifyPlatform(rows, brandDomains) {
     : null;
 
   let state;
-  if (mentioned.length === 0) state = 'not_mentioned';
+  if (mentioned.length < runs * MIN_MENTION_RATE) state = 'not_mentioned';
   else if (mentionPosition === null || Math.round(mentionPosition) > 1) state = 'mentioned_late';
   else if (!citationRank || positionTone(citationRank.rank, citationRank.total) !== 'Early') {
     state = 'not_cited';
@@ -334,11 +342,13 @@ Rules:
   const blocks = platforms
     .map((p) => {
       const where =
-        p.state === 'mentioned_late' && p.mentionPosition
-          ? ` — mentioned at avg #${p.mentionPosition}${p.mentionTotal ? ` of ${p.mentionTotal} brands` : ''}`
-          : p.state === 'not_cited' && p.citationRank
-            ? ` — cited at avg #${p.citationRank.rank} of ${p.citationRank.total} sources`
-            : '';
+        p.state === 'not_mentioned' && p.mentionedRuns > 0
+          ? ` — mentioned in only ${p.mentionedRuns} of ${p.runs} runs`
+          : p.state === 'mentioned_late' && p.mentionPosition
+            ? ` — mentioned at avg #${p.mentionPosition}${p.mentionTotal ? ` of ${p.mentionTotal} brands` : ''}`
+            : p.state === 'not_cited' && p.citationRank
+              ? ` — cited at avg #${p.citationRank.rank} of ${p.citationRank.total} sources`
+              : '';
       return `Platform "${p.id}" (${IMPROVE_PLATFORM_LABELS[p.id] ?? p.id}): ${STATE_LABELS[p.state]}${where}
   Kind of suggestion: ${STATE_GUIDANCE[p.state]}
 ${evidenceBlock(p.evidence)}`;

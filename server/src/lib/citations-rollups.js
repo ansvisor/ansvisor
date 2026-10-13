@@ -88,13 +88,33 @@ export async function refreshCitationHistory(brandId, { pauseMs = 0 } = {}) {
   return chunks.length;
 }
 
+/** How often the server drains the rebuild queue outside the nightly sweep. */
+export const REBUILD_QUEUE_SCHEDULE = '*/5 * * * *';
+
+/** The drain in progress, if any; a full-history rebuild takes minutes. */
+let rebuildInFlight = null;
+
 /**
  * Rebuild the brands queued by a topic move (the trigger on prompts in
  * 00118). Topic is stored in the rollup rows, so a prompt moved to another
  * topic leaves its history under the old one until this runs. A queue entry
  * is cleared only if nothing re-queued the brand while it was rebuilt.
+ *
+ * Called on its own schedule and at the end of the nightly sweep. Runs never
+ * overlap: a call made while one is in progress returns at once with
+ * `skipped: true`, and anything it would have picked up is left for the next.
  */
 export async function rebuildQueuedCitationRollups() {
+  if (rebuildInFlight) return { rebuilt: 0, failed: 0, skipped: true };
+  rebuildInFlight = drainRebuildQueue();
+  try {
+    return await rebuildInFlight;
+  } finally {
+    rebuildInFlight = null;
+  }
+}
+
+async function drainRebuildQueue() {
   const { data: queued, error } = await supabaseAdmin
     .from('citation_rollup_rebuilds')
     .select('brand_id, requested_at');

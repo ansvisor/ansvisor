@@ -21,6 +21,7 @@ import {
 } from './lib/job-manager.js';
 import { runTrackingJob, recoverWaitingJobs } from './lib/job-runner.js';
 import { sweepInsightsRollups } from './lib/insights-rollups.js';
+import { rebuildQueuedCitationRollups, REBUILD_QUEUE_SCHEDULE } from './lib/citations-rollups.js';
 import { sweepActionValidation } from './lib/action-center/validate.js';
 import { parseScraperResponse } from './lib/cloro-scraper.js';
 import { handleScraperResult } from './lib/cloro-result-handler.js';
@@ -663,6 +664,16 @@ server.listen(PORT, async () => {
     recoverWaitingJobs(io).catch((err) => logger.error({ err }, 'waiting-job recovery failed'));
   await recover();
   setInterval(recover, 60_000);
+
+  // Rebuild the citation rollups of brands whose prompts changed topic
+  // (00118) within minutes, not at the nightly sweep, so the Citations topic
+  // filter catches up soon after a move. An empty queue costs one select, and
+  // the function itself refuses to overlap with a run still in progress.
+  cron.schedule(REBUILD_QUEUE_SCHEDULE, () =>
+    rebuildQueuedCitationRollups().catch((err) =>
+      logger.error({ err }, '[citations-rollups] scheduled rebuild crashed'),
+    ),
+  );
 
   if (!isCloud()) {
     const schedule = process.env.DAILY_CRON_SCHEDULE || '0 6 * * *';

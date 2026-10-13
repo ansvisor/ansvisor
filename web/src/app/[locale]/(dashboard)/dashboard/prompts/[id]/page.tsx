@@ -41,6 +41,8 @@ import { cn } from '@/lib/utils';
 import { formatRegionDisplay } from '@/lib/region';
 import { toast } from 'sonner';
 import { useUserRole } from '@/hooks/use-user-role';
+import { getOpportunities } from '@/lib/actions/content';
+import type { ContentOpportunity } from '@/types';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { WorkStatusBadge } from '@/components/prompts/work-status';
 import {
@@ -50,7 +52,12 @@ import {
   type PromptTargetUrl,
   type PromptWorkStatus,
 } from '@/lib/actions/prompt-workflow';
-import { NotesCard, TargetUrlsCard } from './_workflow-cards';
+import {
+  NotesCard,
+  TargetUrlsCard,
+  ContentOpportunitiesCard,
+  OPPORTUNITY_PREVIEW_LIMIT,
+} from './_workflow-cards';
 import { ResponseDetail } from '@/components/results/response-detail';
 import {
   CategoryBadge,
@@ -632,8 +639,13 @@ export default function PromptDetailPage() {
   const promptId = params.id as string;
 
   const { canManage } = useUserRole();
-
   const [data, setData] = useState<PromptDetailData | null>(null);
+  const promptBrandId = data?.prompt.brandId;
+  const [opportunities, setOpportunities] = useState<ContentOpportunity[]>([]);
+  const [opportunitiesTotal, setOpportunitiesTotal] = useState(0);
+  const [opportunitiesLoading, setOpportunitiesLoading] = useState(true);
+  const [opportunitiesFailed, setOpportunitiesFailed] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -661,6 +673,42 @@ export default function PromptDetailPage() {
       cancelled = true;
     };
   }, [promptId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!promptBrandId) return;
+
+    setOpportunities([]);
+    setOpportunitiesTotal(0);
+    setOpportunitiesFailed(false);
+    setOpportunitiesLoading(true);
+
+    getOpportunities(promptBrandId, {
+      promptId,
+      status: 'new',
+      limit: OPPORTUNITY_PREVIEW_LIMIT,
+    })
+      .then((res) => {
+        if (cancelled) return;
+        setOpportunities(res.opportunities);
+        setOpportunitiesTotal(res.total);
+      })
+      .catch((err) => {
+        console.error('Failed to load opportunities:', err);
+        if (cancelled) return;
+        setOpportunities([]);
+        setOpportunitiesTotal(0);
+        setOpportunitiesFailed(true);
+        toast.error('Failed to load content opportunities');
+      })
+      .finally(() => {
+        if (!cancelled) setOpportunitiesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [promptBrandId, promptId]);
 
   const handleStatusChange = (status: PromptWorkStatus | null) => {
     const previous = workStatus;
@@ -922,18 +970,27 @@ export default function PromptDetailPage() {
 
       {/* Workflow — outside the refetch overlay: notes and target URLs are
           date-window independent. */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <NotesCard
+      <div className="space-y-4">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <NotesCard
+            promptId={promptId}
+            notes={notes}
+            onNotesChange={setNotes}
+            canManage={canManage}
+          />
+          <TargetUrlsCard
+            promptId={promptId}
+            urls={targetUrls}
+            onUrlsChange={setTargetUrls}
+            canManage={canManage}
+          />
+        </div>
+        <ContentOpportunitiesCard
           promptId={promptId}
-          notes={notes}
-          onNotesChange={setNotes}
-          canManage={canManage}
-        />
-        <TargetUrlsCard
-          promptId={promptId}
-          urls={targetUrls}
-          onUrlsChange={setTargetUrls}
-          canManage={canManage}
+          opportunities={opportunities}
+          total={opportunitiesTotal}
+          loading={opportunitiesLoading}
+          failed={opportunitiesFailed}
         />
       </div>
     </div>

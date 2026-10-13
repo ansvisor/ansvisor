@@ -31,6 +31,17 @@ describe('classifyPlatform', () => {
     expect(r).toMatchObject({ state: 'not_mentioned', runs: 2, mentionedRuns: 0 });
   });
 
+  it('mentioned in fewer than half the runs is not_mentioned, however high it ranked', () => {
+    const first = row({ mention_count: 1, mention_position: 1, mentioned_entity_count: 5 });
+    const rare = classifyPlatform(
+      [...Array(8).fill(first), ...Array.from({ length: 112 }, () => row())],
+      BRAND_DOMAINS,
+    );
+    expect(rare).toMatchObject({ state: 'not_mentioned', runs: 120, mentionedRuns: 8 });
+    // Exactly half is enough to be judged on position.
+    expect(classifyPlatform([first, row()], BRAND_DOMAINS).state).not.toBe('not_mentioned');
+  });
+
   it('mentioned at an average below #1 is mentioned_late', () => {
     const r = classifyPlatform(
       [
@@ -263,6 +274,30 @@ describe('buildImprovePrompt', () => {
       'Platform "perplexity-web" (Perplexity): MENTIONED LATE — mentioned at avg #3 of 5 brands',
     );
     expect(prompt).toContain('"q1" ×2');
+  });
+
+  it('says how rarely a not-mentioned platform names the brand', () => {
+    const { prompt } = buildImprovePrompt({
+      promptText: 'best coffee subscription',
+      brand: { name: 'Acme', domains: [] },
+      platforms: [
+        {
+          id: 'gemini-web',
+          state: 'not_mentioned',
+          runs: 120,
+          mentionedRuns: 8,
+          evidence: {
+            fanouts: [],
+            citedDomains: [],
+            competitors: [],
+            competitorUrls: [],
+            brandPages: [],
+            excerpt: '',
+          },
+        },
+      ],
+    });
+    expect(prompt).toContain('NOT MENTIONED — mentioned in only 8 of 120 runs');
   });
 });
 
