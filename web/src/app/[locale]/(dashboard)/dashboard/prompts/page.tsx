@@ -44,6 +44,13 @@ import {
 } from '@/components/ui/select';
 import { CompetitionBars } from '@/components/ui/competition-bars';
 import { WorkStatusBadge } from '@/components/prompts/work-status';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { setPromptWorkStatus, type PromptWorkStatus } from '@/lib/actions/prompt-workflow';
 import {
   TrendingUp,
@@ -65,6 +72,9 @@ import {
   X,
   ListChecks,
   Sparkles,
+  MoreHorizontal,
+  Pause,
+  Play,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -1635,6 +1645,7 @@ export default function PromptsPage() {
                 regionFilter={regionFilter}
                 onAddPrompt={canManage ? () => setAddPromptOpen(true) : undefined}
                 onEditPrompt={canManage ? setEditingPrompt : undefined}
+                onChanged={loadData}
               />
             </>
           )}
@@ -2019,6 +2030,61 @@ export default function PromptsPage() {
   );
 }
 
+/** How long a row deleted from its menu can be restored (PROMPT-006). */
+const DELETE_UNDO_MS = 10_000;
+
+/**
+ * The row's ⋯ menu (PROMPT-006): Edit, pause or resume tracking, open the
+ * Positions panel on Improve, and Delete behind a confirmation. Base UI's menu
+ * opens from mouse and keyboard and closes on Esc and outside clicks.
+ */
+function RowActionsMenu({
+  prompt,
+  onEdit,
+  onToggleActive,
+  onImprove,
+  onDelete,
+}: {
+  prompt: Prompt;
+  onEdit: () => void;
+  onToggleActive: () => void;
+  onImprove: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        aria-label={`Actions for ${prompt.text}`}
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem className="gap-2" onClick={onEdit}>
+          <Pencil className="h-3.5 w-3.5" />
+          Edit
+        </DropdownMenuItem>
+        <DropdownMenuItem className="gap-2" onClick={onToggleActive}>
+          {prompt.isActive ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+          {prompt.isActive ? 'Pause tracking' : 'Resume tracking'}
+        </DropdownMenuItem>
+        <DropdownMenuItem className="gap-2" onClick={onImprove}>
+          <TrendingUp className="h-3.5 w-3.5" />
+          Improve position…
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="gap-2 text-red-600 focus:text-red-600 dark:text-red-400"
+          onClick={onDelete}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // ─── All Prompts Tab ──────────────────────────────────────────────────────────
 
 const WORK_FILTER_LABELS: Record<string, string> = {
@@ -2031,7 +2097,7 @@ const WORK_FILTER_LABELS: Record<string, string> = {
 
 function AllPromptsTab({
   loading,
-  prompts,
+  prompts: allRows,
   activeBrandId,
   volumeByPromptId,
   visibility,
@@ -2041,6 +2107,7 @@ function AllPromptsTab({
   regionFilter,
   onAddPrompt,
   onEditPrompt,
+  onChanged,
 }: {
   loading: boolean;
   prompts: Prompt[];
@@ -2056,10 +2123,86 @@ function AllPromptsTab({
   regionFilter: string;
   /** Opens the Add Prompt dialog; undefined when the user can't write (member role). */
   onAddPrompt?: () => void;
-  /** Opens the Edit Prompt dialog for a row; undefined hides the pencil (member role). */
+  /** Opens the Edit Prompt dialog for a row; undefined hides the row menu (member role). */
   onEditPrompt?: (prompt: Prompt) => void;
+  /** Reloads the page data after a row is paused, resumed or deleted from its menu. */
+  onChanged: () => void;
 }) {
   const tCommon = useTranslations('common');
+  // Rows deleted from the row menu, hidden at once and deleted for real after
+  // the Undo window (PROMPT-006). There is no soft delete for prompts — a
+  // delete drops their history — so the delay is the undo: closing the page
+  // inside the window simply leaves the prompt in place.
+  const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(() => new Set());
+  const deleteTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const [confirmDelete, setConfirmDelete] = useState<Prompt | null>(null);
+  const [positionsTab, setPositionsTab] = useState<'platforms' | 'improve'>('platforms');
+  const prompts = useMemo(
+    () => allRows.filter((p) => !pendingDeletes.has(p.id)),
+    [allRows, pendingDeletes],
+  );
+
+  const undoDelete = useCallback((id: string) => {
+    const timer = deleteTimers.current.get(id);
+    if (timer) clearTimeout(timer);
+    deleteTimers.current.delete(id);
+    setPendingDeletes((set) => {
+      const next = new Set(set);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const deleteWithUndo = useCallback(
+    (prompt: Prompt) => {
+      setPendingDeletes((set) => new Set(set).add(prompt.id));
+      const timer = setTimeout(async () => {
+        deleteTimers.current.delete(prompt.id);
+        try {
+          await deletePrompt(prompt.id);
+          onChanged();
+        } catch {
+          toast.error('Failed to delete the prompt.');
+          undoDelete(prompt.id);
+        }
+      }, DELETE_UNDO_MS);
+      deleteTimers.current.set(prompt.id, timer);
+      toast('Prompt deleted', {
+        description: prompt.text,
+        duration: DELETE_UNDO_MS,
+        action: { label: 'Undo', onClick: () => undoDelete(prompt.id) },
+      });
+    },
+    [onChanged, undoDelete],
+  );
+
+  // A pending delete still lands if the table unmounts inside the window
+  // (switching tabs, changing brand); only an Undo or closing the page stops it.
+  useEffect(() => {
+    const timers = deleteTimers.current;
+    return () => {
+      for (const [id, timer] of timers) {
+        clearTimeout(timer);
+        void deletePrompt(id);
+      }
+      timers.clear();
+    };
+  }, []);
+
+  const toggleActive = useCallback(
+    async (prompt: Prompt) => {
+      try {
+        await updatePrompt(prompt.id, { isActive: !prompt.isActive });
+        toast.success(prompt.isActive ? 'Tracking paused' : 'Tracking resumed', {
+          description: prompt.text,
+        });
+        onChanged();
+      } catch {
+        toast.error('Failed to update the prompt.');
+      }
+    },
+    [onChanged],
+  );
   const [search, setSearch] = useState('');
   const [workFilter, setWorkFilter] = useState<'all' | 'none' | PromptWorkStatus>('all');
   // Optimistic per-row status overrides — the prompts prop belongs to the
@@ -2098,7 +2241,8 @@ function AllPromptsTab({
 
   // The panel opens on the table's window; changing it there only moves the panel.
   const openPositionsPanel = useCallback(
-    (promptId: string) => {
+    (promptId: string, tab: 'platforms' | 'improve' = 'platforms') => {
+      setPositionsTab(tab);
       setPositionsRange({
         preset: positionsPreset,
         from: positionsPreset === 'custom' ? positionsWindow.from.slice(0, 10) : '',
@@ -2371,7 +2515,11 @@ function AllPromptsTab({
               >
                 Last run
               </SortableHead>
-              {onEditPrompt && <TableHead className="text-right pr-6 w-[60px]">Edit</TableHead>}
+              {onEditPrompt && (
+                <TableHead className="text-right pr-6 w-[60px]">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -2518,15 +2666,13 @@ function AllPromptsTab({
                   </TableCell>
                   {onEditPrompt && (
                     <TableCell className="text-right pr-6">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 w-7 p-0"
-                        aria-label="Edit prompt"
-                        onClick={() => onEditPrompt(p)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
+                      <RowActionsMenu
+                        prompt={p}
+                        onEdit={() => onEditPrompt(p)}
+                        onToggleActive={() => void toggleActive(p)}
+                        onImprove={() => openPositionsPanel(p.id, 'improve')}
+                        onDelete={() => setConfirmDelete(p)}
+                      />
                     </TableCell>
                   )}
                 </TableRow>
@@ -2554,8 +2700,36 @@ function AllPromptsTab({
         window={panelWindow}
         onRangeChange={setPositionsRange}
         region={regionFilter}
+        initialTab={positionsTab}
         onClose={() => setPositionsId(null)}
       />
+      <Dialog open={confirmDelete !== null} onOpenChange={(v) => !v && setConfirmDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Delete prompt and its history?</DialogTitle>
+            <DialogDescription className="break-words">
+              &ldquo;{confirmDelete?.text}&rdquo; and its tracking results will be removed. You can
+              undo for 10 seconds.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setConfirmDelete(null)}>
+              Keep it
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                if (confirmDelete) deleteWithUndo(confirmDelete);
+                setConfirmDelete(null);
+              }}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
