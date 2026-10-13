@@ -2034,14 +2034,22 @@ export default function PromptsPage() {
 
 // ─── Positions cell (All Prompts) ─────────────────────────────────────────────
 
-/** Average position with its trend against the previous period. */
+/**
+ * Average position with its trend against the previous period; hovering it
+ * lists each platform, which is what the "Late or missing" filter reads.
+ */
 function PositionValue({ cell }: { cell: PromptPositionCell | undefined }) {
   if (!cell || cell.avg === null) {
     return <span className="text-xs text-muted-foreground">—</span>;
   }
   const delta = cell.delta;
+  const breakdown = cell.dots
+    .map(
+      (d) => `${d.label}: ${DOT_LABEL[d.state]}${d.avg !== null ? ` (#${d.avg.toFixed(1)})` : ''}`,
+    )
+    .join('\n');
   return (
-    <span className="inline-flex items-center gap-1 tabular-nums">
+    <span className="inline-flex items-center gap-1 tabular-nums" title={breakdown}>
       <span className="text-sm font-semibold">#{cell.avg.toFixed(1)}</span>
       {delta !== null && delta !== 0 && (
         <span
@@ -2049,7 +2057,6 @@ function PositionValue({ cell }: { cell: PromptPositionCell | undefined }) {
             'inline-flex items-center text-[10px] font-medium',
             delta > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
           )}
-          title={`${delta > 0 ? 'Up' : 'Down'} ${Math.abs(delta).toFixed(1)} against the previous period`}
         >
           {delta > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
           {Math.abs(delta).toFixed(1)}
@@ -2059,14 +2066,6 @@ function PositionValue({ cell }: { cell: PromptPositionCell | undefined }) {
   );
 }
 
-const DOT_CLASS: Record<PlatformDotState, string> = {
-  early: 'bg-emerald-500',
-  late: 'bg-amber-500',
-  mentioned: 'bg-emerald-500/40',
-  missing: 'bg-red-500',
-  no_runs: 'bg-muted-foreground/30',
-};
-
 const DOT_LABEL: Record<PlatformDotState, string> = {
   early: 'named early',
   late: 'named further down',
@@ -2074,27 +2073,6 @@ const DOT_LABEL: Record<PlatformDotState, string> = {
   missing: 'not mentioned',
   no_runs: 'no runs',
 };
-
-/** One dot per platform, its state on hover. */
-function PlatformDots({ cell }: { cell: PromptPositionCell | undefined }) {
-  if (!cell || cell.dots.length === 0) return null;
-  return (
-    <span className="inline-flex items-center gap-1">
-      {cell.dots.map((d) => {
-        const label = `${d.label}: ${DOT_LABEL[d.state]}${d.avg !== null ? ` (#${d.avg.toFixed(1)})` : ''}`;
-        return (
-          <span
-            key={d.id}
-            title={label}
-            aria-label={label}
-            role="img"
-            className={cn('h-1.5 w-1.5 rounded-full', DOT_CLASS[d.state])}
-          />
-        );
-      })}
-    </span>
-  );
-}
 
 // ─── All Prompts Tab ──────────────────────────────────────────────────────────
 
@@ -2398,8 +2376,8 @@ function AllPromptsTab({
                 Citations
               </SortableHead>
               <SortableHead
-                className="text-center"
-                tooltip={`Average position the brand is named at in AI answers over the ${rangeLabel}, with the change against the previous period of the same length. Each dot is a platform: green early, amber further down, red not mentioned, grey no runs. See opens the details.`}
+                className="pl-8"
+                tooltip={`Average position the brand is named at in AI answers over the ${rangeLabel}, with the change against the previous period of the same length. Hover a value for each platform; the chart button opens the details.`}
                 sortKey="position"
                 activeSort={activeSort}
                 dir={dir}
@@ -2547,24 +2525,26 @@ function AllPromptsTab({
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-center">
-                    <div className="inline-flex flex-col items-center gap-1">
-                      <div className="inline-flex items-center gap-2">
+                  <TableCell className="pl-8">
+                    {/* Fixed widths so the value, dots and See line up on every row. */}
+                    <div className="inline-flex items-center gap-2">
+                      <div className="w-[5.5rem] whitespace-nowrap">
                         <PositionValue cell={positions[p.id]} />
+                      </div>
+                      <div className="w-6">
                         {vis && (vis.mentionAnswers > 0 || vis.citationAnswers > 0) && (
                           <Button
                             type="button"
-                            size="xs"
+                            size="icon-xs"
                             variant="outline"
                             aria-label={`View positions for ${p.text}`}
+                            title="See positions"
                             onClick={() => setPositionsFor({ id: p.id, text: p.text })}
                           >
                             <BarChart3 />
-                            See
                           </Button>
                         )}
                       </div>
-                      {vis && <PlatformDots cell={positions[p.id]} />}
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
