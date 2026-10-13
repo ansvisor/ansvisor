@@ -57,7 +57,7 @@ import {
 import { opportunityToMarkdown } from '@/lib/content/opportunity-markdown';
 import { toast } from 'sonner';
 
-const IMPACT_COLORS: Record<string, string> = {
+export const IMPACT_COLORS: Record<string, string> = {
   high: 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
   medium: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
   low: 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-400',

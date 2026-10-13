@@ -12,7 +12,7 @@ import {
 } from '@/lib/prompt-locations';
 import { ALL_MODELS, ALL_SCRAPERS, DEFAULT_PROMPT_RANGE_DAYS } from '@/config/prompt-options';
 import { isValidLocation, locationCode } from '@/lib/region';
-import type { Plan } from '@/config/plans';
+import type { Plan, PlanId } from '@/config/plans';
 import { getPromptVolumes, type VolumeQuota } from '@/lib/actions/volumes';
 import { getPromptVisibilitySummaries, type PromptVisibilitySummary } from '@/lib/actions/tracking';
 
@@ -547,18 +547,30 @@ export async function bulkUpdatePromptLocations(
 
 /**
  * Org-wide tracked-location usage against the plan cap, for the prompts page
- * to bound its location pickers before a save can fail.
+ * to bound its location pickers before a save can fail, and for the Tracked
+ * Prompts usage counter. `maxPrompts` has Enterprise plan_overrides merged.
  */
-export async function getLocationQuota(
-  brandId: string,
-): Promise<{ maxPrompts: number; used: number }> {
+export interface LocationQuota {
+  /** Tracked-location cap; -1 = unlimited. */
+  maxPrompts: number;
+  used: number;
+  planId: PlanId;
+  planName: string;
+}
+
+export async function getLocationQuota(brandId: string): Promise<LocationQuota> {
   const supabase = await createClient();
   const { organizationId: orgId } = await getBrandContext(supabase, brandId);
   const [plan, usage] = await Promise.all([
     getOrgPlan(orgId),
     getOrgLocationUsage(supabase, orgId),
   ]);
-  return { maxPrompts: plan.limits.maxPrompts, used: usage.total };
+  return {
+    maxPrompts: plan.limits.maxPrompts,
+    used: usage.total,
+    planId: plan.id,
+    planName: plan.name,
+  };
 }
 
 interface AddPromptInput {
@@ -726,6 +738,8 @@ export interface PromptsPageData {
   quota: VolumeQuota | null;
   /** True when the volumes upstream failed/timed out — the table still renders. */
   volumesDegraded: boolean;
+  /** Org-wide tracked-location usage for the counter; null when it failed to load. */
+  locationQuota: LocationQuota | null;
 }
 
 /**
@@ -750,7 +764,7 @@ export async function getPromptsPageData(
   // no date dimension, so neither changes with the selected range or the
   // selected location.
   const days = opts?.days ?? DEFAULT_PROMPT_RANGE_DAYS;
-  const [promptSets, visibility, volumesResult] = await Promise.all([
+  const [promptSets, visibility, volumesResult, locationQuota] = await Promise.all([
     getPromptSets(brandId),
     getPromptVisibilitySummaries(brandId, {
       days,
@@ -765,6 +779,12 @@ export async function getPromptsPageData(
         return { volumes: [] as PromptVolume[], quota: null, degraded: true };
       },
     ),
+    // The counter is informational — the limit is enforced on save either
+    // way — so a failure here hides it instead of failing the page.
+    getLocationQuota(brandId).catch((err) => {
+      console.error('[prompts] location quota fetch failed, hiding the counter:', err);
+      return null;
+    }),
   ]);
 
   return {
@@ -773,5 +793,6 @@ export async function getPromptsPageData(
     volumes: volumesResult.volumes,
     quota: volumesResult.quota,
     volumesDegraded: volumesResult.degraded,
+    locationQuota,
   };
 }
