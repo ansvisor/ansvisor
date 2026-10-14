@@ -91,7 +91,9 @@ import {
 import {
   addPromptToBrand,
   deletePrompt,
+  deletePrompts,
   getPromptsPageData,
+  setPromptsActive,
   updatePrompt,
   type LocationQuota,
 } from '@/lib/actions/prompt';
@@ -128,10 +130,18 @@ import {
   suggestContentForPrompt,
 } from '@/lib/actions/content';
 import { hasContentQuota, type ContentUsage } from '@/lib/content-usage';
-import { waitForContentJob } from '@/lib/content-job';
+import { suggestForPrompt } from '@/lib/content-job';
+import {
+  allSelected,
+  bulkSuggestBlock,
+  bulkSuggestSummary,
+  runInTurn,
+  toggleAll,
+} from '@/lib/prompt-bulk-actions';
 import { toCsv } from '@/lib/csv';
 import { formatRelative } from '@/lib/format-relative';
 import { compareNullsLast, type SortDir } from './prompt-sort';
+import { BulkActionBar } from './_bulk-action-bar';
 import { formatCompactNumber } from '@/lib/format';
 import { usePagination, TablePager } from '@/components/table-pager';
 import { PromptPositionsSheet } from '@/components/prompts/prompt-positions-sheet';
@@ -2189,6 +2199,9 @@ export default function PromptsPage() {
 /** How long a row deleted from its menu can be restored (PROMPT-006). */
 const DELETE_UNDO_MS = 10_000;
 
+/** The server calls behind "Suggest content" (PROMPT-006). */
+const SUGGEST_CALLS = { start: suggestContentForPrompt, getStatus: getGenerationJobStatus };
+
 /**
  * The row's ⋯ menu (PROMPT-006): Edit, pause or resume tracking, open the
  * Positions panel on Improve, suggest content, and Delete behind a
@@ -2216,7 +2229,7 @@ function RowActionsMenu({
   onOpenSuggestion: (opportunityId: string) => void;
   /** A suggestion for this prompt is being written. */
   suggesting: boolean;
-  /** Why Suggest content can't run now (the month's quota is used up). */
+  /** Why Suggest content can't run now (the month's quota is used up, or a bulk run is going). */
   suggestDisabledReason: string | null;
   onDelete: () => void;
 }) {
@@ -2335,51 +2348,76 @@ function AllPromptsTab({
   onChanged: () => void;
 }) {
   const tCommon = useTranslations('common');
-  // Rows deleted from the row menu, hidden at once and deleted for real after
-  // the Undo window (PROMPT-006). There is no soft delete for prompts — a
-  // delete drops their history — so the delay is the undo: closing the page
-  // inside the window simply leaves the prompt in place.
+  // Rows deleted from the row menu or the bulk bar, hidden at once and
+  // deleted for real after the Undo window (PROMPT-006). There is no soft
+  // delete for prompts — a delete drops their history — so the delay is the
+  // undo: closing the page inside the window simply leaves the prompts in place.
   const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(() => new Set());
-  const deleteTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-  const [confirmDelete, setConfirmDelete] = useState<Prompt | null>(null);
+  // One entry per delete, keyed by its first prompt, with every prompt it hides.
+  const deleteTimers = useRef(
+    new Map<string, { ids: string[]; timer: ReturnType<typeof setTimeout> }>(),
+  );
+  const [confirmDelete, setConfirmDelete] = useState<Prompt[] | null>(null);
   const [positionsTab, setPositionsTab] = useState<'platforms' | 'improve'>('platforms');
   const prompts = useMemo(
     () => allRows.filter((p) => !pendingDeletes.has(p.id)),
     [allRows, pendingDeletes],
   );
 
-  const undoDelete = useCallback((id: string) => {
-    const timer = deleteTimers.current.get(id);
-    if (timer) clearTimeout(timer);
-    deleteTimers.current.delete(id);
+  const restoreRows = useCallback((ids: string[]) => {
     setPendingDeletes((set) => {
       const next = new Set(set);
-      next.delete(id);
+      for (const id of ids) next.delete(id);
       return next;
     });
   }, []);
 
+  const undoDelete = useCallback(
+    (key: string) => {
+      const pending = deleteTimers.current.get(key);
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      deleteTimers.current.delete(key);
+      restoreRows(pending.ids);
+    },
+    [restoreRows],
+  );
+
   const deleteWithUndo = useCallback(
-    (prompt: Prompt) => {
-      setPendingDeletes((set) => new Set(set).add(prompt.id));
+    (list: Prompt[]) => {
+      if (list.length === 0) return;
+      const ids = list.map((p) => p.id);
+      const key = ids[0];
+      setPendingDeletes((set) => new Set([...set, ...ids]));
       const timer = setTimeout(async () => {
-        deleteTimers.current.delete(prompt.id);
-        try {
-          await deletePrompt(prompt.id);
-          onChanged();
-        } catch {
-          toast.error('Failed to delete the prompt.');
-          undoDelete(prompt.id);
+        deleteTimers.current.delete(key);
+        const result = await deletePrompts(ids).catch(() => ({ error: 'unreachable' }));
+        if ('error' in result) {
+          toast.error(
+            ids.length === 1 ? 'Failed to delete the prompt.' : 'Failed to delete the prompts.',
+          );
+          restoreRows(ids);
+          return;
         }
+        // Rows the delete left out (RLS, or gone already) come back into view.
+        const deleted = new Set(result.deletedIds);
+        const kept = ids.filter((id) => !deleted.has(id));
+        if (kept.length > 0) {
+          toast.error(
+            `${kept.length} of ${ids.length} prompt${ids.length === 1 ? '' : 's'} couldn't be deleted.`,
+          );
+          restoreRows(kept);
+        }
+        onChanged();
       }, DELETE_UNDO_MS);
-      deleteTimers.current.set(prompt.id, timer);
-      toast('Prompt deleted', {
-        description: prompt.text,
+      deleteTimers.current.set(key, { ids, timer });
+      toast(ids.length === 1 ? 'Prompt deleted' : `${ids.length} prompts deleted`, {
+        description: ids.length === 1 ? list[0].text : undefined,
         duration: DELETE_UNDO_MS,
-        action: { label: 'Undo', onClick: () => undoDelete(prompt.id) },
+        action: { label: 'Undo', onClick: () => undoDelete(key) },
       });
     },
-    [onChanged, undoDelete],
+    [onChanged, restoreRows, undoDelete],
   );
 
   // A pending delete still lands if the table unmounts inside the window
@@ -2387,9 +2425,9 @@ function AllPromptsTab({
   useEffect(() => {
     const timers = deleteTimers.current;
     return () => {
-      for (const [id, timer] of timers) {
+      for (const { ids, timer } of timers.values()) {
         clearTimeout(timer);
-        void deletePrompt(id);
+        void deletePrompts(ids).catch(() => undefined);
       }
       timers.clear();
     };
@@ -2410,18 +2448,60 @@ function AllPromptsTab({
     [onChanged],
   );
 
+  // Bulk Pause / Resume: one write for the selected prompts that change.
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const setActiveFor = useCallback(
+    async (list: Prompt[], isActive: boolean) => {
+      const ids = list.filter((p) => p.isActive !== isActive).map((p) => p.id);
+      if (ids.length === 0) return;
+      setBulkBusy(true);
+      const verb = isActive ? 'resume' : 'pause';
+      try {
+        const result = await setPromptsActive(ids, isActive).catch(() => ({
+          error: 'unreachable',
+        }));
+        if ('error' in result) {
+          toast.error(`Failed to ${verb} the prompts.`);
+          return;
+        }
+        if (result.updated > 0) {
+          toast.success(
+            `Tracking ${isActive ? 'resumed' : 'paused'} for ${result.updated} prompt${result.updated === 1 ? '' : 's'}`,
+          );
+        }
+        if (result.updated < ids.length) {
+          toast.error(`${ids.length - result.updated} of ${ids.length} couldn't be ${verb}d.`);
+        }
+        onChanged();
+      } finally {
+        setBulkBusy(false);
+      }
+    },
+    [onChanged],
+  );
+
   // "Suggest content" (PROMPT-006): one content opportunity for a prompt,
   // against the month's content quota. The quota is read up front so the
   // menu can say when nothing is left; the server enforces it either way.
   const router = useRouter();
   const [contentUsage, setContentUsage] = useState<ContentUsage | null>(null);
+  // The quota couldn't be read; the bulk bar falls back to the smallest cap.
+  const [contentUsageFailed, setContentUsageFailed] = useState(false);
   const [usageVersion, setUsageVersion] = useState(0);
   const [suggestingIds, setSuggestingIds] = useState<Set<string>>(new Set());
   useEffect(() => {
     let cancelled = false;
     getContentUsage().then(
-      (usage) => !cancelled && setContentUsage(usage),
-      () => !cancelled && setContentUsage(null),
+      (usage) => {
+        if (cancelled) return;
+        setContentUsage(usage);
+        setContentUsageFailed(false);
+      },
+      () => {
+        if (cancelled) return;
+        setContentUsage(null);
+        setContentUsageFailed(true);
+      },
     );
     return () => {
       cancelled = true;
@@ -2444,94 +2524,134 @@ function AllPromptsTab({
     (id: string) => router.push(`/dashboard/content?opportunity=${id}`),
     [router],
   );
+  const markSuggesting = useCallback((ids: string[], on: boolean) => {
+    setSuggestingIds((set) => {
+      const next = new Set(set);
+      for (const id of ids) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }, []);
+
   const suggestContent = useCallback(
     async (prompt: Prompt) => {
       // Only a plan with a monthly limit has a quota to say was left alone.
       const quotaUntouched = hasOpportunityLimit
         ? 'Nothing was used from your monthly content quota.'
         : undefined;
-      setSuggestingIds((set) => new Set(set).add(prompt.id));
+      markSuggesting([prompt.id], true);
       const toastId = toast.loading('Writing a content suggestion…', {
         description: prompt.text,
       });
-      // CONTENT-004: an open suggestion already answers this prompt.
-      const showExisting = (id: string) =>
-        toast.info('This prompt already has a content suggestion', {
-          id: toastId,
-          description: prompt.text,
-          duration: 10_000,
-          action: { label: 'Open existing', onClick: () => openOpportunity(id) },
-        });
-      try {
-        const started = await suggestContentForPrompt(prompt.id, crypto.randomUUID());
-        if (!started.ok) {
-          toast.error(started.quotaExhausted ? 'Monthly content limit reached.' : started.error, {
+      const outcome = await suggestForPrompt(prompt.id, SUGGEST_CALLS);
+      markSuggesting([prompt.id], false);
+      setUsageVersion((v) => v + 1);
+      switch (outcome.kind) {
+        case 'created':
+          toast.success('Content suggestion created', {
             id: toastId,
             description: prompt.text,
+            duration: 10_000,
+            action: { label: 'Open', onClick: () => openOpportunity(outcome.opportunityId) },
           });
-          return;
-        }
-        if ('existingId' in started) {
-          showExisting(started.existingId);
-          return;
-        }
-
-        const outcome = await waitForContentJob(started.jobId, {
-          getStatus: getGenerationJobStatus,
-        });
-        if (outcome.kind === 'completed') {
-          const createdId = outcome.result.opportunityIds?.[0];
-          if (createdId) {
-            toast.success('Content suggestion created', {
-              id: toastId,
-              description: prompt.text,
-              duration: 10_000,
-              action: { label: 'Open', onClick: () => openOpportunity(createdId) },
-            });
-          } else if (outcome.result.existingId) {
-            // Covered while the job ran, e.g. once the prompt was regrouped.
-            showExisting(outcome.result.existingId);
-          } else if (outcome.result.limited) {
-            toast.error('Monthly content limit reached.', { id: toastId });
-          } else {
-            toast.info("Couldn't write a suggestion for this prompt yet", {
-              id: toastId,
-              // Not grouped with other prompts yet, or no answers to go on.
-              description: [
-                'It needs tracked answers and a prompt group first; both come with its next tracking run.',
-                quotaUntouched,
-              ]
-                .filter(Boolean)
-                .join(' '),
-            });
-          }
-        } else if (outcome.kind === 'failed') {
+          break;
+        case 'existing':
+          // CONTENT-004: an open suggestion already answers this prompt.
+          toast.info('This prompt already has a content suggestion', {
+            id: toastId,
+            description: prompt.text,
+            duration: 10_000,
+            action: {
+              label: 'Open existing',
+              onClick: () => openOpportunity(outcome.opportunityId),
+            },
+          });
+          break;
+        case 'limited':
+          toast.error('Monthly content limit reached.', { id: toastId, description: prompt.text });
+          break;
+        case 'nothing':
+          toast.info("Couldn't write a suggestion for this prompt yet", {
+            id: toastId,
+            // Not grouped with other prompts yet, or no answers to go on.
+            description: [
+              'It needs tracked answers and a prompt group first; both come with its next tracking run.',
+              quotaUntouched,
+            ]
+              .filter(Boolean)
+              .join(' '),
+          });
+          break;
+        case 'failed':
           toast.error("Couldn't write a content suggestion", {
             id: toastId,
-            description: quotaUntouched,
+            description: [outcome.message, quotaUntouched].filter(Boolean).join(' ') || undefined,
           });
-        } else {
+          break;
+        case 'timeout':
           toast.info('Still writing the content suggestion', {
             id: toastId,
             description: 'It will appear in Content when it is done.',
           });
-        }
-      } catch (err) {
-        // Nothing may be left spinning, whatever went wrong on the way.
-        toast.error("Couldn't write a content suggestion", {
-          id: toastId,
-          description: err instanceof Error ? err.message : quotaUntouched,
-        });
-      } finally {
-        setSuggestingIds((set) => {
-          const next = new Set(set);
-          next.delete(prompt.id);
-          return next;
-        });
-        setUsageVersion((v) => v + 1);
+          break;
       }
     },
-    [openOpportunity, hasOpportunityLimit],
+    [hasOpportunityLimit, markSuggesting, openOpportunity],
+  );
+
+  // Bulk "Suggest content": one prompt after another (runInTurn), so a
+  // prompt whose group got a suggestion a moment ago is answered by that one,
+  // at no cost.
+  const [bulkSuggesting, setBulkSuggesting] = useState(false);
+  const suggestFor = useCallback(
+    async (list: Prompt[]) => {
+      if (list.length === 0) return;
+      setBulkSuggesting(true);
+      markSuggesting(
+        list.map((p) => p.id),
+        true,
+      );
+      const toastId = toast.loading(`Writing content suggestions… 1 of ${list.length}`, {
+        description: list[0].text,
+      });
+      const tally = await runInTurn(list, async (prompt, i) => {
+        if (i > 0) {
+          toast.loading(`Writing content suggestions… ${i + 1} of ${list.length}`, {
+            id: toastId,
+            description: prompt.text,
+          });
+        }
+        const outcome = await suggestForPrompt(prompt.id, SUGGEST_CALLS);
+        markSuggesting([prompt.id], false);
+        return outcome;
+      });
+      markSuggesting(
+        list.map((p) => p.id),
+        false,
+      );
+      setBulkSuggesting(false);
+      setUsageVersion((v) => v + 1);
+
+      const summary = bulkSuggestSummary(tally);
+      const opened = tally.created.length > 0 ? tally.created : tally.existing;
+      toast[summary.tone](summary.title, {
+        id: toastId,
+        description: summary.description,
+        duration: 10_000,
+        action:
+          opened.length === 1
+            ? {
+                label: tally.created.length > 0 ? 'Open' : 'Open existing',
+                onClick: () => openOpportunity(opened[0]),
+              }
+            : opened.length > 1
+              ? { label: 'Open Content', onClick: () => router.push('/dashboard/content') }
+              : undefined,
+      });
+    },
+    [markSuggesting, openOpportunity, router],
   );
   const [search, setSearch] = useState('');
   const [workFilter, setWorkFilter] = useState<'all' | 'none' | PromptWorkStatus>('all');
@@ -2680,6 +2800,31 @@ function AllPromptsTab({
   const promptsResetKey = `${search}::${workFilter}::${activeSort}::${dir}`;
   const promptsPager = usePagination(filtered.length, promptsResetKey);
 
+  // Rows ticked for the bulk action bar. Only rows on screen can be ticked,
+  // so the selection starts over whenever the rows on screen change.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const selectionKey = [
+    activeBrandId,
+    promptsResetKey,
+    promptsPager.page,
+    regionFilter,
+    positionsWindow.from,
+    positionsWindow.to ?? '',
+  ].join('::');
+  const [prevSelectionKey, setPrevSelectionKey] = useState(selectionKey);
+  if (prevSelectionKey !== selectionKey) {
+    setPrevSelectionKey(selectionKey);
+    setSelectedIds(new Set());
+  }
+  const toggleRow = useCallback((id: string, on: boolean) => {
+    setSelectedIds((set) => {
+      const next = new Set(set);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-10">
@@ -2717,6 +2862,10 @@ function AllPromptsTab({
       </Card>
     );
   }
+
+  const pageRows = filtered.slice(promptsPager.start, promptsPager.end);
+  const pageIds = pageRows.map((p) => p.id);
+  const selectedPrompts = pageRows.filter((p) => selectedIds.has(p.id));
 
   return (
     <Card>
@@ -2766,10 +2915,44 @@ function AllPromptsTab({
         </div>
       </CardHeader>
       <CardContent className="p-0">
+        {onEditPrompt && selectedPrompts.length > 0 && (
+          <BulkActionBar
+            count={selectedPrompts.length}
+            activeCount={selectedPrompts.filter((p) => p.isActive).length}
+            busy={bulkBusy || bulkSuggesting}
+            suggesting={bulkSuggesting}
+            suggestBlockedReason={
+              suggestDisabledReason ??
+              (!bulkSuggesting && suggestingIds.size > 0
+                ? 'Wait for the suggestion being written'
+                : bulkSuggestBlock(selectedPrompts.length, contentUsage, {
+                    unavailable: contentUsageFailed,
+                  }))
+            }
+            onPause={() => void setActiveFor(selectedPrompts, false)}
+            onResume={() => void setActiveFor(selectedPrompts, true)}
+            onSuggestContent={() => void suggestFor(selectedPrompts)}
+            onDelete={() => setConfirmDelete(selectedPrompts)}
+            onClear={() => setSelectedIds(new Set())}
+          />
+        )}
         <Table stickyHeader stickyFirstColumn>
           <TableHeader>
             <TableRow>
-              <TableHead className="pl-6">Prompt</TableHead>
+              <TableHead className="pl-6">
+                {onEditPrompt ? (
+                  <div className="flex items-center gap-3">
+                    <Checkbox
+                      checked={allSelected(pageIds, selectedIds)}
+                      onCheckedChange={() => setSelectedIds(toggleAll(pageIds, selectedIds))}
+                      aria-label="Select every prompt on this page"
+                    />
+                    Prompt
+                  </div>
+                ) : (
+                  'Prompt'
+                )}
+              </TableHead>
               <TableHead>Topic</TableHead>
               <TableHead className="text-center">Status</TableHead>
               <ColHead
@@ -2858,18 +3041,28 @@ function AllPromptsTab({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.slice(promptsPager.start, promptsPager.end).map((p) => {
+            {pageRows.map((p) => {
               const vol = volumeByPromptId.get(p.id);
               const vis = visibility[p.id];
               return (
                 <TableRow key={p.id} className="hover:bg-muted/50">
                   <TableCell className="pl-6 font-medium text-sm max-w-[320px]">
-                    <Link
-                      href={`/dashboard/prompts/${p.id}`}
-                      className="line-clamp-2 transition-colors hover:text-primary hover:underline"
-                    >
-                      {p.text}
-                    </Link>
+                    <div className="flex items-start gap-3">
+                      {onEditPrompt && (
+                        <Checkbox
+                          className="mt-0.5"
+                          checked={selectedIds.has(p.id)}
+                          onCheckedChange={(v) => toggleRow(p.id, v === true)}
+                          aria-label={`Select ${p.text}`}
+                        />
+                      )}
+                      <Link
+                        href={`/dashboard/prompts/${p.id}`}
+                        className="line-clamp-2 transition-colors hover:text-primary hover:underline"
+                      >
+                        {p.text}
+                      </Link>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <span className="text-xs text-muted-foreground truncate inline-block max-w-[140px] align-middle">
@@ -3009,8 +3202,11 @@ function AllPromptsTab({
                         onSuggestContent={() => void suggestContent(p)}
                         onOpenSuggestion={openOpportunity}
                         suggesting={suggestingIds.has(p.id)}
-                        suggestDisabledReason={suggestDisabledReason}
-                        onDelete={() => setConfirmDelete(p)}
+                        suggestDisabledReason={
+                          suggestDisabledReason ??
+                          (bulkSuggesting ? 'Wait for the selected prompts' : null)
+                        }
+                        onDelete={() => setConfirmDelete([p])}
                       />
                     </TableCell>
                   )}
@@ -3045,21 +3241,38 @@ function AllPromptsTab({
       <Dialog open={confirmDelete !== null} onOpenChange={(v) => !v && setConfirmDelete(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base">Delete prompt and its history?</DialogTitle>
+            <DialogTitle className="text-base">
+              {confirmDelete && confirmDelete.length > 1
+                ? `Delete ${confirmDelete.length} prompts and their history?`
+                : 'Delete prompt and its history?'}
+            </DialogTitle>
             <DialogDescription className="break-words">
-              &ldquo;{confirmDelete?.text}&rdquo; and its tracking results will be removed. You can
-              undo for 10 seconds.
+              {confirmDelete && confirmDelete.length > 1 ? (
+                <>These prompts and their tracking results will be removed.</>
+              ) : (
+                <>
+                  &ldquo;{confirmDelete?.[0]?.text}&rdquo; and its tracking results will be removed.
+                </>
+              )}{' '}
+              You can undo for 10 seconds.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setConfirmDelete(null)}>
-              Keep it
+              {confirmDelete && confirmDelete.length > 1 ? 'Keep them' : 'Keep it'}
             </Button>
             <Button
               type="button"
               variant="destructive"
               onClick={() => {
-                if (confirmDelete) deleteWithUndo(confirmDelete);
+                if (confirmDelete) {
+                  deleteWithUndo(confirmDelete);
+                  setSelectedIds((set) => {
+                    const next = new Set(set);
+                    for (const p of confirmDelete) next.delete(p.id);
+                    return next;
+                  });
+                }
                 setConfirmDelete(null);
               }}
             >

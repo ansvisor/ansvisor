@@ -722,6 +722,44 @@ export async function deletePrompt(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+/**
+ * Pause or resume several prompts in one write, from the prompts table's
+ * bulk action bar (PROMPT-006). At most a page of rows; RLS keeps it to the
+ * caller's prompts, so `updated` can be fewer than asked. Errors come back as
+ * values.
+ */
+export async function setPromptsActive(
+  ids: string[],
+  isActive: boolean,
+): Promise<{ updated: number } | { error: string }> {
+  if (ids.length === 0) return { updated: 0 };
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from('prompts')
+    .update({ is_active: isActive })
+    .in('id', ids)
+    .select('id');
+  if (error) return { error: error.message };
+  return { updated: data?.length ?? 0 };
+}
+
+/**
+ * Delete several prompts and their history in one write, once the undo
+ * window has passed (PROMPT-006). Returns the ids actually deleted: RLS
+ * quietly leaves out any the caller can't delete. Errors come back as values.
+ */
+export async function deletePrompts(
+  ids: string[],
+): Promise<{ deletedIds: string[] } | { error: string }> {
+  if (ids.length === 0) return { deletedIds: [] };
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.from('prompts').delete().in('id', ids).select('id');
+  if (error) return { error: error.message };
+  return { deletedIds: (data ?? []).map((row) => row.id as string) };
+}
+
 export async function deletePromptSet(id: string): Promise<void> {
   const supabase = await createClient();
 
