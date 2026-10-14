@@ -33,6 +33,9 @@ import {
   listActionsFor,
   listSignalsFor,
   updateTaskStatusFor,
+  IMPROVE_PRESETS,
+  IMPROVE_SOURCE_TYPES,
+  createImproveActionFor,
 } from './data';
 
 /**
@@ -1026,6 +1029,82 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       }
       return {
         content: [{ type: 'text', text: JSON.stringify(updated, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'create_improve_action',
+    {
+      description:
+        'Send Improve suggestions for one prompt to Action Center as a new `prompt_improve` action, one human task per suggestion — the same as the Positions panel\'s Improve tab "Send Actions". The prompt must already have an Improve suggestion set for this exact range (generated in the dashboard); otherwise it errors with "Generate suggestions for this range first". Needs a plan that includes Improve. Reuse the same idempotency_key when retrying: a repeated call returns the action the first one created (created: false) instead of a duplicate. It is a write logged under the API key\'s user — only fire on explicit user intent, never as part of an exploratory query.',
+      inputSchema: {
+        prompt_id: relaxedUuid.describe('Prompt UUID, from list_prompts.'),
+        range: z
+          .object({
+            preset: z
+              .enum(IMPROVE_PRESETS)
+              .describe(
+                'The range the suggestion set was generated for: 24h, 7d, 30d, 90d or custom.',
+              ),
+            from: z
+              .string()
+              .describe('ISO timestamp lower bound; for custom, its date is part of the set key.'),
+            to: z
+              .string()
+              .optional()
+              .describe('ISO timestamp upper bound; for custom, its date is part of the set key.'),
+            region: z
+              .string()
+              .optional()
+              .describe('Region code the set was generated for (e.g. "US"); omit for all regions.'),
+          })
+          .describe('The Positions panel range the suggestion set belongs to.'),
+        idempotency_key: z
+          .string()
+          .min(8)
+          .max(64)
+          .describe('Unique per send (e.g. a UUID); reuse it only to retry the same send.'),
+        suggestions: z
+          .array(
+            z.object({
+              id: z.string().min(1).max(120).describe('Suggestion id from the set, or your own.'),
+              platform: z
+                .string()
+                .describe(
+                  'Platform id: chatgpt-web, perplexity-web, google-aio, google-aimode, gemini-web, copilot-web, grok-web or claude.',
+                ),
+              title: z.string().min(1).max(200).describe('Task title.'),
+              body: z.string().max(1000).optional().describe('What to do, in a sentence or two.'),
+              sources: z
+                .array(
+                  z.object({ type: z.enum(IMPROVE_SOURCE_TYPES), ref: z.string().min(1).max(300) }),
+                )
+                .max(6)
+                .optional()
+                .describe('Evidence behind the suggestion.'),
+            }),
+          )
+          .min(1)
+          .max(50)
+          .describe('The suggestions to send, in task order.'),
+      },
+    },
+    async (args) => {
+      const result = await createImproveActionFor(auth, {
+        promptId: args.prompt_id,
+        range: args.range,
+        idempotencyKey: args.idempotency_key,
+        suggestions: args.suggestions,
+      });
+      if (!result) {
+        return {
+          content: [{ type: 'text', text: 'Prompt not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
     },
   );

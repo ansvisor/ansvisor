@@ -124,7 +124,7 @@ export function MobileNav() {
                   );
                 }
 
-                return (
+                const link = (
                   <Link key={item.href} href={item.href} onClick={() => setOpen(false)}>
                     <span
                       className={cn(
@@ -146,6 +146,29 @@ export function MobileNav() {
                       )}
                     </span>
                   </Link>
+                );
+                if (!item.children?.length) return link;
+                // The Prompts submenu (PROMPT-001), always shown on mobile.
+                return (
+                  <div key={item.href}>
+                    {link}
+                    <div className="ml-7 border-l pl-2">
+                      {item.children.map((child) => (
+                        <Link key={child.href} href={child.href} onClick={() => setOpen(false)}>
+                          <span
+                            className={cn(
+                              'block rounded-md px-3 py-1.5 text-sm transition-colors',
+                              pathname === child.href
+                                ? 'font-medium text-primary'
+                                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                            )}
+                          >
+                            {getDashboardNavLabel(child.title, t, tBrands)}
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
                 );
               }),
             )}

@@ -40,8 +40,22 @@ describe('actionTexts', () => {
     expect(() => actionGoal(kind, t)).not.toThrow();
   });
 
-  it('holds copy for all sixty-two definitions and opportunity actions', () => {
-    expect(ACTION_KINDS).toHaveLength(63);
+  it('holds copy for all sixty-two definitions, opportunity and Improve actions', () => {
+    expect(ACTION_KINDS).toHaveLength(64);
+  });
+
+  it('names an Improve action after its prompt, with its own why and goal', () => {
+    const payload = {
+      title: 'Improve position: "best coffee"',
+      why: 'Not mentioned on Perplexity.',
+      goal: 'Get the brand mentioned early and cited for "best coffee" on Perplexity.',
+    };
+    const texts = actionTexts(action({ kind: 'prompt_improve', payload }), t);
+    expect(texts).toEqual({ title: payload.title, description: payload.why });
+    expect(actionGoal('prompt_improve', t, payload)).toBe(payload.goal);
+    expect(actionGoal('prompt_improve', t)).toBe(
+      messages.actionCenter.actionTexts.prompt_improve.goal,
+    );
   });
 
   it('names an opportunity action after the work it was sent for', () => {
