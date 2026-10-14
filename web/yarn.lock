@@ -6620,7 +6620,7 @@ react@19.2.3:
   resolved "https://registry.npmjs.org/react/-/react-19.2.3.tgz"
   integrity sha512-Ku/hhYbVjOQnXDZFv2+RibmLFGwFdeeKHFcOTlrt7xplBnya5OGn/hIRDsqDiSUcfORsDC7MPxwork8jBwsIWA==
 
-read-excel-file@^9.3.12:
+read-excel-file@9.3.12:
   version "9.3.12"
   resolved "https://registry.yarnpkg.com/read-excel-file/-/read-excel-file-9.3.12.tgz#aacedbef34d555b8fb0f9bfe4e93652b56ace203"
   integrity sha512-benNAoQbe5HqoTi3qrQkR8wMeHq0gVWLt2Br73hVvmBPGdzMf9OLGsps/812AfZ+bvzVYsUyhF77Y3o4B51yCA==
