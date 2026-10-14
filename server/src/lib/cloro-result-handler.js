@@ -45,7 +45,7 @@ export async function handleScraperResult({
   const mentionCount = countBrandMentions(aiResponse.text, brandInfo);
   const sentimentResult =
     mentionCount > 0
-      ? await analyzeSentimentAI(aiResponse.text, brandInfo.brandName)
+      ? await analyzeSentimentAI(aiResponse.text, brandInfo.brandName, brandInfo.domains)
       : { sentiment: 'neutral', confidence: 0, reason: 'Brand not mentioned' };
 
   const metrics = parseResponse(aiResponse, brandInfo, sentimentResult.sentiment, competitors);
