@@ -127,10 +127,12 @@ import { formatCompactNumber } from '@/lib/format';
 import { usePagination, TablePager } from '@/components/table-pager';
 import { PromptPositionsSheet } from '@/components/prompts/prompt-positions-sheet';
 import {
+  panelRangeFromTable,
   parsePositionsRange,
   positionsUrlParams,
   type PositionsRange,
 } from '@/lib/positions-range';
+import { viewerTimeZone } from '@/lib/time-zone';
 
 // ─── Info Tooltip ─────────────────────────────────────────────────────────────
 
@@ -2393,11 +2395,7 @@ function AllPromptsTab({
   const openPositionsPanel = useCallback(
     (promptId: string, tab: 'platforms' | 'improve' = 'platforms') => {
       setPositionsTab(tab);
-      setPositionsRange({
-        preset: positionsPreset,
-        from: positionsPreset === 'custom' ? positionsWindow.from.slice(0, 10) : '',
-        to: positionsPreset === 'custom' ? (positionsWindow.to?.slice(0, 10) ?? '') : '',
-      });
+      setPositionsRange(panelRangeFromTable(positionsPreset, positionsWindow, viewerTimeZone()));
       setPositionsId(promptId);
     },
     [positionsPreset, positionsWindow],
