@@ -4,7 +4,8 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
-import { Link } from '@/i18n/navigation';
+import { Link, usePathname } from '@/i18n/navigation';
+import { PROMPTS_BASE, sectionFor, sectionFromPath } from '@/lib/prompts-routes';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -46,6 +47,13 @@ import { CompetitionBars } from '@/components/ui/competition-bars';
 import { WorkStatusBadge } from '@/components/prompts/work-status';
 import { BulkImportPrompts } from '@/components/prompts/bulk-import-prompts';
 import { promptKey } from '@/lib/prompt-import';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { setPromptWorkStatus, type PromptWorkStatus } from '@/lib/actions/prompt-workflow';
 import {
   TrendingUp,
@@ -68,6 +76,9 @@ import {
   ListChecks,
   Sparkles,
   ExternalLink,
+  MoreHorizontal,
+  Pause,
+  Play,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -1254,8 +1265,12 @@ export default function PromptsPage() {
     (s) => s.brands.find((brand) => brand.id === s.activeBrandId) ?? null,
   );
   const searchParams = useSearchParams();
+  // On /dashboard/prompts/{tracked,suggestions,fan-outs,insights} the route
+  // names the view (PROMPT-001); ?tab= / ?view= are the older links' shape.
+  const section = sectionFromPath(usePathname());
 
   const initialTab: TabId = (() => {
+    if (section) return section.tab;
     const raw = searchParams.get('tab');
     if ((VALID_TABS as readonly string[]).includes(raw ?? '')) return raw as TabId;
     return 'all';
@@ -1266,6 +1281,7 @@ export default function PromptsPage() {
   // what could be. A sub-tab rather than a fourth top-level tab, because the
   // date range, the Add prompt action and the export all belong to both.
   const initialView: PromptsView = (() => {
+    if (section) return section.view;
     const raw = searchParams.get('view');
     if ((PROMPT_VIEWS as readonly string[]).includes(raw ?? '')) return raw as PromptsView;
     // Links written before the split point at the suggestions card's anchor.
@@ -1287,7 +1303,9 @@ export default function PromptsPage() {
   const [rangePreset, setRangePreset] = useState<PromptRangePreset>(initialRange);
   // Which tracked location the health columns describe. Empty = every
   // location blended, which is what the table has always shown (#691).
-  const [regionFilter, setRegionFilter] = useState('');
+  // In the URL like the range, so it survives moving between the Prompts
+  // routes from the sidebar (PROMPT-001).
+  const [regionFilter, setRegionFilter] = useState(() => searchParams.get('region') ?? '');
   const [availableRegions, setAvailableRegions] = useState<string[]>([]);
   const [customFrom, setCustomFrom] = useState(() => searchParams.get('from') ?? '');
   const [customTo, setCustomTo] = useState(() => searchParams.get('to') ?? '');
@@ -1315,38 +1333,37 @@ export default function PromptsPage() {
   // blocked Next's server-action queue, so the page's data fetch never even
   // dispatched (the "prompts table spins forever" bug). replaceState updates
   // the URL with no server request; Next's router syncs with the History API.
+  //
+  // The tab and view live in the path (PROMPT-001): /dashboard/prompts/tracked,
+  // /suggestions, /fan-outs, /insights — the routes the sidebar's Prompts
+  // submenu links to, so the sidebar and these tabs always agree. The path is
+  // rewritten in place under any locale prefix.
   useEffect(() => {
-    const currentTab = searchParams.get('tab');
-    const currentRange = searchParams.get('range');
     // The default range stays out of the URL so shared links keep their
     // existing shape unless the user actually picked a different window.
-    const wantRange = rangePreset === DEFAULT_PROMPT_RANGE_PRESET ? null : rangePreset;
-    const wantView = view === 'tracked' ? null : view;
-    const wantFrom = rangePreset === 'custom' && customFrom ? customFrom : null;
-    const wantTo = rangePreset === 'custom' && customTo ? customTo : null;
-    if (
-      currentTab === tab &&
-      searchParams.get('view') === wantView &&
-      currentRange === wantRange &&
-      searchParams.get('from') === wantFrom &&
-      searchParams.get('to') === wantTo
-    ) {
+    const want: Record<string, string | null> = {
+      range: rangePreset === DEFAULT_PROMPT_RANGE_PRESET ? null : rangePreset,
+      from: rangePreset === 'custom' && customFrom ? customFrom : null,
+      to: rangePreset === 'custom' && customTo ? customTo : null,
+      region: regionFilter || null,
+      tab: null,
+      view: null,
+    };
+    const { pathname, search, hash } = window.location;
+    const at = pathname.indexOf(PROMPTS_BASE);
+    const wantPath = `${at > 0 ? pathname.slice(0, at) : ''}${sectionFor(tab, view).href}`;
+    const params = new URLSearchParams(search);
+    if (pathname === wantPath && Object.entries(want).every(([k, v]) => params.get(k) === v)) {
       return;
     }
-    const params = new URLSearchParams(Array.from(searchParams.entries()));
-    params.set('tab', tab);
-    if (wantView) params.set('view', wantView);
-    else params.delete('view');
-    if (wantRange) params.set('range', wantRange);
-    else params.delete('range');
-    if (wantFrom) params.set('from', wantFrom);
-    else params.delete('from');
-    if (wantTo) params.set('to', wantTo);
-    else params.delete('to');
-    // Keep the hash: deep links like #prompt-opportunities arrive without a
-    // tab param, and this sync must not strip their anchor from the URL.
-    window.history.replaceState(null, '', `?${params.toString()}${window.location.hash}`);
-  }, [tab, view, rangePreset, customFrom, customTo, searchParams]);
+    for (const [k, v] of Object.entries(want)) {
+      if (v) params.set(k, v);
+      else params.delete(k);
+    }
+    const query = params.toString();
+    // Keep the hash: deep links like #prompt-opportunities must keep their anchor.
+    window.history.replaceState(null, '', `${wantPath}${query ? `?${query}` : ''}${hash}`);
+  }, [tab, view, rangePreset, customFrom, customTo, regionFilter, searchParams]);
 
   // Deep link from the Insights Recommendations row (#459): the target card
   // only exists once the Insights tab's volume data has rendered, so a bare
@@ -1923,6 +1940,7 @@ export default function PromptsPage() {
                 locationQuota={locationQuota}
                 onAddPrompt={canManage ? () => setAddPromptOpen(true) : undefined}
                 onEditPrompt={canManage ? setEditingPrompt : undefined}
+                onChanged={loadData}
               />
             </>
           )}
@@ -2310,6 +2328,61 @@ export default function PromptsPage() {
   );
 }
 
+/** How long a row deleted from its menu can be restored (PROMPT-006). */
+const DELETE_UNDO_MS = 10_000;
+
+/**
+ * The row's ⋯ menu (PROMPT-006): Edit, pause or resume tracking, open the
+ * Positions panel on Improve, and Delete behind a confirmation. Base UI's menu
+ * opens from mouse and keyboard and closes on Esc and outside clicks.
+ */
+function RowActionsMenu({
+  prompt,
+  onEdit,
+  onToggleActive,
+  onImprove,
+  onDelete,
+}: {
+  prompt: Prompt;
+  onEdit: () => void;
+  onToggleActive: () => void;
+  onImprove: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        aria-label={`Actions for ${prompt.text}`}
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem className="gap-2" onClick={onEdit}>
+          <Pencil className="h-3.5 w-3.5" />
+          Edit
+        </DropdownMenuItem>
+        <DropdownMenuItem className="gap-2" onClick={onToggleActive}>
+          {prompt.isActive ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+          {prompt.isActive ? 'Pause tracking' : 'Resume tracking'}
+        </DropdownMenuItem>
+        <DropdownMenuItem className="gap-2" onClick={onImprove}>
+          <TrendingUp className="h-3.5 w-3.5" />
+          Improve position…
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="gap-2 text-red-600 focus:text-red-600 dark:text-red-400"
+          onClick={onDelete}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // ─── All Prompts Tab ──────────────────────────────────────────────────────────
 
 const WORK_FILTER_LABELS: Record<string, string> = {
@@ -2322,7 +2395,7 @@ const WORK_FILTER_LABELS: Record<string, string> = {
 
 function AllPromptsTab({
   loading,
-  prompts,
+  prompts: allRows,
   activeBrandId,
   volumeByPromptId,
   visibility,
@@ -2333,6 +2406,7 @@ function AllPromptsTab({
   locationQuota,
   onAddPrompt,
   onEditPrompt,
+  onChanged,
 }: {
   loading: boolean;
   prompts: Prompt[];
@@ -2350,10 +2424,86 @@ function AllPromptsTab({
   locationQuota: LocationQuota | null;
   /** Opens the Add Prompt dialog; undefined when the user can't write (member role). */
   onAddPrompt?: () => void;
-  /** Opens the Edit Prompt dialog for a row; undefined hides the pencil (member role). */
+  /** Opens the Edit Prompt dialog for a row; undefined hides the row menu (member role). */
   onEditPrompt?: (prompt: Prompt) => void;
+  /** Reloads the page data after a row is paused, resumed or deleted from its menu. */
+  onChanged: () => void;
 }) {
   const tCommon = useTranslations('common');
+  // Rows deleted from the row menu, hidden at once and deleted for real after
+  // the Undo window (PROMPT-006). There is no soft delete for prompts — a
+  // delete drops their history — so the delay is the undo: closing the page
+  // inside the window simply leaves the prompt in place.
+  const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(() => new Set());
+  const deleteTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const [confirmDelete, setConfirmDelete] = useState<Prompt | null>(null);
+  const [positionsTab, setPositionsTab] = useState<'platforms' | 'improve'>('platforms');
+  const prompts = useMemo(
+    () => allRows.filter((p) => !pendingDeletes.has(p.id)),
+    [allRows, pendingDeletes],
+  );
+
+  const undoDelete = useCallback((id: string) => {
+    const timer = deleteTimers.current.get(id);
+    if (timer) clearTimeout(timer);
+    deleteTimers.current.delete(id);
+    setPendingDeletes((set) => {
+      const next = new Set(set);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const deleteWithUndo = useCallback(
+    (prompt: Prompt) => {
+      setPendingDeletes((set) => new Set(set).add(prompt.id));
+      const timer = setTimeout(async () => {
+        deleteTimers.current.delete(prompt.id);
+        try {
+          await deletePrompt(prompt.id);
+          onChanged();
+        } catch {
+          toast.error('Failed to delete the prompt.');
+          undoDelete(prompt.id);
+        }
+      }, DELETE_UNDO_MS);
+      deleteTimers.current.set(prompt.id, timer);
+      toast('Prompt deleted', {
+        description: prompt.text,
+        duration: DELETE_UNDO_MS,
+        action: { label: 'Undo', onClick: () => undoDelete(prompt.id) },
+      });
+    },
+    [onChanged, undoDelete],
+  );
+
+  // A pending delete still lands if the table unmounts inside the window
+  // (switching tabs, changing brand); only an Undo or closing the page stops it.
+  useEffect(() => {
+    const timers = deleteTimers.current;
+    return () => {
+      for (const [id, timer] of timers) {
+        clearTimeout(timer);
+        void deletePrompt(id);
+      }
+      timers.clear();
+    };
+  }, []);
+
+  const toggleActive = useCallback(
+    async (prompt: Prompt) => {
+      try {
+        await updatePrompt(prompt.id, { isActive: !prompt.isActive });
+        toast.success(prompt.isActive ? 'Tracking paused' : 'Tracking resumed', {
+          description: prompt.text,
+        });
+        onChanged();
+      } catch {
+        toast.error('Failed to update the prompt.');
+      }
+    },
+    [onChanged],
+  );
   const [search, setSearch] = useState('');
   const [workFilter, setWorkFilter] = useState<'all' | 'none' | PromptWorkStatus>('all');
   // Optimistic per-row status overrides — the prompts prop belongs to the
@@ -2392,7 +2542,8 @@ function AllPromptsTab({
 
   // The panel opens on the table's window; changing it there only moves the panel.
   const openPositionsPanel = useCallback(
-    (promptId: string) => {
+    (promptId: string, tab: 'platforms' | 'improve' = 'platforms') => {
+      setPositionsTab(tab);
       setPositionsRange({
         preset: positionsPreset,
         from: positionsPreset === 'custom' ? positionsWindow.from.slice(0, 10) : '',
@@ -2670,7 +2821,11 @@ function AllPromptsTab({
               >
                 Last run
               </SortableHead>
-              {onEditPrompt && <TableHead className="text-right pr-6 w-[60px]">Edit</TableHead>}
+              {onEditPrompt && (
+                <TableHead className="text-right pr-6 w-[60px]">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -2817,15 +2972,13 @@ function AllPromptsTab({
                   </TableCell>
                   {onEditPrompt && (
                     <TableCell className="text-right pr-6">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 w-7 p-0"
-                        aria-label="Edit prompt"
-                        onClick={() => onEditPrompt(p)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
+                      <RowActionsMenu
+                        prompt={p}
+                        onEdit={() => onEditPrompt(p)}
+                        onToggleActive={() => void toggleActive(p)}
+                        onImprove={() => openPositionsPanel(p.id, 'improve')}
+                        onDelete={() => setConfirmDelete(p)}
+                      />
                     </TableCell>
                   )}
                 </TableRow>
@@ -2853,8 +3006,36 @@ function AllPromptsTab({
         window={panelWindow}
         onRangeChange={setPositionsRange}
         region={regionFilter}
+        initialTab={positionsTab}
         onClose={() => setPositionsId(null)}
       />
+      <Dialog open={confirmDelete !== null} onOpenChange={(v) => !v && setConfirmDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Delete prompt and its history?</DialogTitle>
+            <DialogDescription className="break-words">
+              &ldquo;{confirmDelete?.text}&rdquo; and its tracking results will be removed. You can
+              undo for 10 seconds.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setConfirmDelete(null)}>
+              Keep it
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                if (confirmDelete) deleteWithUndo(confirmDelete);
+                setConfirmDelete(null);
+              }}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

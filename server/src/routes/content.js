@@ -5,6 +5,7 @@ import {
   requireFeature,
   enforceBriefQuota,
   getBriefQuotaStatus,
+  getContentUsage,
   getOrgIdForUser,
   PlanLimitError,
 } from '../lib/plan-guard.js';
@@ -1031,6 +1032,42 @@ router.get('/briefs/quota', async (req, res) => {
     }
     req.log.error({ err: error }, 'content brief quota status error');
     return res.status(500).json({ error: 'Failed to get brief quota', details: error.message });
+  }
+});
+
+/**
+ * GET /api/content/usage
+ * Both monthly content counters for the user's org (CONTENT-001), so the
+ * Content page, the MCP server and agents read the same figures:
+ * { plan, planName, periodStart, periodEnd, opportunities, briefs }, each
+ * counter { used, limit, remaining } with limit -1 meaning unlimited.
+ */
+router.get('/usage', async (req, res) => {
+  try {
+    const orgId = await getOrgIdForUser(req.user.id);
+    if (!orgId) {
+      // Self-hosted single-user setups may have no org row; no quota applies.
+      const unlimited = { used: 0, limit: -1, remaining: -1 };
+      return res.json({
+        plan: 'self_hosted',
+        planName: null,
+        periodStart: null,
+        periodEnd: null,
+        opportunities: unlimited,
+        briefs: unlimited,
+      });
+    }
+    return res.json(await getContentUsage(orgId));
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        error: 'plan_limit',
+        message: error.message,
+      });
+    }
+    req.log.error({ err: error }, 'content usage error');
+    return res.status(500).json({ error: 'Failed to get content usage', details: error.message });
   }
 });
 

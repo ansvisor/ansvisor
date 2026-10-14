@@ -51,6 +51,12 @@ export interface PlanLimits {
    */
   improveMonthlyBudgetUsd: number;
   /**
+   * New content opportunities per month (CONTENT-001), counted separately
+   * from briefs. -1 = unlimited. Enterprise is -1 by default and set per
+   * customer via organizations.plan_overrides.maxOpportunitiesPerMonth.
+   */
+  maxOpportunitiesPerMonth: number;
+  /**
    * Monthly Site Audit runs. -1 = unlimited (self-hosted / enterprise).
    * Starter 100, Growth 500.
    */
@@ -92,6 +98,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxVolumeAnalyses: -1,
       maxBriefGenerations: -1,
       improveMonthlyBudgetUsd: -1,
+      maxOpportunitiesPerMonth: -1,
       maxSiteAudits: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
@@ -128,6 +135,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxVolumeAnalyses: 4,
       maxBriefGenerations: 10,
       improveMonthlyBudgetUsd: 0,
+      maxOpportunitiesPerMonth: 10,
       maxSiteAudits: 100,
       maxDailyOnDemand: 3,
       onDemandCooldownMinutes: 15,
@@ -168,6 +176,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxBriefGenerations: 50,
       // 1% of the $249 price, spent on Improve model calls (PROMPT-003).
       improveMonthlyBudgetUsd: 2.49,
+      maxOpportunitiesPerMonth: 50,
       maxSiteAudits: 500,
       maxDailyOnDemand: 10,
       onDemandCooldownMinutes: 5,
@@ -208,6 +217,7 @@ export const PLANS: Record<PlanId, Plan> = {
       // 1% of the $499 floor. plan_overrides.contractMonthlyUsd raises it to 1%
       // of the contract; an explicit plan_overrides.improveMonthlyBudgetUsd wins.
       improveMonthlyBudgetUsd: 4.99,
+      maxOpportunitiesPerMonth: -1,
       maxSiteAudits: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,

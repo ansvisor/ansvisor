@@ -6,7 +6,7 @@ import {
   isCloud,
   isSubscriptionActive,
 } from '../config/plans.js';
-import { anchoredPeriodStart } from './quota-period.js';
+import { anchoredPeriodStart, shiftMonthClamped } from './quota-period.js';
 import {
   IMPROVE_BUDGET_SHARE,
   estimateGenerationsLeft,
@@ -334,6 +334,92 @@ export async function enforceImproveQuota(orgId, modelId) {
     );
   }
   return quota;
+}
+
+async function countOpportunityUsage(orgId, since) {
+  const { count } = await supabaseAdmin
+    .from('opportunity_usage')
+    .select('*', { count: 'exact', head: true })
+    .eq('organization_id', orgId)
+    .gte('used_at', since.toISOString());
+  return count || 0;
+}
+
+/**
+ * Get the monthly content opportunity quota without enforcing (CONTENT-001).
+ * Returns { used, limit, remaining }; limit -1 is unlimited.
+ */
+export async function getOpportunityQuotaStatus(orgId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const max = plan.limits.maxOpportunitiesPerMonth ?? -1;
+  if (max === -1) return { used: 0, limit: -1, remaining: -1 };
+
+  const used = await countOpportunityUsage(orgId, await quotaPeriodStart(orgId));
+  return { used, limit: max, remaining: Math.max(0, max - used) };
+}
+
+/**
+ * Claim up to `count` of this period's opportunity slots before generating.
+ * Atomic per organization (claim_opportunity_usage), so concurrent runs can't
+ * overshoot. Returns { unlimited, ids }: link each id to the opportunity it
+ * becomes (linkOpportunitySlots) and hand back the rest (releaseOpportunitySlots).
+ */
+export async function claimOpportunitySlots(orgId, count) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const max = plan.limits.maxOpportunitiesPerMonth ?? -1;
+  if (max === -1) return { unlimited: true, ids: [] };
+  if (count <= 0) return { unlimited: false, ids: [] };
+
+  const { data, error } = await supabaseAdmin.rpc('claim_opportunity_usage', {
+    p_organization_id: orgId,
+    p_since: (await quotaPeriodStart(orgId)).toISOString(),
+    p_limit: max,
+    p_count: count,
+  });
+  if (error) throw new Error(error.message);
+  // A setof uuid comes back as bare ids or as one-key rows, by client version.
+  const ids = (data ?? []).map((r) => (typeof r === 'string' ? r : Object.values(r)[0]));
+  return { unlimited: false, ids };
+}
+
+/** Point each claimed slot at the opportunity it was used for. */
+export async function linkOpportunitySlots(pairs) {
+  for (const { usageId, opportunityId } of pairs) {
+    const { error } = await supabaseAdmin
+      .from('opportunity_usage')
+      .update({ opportunity_id: opportunityId })
+      .eq('id', usageId);
+    if (error) throw new Error(error.message);
+  }
+}
+
+/** Hand back slots that were claimed but not used (merged, skipped or failed). */
+export async function releaseOpportunitySlots(ids) {
+  if (!ids.length) return;
+  const { error } = await supabaseAdmin.from('opportunity_usage').delete().in('id', ids);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Both monthly content counters with the period they belong to, for the
+ * Content page and GET /content/usage (CONTENT-001). Opportunities and briefs
+ * are separate pools that renew together with the subscription.
+ */
+export async function getContentUsage(orgId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const periodStart = await quotaPeriodStart(orgId);
+  const [opportunities, briefs] = await Promise.all([
+    getOpportunityQuotaStatus(orgId),
+    getBriefQuotaStatus(orgId),
+  ]);
+  return {
+    plan: plan.id,
+    planName: plan.name,
+    periodStart: periodStart.toISOString(),
+    periodEnd: shiftMonthClamped(periodStart, 1).toISOString(),
+    opportunities,
+    briefs,
+  };
 }
 
 async function countSiteAuditUsageThisMonth(orgId) {

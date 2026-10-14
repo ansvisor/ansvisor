@@ -71,6 +71,8 @@ interface Props {
   onRangeChange: (range: PositionsRange) => void;
   /** The table's location; empty means every location. */
   region: string;
+  /** The tab the panel opens on: Improve when opened from the row menu (PROMPT-006). */
+  initialTab?: 'platforms' | 'improve';
   onClose: () => void;
 }
 
@@ -113,6 +115,7 @@ export function PromptPositionsSheet({
   window,
   onRangeChange,
   region,
+  initialTab = 'platforms',
   onClose,
 }: Props) {
   const preset = range.preset;
@@ -255,9 +258,9 @@ export function PromptPositionsSheet({
           {current?.error && <LoadError message={current.error} onRetry={retry} />}
           {data &&
             (latestMode ? (
-              <LatestView data={data} improve={improve} />
+              <LatestView data={data} improve={improve} initialTab={initialTab} />
             ) : (
-              <PeriodView data={data} improve={improve} />
+              <PeriodView data={data} improve={improve} initialTab={initialTab} />
             ))}
         </div>
 
@@ -463,7 +466,15 @@ function ImproveTrigger({ improve }: { improve: ImproveController }) {
   );
 }
 
-function LatestView({ data, improve }: { data: PromptPositionsData; improve: ImproveController }) {
+function LatestView({
+  data,
+  improve,
+  initialTab,
+}: {
+  data: PromptPositionsData;
+  improve: ImproveController;
+  initialTab: 'platforms' | 'improve';
+}) {
   const included = data.platforms.filter((p) => p.access.state === 'included');
   const answered = included.filter((p) => p.latest);
   const mentioned = answered.filter((p) => p.latest!.mentioned).length;
@@ -489,7 +500,7 @@ function LatestView({ data, improve }: { data: PromptPositionsData; improve: Imp
         <Stat label="Avg. position" value={avg} sub="when mentioned" />
       </div>
 
-      <Tabs defaultValue="platforms">
+      <Tabs defaultValue={initialTab}>
         <TabsList>
           <TabsTrigger value="platforms">Platform results</TabsTrigger>
           <ImproveTrigger improve={improve} />
@@ -560,7 +571,15 @@ function LatestRow({ platform: p }: { platform: PlatformPositions }) {
 
 // ─── 7d / 30d / 90d / custom: days ────────────────────────────────────────────
 
-function PeriodView({ data, improve }: { data: PromptPositionsData; improve: ImproveController }) {
+function PeriodView({
+  data,
+  improve,
+  initialTab,
+}: {
+  data: PromptPositionsData;
+  improve: ImproveController;
+  initialTab: 'platforms' | 'improve';
+}) {
   const s = data.summary;
   return (
     <div className="space-y-4">
@@ -597,7 +616,7 @@ function PeriodView({ data, improve }: { data: PromptPositionsData; improve: Imp
         </p>
       )}
 
-      <Tabs defaultValue="platforms">
+      <Tabs defaultValue={initialTab}>
         <TabsList>
           <TabsTrigger value="platforms">Platform results</TabsTrigger>
           <TabsTrigger value="history">Daily history ({s.trackedDays})</TabsTrigger>

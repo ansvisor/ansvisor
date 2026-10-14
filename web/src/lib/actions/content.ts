@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import type { ContentBrief, ContentOpportunity, OpportunityBasket, WebhookConfig } from '@/types';
 import { API_BASE_URL } from '@/config/api';
+import type { ContentUsage } from '@/lib/content-usage';
 
 const AEO_SERVER_URL = API_BASE_URL;
 
@@ -285,6 +286,24 @@ export async function getBriefQuota(): Promise<BriefQuota> {
   const res = await fetch(`${AEO_SERVER_URL}/api/content/briefs/quota`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || body.error || `Server error: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+/** Both monthly content counters and their period (CONTENT-001). */
+export async function getContentUsage(): Promise<ContentUsage> {
+  const session = await getSession();
+
+  const res = await fetch(`${AEO_SERVER_URL}/api/content/usage`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+    cache: 'no-store',
   });
 
   if (!res.ok) {

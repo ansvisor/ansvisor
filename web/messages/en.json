@@ -64,7 +64,12 @@
     "toggleMenu": "Toggle navigation menu",
     "keepSidebarOpen": "Keep sidebar open",
     "collapseSidebar": "Collapse sidebar",
-    "feedback": "Send feedback"
+    "feedback": "Send feedback",
+    "trackedPrompts": "Tracked Prompts",
+    "promptSuggestions": "Prompt Suggestions",
+    "queryFanouts": "Query Fan-outs",
+    "promptsInsights": "Insights",
+    "toggleSubmenu": "Show or hide {label}"
   },
   "actionCenter": {
     "tabs": {
@@ -1712,7 +1717,6 @@
     "copyAllData": "Copy All Data",
     "copiedToast": "Copied to clipboard",
     "copyError": "Could not copy to the clipboard",
-    "moreActions": "More actions",
     "sending": "Sending...",
     "noResults": "No opportunities match your filters.",
     "clearFilters": "Clear filters",
@@ -1749,6 +1753,18 @@
     "typeHint": {
       "owned": "Content on your own site",
       "earned": "Coverage on other sites: articles, reviews, links"
+    },
+    "usage": {
+      "title": "This billing period",
+      "opportunities": "New opportunities",
+      "briefs": "Content briefs",
+      "remaining": "{count, plural, one {# remaining} other {# remaining}}",
+      "limitReached": "Limit reached",
+      "unlimited": "Unlimited",
+      "plan": "{plan} plan",
+      "resets": "Resets {date}",
+      "upgrade": "Upgrade plan",
+      "tooltip": "Every new opportunity counts once, whether Ansvisor suggested it or you asked for it; dismissed and deleted ones still count, merged duplicates don't. Generating a brief counts separately. Unused allowance doesn't carry over. Both reset on {date}, when your subscription renews."
     },
     "kpi": {
       "total": "Total Opportunities",

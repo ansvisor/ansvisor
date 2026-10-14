@@ -7,6 +7,7 @@ import { classifyPromptIntent } from '../lib/intent-extraction.js';
 import { getLanguageName } from '../lib/languages.js';
 import {
   PlanLimitError,
+  enforceFeature,
   enforceImproveQuota,
   getImproveQuotaStatus,
   requireFeature,
@@ -1134,71 +1135,105 @@ function positionsPanelLink(promptId, range) {
   return `/dashboard/prompts?${params.toString()}`;
 }
 
+/**
+ * Sends the selected suggestions for `userId`, who must already have passed the
+ * prompt_improve plan check. Shared by the dashboard route below and the
+ * internal endpoint the web MCP layer calls (`create_improve_action`), so both
+ * create the action, record the send and dedupe on the idempotency key alike.
+ * Errors carry a `status` (400 bad input, 403/404 access, 404 no set yet).
+ */
+export async function sendImproveAction({ promptId, userId, body }) {
+  const range = parseImproveRange(body);
+  const parsed = sendImproveSchema.safeParse(body);
+  if (!parsed.success) {
+    const err = new Error('Invalid suggestions');
+    err.status = 400;
+    err.details = parsed.error.issues;
+    throw err;
+  }
+  const { prompt, brandId } = await loadImprovePrompt(promptId, userId);
+
+  const { data: set } = await supabaseAdmin
+    .from('prompt_improve_suggestions')
+    .select('*')
+    .eq('prompt_id', promptId)
+    .eq('range_key', range.key)
+    .eq('region', range.region)
+    .maybeSingle();
+  if (!set) {
+    const err = new Error('Generate suggestions for this range first');
+    err.status = 404;
+    throw err;
+  }
+
+  const { suggestions, idempotencyKey } = parsed.data;
+  const result = await sendImproveToActionCenter({
+    prompt,
+    brandId,
+    set,
+    suggestions,
+    idempotencyKey,
+    panelLink: positionsPanelLink(promptId, range),
+    userId,
+  });
+
+  // Record the send on the set, once, so the panel can show it after a reload.
+  const sends = set.sent_actions ?? [];
+  let updated = set;
+  if (!sends.some((s) => s.actionId === result.actionId)) {
+    const { data, error } = await supabaseAdmin
+      .from('prompt_improve_suggestions')
+      .update({
+        sent_actions: [
+          ...sends,
+          {
+            actionId: result.actionId,
+            actionNo: result.actionNo,
+            sentAt: new Date().toISOString(),
+            setGeneratedAt: set.generated_at,
+            suggestionIds: suggestions.map((s) => s.id),
+          },
+        ],
+      })
+      .eq('id', set.id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    updated = data;
+  }
+
+  return {
+    actionId: result.actionId,
+    actionNo: result.actionNo,
+    created: result.created,
+    taskCount: suggestions.length,
+    sent: await liveImproveSends(updated),
+  };
+}
+
+/**
+ * The same send for an MCP API key (`create_improve_action`): the key carries
+ * no session, so the prompt_improve plan check that `requireFeature` runs for
+ * the dashboard route happens here, against the key's user.
+ */
+export async function sendImproveActionForKeyUser({ promptId, userId, body }) {
+  await enforceFeature(userId, 'prompt_improve');
+  return sendImproveAction({ promptId, userId, body });
+}
+
 router.post('/:promptId/improve/action', requireFeature('prompt_improve'), async (req, res) => {
   try {
-    const range = parseImproveRange(req.body);
-    const parsed = sendImproveSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ error: 'Invalid suggestions', details: parsed.error.issues });
-    }
-    const promptId = req.params.promptId;
-    const { prompt, brandId } = await loadImprovePrompt(promptId, req.user.id);
-
-    const { data: set } = await supabaseAdmin
-      .from('prompt_improve_suggestions')
-      .select('*')
-      .eq('prompt_id', promptId)
-      .eq('range_key', range.key)
-      .eq('region', range.region)
-      .maybeSingle();
-    if (!set) {
-      return res.status(404).json({ error: 'Generate suggestions for this range first' });
-    }
-
-    const { suggestions, idempotencyKey } = parsed.data;
-    const result = await sendImproveToActionCenter({
-      prompt,
-      brandId,
-      set,
-      suggestions,
-      idempotencyKey,
-      panelLink: positionsPanelLink(promptId, range),
-      userId: req.user.id,
-    });
-
-    // Record the send on the set, once, so the panel can show it after a reload.
-    const sends = set.sent_actions ?? [];
-    let updated = set;
-    if (!sends.some((s) => s.actionId === result.actionId)) {
-      const { data, error } = await supabaseAdmin
-        .from('prompt_improve_suggestions')
-        .update({
-          sent_actions: [
-            ...sends,
-            {
-              actionId: result.actionId,
-              actionNo: result.actionNo,
-              sentAt: new Date().toISOString(),
-              setGeneratedAt: set.generated_at,
-              suggestionIds: suggestions.map((s) => s.id),
-            },
-          ],
-        })
-        .eq('id', set.id)
-        .select('*')
-        .single();
-      if (error) throw error;
-      updated = data;
-    }
-
-    return res.json({
-      actionId: result.actionId,
-      actionNo: result.actionNo,
-      created: result.created,
-      taskCount: suggestions.length,
-      sent: await liveImproveSends(updated),
-    });
+    return res.json(
+      await sendImproveAction({
+        promptId: req.params.promptId,
+        userId: req.user.id,
+        body: req.body,
+      }),
+    );
   } catch (error) {
+    if (error.details) {
+      return res.status(400).json({ error: error.message, details: error.details });
+    }
     req.log.error({ err: error }, 'prompt improve send error');
     return res
       .status(error.status || 500)

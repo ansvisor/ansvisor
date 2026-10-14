@@ -27,6 +27,7 @@ import { parseScraperResponse } from './lib/cloro-scraper.js';
 import { handleScraperResult } from './lib/cloro-result-handler.js';
 import { verifyCloroWebhook } from './lib/cloro-webhook-verify.js';
 import { generateBriefForOpportunity } from './routes/content.js';
+import { sendImproveActionForKeyUser } from './routes/prompts.js';
 import { startSiteAuditForBrand } from './routes/audits.js';
 import { getSiteAuditQuotaStatus } from './lib/plan-guard.js';
 import { recountBrandCitations } from './lib/citation-recount.js';
@@ -385,6 +386,46 @@ app.get('/api/internal/site-audit-quota', async (req, res) => {
         .json({ success: false, error: 'quota_exceeded', message: err.message });
     }
     req.log.error({ err }, 'internal site audit quota error');
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// --- Internal Improve send endpoint (CRON_SECRET auth, called by web MCP layer) ---
+// The web MCP layer verifies the caller's `ans_` API key org owns the prompt
+// before reaching here and passes the key's user, so this endpoint trusts the
+// secret, checks the user's plan includes prompt_improve and creates the
+// Action Center action exactly as the Improve tab's "Send Actions" does.
+app.post('/api/internal/prompts/:promptId/improve/action', async (req, res) => {
+  const secret = req.headers.authorization?.replace('Bearer ', '');
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  try {
+    const { userId, ...body } = req.body || {};
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'userId is required' });
+    }
+    const result = await sendImproveActionForKeyUser({
+      promptId: req.params.promptId,
+      userId,
+      body,
+    });
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    // PlanLimitError (plan without prompt_improve / inactive subscription)
+    // carries a statusCode — surface it so the MCP layer can relay it.
+    if (err.statusCode) {
+      return res
+        .status(err.statusCode)
+        .json({ success: false, error: 'plan_limit', message: err.message });
+    }
+    if (err.status) {
+      return res
+        .status(err.status)
+        .json({ success: false, message: err.message, details: err.details });
+    }
+    req.log.error({ err }, 'internal improve send error');
     return res.status(500).json({ success: false, message: err.message });
   }
 });

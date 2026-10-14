@@ -64,6 +64,7 @@ import { usePlanContext } from '@/components/providers/plan-provider';
 import {
   generateOpportunities,
   getGenerationJobStatus,
+  getContentUsage,
   getOpportunities,
   getOpportunityPrompts,
   getOpportunityTopics,
@@ -81,6 +82,8 @@ import { Link } from '@/i18n/navigation';
 import { WebhookSettingsDialog } from './_webhook-settings';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { OpportunityDetail } from '@/components/content/opportunity-detail';
+import { ContentUsageCard } from '@/components/content/content-usage-card';
+import { hasContentQuota, type ContentUsage } from '@/lib/content-usage';
 import { PAGE_SIZE, TablePager, usePagination } from '@/components/table-pager';
 import { toCsv } from '@/lib/csv';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
@@ -238,6 +241,8 @@ export default function ContentPage() {
   const [bulkSending, setBulkSending] = useState(false);
 
   const [webhookOpen, setWebhookOpen] = useState(false);
+  // This billing period's content usage (CONTENT-001); null hides the card.
+  const [contentUsage, setContentUsage] = useState<ContentUsage | null>(null);
   const pollRef = useRef(false);
   const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [aggregates, setAggregates] = useState({
@@ -428,6 +433,19 @@ export default function ContentPage() {
       cancelled = true;
     };
   }, [loadData]);
+
+  // Reloaded when the list's size changes, since that is when something may
+  // have used the quota. A failure only hides the card.
+  useEffect(() => {
+    let cancelled = false;
+    getContentUsage().then(
+      (usage) => !cancelled && setContentUsage(usage),
+      () => !cancelled && setContentUsage(null),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrandId, total]);
 
   const pollJob = useCallback(
     (jobId: string, startedAt: number) => {
@@ -793,7 +811,16 @@ export default function ContentPage() {
         </Card>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div
+            className={cn(
+              'grid grid-cols-2 gap-4 sm:grid-cols-4',
+              hasContentQuota(contentUsage) && 'xl:grid-cols-[1.4fr_repeat(4,minmax(0,1fr))]',
+            )}
+          >
+            <ContentUsageCard
+              usage={contentUsage}
+              className="col-span-2 sm:col-span-4 xl:col-span-1"
+            />
             <KpiCard
               title={t('kpi.total')}
               icon={Lightbulb}
