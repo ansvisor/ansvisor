@@ -16,11 +16,11 @@ const accessFor = (plan: Plan) =>
   Object.fromEntries(POSITION_PLATFORMS.map((p) => [p.id, platformAccess(plan, p.id)]));
 
 describe('platformAccess', () => {
-  it('locks Starter to ChatGPT and Perplexity, with Grok and Claude behind sales', () => {
+  it('locks Starter to ChatGPT and Microsoft Copilot, with Grok and Claude behind sales', () => {
     const access = accessFor(PLANS.starter);
     expect(access['chatgpt-web']).toEqual({ state: 'included' });
-    expect(access['perplexity-web']).toEqual({ state: 'included' });
-    for (const id of ['google-aio', 'google-aimode', 'gemini-web', 'copilot-web']) {
+    expect(access['copilot-web']).toEqual({ state: 'included' });
+    for (const id of ['google-aio', 'google-aimode', 'gemini-web', 'perplexity-web']) {
       expect(access[id]).toEqual({ state: 'locked', requiredPlan: 'growth' });
     }
     expect(access['grok-web']).toEqual({ state: 'locked', requiredPlan: 'enterprise' });
