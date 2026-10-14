@@ -46,3 +46,33 @@ describe('applyPlanOverrides', () => {
     expect(applyPlanOverrides(plan, { plan: 'enterprise', plan_overrides: [] })).toEqual(plan);
   });
 });
+
+describe('applyPlanOverrides — Improve budget from the contract value', () => {
+  const enterprise = {
+    id: 'enterprise',
+    name: 'Enterprise',
+    limits: { maxPrompts: -1, improveMonthlyBudgetUsd: 4.99 },
+  };
+  const budget = (plan_overrides) =>
+    applyPlanOverrides(enterprise, { plan: 'enterprise', plan_overrides }).limits
+      .improveMonthlyBudgetUsd;
+
+  it('is 1% of the monthly contract', () => {
+    expect(budget({ contractMonthlyUsd: 1000 })).toBe(10);
+    expect(budget({ contractMonthlyUsd: 2000 })).toBe(20);
+    expect(budget({ contractMonthlyUsd: 1234 })).toBe(12.34);
+  });
+
+  it('never drops below the plan default', () => {
+    expect(budget({ contractMonthlyUsd: 300 })).toBe(4.99);
+  });
+
+  it('an explicit improveMonthlyBudgetUsd wins over the contract value', () => {
+    expect(budget({ contractMonthlyUsd: 2000, improveMonthlyBudgetUsd: 7 })).toBe(7);
+  });
+
+  it('keeps the default without a usable contract value', () => {
+    expect(budget({ maxPrompts: 900 })).toBe(4.99);
+    expect(budget({ contractMonthlyUsd: 'n/a' })).toBe(4.99);
+  });
+});

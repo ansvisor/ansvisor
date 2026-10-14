@@ -167,4 +167,52 @@ describe('rebuildQueuedCitationRollups', () => {
     await expect(rebuildQueuedCitationRollups()).resolves.toEqual({ rebuilt: 0, failed: 1 });
     expect(deletes).toBe(0);
   });
+
+  it('skips a call made while a run is in progress, then runs again once it ends', async () => {
+    let releaseQueue;
+    let reads = 0;
+    from.mockImplementation(() => ({
+      select: () => {
+        reads++;
+        if (reads > 1) return Promise.resolve({ data: [], error: null });
+        return new Promise((resolve) => {
+          releaseQueue = () => resolve({ data: [], error: null });
+        });
+      },
+    }));
+
+    const first = rebuildQueuedCitationRollups();
+    await expect(rebuildQueuedCitationRollups()).resolves.toEqual({
+      rebuilt: 0,
+      failed: 0,
+      skipped: true,
+    });
+    expect(reads).toBe(1);
+
+    releaseQueue();
+    await expect(first).resolves.toEqual({ rebuilt: 0, failed: 0 });
+    await expect(rebuildQueuedCitationRollups()).resolves.toEqual({ rebuilt: 0, failed: 0 });
+    expect(reads).toBe(2);
+  });
+
+  it('runs again after a run that threw', async () => {
+    from.mockImplementationOnce(() => {
+      throw new Error('client down');
+    });
+    await expect(rebuildQueuedCitationRollups()).rejects.toThrow('client down');
+
+    from.mockImplementation(() => ({
+      select: () => Promise.resolve({ data: [], error: null }),
+    }));
+    await expect(rebuildQueuedCitationRollups()).resolves.toEqual({ rebuilt: 0, failed: 0 });
+  });
+
+  it('costs a single query when the queue is empty', async () => {
+    from.mockImplementation(() => ({
+      select: () => Promise.resolve({ data: [], error: null }),
+    }));
+    await rebuildQueuedCitationRollups();
+    expect(from).toHaveBeenCalledTimes(1);
+    expect(rpc).not.toHaveBeenCalled();
+  });
 });
