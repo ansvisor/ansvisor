@@ -59,6 +59,7 @@ import { isKpiKey } from '@/lib/kpis/registry';
 import { ImpactDots, isSuperseded, SignalStatusBadge } from './signal-table';
 import { ActionIcon } from './action-table';
 import { OpportunityContext } from './opportunity-context';
+import { ImproveContext } from './improve-context';
 import { cn } from '@/lib/utils';
 
 type DrawerTab = 'overview' | 'tasks' | 'signals' | 'history';
@@ -224,7 +225,7 @@ export function ActionDrawer({
               <Separator />
               <section>
                 <p className="text-xs font-medium text-muted-foreground">{t('drawer.goal')}</p>
-                <p className="mt-1">{actionGoal(action.kind, tTexts)}</p>
+                <p className="mt-1">{actionGoal(action.kind, tTexts, action.payload)}</p>
               </section>
               <Separator />
               <section>
@@ -247,7 +248,9 @@ export function ActionDrawer({
                 )}
               </section>
               <Separator />
-              {opportunityId ? (
+              {action.kind === 'prompt_improve' ? (
+                <ImproveContext payload={action.payload ?? {}} />
+              ) : opportunityId ? (
                 <OpportunityContext
                   opportunityId={opportunityId}
                   pageUrls={action.payload?.assetKey ? opportunityPages : undefined}
@@ -322,7 +325,11 @@ export function ActionDrawer({
             <section className="space-y-2">
               {detail.signals.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  {opportunityId ? t('drawer.noSignalsOpportunity') : t('drawer.noSignals')}
+                  {action.kind === 'prompt_improve'
+                    ? t('drawer.noSignalsImprove')
+                    : opportunityId
+                      ? t('drawer.noSignalsOpportunity')
+                      : t('drawer.noSignals')}
                 </p>
               )}
               {detail.signals.map((signal) => {
@@ -570,6 +577,8 @@ function TaskRow({
         </Button>
       </div>
 
+      {task.details && <TaskDetails details={task.details} />}
+
       {skipDraft !== null && (
         <div className="flex items-center gap-2 border-t bg-muted/30 px-3 py-2">
           <Input
@@ -700,6 +709,32 @@ function AddTaskForm({
       >
         {t('drawer.addTaskCancel')}
       </Button>
+    </div>
+  );
+}
+
+/** A task sent from the Improve tab: its platform, body and evidence (PROMPT-004). */
+function TaskDetails({ details }: { details: NonNullable<ActionTask['details']> }) {
+  return (
+    <div className="space-y-1.5 px-4 pb-3">
+      {details.body && (
+        <p className="text-xs leading-relaxed text-muted-foreground">{details.body}</p>
+      )}
+      <div className="flex flex-wrap gap-1">
+        <Badge variant="secondary" className="text-[10px]">
+          {details.platformLabel}
+        </Badge>
+        {details.sources.map((source) => (
+          <Badge
+            key={`${source.type}:${source.ref}`}
+            variant="outline"
+            title={source.ref}
+            className="max-w-full truncate text-[10px] font-normal text-muted-foreground"
+          >
+            {source.type === 'answer' ? 'AI answer' : source.ref}
+          </Badge>
+        ))}
+      </div>
     </div>
   );
 }

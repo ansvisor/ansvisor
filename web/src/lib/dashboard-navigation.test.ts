@@ -11,7 +11,9 @@ const translateBrands = (key: string) => `brands.${key}`;
 
 describe('getDashboardNavLabel', () => {
   it('maps every dashboard item through an i18n key', () => {
-    const titles = dashboardNav.flatMap((group) => group.items.map((item) => item.title));
+    const titles = dashboardNav.flatMap((group) =>
+      group.items.flatMap((item) => [item.title, ...(item.children ?? []).map((c) => c.title)]),
+    );
 
     expect(Object.keys(dashboardNavLabelKeys).sort()).toEqual([...titles].sort());
 
