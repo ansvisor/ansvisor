@@ -142,7 +142,7 @@ export function HistoryDrawer({
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-4 text-sm">
           <section>
             <p className="text-xs font-medium text-muted-foreground">{t('drawer.goal')}</p>
-            <p className="mt-1">{actionGoal(item.kind, tTexts)}</p>
+            <p className="mt-1">{actionGoal(item.kind, tTexts, item.payload)}</p>
           </section>
 
           <Separator />

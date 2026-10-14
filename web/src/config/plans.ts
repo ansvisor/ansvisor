@@ -21,6 +21,9 @@ export const FEATURES = [
   // merchant breakdown). Free / Starter get the headline KPI only;
   // Growth+ and self-host get the full set of tabs.
   'shopping_analytics',
+  // Positions panel → Improve tab: AI-generated, platform-specific
+  // suggestions to improve a prompt's position (PROMPT-003). Growth+.
+  'prompt_improve',
 ] as const;
 
 export type Feature = (typeof FEATURES)[number];
@@ -51,6 +54,13 @@ export interface PlanLimits {
    * by what is left of the month. Starter 3, Growth 5.
    */
   maxOpportunitiesPerRequest: number;
+  /**
+   * Monthly USD budget for Improve-tab model calls (Positions panel,
+   * PROMPT-003): 1% of the plan price, enforced on the server from each
+   * call's real token cost so it holds whichever model is configured.
+   * -1 = unlimited (self-host).
+   */
+  improveMonthlyBudgetUsd: number;
   /**
    * Monthly Site Audit runs. -1 = unlimited (self-hosted / enterprise).
    * Starter 100, Growth 500.
@@ -94,6 +104,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxBriefGenerations: -1,
       maxOpportunitiesPerMonth: -1,
       maxOpportunitiesPerRequest: 5,
+      improveMonthlyBudgetUsd: -1,
       maxSiteAudits: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
@@ -110,6 +121,7 @@ export const PLANS: Record<PlanId, Plan> = {
         'api_access',
         'ai_agent',
         'shopping_analytics',
+        'prompt_improve',
       ],
       // Self-host runs against the operator's own infrastructure / API
       // keys — no platform quota to enforce.
@@ -130,6 +142,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxBriefGenerations: 10,
       maxOpportunitiesPerMonth: 10,
       maxOpportunitiesPerRequest: 3,
+      improveMonthlyBudgetUsd: 0,
       maxSiteAudits: 100,
       maxDailyOnDemand: 3,
       onDemandCooldownMinutes: 15,
@@ -170,6 +183,8 @@ export const PLANS: Record<PlanId, Plan> = {
       maxBriefGenerations: 50,
       maxOpportunitiesPerMonth: 50,
       maxOpportunitiesPerRequest: 5,
+      // 1% of the $249 price, spent on Improve model calls (PROMPT-003).
+      improveMonthlyBudgetUsd: 2.49,
       maxSiteAudits: 500,
       maxDailyOnDemand: 10,
       onDemandCooldownMinutes: 5,
@@ -189,6 +204,7 @@ export const PLANS: Record<PlanId, Plan> = {
         'api_access',
         'ai_agent',
         'shopping_analytics',
+        'prompt_improve',
       ],
     },
   },
@@ -208,6 +224,9 @@ export const PLANS: Record<PlanId, Plan> = {
       maxBriefGenerations: -1,
       maxOpportunitiesPerMonth: -1,
       maxOpportunitiesPerRequest: 5,
+      // 1% of the $499 floor. plan_overrides.contractMonthlyUsd raises it to 1%
+      // of the contract; an explicit plan_overrides.improveMonthlyBudgetUsd wins.
+      improveMonthlyBudgetUsd: 4.99,
       maxSiteAudits: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
@@ -232,6 +251,7 @@ export const PLANS: Record<PlanId, Plan> = {
         'sso_saml',
         'ai_agent',
         'shopping_analytics',
+        'prompt_improve',
       ],
       // Enterprise — no platform quota; usage governed by contract.
     },

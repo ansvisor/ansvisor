@@ -160,6 +160,18 @@ export interface ActionTask {
   dependsOn: string[];
   /** Why the task was skipped; null for every other status. */
   skipReason: string | null;
+  /**
+   * What a task sent from the Improve tab carries beyond its title (PROMPT-004):
+   * its body, platform and evidence. Null for library and hand-added tasks.
+   */
+  details: ActionTaskDetails | null;
+}
+
+export interface ActionTaskDetails {
+  body: string;
+  platform: string;
+  platformLabel: string;
+  sources: { type: string; ref: string }[];
 }
 
 export interface ActionEvent {
@@ -191,7 +203,9 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
   const [tasksRes, signalsRes, eventsRes, kpisRes] = await Promise.all([
     supabase
       .from('action_tasks')
-      .select('id, position, task_key, title, status, skip_reason, title_params, depends_on')
+      .select(
+        'id, position, task_key, title, status, skip_reason, title_params, depends_on, details',
+      )
       .eq('action_id', actionId)
       .order('position'),
     supabase
@@ -226,6 +240,7 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
       titleParams: (task.title_params ?? {}) as Record<string, string | number>,
       dependsOn: (task.depends_on ?? []) as string[],
       skipReason: task.skip_reason,
+      details: (task.details ?? null) as ActionTaskDetails | null,
     })),
     signals: mapSignalRows((signalsRes.data ?? []) as SignalRow[]),
     events: (eventsRes.data ?? []).map((event) => ({

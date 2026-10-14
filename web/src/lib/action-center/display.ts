@@ -70,6 +70,14 @@ export function actionTexts(
   if (action.kind === 'content_opportunity' && typeof p.title === 'string' && p.title) {
     return { title: p.title, description: t(`${action.kind}.description`) };
   }
+  // An Improve action carries its own title and "why", written from the
+  // prompt's platform states when it was sent (PROMPT-004).
+  if (action.kind === 'prompt_improve' && typeof p.title === 'string' && p.title) {
+    return {
+      title: p.title,
+      description: typeof p.why === 'string' && p.why ? p.why : t(`${action.kind}.description`),
+    };
+  }
   const targets = targetLabel(p, t);
   return {
     title: targets ? t(`${action.kind}.title`, { targets }) : t(`${action.kind}.titleGeneric`),
@@ -101,17 +109,27 @@ export function eventTaskText(
  * because an unknown kind has no goal key and next-intl would render the key
  * itself into the drawer.
  */
-export function actionGoal(kind: string, t: Translator): string {
+export function actionGoal(
+  kind: string,
+  t: Translator,
+  payload?: Record<string, unknown> | null,
+): string {
+  // An Improve action names its own prompt and platforms (PROMPT-004).
+  if (kind === 'prompt_improve' && typeof payload?.goal === 'string' && payload.goal) {
+    return payload.goal;
+  }
   return isActionKind(kind) ? t(`${kind}.goal`) : t('unknown.goal');
 }
 
 /** Compact evidence chips under the title: signal count plus the kind's own
  *  count (pages, prompts, competitors). */
 export function actionContextTags(action: ActionItem, t: Translator): string[] {
-  // An action sent from a content opportunity has no detection signals by
-  // design; "0 signals" would read as missing evidence.
+  // Actions a person sent (a content opportunity, an Improve set) have no
+  // detection signals by design; "0 signals" would read as missing evidence.
   const tags =
-    action.kind === 'content_opportunity' ? [] : [t('tags.signals', { count: action.signalCount })];
+    action.kind === 'content_opportunity' || action.kind === 'prompt_improve'
+      ? []
+      : [t('tags.signals', { count: action.signalCount })];
   const count = num(action.payload ?? {}, 'targetCount');
   const entity = str(action.payload ?? {}, 'targetEntity');
   if (count > 0 && entity) tags.push(t(`tags.${entity}`, { count }));
