@@ -131,6 +131,31 @@ export function coveredClusterIds(rows) {
   return ids;
 }
 
+/** Statuses that still stand for a need's content work. */
+export const OPEN_OPPORTUNITY_STATUSES = ['new', 'reviewed', 'sent', 'in_progress'];
+
+/**
+ * Clusters with an open opportunity, which is all that holds back a prompt's
+ * own "Suggest content" (PROMPT-006): unlike coveredClusterIds, a dismissed
+ * or finished one doesn't count, since the user is asking again on purpose.
+ */
+export function openlyCoveredClusterIds(rows) {
+  return coveredClusterIds(
+    (rows || []).filter((r) => OPEN_OPPORTUNITY_STATUSES.includes(r.status)),
+  );
+}
+
+/** An open opportunity covering the cluster, as its own or a merged one; null when none. */
+export function openOpportunityOn(rows, clusterId) {
+  if (!clusterId) return null;
+  const match = (rows || []).find(
+    (r) =>
+      OPEN_OPPORTUNITY_STATUSES.includes(r.status) &&
+      (r.cluster_id === clusterId || (r.related_cluster_ids || []).includes(clusterId)),
+  );
+  return match?.id ?? null;
+}
+
 /**
  * The highest-scoring clusters with answers and no opportunity yet, at most
  * one per topic, so a run's few suggestions spread across the brand's topics

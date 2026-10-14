@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
-import { Link, usePathname } from '@/i18n/navigation';
+import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { PROMPTS_BASE, sectionFor, sectionFromPath } from '@/lib/prompts-routes';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -77,6 +77,7 @@ import {
   MoreHorizontal,
   Pause,
   Play,
+  Lightbulb,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -120,6 +121,14 @@ import { analyzeNewPrompt, type PromptVisibilitySummary } from '@/lib/actions/tr
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import type { PromptVolume, Prompt, Topic } from '@/types';
 import { toast } from 'sonner';
+import {
+  getContentUsage,
+  getGenerationJobStatus,
+  getOpenSuggestionForPrompt,
+  suggestContentForPrompt,
+} from '@/lib/actions/content';
+import { hasContentQuota, type ContentUsage } from '@/lib/content-usage';
+import { waitForContentJob } from '@/lib/content-job';
 import { toCsv } from '@/lib/csv';
 import { formatRelative } from '@/lib/format-relative';
 import { compareNullsLast, type SortDir } from './prompt-sort';
@@ -2182,31 +2191,54 @@ const DELETE_UNDO_MS = 10_000;
 
 /**
  * The row's ⋯ menu (PROMPT-006): Edit, pause or resume tracking, open the
- * Positions panel on Improve, and Delete behind a confirmation. Base UI's menu
- * opens from mouse and keyboard and closes on Esc and outside clicks.
+ * Positions panel on Improve, suggest content, and Delete behind a
+ * confirmation. Base UI's menu opens from mouse and keyboard and closes on
+ * Esc and outside clicks.
  */
 function RowActionsMenu({
   prompt,
   onEdit,
   onToggleActive,
   onImprove,
+  onSuggestContent,
+  onOpenSuggestion,
+  suggesting,
+  suggestDisabledReason,
   onDelete,
 }: {
   prompt: Prompt;
   onEdit: () => void;
   onToggleActive: () => void;
   onImprove: () => void;
+  /** One content opportunity for this prompt (PROMPT-006). */
+  onSuggestContent: () => void;
+  /** Opens one of the prompt's content opportunities. */
+  onOpenSuggestion: (opportunityId: string) => void;
+  /** A suggestion for this prompt is being written. */
+  suggesting: boolean;
+  /** Why Suggest content can't run now (the month's quota is used up). */
+  suggestDisabledReason: string | null;
   onDelete: () => void;
 }) {
+  // With the month's quota used up, a prompt that already has a suggestion
+  // can still open it, which costs nothing; the menu asks as it opens.
+  const [openSuggestionId, setOpenSuggestionId] = useState<string | null>(null);
+  const lookUpSuggestion = (open: boolean) => {
+    if (!open || suggestDisabledReason === null) return;
+    getOpenSuggestionForPrompt(prompt.id).then(setOpenSuggestionId, () =>
+      setOpenSuggestionId(null),
+    );
+  };
+
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={lookUpSuggestion}>
       <DropdownMenuTrigger
         className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         aria-label={`Actions for ${prompt.text}`}
       >
         <MoreHorizontal className="h-4 w-4" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem className="gap-2" onClick={onEdit}>
           <Pencil className="h-3.5 w-3.5" />
           Edit
@@ -2219,6 +2251,30 @@ function RowActionsMenu({
           <TrendingUp className="h-3.5 w-3.5" />
           Improve position…
         </DropdownMenuItem>
+        {suggestDisabledReason !== null && openSuggestionId ? (
+          <DropdownMenuItem className="gap-2" onClick={() => onOpenSuggestion(openSuggestionId)}>
+            <Lightbulb className="h-3.5 w-3.5" />
+            Open content suggestion
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem
+            className="gap-2"
+            onClick={onSuggestContent}
+            disabled={suggesting || suggestDisabledReason !== null}
+          >
+            {suggesting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Lightbulb className="h-3.5 w-3.5" />
+            )}
+            <span className="flex flex-col">
+              <span>{suggesting ? 'Writing a suggestion…' : 'Suggest content'}</span>
+              {suggestDisabledReason && (
+                <span className="text-[11px] text-muted-foreground">{suggestDisabledReason}</span>
+              )}
+            </span>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="gap-2 text-red-600 focus:text-red-600 dark:text-red-400"
@@ -2352,6 +2408,130 @@ function AllPromptsTab({
       }
     },
     [onChanged],
+  );
+
+  // "Suggest content" (PROMPT-006): one content opportunity for a prompt,
+  // against the month's content quota. The quota is read up front so the
+  // menu can say when nothing is left; the server enforces it either way.
+  const router = useRouter();
+  const [contentUsage, setContentUsage] = useState<ContentUsage | null>(null);
+  const [usageVersion, setUsageVersion] = useState(0);
+  const [suggestingIds, setSuggestingIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    getContentUsage().then(
+      (usage) => !cancelled && setContentUsage(usage),
+      () => !cancelled && setContentUsage(null),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrandId, usageVersion]);
+  const hasOpportunityLimit =
+    hasContentQuota(contentUsage) && contentUsage.opportunities.limit !== -1;
+  const suggestDisabledReason =
+    hasOpportunityLimit && contentUsage.opportunities.remaining <= 0
+      ? contentUsage.periodEnd
+        ? `Limit reached · resets ${new Date(contentUsage.periodEnd).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            timeZone: 'UTC',
+          })}`
+        : 'Monthly limit reached'
+      : null;
+
+  const openOpportunity = useCallback(
+    (id: string) => router.push(`/dashboard/content?opportunity=${id}`),
+    [router],
+  );
+  const suggestContent = useCallback(
+    async (prompt: Prompt) => {
+      // Only a plan with a monthly limit has a quota to say was left alone.
+      const quotaUntouched = hasOpportunityLimit
+        ? 'Nothing was used from your monthly content quota.'
+        : undefined;
+      setSuggestingIds((set) => new Set(set).add(prompt.id));
+      const toastId = toast.loading('Writing a content suggestion…', {
+        description: prompt.text,
+      });
+      // CONTENT-004: an open suggestion already answers this prompt.
+      const showExisting = (id: string) =>
+        toast.info('This prompt already has a content suggestion', {
+          id: toastId,
+          description: prompt.text,
+          duration: 10_000,
+          action: { label: 'Open existing', onClick: () => openOpportunity(id) },
+        });
+      try {
+        const started = await suggestContentForPrompt(prompt.id, crypto.randomUUID());
+        if (!started.ok) {
+          toast.error(started.quotaExhausted ? 'Monthly content limit reached.' : started.error, {
+            id: toastId,
+            description: prompt.text,
+          });
+          return;
+        }
+        if ('existingId' in started) {
+          showExisting(started.existingId);
+          return;
+        }
+
+        const outcome = await waitForContentJob(started.jobId, {
+          getStatus: getGenerationJobStatus,
+        });
+        if (outcome.kind === 'completed') {
+          const createdId = outcome.result.opportunityIds?.[0];
+          if (createdId) {
+            toast.success('Content suggestion created', {
+              id: toastId,
+              description: prompt.text,
+              duration: 10_000,
+              action: { label: 'Open', onClick: () => openOpportunity(createdId) },
+            });
+          } else if (outcome.result.existingId) {
+            // Covered while the job ran, e.g. once the prompt was regrouped.
+            showExisting(outcome.result.existingId);
+          } else if (outcome.result.limited) {
+            toast.error('Monthly content limit reached.', { id: toastId });
+          } else {
+            toast.info("Couldn't write a suggestion for this prompt yet", {
+              id: toastId,
+              // Not grouped with other prompts yet, or no answers to go on.
+              description: [
+                'It needs tracked answers and a prompt group first; both come with its next tracking run.',
+                quotaUntouched,
+              ]
+                .filter(Boolean)
+                .join(' '),
+            });
+          }
+        } else if (outcome.kind === 'failed') {
+          toast.error("Couldn't write a content suggestion", {
+            id: toastId,
+            description: quotaUntouched,
+          });
+        } else {
+          toast.info('Still writing the content suggestion', {
+            id: toastId,
+            description: 'It will appear in Content when it is done.',
+          });
+        }
+      } catch (err) {
+        // Nothing may be left spinning, whatever went wrong on the way.
+        toast.error("Couldn't write a content suggestion", {
+          id: toastId,
+          description: err instanceof Error ? err.message : quotaUntouched,
+        });
+      } finally {
+        setSuggestingIds((set) => {
+          const next = new Set(set);
+          next.delete(prompt.id);
+          return next;
+        });
+        setUsageVersion((v) => v + 1);
+      }
+    },
+    [openOpportunity, hasOpportunityLimit],
   );
   const [search, setSearch] = useState('');
   const [workFilter, setWorkFilter] = useState<'all' | 'none' | PromptWorkStatus>('all');
@@ -2826,6 +3006,10 @@ function AllPromptsTab({
                         onEdit={() => onEditPrompt(p)}
                         onToggleActive={() => void toggleActive(p)}
                         onImprove={() => openPositionsPanel(p.id, 'improve')}
+                        onSuggestContent={() => void suggestContent(p)}
+                        onOpenSuggestion={openOpportunity}
+                        suggesting={suggestingIds.has(p.id)}
+                        suggestDisabledReason={suggestDisabledReason}
                         onDelete={() => setConfirmDelete(p)}
                       />
                     </TableCell>

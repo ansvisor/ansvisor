@@ -20,12 +20,19 @@ import {
   assertBrandAccess,
   assertOpportunitiesAccess,
   assertOpportunityAccess,
+  assertPromptAccess,
 } from '../lib/access.js';
 import { loadClusters } from '../lib/prompt-clusters.js';
 import { sendToActionCenter } from '../lib/action-center/from-opportunity.js';
 import { IDEA_MAX_LENGTH } from '../lib/opportunity-generator.js';
 import { cleanStoredOpportunity } from '../lib/opportunity-text.js';
 import { sourceDataForStatus } from '../lib/opportunity-status.js';
+import {
+  openOpportunityForPrompt,
+  promptClusterId,
+  promptSuggestionRequest,
+  runningSuggestionJob,
+} from '../lib/prompt-content-suggestion.js';
 
 const router = Router();
 
@@ -235,13 +242,7 @@ const alternativeSchema = z.object({
  */
 async function alternativeCluster(opp) {
   if (opp.cluster_id) return opp.cluster_id;
-  if (!opp.prompt_id) return null;
-  const { data } = await supabaseAdmin
-    .from('prompt_cluster_members')
-    .select('cluster_id')
-    .eq('prompt_id', opp.prompt_id)
-    .maybeSingle();
-  return data?.cluster_id ?? null;
+  return opp.prompt_id ? promptClusterId(opp.prompt_id) : null;
 }
 
 /**
@@ -313,6 +314,96 @@ router.post('/:id/alternative', requireFeature('content_optimization'), async (r
     return res.status(500).json({ error: 'Failed to start generation' });
   }
 });
+
+/**
+ * GET /api/content/prompts/:promptId/suggestion
+ * The prompt's open content opportunity, if any: { existingId } (or null).
+ * The row menu asks once the month's quota is used up, so a prompt that
+ * already has a suggestion can still open it (PROMPT-006).
+ */
+router.get(
+  '/prompts/:promptId/suggestion',
+  requireFeature('content_optimization'),
+  async (req, res) => {
+    const { promptId } = req.params;
+    try {
+      const [prompt] = await assertPromptAccess(promptId, req.user.id);
+      const existingId = await openOpportunityForPrompt(prompt.prompt_sets.brand_id, promptId);
+      return res.json({ existingId });
+    } catch (error) {
+      if (error.status) return res.status(error.status).json({ error: error.message });
+      req.log.error({ err: error }, 'prompt content suggestion lookup error');
+      return res.status(500).json({ error: 'Failed to look up the suggestion' });
+    }
+  },
+);
+
+const promptSuggestionSchema = z.object({
+  idempotencyKey: z.string().min(8).max(100),
+});
+
+/**
+ * POST /api/content/prompts/:promptId/suggest
+ * "Suggest content" from a prompt's row in the prompts table (PROMPT-006).
+ * Returns { existingId } (200) when an open opportunity already answers the
+ * prompt, so the page offers that one instead of a duplicate. Otherwise it
+ * queues exactly one opportunity for the prompt's cluster, tagged `prompt`,
+ * against the monthly quota (its slot handed back on failure): { jobId }
+ * (202), or 429 'quota_exhausted'. A repeated idempotency key, or a
+ * suggestion for the prompt that is still being written, returns that job.
+ * The job's result carries the new opportunity's id.
+ */
+router.post(
+  '/prompts/:promptId/suggest',
+  requireFeature('content_optimization'),
+  async (req, res) => {
+    const parsed = promptSuggestionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request', details: parsed.error.issues });
+    }
+    const { promptId } = req.params;
+    const { idempotencyKey } = parsed.data;
+
+    try {
+      const [prompt] = await assertPromptAccess(promptId, req.user.id);
+      const { brand_id: brandId, brands } = prompt.prompt_sets;
+
+      const previous = await startedJob(brandId, idempotencyKey);
+      if (previous) return res.status(202).json({ jobId: previous.id });
+
+      // A suggestion still being written is followed, not started twice.
+      const running = await runningSuggestionJob(brandId, promptId);
+      if (running) return res.status(202).json({ jobId: running });
+
+      const existingId = await openOpportunityForPrompt(brandId, promptId);
+      if (existingId) return res.json({ existingId });
+
+      const allowance = await requestAllowance(brands.organization_id);
+      if (allowance.max <= 0) return quotaExhausted(res, allowance);
+
+      const job = await createJob({
+        type: 'content',
+        brandId,
+        data: { brandId, model: null, request: promptSuggestionRequest(promptId, idempotencyKey) },
+        maxAttempts: 2,
+      });
+      runContentJob(job.id, req.app.get('io'));
+
+      return res.status(202).json({ jobId: job.id });
+    } catch (error) {
+      if (error instanceof PlanLimitError) {
+        return res.status(error.statusCode).json({
+          success: false,
+          error: 'plan_limit',
+          message: error.message,
+        });
+      }
+      if (error.status) return res.status(error.status).json({ error: error.message });
+      req.log.error({ err: error }, 'prompt content suggestion error');
+      return res.status(500).json({ error: 'Failed to start generation' });
+    }
+  },
+);
 
 /**
  * GET /api/content/job/:jobId

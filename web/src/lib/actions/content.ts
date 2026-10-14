@@ -67,6 +67,10 @@ export interface GenerationJobStatus {
     duplicates?: number;
     /** The month's quota ran out before anything could be generated. */
     limited?: boolean;
+    /** The opportunities this run created, newest work first. */
+    opportunityIds?: string[];
+    /** A run for one prompt wrote nothing: the open opportunity that answers it. */
+    existingId?: string;
   } | null;
   failedReason: string | null;
 }
@@ -635,4 +639,58 @@ export async function suggestAlternative(
     };
   }
   return { ok: true, jobId: body.jobId };
+}
+
+export type PromptSuggestionResult =
+  | { ok: true; jobId: string }
+  | { ok: true; existingId: string }
+  | { ok: false; error: string; quotaExhausted?: boolean };
+
+/**
+ * "Suggest content" from the prompts table (PROMPT-006): one content
+ * opportunity for the prompt, or the open one it already has. Errors come
+ * back as values.
+ */
+export async function suggestContentForPrompt(
+  promptId: string,
+  idempotencyKey: string,
+): Promise<PromptSuggestionResult> {
+  const session = await getSession();
+
+  const res = await fetch(`${AEO_SERVER_URL}/api/content/prompts/${promptId}/suggest`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ idempotencyKey }),
+  });
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: body.message || body.error || `Server error: ${res.status}`,
+      quotaExhausted: body.error === 'quota_exhausted',
+    };
+  }
+  return body.existingId
+    ? { ok: true, existingId: body.existingId }
+    : { ok: true, jobId: body.jobId };
+}
+
+/**
+ * The prompt's open content opportunity, if any (PROMPT-006): with the
+ * month's quota used up, the row menu can still open it. Null when there is
+ * none or it can't be read.
+ */
+export async function getOpenSuggestionForPrompt(promptId: string): Promise<string | null> {
+  const session = await getSession();
+
+  const res = await fetch(`${AEO_SERVER_URL}/api/content/prompts/${promptId}/suggestion`, {
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+  if (!res.ok) return null;
+  const body = await res.json().catch(() => ({}));
+  return body.existingId ?? null;
 }

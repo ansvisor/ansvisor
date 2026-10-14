@@ -104,7 +104,8 @@ export async function assertOpportunityAccess(id, userId) {
 /**
  * Assert that every prompt in `promptIds` belongs to the caller's org,
  * resolved through prompts -> prompt_sets -> brands.
- * @returns {Promise<object[]>} the matched prompt rows
+ * @returns {Promise<object[]>} the matched prompt rows, each with
+ *   prompt_sets.brand_id and prompt_sets.brands.organization_id
  */
 export async function assertPromptAccess(promptIds, userId) {
   const ids = Array.isArray(promptIds) ? promptIds : [promptIds];
@@ -112,7 +113,7 @@ export async function assertPromptAccess(promptIds, userId) {
 
   const { data: rows } = await supabaseAdmin
     .from('prompts')
-    .select('id, prompt_sets!inner(brands!inner(organization_id))')
+    .select('id, prompt_sets!inner(brand_id, brands!inner(organization_id))')
     .in('id', ids);
 
   if (!rows || rows.length < new Set(ids).size) {

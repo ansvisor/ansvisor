@@ -20,6 +20,8 @@ import {
   OPPORTUNITY_WINDOW_DAYS,
   clusterMetrics,
   coveredClusterIds,
+  openOpportunityOn,
+  openlyCoveredClusterIds,
   opportunityScore,
   pickClusters,
   scoreComponents,
@@ -221,6 +223,16 @@ async function loadPromptTexts(promptIds) {
 }
 
 /**
+ * The clusters a run may write for: those with answers to go on that aren't
+ * covered yet, within the request's focus. "Another angle" (CONTENT-006) is
+ * for its own cluster only.
+ */
+export function openCandidates(candidates, { covered, inFocus, alternativeOf = null }) {
+  if (alternativeOf) return candidates.filter((c) => c.id === alternativeOf.clusterId);
+  return candidates.filter((c) => c.metrics.tested > 0 && !covered.has(c.id) && inFocus(c));
+}
+
+/**
  * What the model is told when the user asks for another angle on an existing
  * opportunity (CONTENT-006): the original, and that this one must differ in
  * kind, not just in wording.
@@ -250,13 +262,18 @@ export const IDEA_MAX_LENGTH = 500;
  *   idea?: string | null,
  *   source?: 'system' | 'manual' | 'prompt',
  *   alternativeOf?: { id: string, title: string, description?: string|null, decision?: string|null, clusterId: string } | null,
+ *   explicit?: boolean,
  * }} [opts] - `count`, the focus (`topicId` / `promptId`) and `idea` come from
  *   an on-demand request (CONTENT-003); the nightly run passes none of them.
  *   `alternativeOf` asks for one more opportunity on that opportunity's
  *   cluster with a different angle (CONTENT-006): the user wants a second
  *   take on a need that's already covered, so neither coverage nor the
  *   duplicate check stands in its way, and it isn't merged into anything.
- * @returns {Promise<{ generated: number, merged: number, reopened?: number, duplicates?: number, limited?: boolean }>}
+ *   `explicit` is a request for the focused prompt's cluster itself (PROMPT-006
+ *   "Suggest content"): it is written even if the cluster was covered by a
+ *   dismissed or finished opportunity, never when an open one covers it, and
+ *   never merged away.
+ * @returns {Promise<{ generated: number, merged: number, reopened?: number, duplicates?: number, limited?: boolean, opportunityIds?: string[], existingId?: string }>}
  */
 export async function generateContentOpportunities(
   brandId,
@@ -269,8 +286,12 @@ export async function generateContentOpportunities(
     idea = null,
     source = 'system',
     alternativeOf = null,
+    explicit = false,
   } = {},
 ) {
+  // The user asked for this cluster by name: the duplicate check, merging
+  // into another opportunity and reopening finished ones don't apply.
+  const targeted = !!alternativeOf || explicit;
   onProgress?.({ phase: 'collecting_data', message: 'Fetching clusters and metrics...' });
 
   const { data: brand } = await supabaseAdmin
@@ -346,16 +367,22 @@ export async function generateContentOpportunities(
   };
 
   // Finished opportunities whose signals moved go back to New before any new
-  // ones are written; they keep their clusters, so nothing is duplicated.
+  // ones are written; they keep their clusters, so nothing is duplicated. A
+  // run asked for one cluster leaves that to the next regular run: reopening
+  // that cluster's own would put two open opportunities on it.
   let reopened = 0;
-  try {
-    reopened = await reopenStrengthened(brandId, existing, measure);
-  } catch (err) {
-    logger.error({ err, brandId }, '[opportunities] re-opening finished opportunities failed');
+  if (!targeted) {
+    try {
+      reopened = await reopenStrengthened(brandId, existing, measure);
+    } catch (err) {
+      logger.error({ err, brandId }, '[opportunities] re-opening finished opportunities failed');
+    }
   }
 
   const candidates = clusters.map((c) => ({ id: c.id, topicId: c.topic_id, ...measure([c.id]) }));
-  const covered = coveredClusterIds(existing);
+  // A prompt's own request may revisit a cluster whose opportunity was
+  // dismissed or finished, never one with an open opportunity.
+  const covered = explicit ? openlyCoveredClusterIds(existing) : coveredClusterIds(existing);
 
   // The fan-out baskets of every cluster still open for an opportunity: the
   // duplicate check compares them, and the prompt shows the picked ones'.
@@ -363,9 +390,7 @@ export async function generateContentOpportunities(
   const inFocus = (c) =>
     (!topicId || c.topicId === topicId) &&
     (!promptId || clusterById.get(c.id).prompt_ids.includes(promptId));
-  const open = alternativeOf
-    ? candidates.filter((c) => c.id === alternativeOf.clusterId)
-    : candidates.filter((c) => c.metrics.tested > 0 && !covered.has(c.id) && inFocus(c));
+  const open = openCandidates(candidates, { covered, inFocus, alternativeOf });
   const { data: basketRows, error: basketErr } = await selectInChunks(
     open.map((c) => c.id),
     (chunk) =>
@@ -381,7 +406,7 @@ export async function generateContentOpportunities(
   // that opportunity again. It is never written, so it costs neither a model
   // call nor a slot of the quota; an open match takes it in as a related
   // cluster, so it is covered from now on.
-  const duplicates = alternativeOf
+  const duplicates = targeted
     ? 0
     : await skipDuplicates(brandId, open, {
         clusterById,
@@ -389,8 +414,8 @@ export async function generateContentOpportunities(
         covered,
       });
 
-  const wanted = alternativeOf
-    ? open.slice(0, 1)
+  const wanted = targeted
+    ? open.slice(0, count ?? 1)
     : pickClusters(open, covered, count ?? OPPORTUNITIES_PER_RUN, {
         fill: count !== undefined,
       });
@@ -399,7 +424,14 @@ export async function generateContentOpportunities(
       { brandId, clusters: clusters.length, opportunities: existing.length, reopened, duplicates },
       '[opportunities] every cluster with answers already has an opportunity',
     );
-    return { generated: 0, merged: 0, reopened, duplicates };
+    // A request for one prompt that an open opportunity already answers
+    // points at it (PROMPT-006): regrouping or another run may have covered
+    // the prompt since the request was checked.
+    const promptCluster = promptId
+      ? clusters.find((c) => c.prompt_ids.includes(promptId))?.id
+      : null;
+    const existingId = openOpportunityOn(existing, promptCluster);
+    return { generated: 0, merged: 0, reopened, duplicates, ...(existingId ? { existingId } : {}) };
   }
 
   // Each new opportunity takes one of the organization's monthly slots
@@ -416,8 +448,8 @@ export async function generateContentOpportunities(
       logger.error({ err, brandId }, '[opportunities] handing back slots failed'),
     );
 
-  // An alternative is its own take, never folded into another opportunity.
-  const shown = (alternativeOf ? [] : existing)
+  // An asked-for opportunity is its own, never folded into another one.
+  const shown = (targeted ? [] : existing)
     .filter(
       (o) =>
         o.status !== 'dismissed' &&
@@ -612,5 +644,12 @@ ${alternativeOf ? `${alternativeInstruction(alternativeOf)}\n\n` : ''}${
     { brandId, generated: inserts.length, merged, reopened, duplicates, clusters: clusters.length },
     '[opportunities] generated',
   );
-  return { generated: inserts.length, merged, reopened, duplicates };
+  // The new rows' ids, so a caller that asked for one can open it.
+  return {
+    generated: inserts.length,
+    merged,
+    reopened,
+    duplicates,
+    opportunityIds: created.map((row) => row.id),
+  };
 }

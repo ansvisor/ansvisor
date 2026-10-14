@@ -40,7 +40,10 @@ export async function processContentJob({ brandId, model, job, request = null })
           promptId: request.promptId ?? null,
           idea: request.idea ?? null,
           alternativeOf: request.alternativeOf ?? null,
-          source: 'manual',
+          explicit: !!request.explicit,
+          // "+ New" and "Another angle" are manual; "Suggest content" from
+          // the prompts table is tagged prompt.
+          source: request.source === 'prompt' ? 'prompt' : 'manual',
         }
       : {}),
   });
