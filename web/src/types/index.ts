@@ -227,6 +227,11 @@ export interface ContentOpportunitySourceData {
   actions?: Record<string, string>;
   /** Actions from before the opportunity was re-opened. */
   pastActions?: string[];
+  /**
+   * Duplicates folded into this opportunity instead of being created
+   * (CONTENT-004): clusters whose prompt and fan-out baskets matched its own.
+   */
+  duplicatesMerged?: number;
   /** Why a finished opportunity went back to New (#857, Phase 4). */
   reopened?: {
     at: string;
@@ -288,6 +293,8 @@ export interface ContentBrief {
   callToAction: string;
 }
 
+export type ContentOpportunitySource = 'system' | 'manual' | 'prompt';
+
 export interface ContentOpportunity {
   id: string;
   brandId: string;
@@ -300,6 +307,8 @@ export interface ContentOpportunity {
   impact: ContentOpportunityImpact;
   opportunityScore: number;
   status: ContentOpportunityStatus;
+  /** Where it came from: the nightly run, "+ New", or a prompt (CONTENT-003). */
+  source?: ContentOpportunitySource;
   sourceData: ContentOpportunitySourceData;
   brief?: ContentBrief;
   webhookSentAt?: string;

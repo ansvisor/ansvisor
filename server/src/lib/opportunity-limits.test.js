@@ -126,6 +126,22 @@ describe('cluster selection', () => {
     );
     expect(picked.map((c) => c.id)).toEqual(['a1', 'none1', 'b1']);
   });
+
+  it('tops up from the best of the rest when asked for more than there are topics', () => {
+    const cand = (id, score, topicId) => ({ id, score, topicId, metrics: { tested: 1 } });
+    const candidates = [
+      cand('a1', 95, 'a'),
+      cand('a2', 90, 'a'),
+      cand('a3', 60, 'a'),
+      cand('b1', 50, 'b'),
+    ];
+    expect(pickClusters(candidates, new Set(), 3).map((c) => c.id)).toEqual(['a1', 'b1']);
+    expect(pickClusters(candidates, new Set(), 3, { fill: true }).map((c) => c.id)).toEqual([
+      'a1',
+      'b1',
+      'a2',
+    ]);
+  });
 });
 
 describe('generators', () => {

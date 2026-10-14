@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,7 @@ import {
   Check,
   Copy,
   ExternalLink,
+  Info,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Link } from '@/i18n/navigation';
@@ -49,6 +50,7 @@ import {
 } from '@/components/content/opportunity-basket';
 import { opportunityToMarkdown } from '@/lib/content/opportunity-markdown';
 import { toast } from 'sonner';
+import { suggestedDate } from '@/lib/suggested-date';
 
 export const IMPACT_COLORS: Record<string, string> = {
   high: 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
@@ -116,6 +118,7 @@ export function OpportunityDetail({
   onChanged?: () => void;
 }) {
   const t = useTranslations('content');
+  const locale = useLocale();
 
   const [opportunity, setOpportunity] = useState<ContentOpportunity | null>(null);
   const [loading, setLoading] = useState(true);
@@ -327,9 +330,13 @@ export function OpportunityDetail({
           <Badge variant="outline" className="text-xs tabular-nums">
             Score: {Math.round(opportunity.opportunityScore)}
           </Badge>
-          <span className="text-xs text-muted-foreground ml-auto flex items-center gap-1.5">
+          {/* The UI's language, not the browser's: an English page showed "25 Eyl". */}
+          <span
+            className="text-xs text-muted-foreground ml-auto flex items-center gap-1.5"
+            title={suggestedDate(opportunity.createdAt, locale).full}
+          >
             <Clock className="h-3.5 w-3.5" />
-            {new Date(opportunity.createdAt).toLocaleDateString(undefined, {
+            {new Date(opportunity.createdAt).toLocaleDateString(locale, {
               day: 'numeric',
               month: 'short',
               year: 'numeric',
@@ -448,6 +455,18 @@ export function OpportunityDetail({
                   after: Math.round((sd.reopened.visibilityAfter ?? 0) * 10) / 10,
                   now: Math.round(sd.reopened.visibility * 10) / 10,
                 })}
+          </p>
+        </div>
+      )}
+
+      {(sd.duplicatesMerged ?? 0) > 0 && (
+        <div className="flex items-start gap-2 rounded-md border bg-muted/40 px-4 py-3 text-xs">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <p>
+            <span className="font-medium">
+              {t('duplicatesMerged', { count: sd.duplicatesMerged ?? 0 })}
+            </span>{' '}
+            <span className="text-muted-foreground">{t('duplicatesMergedHint')}</span>
           </p>
         </div>
       )}
@@ -632,7 +651,8 @@ export function OpportunityDetail({
                   <h3 className="text-sm font-medium mb-1">Monthly Brief Limit Reached</h3>
                   <p className="text-xs text-muted-foreground mb-4 max-w-sm">
                     You&apos;ve used all {quota.limit} content briefs included in your plan this
-                    month. Upgrade for a higher limit, or wait until the 1st when your quota resets.
+                    billing period. Upgrade for a higher limit, or wait until your subscription
+                    renews and the quota resets.
                   </p>
                   <Link href="/dashboard/settings?tab=billing">
                     <Button className="gap-2">
@@ -663,7 +683,7 @@ export function OpportunityDetail({
                   </Button>
                   {quotaLimited && (
                     <p className="text-xs text-muted-foreground mt-3 tabular-nums">
-                      {quota.remaining}/{quota.limit} briefs remaining this month
+                      {quota.remaining}/{quota.limit} briefs remaining this billing period
                     </p>
                   )}
                 </>

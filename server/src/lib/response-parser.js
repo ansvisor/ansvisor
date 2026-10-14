@@ -109,6 +109,22 @@ export function countBrandMentions(text, brand) {
 }
 
 /**
+ * Where the brand (name or any of its domains) appears in the text, as
+ * [start, end) character ranges in order. Same matching as countBrandMentions,
+ * but on the text as given, so the ranges index into it.
+ */
+export function brandMentionRanges(text, brand) {
+  const ranges = [];
+  for (const term of [brand.brandName, ...(brand.domains || [])]) {
+    if (!term) continue;
+    for (const match of text.matchAll(nameRegex(term, 'gi'))) {
+      ranges.push([match.index, match.index + match[0].length]);
+    }
+  }
+  return ranges.sort((a, b) => a[0] - b[0]);
+}
+
+/**
  * First word-boundary occurrence index of a term (case-insensitive), or -1.
  */
 function firstOccurrenceIndex(text, term) {

@@ -14230,3 +14230,392 @@ revoke execute on function public.citations_urls_daily(uuid, date, date, text[],
 grant execute on function public.citations_urls_daily(uuid, date, date, text[], text[], uuid[], integer, text[], text[])
   to authenticated, service_role;
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00120_prompt_improve_suggestions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Positions panel → Improve tab (PROMPT-003): AI-generated, platform-specific
+-- suggestions to improve one prompt's position.
+--
+-- One row per (prompt, range, location): the whole generated set for every
+-- platform the prompt was tracked on in that window. Generating costs a model
+-- call, so the panel reads this row first and only regenerates when the user
+-- asks or when newer answers have arrived since it was built
+-- (latest_result_at).
+--
+-- range_key is the panel's range as the user picked it: a preset ('24h', '7d',
+-- '30d', '90d') or 'custom:<from>:<to>'. Presets slide with the clock; keying
+-- on the preset rather than the resolved bounds is what lets "30d" be reused
+-- across a day instead of missing the cache every minute.
+--
+-- Edits, removals and the user's own suggestions are not stored here: they
+-- live in the panel until sent to Action Center (PROMPT-004).
+
+create table if not exists public.prompt_improve_suggestions (
+  id uuid primary key default gen_random_uuid(),
+  prompt_id uuid not null references public.prompts(id) on delete cascade,
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  range_key text not null,
+  -- '' = every location, matching the Prompts table's location filter.
+  region text not null default '',
+
+  -- Per platform: { platform, state, runs, mentionPosition, citationRank, inputs }.
+  platform_states jsonb not null default '[]'::jsonb,
+  -- [{ id, platform, state, title, body, sources: [{ type, ref }], confidence }].
+  suggestions jsonb not null default '[]'::jsonb,
+
+  -- Newest answer the set was built from. A newer answer in the window marks
+  -- the set stale, so it is rebuilt on the next open.
+  latest_result_at timestamptz,
+  model text,
+  generated_at timestamptz not null default now()
+);
+
+create unique index if not exists prompt_improve_suggestions_key_idx
+  on public.prompt_improve_suggestions (prompt_id, range_key, region);
+
+create index if not exists prompt_improve_suggestions_brand_idx
+  on public.prompt_improve_suggestions (brand_id);
+
+-- Service-role only, like action_candidates (00089): the server reads and
+-- writes it after checking the caller's brand access. No policy on purpose.
+alter table public.prompt_improve_suggestions enable row level security;
+
+comment on table public.prompt_improve_suggestions is
+  'Cached Improve-tab suggestions per (prompt, range, location). Rebuilt on Regenerate or when an answer newer than latest_result_at arrives.';
+
+-- Monthly Improve budget: one row per model call with its real token cost,
+-- summed per organization over the subscription period against
+-- plan.limits.improveMonthlyBudgetUsd, 1% of the plan price (Starter 0,
+-- Growth $2.49, Enterprise $4.99 or 1% of plan_overrides.contractMonthlyUsd).
+-- Charging the real cost keeps the share fixed whichever model is
+-- configured. Same posture as brief_usage (00015): reading a cached set
+-- costs nothing. Self-hosted bypasses the budget.
+
+create table if not exists public.prompt_improve_usage (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  prompt_id uuid references public.prompts(id) on delete set null,
+  model text,
+  input_tokens integer,
+  output_tokens integer,
+  cost_usd numeric(12, 6) not null default 0,
+  used_at timestamptz not null default now()
+);
+
+create index if not exists prompt_improve_usage_org_used_idx
+  on public.prompt_improve_usage (organization_id, used_at);
+
+-- Service-role only, no policy (as brief_usage).
+alter table public.prompt_improve_usage enable row level security;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00121_prompt_improve_actions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Positions panel → Improve → Send Actions (PROMPT-004): the selected
+-- suggestions become one Action Center action with a task each.
+--
+-- action_tasks.details: what a task sent from a suggestion carries beyond its
+-- title — the body the user wrote or kept, the platform it is for, and the
+-- evidence it was based on: { body, platform, platformLabel, sources: [{ type,
+-- ref }] }. Null for library and hand-added tasks, which render as before.
+alter table public.action_tasks add column if not exists details jsonb;
+
+comment on column public.action_tasks.details is
+  'Extra content for a task sent from the Improve tab (PROMPT-004): { body, platform, platformLabel, sources: [{ type, ref }] }. Null otherwise.';
+
+-- prompt_improve_suggestions.sent_actions: every send of this set, newest
+-- last — [{ actionId, actionNo, sentAt, setGeneratedAt, suggestionIds }]. The
+-- panel shows "Open in Actions" for the newest send of the current set while
+-- its action is still open, and marks the suggestions it carried.
+alter table public.prompt_improve_suggestions
+  add column if not exists sent_actions jsonb not null default '[]'::jsonb;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00125_opportunity_usage.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Monthly content opportunity quota (CONTENT-001).
+--
+-- One row per opportunity created, counted per organization per billing
+-- period against plan.limits.maxOpportunitiesPerMonth (Starter 10, Growth 50,
+-- Enterprise via organizations.plan_overrides). Separate from brief_usage:
+-- creating an opportunity and generating its brief are two counters.
+--
+-- A row outlives its opportunity (ON DELETE SET NULL), so deleting or
+-- dismissing an opportunity never hands its slot back. Self-hosted instances
+-- bypass the quota entirely (IS_CLOUD !== "true").
+
+create table if not exists public.opportunity_usage (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  opportunity_id uuid references public.content_opportunities(id) on delete set null,
+  used_at timestamptz not null default now(),
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_opportunity_usage_org_period
+  on public.opportunity_usage (organization_id, used_at);
+
+-- RLS enabled with no policies: only the service role (aeo-server) reads and
+-- writes usage rows, the same posture as brief_usage.
+alter table public.opportunity_usage enable row level security;
+
+grant all on table public.opportunity_usage to service_role;
+
+-- Claims up to p_count slots in one transaction, under a per-organization
+-- lock, so two generations running at once (several brands of one org, or a
+-- double click) can never take the organization past its limit. Returns the
+-- claimed usage row ids; the caller links each to the opportunity it creates
+-- and deletes the ones it ends up not using, which hands those slots back.
+create or replace function public.claim_opportunity_usage(
+  p_organization_id uuid,
+  p_since timestamptz,
+  p_limit integer,
+  p_count integer
+)
+returns setof uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_used integer;
+  v_take integer;
+begin
+  perform pg_advisory_xact_lock(hashtext('opportunity_usage:' || p_organization_id::text));
+
+  select count(*) into v_used
+  from public.opportunity_usage
+  where organization_id = p_organization_id
+    and used_at >= p_since;
+
+  v_take := greatest(0, least(p_count, p_limit - v_used));
+
+  return query
+    insert into public.opportunity_usage (organization_id)
+    select p_organization_id from generate_series(1, v_take)
+    returning id;
+end;
+$$;
+
+revoke all on function public.claim_opportunity_usage(uuid, timestamptz, integer, integer)
+  from public, anon, authenticated;
+grant execute on function public.claim_opportunity_usage(uuid, timestamptz, integer, integer)
+  to service_role;
+
+comment on function public.claim_opportunity_usage(uuid, timestamptz, integer, integer) is
+  'Atomically claims up to p_count monthly opportunity slots for an organization (CONTENT-001). Returns the claimed opportunity_usage ids.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00126_opportunity_source.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Where an opportunity came from (CONTENT-003): the nightly run (system),
+-- the "+ New" button (manual), or a prompt's "Suggest Content" (prompt,
+-- PROMPT-006). The list shows it as a badge and can filter by it, so the
+-- summary figures above the list take the same filter.
+--
+-- Existing rows were all made by the nightly run, hence the default.
+alter table public.content_opportunities
+  add column if not exists source text not null default 'system';
+
+alter table public.content_opportunities
+  drop constraint if exists content_opportunities_source_check;
+alter table public.content_opportunities
+  add constraint content_opportunities_source_check
+  check (source in ('system', 'manual', 'prompt'));
+
+-- content_opportunity_aggregates (00103) with the source filter.
+drop function if exists public.content_opportunity_aggregates(uuid, text, text, text, text, uuid, uuid);
+
+create or replace function public.content_opportunity_aggregates(
+  p_brand_id uuid,
+  p_status text default null,
+  p_impact text default null,
+  p_type text default null,
+  p_q text default null,
+  p_prompt_id uuid default null,
+  p_topic_id uuid default null,
+  p_source text default null
+)
+returns table (
+  avg_score numeric,
+  high_impact_count bigint,
+  sent_count bigint,
+  signal_count bigint
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select
+    coalesce(avg(co.opportunity_score), 0) as avg_score,
+    count(*) filter (
+      where co.impact = 'high'
+    ) as high_impact_count,
+    count(*) filter (
+      where co.status in ('sent', 'in_progress', 'done')
+    ) as sent_count,
+    (
+      select count(*)
+      from prompt_cluster_members m
+      join prompt_clusters pc on pc.id = m.cluster_id
+      where pc.brand_id = p_brand_id
+    ) + (
+      select count(*)
+      from prompt_cluster_queries q
+      join prompt_clusters pc on pc.id = q.cluster_id
+      where pc.brand_id = p_brand_id
+    ) as signal_count
+  from public.content_opportunities co
+  where co.brand_id = p_brand_id
+    and (
+      (p_status is null and co.status <> 'archived')
+      or co.status = p_status
+    )
+    and (p_impact is null or co.impact = p_impact)
+    and (p_type is null or co.type = p_type)
+    and (p_source is null or co.source = p_source)
+    and (
+      p_prompt_id is null
+      or co.prompt_id = p_prompt_id
+      or exists (
+        select 1
+        from prompt_cluster_members m
+        where m.prompt_id = p_prompt_id
+          and (m.cluster_id = co.cluster_id or m.cluster_id = any(co.related_cluster_ids))
+      )
+    )
+    and (
+      p_topic_id is null
+      or exists (
+        select 1
+        from prompt_clusters pc
+        where pc.topic_id = p_topic_id
+          and (pc.id = co.cluster_id or pc.id = any(co.related_cluster_ids))
+      )
+    )
+    and (
+      p_q is null
+      or co.title ilike '%' || p_q || '%'
+      or co.description ilike '%' || p_q || '%'
+    );
+$$;
+
+grant execute on function public.content_opportunity_aggregates(
+  uuid,
+  text,
+  text,
+  text,
+  text,
+  uuid,
+  uuid,
+  text
+) to authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00127_opportunity_suggested_filter.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- The Content list's date filter (CONTENT-002): This month / Last 30 days /
+-- Custom bound the opportunities by when they were suggested (created_at),
+-- so the summary figures above the list take the same bounds. The list can
+-- now also sort oldest first, which an index on (brand_id, created_at)
+-- keeps cheap together with the newest-first sort.
+
+create index if not exists content_opportunities_brand_created_idx
+  on public.content_opportunities (brand_id, created_at desc);
+
+-- content_opportunity_aggregates (00126) with the date bounds.
+drop function if exists public.content_opportunity_aggregates(uuid, text, text, text, text, uuid, uuid, text);
+
+create or replace function public.content_opportunity_aggregates(
+  p_brand_id uuid,
+  p_status text default null,
+  p_impact text default null,
+  p_type text default null,
+  p_q text default null,
+  p_prompt_id uuid default null,
+  p_topic_id uuid default null,
+  p_source text default null,
+  p_created_from timestamptz default null,
+  p_created_to timestamptz default null
+)
+returns table (
+  avg_score numeric,
+  high_impact_count bigint,
+  sent_count bigint,
+  signal_count bigint
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select
+    coalesce(avg(co.opportunity_score), 0) as avg_score,
+    count(*) filter (
+      where co.impact = 'high'
+    ) as high_impact_count,
+    count(*) filter (
+      where co.status in ('sent', 'in_progress', 'done')
+    ) as sent_count,
+    (
+      select count(*)
+      from prompt_cluster_members m
+      join prompt_clusters pc on pc.id = m.cluster_id
+      where pc.brand_id = p_brand_id
+    ) + (
+      select count(*)
+      from prompt_cluster_queries q
+      join prompt_clusters pc on pc.id = q.cluster_id
+      where pc.brand_id = p_brand_id
+    ) as signal_count
+  from public.content_opportunities co
+  where co.brand_id = p_brand_id
+    and (
+      (p_status is null and co.status <> 'archived')
+      or co.status = p_status
+    )
+    and (p_impact is null or co.impact = p_impact)
+    and (p_type is null or co.type = p_type)
+    and (p_source is null or co.source = p_source)
+    and (p_created_from is null or co.created_at >= p_created_from)
+    and (p_created_to is null or co.created_at <= p_created_to)
+    and (
+      p_prompt_id is null
+      or co.prompt_id = p_prompt_id
+      or exists (
+        select 1
+        from prompt_cluster_members m
+        where m.prompt_id = p_prompt_id
+          and (m.cluster_id = co.cluster_id or m.cluster_id = any(co.related_cluster_ids))
+      )
+    )
+    and (
+      p_topic_id is null
+      or exists (
+        select 1
+        from prompt_clusters pc
+        where pc.topic_id = p_topic_id
+          and (pc.id = co.cluster_id or pc.id = any(co.related_cluster_ids))
+      )
+    )
+    and (
+      p_q is null
+      or co.title ilike '%' || p_q || '%'
+      or co.description ilike '%' || p_q || '%'
+    );
+$$;
+
+grant execute on function public.content_opportunity_aggregates(
+  uuid,
+  text,
+  text,
+  text,
+  text,
+  uuid,
+  uuid,
+  text,
+  timestamptz,
+  timestamptz
+) to authenticated;
+

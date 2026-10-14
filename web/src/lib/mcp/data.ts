@@ -2825,3 +2825,102 @@ export async function updateTaskStatusFor(
     updated_at: data.updated_at ?? updatedAt,
   };
 }
+
+export const IMPROVE_PRESETS = ['24h', '7d', '30d', '90d', 'custom'] as const;
+export const IMPROVE_SOURCE_TYPES = [
+  'fanout',
+  'domain',
+  'answer',
+  'competitor_url',
+  'brand_page',
+] as const;
+
+export interface CreateImproveActionInput {
+  promptId: string;
+  range: {
+    preset: (typeof IMPROVE_PRESETS)[number];
+    from: string;
+    to?: string;
+    region?: string;
+  };
+  idempotencyKey: string;
+  suggestions: Array<{
+    id: string;
+    platform: string;
+    title: string;
+    body?: string;
+    sources?: Array<{ type: (typeof IMPROVE_SOURCE_TYPES)[number]; ref: string }>;
+  }>;
+}
+
+export interface CreatedImproveAction {
+  actionId: string;
+  actionNo: number;
+  created: boolean;
+  taskCount: number;
+}
+
+/**
+ * Create a `prompt_improve` Action Center action from Improve suggestions —
+ * the MCP counterpart of the Improve tab's "Send Actions".
+ *
+ * Org-ownership of the prompt is verified *first* via supabaseAdmin — a
+ * wrong-org or missing id returns `null` (→ 404 upstream) with no outbound
+ * call. Only then do we call the internal endpoint at
+ * `${API_BASE_URL}/api/internal/prompts/:id/improve/action` with
+ * `Authorization: Bearer ${CRON_SECRET}` and the key's user — same pattern as
+ * `generateBriefFor`. The server checks the prompt_improve plan feature for
+ * that user and dedupes on the idempotency key, so a retried call returns the
+ * action the first one created (`created: false`).
+ */
+export async function createImproveActionFor(
+  auth: McpAuthContext,
+  input: CreateImproveActionInput,
+): Promise<CreatedImproveAction | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: ownership } = await supabaseAdmin
+    .from('prompts')
+    .select('id, prompt_sets!inner(brands!inner(organization_id))')
+    .eq('id', input.promptId)
+    .eq('prompt_sets.brands.organization_id', auth.organizationId)
+    .maybeSingle();
+  if (!ownership) return null;
+
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    throw new Error('CRON_SECRET must be configured for MCP Improve actions');
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/internal/prompts/${input.promptId}/improve/action`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${cronSecret}`,
+    },
+    body: JSON.stringify({
+      userId: auth.userId,
+      preset: input.range.preset,
+      from: input.range.from,
+      to: input.range.to,
+      region: input.range.region ?? '',
+      idempotencyKey: input.idempotencyKey,
+      suggestions: input.suggestions,
+    }),
+  });
+
+  if (!res.ok) {
+    // Surface the server's message (plan without Improve, no suggestions for
+    // this range yet, invalid suggestion) so the agent can relay it.
+    const body = (await res.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(body?.message ?? `Internal Improve endpoint returned ${res.status}`);
+  }
+
+  const body = (await res.json()) as CreatedImproveAction;
+  return {
+    actionId: body.actionId,
+    actionNo: body.actionNo,
+    created: body.created,
+    taskCount: body.taskCount,
+  };
+}

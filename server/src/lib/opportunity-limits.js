@@ -135,19 +135,34 @@ export function coveredClusterIds(rows) {
  * The highest-scoring clusters with answers and no opportunity yet, at most
  * one per topic, so a run's few suggestions spread across the brand's topics
  * instead of all landing in its strongest one. The no-topic scope (null)
- * counts as one topic.
+ * counts as one topic. With `fill`, a request for more than one per topic
+ * is topped up from the best of the rest.
  */
-export function pickClusters(candidates, covered, count = OPPORTUNITIES_PER_RUN) {
+export function pickClusters(
+  candidates,
+  covered,
+  count = OPPORTUNITIES_PER_RUN,
+  { fill = false } = {},
+) {
   const topics = new Set();
   const picked = [];
-  for (const c of [...candidates]
+  const ranked = [...candidates]
     .filter((c) => c.metrics.tested > 0 && !covered.has(c.id))
-    .sort((a, b) => b.score - a.score)) {
+    .sort((a, b) => b.score - a.score);
+  for (const c of ranked) {
     const topic = c.topicId ?? null;
     if (topics.has(topic)) continue;
     topics.add(topic);
     picked.push(c);
-    if (picked.length === count) break;
+    if (picked.length === count) return picked;
+  }
+  // A request for more than there are topics (CONTENT-003's "+ New") takes
+  // the next best clusters once every topic has one.
+  if (fill) {
+    for (const c of ranked) {
+      if (picked.length === count) break;
+      if (!picked.includes(c)) picked.push(c);
+    }
   }
   return picked;
 }

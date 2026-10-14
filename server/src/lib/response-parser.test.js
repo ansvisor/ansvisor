@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { computeMentionPosition, countBrandMentions, parseResponse } from './response-parser.js';
+import {
+  brandMentionRanges,
+  computeMentionPosition,
+  countBrandMentions,
+  parseResponse,
+} from './response-parser.js';
 
 describe('response-parser', () => {
   describe('countBrandMentions', () => {
@@ -415,5 +420,18 @@ describe('response-parser', () => {
       expect(result.competitorMentions[0].mention_count).toBe(2);
       expect(result.competitorMentions[0].mention_position).toBe(1);
     });
+  });
+});
+
+describe('brandMentionRanges', () => {
+  it('finds the name and the domains as whole words, in order', () => {
+    const text = 'Acme leads. See acme.com. Acmeville is a town. ACME again.';
+
+    expect(brandMentionRanges(text, { brandName: 'Acme', domains: ['acme.com'] })).toEqual([
+      [0, 4],
+      [16, 20],
+      [16, 24],
+      [47, 51],
+    ]);
   });
 });
