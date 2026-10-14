@@ -287,6 +287,55 @@ export async function getBriefQuotaStatus(orgId) {
   return { used, limit: max, remaining: Math.max(0, max - used) };
 }
 
+async function improveSpendThisPeriod(orgId) {
+  const periodStart = await quotaPeriodStart(orgId);
+  const { data } = await supabaseAdmin
+    .from('prompt_improve_usage')
+    .select('cost_usd')
+    .eq('organization_id', orgId)
+    .gte('used_at', periodStart.toISOString())
+    .order('used_at', { ascending: false })
+    .limit(5000);
+  const costs = (data ?? []).map((r) => Number(r.cost_usd) || 0);
+  const spent = costs.reduce((a, b) => a + b, 0);
+  return { spent, typical: medianCost(costs.slice(0, 20)) };
+}
+
+/**
+ * Improve-tab budget (PROMPT-003): a monthly USD budget per organization,
+ * 1% of the plan price (plan.limits.improveMonthlyBudgetUsd), charged with
+ * each generation's real token cost so the share holds for any model. Users
+ * see an estimate of generations left, not dollars. -1 is unlimited.
+ */
+export async function getImproveQuotaStatus(orgId, modelId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const budget = plan.limits.improveMonthlyBudgetUsd ?? -1;
+  if (budget === -1) return { unlimited: true, planName: plan.name };
+  const { spent, typical } = await improveSpendThisPeriod(orgId);
+  const remaining = Math.max(0, budget - spent);
+  return {
+    unlimited: false,
+    planName: plan.name,
+    budgetUsd: budget,
+    spentUsd: spent,
+    remainingUsd: remaining,
+    generationsLeft: estimateGenerationsLeft(remaining, typical ?? typicalCostUsd(modelId)),
+    percentLeft: budget > 0 ? Math.round((remaining / budget) * 100) : 0,
+  };
+}
+
+/** Throws PlanLimitError (429) once the period's Improve budget is spent. */
+export async function enforceImproveQuota(orgId, modelId) {
+  const quota = await getImproveQuotaStatus(orgId, modelId);
+  if (!quota.unlimited && quota.remainingUsd <= 0) {
+    throw new PlanLimitError(
+      `This month's suggestion budget on the ${quota.planName} plan is used up. It resets when your subscription renews.`,
+      429,
+    );
+  }
+  return quota;
+}
+
 async function countOpportunityUsage(orgId, since) {
   const { count } = await supabaseAdmin
     .from('opportunity_usage')
@@ -394,55 +443,6 @@ export async function getContentUsage(orgId) {
     },
     briefs,
   };
-}
-
-async function improveSpendThisPeriod(orgId) {
-  const periodStart = await quotaPeriodStart(orgId);
-  const { data } = await supabaseAdmin
-    .from('prompt_improve_usage')
-    .select('cost_usd')
-    .eq('organization_id', orgId)
-    .gte('used_at', periodStart.toISOString())
-    .order('used_at', { ascending: false })
-    .limit(5000);
-  const costs = (data ?? []).map((r) => Number(r.cost_usd) || 0);
-  const spent = costs.reduce((a, b) => a + b, 0);
-  return { spent, typical: medianCost(costs.slice(0, 20)) };
-}
-
-/**
- * Improve-tab budget (PROMPT-003): a monthly USD budget per organization,
- * 1% of the plan price (plan.limits.improveMonthlyBudgetUsd), charged with
- * each generation's real token cost so the share holds for any model. Users
- * see an estimate of generations left, not dollars. -1 is unlimited.
- */
-export async function getImproveQuotaStatus(orgId, modelId) {
-  const plan = await resolveOrgPlanByOrgId(orgId);
-  const budget = plan.limits.improveMonthlyBudgetUsd ?? -1;
-  if (budget === -1) return { unlimited: true, planName: plan.name };
-  const { spent, typical } = await improveSpendThisPeriod(orgId);
-  const remaining = Math.max(0, budget - spent);
-  return {
-    unlimited: false,
-    planName: plan.name,
-    budgetUsd: budget,
-    spentUsd: spent,
-    remainingUsd: remaining,
-    generationsLeft: estimateGenerationsLeft(remaining, typical ?? typicalCostUsd(modelId)),
-    percentLeft: budget > 0 ? Math.round((remaining / budget) * 100) : 0,
-  };
-}
-
-/** Throws PlanLimitError (429) once the period's Improve budget is spent. */
-export async function enforceImproveQuota(orgId, modelId) {
-  const quota = await getImproveQuotaStatus(orgId, modelId);
-  if (!quota.unlimited && quota.remainingUsd <= 0) {
-    throw new PlanLimitError(
-      `This month's suggestion budget on the ${quota.planName} plan is used up. It resets when your subscription renews.`,
-      429,
-    );
-  }
-  return quota;
 }
 
 async function countSiteAuditUsageThisMonth(orgId) {

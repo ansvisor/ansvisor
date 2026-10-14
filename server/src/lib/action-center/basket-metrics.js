@@ -75,7 +75,8 @@ export function basketValues(raw, { pageCount }) {
 
 /**
  * The prompts and pages an action covers. Actions sent before the payload
- * carried prompt ids take them from the opportunity's clusters as they are now.
+ * carried prompt ids take them from the opportunity's clusters as they are
+ * now, or, without clusters, from the one prompt it was written for.
  */
 export async function basketScope(action) {
   const payload = action.payload || {};
@@ -83,7 +84,7 @@ export async function basketScope(action) {
   if (!promptIds.length && payload.opportunityId) {
     const { data: opp } = await supabaseAdmin
       .from('content_opportunities')
-      .select('cluster_id, related_cluster_ids')
+      .select('cluster_id, related_cluster_ids, prompt_id')
       .eq('id', payload.opportunityId)
       .maybeSingle();
     const clusterIds = [opp?.cluster_id, ...(opp?.related_cluster_ids || [])].filter(Boolean);
@@ -95,6 +96,7 @@ export async function basketScope(action) {
       if (error) throw new Error(error.message);
       promptIds = (members || []).map((m) => m.prompt_id);
     }
+    if (!promptIds.length && opp?.prompt_id) promptIds = [opp.prompt_id];
   }
   return { promptIds, pages: Array.isArray(payload.pages) ? payload.pages : [] };
 }
