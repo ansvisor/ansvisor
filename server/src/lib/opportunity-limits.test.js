@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
+  OPEN_OPPORTUNITY_STATUSES,
   OPPORTUNITIES_PER_RUN,
   SCORE_WEIGHTS,
   clusterMetrics,
   coveredClusterIds,
+  openOpportunityOn,
+  openlyCoveredClusterIds,
   opportunityScore,
   pickClusters,
   scoreComponents,
@@ -94,6 +97,27 @@ describe('cluster selection', () => {
       { cluster_id: 'c3', related_cluster_ids: [] },
     ]);
     expect([...covered].sort()).toEqual(['c1', 'c2', 'c3']);
+  });
+
+  it("holds a prompt's own request back only with an open opportunity (PROMPT-006)", () => {
+    const rows = [
+      { cluster_id: 'c1', related_cluster_ids: ['c2'], status: 'in_progress' },
+      { cluster_id: 'c3', related_cluster_ids: [], status: 'dismissed' },
+      { cluster_id: 'c4', related_cluster_ids: [], status: 'done' },
+      { cluster_id: 'c5', related_cluster_ids: [], status: 'archived' },
+    ];
+    expect([...openlyCoveredClusterIds(rows)].sort()).toEqual(['c1', 'c2']);
+    expect(OPEN_OPPORTUNITY_STATUSES).toEqual(['new', 'reviewed', 'sent', 'in_progress']);
+  });
+
+  it('names the open opportunity that covers a cluster, merged ones included', () => {
+    const rows = [
+      { id: 'o1', cluster_id: 'c1', related_cluster_ids: [], status: 'dismissed' },
+      { id: 'o2', cluster_id: 'c9', related_cluster_ids: ['c1'], status: 'sent' },
+    ];
+    expect(openOpportunityOn(rows, 'c1')).toBe('o2');
+    expect(openOpportunityOn(rows, 'c2')).toBeNull();
+    expect(openOpportunityOn(rows, null)).toBeNull();
   });
 
   it('takes the best uncovered clusters that have answers', () => {

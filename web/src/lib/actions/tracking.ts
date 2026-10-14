@@ -1608,6 +1608,20 @@ export async function analyzeNewPrompt(
   brandId: string,
   promptId: string,
 ): Promise<{ started: boolean }> {
+  return analyzeNewPrompts(brandId, [promptId]);
+}
+
+/**
+ * Submit several just-added prompts for their first run in one request — a
+ * bulk import (PROMPT-005) spends one on-demand run, not one per row. A
+ * refusal (daily cap, cooldown, paused brand) is not an error: the prompts are
+ * saved and the next scheduled run picks them up.
+ */
+export async function analyzeNewPrompts(
+  brandId: string,
+  promptIds: string[],
+): Promise<{ started: boolean }> {
+  if (promptIds.length === 0) return { started: false };
   const supabase = await dbClient();
 
   const {
@@ -1622,7 +1636,7 @@ export async function analyzeNewPrompt(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ brandId, promptIds: [promptId] }),
+      body: JSON.stringify({ brandId, promptIds }),
     });
 
     if (!res.ok) {

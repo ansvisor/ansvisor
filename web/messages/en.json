@@ -1818,6 +1818,38 @@
     "newRefunded": "Nothing was used from your monthly quota.",
     "retry": "Retry",
     "generatingRow": "Generating…",
+    "alternative": {
+      "button": "Another angle",
+      "running": "Writing another angle…",
+      "hint": "Suggest one more opportunity for the same need, with a different angle",
+      "badge": "Alternative",
+      "of": "Another angle on",
+      "title": "Another angle",
+      "description": "Ansvisor writes one more opportunity for the same need, with a different content type, format, audience or approach. Both stay in the list so you can keep the one you prefer.",
+      "direction": "Direction (optional)",
+      "directionPlaceholder": "e.g. more technical, a video instead of a blog post, aimed at agencies",
+      "uses": "Uses 1 of your {remaining} remaining this month → {after} left after this.",
+      "usesUnlimited": "Uses one generation.",
+      "noneLeft": "You've used this month's opportunities. They reset when your subscription renews.",
+      "generate": "Write another angle",
+      "started": "Writing another angle — it will appear in the list.",
+      "done": "Another angle is in the list.",
+      "none": "No new angle could be written for this need.",
+      "failed": "Couldn't write another angle — please try again.",
+      "stillRunning": "Still writing another angle — it will appear in the list when it's done."
+    },
+    "dismissReason": {
+      "title": "Why dismiss it?",
+      "description": "This helps Ansvisor suggest better opportunities.",
+      "not_relevant": {
+        "label": "The topic doesn't matter to us",
+        "hint": "It won't be suggested again in this form for 90 days."
+      },
+      "wrong_angle": {
+        "label": "Right topic, wrong angle",
+        "hint": "Dismiss it and ask for another angle on the same need."
+      }
+    },
     "newDialog": {
       "title": "New content opportunities",
       "description": "Generate fresh suggestions now instead of waiting for the next scheduled run.",

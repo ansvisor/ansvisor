@@ -1461,6 +1461,17 @@ export default function ContentPage() {
                               </Badge>
                             )}
                             {/* Before the title, which is clamped to one line. */}
+                            {opp.sourceData?.alternativeOf && (
+                              <Badge
+                                variant="outline"
+                                className="mr-1.5 align-middle text-[10px] font-normal text-muted-foreground"
+                                title={
+                                  t('alternative.of') + ' ' + opp.sourceData.alternativeOf.title
+                                }
+                              >
+                                {t('alternative.badge')}
+                              </Badge>
+                            )}
                             {opp.source && opp.source !== 'system' && (
                               <Badge
                                 variant="outline"

@@ -111,11 +111,16 @@ export function initialTaskStatus(taskKey, opportunity) {
  * was already sent, and records the action on the opportunity.
  *
  * @param {object} opportunity - the content_opportunities row
- * @param {{ assetKey?: string|null, userId: string }} opts
+ * @param {{ assetKey?: string|null, userId: string, readable?: object }} opts - `readable`:
+ *   the same row with its text cleaned for reading (opportunity-text.js); the
+ *   action shows that text, while the row written back keeps its own.
  * @returns {Promise<{ actionId: string, created: boolean }>}
  */
-export async function sendToActionCenter(opportunity, { assetKey = null, userId }) {
-  const assets = opportunityAssets(opportunity);
+export async function sendToActionCenter(
+  opportunity,
+  { assetKey = null, userId, readable = opportunity },
+) {
+  const assets = opportunityAssets(readable);
   const chosen = assetKey ? assets.filter((a) => a.key === assetKey) : assets;
   if (!chosen.length) {
     const err = new Error('Asset not found');
@@ -155,7 +160,7 @@ export async function sendToActionCenter(opportunity, { assetKey = null, userId 
     source: OPPORTUNITY_ACTION_KIND,
     opportunityId: opportunity.id,
     assetKey,
-    title: assetKey ? chosen[0].title : opportunity.title,
+    title: assetKey ? chosen[0].title : readable.title,
     decision: chosen[0].decision,
     assets: chosen.map(({ key: k, type, channel, decision, title }) => ({
       key: k,

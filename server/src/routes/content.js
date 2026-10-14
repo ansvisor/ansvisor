@@ -20,14 +20,69 @@ import {
   assertBrandAccess,
   assertOpportunitiesAccess,
   assertOpportunityAccess,
+  assertPromptAccess,
 } from '../lib/access.js';
 import { loadClusters } from '../lib/prompt-clusters.js';
 import { sendToActionCenter } from '../lib/action-center/from-opportunity.js';
 import { IDEA_MAX_LENGTH } from '../lib/opportunity-generator.js';
+import { cleanStoredOpportunity } from '../lib/opportunity-text.js';
+import { sourceDataForStatus } from '../lib/opportunity-status.js';
+import {
+  openOpportunityForPrompt,
+  promptClusterId,
+  promptSuggestionRequest,
+  runningSuggestionJob,
+} from '../lib/prompt-content-suggestion.js';
 
 const router = Router();
 
-function mapOpportunityRow(row) {
+/** The job a repeated "+ New" or alternative request already started. */
+async function startedJob(brandId, idempotencyKey) {
+  const since = new Date(Date.now() - IDEMPOTENCY_WINDOW_MS).toISOString();
+  const { data } = await supabaseAdmin
+    .from('jobs')
+    .select('id, data')
+    .eq('type', 'content')
+    .eq('brand_id', brandId)
+    .eq('data->request->>idempotencyKey', idempotencyKey)
+    .gte('created_at', since)
+    .limit(1)
+    .maybeSingle();
+  return data;
+}
+
+/** What one request may ask for; self-hosted setups without an org have no quota. */
+function requestAllowance(orgId) {
+  return orgId
+    ? getOpportunityRequestAllowance(orgId)
+    : { perRequest: 5, remaining: -1, max: 5, periodEnd: null, planId: 'self_hosted' };
+}
+
+function quotaExhausted(res, allowance) {
+  return res.status(429).json({
+    success: false,
+    error: 'quota_exhausted',
+    message: 'Monthly opportunity limit reached.',
+    periodEnd: allowance.periodEnd,
+    plan: allowance.planId,
+  });
+}
+
+/**
+ * The brand's competitor names, which opportunity text is checked against
+ * when it's read (CONTENT-005).
+ */
+async function competitorNames(brandId) {
+  const { data } = await supabaseAdmin.from('competitors').select('name').eq('brand_id', brandId);
+  return (data || []).map((c) => c.name);
+}
+
+/**
+ * The API's opportunity. Text is shown cleaned of leaked internal indexes and
+ * misspelled competitor names; the stored row is left as it is.
+ */
+function mapOpportunityRow(stored, competitors = []) {
+  const row = cleanStoredOpportunity(stored, competitors);
   return {
     id: row.id,
     brandId: row.brand_id,
@@ -138,32 +193,13 @@ router.post('/opportunities/generate', requireFeature('content_optimization'), a
   try {
     const { orgId } = await assertBrandAccess(brandId, req.user.id);
 
-    const since = new Date(Date.now() - IDEMPOTENCY_WINDOW_MS).toISOString();
-    const { data: previous } = await supabaseAdmin
-      .from('jobs')
-      .select('id, data')
-      .eq('type', 'content')
-      .eq('brand_id', brandId)
-      .eq('data->request->>idempotencyKey', idempotencyKey)
-      .gte('created_at', since)
-      .limit(1)
-      .maybeSingle();
+    const previous = await startedJob(brandId, idempotencyKey);
     if (previous) {
       return res.status(202).json({ jobId: previous.id, count: previous.data.request.count });
     }
 
-    const allowance = orgId
-      ? await getOpportunityRequestAllowance(orgId)
-      : { perRequest: 5, remaining: -1, max: 5, periodEnd: null, planId: 'self_hosted' };
-    if (allowance.max <= 0) {
-      return res.status(429).json({
-        success: false,
-        error: 'quota_exhausted',
-        message: 'Monthly opportunity limit reached.',
-        periodEnd: allowance.periodEnd,
-        plan: allowance.planId,
-      });
-    }
+    const allowance = await requestAllowance(orgId);
+    if (allowance.max <= 0) return quotaExhausted(res, allowance);
 
     const request = {
       count: Math.min(count, allowance.max),
@@ -194,6 +230,180 @@ router.post('/opportunities/generate', requireFeature('content_optimization'), a
     return res.status(500).json({ error: 'Failed to start generation' });
   }
 });
+
+const alternativeSchema = z.object({
+  direction: z.string().trim().max(IDEA_MAX_LENGTH).nullish(),
+  idempotencyKey: z.string().min(8).max(100),
+});
+
+/**
+ * The cluster an alternative is written for: the opportunity's own, or, for
+ * one from the per-prompt generator, the cluster its prompt is in today.
+ */
+async function alternativeCluster(opp) {
+  if (opp.cluster_id) return opp.cluster_id;
+  return opp.prompt_id ? promptClusterId(opp.prompt_id) : null;
+}
+
+/**
+ * POST /api/content/:id/alternative
+ * "Another angle" (CONTENT-006): one more opportunity for the same need with
+ * a different angle, optionally steered by `direction`. It stands beside the
+ * original (source_data.alternativeOf), uses one quota slot (handed back on
+ * failure) and skips the duplicate check, since the user asked for it.
+ * Body: { direction?, idempotencyKey }. Returns { jobId } (202); 409
+ * 'no_cluster' when the prompt isn't in any cluster; 429 'quota_exhausted'.
+ */
+router.post('/:id/alternative', requireFeature('content_optimization'), async (req, res) => {
+  const parsed = alternativeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Invalid request', details: parsed.error.issues });
+  }
+  const { direction, idempotencyKey } = parsed.data;
+
+  try {
+    const opp = await assertOpportunityAccess(req.params.id, req.user.id);
+    const previous = await startedJob(opp.brand_id, idempotencyKey);
+    if (previous) return res.status(202).json({ jobId: previous.id });
+
+    const clusterId = await alternativeCluster(opp);
+    if (!clusterId) {
+      return res.status(409).json({
+        error: 'no_cluster',
+        message:
+          "This opportunity's prompt isn't grouped yet, so there's no need to write another angle for.",
+      });
+    }
+
+    const allowance = await requestAllowance(await getOrgIdForUser(req.user.id));
+    if (allowance.max <= 0) return quotaExhausted(res, allowance);
+
+    // The model sees the original as users read it.
+    const readable = cleanStoredOpportunity(opp, await competitorNames(opp.brand_id));
+    const request = {
+      count: 1,
+      idea: direction || null,
+      alternativeOf: {
+        id: opp.id,
+        title: readable.title,
+        description: readable.description ?? null,
+        decision: opp.decision ?? null,
+        clusterId,
+      },
+      idempotencyKey,
+    };
+    const job = await createJob({
+      type: 'content',
+      brandId: opp.brand_id,
+      data: { brandId: opp.brand_id, model: null, request },
+      maxAttempts: 2,
+    });
+    runContentJob(job.id, req.app.get('io'));
+
+    return res.status(202).json({ jobId: job.id });
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        error: 'plan_limit',
+        message: error.message,
+      });
+    }
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    req.log.error({ err: error }, 'alternative opportunity error');
+    return res.status(500).json({ error: 'Failed to start generation' });
+  }
+});
+
+/**
+ * GET /api/content/prompts/:promptId/suggestion
+ * The prompt's open content opportunity, if any: { existingId } (or null).
+ * The row menu asks once the month's quota is used up, so a prompt that
+ * already has a suggestion can still open it (PROMPT-006).
+ */
+router.get(
+  '/prompts/:promptId/suggestion',
+  requireFeature('content_optimization'),
+  async (req, res) => {
+    const { promptId } = req.params;
+    try {
+      const [prompt] = await assertPromptAccess(promptId, req.user.id);
+      const existingId = await openOpportunityForPrompt(prompt.prompt_sets.brand_id, promptId);
+      return res.json({ existingId });
+    } catch (error) {
+      if (error.status) return res.status(error.status).json({ error: error.message });
+      req.log.error({ err: error }, 'prompt content suggestion lookup error');
+      return res.status(500).json({ error: 'Failed to look up the suggestion' });
+    }
+  },
+);
+
+const promptSuggestionSchema = z.object({
+  idempotencyKey: z.string().min(8).max(100),
+});
+
+/**
+ * POST /api/content/prompts/:promptId/suggest
+ * "Suggest content" from a prompt's row in the prompts table (PROMPT-006).
+ * Returns { existingId } (200) when an open opportunity already answers the
+ * prompt, so the page offers that one instead of a duplicate. Otherwise it
+ * queues exactly one opportunity for the prompt's cluster, tagged `prompt`,
+ * against the monthly quota (its slot handed back on failure): { jobId }
+ * (202), or 429 'quota_exhausted'. A repeated idempotency key, or a
+ * suggestion for the prompt that is still being written, returns that job.
+ * The job's result carries the new opportunity's id.
+ */
+router.post(
+  '/prompts/:promptId/suggest',
+  requireFeature('content_optimization'),
+  async (req, res) => {
+    const parsed = promptSuggestionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request', details: parsed.error.issues });
+    }
+    const { promptId } = req.params;
+    const { idempotencyKey } = parsed.data;
+
+    try {
+      const [prompt] = await assertPromptAccess(promptId, req.user.id);
+      const { brand_id: brandId, brands } = prompt.prompt_sets;
+
+      const previous = await startedJob(brandId, idempotencyKey);
+      if (previous) return res.status(202).json({ jobId: previous.id });
+
+      // A suggestion still being written is followed, not started twice.
+      const running = await runningSuggestionJob(brandId, promptId);
+      if (running) return res.status(202).json({ jobId: running });
+
+      const existingId = await openOpportunityForPrompt(brandId, promptId);
+      if (existingId) return res.json({ existingId });
+
+      const allowance = await requestAllowance(brands.organization_id);
+      if (allowance.max <= 0) return quotaExhausted(res, allowance);
+
+      const job = await createJob({
+        type: 'content',
+        brandId,
+        data: { brandId, model: null, request: promptSuggestionRequest(promptId, idempotencyKey) },
+        maxAttempts: 2,
+      });
+      runContentJob(job.id, req.app.get('io'));
+
+      return res.status(202).json({ jobId: job.id });
+    } catch (error) {
+      if (error instanceof PlanLimitError) {
+        return res.status(error.statusCode).json({
+          success: false,
+          error: 'plan_limit',
+          message: error.message,
+        });
+      }
+      if (error.status) return res.status(error.status).json({ error: error.message });
+      req.log.error({ err: error }, 'prompt content suggestion error');
+      return res.status(500).json({ error: 'Failed to start generation' });
+    }
+  },
+);
 
 /**
  * GET /api/content/job/:jobId
@@ -365,8 +575,11 @@ router.get('/brand/:brandId', async (req, res) => {
       p_created_to: toBound,
     });
 
-    const [{ data, error: dataError, count }, { data: aggregateData, error: aggregateError }] =
-      await Promise.all([dataQuery, aggregateQuery]);
+    const [
+      { data, error: dataError, count },
+      { data: aggregateData, error: aggregateError },
+      competitors,
+    ] = await Promise.all([dataQuery, aggregateQuery, competitorNames(brandId)]);
 
     if (dataError) {
       throw new Error(dataError.message);
@@ -384,7 +597,7 @@ router.get('/brand/:brandId', async (req, res) => {
     };
 
     return res.json({
-      opportunities: (data || []).map(mapOpportunityRow),
+      opportunities: (data || []).map((row) => mapOpportunityRow(row, competitors)),
 
       total: count || 0,
 
@@ -655,8 +868,11 @@ router.post('/bulk/send-webhook', async (req, res) => {
 
     let sent = 0;
     let failed = 0;
+    // What the workflow receives reads the way the page shows it.
+    const competitors = await competitorNames(brandId);
 
-    for (const opportunity of opportunities) {
+    for (const stored of opportunities) {
+      const opportunity = cleanStoredOpportunity(stored, competitors);
       try {
         let prompt = null;
         if (opportunity.prompt_id) {
@@ -734,7 +950,7 @@ router.post('/bulk/send-webhook', async (req, res) => {
 router.patch('/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, reason } = req.body;
 
     const validStatuses = ['new', 'reviewed', 'sent', 'in_progress', 'done', 'dismissed'];
     if (!validStatuses.includes(status)) {
@@ -743,19 +959,42 @@ router.patch('/:id/status', async (req, res) => {
         .json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
     }
 
-    await assertOpportunityAccess(id, req.user.id);
+    let current = await assertOpportunityAccess(id, req.user.id);
 
-    const { data, error } = await supabaseAdmin
-      .from('content_opportunities')
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single();
+    // Why it was dismissed (CONTENT-006) rides in source_data, which other
+    // writers touch too (an Action Center send, a duplicate merge). The row
+    // is written only if it hasn't changed since it was read; otherwise it is
+    // read again and the change applied once more on the fresh copy.
+    let data = null;
+    let error = null;
+    for (let attempt = 0; attempt < 2 && !data && !error; attempt++) {
+      if (attempt > 0) {
+        const fresh = await supabaseAdmin
+          .from('content_opportunities')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle();
+        if (fresh.error) throw new Error(fresh.error.message);
+        if (!fresh.data) break;
+        current = fresh.data;
+      }
+      const sourceData = sourceDataForStatus(current.source_data, status, reason);
+      let update = supabaseAdmin
+        .from('content_opportunities')
+        .update({
+          status,
+          updated_at: new Date().toISOString(),
+          ...(sourceData ? { source_data: sourceData } : {}),
+        })
+        .eq('id', id);
+      if (sourceData) update = update.eq('updated_at', current.updated_at);
+      ({ data, error } = await update.select().maybeSingle());
+    }
 
     if (error) throw new Error(error.message);
     if (!data) return res.status(404).json({ error: 'Opportunity not found' });
 
-    return res.json(mapOpportunityRow(data));
+    return res.json(mapOpportunityRow(data, await competitorNames(data.brand_id)));
   } catch (error) {
     req.log.error({ err: error }, 'update opportunity status error');
     return res.status(error.status || 500).json({
@@ -773,7 +1012,9 @@ router.post('/:id/send-webhook', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const opportunity = await assertOpportunityAccess(id, req.user.id);
+    // What the workflow receives reads the way the page shows it.
+    const stored = await assertOpportunityAccess(id, req.user.id);
+    const opportunity = cleanStoredOpportunity(stored, await competitorNames(stored.brand_id));
 
     const { data: webhookConfig } = await supabaseAdmin
       .from('webhook_configs')
@@ -1067,6 +1308,11 @@ Searches AI engines ran while answering them: ${(sourceData.queries?.top || []).
 `
     : '';
 
+  // The brief is written from the text as users read it, not leaked indexes.
+  const readable = cleanStoredOpportunity(
+    opportunity,
+    (competitors || []).map((c) => c.name),
+  );
   const userPrompt = `Brand: ${brand?.name || 'Unknown'}
 Industry: ${brand?.industry || 'Not specified'}
 Description: ${brand?.description || 'N/A'}
@@ -1074,8 +1320,8 @@ Domain: ${(domains || []).map((d) => d.domain).join(', ') || 'N/A'}
 Competitors: ${(competitors || []).map((c) => `${c.name} (${c.domain})`).join(', ') || 'None'}
 
 Opportunity:
-- Title: ${opportunity.title}
-- Description: ${opportunity.description}
+- Title: ${readable.title}
+- Description: ${readable.description}
 - Type: ${opportunity.type}
 - Impact: ${opportunity.impact}
 - Score: ${opportunity.opportunity_score}
@@ -1258,7 +1504,10 @@ router.post('/:id/action', async (req, res) => {
   try {
     const opp = await assertOpportunityAccess(req.params.id, req.user.id);
     const assetKey = typeof req.body?.assetKey === 'string' ? req.body.assetKey : null;
-    const result = await sendToActionCenter(opp, { assetKey, userId: req.user.id });
+    // The action's title and assets read the way the page shows them; the
+    // opportunity's own stored text is left as it is.
+    const readable = cleanStoredOpportunity(opp, await competitorNames(opp.brand_id));
+    const result = await sendToActionCenter(opp, { assetKey, userId: req.user.id, readable });
     return res.status(result.created ? 201 : 200).json(result);
   } catch (error) {
     req.log.error({ err: error }, 'send opportunity to action center error');
@@ -1358,7 +1607,7 @@ router.get('/:id', async (req, res) => {
 
     const opp = await assertOpportunityAccess(id, req.user.id);
 
-    return res.json(mapOpportunityRow(opp));
+    return res.json(mapOpportunityRow(opp, await competitorNames(opp.brand_id)));
   } catch (error) {
     req.log.error({ err: error }, 'get opportunity error');
     return res.status(error.status || 500).json({
