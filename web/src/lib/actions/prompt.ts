@@ -748,11 +748,16 @@ export async function setPromptActive(
       ?.brands?.organization_id;
     if (adding > 0) {
       if (!orgId) return { error: 'Prompt not found' };
-      const [plan, usage] = await Promise.all([
-        getOrgPlan(orgId),
-        getOrgLocationUsage(supabase, orgId),
-      ]);
-      const limitError = locationLimitMessage(plan, usage.total, adding);
+      let limitError: string | null;
+      try {
+        const [plan, usage] = await Promise.all([
+          getOrgPlan(orgId),
+          getOrgLocationUsage(supabase, orgId),
+        ]);
+        limitError = locationLimitMessage(plan, usage.total, adding);
+      } catch {
+        return { error: "Couldn't check your plan's prompt limit. Please try again." };
+      }
       if (limitError) return { code: 'plan_limit', error: limitError };
     }
   }

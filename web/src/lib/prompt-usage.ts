@@ -1,8 +1,8 @@
 /**
  * Tracked Prompts usage counter (PROMPT-009): which state the "used / limit"
  * counter is in. The numbers come from getLocationQuota, so the counter shows
- * exactly what the plan-limit guard enforces (tracked prompt locations,
- * org-wide, paused prompts included — see prompt-locations.ts).
+ * exactly what the plan-limit guard enforces (active prompt locations,
+ * org-wide; paused prompts don't count — see prompt-locations.ts).
  */
 
 export type PromptUsageState = 'unlimited' | 'normal' | 'warning' | 'full' | 'over';

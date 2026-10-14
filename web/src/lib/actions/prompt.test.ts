@@ -5,11 +5,12 @@ import { PLANS, type Plan } from '@/config/plans';
  * setPromptActive meters resuming like adding (00128): only active prompts
  * count toward the plan, so a paused prompt's locations come back when it is
  * resumed. A refusal comes back as a value and nothing is written; pausing is
- * always allowed.
+ * always allowed. Location edits on a paused prompt aren't metered until then.
  */
 
-let promptRow: { regions: string[]; is_active: boolean };
+let promptRow: { regions: string[]; is_active: boolean } | null;
 let usedLocations = 0;
+let usageFails = false;
 let plan: Plan;
 let writes: unknown[] = [];
 
@@ -23,20 +24,23 @@ vi.mock('@/lib/guards/plan-guard', () => ({
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
-    rpc: async () => ({
-      data: [{ brand_id: 'b1', locations: usedLocations }],
-      error: null,
-    }),
+    rpc: async () =>
+      usageFails
+        ? { data: null, error: { message: 'rpc failed' } }
+        : { data: [{ brand_id: 'b1', locations: usedLocations }], error: null },
     from: () => ({
       select: () => ({
         eq: () => ({
-          single: async () => ({
-            data: { ...promptRow, prompt_sets: { brands: { organization_id: 'org-1' } } },
-            error: null,
-          }),
+          single: async () =>
+            promptRow
+              ? {
+                  data: { ...promptRow, prompt_sets: { brands: { organization_id: 'org-1' } } },
+                  error: null,
+                }
+              : { data: null, error: { message: 'no rows' } },
         }),
       }),
-      update: (payload: { is_active: boolean }) => {
+      update: (payload: Record<string, unknown>) => {
         writes.push(payload);
         return {
           eq: () => ({
@@ -53,7 +57,7 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { setPromptActive } = await import('./prompt');
+const { setPromptActive, updatePromptLocations } = await import('./prompt');
 
 const capped = (maxPrompts: number): Plan => ({
   ...PLANS.starter,
@@ -63,6 +67,7 @@ const capped = (maxPrompts: number): Plan => ({
 describe('setPromptActive', () => {
   beforeEach(() => {
     writes = [];
+    usageFails = false;
     plan = capped(50);
   });
 
@@ -115,5 +120,51 @@ describe('setPromptActive', () => {
     const result = await setPromptActive('p1', true);
 
     expect(result).toMatchObject({ prompt: { isActive: true } });
+  });
+
+  it('returns an error and writes nothing for a prompt it cannot see', async () => {
+    promptRow = null;
+
+    const result = await setPromptActive('p1', true);
+
+    expect(result).toEqual({ error: 'Prompt not found' });
+    expect(writes).toEqual([]);
+  });
+
+  it('returns a failed limit check as a value instead of throwing', async () => {
+    promptRow = { regions: ['US'], is_active: false };
+    usageFails = true;
+
+    const result = await setPromptActive('p1', true);
+
+    expect(result).toEqual({ error: "Couldn't check your plan's prompt limit. Please try again." });
+    expect(writes).toEqual([]);
+  });
+});
+
+describe('updatePromptLocations on paused prompts', () => {
+  beforeEach(() => {
+    writes = [];
+    usageFails = false;
+    plan = capped(50);
+    usedLocations = 50;
+  });
+
+  it('lets a paused prompt gain locations at the limit; they count when it is resumed', async () => {
+    promptRow = { regions: ['US'], is_active: false };
+
+    const result = await updatePromptLocations('p1', ['US', 'DE', 'TR']);
+
+    expect(result).toMatchObject({ prompt: { regions: ['US', 'DE', 'TR'] } });
+    expect(writes).toEqual([{ regions: ['US', 'DE', 'TR'] }]);
+  });
+
+  it('still meters an active prompt gaining locations', async () => {
+    promptRow = { regions: ['US'], is_active: true };
+
+    const result = await updatePromptLocations('p1', ['US', 'DE']);
+
+    expect(result).toMatchObject({ code: 'plan_limit' });
+    expect(writes).toEqual([]);
   });
 });

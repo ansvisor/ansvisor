@@ -881,7 +881,11 @@ function EditPromptDialog({
       if (isActive !== prompt.isActive) {
         const result = await setPromptActive(prompt.id, isActive);
         if ('error' in result) {
-          setError(result.error);
+          setError(
+            result.code === 'plan_limit'
+              ? result.error
+              : 'Failed to update prompt. Please try again.',
+          );
           return;
         }
         activeChanged = true;

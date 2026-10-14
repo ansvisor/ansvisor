@@ -387,8 +387,10 @@ export default function PromptsPage() {
           return;
         }
         // Pausing frees room and resuming takes it, so the location pickers
-        // need the new usage figure.
-        setLocationQuota(await getLocationQuota(brandId).catch(() => null));
+        // need the new usage figure. A failed refresh keeps the last one
+        // rather than leaving the pickers uncapped.
+        const quota = await getLocationQuota(brandId).catch(() => null);
+        if (quota) setLocationQuota(quota);
       } catch {
         updatePromptLocal(prompt.id, { isActive: prompt.isActive });
         toast.error('Failed to update prompt');
