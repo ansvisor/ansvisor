@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createTranslator } from 'next-intl';
 import { describe, expect, it } from 'vitest';
@@ -195,16 +195,29 @@ describe('eventTaskText', () => {
 });
 
 /**
- * Every event the server actions write to an action's trail is a line in the
- * drawer's History tab, and an event with no message there shows next-intl's
- * missing-message text instead. The events are read from the server actions'
- * own source, so one added there without copy fails here, not in the drawer.
+ * Every event written to an action's trail is a line in the drawer's History
+ * tab, and an event with no message there shows next-intl's missing-message
+ * text instead. The events are read from the source that writes them — the
+ * server actions and the Node server's Action Center engine — so one added
+ * there without copy fails here, not in the drawer.
  */
 describe('History events', () => {
   const source = readFileSync(join(__dirname, '../actions/action-center.ts'), 'utf8');
   const logged = [...source.matchAll(/logEvent\(\s*\w+,\s*\w+,\s*'(\w+)'/g)].map(
     (match) => match[1],
   );
+
+  // The engine writes through a `logEvent(actionId, 'event', …)` helper or
+  // inserts the row itself with `event: 'event'`.
+  const engineDir = join(__dirname, '../../../../server/src/lib/action-center');
+  const written = readdirSync(engineDir, { recursive: true, encoding: 'utf8' })
+    .filter((file) => file.endsWith('.js') && !file.endsWith('.test.js'))
+    .flatMap((file) => [
+      ...readFileSync(join(engineDir, file), 'utf8').matchAll(
+        /logEvent\(\s*[\w.]+,\s*'(\w+)'|event: '(\w+)'/g,
+      ),
+    ])
+    .map((match) => match[1] ?? match[2]);
 
   const tPage = createTranslator({
     locale: 'en',
@@ -223,9 +236,10 @@ describe('History events', () => {
     improved: 1,
     measurable: 2,
     title: 'Ask the agency',
+    outcome: 'improved',
   };
-  const eventText = (event: string) =>
-    tPage(`drawer.events.${event}` as Parameters<typeof tPage>[0], values);
+  const eventText = (event: string, data: Partial<typeof values> = {}) =>
+    tPage(`drawer.events.${event}` as Parameters<typeof tPage>[0], { ...values, ...data });
 
   /** A pattern that stopped matching would pass every check below by
    *  checking nothing. */
@@ -235,8 +249,41 @@ describe('History events', () => {
     );
   });
 
-  it.each(logged)('has a History line for %s', (event) => {
+  it('reads the events the Node server writes', () => {
+    expect(written).toEqual(
+      expect.arrayContaining([
+        'created',
+        'signals_linked',
+        'task_ran',
+        'task_run_failed',
+        'task_awaiting_approval',
+        'position_outcome_recorded',
+        'outcome_measured',
+      ]),
+    );
+  });
+
+  it.each([...new Set([...logged, ...written])])('has a History line for %s', (event) => {
     expect(() => eventText(event)).not.toThrow();
+  });
+
+  /** The validation sweep records one of four verdicts, and each reads in
+   *  words — "after this action closed", never "because of it". */
+  it.each([
+    ['improved', 'Result: metrics improved after this action closed'],
+    ['declined', 'Result: metrics declined after this action closed'],
+    ['no_meaningful_change', 'Result: no meaningful change in metrics after this action closed'],
+    ['not_measurable', 'Result: could not be measured'],
+  ])('says what the measurement found: %s', (outcome, text) => {
+    expect(eventText('outcome_measured', { outcome })).toBe(text);
+  });
+
+  /** A verdict this build has no words for still reads as a result. */
+  it('reads an unknown or missing verdict as a plain result', () => {
+    expect(eventText('outcome_measured', { outcome: 'pending_measurement' })).toBe(
+      'Result measured',
+    );
+    expect(eventText('outcome_measured', { outcome: '' })).toBe('Result measured');
   });
 
   /** A task someone added or renamed is named as they typed it. */
