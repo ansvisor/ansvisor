@@ -84,7 +84,12 @@ import {
   Lightbulb,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { PlatformDotState, PromptPositionCell } from '@/lib/prompt-position-summary';
+import type {
+  PlatformDot,
+  PlatformDotState,
+  PromptPositionCell,
+} from '@/lib/prompt-position-summary';
+import { mentionRateLabel } from '@/lib/prompt-improve';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
   startPromptVolumeAnalysis,
@@ -2382,11 +2387,7 @@ function PositionValue({ cell }: { cell: PromptPositionCell | undefined }) {
     return <span className="text-xs text-muted-foreground">—</span>;
   }
   const delta = cell.delta;
-  const breakdown = cell.dots
-    .map(
-      (d) => `${d.label}: ${DOT_LABEL[d.state]}${d.avg !== null ? ` (#${d.avg.toFixed(1)})` : ''}`,
-    )
-    .join('\n');
+  const breakdown = cell.dots.map((d) => `${d.label}: ${dotDetail(d)}`).join('\n');
   return (
     <span className="inline-flex items-center gap-1 tabular-nums" title={breakdown}>
       <span className="text-sm font-semibold">#{cell.avg.toFixed(1)}</span>
@@ -2412,6 +2413,12 @@ const DOT_LABEL: Record<PlatformDotState, string> = {
   missing: 'not mentioned',
   no_runs: 'no runs',
 };
+
+/** Like the Improve tab, "not mentioned" says how often it was. */
+function dotDetail(d: PlatformDot): string {
+  if (d.state === 'missing') return `${DOT_LABEL.missing} · ${mentionRateLabel(d)}`;
+  return `${DOT_LABEL[d.state]}${d.avg !== null ? ` (#${d.avg.toFixed(1)})` : ''}`;
+}
 
 /** How long a row deleted from its menu can be restored (PROMPT-006). */
 const DELETE_UNDO_MS = 10_000;

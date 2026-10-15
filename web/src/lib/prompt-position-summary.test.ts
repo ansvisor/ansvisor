@@ -93,6 +93,47 @@ describe('buildPositionCell', () => {
     expect(cell.lateOrMissing).toBe(true);
   });
 
+  test('mentioned in under half the runs is missing, like the Improve tab, however high it ranked', () => {
+    // #1 in 8 of 120 answers: the Improve tab calls this "Not mentioned".
+    const cell = buildPositionCell(
+      [
+        row('chatgpt-web', {
+          runs: 120,
+          mentionAnswers: 8,
+          positionSum: 8,
+          positionCount: 8,
+          entitySum: 40,
+          entityCount: 8,
+        }),
+      ],
+      [],
+      platforms.slice(0, 1),
+    );
+    expect(cell.dots).toEqual([
+      {
+        id: 'chatgpt-web',
+        label: 'ChatGPT',
+        state: 'missing',
+        avg: null,
+        runs: 120,
+        mentionedRuns: 8,
+      },
+    ]);
+    expect(cell.lateOrMissing).toBe(true);
+    // The average stays the Positions panel's.
+    expect(cell.avg).toBe(1);
+  });
+
+  test('mentioned in exactly half the runs counts as mentioned', () => {
+    const cell = buildPositionCell(
+      [row('chatgpt-web', { runs: 4, mentionAnswers: 2, positionSum: 2, positionCount: 2 })],
+      [],
+      platforms.slice(0, 1),
+    );
+    expect(cell.dots[0].state).toBe('early');
+    expect(cell.lateOrMissing).toBe(false);
+  });
+
   test('not late or missing when every tracked platform is early or has no runs', () => {
     const cell = buildPositionCell(
       [row('chatgpt-web', { positionSum: 1, positionCount: 1 })],

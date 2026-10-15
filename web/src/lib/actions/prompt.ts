@@ -971,7 +971,13 @@ export async function getPromptsPageData(
       to: opts?.to,
       region: opts?.region,
     }),
-    getPositionRows(brandId, window, opts?.region),
+    // The Positions column scans every answer in the window and the one
+    // before it. A timeout, or the web deploying before 00123 is applied,
+    // shows — in that column instead of failing the table.
+    getPositionRows(brandId, window, opts?.region).catch((err) => {
+      console.error('[prompts] position summaries fetch failed, rendering without them:', err);
+      return noPositionRows();
+    }),
     getPromptVolumes(brandId).then(
       (r) => ({ volumes: r.volumes, quota: r.quota ?? null, degraded: false }),
       (err) => {
@@ -1014,6 +1020,17 @@ export async function getPromptsPageData(
   };
 }
 
+interface PositionRows {
+  included: { id: string; label: string }[];
+  current: Map<string, PlatformPositionRow[]>;
+  previous: Map<string, PlatformPositionRow[]>;
+}
+
+/** No position data: every prompt's Positions cell reads —. */
+function noPositionRows(): PositionRows {
+  return { included: [], current: new Map(), previous: new Map() };
+}
+
 /**
  * Per-prompt, per-engine position sums for the Positions column: the window
  * on screen and the period of the same length just before it, for the trend.
@@ -1023,18 +1040,14 @@ async function getPositionRows(
   brandId: string,
   window: { from: string; to?: string },
   region?: string,
-): Promise<{
-  included: { id: string; label: string }[];
-  current: Map<string, PlatformPositionRow[]>;
-  previous: Map<string, PlatformPositionRow[]>;
-}> {
+): Promise<PositionRows> {
   const supabase = await createClient();
   const { data: brand } = await supabase
     .from('brands')
     .select('organization_id')
     .eq('id', brandId)
     .maybeSingle();
-  if (!brand?.organization_id) return { included: [], current: new Map(), previous: new Map() };
+  if (!brand?.organization_id) return noPositionRows();
 
   const before = previousWindow(window);
   const [plan, current, previous] = await Promise.all([

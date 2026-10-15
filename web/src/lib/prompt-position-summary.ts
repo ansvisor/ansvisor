@@ -10,6 +10,7 @@
  */
 
 import { positionTone } from '@/lib/position-tone';
+import { MIN_MENTION_RATE } from '@/lib/prompt-improve';
 
 /** One platform's sums for one prompt over a window. */
 export interface PlatformPositionRow {
@@ -26,7 +27,8 @@ export interface PlatformPositionRow {
  * - early     mentioned, in the first third of the brands named
  * - late      mentioned, but further down
  * - mentioned mentioned, with no stored position
- * - missing   tracked, never mentioned
+ * - missing   mentioned in fewer than half the runs, or never: the Improve
+ *             tab's "Not mentioned" (MIN_MENTION_RATE)
  * - no_runs   nothing tracked in the window
  */
 export type PlatformDotState = 'early' | 'late' | 'mentioned' | 'missing' | 'no_runs';
@@ -37,6 +39,9 @@ export interface PlatformDot {
   state: PlatformDotState;
   /** The platform's average position; null when not mentioned or unknown. */
   avg: number | null;
+  runs: number;
+  /** Runs that mention the brand, for "mentioned in 8 of 120 runs". */
+  mentionedRuns: number;
 }
 
 export interface PromptPositionCell {
@@ -59,7 +64,8 @@ function average(rows: PlatformPositionRow[]): number | null {
 
 function dotState(row: PlatformPositionRow | undefined): PlatformDotState {
   if (!row || row.runs === 0) return 'no_runs';
-  if (row.mentionAnswers === 0) return 'missing';
+  // Same rule as the Improve tab: #1 in 8 of 120 answers is mostly missing.
+  if (row.mentionAnswers < row.runs * MIN_MENTION_RATE) return 'missing';
   if (row.positionCount === 0) return 'mentioned';
   const rank = row.positionSum / row.positionCount;
   const total = row.entityCount > 0 ? row.entitySum / row.entityCount : rank;
@@ -83,11 +89,17 @@ export function buildPositionCell(
   const prev = average(before);
   const dots = platforms.map((p) => {
     const row = now.find((r) => r.platform === p.id);
+    const state = dotState(row);
     return {
       id: p.id,
       label: p.label,
-      state: dotState(row),
-      avg: row && row.positionCount > 0 ? round1(row.positionSum / row.positionCount) : null,
+      state,
+      avg:
+        row && state !== 'missing' && row.positionCount > 0
+          ? round1(row.positionSum / row.positionCount)
+          : null,
+      runs: row?.runs ?? 0,
+      mentionedRuns: row?.mentionAnswers ?? 0,
     };
   });
   return {
