@@ -858,7 +858,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'list_actions',
     {
       description:
-        'List the Action Center actions for a brand: what the product thinks should be done about its AI visibility. Each action was consolidated from one or more detected signals and carries a task plan. Returns category, kind, impact, priority (a 0–100 score, its level — critical, high, medium or low — and the facts it rests on; null until scored), status, outcome, assignee, due date and task progress, most recently updated first, or highest priority first with sort "priority". `kind` is an opaque definition id (e.g. "close_competitor_gap"); the action payload with the specifics is on get_action. Use this to see open work ("what should we do next?") or to check what is in progress.',
+        'List the Action Center actions for a brand: what the product thinks should be done about its AI visibility. Each action was consolidated from one or more detected signals and carries a task plan. Returns category, kind, impact, priority (a 0–100 score, its level — critical, high, medium or low — and the facts it rests on; null until scored), status, outcome, assignee, due date and task progress, highest priority first (unscored last), or most recently updated first with sort "updated". `kind` is an opaque definition id (e.g. "close_competitor_gap"); the action payload with the specifics is on get_action. Use this to see open work ("what should we do next?") or to check what is in progress.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         status: z
@@ -880,7 +880,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           .enum(['updated', 'priority'])
           .optional()
           .describe(
-            'Order: "updated" (default) most recently updated first; "priority" highest priority score first — the order to work on them.',
+            'Order: "priority" (default) highest priority score first — the order to work on them; "updated" most recently updated first.',
           ),
       },
     },

@@ -616,12 +616,12 @@
         "opportunitiesSub": "High potential to grow",
         "inProgress": "In Progress",
         "inProgressSub": "Actions currently running",
-        "impact": "Potential Impact",
-        "impactSub": "Across open actions"
+        "priority": "Highest Priority",
+        "prioritySub": "Across open actions"
       },
       "allActions": "All",
       "filters": {
-        "impact": "Impact",
+        "priority": "Priority",
         "status": "Status",
         "assignee": "Assignee",
         "all": "All",
@@ -632,15 +632,13 @@
       "sort": {
         "label": "Sort",
         "priority": "Priority",
-        "impact": "Impact",
         "newest": "Newest",
         "due_date": "Due date",
         "updated": "Recently updated"
       },
       "table": {
-        "priority": "Priority",
+        "priority": "Priority Score",
         "action": "Action",
-        "impact": "Impact",
         "status": "Status",
         "assignee": "Assignee",
         "dueDate": "Due date",
@@ -653,11 +651,6 @@
         "on_hold": "On Hold",
         "completed": "Completed",
         "dismissed": "Dismissed"
-      },
-      "impact": {
-        "high": "High",
-        "medium": "Medium",
-        "low": "Low"
       },
       "taskProgress": "{completed}/{total} tasks",
       "tags": {
@@ -697,7 +690,6 @@
           "low": "Low"
         },
         "notScored": "Not scored yet",
-        "levelTitle": "{level} priority",
         "why": "Why this priority?",
         "reason": {
           "change": {
@@ -774,6 +766,7 @@
         "action": "Action",
         "title": "Title",
         "priority": "Priority",
+        "priorityValue": "{score} ({level})",
         "priorityWhy": "Why this priority",
         "category": "Category",
         "impact": "Impact",
@@ -1455,7 +1448,7 @@
       "table": {
         "action": "Action",
         "type": "Type",
-        "impact": "Impact",
+        "priority": "Priority Score",
         "affected": "Affected",
         "result": "Result",
         "status": "Status",
@@ -1486,12 +1479,12 @@
       "sort": {
         "newest": "Newest",
         "oldest": "Oldest",
-        "impact": "Impact"
+        "priority": "Priority"
       },
       "filters": {
         "status": "Status",
         "type": "Type",
-        "impact": "Impact",
+        "priority": "Priority",
         "source": "Source",
         "sort": "Sort",
         "all": "All",

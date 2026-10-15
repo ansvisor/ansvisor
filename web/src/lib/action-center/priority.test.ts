@@ -3,11 +3,12 @@ import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import type { ActionItem } from '@/lib/actions/action-center';
 import {
-  compareImpact,
   comparePriority,
+  highestPriorityLevel,
   parsePriorityReason,
   priorityLevelOf,
   priorityReasonText,
+  storedPriorityLevel,
   topActionIds,
   type PriorityReason,
 } from './priority';
@@ -59,11 +60,6 @@ describe('comparePriority', () => {
     ];
     expect(list.sort(comparePriority).map((a) => a.id)).toEqual(['high', 'medium']);
   });
-
-  it('keeps the Impact sort on impact, whatever the score', () => {
-    const list = [action({ id: 'p94', priorityScore: 94 }), action({ id: 'high', impact: 'high' })];
-    expect(list.sort(compareImpact).map((a) => a.id)).toEqual(['high', 'p94']);
-  });
 });
 
 describe('topActionIds', () => {
@@ -113,6 +109,20 @@ describe('the age of the evidence', () => {
 describe('priorityLevelOf', () => {
   it('reads a level from a score, as the server does', () => {
     expect([95, 80, 60, 10].map(priorityLevelOf)).toEqual(['critical', 'high', 'medium', 'low']);
+  });
+
+  it("keeps the stored level, and reads the score's when that is unknown", () => {
+    expect(storedPriorityLevel('critical', 80)).toBe('critical');
+    expect(storedPriorityLevel('urgent', 80)).toBe('high');
+    expect(storedPriorityLevel(null, null)).toBeNull();
+  });
+});
+
+describe('highestPriorityLevel', () => {
+  it('names the highest level, for the summary cards', () => {
+    expect(highestPriorityLevel(['medium', null, 'high', 'low'])).toBe('high');
+    expect(highestPriorityLevel([null])).toBeNull();
+    expect(highestPriorityLevel([])).toBeNull();
   });
 });
 

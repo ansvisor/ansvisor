@@ -21,9 +21,8 @@ import {
 import { SIGNAL_ROW_COLUMNS, mapSignalRows, type Signal, type SignalRow } from '@/lib/signals/map';
 import type { KpiTimeframe } from '@/lib/kpis/registry';
 import {
-  isPriorityLevel,
   parsePriorityReason,
-  priorityLevelOf,
+  storedPriorityLevel,
   type PriorityLevel,
   type PriorityReason,
 } from '@/lib/action-center/priority';
@@ -155,11 +154,10 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
     taskCompleted: taskTotals.get(row.id)?.completed ?? 0,
     signalCount: signalCounts.get(row.id) ?? 0,
     priorityScore: row.priority_score === null ? null : Number(row.priority_score),
-    priorityLevel: isPriorityLevel(row.priority_level)
-      ? row.priority_level
-      : row.priority_score === null
-        ? null
-        : priorityLevelOf(Number(row.priority_score)),
+    priorityLevel: storedPriorityLevel(
+      row.priority_level,
+      row.priority_score === null ? null : Number(row.priority_score),
+    ),
     priorityReason: parsePriorityReason(row.priority_reason, {
       scoredAt: row.priority_updated_at,
     }),

@@ -165,10 +165,6 @@ export function ActionDrawer({
             {action.priorityScore !== null && (
               <PriorityBadge score={action.priorityScore} level={action.priorityLevel} />
             )}
-            <span className="flex items-center gap-1.5 text-muted-foreground">
-              <ImpactDots impact={action.impact} />
-              {t(`impact.${action.impact}`)}
-            </span>
             <span className="ml-auto text-muted-foreground">
               {t('drawer.actionId')}: AC-{action.actionNo}
             </span>

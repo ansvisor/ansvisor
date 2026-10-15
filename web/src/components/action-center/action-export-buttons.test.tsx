@@ -160,7 +160,9 @@ describe('ActionExportButtons', () => {
     await act(async () => button('Copy Data').click());
     const shown = document.querySelector('textarea')?.value ?? '';
     expect(shown).toMatch(/^# Recover lost visibility \(AC-52\)\n/);
-    expect(shown).toContain('Priority: 84 · Category: Recover');
+    // The priority stands where impact used to: impact is one of its factors.
+    expect(shown).toContain('Priority: 84 (High) · Category: Recover · Status:');
+    expect(shown).not.toContain('Impact:');
     expect(shown).toContain(
       'Why this priority: A sharp drop on 3 high-demand prompts 2 days ago — commercial intent, previously visible.',
     );

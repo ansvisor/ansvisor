@@ -27,7 +27,6 @@ import type { ActionItem } from '@/lib/actions/action-center';
 import type { ActionCategory, ActionKind, ActionStatus } from '@/lib/action-center/registry';
 import { actionContextTags, actionTexts } from '@/lib/action-center/display';
 import type { PriorityLevel } from '@/lib/action-center/priority';
-import { ImpactDots } from './signal-table';
 import { formatRelative } from '@/lib/format-relative';
 import { cn } from '@/lib/utils';
 
@@ -101,9 +100,9 @@ export const PRIORITY_BADGE: Record<PriorityLevel, string> = {
 };
 
 /**
- * The priority score alone (AC-006), coloured by its level; the level is
- * named on hover and to screen readers, so "High" is not shown twice beside
- * the Impact column. A dash until the server has scored the action.
+ * The priority score (AC-006), coloured by its level, and the level's name:
+ * "84 High". It stands where Impact used to, since the score weighs impact
+ * in. A dash until the server has scored the action.
  */
 export function PriorityBadge({
   score,
@@ -120,16 +119,13 @@ export function PriorityBadge({
       </span>
     );
   }
-  const name = t('levelTitle', { level: t(`levels.${level}`) });
   return (
-    <Badge
-      variant="outline"
-      title={name}
-      className={cn('font-semibold tabular-nums', PRIORITY_BADGE[level])}
-    >
-      {score}
-      <span className="sr-only">{name}</span>
-    </Badge>
+    <span className="flex items-center gap-1.5">
+      <Badge variant="outline" className={cn('font-semibold tabular-nums', PRIORITY_BADGE[level])}>
+        {score}
+      </Badge>
+      <span className="text-xs">{t(`levels.${level}`)}</span>
+    </span>
   );
 }
 
@@ -168,7 +164,6 @@ export function ActionTable({
           <TableRow>
             <TableHead className="text-xs">{t('table.action')}</TableHead>
             <TableHead className="text-xs">{t('table.priority')}</TableHead>
-            <TableHead className="text-xs">{t('table.impact')}</TableHead>
             <TableHead className="text-xs">{t('table.status')}</TableHead>
             <TableHead className="text-xs">{t('table.assignee')}</TableHead>
             <TableHead className="text-xs">{t('table.dueDate')}</TableHead>
@@ -208,12 +203,6 @@ export function ActionTable({
                 </TableCell>
                 <TableCell>
                   <PriorityBadge score={action.priorityScore} level={action.priorityLevel} />
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs">{t(`impact.${action.impact}`)}</span>
-                    <ImpactDots impact={action.impact} />
-                  </div>
                 </TableCell>
                 <TableCell>
                   <ActionStatusBadge status={action.status} />

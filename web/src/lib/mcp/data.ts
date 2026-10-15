@@ -2525,7 +2525,10 @@ export interface ListActionsParams {
   status?: string;
   category?: string;
   limit?: number;
-  /** `updated` (default): most recently updated first; `priority`: highest priority first. */
+  /**
+   * `priority` (default): highest priority score first, unscored last — the
+   * order the app lists them in; `updated`: most recently updated first.
+   */
   sort?: 'updated' | 'priority';
 }
 
@@ -2543,11 +2546,11 @@ export async function listActionsFor(
     )
     .eq('brand_id', params.brandId);
   query =
-    params.sort === 'priority'
-      ? query
+    params.sort === 'updated'
+      ? query.order('updated_at', { ascending: false })
+      : query
           .order('priority_score', { ascending: false, nullsFirst: false })
-          .order('updated_at', { ascending: false })
-      : query.order('updated_at', { ascending: false });
+          .order('updated_at', { ascending: false });
   query = query.limit(limit);
   if (params.status) query = query.eq('status', params.status);
   if (params.category) query = query.eq('category', params.category);

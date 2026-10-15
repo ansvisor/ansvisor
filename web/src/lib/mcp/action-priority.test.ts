@@ -90,16 +90,16 @@ describe('listActionsFor', () => {
       { score: 94, level: 'critical', reason: { change: 'lost', demand: 'high' } },
       null,
     ]);
-    // Most recently updated first, as before.
-    expect(orders).toEqual([['updated_at', { ascending: false }]]);
-  });
-
-  it('lists the highest priority first when asked, unscored ones last', async () => {
-    await listActionsFor(auth, { brandId: 'brand-1', sort: 'priority' });
+    // Highest priority first, unscored ones last, as the app lists them.
     expect(orders).toEqual([
       ['priority_score', { ascending: false, nullsFirst: false }],
       ['updated_at', { ascending: false }],
     ]);
+  });
+
+  it('lists the most recently updated first when asked', async () => {
+    await listActionsFor(auth, { brandId: 'brand-1', sort: 'updated' });
+    expect(orders).toEqual([['updated_at', { ascending: false }]]);
   });
 });
 

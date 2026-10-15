@@ -22,17 +22,17 @@ import {
   HISTORY_PAGE_SIZE,
   HISTORY_SORTS,
   HISTORY_STATUSES,
+  compareHistory,
   summarize,
   type ActionHistoryItem,
   type HistorySort,
 } from '@/lib/action-center/history';
 import {
   ACTION_CATEGORIES,
-  ACTION_IMPACTS,
   type ActionCategory,
-  type ActionImpact,
   type ActionStatus,
 } from '@/lib/action-center/registry';
+import { PRIORITY_LEVELS, type PriorityLevel } from '@/lib/action-center/priority';
 import { SIGNAL_SOURCES, type SignalSource } from '@/lib/signals/registry';
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
 import { HistoryTable } from '@/components/action-center/history-table';
@@ -68,7 +68,7 @@ export default function ActionCenterHistoryPage() {
   const [range, setRange] = useState<RangePreset>('30d');
   const [status, setStatus] = useState<ActionStatus | 'all'>('all');
   const [type, setType] = useState<ActionCategory | 'all'>('all');
-  const [impact, setImpact] = useState<ActionImpact | 'all'>('all');
+  const [priority, setPriority] = useState<PriorityLevel | 'all'>('all');
   const [source, setSource] = useState<SignalSource | 'all'>('all');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<HistorySort>('newest');
@@ -82,7 +82,9 @@ export default function ActionCenterHistoryPage() {
     setRange(readUrlChoice('range', RANGE_PRESETS, '30d'));
     setStatus(readUrlChoice<ActionStatus | 'all'>('status', ['all', ...HISTORY_STATUSES], 'all'));
     setType(readUrlChoice<ActionCategory | 'all'>('type', ['all', ...ACTION_CATEGORIES], 'all'));
-    setImpact(readUrlChoice<ActionImpact | 'all'>('impact', ['all', ...ACTION_IMPACTS], 'all'));
+    setPriority(
+      readUrlChoice<PriorityLevel | 'all'>('priority', ['all', ...PRIORITY_LEVELS], 'all'),
+    );
     setSource(readUrlChoice<SignalSource | 'all'>('source', ['all', ...SIGNAL_SOURCES], 'all'));
     setSort(readUrlChoice('sort', HISTORY_SORTS, 'newest'));
     setSearch(readUrlParam('q'));
@@ -95,12 +97,12 @@ export default function ActionCenterHistoryPage() {
     const timer = setTimeout(
       () =>
         writeUrlParams(
-          { range, status, type, impact, source, sort, q: search.trim() },
+          { range, status, type, priority, source, sort, q: search.trim() },
           {
             range: '30d',
             status: 'all',
             type: 'all',
-            impact: 'all',
+            priority: 'all',
             source: 'all',
             sort: 'newest',
           },
@@ -108,7 +110,7 @@ export default function ActionCenterHistoryPage() {
       300,
     );
     return () => clearTimeout(timer);
-  }, [urlRead, range, status, type, impact, source, sort, search]);
+  }, [urlRead, range, status, type, priority, source, sort, search]);
 
   const load = useCallback(async () => {
     if (!brandId) {
@@ -137,14 +139,14 @@ export default function ActionCenterHistoryPage() {
   // that now has one page shows nothing and looks like a failure.
   useEffect(() => {
     setPage(1);
-  }, [status, type, impact, source, search, sort, range]);
+  }, [status, type, priority, source, search, sort, range]);
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
     const rows = (items ?? []).filter((item) => {
       if (status !== 'all' && item.status !== status) return false;
       if (type !== 'all' && item.type !== type) return false;
-      if (impact !== 'all' && item.impact !== impact) return false;
+      if (priority !== 'all' && item.priorityLevel !== priority) return false;
       if (source !== 'all' && !item.sources.includes(source)) return false;
       if (needle) {
         // Titles are composed from i18n templates rather than stored, so the
@@ -159,20 +161,8 @@ export default function ActionCenterHistoryPage() {
       return true;
     });
 
-    const impactRank = { high: 0, medium: 1, low: 2 };
-    return rows.sort((a, b) => {
-      const aDate = a.completedAt ?? a.createdAt;
-      const bDate = b.completedAt ?? b.createdAt;
-      switch (sort) {
-        case 'oldest':
-          return aDate.localeCompare(bDate);
-        case 'impact':
-          return impactRank[a.impact] - impactRank[b.impact] || bDate.localeCompare(aDate);
-        default:
-          return bDate.localeCompare(aDate);
-      }
-    });
-  }, [items, status, type, impact, source, search, sort, tTexts]);
+    return rows.sort(compareHistory(sort));
+  }, [items, status, type, priority, source, search, sort, tTexts]);
 
   const summary = useMemo(() => summarize(filtered), [filtered]);
 
@@ -180,12 +170,12 @@ export default function ActionCenterHistoryPage() {
   const visible = filtered.slice((page - 1) * HISTORY_PAGE_SIZE, page * HISTORY_PAGE_SIZE);
 
   const hasActiveFilters =
-    status !== 'all' || type !== 'all' || impact !== 'all' || source !== 'all' || search !== '';
+    status !== 'all' || type !== 'all' || priority !== 'all' || source !== 'all' || search !== '';
 
   const clearFilters = () => {
     setStatus('all');
     setType('all');
-    setImpact('all');
+    setPriority('all');
     setSource('all');
     setSearch('');
   };
@@ -305,10 +295,13 @@ export default function ActionCenterHistoryPage() {
               allLabel={t('filters.all')}
             />
             <FilterSelect
-              label={t('filters.impact')}
-              value={impact}
-              onChange={(v) => setImpact(v as ActionImpact | 'all')}
-              options={ACTION_IMPACTS.map((v) => ({ value: v, label: tActions(`impact.${v}`) }))}
+              label={t('filters.priority')}
+              value={priority}
+              onChange={(v) => setPriority(v as PriorityLevel | 'all')}
+              options={PRIORITY_LEVELS.map((v) => ({
+                value: v,
+                label: tActions(`priority.levels.${v}`),
+              }))}
               allLabel={t('filters.all')}
             />
             <FilterSelect

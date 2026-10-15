@@ -13,8 +13,7 @@ import {
 import { actionTexts } from '@/lib/action-center/display';
 import type { ActionHistoryItem } from '@/lib/action-center/history';
 import type { ActionStatus } from '@/lib/action-center/registry';
-import { ImpactDots } from './signal-table';
-import { ActionIcon } from './action-table';
+import { ActionIcon, PriorityBadge } from './action-table';
 import { cn } from '@/lib/utils';
 
 /** Low-saturation per type, the way the Signals table tints its categories —
@@ -98,7 +97,6 @@ export function HistoryTable({
   onSelect: (item: ActionHistoryItem) => void;
 }) {
   const t = useTranslations('actionCenter.historyPage');
-  const tActions = useTranslations('actionCenter.actionsPage');
   const tTexts = useTranslations('actionCenter.actionTexts');
   const tTypes = useTranslations('actionCenter.actionCategories');
   const tAffected = useTranslations('actionCenter.historyPage.affected');
@@ -110,7 +108,7 @@ export function HistoryTable({
           <TableRow>
             <TableHead className="text-xs">{t('table.action')}</TableHead>
             <TableHead className="text-xs">{t('table.type')}</TableHead>
-            <TableHead className="text-xs">{t('table.impact')}</TableHead>
+            <TableHead className="text-xs">{t('table.priority')}</TableHead>
             <TableHead className="text-xs">{t('table.affected')}</TableHead>
             <TableHead className="text-xs">{t('table.result')}</TableHead>
             <TableHead className="text-xs">{t('table.status')}</TableHead>
@@ -154,10 +152,7 @@ export function HistoryTable({
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs">{tActions(`impact.${item.impact}`)}</span>
-                    <ImpactDots impact={item.impact} />
-                  </div>
+                  <PriorityBadge score={item.priorityScore} level={item.priorityLevel} />
                 </TableCell>
                 <TableCell>
                   <div className="space-y-0.5">

@@ -24,10 +24,9 @@ export interface ActionExport {
   /** "AC-52". */
   ref: string;
   title: string;
-  /** The score ("94") and "Why this priority?"; null before the action is scored. */
+  /** "94 (Critical)" and "Why this priority?"; null before the action is scored. */
   priority: { label: string; why: string } | null;
   category: string;
-  impact: string;
   status: string;
   /** Empty when no one is assigned. */
   assignee: string;
@@ -89,7 +88,6 @@ export interface ExportTexts {
   why: string;
   goal: string;
   category: string;
-  impact: string;
   status: string;
   tags: string[];
   kpis: string[];
@@ -134,7 +132,6 @@ export function buildActionExport(
     title: texts.title,
     priority: texts.priority,
     category: texts.category,
-    impact: texts.impact,
     status: texts.status,
     assignee: action.assignee?.fullName?.trim() ?? '',
     dueDate: day(action.dueDate),
@@ -216,7 +213,6 @@ export function actionMarkdown(a: ActionExport, label: Labels): string {
     facts([
       ['priority', a.priority?.label ?? ''],
       ['category', a.category],
-      ['impact', a.impact],
       ['status', a.status],
     ]),
     facts([
@@ -318,7 +314,6 @@ export function actionWorkbook(a: ActionExport, label: Labels): Sheet<Blob>[] {
     [label('priority'), a.priority?.label ?? ''],
     [label('priorityWhy'), a.priority?.why ?? ''],
     [label('category'), a.category],
-    [label('impact'), a.impact],
     [label('status'), a.status],
     [label('assignee'), a.assignee],
     [label('dueDate'), a.dueDate],

@@ -178,10 +178,14 @@ export function ActionExportButtons({
       detail,
       {
         title: texts.title,
+        // A scored action always has a level: one read from its score if need be.
         priority:
-          action.priorityScore !== null
+          action.priorityScore !== null && action.priorityLevel !== null
             ? {
-                label: String(action.priorityScore),
+                label: t('export.priorityValue', {
+                  score: action.priorityScore,
+                  level: tPriority(`levels.${action.priorityLevel}`),
+                }),
                 why: action.priorityReason
                   ? priorityReasonText(action.priorityReason, tPriority)
                   : '',
@@ -190,7 +194,6 @@ export function ActionExportButtons({
         why: texts.description,
         goal: actionGoal(action.kind, tTexts, action.payload),
         category: tCategories(action.category),
-        impact: t(`impact.${action.impact}`),
         status: t(`status.${action.status}`),
         tags: actionContextTags(action, t),
         kpis: detail.kpis

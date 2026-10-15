@@ -15,9 +15,10 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import type { ActionCategory, ActionImpact } from '@/lib/action-center/registry';
+import type { ActionCategory } from '@/lib/action-center/registry';
 import type { ActionOutcome, ActionStatus, TaskStatus } from '@/lib/action-center/registry';
 import { SIGNAL_SOURCES, type SignalSource } from '@/lib/signals/registry';
+import { storedPriorityLevel } from '@/lib/action-center/priority';
 import {
   HISTORY_STATUSES,
   daysBetween,
@@ -33,7 +34,6 @@ interface HistoryRow {
   action_no: number;
   category: string;
   kind: string;
-  impact: string;
   status: string;
   outcome: string;
   validation: ValidationSnapshot | null;
@@ -43,10 +43,12 @@ interface HistoryRow {
   created_at: string;
   completed_at: string | null;
   updated_at: string;
+  priority_score: number | null;
+  priority_level: string | null;
 }
 
 const HISTORY_COLUMNS =
-  'id, action_no, category, kind, impact, status, outcome, validation, payload, kpi_keys, assignee_id, created_at, completed_at, updated_at';
+  'id, action_no, category, kind, status, outcome, validation, payload, kpi_keys, assignee_id, created_at, completed_at, updated_at, priority_score, priority_level';
 
 /** What the validation sweep stores on an action. */
 interface ValidationSnapshot {
@@ -236,12 +238,14 @@ export async function getActionHistory(
   return rows.map((row) => {
     const triggerSignals = signalsByAction.get(row.id) ?? [];
     const results = resultsFrom(row.validation);
+    const score = row.priority_score === null ? null : Number(row.priority_score);
     return {
       id: row.id,
       actionNo: Number(row.action_no),
       kind: row.kind,
       type: row.category as ActionCategory,
-      impact: row.impact as ActionImpact,
+      priorityScore: score,
+      priorityLevel: storedPriorityLevel(row.priority_level, score),
       status: row.status as ActionStatus,
       outcome: row.outcome as ActionOutcome,
       payload: row.payload ?? {},

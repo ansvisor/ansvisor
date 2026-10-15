@@ -95,11 +95,10 @@ const detail = {
 
 const texts: ExportTexts = {
   title: 'Recover lost citations on 7 prompts',
-  priority: { label: '94', why: 'Lost ground on 7 high-demand prompts 2 days ago.' },
+  priority: { label: '94 (Critical)', why: 'Lost ground on 7 high-demand prompts 2 days ago.' },
   why: '7 prompts lost their citations.',
   goal: 'Citations back on 5 of 7 prompts',
   category: 'Recover',
-  impact: 'High',
   status: 'In progress',
   tags: ['Recover', '1 platform'],
   kpis: ['AI Visibility (target 40)'],
@@ -169,7 +168,7 @@ describe('actionMarkdown', () => {
     expect(actionMarkdown(exported, label)).toBe(
       [
         '# Recover lost citations on 7 prompts (AC-52)',
-        'priority: 94 · category: Recover · impact: High · status: In progress',
+        'priority: 94 (Critical) · category: Recover · status: In progress',
         'assignee: Ada Lovelace · dueDate: 2026-11-09',
         'tags: Recover, 1 platform',
         'priorityWhy: Lost ground on 7 high-demand prompts 2 days ago.',
@@ -241,7 +240,13 @@ describe('actionWorkbook', () => {
       'sheets.signals',
       'sheets.history',
     ]);
-    expect(sheets[0].data).toContainEqual([{ value: 'priority', fontWeight: 'bold' }, '94']);
+    expect(sheets[0].data).toContainEqual([
+      { value: 'priority', fontWeight: 'bold' },
+      '94 (Critical)',
+    ]);
+    expect(sheets[0].data.map((row) => (row[0] as { value: string }).value)).not.toContain(
+      'impact',
+    );
     expect(sheets[0].data).toContainEqual([
       { value: 'Platforms at send time', fontWeight: 'bold' },
       'Gemini · No runs; ChatGPT · Not cited',

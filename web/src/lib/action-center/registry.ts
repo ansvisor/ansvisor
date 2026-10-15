@@ -144,8 +144,6 @@ export const ACTION_OUTCOMES: readonly ActionOutcome[] = [
 /** An action whose cycle is over: it is history, and its kind's slot is free. */
 export const CLOSED_ACTION_STATUSES: readonly ActionStatus[] = ['completed', 'dismissed'];
 
-export const ACTION_IMPACTS: readonly ActionImpact[] = ['high', 'medium', 'low'];
-
 export const TASK_STATUSES: readonly TaskStatus[] = [
   'todo',
   'in_progress',
@@ -235,12 +233,9 @@ export function isActionKind(value: string): value is ActionKind {
   return (ACTION_KINDS as readonly string[]).includes(value);
 }
 
-/** Sort orders the toolbar offers. Priority is impact-weighted evidence. */
-export type ActionSort = 'priority' | 'impact' | 'newest' | 'due_date' | 'updated';
-export const ACTION_SORTS: readonly ActionSort[] = [
-  'priority',
-  'impact',
-  'newest',
-  'due_date',
-  'updated',
-];
+/**
+ * Sort orders the toolbar offers. Priority is the server's score (AC-006),
+ * which already weighs impact in, so impact is not an order of its own.
+ */
+export type ActionSort = 'priority' | 'newest' | 'due_date' | 'updated';
+export const ACTION_SORTS: readonly ActionSort[] = ['priority', 'newest', 'due_date', 'updated'];

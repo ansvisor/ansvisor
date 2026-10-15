@@ -45,6 +45,17 @@ export function priorityLevelOf(score: number): PriorityLevel {
   return 'low';
 }
 
+/** The stored level, or the score's when the stored one is missing or unknown. */
+export function storedPriorityLevel(level: unknown, score: number | null): PriorityLevel | null {
+  if (isPriorityLevel(level)) return level;
+  return score === null ? null : priorityLevelOf(score);
+}
+
+/** The highest of these levels — what a summary card shows; null when none is scored. */
+export function highestPriorityLevel(levels: (PriorityLevel | null)[]): PriorityLevel | null {
+  return PRIORITY_LEVELS.find((level) => levels.includes(level)) ?? null;
+}
+
 const DAY_MS = 86_400_000;
 
 /**
@@ -88,8 +99,11 @@ function daysSince(days: number | null, scoredAt: string | null | undefined, now
 
 const IMPACT_RANK: Record<ActionItem['impact'], number> = { high: 3, medium: 2, low: 1 };
 
-/** Impact first, then weight of evidence, then recency: the order before scores. */
-export function compareImpact(a: ActionItem, b: ActionItem): number {
+/**
+ * Impact first, then weight of evidence, then recency: the order before
+ * scores, kept to break ties and to order actions not scored yet.
+ */
+function compareImpact(a: ActionItem, b: ActionItem): number {
   return (
     IMPACT_RANK[b.impact] - IMPACT_RANK[a.impact] ||
     b.signalCount - a.signalCount ||

@@ -21,17 +21,21 @@ import { listMembers, type TeamMember } from '@/lib/actions/team';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import {
   ACTION_CATEGORIES,
-  ACTION_IMPACTS,
   ACTION_SORTS,
   ACTION_STATUSES,
   OPEN_ACTION_STATUSES,
   type ActionCategory,
-  type ActionImpact,
   type ActionSort,
   type ActionStatus,
 } from '@/lib/action-center/registry';
 import { actionContextTags, actionTexts, memberLabel } from '@/lib/action-center/display';
-import { compareImpact, comparePriority, topActionIds } from '@/lib/action-center/priority';
+import {
+  PRIORITY_LEVELS,
+  comparePriority,
+  highestPriorityLevel,
+  topActionIds,
+  type PriorityLevel,
+} from '@/lib/action-center/priority';
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
 import { ActionTable } from '@/components/action-center/action-table';
 import { ActionDrawer } from '@/components/action-center/action-drawer';
@@ -55,7 +59,6 @@ const ACTION_EXPORT_HEADERS = [
   'priority_level',
   'title',
   'category',
-  'impact',
   'status',
   'assignee',
   'due_date',
@@ -120,7 +123,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
   const [loadFailed, setLoadFailed] = useState(false);
 
   const [category, setCategory] = useState<ActionCategory | 'all'>('all');
-  const [impact, setImpact] = useState<ActionImpact | 'all'>('all');
+  const [priority, setPriority] = useState<PriorityLevel | 'all'>('all');
   const [status, setStatus] = useState<ActionStatus | 'all'>('all');
   const [assignee, setAssignee] = useState<string>('all');
   const [sort, setSort] = useState<ActionSort>('priority');
@@ -134,7 +137,9 @@ function ActionsContent({ brand }: { brand: Brand }) {
     setCategory(
       readUrlChoice<ActionCategory | 'all'>('category', ['all', ...ACTION_CATEGORIES], 'all'),
     );
-    setImpact(readUrlChoice<ActionImpact | 'all'>('impact', ['all', ...ACTION_IMPACTS], 'all'));
+    setPriority(
+      readUrlChoice<PriorityLevel | 'all'>('priority', ['all', ...PRIORITY_LEVELS], 'all'),
+    );
     setStatus(readUrlChoice<ActionStatus | 'all'>('status', ['all', ...ACTION_STATUSES], 'all'));
     setAssignee(readUrlParam('assignee') || 'all');
     setSort(readUrlChoice<ActionSort>('sort', ACTION_SORTS, 'priority'));
@@ -148,13 +153,13 @@ function ActionsContent({ brand }: { brand: Brand }) {
     const timer = setTimeout(
       () =>
         writeUrlParams(
-          { category, impact, status, assignee, sort, q: search.trim() },
-          { category: 'all', impact: 'all', status: 'all', assignee: 'all', sort: 'priority' },
+          { category, priority, status, assignee, sort, q: search.trim() },
+          { category: 'all', priority: 'all', status: 'all', assignee: 'all', sort: 'priority' },
         ),
       300,
     );
     return () => clearTimeout(timer);
-  }, [urlRead, category, impact, status, assignee, sort, search]);
+  }, [urlRead, category, priority, status, assignee, sort, search]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -215,7 +220,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
       if (focus === 'top' ? !topIds.has(action.id) : focus && !CARD_FILTERS[focus](action))
         return false;
       if (category !== 'all' && action.category !== category) return false;
-      if (impact !== 'all' && action.impact !== impact) return false;
+      if (priority !== 'all' && action.priorityLevel !== priority) return false;
       if (status !== 'all' && action.status !== status) return false;
       if (assignee !== 'all') {
         if (assignee === 'unassigned' ? action.assignee !== null : action.assignee?.id !== assignee)
@@ -231,8 +236,6 @@ function ActionsContent({ brand }: { brand: Brand }) {
     });
     return filtered.sort((a, b) => {
       switch (sort) {
-        case 'impact':
-          return compareImpact(a, b);
         case 'newest':
           return b.createdAt.localeCompare(a.createdAt);
         case 'due_date':
@@ -243,7 +246,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
           return comparePriority(a, b);
       }
     });
-  }, [actions, topIds, focus, category, impact, status, assignee, search, sort, tTexts, t]);
+  }, [actions, topIds, focus, category, priority, status, assignee, search, sort, tTexts, t]);
 
   const handleExportCsv = useCallback(() => {
     if (visible.length === 0) return;
@@ -254,7 +257,6 @@ function ActionsContent({ brand }: { brand: Brand }) {
       priority_level: action.priorityLevel ? t(`priority.levels.${action.priorityLevel}`) : '',
       title: actionTexts(action, tTexts).title,
       category: tCategories(action.category),
-      impact: t(`impact.${action.impact}`),
       status: t(`status.${action.status}`),
       assignee: action.assignee?.fullName ?? '',
       due_date: action.dueDate ?? '',
@@ -288,21 +290,19 @@ function ActionsContent({ brand }: { brand: Brand }) {
   const summary = useMemo(() => {
     const all = actions ?? [];
     const open = all.filter(isOpen);
-    const impacts = open.map((action) => action.impact);
     return {
       top: topIds.size,
       atRisk: all.filter(CARD_FILTERS.atRisk).length,
       opportunities: all.filter(CARD_FILTERS.opportunities).length,
       inProgress: all.filter(CARD_FILTERS.inProgress).length,
-      potential: impacts.includes('high') ? 'high' : impacts.includes('medium') ? 'medium' : 'low',
-      hasOpen: open.length > 0,
+      highest: highestPriorityLevel(open.map((action) => action.priorityLevel)),
     };
   }, [actions, topIds]);
 
   const hasActiveFilters =
     focus !== null ||
     category !== 'all' ||
-    impact !== 'all' ||
+    priority !== 'all' ||
     status !== 'all' ||
     assignee !== 'all' ||
     search !== '';
@@ -310,7 +310,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
   const clearFilters = () => {
     setFocus(null);
     setCategory('all');
-    setImpact('all');
+    setPriority('all');
     setStatus('all');
     setAssignee('all');
     setSearch('');
@@ -398,12 +398,12 @@ function ActionsContent({ brand }: { brand: Brand }) {
               <div className="flex h-7 w-7 items-center justify-center rounded-md border bg-muted/40">
                 <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
               </div>
-              <p className="text-xs font-medium text-muted-foreground">{t('cards.impact')}</p>
+              <p className="text-xs font-medium text-muted-foreground">{t('cards.priority')}</p>
             </div>
             <p className="mt-2 text-2xl font-bold">
-              {summary.hasOpen ? t(`impact.${summary.potential}`) : '—'}
+              {summary.highest ? t(`priority.levels.${summary.highest}`) : '—'}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{t('cards.impactSub')}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{t('cards.prioritySub')}</p>
           </CardContent>
         </Card>
       </div>
@@ -447,10 +447,10 @@ function ActionsContent({ brand }: { brand: Brand }) {
 
       <div className="flex flex-wrap items-center gap-2">
         <FilterSelect
-          label={t('filters.impact')}
-          value={impact}
-          onChange={(v) => setImpact(v as ActionImpact | 'all')}
-          options={ACTION_IMPACTS.map((v) => ({ value: v, label: t(`impact.${v}`) }))}
+          label={t('filters.priority')}
+          value={priority}
+          onChange={(v) => setPriority(v as PriorityLevel | 'all')}
+          options={PRIORITY_LEVELS.map((v) => ({ value: v, label: t(`priority.levels.${v}`) }))}
           allLabel={t('filters.all')}
         />
         <FilterSelect
@@ -537,7 +537,7 @@ function SummaryCard({
   label: string;
   value: number;
   sub: string;
-  /** Omit both to render a card that only reports, like Potential Impact. */
+  /** Omit both to render a card that only reports, like Highest Priority. */
   isActive?: boolean;
   onClick?: () => void;
 }) {

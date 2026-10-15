@@ -15,8 +15,7 @@ import {
 import { actionGoal, actionTexts } from '@/lib/action-center/display';
 import type { ActionHistoryItem } from '@/lib/action-center/history';
 import { UNCOUNTED_TASK_STATUSES } from '@/lib/action-center/registry';
-import { ImpactDots } from './signal-table';
-import { ActionIcon } from './action-table';
+import { ActionIcon, PriorityBadge } from './action-table';
 import { HistoryStatusBadge } from './history-table';
 import { cn } from '@/lib/utils';
 
@@ -77,7 +76,6 @@ export function HistoryDrawer({
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations('actionCenter.historyPage');
-  const tActions = useTranslations('actionCenter.actionsPage');
   const tTexts = useTranslations('actionCenter.actionTexts');
   const tTypes = useTranslations('actionCenter.actionCategories');
   const tTasks = useTranslations('actionCenter.actionTasks');
@@ -108,10 +106,9 @@ export function HistoryDrawer({
             <Badge variant="outline" className="text-[10px]">
               {tTypes(item.type)}
             </Badge>
-            <span className="flex items-center gap-1.5 text-muted-foreground">
-              <ImpactDots impact={item.impact} />
-              {tActions(`impact.${item.impact}`)}
-            </span>
+            {item.priorityScore !== null && (
+              <PriorityBadge score={item.priorityScore} level={item.priorityLevel} />
+            )}
             <HistoryStatusBadge status={item.status} />
             <span className="ml-auto text-muted-foreground">AC-{item.actionNo}</span>
           </div>
