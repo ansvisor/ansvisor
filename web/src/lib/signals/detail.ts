@@ -93,17 +93,36 @@ export interface SignalFigure {
   subjectType?: 'competitor' | 'platform' | 'location';
   /** Out of how many, for a count of days: 9 of 11. */
   of?: number;
+  /**
+   * Its own window, where it differs from the change's: a cross-channel
+   * finding sets 14 days of AI sessions beside 28 days of search clicks.
+   */
+  period?: ChangePeriod;
 }
 
-/** The window the figures cover. The detectors all read 7-day windows. */
+/**
+ * The window the figures cover. The library's detectors read 7-day windows,
+ * AI traffic 14 (server signals/traffic-evidence.js) and Search Console 28
+ * (server signals/library/detect.js, `ctx.gsc`).
+ */
 export type ChangePeriod =
   | 'week_over_week'
   /** The AI-traffic detector's windows (server signals/traffic-evidence.js). */
   | 'fortnight_over_fortnight'
+  /** The Search Console detector's windows. */
+  | 'four_weeks_over_four_weeks'
   | 'last_7_days'
   | 'last_14_days'
   | 'last_fortnight'
+  | 'last_four_weeks'
   | 'latest';
+
+/** Days in each window of a before-and-after period: "previous 14 days". */
+export const PERIOD_DAYS: Partial<Record<ChangePeriod, number>> = {
+  week_over_week: 7,
+  fortnight_over_fortnight: 14,
+  four_weeks_over_four_weeks: 28,
+};
 
 export interface SignalChange {
   period: ChangePeriod;
@@ -115,7 +134,7 @@ function str(payload: Record<string, unknown>, key: string): string {
   return typeof value === 'string' ? value : '';
 }
 
-/** Kinds whose two values are the previous and the last 7 days of one metric. */
+/** Kinds whose two values are one metric's previous and last window. */
 const WEEK_OVER_WEEK: Partial<Record<SignalKind, SignalMetric>> = {
   sharp_drop: 'visibility_rate',
   visibility_slipping: 'visibility_rate',
@@ -139,6 +158,15 @@ const AI_TRAFFIC_KINDS: ReadonlySet<string> = new Set([
   'ai_landing_page_winner',
   'ai_landing_underperforming',
   'converting_page_slipping',
+]);
+
+// Compared over the last 28 days against the 28 before (`ctx.gsc`).
+const SEARCH_CONSOLE_KINDS: ReadonlySet<string> = new Set([
+  'gsc_demand_gap',
+  'search_ai_misalignment',
+  'gsc_low_ctr',
+  'gsc_risk',
+  'gsc_decline',
 ]);
 
 const COUNTED: Record<string, SignalMetric> = {
@@ -167,21 +195,26 @@ export function signalChange(signal: Signal): SignalChange | null {
       { metric: overTime, role: 'before', value: prev, ...about },
       { metric: overTime, role: 'after', value: cur, ...about },
     ];
-    // The cross-channel findings say what fell beside the AI sessions.
+    // The cross-channel findings say what fell beside the AI sessions, each
+    // over the window it was read in: Search Console's 28 days, or the
+    // library's 7 for mentions (`ctx.dimensions`).
     if (signal.kind === 'cross_channel_risk') {
+      const period = 'four_weeks_over_four_weeks';
       figures.push(
-        { metric: 'search_clicks', role: 'before', value: Number(p.clicksBefore ?? 0) },
-        { metric: 'search_clicks', role: 'after', value: Number(p.clicksNow ?? 0) },
+        { metric: 'search_clicks', role: 'before', value: Number(p.clicksBefore ?? 0), period },
+        { metric: 'search_clicks', role: 'after', value: Number(p.clicksNow ?? 0), period },
       );
     }
     if (signal.kind === 'visibility_traffic_loss') {
+      const period = 'week_over_week';
       figures.push(
-        { metric: 'mentions', role: 'before', value: Number(p.mentionsBefore ?? 0) },
-        { metric: 'mentions', role: 'after', value: Number(p.mentionsNow ?? 0) },
+        { metric: 'mentions', role: 'before', value: Number(p.mentionsBefore ?? 0), period },
+        { metric: 'mentions', role: 'after', value: Number(p.mentionsNow ?? 0), period },
       );
     }
     return {
-      period: AI_TRAFFIC_KINDS.has(signal.kind) ? 'fortnight_over_fortnight' : 'week_over_week',
+      // AI sessions are always read over 14 days (`ctx.traffic`).
+      period: overTime === 'ai_sessions' ? 'fortnight_over_fortnight' : 'week_over_week',
       figures,
     };
   }
@@ -337,10 +370,12 @@ export function signalChange(signal: Signal): SignalChange | null {
   }
   const counted = COUNTED[entity];
   if (counted && cur !== null) {
-    return {
-      period: AI_TRAFFIC_KINDS.has(signal.kind) ? 'last_fortnight' : 'last_7_days',
-      figures: [{ metric: counted, role: 'total', value: cur }],
-    };
+    const period: ChangePeriod = AI_TRAFFIC_KINDS.has(signal.kind)
+      ? 'last_fortnight'
+      : SEARCH_CONSOLE_KINDS.has(signal.kind)
+        ? 'last_four_weeks'
+        : 'last_7_days';
+    return { period, figures: [{ metric: counted, role: 'total', value: cur }] };
   }
   return null;
 }
@@ -1121,6 +1156,8 @@ export function signalDetailForApi(signal: Signal, actions: SignalActionRef[]) {
         subject: f.subject ?? null,
         subject_type: f.subjectType ?? null,
         of: f.of ?? null,
+        // One finding can mix windows: each figure says which it covers.
+        period: f.period ?? change.period,
       })),
     },
     evidence: {
