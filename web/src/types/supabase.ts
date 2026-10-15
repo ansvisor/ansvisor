@@ -3097,6 +3097,31 @@ export type Database = {
           regions: string[]
         }[]
       }
+      insights_same_prompt_compare: {
+        Args: {
+          p_brand_id: string
+          p_cur_from: string
+          p_cur_to: string
+          p_models?: string[]
+          p_prev_from: string
+          p_prev_to: string
+          p_region?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      insights_same_prompt_compare_daily: {
+        Args: {
+          p_brand_id: string
+          p_cur_from: string
+          p_cur_to: string
+          p_models?: string[]
+          p_prev_from: string
+          p_prev_to: string
+          p_region?: string
+        }
+        Returns: Json
+      }
       normalize_page_path: { Args: { p_url: string }; Returns: string }
       import_prompts: {
         Args: {
