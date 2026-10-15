@@ -11,11 +11,14 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import type {
-  SignalCategory,
-  SignalImpact,
-  SignalSource,
-  SignalStatus,
+import { after } from 'next/server';
+import { API_BASE_URL } from '@/config/api';
+import {
+  OPEN_SIGNAL_STATUSES,
+  type SignalCategory,
+  type SignalImpact,
+  type SignalSource,
+  type SignalStatus,
 } from '@/lib/signals/registry';
 import { SIGNAL_ROW_COLUMNS, mapSignalRows, type Signal, type SignalRow } from '@/lib/signals/map';
 import type { PromptPlace } from '@/lib/signals/where';
@@ -190,7 +193,13 @@ export async function updateSignalStatus(
   status: SignalStatus,
 ): Promise<void> {
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: before } = await supabase
+    .from('signals')
+    .select('status')
+    .eq('brand_id', brandId)
+    .eq('id', signalId)
+    .maybeSingle();
+  const { data, error } = await supabase
     .from('signals')
     .update({
       status,
@@ -198,8 +207,40 @@ export async function updateSignalStatus(
       updated_at: new Date().toISOString(),
     })
     .eq('brand_id', brandId)
-    .eq('id', signalId);
+    .eq('id', signalId)
+    .select('action_id')
+    .maybeSingle();
   if (error) throw new Error(error.message);
+
+  // When it starts or stops supporting its action, the action's support and
+  // confidence follow at once, not the next night (AC-007). Acknowledging
+  // leaves it open, so nothing changes for the action.
+  const isOpen = (value: unknown) => OPEN_SIGNAL_STATUSES.includes(value as SignalStatus);
+  if (!data?.action_id || isOpen(before?.status) === isOpen(status)) return;
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (session) scheduleRescore(signalId, session.access_token);
+}
+
+/**
+ * Asks the server to score again the active actions a signal supports, once
+ * the response has gone: the click doesn't wait for it. Best effort, as the
+ * status change is saved either way and the nightly pass scores every action
+ * again.
+ */
+function scheduleRescore(signalId: string, accessToken: string) {
+  after(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/action-center/signals/${signalId}/rescore`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) console.warn(`[signals] action rescore failed: ${res.status}`);
+    } catch (err) {
+      console.warn('[signals] action rescore failed:', err);
+    }
+  });
 }
 
 function nextDay(day: string): string {

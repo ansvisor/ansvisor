@@ -27,8 +27,7 @@ import {
 import { opportunityLists } from '@/lib/content/opportunity-lists';
 import { priorityReasonText } from '@/lib/action-center/priority';
 import { isKpiKey } from '@/lib/kpis/registry';
-import { signalAffected, signalTexts } from '@/lib/signals/display';
-import { SIGNAL_KINDS } from '@/lib/signals/registry';
+import { signalAffected, signalTexts, signalTypeLabel } from '@/lib/signals/display';
 import { viewerTimeZone } from '@/lib/time-zone';
 import { isSuperseded } from './signal-table';
 
@@ -209,7 +208,7 @@ export function ActionExportButtons({
           const affected = signalAffected(signal, tSignals);
           return {
             ...signalTexts(signal, tSignalTexts),
-            type: `${tSignalCategories(signal.category)} · ${tSignals(`states.${SIGNAL_KINDS[signal.kind].stateKey}`)}`,
+            type: signalTypeLabel(signal, tSignalCategories, tSignals),
             entity: affected.detail ?? affected.label,
             category: tSignalCategories(signal.category),
             status: isSuperseded(signal)

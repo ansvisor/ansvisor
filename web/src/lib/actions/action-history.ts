@@ -182,10 +182,11 @@ export async function getActionHistory(
       .select('id, action_id, position, task_key, title, status')
       .in('action_id', actionIds)
       .order('position'),
+    // Every signal each action took as evidence (AC-007): a closed action
+    // keeps the ones that have since moved on to a later cycle.
     supabase
-      .from('signals')
-      .select('id, action_id, kind, source, detected_at')
-      .eq('brand_id', brandId)
+      .from('action_signals')
+      .select('action_id, signals!inner(id, kind, source, detected_at)')
       .in('action_id', actionIds),
     assigneeIds.length > 0
       ? supabase.from('profiles').select('id, full_name, avatar_url').in('id', assigneeIds)
@@ -210,18 +211,18 @@ export async function getActionHistory(
 
   const signalsByAction = new Map<string, TriggerSignal[]>();
   const sourcesByAction = new Map<string, Set<SignalSource>>();
-  for (const signal of signalsRes.data ?? []) {
-    if (!signal.action_id) continue;
-    const list = signalsByAction.get(signal.action_id) ?? [];
+  for (const { action_id: actionId, signals: signal } of signalsRes.data ?? []) {
+    if (!signal) continue;
+    const list = signalsByAction.get(actionId) ?? [];
     list.push({ signalId: signal.id, kind: signal.kind, detectedAt: signal.detected_at });
-    signalsByAction.set(signal.action_id, list);
+    signalsByAction.set(actionId, list);
 
     // `source` is an array — one signal can be corroborated by several feeds.
-    const set = sourcesByAction.get(signal.action_id) ?? new Set<SignalSource>();
+    const set = sourcesByAction.get(actionId) ?? new Set<SignalSource>();
     for (const source of (signal.source ?? []) as string[]) {
       if ((SIGNAL_SOURCES as readonly string[]).includes(source)) set.add(source as SignalSource);
     }
-    if (set.size > 0) sourcesByAction.set(signal.action_id, set);
+    if (set.size > 0) sourcesByAction.set(actionId, set);
   }
 
   const profiles = new Map(

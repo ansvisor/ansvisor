@@ -74,3 +74,77 @@ export async function priorityOnCreate(action, now = new Date()) {
   );
   return priorityColumns(priority, now);
 }
+
+/** An action still being worked on: its priority is kept current. */
+const ACTIVE_STATUSES = ['new', 'in_progress', 'on_hold'];
+/** A signal that still supports its action. */
+const OPEN_SIGNAL_STATUSES = ['new', 'acknowledged'];
+
+/**
+ * An active action's priority, worked out again from its open signals as
+ * they stand now, as the nightly pass would. Best effort: a score that can't
+ * be read or saved is logged and left for the night.
+ *
+ * @param {{ id: string, kind: string, category: string, impact: string, payload?: object, created_at?: string }} action
+ * @returns {Promise<boolean>} whether the score was saved
+ */
+export async function rescoreAction(action, now = new Date()) {
+  const { data: signals, error } = await supabaseAdmin
+    .from('signals')
+    .select('id, kind, impact, payload, current_value, source, detected_at')
+    .eq('action_id', action.id)
+    .in('status', OPEN_SIGNAL_STATUSES)
+    .limit(1000);
+  if (error) {
+    logger.warn({ actionId: action.id, err: error.message }, '[actions] rescore read failed');
+    return false;
+  }
+  let prompts = new Map();
+  try {
+    prompts = await loadPromptDemand(
+      promptIdsOf([action.payload, ...(signals ?? []).map((signal) => signal.payload)]),
+    );
+  } catch (err) {
+    logger.warn({ actionId: action.id, err: err.message }, '[actions] prompt demand unavailable');
+  }
+  const priority = scorePriority({ action, signals: signals ?? [], prompts }, now);
+  const { error: saveErr } = await supabaseAdmin
+    .from('actions')
+    .update(priorityColumns(priority, now))
+    .eq('id', action.id);
+  if (saveErr) {
+    logger.warn({ actionId: action.id, err: saveErr.message }, '[actions] priority not saved');
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Every active action a signal supports, scored again (AC-007): resolving,
+ * dismissing or reopening a signal changes its actions' support and
+ * confidence at once, not the next night.
+ *
+ * @returns {Promise<number>} how many actions were rescored
+ */
+export async function rescoreActionsForSignal(signalId, now = new Date()) {
+  const { data: links, error } = await supabaseAdmin
+    .from('action_signals')
+    .select('action_id')
+    .eq('signal_id', signalId);
+  if (error) throw new Error(error.message);
+  const ids = [...new Set((links ?? []).map((link) => link.action_id))];
+  if (ids.length === 0) return 0;
+
+  const { data: actions, error: actionsErr } = await supabaseAdmin
+    .from('actions')
+    .select('id, kind, category, impact, payload, created_at')
+    .in('id', ids)
+    .in('status', ACTIVE_STATUSES);
+  if (actionsErr) throw new Error(actionsErr.message);
+
+  let rescored = 0;
+  for (const action of actions ?? []) {
+    if (await rescoreAction(action, now)) rescored += 1;
+  }
+  return rescored;
+}

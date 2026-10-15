@@ -56,11 +56,12 @@ import {
 } from '@/lib/action-center/display';
 import { signalTexts } from '@/lib/signals/display';
 import { isKpiKey } from '@/lib/kpis/registry';
-import { ImpactDots, isSuperseded, SignalStatusBadge } from './signal-table';
+import { isSuperseded, SignalStatusBadge } from './signal-table';
 import { ActionIcon, PriorityBadge } from './action-table';
 import { priorityReasonText } from '@/lib/action-center/priority';
 import { OpportunityContext } from './opportunity-context';
 import { ActionExportButtons } from './action-export-buttons';
+import { SupportingSignals } from './supporting-signals';
 import { ImproveContext } from './improve-context';
 import { cn } from '@/lib/utils';
 
@@ -233,6 +234,14 @@ export function ActionDrawer({
               <section>
                 <p className="text-xs font-medium text-muted-foreground">{t('drawer.why')}</p>
                 <p className="mt-1">{texts.description}</p>
+                {detail.signals.length > 0 && (
+                  <SupportingSignals
+                    actionId={action.id}
+                    signals={detail.signals}
+                    onOpenSignal={openSignal}
+                    onShowAll={() => setTab('signals')}
+                  />
+                )}
               </section>
               <Separator />
               <section>
@@ -259,40 +268,22 @@ export function ActionDrawer({
                   <p className="mt-1 text-xs text-muted-foreground">{t('drawer.noKpis')}</p>
                 )}
               </section>
-              <Separator />
+              {/* What a person sent the action from; a detected action's
+                  evidence is its supporting signals, above. */}
               {action.kind === 'prompt_improve' ? (
-                <ImproveContext payload={action.payload ?? {}} />
+                <>
+                  <Separator />
+                  <ImproveContext payload={action.payload ?? {}} />
+                </>
               ) : opportunityId ? (
-                <OpportunityContext
-                  opportunityId={opportunityId}
-                  pageUrls={action.payload?.assetKey ? opportunityPages : undefined}
-                />
-              ) : (
-                <section>
-                  <p className="text-xs font-medium text-muted-foreground">
-                    {t('drawer.primarySignals')}
-                  </p>
-                  <div className="mt-2 space-y-2">
-                    {detail.signals.slice(0, 3).map((signal) => {
-                      const st = signalTexts(signal, tSignalTexts);
-                      return (
-                        <button
-                          key={signal.id}
-                          type="button"
-                          onClick={() => openSignal(signal.id)}
-                          className="block w-full rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted/40"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="truncate text-xs font-medium">{st.title}</p>
-                            <ImpactDots impact={signal.impact} />
-                          </div>
-                          <p className="truncate text-xs text-muted-foreground">{st.description}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-              )}
+                <>
+                  <Separator />
+                  <OpportunityContext
+                    opportunityId={opportunityId}
+                    pageUrls={action.payload?.assetKey ? opportunityPages : undefined}
+                  />
+                </>
+              ) : null}
             </>
           ) : tab === 'tasks' ? (
             <section>

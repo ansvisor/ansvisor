@@ -19,6 +19,7 @@ import {
   type TaskStatus,
 } from '@/lib/action-center/registry';
 import { SIGNAL_ROW_COLUMNS, mapSignalRows, type Signal, type SignalRow } from '@/lib/signals/map';
+import { OPEN_SIGNAL_STATUSES, type SignalStatus } from '@/lib/signals/registry';
 import type { KpiTimeframe } from '@/lib/kpis/registry';
 import {
   parsePriorityReason,
@@ -98,10 +99,12 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
 
   const [tasksRes, signalsRes, profilesRes] = await Promise.all([
     supabase.from('action_tasks').select('action_id, status').in('action_id', actionIds),
+    // The signals that support each action now (AC-007): its open ones.
     supabase
       .from('signals')
       .select('action_id')
       .eq('brand_id', brandId)
+      .in('status', OPEN_SIGNAL_STATUSES as SignalStatus[])
       .not('action_id', 'is', null),
     assigneeIds.length > 0
       ? supabase.from('profiles').select('id, full_name, avatar_url').in('id', assigneeIds)
@@ -230,11 +233,13 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
       )
       .eq('action_id', actionId)
       .order('position'),
+    // Every signal the action has taken as evidence (AC-007), kept after a
+    // signal moves on to a later cycle: a closed action still shows its own.
     supabase
       .from('signals')
-      .select(SIGNAL_ROW_COLUMNS)
+      .select(`${SIGNAL_ROW_COLUMNS}, action_signals!inner(action_id)`)
       .eq('brand_id', brandId)
-      .eq('action_id', actionId)
+      .eq('action_signals.action_id', actionId)
       .order('detected_at', { ascending: false }),
     supabase
       .from('action_events')

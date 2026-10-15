@@ -56,6 +56,39 @@ export type Database = {
           },
         ]
       }
+      action_signals: {
+        Row: {
+          action_id: string
+          linked_at: string
+          signal_id: string
+        }
+        Insert: {
+          action_id: string
+          linked_at?: string
+          signal_id: string
+        }
+        Update: {
+          action_id?: string
+          linked_at?: string
+          signal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_signals_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_signals_signal_id_fkey"
+            columns: ["signal_id"]
+            isOneToOne: false
+            referencedRelation: "signals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       action_tasks: {
         Row: {
           action_id: string

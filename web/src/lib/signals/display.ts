@@ -1,5 +1,5 @@
 import type { Signal } from '@/lib/actions/signals';
-import { isLibrarySignalKind } from '@/lib/signals/registry';
+import { SIGNAL_KINDS, isLibrarySignalKind } from '@/lib/signals/registry';
 import { locationName, platformName, targetName } from '@/lib/signals/names';
 
 /**
@@ -113,6 +113,15 @@ export function signalTexts(signal: Signal, t: Translator): { title: string; des
     title: t(`${signal.kind}.title`, values),
     description: t(`${signal.kind}.description`, values),
   };
+}
+
+/**
+ * "Citation · Lost": the signal's category and what happened, as the signals
+ * list's Type column reads. `tCategories` is actionCenter.signalCategories,
+ * `t` actionCenter.signalsPage.
+ */
+export function signalTypeLabel(signal: Signal, tCategories: Translator, t: Translator): string {
+  return `${tCategories(signal.category)} · ${t(`states.${SIGNAL_KINDS[signal.kind].stateKey}`)}`;
 }
 
 /** What the Affected column shows: a compact count label + optional detail. */

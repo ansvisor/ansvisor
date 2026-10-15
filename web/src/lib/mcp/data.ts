@@ -2656,11 +2656,13 @@ export async function getActionFor(
       )
       .eq('action_id', actionId)
       .order('position'),
+    // Every signal the action has taken as evidence (AC-007), kept after a
+    // signal moves on to a later cycle.
     supabaseAdmin
       .from('signals')
-      .select(MCP_SIGNAL_COLUMNS)
+      .select(`${MCP_SIGNAL_COLUMNS}, action_signals!inner(action_id)`)
       .eq('brand_id', action.brand_id)
-      .eq('action_id', actionId)
+      .eq('action_signals.action_id', actionId)
       .order('detected_at', { ascending: false }),
     supabaseAdmin
       .from('action_events')
@@ -2704,7 +2706,10 @@ export async function getActionFor(
       permission: t.permission ?? null,
       depends_on: (t.depends_on ?? []) as string[],
     })),
-    signals: (signalsRes.data ?? []) as Record<string, unknown>[],
+    // The join that found them is not part of a signal.
+    signals: ((signalsRes.data ?? []) as Record<string, unknown>[]).map((row) =>
+      Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'action_signals')),
+    ),
     events: (eventsRes.data ?? []).map((e) => ({
       event: e.event,
       data: (e.data ?? {}) as Record<string, unknown>,
