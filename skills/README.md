@@ -18,7 +18,7 @@ behaves like an AEO analyst who's been on your account for six months.
 
 | Skill | Flavour | What it's for |
 | --- | --- | --- |
-| [`ansvisor-aeo-coach`](./ansvisor-aeo-coach) | **MCP (preferred)** | Brand snapshots, visibility deep-dives, competitor watch. Use this when your client (Claude Desktop, Claude Code, Cursor, Zed) is connected to the Ansvisor MCP server. |
+| [`ansvisor-aeo-coach`](./ansvisor-aeo-coach) | **MCP (preferred)** | Brand snapshots, visibility deep-dives, competitor watch, citation sources, prompt coverage, Action Center (what to do next, did it work, sending Improve suggestions). Use this when your client (Claude Desktop, Claude Code, Cursor, Zed) is connected to the Ansvisor MCP server. |
 | [`ansvisor-aeo-coach-standalone`](./ansvisor-aeo-coach-standalone) | **REST (fallback)** | Same skill, no MCP needed. Use this when you're on claude.ai web without a Connector, or any surface where setting up MCP isn't an option. |
 
 ## Which flavour should I install?
@@ -86,10 +86,15 @@ Once installed, just ask in plain English:
 - _"How is my brand doing this week?"_
 - _"Why did visibility drop on ChatGPT?"_
 - _"Who are my biggest competitors right now?"_
+- _"Which sites does AI cite instead of us?"_
+- _"What should we work on next — and did last month's actions work?"_
 - _"Give me a 30-second standup on the Acme brand."_
 
 Claude picks the right tools / endpoints, fills in filters, interprets
-the numbers, and answers with action items.
+the numbers, and answers with action items. Tools that change your
+account (accepting a suggestion, updating a task, sending Improve
+suggestions to Action Center, running a page audit) are only used when
+you ask for that specific change.
 
 ## Contributing
 

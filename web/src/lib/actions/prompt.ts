@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { PromptSet, Prompt, AIPlatform, PromptVolume } from '@/types';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
 import {
+  activationDelta,
   getOrgLocationUsage,
   locationLimitMessage,
   planBulkLocationChange,
@@ -197,15 +198,17 @@ export async function savePromptSet(input: SavePromptSetInput): Promise<SaveProm
   );
   const plan = await getOrgPlan(orgId);
 
-  // Count existing tracked locations for this org, excluding this brand's own
+  // Count existing active locations for this org, excluding this brand's own
   // (its whole set is replaced below, so a re-save doesn't compete with
   // itself). Every prompt saved here targets exactly one location — the
-  // brand's region — so the request adds one location per prompt. The cap is
-  // inclusive: landing exactly on maxPrompts is allowed (onboarding generates
-  // 5 per topic, so hitting the cap there is a normal, recoverable state).
+  // brand's region — so the request adds one location per active prompt;
+  // paused ones take no room (00128). The cap is inclusive: landing exactly
+  // on maxPrompts is allowed (onboarding generates 5 per topic, so hitting
+  // the cap there is a normal, recoverable state).
   const usage = await getOrgLocationUsage(supabase, orgId);
   const otherLocations = usage.total - (usage.byBrand.get(input.brandId) ?? 0);
-  const limitError = locationLimitMessage(plan, otherLocations, input.prompts.length);
+  const adding = input.prompts.filter((p) => p.isActive ?? true).length;
+  const limitError = locationLimitMessage(plan, otherLocations, adding);
   if (limitError) {
     return { code: 'plan_limit', error: limitError };
   }
@@ -299,7 +302,6 @@ export async function updatePrompt(
     category?: string;
     platforms?: string[];
     models?: string[];
-    isActive?: boolean;
   },
 ): Promise<Prompt> {
   const supabase = await createClient();
@@ -307,7 +309,6 @@ export async function updatePrompt(
   const payload: Record<string, unknown> = {};
   if (updates.text !== undefined) payload.text = updates.text;
   if (updates.category !== undefined) payload.category = updates.category || null;
-  if (updates.isActive !== undefined) payload.is_active = updates.isActive;
 
   // Both the category and the platform/model branch need context from the
   // prompt's row (its brand, org and shopping pref) — one fetch serves them.
@@ -374,9 +375,9 @@ export type UpdatePromptLocationsResult =
 /**
  * Retarget a prompt's tracking locations (#691).
  *
- * Its own action rather than a field on `updatePrompt` because locations are
- * the only prompt edit that meters against the plan, so this is the one that
- * can be REFUSED — and a refusal has to reach the user as a value: every
+ * Its own action rather than a field on `updatePrompt` because locations meter
+ * against the plan (as does resuming, see setPromptActive), so this edit can
+ * be REFUSED — and a refusal has to reach the user as a value: every
  * error thrown from a server action reaches production as a meaningless
  * digest string (#427).
  *
@@ -406,7 +407,7 @@ export async function updatePromptLocations(
 
   const { data: promptRow } = await supabase
     .from('prompts')
-    .select('regions, prompt_sets!inner(brands!inner(organization_id))')
+    .select('regions, is_active, prompt_sets!inner(brands!inner(organization_id))')
     .eq('id', id)
     .single();
   const orgId = (
@@ -414,8 +415,9 @@ export async function updatePromptLocations(
   )?.brands?.organization_id;
   if (!orgId) return { error: 'Prompt not found' };
 
+  // A paused prompt takes no room; its locations are counted when resumed.
   const delta = regions.length - promptLocationCount(promptRow?.regions as string[] | null);
-  if (delta > 0) {
+  if (delta > 0 && promptRow?.is_active !== false) {
     const plan = await getOrgPlan(orgId);
     const usage = await getOrgLocationUsage(supabase, orgId);
     const limitError = locationLimitMessage(plan, usage.total, delta);
@@ -497,11 +499,11 @@ export async function bulkUpdatePromptLocations(
     };
   }
 
-  const rows: { id: string; regions: string[]; organizationId: string }[] = [];
+  const rows: { id: string; regions: string[]; isActive: boolean; organizationId: string }[] = [];
   for (let i = 0; i < ids.length; i += BULK_LOCATION_READ_CHUNK) {
     const { data, error } = await supabase
       .from('prompts')
-      .select('id, regions, prompt_sets!inner(brands!inner(organization_id))')
+      .select('id, regions, is_active, prompt_sets!inner(brands!inner(organization_id))')
       .in('id', ids.slice(i, i + BULK_LOCATION_READ_CHUNK));
     if (error) return { error: error.message };
     for (const row of data ?? []) {
@@ -511,6 +513,7 @@ export async function bulkUpdatePromptLocations(
       rows.push({
         id: row.id as string,
         regions: (row.regions as string[] | null) ?? [],
+        isActive: row.is_active !== false,
         organizationId: orgId,
       });
     }
@@ -717,6 +720,60 @@ export async function addPromptToBrand(
 
   revalidatePath('/dashboard/prompts');
   return { prompt: result.prompt };
+}
+
+export type SetPromptActiveResult = { prompt: Prompt } | { error: string; code?: 'plan_limit' };
+
+/**
+ * Pause or resume one prompt — the only way a prompt's active state changes
+ * after it is created. Pausing frees its locations on the plan (00128).
+ * Resuming brings them all back (activationDelta), so it is measured like
+ * adding them and refused when the plan has no room: pausing prompts,
+ * filling their room with new ones and resuming the old ones can't get past
+ * the limit. Errors come back as values (#427).
+ */
+export async function setPromptActive(
+  id: string,
+  isActive: boolean,
+): Promise<SetPromptActiveResult> {
+  const supabase = await createClient();
+
+  if (isActive) {
+    const { data: row, error } = await supabase
+      .from('prompts')
+      .select('regions, is_active, prompt_sets!inner(brands!inner(organization_id))')
+      .eq('id', id)
+      .single();
+    if (error || !row) return { error: 'Prompt not found' };
+    const adding = activationDelta([
+      { isActive: row.is_active !== false, regions: row.regions as string[] | null },
+    ]);
+    const orgId = (row.prompt_sets as unknown as { brands: { organization_id: string } } | null)
+      ?.brands?.organization_id;
+    if (adding > 0) {
+      if (!orgId) return { error: 'Prompt not found' };
+      let limitError: string | null;
+      try {
+        const [plan, usage] = await Promise.all([
+          getOrgPlan(orgId),
+          getOrgLocationUsage(supabase, orgId),
+        ]);
+        limitError = locationLimitMessage(plan, usage.total, adding);
+      } catch {
+        return { error: "Couldn't check your plan's prompt limit. Please try again." };
+      }
+      if (limitError) return { code: 'plan_limit', error: limitError };
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('prompts')
+    .update({ is_active: isActive })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error || !data) return { error: error?.message ?? 'Failed to update the prompt' };
+  return { prompt: mapPromptRow(data as Record<string, unknown>) };
 }
 
 export interface ImportPromptRow {
