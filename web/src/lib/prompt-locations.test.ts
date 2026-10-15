@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  activationDelta,
   promptLocationCount,
   summarizeLocationRows,
   locationLimitMessage,
@@ -74,14 +75,39 @@ describe('locationLimitMessage', () => {
 
   it('spells out the location math in the message', () => {
     const msg = locationLimitMessage(starter, 48, 5);
-    expect(msg).toContain('50 tracked prompt locations');
+    expect(msg).toContain('50 active prompt locations');
+    expect(msg).toContain("paused prompts don't count");
     expect(msg).toContain('53');
     expect(msg).toContain('48 in place + 5 added');
-    expect(msg).toContain('Remove 3 locations');
+    expect(msg).toContain('Remove or pause 3 locations');
   });
 
   it('uses singular grammar for a single excess location', () => {
-    expect(locationLimitMessage(starter, 50, 1)).toContain('Remove 1 location ');
+    expect(locationLimitMessage(starter, 50, 1)).toContain('Remove or pause 1 location ');
+  });
+});
+
+describe('activationDelta', () => {
+  it('counts every location of each paused prompt being resumed', () => {
+    expect(
+      activationDelta([
+        { isActive: false, regions: ['US', 'DE'] },
+        { isActive: false, regions: [] },
+        { isActive: true, regions: ['TR'] },
+      ]),
+    ).toBe(3);
+  });
+
+  it('costs nothing to "resume" prompts that are already active', () => {
+    expect(activationDelta([{ isActive: true, regions: ['US', 'DE'] }])).toBe(0);
+    expect(activationDelta([])).toBe(0);
+  });
+
+  it('closes the pause-and-refill loophole', () => {
+    // 50 of 50 active after pausing 10 and adding 10 new ones: resuming
+    // the old ten would need 10 more, which the plan doesn't have.
+    const resuming = Array.from({ length: 10 }, () => ({ isActive: false, regions: ['US'] }));
+    expect(locationLimitMessage(starter, 50, activationDelta(resuming))).not.toBeNull();
   });
 });
 
@@ -155,5 +181,20 @@ describe('planBulkLocationChange', () => {
     const plan = planBulkLocationChange([{ id: 'a', regions: [] }], 'add', ['DE']);
     expect(plan.changes[0].regions).toEqual(['DE']);
     expect(plan.delta).toBe(0);
+  });
+});
+
+describe('planBulkLocationChange on paused prompts', () => {
+  it("writes the change but doesn't count it until the prompt is resumed", () => {
+    const plan = planBulkLocationChange(
+      [
+        { id: 'a', regions: ['US'], isActive: true },
+        { id: 'b', regions: ['US'], isActive: false },
+      ],
+      'add',
+      ['DE'],
+    );
+    expect(plan.changes.map((c) => c.promptId)).toEqual(['a', 'b']);
+    expect(plan.delta).toBe(1);
   });
 });
