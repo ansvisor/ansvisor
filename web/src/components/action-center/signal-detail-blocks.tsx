@@ -8,6 +8,7 @@ import { AIProviderAvatar } from '@/components/ai-provider-avatar';
 import { getSignalActions, type Signal, type SignalAction } from '@/lib/actions/signals';
 import { actionTexts } from '@/lib/action-center/display';
 import { crawlerName, locationName, platformFamily, platformName } from '@/lib/signals/names';
+import { getPlatformName } from '@/lib/traffic-platforms';
 import {
   METRIC_UNITS,
   signalChange,
@@ -127,6 +128,7 @@ function WhereValueView({ value }: { value: WhereValue }) {
         </span>
       );
     case 'prompts': {
+      if (value.total === 0) return <span>{t('drawer.none')}</span>;
       if (value.items.length === 0)
         return <span>{t('affected.prompts', { count: value.total })}</span>;
       const shown = value.items.slice(0, LIST_LIMIT);
@@ -209,6 +211,37 @@ function WhereValueView({ value }: { value: WhereValue }) {
       );
     case 'crawlers':
       return <span>{value.agents.map(crawlerName).join(', ')}</span>;
+    case 'referrals': {
+      const shown = value.items.slice(0, LIST_LIMIT);
+      return (
+        <ul className="space-y-2">
+          {shown.map((item) => (
+            <li key={item.page ?? ''}>
+              {/* One page is the one the fields above name already. */}
+              {item.page && shown.length > 1 && (
+                <span className="block break-all">{item.page}</span>
+              )}
+              <span className="block text-xs text-muted-foreground">
+                {item.platforms.length
+                  ? item.platforms.map((p, i) => (
+                      <span key={p.platform}>
+                        {i > 0 && ' · '}
+                        <span className="whitespace-nowrap">
+                          {`${getPlatformName(p.platform)} ${format.number(p.before)} → ${format.number(p.sessions)}`}
+                        </span>
+                      </span>
+                    ))
+                  : t('drawer.referrals.none')}
+              </span>
+            </li>
+          ))}
+          <More shown={shown.length} total={value.items.length} />
+          <li className="text-xs text-muted-foreground">
+            {t('drawer.referrals.period', { days: value.days })}
+          </li>
+        </ul>
+      );
+    }
     case 'issues': {
       // Page by page, each failed check with what it found.
       const byPage = new Map<string, typeof value.items>();

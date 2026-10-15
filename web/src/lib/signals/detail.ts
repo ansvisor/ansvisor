@@ -1,5 +1,6 @@
 import type { Signal } from './map';
 import { locationName, platformName } from './names';
+import { getPlatformName } from '@/lib/traffic-platforms';
 import { isLibrarySignalKind, type SignalCategory, type SignalKind } from './registry';
 
 /**
@@ -95,7 +96,14 @@ export interface SignalFigure {
 }
 
 /** The window the figures cover. The detectors all read 7-day windows. */
-export type ChangePeriod = 'week_over_week' | 'last_7_days' | 'last_14_days' | 'latest';
+export type ChangePeriod =
+  | 'week_over_week'
+  /** The AI-traffic detector's windows (server signals/traffic-evidence.js). */
+  | 'fortnight_over_fortnight'
+  | 'last_7_days'
+  | 'last_14_days'
+  | 'last_fortnight'
+  | 'latest';
 
 export interface SignalChange {
   period: ChangePeriod;
@@ -123,6 +131,15 @@ const WEEK_OVER_WEEK: Partial<Record<SignalKind, SignalMetric>> = {
   visibility_traffic_loss: 'ai_sessions',
   cross_channel_risk: 'ai_sessions',
 };
+
+// Compared over the last 14 days against the 14 before, not by week.
+const AI_TRAFFIC_KINDS: ReadonlySet<string> = new Set([
+  'ai_traffic_slipping',
+  'ai_traffic_drop',
+  'ai_landing_page_winner',
+  'ai_landing_underperforming',
+  'converting_page_slipping',
+]);
 
 const COUNTED: Record<string, SignalMetric> = {
   prompts: 'prompts',
@@ -163,7 +180,10 @@ export function signalChange(signal: Signal): SignalChange | null {
         { metric: 'mentions', role: 'after', value: Number(p.mentionsNow ?? 0) },
       );
     }
-    return { period: 'week_over_week', figures };
+    return {
+      period: AI_TRAFFIC_KINDS.has(signal.kind) ? 'fortnight_over_fortnight' : 'week_over_week',
+      figures,
+    };
   }
 
   switch (signal.kind) {
@@ -317,7 +337,10 @@ export function signalChange(signal: Signal): SignalChange | null {
   }
   const counted = COUNTED[entity];
   if (counted && cur !== null) {
-    return { period: 'last_7_days', figures: [{ metric: counted, role: 'total', value: cur }] };
+    return {
+      period: AI_TRAFFIC_KINDS.has(signal.kind) ? 'last_fortnight' : 'last_7_days',
+      figures: [{ metric: counted, role: 'total', value: cur }],
+    };
   }
   return null;
 }
@@ -379,6 +402,8 @@ export type WhereValue =
   | { type: 'issues'; items: PageIssue[] }
   /** AI crawlers by robots.txt user agent (`gptbot`). */
   | { type: 'crawlers'; agents: string[] }
+  /** AI visits by platform, per page or for the site, over two windows of `days`. */
+  | { type: 'referrals'; items: PageReferrals[]; days: number }
   | { type: 'locations'; codes: readonly string[] }
   | { type: 'number'; value: number };
 
@@ -498,6 +523,37 @@ function blockedCrawlers(issues: PageIssue[]): string[] {
   return [...new Set(agents)];
 }
 
+/** A page's AI visits (the site's, with no page) by referring platform. */
+export interface PageReferrals {
+  page: string | null;
+  /** Where they were counted: Analytics, or the tracking snippet without it. */
+  source: 'analytics' | 'snippet' | null;
+  sessions: number;
+  before: number;
+  /** By the referrer's platform (`chatgpt.com`), most visits first. */
+  platforms: { platform: string; sessions: number; before: number }[];
+}
+
+function pageReferrals(value: unknown): PageReferrals[] {
+  if (!Array.isArray(value)) return [];
+  const count = (v: unknown) => (typeof v === 'number' ? v : 0);
+  return value
+    .filter((r): r is Record<string, unknown> => !!r && typeof r === 'object')
+    .map((r) => ({
+      page: typeof r.page === 'string' ? r.page : null,
+      source: r.source === 'analytics' || r.source === 'snippet' ? r.source : null,
+      sessions: count(r.sessions),
+      before: count(r.before),
+      platforms: (Array.isArray(r.platforms) ? r.platforms : [])
+        .filter((p): p is Record<string, unknown> => typeof p?.platform === 'string')
+        .map((p) => ({
+          platform: p.platform as string,
+          sessions: count(p.sessions),
+          before: count(p.before),
+        })),
+    }));
+}
+
 export interface WinningSource {
   domain: string;
   /** Answers it is cited in, of the answers read that the competitor wins. */
@@ -594,6 +650,9 @@ const LAYOUT: Record<SignalCategory, WhereFieldKey[]> = {
 // Only a blocked crawler has crawlers to name; another technical issue has none.
 const CRAWLER_LAYOUT: WhereFieldKey[] = ['pages', 'issue', 'crawlers', 'evidence'];
 
+// A site-wide traffic finding has no page to cite: where its AI visits come from.
+const SITE_TRAFFIC_LAYOUT: WhereFieldKey[] = ['scope', 'aiReferrals'];
+
 // A first citation is a gain: the page and the prompt, not who replaced it.
 const FIRST_CITATION_LAYOUT: WhereFieldKey[] = ['url', 'prompt', 'platforms', 'locations'];
 
@@ -657,9 +716,7 @@ function fieldValue(signal: Signal, key: WhereFieldKey): WhereValue | null {
       if (signal.kind === 'sharp_drop' || signal.kind === 'visibility_slipping') {
         return { type: 'scope', scope: 'all_prompts' };
       }
-      if (str(p, 'entity') === 'pages' && targets[0]?.id === 'site') {
-        return { type: 'scope', scope: 'site' };
-      }
+      if (isSiteWide(signal)) return { type: 'scope', scope: 'site' };
       if (entity === 'topics') return { type: 'scope', scope: 'topic' };
       if (
         entity === 'platforms' ||
@@ -787,6 +844,29 @@ function fieldValue(signal: Signal, key: WhereFieldKey): WhereValue | null {
       const sources = winningSourcesOf(p.winningSources);
       return sources.length ? { type: 'sources', items: sources } : null;
     }
+    case 'aiReferrals': {
+      const items = pageReferrals(p.referrals);
+      return items.length
+        ? {
+            type: 'referrals',
+            items,
+            days: typeof p.referralDays === 'number' ? p.referralDays : 14,
+          }
+        : null;
+    }
+    case 'citablePrompts': {
+      // Read with the referrals: none recorded means not looked at, not none.
+      if (!Array.isArray(p.citablePrompts)) return null;
+      const items = (p.citablePrompts as Record<string, unknown>[])
+        .filter((q) => typeof q?.text === 'string')
+        .map((q) => ({ id: typeof q.id === 'string' ? q.id : null, text: q.text as string }));
+      const recorded = p.citablePromptsTotal;
+      return {
+        type: 'prompts',
+        items,
+        total: typeof recorded === 'number' ? recorded : items.length,
+      };
+    }
     case 'issue': {
       const labels = [...new Set(pageIssues(targets).map((i) => i.label))];
       return labels.length ? { type: 'list', items: labels, total: labels.length } : null;
@@ -832,6 +912,13 @@ function namedPlaces(signal: Signal): { platforms: boolean; locations: boolean }
   };
 }
 
+/** A finding about the whole site rather than some of its pages. */
+function isSiteWide(signal: Signal): boolean {
+  const p = signal.payload ?? {};
+  const targets = Array.isArray(p.targets) ? (p.targets as Target[]) : [];
+  return str(p, 'entity') === 'pages' && targets[0]?.id === 'site';
+}
+
 /** The Where block: the spec's fields for this signal, each with its value or none. */
 export function signalWhereFields(signal: Signal): WhereField[] {
   const layout =
@@ -841,7 +928,9 @@ export function signalWhereFields(signal: Signal): WhereField[] {
         ? CRAWLER_LAYOUT
         : CITATION_LOSS.includes(signal.kind)
           ? CITATION_LOSS_LAYOUT
-          : LAYOUT[signal.category];
+          : signal.category === 'traffic' && isSiteWide(signal)
+            ? SITE_TRAFFIC_LAYOUT
+            : LAYOUT[signal.category];
   const named = namedPlaces(signal);
   // A mention's position, sentiment and quote are given per prompt when the
   // evidence is recorded; asked for on their own only when it is not.
@@ -966,6 +1055,22 @@ function apiValue(value: WhereValue): unknown {
       }));
     case 'crawlers':
       return value.agents;
+    case 'referrals':
+      return {
+        days: value.days,
+        items: value.items.map((item) => ({
+          page: item.page,
+          source: item.source,
+          sessions: item.sessions,
+          before: item.before,
+          platforms: item.platforms.map((p) => ({
+            platform: p.platform,
+            name: getPlatformName(p.platform),
+            sessions: p.sessions,
+            before: p.before,
+          })),
+        })),
+      };
     case 'sources':
       return value.items.map((source) => ({
         domain: source.domain,

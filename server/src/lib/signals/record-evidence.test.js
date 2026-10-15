@@ -43,10 +43,35 @@ vi.mock('./mention-evidence.js', () => ({
   },
 }));
 
+let trafficRead = { calls: [], fail: false };
+vi.mock('./traffic-evidence.js', () => ({
+  TRAFFIC_WINDOW_DAYS: 14,
+  trafficEvidence: async (brandId, pages, opts) => {
+    trafficRead.calls.push([brandId, pages, opts]);
+    if (trafficRead.fail) throw new Error('timeout');
+    // Each page is targeted by its own prompt and by a shared one.
+    return new Map(
+      (pages ?? [null]).map((page) => [
+        page,
+        {
+          referrals: { page, source: 'analytics', sessions: 3, before: 5, platforms: [] },
+          prompts: page
+            ? [
+                { id: `p${page}`, text: `About ${page}` },
+                { id: 'shared', text: 'Coffee' },
+              ]
+            : [],
+        },
+      ]),
+    );
+  },
+}));
+
 const {
   attachCompetitorEvidence,
   attachLostCitationEvidence,
   attachMentionEvidence,
+  attachTrafficEvidence,
   keepRecordedEvidence,
 } = await import('./record.js');
 
@@ -70,6 +95,7 @@ beforeEach(() => {
   read = { calls: [], result: new Map(), fail: false };
   competitorRead = { calls: [], result: new Map(), fail: false };
   mentionRead = { calls: [], result: [], fail: false };
+  trafficRead = { calls: [], fail: false };
 });
 
 describe('attachLostCitationEvidence', () => {
@@ -235,5 +261,78 @@ describe('attachMentionEvidence', () => {
       new Map([['uncited_mentions', { payload: { promptIds: ['p1'], mentions } }]]),
     );
     expect(candidates[0].payload).toEqual({ promptIds: ['p1', 'p2'], mentions });
+  });
+});
+
+describe('attachTrafficEvidence', () => {
+  const now = new Date('2026-10-15T00:00:00Z');
+  const slipping = () => ({
+    kind: 'ai_traffic_slipping',
+    dedupKey: 'ai_traffic_slipping',
+    payload: {
+      entity: 'pages',
+      targets: ['/a', '/b', '/c', '/d', '/e', '/f'].map((id) => ({ id, label: id })),
+    },
+  });
+  const opportunity = () => ({
+    kind: 'page_opportunity',
+    dedupKey: 'page_opportunity:/a',
+    payload: { landingPage: '/a', valueRank: 3 },
+  });
+
+  it("reads every signal's pages at once, the site once, side by side", async () => {
+    const candidates = [
+      slipping(),
+      opportunity(),
+      { kind: 'cross_channel_risk', dedupKey: 'cross_channel_risk:site', payload: {} },
+      { kind: 'gsc_decline', dedupKey: 'gsc_decline', payload: { targets: [{ id: 'q' }] } },
+    ];
+    await attachTrafficEvidence('b1', candidates, now);
+    // The detector's pages as written, a page opportunity's as a path.
+    expect(trafficRead.calls).toEqual([
+      ['b1', ['/a', '/b', '/c', '/d', '/e', '/f'], { now, exact: true }],
+      ['b1', ['/a'], { now }],
+      ['b1', null, { now }],
+    ]);
+    const [pages, page, site, other] = candidates.map((c) => c.payload);
+    // Referrals for the first pages; prompts targeting any of them, each once.
+    expect(pages.referrals.map((r) => r.page)).toEqual(['/a', '/b', '/c', '/d', '/e']);
+    expect(pages.citablePrompts.map((p) => p.id)).toEqual([
+      'p/a',
+      'shared',
+      'p/b',
+      'p/c',
+      'p/d',
+      'p/e',
+      'p/f',
+    ]);
+    expect(pages.citablePromptsTotal).toBe(7);
+    expect(page).toMatchObject({
+      landingPage: '/a',
+      referrals: [{ page: '/a', sessions: 3, before: 5 }],
+      referralDays: 14,
+      citablePrompts: [
+        { id: 'p/a', text: 'About /a' },
+        { id: 'shared', text: 'Coffee' },
+      ],
+    });
+    expect(site).toEqual({
+      referrals: [{ page: null, source: 'analytics', sessions: 3, before: 5, platforms: [] }],
+      referralDays: 14,
+    });
+    expect(other).toEqual({ targets: [{ id: 'q' }] });
+  });
+
+  it("records them without evidence when the read fails, keeping an earlier night's", async () => {
+    trafficRead.fail = true;
+    const candidates = [opportunity()];
+    await expect(attachTrafficEvidence('b1', candidates, now)).resolves.toBeUndefined();
+    expect(candidates[0].payload).toEqual({ landingPage: '/a', valueRank: 3 });
+    const recorded = { referrals: [{ page: '/a' }], referralDays: 14, citablePrompts: [] };
+    keepRecordedEvidence(
+      candidates,
+      new Map([['page_opportunity:/a', { payload: { landingPage: '/a', ...recorded } }]]),
+    );
+    expect(candidates[0].payload).toEqual({ landingPage: '/a', valueRank: 3, ...recorded });
   });
 });

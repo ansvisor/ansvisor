@@ -26,6 +26,7 @@ import { resolveBrandSources } from '../../action-center/sources.js';
 import * as c from './classify.js';
 import { isTransientDbError } from '../../pulse/metrics.js';
 import { describeSignal } from '../../audit/rubric.js';
+import { TRAFFIC_WINDOW_DAYS } from '../traffic-evidence.js';
 
 const { library: t } = resolve();
 const DAY_MS = 86_400_000;
@@ -173,10 +174,10 @@ function context(brandId, now, sources) {
       once('traffic', () =>
         rpc('ae_ai_traffic_pages', {
           p_brand_id: brandId,
-          p_cur_from: isoDay(now, 13),
+          p_cur_from: isoDay(now, TRAFFIC_WINDOW_DAYS - 1),
           p_cur_to: isoDay(now, 0),
-          p_prev_from: isoDay(now, 27),
-          p_prev_to: isoDay(now, 14),
+          p_prev_from: isoDay(now, TRAFFIC_WINDOW_DAYS * 2 - 1),
+          p_prev_to: isoDay(now, TRAFFIC_WINDOW_DAYS),
         }),
       ),
     gsc: () =>

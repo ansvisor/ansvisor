@@ -380,6 +380,85 @@ describe("a technical finding with its checks' evidence", () => {
   });
 });
 
+describe('a traffic signal with its referrals and prompts', () => {
+  it('lists the referrals by platform, page by page, and the prompts', () => {
+    render(
+      <SignalWhereBlock
+        signal={signal({
+          category: 'traffic',
+          kind: 'ai_traffic_slipping',
+          currentValue: 2,
+          payload: {
+            entity: 'pages',
+            targets: [
+              { id: '/pricing', label: '/pricing' },
+              { id: '/guide', label: '/guide' },
+            ],
+            referrals: [
+              {
+                page: '/pricing',
+                source: 'analytics',
+                sessions: 6,
+                before: 11,
+                platforms: [
+                  { platform: 'chatgpt.com', sessions: 4, before: 9 },
+                  { platform: 'perplexity.ai', sessions: 2, before: 2 },
+                ],
+              },
+              { page: '/guide', source: null, sessions: 0, before: 0, platforms: [] },
+            ],
+            referralDays: 14,
+            citablePrompts: [],
+            citablePromptsTotal: 0,
+          },
+          where: NO_WHERE,
+        })}
+      />,
+    );
+    const rows = [...container.querySelectorAll('dt')].map(
+      (dt) => `${dt.textContent}: ${dt.nextElementSibling?.textContent}`,
+    );
+    expect(rows).toContain(
+      'AI referrals by platform: /pricingChatGPT 9 → 4 · Perplexity 2 → 2/guideNo AI referrals' +
+        'Visits in the last 14 days, against the 14 before',
+    );
+    expect(rows).toContain('Prompts it could be cited on: None');
+  });
+
+  it("doesn't name the page again when the signal is about one", () => {
+    render(
+      <SignalWhereBlock
+        signal={signal({
+          category: 'traffic',
+          kind: 'page_opportunity',
+          currentValue: 120,
+          payload: {
+            landingPage: '/pricing',
+            referrals: [
+              {
+                page: '/pricing',
+                source: 'analytics',
+                sessions: 1,
+                before: 0,
+                platforms: [{ platform: 'grok.com', sessions: 1, before: 0 }],
+              },
+            ],
+            referralDays: 14,
+          },
+          where: NO_WHERE,
+        })}
+      />,
+    );
+    const rows = [...container.querySelectorAll('dt')].map(
+      (dt) => `${dt.textContent}: ${dt.nextElementSibling?.textContent}`,
+    );
+    expect(rows).toContain('URL: /pricing');
+    expect(rows).toContain(
+      'AI referrals by platform: Grok 0 → 1Visits in the last 14 days, against the 14 before',
+    );
+  });
+});
+
 describe('SignalEvidenceBlock', () => {
   it('links the answers and the action the signal is used by', async () => {
     getSignalActions.mockResolvedValue([

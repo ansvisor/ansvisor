@@ -31,6 +31,7 @@ import { computePulseMetrics, LOST_CITATION_WINDOW_DAYS } from '../pulse/metrics
 import { lostCitationEvidence } from './lost-citation-evidence.js';
 import { competitorEvidence } from './competitor-evidence.js';
 import { mentionEvidence } from './mention-evidence.js';
+import { TRAFFIC_WINDOW_DAYS, trafficEvidence } from './traffic-evidence.js';
 import { logger } from '../logger.js';
 import { resolve } from '../../config/action-engine.js';
 import { EXCLUSIVE_KIND_GROUPS, LIBRARY_KINDS } from './library/kinds.js';
@@ -588,6 +589,28 @@ for (const kind of COMPETITOR_KINDS) {
 }
 EVIDENCE.uncited_mentions = { marker: 'mentions', fields: ['mentions'] };
 
+// Signals about AI visits: to their pages, to one page, or to the whole site.
+const TRAFFIC_PAGE_KINDS = new Set([
+  'ai_traffic_slipping',
+  'ai_traffic_drop',
+  'ai_landing_page_winner',
+  'ai_landing_underperforming',
+  'converting_page_slipping',
+]);
+const TRAFFIC_SITE_KINDS = new Set(['cross_channel_risk', 'visibility_traffic_loss']);
+for (const kind of [...TRAFFIC_PAGE_KINDS, ...TRAFFIC_SITE_KINDS, 'page_opportunity']) {
+  EVIDENCE[kind] = {
+    marker: 'referrals',
+    fields: ['referrals', 'referralDays', 'citablePrompts', 'citablePromptsTotal'],
+  };
+}
+
+/** Pages a traffic signal's referrals describe: its first ones. */
+const TRAFFIC_PAGES_SHOWN = 5;
+
+/** Prompts a traffic signal names it could be cited on. */
+const CITABLE_PROMPTS_SHOWN = 10;
+
 /**
  * A night whose evidence read failed refreshes a signal with its bare
  * detector payload. Keep what an earlier night recorded instead: it is older,
@@ -625,6 +648,83 @@ export async function attachMentionEvidence(brandId, candidates, now) {
       candidate.payload = { ...candidate.payload, mentions };
     } catch (err) {
       logger.warn({ brandId, err: err.message }, '[signals] mention evidence unavailable');
+    }
+  }
+}
+
+/** A traffic signal's pages, or its one; null for the site. */
+function trafficPagesOf(candidate) {
+  if (candidate.kind === 'page_opportunity') {
+    const page = candidate.payload?.landingPage;
+    return typeof page === 'string' && page ? [page] : [];
+  }
+  if (TRAFFIC_SITE_KINDS.has(candidate.kind)) return null;
+  if (!TRAFFIC_PAGE_KINDS.has(candidate.kind)) return [];
+  return (candidate.payload?.targets ?? [])
+    .map((target) => target?.id)
+    .filter((id) => typeof id === 'string' && id);
+}
+
+/** One traffic evidence read; null when it fails, which costs its signals only. */
+async function readTraffic(brandId, pages, opts) {
+  if (pages?.length === 0) return new Map();
+  try {
+    return await trafficEvidence(brandId, pages, opts);
+  } catch (err) {
+    logger.warn({ brandId, err: err.message }, '[signals] traffic evidence unavailable');
+    return null;
+  }
+}
+
+/**
+ * Traffic signals arrive naming their pages and a session count. Before they
+ * are written they get what the drawer shows (AC-001): for their first pages,
+ * the AI visits by platform over the last two windows, and the prompts
+ * naming any of their pages as the target. The detector's pages are matched
+ * as written, so their numbers are the finding's; a page opportunity's path
+ * as a path. Three reads at most, side by side. Best effort, like the other
+ * evidence.
+ */
+export async function attachTrafficEvidence(brandId, candidates, now) {
+  const onPages = candidates
+    .map((candidate) => ({
+      candidate,
+      pages: trafficPagesOf(candidate),
+      exact: TRAFFIC_PAGE_KINDS.has(candidate.kind),
+    }))
+    .filter(({ pages }) => pages?.length);
+  const onSite = candidates.filter((candidate) => TRAFFIC_SITE_KINDS.has(candidate.kind));
+  const pagesOf = (exact) => [
+    ...new Set(onPages.filter((o) => o.exact === exact).flatMap((o) => o.pages)),
+  ];
+
+  const [asWritten, asPaths, site] = await Promise.all([
+    readTraffic(brandId, pagesOf(true), { now, exact: true }),
+    readTraffic(brandId, pagesOf(false), { now }),
+    onSite.length ? readTraffic(brandId, null, { now }) : null,
+  ]);
+
+  for (const { candidate, pages, exact } of onPages) {
+    const evidence = exact ? asWritten : asPaths;
+    if (!evidence) continue;
+    const found = pages.map((page) => evidence.get(page)).filter(Boolean);
+    const prompts = [...new Map(found.flatMap((f) => f.prompts).map((p) => [p.id, p])).values()];
+    candidate.payload = {
+      ...candidate.payload,
+      referrals: found.slice(0, TRAFFIC_PAGES_SHOWN).map((f) => f.referrals),
+      referralDays: TRAFFIC_WINDOW_DAYS,
+      citablePrompts: prompts.slice(0, CITABLE_PROMPTS_SHOWN),
+      citablePromptsTotal: prompts.length,
+    };
+  }
+  const whole = site?.get(null);
+  if (whole) {
+    for (const candidate of onSite) {
+      candidate.payload = {
+        ...candidate.payload,
+        referrals: [whole.referrals],
+        referralDays: TRAFFIC_WINDOW_DAYS,
+      };
     }
   }
 }
@@ -752,6 +852,7 @@ export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) 
   );
   await attachCompetitorEvidence(brandId, [...candidates, ...overflow], now);
   await attachMentionEvidence(brandId, candidates, now);
+  await attachTrafficEvidence(brandId, [...candidates, ...overflow], now);
 
   // Existing rows decide insert vs update vs reopen. A brand's signal set is
   // small (tens), so reading it whole is cheaper than being clever.

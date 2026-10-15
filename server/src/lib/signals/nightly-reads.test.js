@@ -22,6 +22,7 @@ const NIGHTLY_MODULES = [
   'src/lib/signals/lost-citation-evidence.js',
   'src/lib/signals/competitor-evidence.js',
   'src/lib/signals/mention-evidence.js',
+  'src/lib/signals/traffic-evidence.js',
   'src/lib/pulse/metrics.js',
   'src/lib/action-center/generate.js',
   'src/lib/action-center/validate.js',

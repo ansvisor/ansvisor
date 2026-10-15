@@ -514,3 +514,96 @@ describe("a technical finding with its checks' evidence", () => {
     expect(byKey.crawlers).toBeNull();
   });
 });
+
+describe('a traffic signal with its referrals and prompts', () => {
+  const referrals = {
+    page: '/pricing',
+    source: 'analytics',
+    sessions: 4,
+    before: 9,
+    platforms: [{ platform: 'chatgpt.com', sessions: 4, before: 9 }],
+  };
+  const opportunity = signal({
+    category: 'traffic',
+    kind: 'page_opportunity',
+    payload: {
+      landingPage: '/pricing',
+      valueRank: 3,
+      referrals: [referrals],
+      referralDays: 14,
+      citablePrompts: [{ id: 'p1', text: 'Best coffee subscription?' }],
+      citablePromptsTotal: 1,
+    },
+    currentValue: 120,
+  });
+
+  it('gives the AI referrals by platform and the prompts the page could be cited on', () => {
+    const byKey = Object.fromEntries(signalWhereFields(opportunity).map((f) => [f.key, f.value]));
+    expect(byKey.url).toEqual({ type: 'text', text: '/pricing' });
+    expect(byKey.aiReferrals).toEqual({ type: 'referrals', items: [referrals], days: 14 });
+    expect(byKey.citablePrompts).toEqual({
+      type: 'prompts',
+      items: [{ id: 'p1', text: 'Best coffee subscription?' }],
+      total: 1,
+    });
+    expect(signalDetailForApi(opportunity, []).where.ai_referrals).toEqual({
+      days: 14,
+      items: [
+        {
+          ...referrals,
+          platforms: [{ platform: 'chatgpt.com', name: 'ChatGPT', sessions: 4, before: 9 }],
+        },
+      ],
+    });
+  });
+
+  it('says none were found once looked for, and "Not available" before', () => {
+    const none = signal({
+      ...opportunity,
+      payload: {
+        landingPage: '/pricing',
+        referrals: [],
+        citablePrompts: [],
+        citablePromptsTotal: 0,
+      },
+    });
+    const byKey = Object.fromEntries(signalWhereFields(none).map((f) => [f.key, f.value]));
+    expect(byKey.citablePrompts).toEqual({ type: 'prompts', items: [], total: 0 });
+    expect(byKey.aiReferrals).toBeNull();
+
+    const older = signal({ ...opportunity, payload: { landingPage: '/pricing', valueRank: 3 } });
+    const fields = Object.fromEntries(signalWhereFields(older).map((f) => [f.key, f.value]));
+    expect(fields.aiReferrals).toBeNull();
+    expect(fields.citablePrompts).toBeNull();
+  });
+});
+
+describe('the AI-traffic windows', () => {
+  it('says the traffic findings compare 14 days, not 7', () => {
+    const slipping = signal({
+      category: 'traffic',
+      kind: 'ai_traffic_slipping',
+      payload: { entity: 'pages', targets: [{ id: '/a' }, { id: '/b' }] },
+      currentValue: 2,
+    });
+    expect(signalChange(slipping)?.period).toBe('last_fortnight');
+    const drop = signal({
+      ...slipping,
+      kind: 'ai_traffic_drop',
+      previousValue: 90,
+      currentValue: 40,
+    });
+    expect(signalChange(drop)?.period).toBe('fortnight_over_fortnight');
+  });
+
+  it('asks a site-wide finding where its visits come from, not which prompts', () => {
+    const site = signal({
+      category: 'traffic',
+      kind: 'visibility_traffic_loss',
+      payload: { entity: 'pages', targets: [{ id: 'site', label: '' }] },
+      previousValue: 120,
+      currentValue: 80,
+    });
+    expect(signalWhereFields(site).map((f) => f.key)).toEqual(['scope', 'aiReferrals']);
+  });
+});
