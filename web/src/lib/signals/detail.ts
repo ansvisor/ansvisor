@@ -402,6 +402,18 @@ export type WhereValue =
   | { type: 'issues'; items: PageIssue[] }
   /** AI crawlers by robots.txt user agent (`gptbot`). */
   | { type: 'crawlers'; agents: string[] }
+  /**
+   * AI-traffic pages: their sessions and, from Analytics, what their AI
+   * visitors did; `metrics` are those the signal's kind is about.
+   */
+  | {
+      type: 'trafficPages';
+      items: TrafficPage[];
+      total: number;
+      metrics: TrafficMetric[];
+      siteEngagedRate: number | null;
+      siteKeyRate: number | null;
+    }
   /** AI visits by platform, per page or for the site, over two windows of `days`. */
   | { type: 'referrals'; items: PageReferrals[]; days: number }
   | { type: 'locations'; codes: readonly string[] }
@@ -521,6 +533,42 @@ function blockedCrawlers(issues: PageIssue[]): string[] {
     .flatMap((i) => (Array.isArray(i.evidence.blockedBots) ? i.evidence.blockedBots : []))
     .filter((a): a is string => typeof a === 'string');
   return [...new Set(agents)];
+}
+
+/** A page's AI sessions, and from Analytics what its AI visitors did. */
+export interface TrafficPage {
+  page: string;
+  /** AI sessions now and in the window before; null when not recorded. */
+  sessions: number | null;
+  before: number | null;
+  /** Engaged sessions' share, 0–1; null without Analytics. */
+  engagedRate: number | null;
+  /** Key events per session (can pass 1); null without Analytics. */
+  keyRate: number | null;
+  keyEvents: number | null;
+  keyEventsBefore: number | null;
+}
+
+export type TrafficMetric = 'engagement' | 'keyEvents' | 'keyRate';
+
+// What each AI-traffic finding was raised on, beside the sessions
+// (server signals/library/classify.js classifyTrafficPage).
+const TRAFFIC_METRICS: Record<string, TrafficMetric[]> = {
+  ai_landing_underperforming: ['engagement'],
+  ai_landing_page_winner: ['keyEvents', 'keyRate'],
+  converting_page_slipping: ['keyEvents'],
+};
+
+function trafficPages(targets: Target[]): TrafficPage[] {
+  return targets.map((t) => ({
+    page: label(t),
+    sessions: num(t.now),
+    before: num(t.before),
+    engagedRate: num(t.engagedRate),
+    keyRate: num(t.keyRate),
+    keyEvents: num(t.keyEvents),
+    keyEventsBefore: num(t.keyEventsBefore),
+  }));
 }
 
 /** A page's AI visits (the site's, with no page) by referring platform. */
@@ -691,6 +739,12 @@ interface Target {
   checks?: unknown;
   issues?: unknown;
   page?: unknown;
+  before?: unknown;
+  now?: unknown;
+  engagedRate?: unknown;
+  keyRate?: unknown;
+  keyEvents?: unknown;
+  keyEventsBefore?: unknown;
 }
 
 function targetsOf(signal: Signal): Target[] {
@@ -805,6 +859,20 @@ function fieldValue(signal: Signal, key: WhereFieldKey): WhereValue | null {
       return url ? { type: 'text', text: url } : null;
     }
     case 'pages': {
+      if (AI_TRAFFIC_KINDS.has(signal.kind) && targets.length && !isSiteWide(signal)) {
+        return {
+          type: 'trafficPages',
+          items: trafficPages(targets),
+          // A drop's value is the site's sessions; its pages are counted apart.
+          total:
+            signal.kind === 'ai_traffic_drop'
+              ? Math.max(targets.length, num(p.pageCount) ?? 0)
+              : total,
+          metrics: TRAFFIC_METRICS[signal.kind] ?? [],
+          siteEngagedRate: num(p.siteEngagedRate),
+          siteKeyRate: num(p.siteKeyRate),
+        };
+      }
       if (entity === 'pages' && targets.length && targets[0]?.id !== 'site') {
         return { type: 'list', items: targets.map(label), total };
       }
@@ -1055,6 +1123,23 @@ function apiValue(value: WhereValue): unknown {
       }));
     case 'crawlers':
       return value.agents;
+    case 'trafficPages':
+      // `items` stays the page list every other signal's `pages` gives.
+      return {
+        total: value.total,
+        items: value.items.map((item) => item.page),
+        traffic: value.items.map((item) => ({
+          page: item.page,
+          sessions: item.sessions,
+          sessions_before: item.before,
+          engaged_rate: item.engagedRate,
+          key_events: item.keyEvents,
+          key_events_before: item.keyEventsBefore,
+          key_events_per_session: item.keyRate,
+        })),
+        site_engaged_rate: value.siteEngagedRate,
+        site_key_events_per_session: value.siteKeyRate,
+      };
     case 'referrals':
       return {
         days: value.days,

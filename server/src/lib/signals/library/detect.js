@@ -193,6 +193,34 @@ function context(brandId, now, sources) {
   };
 }
 
+/** A rate to three places: what the drawer shows. */
+const rounded = (value) => Math.round(value * 1000) / 1000;
+
+/**
+ * A page of AI traffic as the drawer shows it (AC-001): its sessions, and
+ * from Analytics what its AI visitors did, the engagement and key events the
+ * classification compares with the site's. The snippet counts visits only.
+ */
+function trafficTarget(p) {
+  const target = {
+    id: p.page,
+    label: p.page,
+    before: p.prev_sessions ?? 0,
+    now: p.cur_sessions ?? 0,
+  };
+  if (p.source !== 'analytics') return target;
+  const sessions = p.cur_sessions ?? 0;
+  const share = (part) => (sessions > 0 ? rounded((part ?? 0) / sessions) : null);
+  return {
+    ...target,
+    engagedRate: share(p.cur_engaged),
+    keyEvents: p.cur_key_events ?? 0,
+    keyEventsBefore: p.prev_key_events ?? 0,
+    // Key events per session, as the classification compares them: can pass 1.
+    keyRate: share(p.cur_key_events),
+  };
+}
+
 const promptTarget = (texts) => (p) => ({
   id: p.prompt_id,
   label: String(texts.get(p.prompt_id) ?? '').slice(0, 160),
@@ -574,23 +602,17 @@ const FAMILIES = [
       const pages = c.mergeTrafficPages(await ctx.traffic());
       const site = c.siteTrafficRates(pages);
       const source = pages.some((p) => p.source === 'analytics') ? GA : AI;
+      // The site's rates the pages were compared with, from Analytics only.
+      const siteRates =
+        source === GA
+          ? { siteEngagedRate: rounded(site.engagedRate), siteKeyRate: rounded(site.keyRate) }
+          : {};
       const groups = {};
       for (const page of pages) {
         for (const kind of c.classifyTrafficPage(page, site, t)) (groups[kind] ??= []).push(page);
       }
       const found = Object.entries(groups).map(([kind, rows]) =>
-        group(
-          kind,
-          'pages',
-          rows,
-          (p) => ({
-            id: p.page,
-            label: p.page,
-            before: p.prev_sessions ?? 0,
-            now: p.cur_sessions ?? 0,
-          }),
-          source,
-        ),
+        group(kind, 'pages', rows, trafficTarget, source, siteRates),
       );
       if (
         site.prev >= t.aiTrafficMinSessions * 3 &&
@@ -598,18 +620,12 @@ const FAMILIES = [
       ) {
         const falling = pages.filter((p) => (p.prev_sessions ?? 0) > (p.cur_sessions ?? 0));
         found.push({
-          ...group(
-            'ai_traffic_drop',
-            'pages',
-            falling,
-            (p) => ({
-              id: p.page,
-              label: p.page,
-              before: p.prev_sessions ?? 0,
-              now: p.cur_sessions ?? 0,
-            }),
-            source,
-          ),
+          // Its value is the site's sessions, so the falling pages are counted
+          // apart: only the first 50 are kept as targets.
+          ...group('ai_traffic_drop', 'pages', falling, trafficTarget, source, {
+            ...siteRates,
+            pageCount: falling.length,
+          }),
           previousValue: site.prev,
           currentValue: site.cur,
           changeValue: site.cur - site.prev,

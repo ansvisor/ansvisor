@@ -607,3 +607,114 @@ describe('the AI-traffic windows', () => {
     expect(signalWhereFields(site).map((f) => f.key)).toEqual(['scope', 'aiReferrals']);
   });
 });
+
+describe("an AI-traffic finding's pages", () => {
+  const winner = signal({
+    category: 'traffic',
+    kind: 'ai_landing_page_winner',
+    payload: {
+      entity: 'pages',
+      targets: [
+        {
+          id: '/pricing',
+          label: '/pricing',
+          before: 42,
+          now: 40,
+          engagedRate: 0.75,
+          keyEvents: 8,
+          keyEventsBefore: 5,
+          keyRate: 0.2,
+        },
+      ],
+      siteEngagedRate: 0.444,
+      siteKeyRate: 0.089,
+    },
+    currentValue: 1,
+  });
+
+  it('gives each page its sessions and what its AI visitors did, beside the site', () => {
+    const pages = signalWhereFields(winner).find((f) => f.key === 'pages')?.value;
+    expect(pages).toEqual({
+      type: 'trafficPages',
+      items: [
+        {
+          page: '/pricing',
+          sessions: 40,
+          before: 42,
+          engagedRate: 0.75,
+          keyRate: 0.2,
+          keyEvents: 8,
+          keyEventsBefore: 5,
+        },
+      ],
+      total: 1,
+      metrics: ['keyEvents', 'keyRate'],
+      siteEngagedRate: 0.444,
+      siteKeyRate: 0.089,
+    });
+    // `items` stays the page list other signals give; the figures ride beside.
+    expect(signalDetailForApi(winner, []).where.pages).toEqual({
+      total: 1,
+      items: ['/pricing'],
+      traffic: [
+        {
+          page: '/pricing',
+          sessions: 40,
+          sessions_before: 42,
+          engaged_rate: 0.75,
+          key_events: 8,
+          key_events_before: 5,
+          key_events_per_session: 0.2,
+        },
+      ],
+      site_engaged_rate: 0.444,
+      site_key_events_per_session: 0.089,
+    });
+  });
+
+  it("counts a drop's pages, not its sessions, and reads a snippet page's visits only", () => {
+    const drop = signal({
+      category: 'traffic',
+      kind: 'ai_traffic_drop',
+      payload: {
+        entity: 'pages',
+        targets: [{ id: '/blog', label: '/blog', before: 20, now: 6 }],
+        pageCount: 120,
+      },
+      previousValue: 120,
+      currentValue: 70,
+    });
+    expect(signalWhereFields(drop).find((f) => f.key === 'pages')?.value).toEqual({
+      type: 'trafficPages',
+      items: [
+        {
+          page: '/blog',
+          sessions: 6,
+          before: 20,
+          engagedRate: null,
+          keyRate: null,
+          keyEvents: null,
+          keyEventsBefore: null,
+        },
+      ],
+      total: 120,
+      metrics: [],
+      siteEngagedRate: null,
+      siteKeyRate: null,
+    });
+  });
+
+  it('leaves out sessions a target does not record', () => {
+    const bare = signal({
+      category: 'traffic',
+      kind: 'ai_traffic_slipping',
+      payload: { entity: 'pages', targets: [{ id: '/blog', label: '/blog' }] },
+      currentValue: 1,
+    });
+    const pages = signalWhereFields(bare).find((f) => f.key === 'pages')?.value;
+    expect(pages?.type === 'trafficPages' && pages.items[0]).toMatchObject({
+      sessions: null,
+      before: null,
+    });
+  });
+});

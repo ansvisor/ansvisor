@@ -211,6 +211,69 @@ function WhereValueView({ value }: { value: WhereValue }) {
       );
     case 'crawlers':
       return <span>{value.agents.map(crawlerName).join(', ')}</span>;
+    case 'trafficPages': {
+      const shown = value.items.slice(0, LIST_LIMIT);
+      // Engagement is a share of sessions; key events are counted per
+      // session, which can pass one.
+      const percent = (share: number) =>
+        format.number(share, { style: 'percent', maximumFractionDigits: 0 });
+      const perSession = (rate: number) => format.number(rate, { maximumFractionDigits: 2 });
+      const versus = (
+        key: 'engagement' | 'keyRate',
+        value: number,
+        site: number | null,
+        shown: (n: number) => string,
+      ) =>
+        site === null
+          ? t(`drawer.trafficPages.${key}`, { rate: shown(value) })
+          : t(`drawer.trafficPages.${key}VsSite`, { rate: shown(value), site: shown(site) });
+      return (
+        <ul className="space-y-2">
+          {shown.map((item) => {
+            // The sessions, then what the finding was raised on.
+            const facts: string[] = [];
+            if (item.sessions !== null && item.before !== null) {
+              facts.push(
+                t('drawer.trafficPages.sessions', {
+                  before: format.number(item.before),
+                  now: format.number(item.sessions),
+                }),
+              );
+            }
+            for (const metric of value.metrics) {
+              if (metric === 'engagement' && item.engagedRate !== null) {
+                facts.push(versus('engagement', item.engagedRate, value.siteEngagedRate, percent));
+              }
+              if (metric === 'keyRate' && item.keyRate !== null) {
+                facts.push(versus('keyRate', item.keyRate, value.siteKeyRate, perSession));
+              }
+              if (metric === 'keyEvents' && item.keyEvents !== null) {
+                facts.push(
+                  t('drawer.trafficPages.keyEvents', {
+                    before: format.number(item.keyEventsBefore ?? 0),
+                    now: format.number(item.keyEvents),
+                  }),
+                );
+              }
+            }
+            return (
+              <li key={item.page}>
+                <span className="block break-all">{item.page}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {facts.map((fact, i) => (
+                    <span key={i}>
+                      {i > 0 && ' · '}
+                      <span className="whitespace-nowrap">{fact}</span>
+                    </span>
+                  ))}
+                </span>
+              </li>
+            );
+          })}
+          <More shown={shown.length} total={value.total} />
+        </ul>
+      );
+    }
     case 'referrals': {
       const shown = value.items.slice(0, LIST_LIMIT);
       return (

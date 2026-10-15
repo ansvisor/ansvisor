@@ -459,6 +459,79 @@ describe('a traffic signal with its referrals and prompts', () => {
   });
 });
 
+describe("an AI-traffic finding's pages", () => {
+  const rowsOf = () =>
+    [...container.querySelectorAll('dt')].map(
+      (dt) => `${dt.textContent}: ${dt.nextElementSibling?.textContent}`,
+    );
+  const page = {
+    id: '/guide',
+    label: '/guide',
+    before: 52,
+    now: 50,
+    engagedRate: 0.2,
+    keyEvents: 1,
+    keyEventsBefore: 3,
+    keyRate: 0.02,
+  };
+
+  it('says how engaged its AI visitors were against the site', () => {
+    render(
+      <SignalWhereBlock
+        signal={signal({
+          category: 'traffic',
+          kind: 'ai_landing_underperforming',
+          currentValue: 1,
+          payload: { entity: 'pages', targets: [page], siteEngagedRate: 0.444, siteKeyRate: 0.089 },
+          where: NO_WHERE,
+        })}
+      />,
+    );
+    expect(rowsOf()).toContain('Pages: /guideSessions 52 → 50 · Engagement rate 20% (site 44%)');
+  });
+
+  it("counts a winning page's key events per session, which can pass one", () => {
+    render(
+      <SignalWhereBlock
+        signal={signal({
+          category: 'traffic',
+          kind: 'ai_landing_page_winner',
+          currentValue: 1,
+          payload: {
+            entity: 'pages',
+            targets: [{ ...page, keyEvents: 75, keyEventsBefore: 40, keyRate: 1.5 }],
+            siteKeyRate: 0.089,
+          },
+          where: NO_WHERE,
+        })}
+      />,
+    );
+    expect(rowsOf()).toContain(
+      'Pages: /guideSessions 52 → 50 · Key events 40 → 75 · 1.5 key events per session (site 0.09)',
+    );
+  });
+
+  it('gives the key events a converting page lost, and only sessions without Analytics', () => {
+    render(
+      <SignalWhereBlock
+        signal={signal({
+          category: 'traffic',
+          kind: 'converting_page_slipping',
+          currentValue: 2,
+          payload: {
+            entity: 'pages',
+            targets: [page, { id: '/blog', label: '/blog', before: 20, now: 16 }],
+          },
+          where: NO_WHERE,
+        })}
+      />,
+    );
+    expect(rowsOf()).toContain(
+      'Pages: /guideSessions 52 → 50 · Key events 3 → 1/blogSessions 20 → 16',
+    );
+  });
+});
+
 describe('SignalEvidenceBlock', () => {
   it('links the answers and the action the signal is used by', async () => {
     getSignalActions.mockResolvedValue([

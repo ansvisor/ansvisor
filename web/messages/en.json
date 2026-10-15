@@ -349,6 +349,14 @@
         "viewPrompt": "View prompt",
         "notAvailable": "Not available",
         "none": "None",
+        "trafficPages": {
+          "sessions": "Sessions {before} → {now}",
+          "engagement": "Engagement rate {rate}",
+          "engagementVsSite": "Engagement rate {rate} (site {site})",
+          "keyEvents": "Key events {before} → {now}",
+          "keyRate": "{rate} key events per session",
+          "keyRateVsSite": "{rate} key events per session (site {site})"
+        },
         "referrals": {
           "none": "No AI referrals",
           "period": "Visits in the last {days} days, against the {days} before"
