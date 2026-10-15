@@ -2063,6 +2063,24 @@
       "platformsAndModels": "Platform & Models",
       "selectPlatformsAndModels": "Select platform & models",
       "selectedCount": "{count} selected"
+    },
+    "fanout": {
+      "engines": "Engines",
+      "allEngines": "All engines",
+      "share": "{percent} of answers",
+      "noneSince": "none since {date}",
+      "noneInWindow": "none in this window",
+      "notShared": "not shared",
+      "silentTitle": "{engine} usually shares the searches behind its answers, but none arrived since {date}.",
+      "silentTitleNoDate": "{engine} usually shares the searches behind its answers, but none arrived in this window.",
+      "silentBody": "Its answers are still tracked as usual; only the list of searches is missing.",
+      "notSharedNote": "{engines} don't come with the searches behind their answers, so they can't appear here.",
+      "enginesLegend": "Coloured: shared searches for this prompt in the window. Faded: tracked, but shared none.",
+      "engineEmptyTitle": "No {engine} searches in the {range}",
+      "engineEmptyBody": "{engine} usually shares the searches behind its answers. Try a longer date range.",
+      "emptyTitle": "No fan-out captured yet",
+      "emptyBody": "ChatGPT, Copilot and Perplexity share the searches behind some of their answers; Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
+      "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. Only ChatGPT, Copilot and Perplexity share them."
     }
   },
   "competitors": {

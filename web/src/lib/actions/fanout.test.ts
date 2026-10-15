@@ -13,6 +13,8 @@ interface QueryState {
   eq: Record<string, unknown>;
   inFilter?: { column: string; values: string[] };
   range?: [number, number];
+  /** The single-row lookup (lastFanoutAt): `.not(…).limit(1).maybeSingle()`. */
+  single?: boolean;
 }
 
 const SET_ID = 'set-1';
@@ -30,6 +32,8 @@ let rosterRows: PromptRow[] = [];
 /** Prompts reachable only by id — e.g. moved out of the brand's sets. */
 let residualRows: PromptRow[] = [];
 let promptSetRows: { id: string }[] = [];
+/** What the last-fan-out lookup finds, per platform. */
+let lastFanoutRows: Record<string, string> = {};
 /** When set, prompt_results always returns a full page (drives truncation). */
 let alwaysFullPage = false;
 let residualError: string | null = null;
@@ -44,6 +48,11 @@ function resolveQuery(state: QueryState): {
     const [from, to] = state.range;
     return rows.slice(from, to + 1);
   };
+
+  if (state.table === 'prompt_results' && state.single) {
+    const at = lastFanoutRows[state.eq.platform as string];
+    return { data: at ? ({ created_at: at } as never) : null, error: null };
+  }
 
   if (state.table === 'prompt_results') {
     if (alwaysFullPage) {
@@ -79,6 +88,13 @@ function fakeQueryBuilder(table: string) {
       return builder;
     },
     gte: () => builder,
+    lt: () => builder,
+    not: () => builder,
+    limit: () => builder,
+    maybeSingle: () => {
+      state.single = true;
+      return builder;
+    },
     order: () => builder,
     in: (column: string, values: string[]) => {
       state.inFilter = { column, values };
@@ -113,6 +129,7 @@ const q = (query: string) => ({ query, source_platform: 'copilot' });
 
 beforeEach(() => {
   calls = [];
+  lastFanoutRows = {};
   alwaysFullPage = false;
   residualError = null;
   promptSetRows = [{ id: SET_ID }];
@@ -154,6 +171,8 @@ describe('getQueryFanout — prompt coverage', () => {
       text: 'How do I track brand mentions?',
       totalRuns: 4,
       runsWithFanout: 0,
+      platforms: ['copilot'],
+      fanoutPlatforms: [],
     });
   });
 
@@ -294,5 +313,79 @@ describe('getQueryFanout — window truncation', () => {
     // on the end of the window — the newest answers are missing and the ratios
     // are a lower bound.
     await expect(getQueryFanout('brand-1')).resolves.toMatchObject({ truncated: true });
+  });
+});
+
+describe('getQueryFanout — engines', () => {
+  it("counts each engine's answers, answers with fan-out and distinct sub-queries", async () => {
+    resultRows = [
+      answer('p-loud', [{ query: 'aeo tools', source_platform: 'copilot-web' }], 'copilot-web'),
+      answer('p-loud', [], 'copilot-web'),
+      answer('p-loud', [], 'chatgpt-web'),
+      answer('p-loud', [], 'google-aio'),
+    ];
+    const { getQueryFanout } = await import('./fanout');
+
+    const { engines, promptCoverage } = await getQueryFanout('brand-1');
+
+    expect(engines).toEqual([
+      {
+        platform: 'copilot-web',
+        answers: 2,
+        answersWithFanout: 1,
+        subQueries: 1,
+        lastFanoutAt: null,
+      },
+      {
+        platform: 'chatgpt-web',
+        answers: 1,
+        answersWithFanout: 0,
+        subQueries: 0,
+        lastFanoutAt: null,
+      },
+      {
+        platform: 'google-aio',
+        answers: 1,
+        answersWithFanout: 0,
+        subQueries: 0,
+        lastFanoutAt: null,
+      },
+    ]);
+    expect(promptCoverage.find((p) => p.id === 'p-loud')).toMatchObject({
+      platforms: ['chatgpt-web', 'copilot-web', 'google-aio'],
+      fanoutPlatforms: ['copilot-web'],
+    });
+  });
+
+  it('says when an engine that shares its searches last did, and only for such an engine', async () => {
+    resultRows = [
+      ...Array.from({ length: 20 }, () => answer('p-loud', [], 'chatgpt-web')),
+      ...Array.from({ length: 20 }, () => answer('p-loud', [], 'gemini-web')),
+    ];
+    lastFanoutRows = {
+      'chatgpt-web': '2026-09-29T05:12:00Z',
+      'gemini-web': '2026-09-01T00:00:00Z',
+    };
+    const { getQueryFanout } = await import('./fanout');
+
+    const { engines } = await getQueryFanout('brand-1');
+
+    expect(engines.find((e) => e.platform === 'chatgpt-web')?.lastFanoutAt).toBe(
+      '2026-09-29T05:12:00Z',
+    );
+    // Gemini never shares searches, so there is nothing to look back for.
+    expect(engines.find((e) => e.platform === 'gemini-web')?.lastFanoutAt).toBeNull();
+    expect(calls.filter((c) => c.single).map((c) => c.eq.platform)).toEqual(['chatgpt-web']);
+  });
+
+  it('does not look back for an engine with too few answers to tell', async () => {
+    resultRows = Array.from({ length: 4 }, () => answer('p-loud', [], 'chatgpt-web'));
+    lastFanoutRows = { 'chatgpt-web': '2026-09-29T05:12:00Z' };
+    const { getQueryFanout } = await import('./fanout');
+
+    const { engines } = await getQueryFanout('brand-1');
+
+    expect(engines[0]).toMatchObject({ platform: 'chatgpt-web', answers: 4, lastFanoutAt: null });
+    expect(calls.filter((c) => c.single)).toHaveLength(0);
   });
 });
