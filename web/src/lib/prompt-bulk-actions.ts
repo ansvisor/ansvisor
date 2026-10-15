@@ -1,7 +1,8 @@
 /**
  * The prompts table's bulk action bar (PROMPT-006): selecting the rows on
- * screen, how many content suggestions one click may ask for, and how a run
- * of suggestions is summed up. The page does the calls; this only decides.
+ * screen, how many content suggestions one click may ask for, how a run of
+ * suggestions is summed up, and deleting a few prompts per call. The page
+ * passes the calls in; this only decides.
  */
 
 import { onDemandMax, type ContentUsage } from '@/lib/content-usage';
@@ -93,6 +94,54 @@ export function tallyOutcome(tally: BulkSuggestTally, outcome: PromptSuggestionO
       tally.limited = true;
       break;
   }
+}
+
+/**
+ * Prompts deleted per call. Each takes its answers and their citations with
+ * it, and on the heaviest brands one prompt carries about 700 answers and
+ * 7,000 citations. Three stay near the 2,000 answers a brand delete takes per
+ * statement (#991), well inside the signed-in user's 8-second statement
+ * timeout; a whole page in one call outran it and rolled back.
+ */
+export const PROMPT_DELETE_BATCH = 3;
+
+/** How a delete run went. */
+export interface BatchDeleteResult {
+  deletedIds: string[];
+  /** Still there: left out by RLS, in the call that failed, or never asked for after it. */
+  keptIds: string[];
+  /** A call failed, so the run stopped there. */
+  failed: boolean;
+}
+
+/**
+ * Deletes prompts a few per call, one call after another, so each statement
+ * stays short. It stops at the first call that fails, as a brand delete
+ * stops at a failed batch: what came before stays deleted, the rest is kept.
+ * `onProgress` hears how many prompts are done after each call.
+ */
+export async function deleteInBatches(
+  ids: string[],
+  deleteBatch: (ids: string[]) => Promise<{ deletedIds: string[] } | { error: string }>,
+  onProgress?: (done: number) => void,
+): Promise<BatchDeleteResult> {
+  const deleted = new Set<string>();
+  let failed = false;
+  for (let start = 0; start < ids.length; start += PROMPT_DELETE_BATCH) {
+    const batch = ids.slice(start, start + PROMPT_DELETE_BATCH);
+    const result = await deleteBatch(batch).catch(() => ({ error: 'unreachable' }));
+    if ('error' in result) {
+      failed = true;
+      break;
+    }
+    for (const id of result.deletedIds) deleted.add(id);
+    onProgress?.(start + batch.length);
+  }
+  return {
+    deletedIds: ids.filter((id) => deleted.has(id)),
+    keptIds: ids.filter((id) => !deleted.has(id)),
+    failed,
+  };
 }
 
 /**

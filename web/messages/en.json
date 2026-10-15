@@ -2063,6 +2063,13 @@
       "platformsAndModels": "Platform & Models",
       "selectPlatformsAndModels": "Select platform & models",
       "selectedCount": "{count} selected"
+    },
+    "bulkDelete": {
+      "progress": "Deleting {done} of {total} prompts…",
+      "failed": "{count, plural, one {Failed to delete the prompt.} other {Failed to delete the prompts.}}",
+      "stopped": "{deleted} of {total} prompts deleted",
+      "stoppedDescription": "Deleting stopped at an error. {kept, plural, one {The other prompt is} other {The other # prompts are}} back in the list, so you can try again.",
+      "notDeleted": "{kept} of {total} {total, plural, one {prompt} other {prompts}} couldn't be deleted."
     }
   },
   "competitors": {

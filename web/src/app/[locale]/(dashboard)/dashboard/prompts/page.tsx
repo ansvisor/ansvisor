@@ -138,6 +138,8 @@ import {
   allSelected,
   bulkSuggestBlock,
   bulkSuggestSummary,
+  deleteInBatches,
+  PROMPT_DELETE_BATCH,
   runInTurn,
   toggleAll,
 } from '@/lib/prompt-bulk-actions';
@@ -2518,6 +2520,7 @@ function AllPromptsTab({
   onChanged: () => void;
 }) {
   const tCommon = useTranslations('common');
+  const tDelete = useTranslations('prompts.bulkDelete');
   // Rows deleted from the row menu or the bulk bar, hidden at once and
   // deleted for real after the Undo window (PROMPT-006). There is no soft
   // delete for prompts — a delete drops their history — so the delay is the
@@ -2542,6 +2545,54 @@ function AllPromptsTab({
     });
   }, []);
 
+  // Past its Undo window a delete runs a few prompts per call
+  // (deleteInBatches), so no statement outlives the timeout on big brands.
+  // Deletes queue behind each other, one call at a time, and the bulk bar
+  // shows how far the running one has got.
+  const deleteQueue = useRef<Promise<void>>(Promise.resolve());
+  const [deleteProgress, setDeleteProgress] = useState<{ done: number; total: number } | null>(
+    null,
+  );
+
+  const runDelete = useCallback(
+    async (ids: string[]) => {
+      setDeleteProgress({ done: 0, total: ids.length });
+      const result = await deleteInBatches(ids, deletePrompts, (done) =>
+        setDeleteProgress({ done, total: ids.length }),
+      );
+      // Prompts still there (a call failed, or RLS left them out) come back
+      // into view; the ones deleted before a failure stay deleted.
+      const kept = result.keptIds.length;
+      if (kept > 0) restoreRows(result.keptIds);
+      if (result.failed && result.deletedIds.length === 0) {
+        toast.error(tDelete('failed', { count: ids.length }));
+        return;
+      }
+      if (result.failed) {
+        toast.error(tDelete('stopped', { deleted: result.deletedIds.length, total: ids.length }), {
+          description: tDelete('stoppedDescription', { kept }),
+        });
+      } else if (kept > 0) {
+        toast.error(tDelete('notDeleted', { kept, total: ids.length }));
+      }
+      onChanged();
+    },
+    [onChanged, restoreRows, tDelete],
+  );
+
+  const queueDelete = useCallback(
+    (ids: string[]) => {
+      const run: Promise<void> = deleteQueue.current
+        .then(() => runDelete(ids))
+        .catch(() => undefined)
+        .then(() => {
+          if (deleteQueue.current === run) setDeleteProgress(null);
+        });
+      deleteQueue.current = run;
+    },
+    [runDelete],
+  );
+
   const undoDelete = useCallback(
     (key: string) => {
       const pending = deleteTimers.current.get(key);
@@ -2559,26 +2610,9 @@ function AllPromptsTab({
       const ids = list.map((p) => p.id);
       const key = ids[0];
       setPendingDeletes((set) => new Set([...set, ...ids]));
-      const timer = setTimeout(async () => {
+      const timer = setTimeout(() => {
         deleteTimers.current.delete(key);
-        const result = await deletePrompts(ids).catch(() => ({ error: 'unreachable' }));
-        if ('error' in result) {
-          toast.error(
-            ids.length === 1 ? 'Failed to delete the prompt.' : 'Failed to delete the prompts.',
-          );
-          restoreRows(ids);
-          return;
-        }
-        // Rows the delete left out (RLS, or gone already) come back into view.
-        const deleted = new Set(result.deletedIds);
-        const kept = ids.filter((id) => !deleted.has(id));
-        if (kept.length > 0) {
-          toast.error(
-            `${kept.length} of ${ids.length} prompt${ids.length === 1 ? '' : 's'} couldn't be deleted.`,
-          );
-          restoreRows(kept);
-        }
-        onChanged();
+        queueDelete(ids);
       }, DELETE_UNDO_MS);
       deleteTimers.current.set(key, { ids, timer });
       toast(ids.length === 1 ? 'Prompt deleted' : `${ids.length} prompts deleted`, {
@@ -2587,17 +2621,24 @@ function AllPromptsTab({
         action: { label: 'Undo', onClick: () => undoDelete(key) },
       });
     },
-    [onChanged, restoreRows, undoDelete],
+    [queueDelete, undoDelete],
   );
 
   // A pending delete still lands if the table unmounts inside the window
-  // (switching tabs, changing brand); only an Undo or closing the page stops it.
+  // (switching tabs, changing brand), in the same batches, after any delete
+  // already running; only an Undo or closing the page stops it.
   useEffect(() => {
     const timers = deleteTimers.current;
+    const queue = deleteQueue;
     return () => {
       for (const { ids, timer } of timers.values()) {
         clearTimeout(timer);
-        void deletePrompts(ids).catch(() => undefined);
+        queue.current = queue.current
+          .then(() => deleteInBatches(ids, deletePrompts))
+          .then(
+            () => undefined,
+            () => undefined,
+          );
       }
       timers.clear();
     };
@@ -3047,6 +3088,8 @@ function AllPromptsTab({
   const pageRows = filtered.slice(promptsPager.start, promptsPager.end);
   const pageIds = pageRows.map((p) => p.id);
   const selectedPrompts = pageRows.filter((p) => selectedIds.has(p.id));
+  // A delete that fits in one call is over before the bar could say so.
+  const showDeleteProgress = deleteProgress !== null && deleteProgress.total > PROMPT_DELETE_BATCH;
 
   return (
     <Card>
@@ -3096,7 +3139,7 @@ function AllPromptsTab({
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        {onEditPrompt && selectedPrompts.length > 0 && (
+        {onEditPrompt && (selectedPrompts.length > 0 || showDeleteProgress) && (
           <BulkActionBar
             count={selectedPrompts.length}
             activeCount={selectedPrompts.filter((p) => p.isActive).length}
@@ -3110,6 +3153,7 @@ function AllPromptsTab({
                     unavailable: contentUsageFailed,
                   }))
             }
+            deleting={showDeleteProgress ? deleteProgress : null}
             onPause={() => void setActiveFor(selectedPrompts, false)}
             onResume={() => void setActiveFor(selectedPrompts, true)}
             onSuggestContent={() => void suggestFor(selectedPrompts)}

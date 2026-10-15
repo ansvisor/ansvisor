@@ -1,12 +1,15 @@
 'use client';
 
 import { Lightbulb, Loader2, Pause, Play, Trash2, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 
 /**
  * The prompts table's bulk action bar (PROMPT-006): shown while rows are
  * selected, with the row menu's own actions for all of them at once. Pause
- * and Resume each show only when some selected prompt can take them.
+ * and Resume each show only when some selected prompt can take them. While a
+ * bulk delete runs, a few prompts per call, it shows how far it has got, even
+ * with nothing selected.
  */
 export function BulkActionBar({
   count,
@@ -14,6 +17,7 @@ export function BulkActionBar({
   busy,
   suggesting,
   suggestBlockedReason,
+  deleting,
   onPause,
   onResume,
   onSuggestContent,
@@ -28,13 +32,26 @@ export function BulkActionBar({
   suggesting: boolean;
   /** Why Suggest content can't take this selection now; null when it can. */
   suggestBlockedReason: string | null;
+  /** How far the delete that is running has got; null when none is. */
+  deleting: { done: number; total: number } | null;
   onPause: () => void;
   onResume: () => void;
   onSuggestContent: () => void;
   onDelete: () => void;
   onClear: () => void;
 }) {
+  const t = useTranslations('prompts.bulkDelete');
   const pausedCount = count - activeCount;
+  const progress = deleting && (
+    <span role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <Loader2 className="h-3 w-3 animate-spin" />
+      {t('progress', deleting)}
+    </span>
+  );
+  // Nothing selected: only the delete's progress, at the bar's usual height.
+  if (count === 0) {
+    return <div className="flex h-11 items-center border-b bg-muted/50 px-4">{progress}</div>;
+  }
   return (
     <div
       role="toolbar"
@@ -42,6 +59,7 @@ export function BulkActionBar({
       className="flex flex-wrap items-center gap-2 border-b bg-muted/50 px-4 py-2"
     >
       <span className="text-xs font-medium">{count} selected</span>
+      {progress}
       <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
         {activeCount > 0 && (
           <Button

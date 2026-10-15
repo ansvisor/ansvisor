@@ -12,6 +12,7 @@ import {
   promptLocationCount,
 } from '@/lib/prompt-locations';
 import { ALL_MODELS, ALL_SCRAPERS, DEFAULT_PROMPT_RANGE_DAYS } from '@/config/prompt-options';
+import { PROMPT_DELETE_BATCH } from '@/lib/prompt-bulk-actions';
 import { isValidLocation, locationCode } from '@/lib/region';
 import type { Plan, PlanId } from '@/config/plans';
 import { getPromptVolumes, type VolumeQuota } from '@/lib/actions/volumes';
@@ -972,14 +973,20 @@ export async function setPromptsActive(
 }
 
 /**
- * Delete several prompts and their history in one write, once the undo
- * window has passed (PROMPT-006). Returns the ids actually deleted: RLS
- * quietly leaves out any the caller can't delete. Errors come back as values.
+ * Delete a few prompts and their history in one write, once the undo window
+ * has passed (PROMPT-006). Each prompt's answers and citations go with it, so
+ * a call takes at most PROMPT_DELETE_BATCH prompts and the page calls it in
+ * turn (deleteInBatches); a whole page at once outran the statement timeout
+ * on big brands. Returns the ids actually deleted: RLS quietly leaves out any
+ * the caller can't delete. Errors come back as values.
  */
 export async function deletePrompts(
   ids: string[],
 ): Promise<{ deletedIds: string[] } | { error: string }> {
   if (ids.length === 0) return { deletedIds: [] };
+  if (ids.length > PROMPT_DELETE_BATCH) {
+    return { error: `At most ${PROMPT_DELETE_BATCH} prompts per call.` };
+  }
   const supabase = await createClient();
 
   const { data, error } = await supabase.from('prompts').delete().in('id', ids).select('id');

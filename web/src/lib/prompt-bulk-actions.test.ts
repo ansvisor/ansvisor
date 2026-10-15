@@ -2,7 +2,7 @@
  * prompt-bulk-actions.test.ts  (PROMPT-006)
  *
  * The prompts table's bulk action bar: selecting the page, capping a bulk
- * "Suggest content", and summing up how it went.
+ * "Suggest content", summing up how it went, and deleting in small batches.
  */
 
 import { describe, expect, test } from 'vitest';
@@ -11,7 +11,9 @@ import {
   allSelected,
   bulkSuggestBlock,
   bulkSuggestSummary,
+  deleteInBatches,
   emptyTally,
+  PROMPT_DELETE_BATCH,
   runInTurn,
   tallyOutcome,
   toggleAll,
@@ -171,5 +173,89 @@ describe('runInTurn', () => {
         : '1 still being written · 1 not started',
     );
     expect(bulkSuggestSummary({ ...tally, created: [] }).title).toBe(title);
+  });
+});
+
+describe('deleteInBatches', () => {
+  const ids = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'];
+
+  test('deletes a few prompts per call, one call after another', async () => {
+    const log: string[] = [];
+    const progress: number[] = [];
+    const result = await deleteInBatches(
+      ids,
+      async (batch) => {
+        log.push(`start ${batch.join(',')}`);
+        await Promise.resolve();
+        log.push(`end ${batch.join(',')}`);
+        return { deletedIds: batch };
+      },
+      (done) => progress.push(done),
+    );
+    expect(PROMPT_DELETE_BATCH).toBe(3);
+    expect(log).toEqual([
+      'start p1,p2,p3',
+      'end p1,p2,p3',
+      'start p4,p5,p6',
+      'end p4,p5,p6',
+      'start p7',
+      'end p7',
+    ]);
+    expect(progress).toEqual([3, 6, 7]);
+    expect(result).toEqual({ deletedIds: ids, keptIds: [], failed: false });
+  });
+
+  test('stops at a failed call: earlier batches stay deleted, the rest is kept', async () => {
+    const asked: string[][] = [];
+    const progress: number[] = [];
+    const result = await deleteInBatches(
+      ids,
+      async (batch) => {
+        asked.push(batch);
+        return asked.length === 2
+          ? { error: 'canceling statement due to statement timeout' }
+          : { deletedIds: batch };
+      },
+      (done) => progress.push(done),
+    );
+    // The third batch is never asked for.
+    expect(asked).toEqual([
+      ['p1', 'p2', 'p3'],
+      ['p4', 'p5', 'p6'],
+    ]);
+    expect(progress).toEqual([3]);
+    expect(result).toEqual({
+      deletedIds: ['p1', 'p2', 'p3'],
+      keptIds: ['p4', 'p5', 'p6', 'p7'],
+      failed: true,
+    });
+  });
+
+  test('a call that throws counts as a failed call', async () => {
+    const result = await deleteInBatches(ids, async () => {
+      throw new Error('network');
+    });
+    expect(result).toEqual({ deletedIds: [], keptIds: ids, failed: true });
+  });
+
+  test('keeps prompts RLS left out and carries on', async () => {
+    const result = await deleteInBatches(ids, async (batch) => ({
+      deletedIds: batch.filter((id) => id !== 'p2'),
+    }));
+    expect(result).toEqual({
+      deletedIds: ['p1', 'p3', 'p4', 'p5', 'p6', 'p7'],
+      keptIds: ['p2'],
+      failed: false,
+    });
+  });
+
+  test('makes no call for an empty list', async () => {
+    let calls = 0;
+    const result = await deleteInBatches([], async () => {
+      calls += 1;
+      return { deletedIds: [] };
+    });
+    expect(calls).toBe(0);
+    expect(result).toEqual({ deletedIds: [], keptIds: [], failed: false });
   });
 });
