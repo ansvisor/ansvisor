@@ -14,12 +14,14 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
+import { getInsightsBreakdown } from '@/lib/actions/tracking';
 import {
-  getInsightsBreakdown,
+  pickDriver,
+  type BreakdownFilters,
   type BreakdownMetric,
   type BreakdownRow,
   type InsightsBreakdown,
-} from '@/lib/actions/tracking';
+} from '@/lib/insights-breakdown';
 import { sortBreakdownRowsForDisplay } from './breakdown-display';
 
 const METRIC_TITLE: Record<BreakdownMetric, string> = {
@@ -36,13 +38,8 @@ interface Props {
   brandId: string | null;
   metric: BreakdownMetric | null;
   onOpenChange: (open: boolean) => void;
-  filters?: {
-    dateFrom?: string;
-    dateTo?: string;
-    region?: string;
-    model?: string;
-    topicId?: string;
-  };
+  /** The window and filters the cards were loaded with, so the panel explains their numbers. */
+  filters?: BreakdownFilters;
 }
 
 export function MetricBreakdownSheet({ brandId, metric, onOpenChange, filters }: Props) {
@@ -94,9 +91,11 @@ export function MetricBreakdownSheet({ brandId, metric, onOpenChange, filters }:
         <SheetHeader className="border-b px-5 py-4">
           <SheetTitle className="text-base">{title} Breakdown</SheetTitle>
           <SheetDescription className="text-xs">
-            {data
-              ? `Last ${data.windowDays} day${data.windowDays !== 1 ? 's' : ''} vs previous ${data.windowDays} day${data.windowDays !== 1 ? 's' : ''}`
-              : 'Comparing the selected window with the previous equal-length window.'}
+            {!data
+              ? 'Comparing the selected window with the previous equal-length window.'
+              : data.windowDays === null
+                ? 'All time. There is no earlier period of the same length to compare.'
+                : `Last ${data.windowDays} day${data.windowDays !== 1 ? 's' : ''} vs previous ${data.windowDays} day${data.windowDays !== 1 ? 's' : ''}`}
           </SheetDescription>
         </SheetHeader>
 
@@ -143,7 +142,7 @@ function BreakdownBody({ data, metric }: { data: InsightsBreakdown; metric: Brea
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="text-xs uppercase tracking-wide text-muted-foreground">
-              Current {data.windowDays}d
+              {data.windowDays === null ? 'All time' : `Current ${data.windowDays}d`}
             </div>
             <div className="text-2xl font-semibold tabular-nums">
               {formatValue(data.curTotal, metric)}
@@ -151,15 +150,23 @@ function BreakdownBody({ data, metric }: { data: InsightsBreakdown; metric: Brea
                 {METRIC_UNIT[metric]}
               </span>
             </div>
-            <div className="text-xs text-muted-foreground">
-              vs previous{' '}
-              <span className="tabular-nums">
-                {formatValue(data.prevTotal, metric)}
-                {METRIC_UNIT[metric]}
-              </span>
-            </div>
+            {data.windowDays !== null && (
+              <div className="text-xs text-muted-foreground">
+                vs previous{' '}
+                {data.prevTotal === null ? (
+                  'no data'
+                ) : (
+                  <span className="tabular-nums">
+                    {formatValue(data.prevTotal, metric)}
+                    {METRIC_UNIT[metric]}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
-          <DeltaPill delta={data.delta} deltaPct={data.deltaPct} metric={metric} big />
+          {data.delta !== null && (
+            <DeltaPill delta={data.delta} deltaPct={data.deltaPct} metric={metric} big />
+          )}
         </div>
         <RootCauseSummary data={data} metric={metric} />
       </div>
@@ -188,7 +195,12 @@ function BreakdownBody({ data, metric }: { data: InsightsBreakdown; metric: Brea
         </TabsList>
 
         <TabsContent value={tab} className="mt-3">
-          <BreakdownTable rows={pickRows()} metric={metric} kind={tab} />
+          <BreakdownTable
+            rows={pickRows()}
+            metric={metric}
+            kind={tab}
+            comparable={data.windowDays !== null}
+          />
         </TabsContent>
       </Tabs>
     </div>
@@ -196,15 +208,11 @@ function BreakdownBody({ data, metric }: { data: InsightsBreakdown; metric: Brea
 }
 
 function RootCauseSummary({ data, metric }: { data: InsightsBreakdown; metric: BreakdownMetric }) {
-  const isDrop = data.delta < 0;
-  const isFlat = data.delta === 0;
-  const topPrompt = isDrop ? data.byPrompt[0] : data.byPrompt[data.byPrompt.length - 1];
-  const topPlatform = isDrop ? data.byPlatform[0] : data.byPlatform[data.byPlatform.length - 1];
-  const promptContributes = !!topPrompt && (isDrop ? topPrompt.delta < 0 : topPrompt.delta > 0);
-  const platformContributes =
-    !!topPlatform && (isDrop ? topPlatform.delta < 0 : topPlatform.delta > 0);
+  const isDrop = (data.delta ?? 0) < 0;
+  const topPrompt = pickDriver(data.byPrompt, data.delta);
+  const topPlatform = pickDriver(data.byPlatform, data.delta);
 
-  if (isFlat || !promptContributes || !topPrompt) {
+  if (!topPrompt) {
     return (
       <div className="mt-2 text-xs text-muted-foreground leading-relaxed">{data.rootCause}</div>
     );
@@ -220,7 +228,7 @@ function RootCauseSummary({ data, metric }: { data: InsightsBreakdown; metric: B
         &quot;{truncate(topPrompt.label, 60)}&quot;
       </Link>{' '}
       {formatContribution(topPrompt, metric)}.
-      {platformContributes && topPlatform && (
+      {topPlatform && (
         <>
           {' '}
           Top platform {isDrop ? 'drop' : 'gain'}: {topPlatform.label}{' '}
@@ -235,10 +243,13 @@ function BreakdownTable({
   rows,
   metric,
   kind,
+  comparable,
 }: {
   rows: BreakdownRow[];
   metric: BreakdownMetric;
   kind: 'prompts' | 'platforms' | 'topics';
+  /** False for All time: no previous window, so no Prev or Change column. */
+  comparable: boolean;
 }) {
   if (rows.length === 0) {
     return (
@@ -254,9 +265,9 @@ function BreakdownTable({
         <thead>
           <tr className="border-b bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
             <th className="text-left font-medium px-3 py-2">Name</th>
-            <th className="text-right font-medium px-2 py-2 w-16">Prev</th>
+            {comparable && <th className="text-right font-medium px-2 py-2 w-16">Prev</th>}
             <th className="text-right font-medium px-2 py-2 w-16">Cur</th>
-            <th className="text-right font-medium px-2 py-2 w-24">Change</th>
+            {comparable && <th className="text-right font-medium px-2 py-2 w-24">Change</th>}
           </tr>
         </thead>
         <tbody>
@@ -277,13 +288,17 @@ function BreakdownTable({
                   <div className="mt-0.5 text-[11px] text-muted-foreground">{r.sublabel}</div>
                 )}
               </td>
-              <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
-                {formatValue(r.prev, metric)}
-              </td>
+              {comparable && (
+                <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                  {r.prev === null ? '—' : formatValue(r.prev, metric)}
+                </td>
+              )}
               <td className="px-2 py-2 text-right tabular-nums">{formatValue(r.cur, metric)}</td>
-              <td className="px-2 py-2 text-right">
-                <DeltaPill delta={r.delta} deltaPct={r.deltaPct} metric={metric} />
-              </td>
+              {comparable && (
+                <td className="px-2 py-2 text-right">
+                  <DeltaPill delta={r.delta ?? 0} deltaPct={r.deltaPct} metric={metric} />
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -358,8 +373,9 @@ function formatValue(value: number, metric: BreakdownMetric): string {
 }
 
 function formatContribution(row: BreakdownRow, metric: BreakdownMetric): string {
-  const isLoss = row.delta < 0;
-  const abs = Math.abs(row.delta);
+  const delta = row.delta ?? 0;
+  const isLoss = delta < 0;
+  const abs = Math.abs(delta);
 
   if (metric === 'visibility') {
     const verb = isLoss ? 'dropped' : 'rose';
