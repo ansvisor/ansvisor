@@ -20,6 +20,13 @@ import {
   getPromptVisibilitySummaries,
   type PromptVisibilitySummary,
 } from '@/lib/actions/tracking';
+import { POSITION_PLATFORMS, platformAccess } from '@/lib/prompt-positions';
+import {
+  buildPositionCell,
+  previousWindow,
+  type PlatformPositionRow,
+  type PromptPositionCell,
+} from '@/lib/prompt-position-summary';
 
 function filterByPlan(plan: Plan, platforms: string[], models: string[]) {
   const allowedScrapers = plan.limits.allowedScrapers
@@ -920,6 +927,8 @@ export async function deletePromptSet(id: string): Promise<void> {
 export interface PromptsPageData {
   promptSets: PromptSet[];
   visibility: Record<string, PromptVisibilitySummary>;
+  /** The Positions column per prompt id (PROMPT-007). */
+  positions: Record<string, PromptPositionCell>;
   volumes: PromptVolume[];
   quota: VolumeQuota | null;
   /** True when the volumes upstream failed/timed out — the table still renders. */
@@ -950,13 +959,24 @@ export async function getPromptsPageData(
   // no date dimension, so neither changes with the selected range or the
   // selected location.
   const days = opts?.days ?? DEFAULT_PROMPT_RANGE_DAYS;
-  const [promptSets, visibility, volumesResult, locationQuota] = await Promise.all([
+  const window = {
+    from: opts?.from ?? new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString(),
+    to: opts?.to,
+  };
+  const [promptSets, visibility, positionRows, volumesResult, locationQuota] = await Promise.all([
     getPromptSets(brandId),
     getPromptVisibilitySummaries(brandId, {
       days,
       from: opts?.from,
       to: opts?.to,
       region: opts?.region,
+    }),
+    // The Positions column scans every answer in the window and the one
+    // before it. A timeout, or the web deploying before 00123 is applied,
+    // shows — in that column instead of failing the table.
+    getPositionRows(brandId, window, opts?.region).catch((err) => {
+      console.error('[prompts] position summaries fetch failed, rendering without them:', err);
+      return noPositionRows();
     }),
     getPromptVolumes(brandId).then(
       (r) => ({ volumes: r.volumes, quota: r.quota ?? null, degraded: false }),
@@ -973,14 +993,103 @@ export async function getPromptsPageData(
     }),
   ]);
 
+  const positions: Record<string, PromptPositionCell> = {};
+  for (const prompt of promptSets.flatMap((ps) => ps.prompts)) {
+    const current = positionRows.current.get(prompt.id) ?? [];
+    // A dot for every included engine the prompt tracks, plus any it has
+    // answers from in the window, so the dots and the average agree.
+    const platforms = positionRows.included.filter(
+      (p) =>
+        prompt.platforms.includes(p.id as AIPlatform) || current.some((r) => r.platform === p.id),
+    );
+    positions[prompt.id] = buildPositionCell(
+      current,
+      positionRows.previous.get(prompt.id) ?? [],
+      platforms,
+    );
+  }
+
   return {
     promptSets,
     visibility,
+    positions,
     volumes: volumesResult.volumes,
     quota: volumesResult.quota,
     volumesDegraded: volumesResult.degraded,
     locationQuota,
   };
+}
+
+interface PositionRows {
+  included: { id: string; label: string }[];
+  current: Map<string, PlatformPositionRow[]>;
+  previous: Map<string, PlatformPositionRow[]>;
+}
+
+/** No position data: every prompt's Positions cell reads —. */
+function noPositionRows(): PositionRows {
+  return { included: [], current: new Map(), previous: new Map() };
+}
+
+/**
+ * Per-prompt, per-engine position sums for the Positions column: the window
+ * on screen and the period of the same length just before it, for the trend.
+ * Only engines the org's plan includes count, as in the Positions panel.
+ */
+async function getPositionRows(
+  brandId: string,
+  window: { from: string; to?: string },
+  region?: string,
+): Promise<PositionRows> {
+  const supabase = await createClient();
+  const { data: brand } = await supabase
+    .from('brands')
+    .select('organization_id')
+    .eq('id', brandId)
+    .maybeSingle();
+  if (!brand?.organization_id) return noPositionRows();
+
+  const before = previousWindow(window);
+  const [plan, current, previous] = await Promise.all([
+    getOrgPlan(brand.organization_id as string),
+    positionSums(brandId, window, region),
+    positionSums(brandId, before, region),
+  ]);
+  const included = POSITION_PLATFORMS.filter(
+    (p) => platformAccess(plan, p.id).state === 'included',
+  ).map((p) => ({ id: p.id as string, label: p.label as string }));
+  return { included, current, previous };
+}
+
+async function positionSums(
+  brandId: string,
+  window: { from: string; to?: string },
+  region?: string,
+): Promise<Map<string, PlatformPositionRow[]>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('prompt_position_summaries', {
+    p_brand_id: brandId,
+    p_date_from: window.from,
+    p_date_to: window.to ?? undefined,
+    p_region: region ?? undefined,
+  });
+  if (error) throw new Error(error.message);
+
+  const byPrompt = new Map<string, PlatformPositionRow[]>();
+  for (const row of data ?? []) {
+    const list = byPrompt.get(row.prompt_id) ?? [];
+    list.push({
+      platform: row.platform,
+      runs: Number(row.runs ?? 0),
+      mentionAnswers: Number(row.mention_answers ?? 0),
+      positionSum: Number(row.position_sum ?? 0),
+      positionCount: Number(row.position_count ?? 0),
+      entitySum: Number(row.entity_sum ?? 0),
+      entityCount: Number(row.entity_count ?? 0),
+    });
+    byPrompt.set(row.prompt_id, list);
+  }
+  return byPrompt;
 }
 
 /** How many prompts the brand tracks — the count beside Tracked Prompts in the sidebar (PROMPT-001). */
