@@ -381,6 +381,9 @@ export function ActionDrawer({
                         tool: String(event.data.tool ?? ''),
                         improved: Number(event.data.improved ?? 0),
                         measurable: Number(event.data.measurable ?? 0),
+                        // A task someone added or renamed is named in their
+                        // own words, as they typed it.
+                        title: String(event.data.title ?? ''),
                       })}
                     </p>
                     <p className="text-xs text-muted-foreground">
