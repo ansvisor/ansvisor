@@ -57,9 +57,28 @@ function ResultCell({ item }: { item: ActionHistoryItem }) {
   const tOutcome = useTranslations('actionCenter.actionOutcome');
   const tRegistry = useTranslations('actionCenter.registry');
 
+  // An Improve action's 30-day position result (PROMPT-008) leads the cell.
+  const outcome = item.positionOutcome?.final ? item.positionOutcome : null;
+  const position = outcome && (
+    <p
+      className={cn(
+        'text-xs',
+        outcome.summary.improved > 0
+          ? 'text-emerald-600 dark:text-emerald-400'
+          : 'text-muted-foreground',
+      )}
+    >
+      {t('positionResult', {
+        improved: outcome.summary.improved,
+        measurable: outcome.summary.measurable,
+      })}
+    </p>
+  );
+
   if (item.results.length > 0) {
     return (
       <div className="space-y-0.5">
+        {position}
         {item.results.slice(0, 2).map((metric) => (
           <p
             key={metric.id}
@@ -79,6 +98,8 @@ function ResultCell({ item }: { item: ActionHistoryItem }) {
       </div>
     );
   }
+
+  if (position) return <div className="space-y-0.5">{position}</div>;
 
   return (
     <div className="space-y-0.5">
