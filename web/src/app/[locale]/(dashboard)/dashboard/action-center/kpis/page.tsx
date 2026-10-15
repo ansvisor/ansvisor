@@ -18,6 +18,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -226,17 +227,19 @@ function KpisContent({ brand }: { brand: Brand }) {
               )}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>{t('table.status')}</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {KPI_STATUSES.map((status) => (
-                <DropdownMenuCheckboxItem
-                  key={status}
-                  checked={statusFilter.has(status)}
-                  onCheckedChange={() => toggleStatus(status)}
-                >
-                  {t(`status.${status}`)}
-                </DropdownMenuCheckboxItem>
-              ))}
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>{t('table.status')}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {KPI_STATUSES.map((status) => (
+                  <DropdownMenuCheckboxItem
+                    key={status}
+                    checked={statusFilter.has(status)}
+                    onCheckedChange={() => toggleStatus(status)}
+                  >
+                    {t(`status.${status}`)}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
           <div
