@@ -68,6 +68,7 @@ import {
 import { TablePager, usePagination } from '@/components/table-pager';
 import { MODEL_PROVIDER_LABELS, PLATFORM_LABELS } from '@/config/platform-labels';
 import { groupByPlatform, type PlatformGroup } from './grouping';
+import { dayRangeBounds, viewerTimeZone } from '@/lib/time-zone';
 
 // ─── Date range (kept in sync with the insights page filter bar) ─────────────
 
@@ -78,10 +79,9 @@ const DATE_PRESETS: DatePreset[] = ['24h', '7d', '30d', '90d', 'all', 'custom'];
 function getDateRange(preset: DatePreset, custom: { from: string; to: string }) {
   if (preset === 'all') return { dateFrom: undefined, dateTo: undefined };
   if (preset === 'custom') {
-    return {
-      dateFrom: custom.from || undefined,
-      dateTo: custom.to ? `${custom.to}T23:59:59.999Z` : undefined,
-    };
+    // Whole days on the viewer's clock, as the answer times below read.
+    const { from, to } = dayRangeBounds(custom.from, custom.to, viewerTimeZone());
+    return { dateFrom: from, dateTo: to };
   }
   if (preset === '24h') {
     const from = new Date();
@@ -163,14 +163,20 @@ function getModelDisplayName(model?: string, platform?: string): string {
   return model ?? platform ?? 'Unknown';
 }
 
+/**
+ * An answer's time on the viewer's clock, with the zone so it can't be read
+ * as UTC, written as the Positions panel writes it ("Oct 12, 16:28 GMT+3").
+ */
 function formatTimestamp(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
-    hour: 'numeric',
+    hour: '2-digit',
     minute: '2-digit',
+    hourCycle: 'h23',
+    timeZoneName: 'short',
   });
 }
 

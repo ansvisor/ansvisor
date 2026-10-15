@@ -39,6 +39,26 @@ import {
 /** How long the pointer rests on the collapsed sidebar before it opens. */
 const PEEK_DELAY_MS = 150;
 
+/**
+ * The menu's viewport. Its edges fade out where items are hidden above or
+ * below, by as much as has scrolled out (up to 1.5rem), so a long menu says
+ * there's more without a heavier control (prefixed too, for Chromium before
+ * 120). The scroll padding keeps an item scrolled into view (the current
+ * page, keyboard focus) clear of the fade. It only scrolls up and down: while
+ * a collapsed sidebar widens, its labels would otherwise scroll it sideways.
+ * Base UI makes it a tab stop once it overflows, so its focus ring sits
+ * inside, where the fade can't clip it.
+ */
+const NAV_VIEWPORT =
+  'px-2 py-3 scroll-py-6 overflow-x-hidden! focus-visible:ring-inset [--nav-fade:1.5rem] [--nav-mask:linear-gradient(to_bottom,transparent,#000_min(var(--nav-fade),var(--scroll-area-overflow-y-start,0px)),#000_calc(100%_-_min(var(--nav-fade),var(--scroll-area-overflow-y-end,0px))),transparent)] [mask-image:var(--nav-mask)] [-webkit-mask-image:var(--nav-mask)]';
+
+/**
+ * A slim scrollbar over the menu's right edge: it shows only while the pointer
+ * is on the menu or it is scrolling, and never takes width from the items.
+ */
+const NAV_SCROLLBAR =
+  'data-vertical:w-2 opacity-0 transition-opacity duration-300 data-hovering:opacity-100 data-scrolling:opacity-100 data-scrolling:duration-75 [&>[data-slot=scroll-area-thumb]]:bg-muted-foreground/25 [&>[data-slot=scroll-area-thumb]:hover]:bg-muted-foreground/45';
+
 /** Where the Prompts submenu's open/closed state is remembered (PROMPT-001). */
 const SUBMENU_KEY = 'ansvisor.sidebar.promptsOpen';
 
@@ -125,6 +145,24 @@ export function Sidebar() {
   }, []);
 
   useEffect(() => () => clearTimeout(peekTimer.current), []);
+
+  // When the menu is longer than the window, the current page's item is
+  // scrolled into view, so it is never hidden below the fold: on every page
+  // change, and when the sidebar opens or closes (its layout changes) unless
+  // the user has scrolled the menu since, which then stays where they put it.
+  const menuScrolledByUser = useRef(false);
+  useEffect(() => {
+    menuScrolledByUser.current = false;
+  }, [pathname]);
+  useEffect(() => {
+    if (menuScrolledByUser.current) return;
+    asideRef.current
+      ?.querySelector<HTMLElement>('nav [aria-current="page"]')
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [pathname, compact]);
+  const markMenuScrolled = () => {
+    menuScrolledByUser.current = true;
+  };
 
   useEffect(() => {
     let stored: string | null = null;
@@ -253,7 +291,21 @@ export function Sidebar() {
           <BrandSwitcher collapsed={compact} onOpenChange={handleMenuOpenChange} />
         </div>
 
-        <ScrollArea className="flex-1 px-2 py-3">
+        {/* Only the menu scrolls; the logo, the brand switcher and the footer
+            stay put. min-h-0 lets it shrink below its content in the column. */}
+        <ScrollArea
+          className="min-h-0 flex-1"
+          viewportClassName={NAV_VIEWPORT}
+          scrollbarClassName={NAV_SCROLLBAR}
+          onWheel={markMenuScrolled}
+          onTouchMove={markMenuScrolled}
+          onPointerDown={(e) => {
+            // Dragging the scrollbar counts; clicking an item doesn't.
+            if ((e.target as Element).closest('[data-slot="scroll-area-scrollbar"]')) {
+              markMenuScrolled();
+            }
+          }}
+        >
           {dashboardNav.map((group, i) => (
             <div key={i} className="mb-4">
               {group.title && !compact && (
@@ -386,7 +438,12 @@ export function Sidebar() {
                   }
 
                   return (
-                    <Link key={item.href} href={item.href} data-nav-item="link">
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      data-nav-item="link"
+                      aria-current={isActive ? 'page' : undefined}
+                    >
                       <span
                         className={cn(
                           'flex items-center gap-3 rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors',

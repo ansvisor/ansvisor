@@ -4,6 +4,7 @@ import { runTrackingJob } from '../lib/job-runner.js';
 import supabaseAdmin from '../config/supabase.js';
 import { enforceOnDemandTrackingQuota, TrackingQuotaError } from '../lib/tracking-quota.js';
 import { assertBrandAccess } from '../lib/access.js';
+import { selectInChunks } from '../lib/chunked-in.js';
 
 const router = Router();
 
@@ -137,12 +138,18 @@ router.post('/analyze-new', async (req, res) => {
 
     if (Array.isArray(clientPromptIds) && clientPromptIds.length > 0) {
       // Client sent specific prompt IDs — validate they belong to this brand.
-      const { data: validPrompts } = await supabaseAdmin
-        .from('prompts')
-        .select('id')
-        .in('prompt_set_id', setIds)
-        .in('id', clientPromptIds)
-        .eq('is_active', true);
+      // A bulk import sends up to 1,000, more than one `in` filter carries.
+      const { data: validPrompts, error: validErr } = await selectInChunks(
+        clientPromptIds,
+        (chunk) =>
+          supabaseAdmin
+            .from('prompts')
+            .select('id')
+            .in('prompt_set_id', setIds)
+            .in('id', chunk)
+            .eq('is_active', true),
+      );
+      if (validErr) throw validErr;
 
       candidateIds = (validPrompts || []).map((p) => p.id);
     } else {
@@ -168,11 +175,16 @@ router.post('/analyze-new', async (req, res) => {
     // landing, which previously caused duplicate Cloro/LLM spend.
     let newPromptIds = candidateIds;
     if (candidateIds.length > 0) {
-      const { data: existingResults } = await supabaseAdmin
-        .from('prompt_results')
-        .select('prompt_id')
-        .eq('brand_id', brandId)
-        .in('prompt_id', candidateIds);
+      const { data: existingResults, error: existingErr } = await selectInChunks(
+        candidateIds,
+        (chunk) =>
+          supabaseAdmin
+            .from('prompt_results')
+            .select('prompt_id')
+            .eq('brand_id', brandId)
+            .in('prompt_id', chunk),
+      );
+      if (existingErr) throw existingErr;
 
       const analyzedIds = new Set((existingResults || []).map((r) => r.prompt_id));
       newPromptIds = candidateIds.filter((id) => !analyzedIds.has(id));

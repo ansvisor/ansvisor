@@ -5,6 +5,7 @@
  */
 
 import { isPromptRangePreset, type PromptRangePreset } from '@/config/prompt-options';
+import { dayIn } from '@/lib/time-zone';
 
 /** The panel's own window choice; `from` / `to` are YYYY-MM-DD and only used by custom. */
 export interface PositionsRange {
@@ -37,5 +38,24 @@ export function parsePositionsRange(
     preset: isPromptRangePreset(raw) ? raw : fallback,
     from: params.get('positionsFrom') ?? '',
     to: params.get('positionsTo') ?? '',
+  };
+}
+
+/**
+ * The range the panel opens on from the table: the table's preset and, for a
+ * custom range, the days its window covers. The window holds instants, which
+ * read as those days only on the viewer's clock, so they are taken in
+ * `timeZone` rather than cut from the ISO string (which is UTC).
+ */
+export function panelRangeFromTable(
+  preset: PromptRangePreset,
+  window: { from: string; to?: string },
+  timeZone: string,
+): PositionsRange {
+  if (preset !== 'custom') return { preset, from: '', to: '' };
+  return {
+    preset,
+    from: dayIn(window.from, timeZone),
+    to: window.to ? dayIn(window.to, timeZone) : '',
   };
 }
