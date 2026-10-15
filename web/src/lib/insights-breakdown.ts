@@ -1,6 +1,7 @@
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { percentageChange } from '@/lib/metrics';
 import type { DayWindow } from '@/lib/insights-windows';
+import type { PromptComparison } from '@/lib/insights-same-prompts';
 
 /**
  * The Insights "View breakdown" panel (VIS-001): which prompts, platforms and
@@ -20,6 +21,8 @@ export interface BreakdownFilters {
   dateFrom?: string;
   dateTo?: string;
   days?: DayWindow;
+  /** "Compare: Same prompts" (VIS-002); on unless explicitly false. */
+  samePrompts?: boolean;
 }
 
 export interface BreakdownRow {
@@ -45,9 +48,17 @@ export interface BreakdownRow {
 
 export interface InsightsBreakdown {
   metric: BreakdownMetric;
+  /** The card's number: every prompt in the current window. */
   curTotal: number;
-  /** Null when there is no previous window (All time). */
+  /**
+   * The values the change is measured between: every prompt in each window,
+   * or with Same prompts only the prompts answered in both (VIS-002).
+   * prevTotal is null when there is no previous window (All time).
+   */
+  comparedCur: number;
   prevTotal: number | null;
+  /** Which prompts the change compares, with the counts; null when unknown. */
+  comparison: PromptComparison | null;
   delta: number | null;
   deltaPct: number | null;
   /** Days in each comparison window (24h is 1); null for All time. */
@@ -174,20 +185,42 @@ function sumBy(groups: BreakdownGroup[], keyOf: (g: BreakdownGroup) => string): 
 
 const UNCATEGORIZED = '__uncategorized__';
 
+/** Prompts with at least one answer in the window. */
+const answeredPrompts = (p: BreakdownGroupsPayload) =>
+  new Set(p.groups.filter((g) => g.answers > 0).map((g) => g.prompt_id));
+
 /**
  * Per-prompt, per-platform and per-topic rows for one comparison. `prev` is
  * null when there is no previous window (All time): rows then carry no
  * previous value and no change. A slice missing from one window counts as 0
  * there. Rows come sorted by change, biggest drop first.
+ *
+ * With `samePrompts` (VIS-002), every row is measured on the prompts
+ * answered in both windows, so a prompt added this period is never read as a
+ * gain from 0.
  */
 export function buildBreakdownRows(
   metric: BreakdownMetric,
-  cur: BreakdownGroupsPayload,
-  prev: BreakdownGroupsPayload | null,
+  allCur: BreakdownGroupsPayload,
+  allPrev: BreakdownGroupsPayload | null,
   platformLabel: (slug: string) => string,
+  { samePrompts = false }: { samePrompts?: boolean } = {},
 ): { byPrompt: BreakdownRow[]; byPlatform: BreakdownRow[]; byTopic: BreakdownRow[] } {
+  let cur = allCur;
+  let prev = allPrev;
+  if (samePrompts && allPrev) {
+    const before = answeredPrompts(allPrev);
+    const shared = new Set([...answeredPrompts(allCur)].filter((id) => before.has(id)));
+    const only = (p: BreakdownGroupsPayload, keep: (id: string) => boolean) => ({
+      ...p,
+      groups: p.groups.filter((g) => keep(g.prompt_id)),
+    });
+    cur = only(allCur, (id) => shared.has(id));
+    prev = only(allPrev, (id) => shared.has(id));
+  }
+
   const prompts = new Map<string, BreakdownPrompt>();
-  for (const p of [...(prev?.prompts ?? []), ...cur.prompts]) prompts.set(p.id, p);
+  for (const p of [...(allPrev?.prompts ?? []), ...allCur.prompts]) prompts.set(p.id, p);
   const topicOf = (g: BreakdownGroup) => prompts.get(g.prompt_id)?.topic_id ?? UNCATEGORIZED;
   const topicNames = new Map<string, string>();
   for (const p of prompts.values()) {
