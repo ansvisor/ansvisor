@@ -47,10 +47,30 @@ export interface ActionExport {
   updated: string;
   /** The action's drawer in the app. */
   link: string;
+  /** The Affected tab's rows (AC-003). */
+  affected: ExportAffected[];
   tasks: ExportTask[];
   signals: ExportSignal[];
   /** The History tab, in its order. */
   events: { date: string; text: string }[];
+}
+
+/** One affected item as the exports list it (AC-003). */
+export interface ExportAffected {
+  /** "Prompt", "Page", "Competitor", "Topic". */
+  entity: string;
+  label: string;
+  /** "~5.5k", or empty when unknown. */
+  volume: string;
+  /** Display names. */
+  platforms: string[];
+  /** The brand's pages that lost a citation, and those cited instead. */
+  lostPages: string[];
+  citedInstead: string[];
+  /** What else its row says: competitors ahead, a page's visits or issues. */
+  details: string;
+  /** Where it opens in the app, or the page itself. */
+  link: string;
 }
 
 export interface ExportTask {
@@ -92,6 +112,7 @@ export interface ExportTexts {
   tags: string[];
   kpis: string[];
   context: ExportFact[];
+  affected: ExportAffected[];
   taskTitle: (task: ActionDetail['tasks'][number]) => string;
   taskStatus: (status: string) => string;
   signal: (signal: ActionDetail['signals'][number]) => {
@@ -143,6 +164,7 @@ export function buildActionExport(
     created: day(action.createdAt),
     updated: day(action.updatedAt),
     link: `${origin}/dashboard/action-center/actions?action=${action.id}`,
+    affected: texts.affected,
     tasks: detail.tasks.map((task, i) => {
       const details = task.details
         ? [
@@ -198,6 +220,20 @@ function signalLine(signal: ExportSignal): string {
     .join(' · ');
 }
 
+/** One affected item on a line: what it is, its demand, where, and what else it says. */
+function affectedLine(item: ExportAffected, label: Labels): string {
+  return [
+    item.label,
+    item.volume,
+    item.platforms.join(', '),
+    item.lostPages.length ? `${label('lostPage')}: ${item.lostPages.join(', ')}` : '',
+    item.citedInstead.length ? `${label('citedInstead')}: ${item.citedInstead.join(', ')}` : '',
+    item.details,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
 /**
  * "Copy all": the action as Markdown, everything its drawer's tabs show, to
  * paste into Docs, Notion, Jira or an AI agent.
@@ -232,6 +268,11 @@ export function actionMarkdown(a: ActionExport, label: Labels): string {
     `${label('link')}: ${a.link}`,
   ].filter(Boolean);
 
+  if (a.affected.length) {
+    lines.push('', `## ${label('affectedHeading', { count: a.affected.length })}`);
+    for (const item of a.affected) lines.push(`- ${affectedLine(item, label)}`);
+  }
+
   lines.push('', `## ${label('tasksHeading', { count: a.tasks.length })}`);
   for (const task of a.tasks) {
     lines.push(`${task.number}. ${task.title} (${task.status})`);
@@ -250,8 +291,9 @@ export function actionMarkdown(a: ActionExport, label: Labels): string {
 }
 
 /**
- * The CSV columns: a row per task and per signal, marked by `section`, with
- * the columns they share. Machine names, as in the actions list's export.
+ * The CSV columns: a row per affected item, task and signal, marked by
+ * `section`, with the columns they share. Machine names, as in the actions
+ * list's export.
  */
 export const ACTION_CSV_HEADERS = [
   'section',
@@ -264,6 +306,9 @@ export const ACTION_CSV_HEADERS = [
   'status',
   'category',
   'impact',
+  'volume',
+  'lost_pages',
+  'cited_instead',
   'platforms',
   'locations',
   'first_detected',
@@ -271,9 +316,22 @@ export const ACTION_CSV_HEADERS = [
   'link',
 ];
 
-/** "Export CSV": the action's tasks and signals, one row each. */
+/** "Export CSV": the action's affected items, tasks and signals, one row each. */
 export function actionCsv(a: ActionExport): string {
   const rows: Record<string, unknown>[] = [
+    ...a.affected.map((item, i) => ({
+      section: 'affected',
+      action: a.ref,
+      ref: i + 1,
+      title: item.label,
+      type: item.entity,
+      details: item.details,
+      volume: item.volume,
+      lost_pages: item.lostPages.join('; '),
+      cited_instead: item.citedInstead.join('; '),
+      platforms: item.platforms.join('; '),
+      link: item.link,
+    })),
     ...a.tasks.map((task) => ({
       section: 'task',
       action: a.ref,
@@ -332,6 +390,46 @@ export function actionWorkbook(a: ActionExport, label: Labels): Sheet<Blob>[] {
       columns: [{ width: 22 }, { width: 90 }],
       data: summary.map(([name, value]) => [bold(name), value]),
     },
+    ...(a.affected.length
+      ? [
+          {
+            sheet: label('sheets.affected'),
+            stickyRowsCount: 1,
+            columns: [
+              { width: 10 },
+              { width: 60 },
+              { width: 10 },
+              { width: 24 },
+              { width: 40 },
+              { width: 40 },
+              { width: 40 },
+              { width: 40 },
+            ],
+            data: [
+              [
+                label('type'),
+                label('item'),
+                label('volume'),
+                label('platforms'),
+                label('lostPage'),
+                label('citedInstead'),
+                label('details'),
+                label('link'),
+              ].map(bold),
+              ...a.affected.map((item) => [
+                item.entity,
+                item.label,
+                item.volume,
+                item.platforms.join(', '),
+                item.lostPages.join(', '),
+                item.citedInstead.join(', '),
+                item.details,
+                item.link,
+              ]),
+            ],
+          },
+        ]
+      : []),
     {
       sheet: label('sheets.tasks'),
       stickyRowsCount: 1,

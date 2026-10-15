@@ -23,6 +23,7 @@ import {
   buildActionExport,
   type ActionExport,
   type ExportFact,
+  type ExportAffected,
 } from '@/lib/action-center/export';
 import { opportunityLists } from '@/lib/content/opportunity-lists';
 import { priorityReasonText } from '@/lib/action-center/priority';
@@ -30,6 +31,10 @@ import { isKpiKey } from '@/lib/kpis/registry';
 import { signalAffected, signalTexts, signalTypeLabel } from '@/lib/signals/display';
 import { viewerTimeZone } from '@/lib/time-zone';
 import { isSuperseded } from './signal-table';
+import { leaderText, type Affected } from '@/lib/action-center/affected';
+import { platformName } from '@/lib/signals/names';
+import { getPlatformName } from '@/lib/traffic-platforms';
+import { formatCompactNumber } from '@/lib/format';
 
 // Written out so Excel reads the CSV as UTF-8 and keeps Turkish characters.
 const BYTE_ORDER_MARK = String.fromCharCode(0xfeff);
@@ -57,9 +62,14 @@ function save(blob: Blob, fileName: string) {
 export function ActionExportButtons({
   action,
   detail,
+  affected = null,
+  volumes = null,
 }: {
   action: ActionItem;
   detail: ActionDetail | null;
+  /** The Affected tab's list and its prompts' demand, as the drawer shows them (AC-003). */
+  affected?: Affected | null;
+  volumes?: Map<string, number> | null;
 }) {
   const t = useTranslations('actionCenter.actionsPage');
   const tExport = useTranslations('actionCenter.actionsPage.export');
@@ -75,6 +85,7 @@ export function ActionExportButtons({
   const tSignalTexts = useTranslations('actionCenter.signalTexts');
   const tSignalCategories = useTranslations('actionCenter.signalCategories');
   const tPriority = useTranslations('actionCenter.actionsPage.priority');
+  const tAffected = useTranslations('actionCenter.actionsPage.drawer.affected');
   const [isBusy, setIsBusy] = useState(false);
   // The Markdown Copy Data shows, and what to say once it is copied.
   const [preview, setPreview] = useState<{ text: string; copied: string } | null>(null);
@@ -202,6 +213,7 @@ export function ActionExportButtons({
               `${tRegistry(`${kpi.kpiKey}.name`)} (${t('drawer.kpiTarget', { target: kpi.target })})`,
           ),
         context: await sentFrom(origin),
+        affected: exportAffected(origin),
         taskTitle: (task) => taskText(task, tTasks),
         taskStatus: (status) => tTaskStatus(status),
         signal: (signal) => {
@@ -223,6 +235,60 @@ export function ActionExportButtons({
       },
       { origin, timeZone: viewerTimeZone() },
     );
+  };
+
+  /** The Affected tab's rows, labelled for the exports (AC-003). */
+  const exportAffected = (origin: string): ExportAffected[] => {
+    if (!affected) return [];
+    const row = (over: Partial<ExportAffected>): ExportAffected => ({
+      entity: '',
+      label: '',
+      volume: '',
+      platforms: [],
+      lostPages: [],
+      citedInstead: [],
+      details: '',
+      link: '',
+      ...over,
+    });
+    const leadersShown = affected.prompts.some((p) => p.leaders.length > 0);
+    return [
+      ...affected.prompts.map((prompt) => {
+        const volume = prompt.id ? volumes?.get(prompt.id) : undefined;
+        return row({
+          entity: tExport('affectedPrompt'),
+          label: prompt.text,
+          volume: volume ? `~${formatCompactNumber(volume)}` : '',
+          platforms: prompt.platforms.map(platformName),
+          lostPages: prompt.lostPages,
+          citedInstead: prompt.citedInstead,
+          details: prompt.leaders.map((leader) => leaderText(leader, tAffected)).join('; '),
+          link: prompt.id ? `${origin}/dashboard/prompts/${prompt.id}` : '',
+        });
+      }),
+      ...affected.pages.map((page) =>
+        row({
+          entity: tExport('affectedPage'),
+          label: page.url,
+          platforms: page.platforms.map(getPlatformName),
+          details: [
+            page.sessions !== null && page.before !== null
+              ? `${tAffected('visits')}: ${tAffected('visitsValue', { before: page.before, now: page.sessions })}`
+              : '',
+            page.issues.join(', '),
+          ]
+            .filter(Boolean)
+            .join('; '),
+          link: /^https?:\/\//.test(page.url) ? page.url : '',
+        }),
+      ),
+      ...(leadersShown
+        ? []
+        : affected.competitors.map((name) =>
+            row({ entity: tExport('affectedCompetitor'), label: name }),
+          )),
+      ...affected.topics.map((name) => row({ entity: tExport('affectedTopic'), label: name })),
+    ];
   };
 
   /** Builds the export once, holding the buttons while it runs. */

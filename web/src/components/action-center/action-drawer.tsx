@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { toast } from 'sonner';
@@ -30,6 +30,7 @@ import {
   assignAction,
   deleteTask,
   getActionDetail,
+  getPromptDemand,
   setActionDueDate,
   updateActionStatus,
   updateTaskStatus,
@@ -62,11 +63,20 @@ import { priorityReasonText } from '@/lib/action-center/priority';
 import { OpportunityContext } from './opportunity-context';
 import { ActionExportButtons } from './action-export-buttons';
 import { SupportingSignals } from './supporting-signals';
+import { AffectedTab } from './affected-tab';
+import {
+  affectedChips,
+  affectedOf,
+  affectedSignals,
+  affectedTotal,
+} from '@/lib/action-center/affected';
 import { ImproveContext } from './improve-context';
 import { cn } from '@/lib/utils';
 
-type DrawerTab = 'overview' | 'tasks' | 'signals' | 'history';
+type DrawerTab = 'overview' | 'affected' | 'tasks' | 'signals' | 'history';
 const TABS: DrawerTab[] = ['overview', 'tasks', 'signals', 'history'];
+/** With something to list, Affected follows Overview (AC-003). */
+const TABS_WITH_AFFECTED: DrawerTab[] = ['overview', 'affected', 'tasks', 'signals', 'history'];
 
 /**
  * Action detail: evidence, execution, trail. Tabs are local state, not
@@ -128,9 +138,49 @@ export function ActionDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [action?.id]);
 
+  // What the action is about, item by item (AC-003), from the signals it rests on.
+  const affected = useMemo(
+    () =>
+      action && detail
+        ? affectedOf(affectedSignals(detail.signals, action.id), action.payload ?? {})
+        : null,
+    [action, detail],
+  );
+
+  // Each affected prompt's demand. Best effort: without it the column is left out.
+  const [volumes, setVolumes] = useState<Map<string, number> | null>(null);
+  const promptIdsKey = (affected?.prompts ?? [])
+    .map((row) => row.id)
+    .filter(Boolean)
+    .join(',');
+  useEffect(() => {
+    setVolumes(null);
+    if (!promptIdsKey) return;
+    let cancelled = false;
+    getPromptDemand(brandId, promptIdsKey.split(',')).then(
+      (demand) => {
+        if (!cancelled) setVolumes(new Map(Object.entries(demand)));
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, promptIdsKey]);
+
   if (!action) return null;
   const texts = actionTexts(action, tTexts);
   const tags = actionContextTags(action, t);
+  const tabs = affected && affectedTotal(affected) > 0 ? TABS_WITH_AFFECTED : TABS;
+  // Once the detail is in, each count opens the list behind it (AC-003).
+  const chips =
+    detail && affected
+      ? affectedChips(detail.signals, affected, action.id).map((chip) => ({
+          key: chip.entity,
+          label: t(`tags.${chip.entity}`, { count: chip.count }),
+          tab: chip.tab as DrawerTab,
+        }))
+      : [];
   const relatedKpis: string[] = action.kpiKeys.filter(isKpiKey);
   // Sent by a person from Content Optimization (#857): its evidence is the
   // opportunity, not detection signals.
@@ -184,17 +234,33 @@ export function ActionDrawer({
             </div>
           </div>
           <div className="flex flex-wrap gap-1">
-            {tags.map((tag) => (
-              <Badge key={tag} variant="outline" className="text-[10px]">
-                {tag}
-              </Badge>
-            ))}
+            {chips.length > 0
+              ? chips.map((chip) => (
+                  <Badge
+                    key={chip.key}
+                    variant="outline"
+                    className="cursor-pointer text-[10px] hover:bg-muted"
+                    render={<button type="button" onClick={() => setTab(chip.tab)} />}
+                  >
+                    {chip.label}
+                  </Badge>
+                ))
+              : tags.map((tag) => (
+                  <Badge key={tag} variant="outline" className="text-[10px]">
+                    {tag}
+                  </Badge>
+                ))}
           </div>
-          <ActionExportButtons action={action} detail={detail} />
+          <ActionExportButtons
+            action={action}
+            detail={detail}
+            affected={affected}
+            volumes={volumes}
+          />
         </SheetHeader>
 
         <nav className="flex gap-4 border-b px-6" aria-label={t('table.action')}>
-          {TABS.map((key) => (
+          {tabs.map((key) => (
             <button
               key={key}
               type="button"
@@ -209,6 +275,7 @@ export function ActionDrawer({
             >
               {t(`drawer.tabs.${key}`)}
               {key === 'tasks' && detail ? ` (${detail.tasks.length})` : ''}
+              {key === 'affected' && affected ? ` (${affectedTotal(affected)})` : ''}
             </button>
           ))}
         </nav>
@@ -285,6 +352,8 @@ export function ActionDrawer({
                 </>
               ) : null}
             </>
+          ) : tab === 'affected' && affected ? (
+            <AffectedTab affected={affected} volumes={volumes} />
           ) : tab === 'tasks' ? (
             <section>
               {/* Canceled tasks leave the denominator — the work was called

@@ -106,6 +106,18 @@ const texts: ExportTexts = {
     { label: 'Prompt', value: 'Which tools track AI search?' },
     { label: 'Platforms at send time', value: ['Gemini · No runs', 'ChatGPT · Not cited'] },
   ],
+  affected: [
+    {
+      entity: 'Prompt',
+      label: 'Which tools track AI search?',
+      volume: '~25.1k',
+      platforms: ['ChatGPT', 'Gemini'],
+      lostPages: ['https://acme.example/blog/best-tools'],
+      citedInstead: ['https://profound.com/features'],
+      details: '',
+      link: 'https://app.example/dashboard/prompts/p1',
+    },
+  ],
   taskTitle: (task) => task.title ?? '',
   taskStatus: (status) => ({ completed: 'Completed', skipped: 'Skipped' })[status] ?? status,
   signal: () => ({
@@ -181,6 +193,9 @@ describe('actionMarkdown', () => {
         '- ChatGPT · Not cited',
         'link: https://app.example/dashboard/action-center/actions?action=a1',
         '',
+        '## affectedHeading(1)',
+        '- Which tools track AI search? · ~25.1k · ChatGPT, Gemini · lostPage: https://acme.example/blog/best-tools · citedInstead: https://profound.com/features',
+        '',
         '## tasksHeading(2)',
         '1. Add a 2026 comparison table to /blog/best-tools (Completed)',
         '   Lead with the table. Then the FAQ. · ChatGPT · https://acme.example/blog/best-tools · AI answer',
@@ -205,37 +220,43 @@ describe('actionMarkdown', () => {
       tags: [],
       kpis: [],
       context: [],
+      affected: [],
       tasks: [],
       signals: [],
       events: [],
     };
     const md = actionMarkdown(bare, label);
-    expect(md).not.toMatch(/priority|assignee|tags|kpis|historyHeading/);
+    expect(md).not.toMatch(/priority|assignee|tags|kpis|affectedHeading|historyHeading/);
     expect(md).toContain('## tasksHeading(0)');
   });
 });
 
 describe('actionCsv', () => {
-  it('gives each task and signal a row, marked by section and the action', () => {
+  it('gives each affected item, task and signal a row, marked by section and the action', () => {
     const [head, ...rows] = actionCsv(exported).split('\n');
     expect(head).toBe(ACTION_CSV_HEADERS.join(','));
     expect(rows.map((row) => row.split(',').slice(0, 2).join(','))).toEqual([
+      'affected,AC-52',
       'task,AC-52',
       'task,AC-52',
       'signal,AC-52',
     ]);
+    expect(rows[0]).toContain(
+      '~25.1k,https://acme.example/blog/best-tools,https://profound.com/features,ChatGPT; Gemini',
+    );
     // A cell a spreadsheet would run as a formula is kept as text.
-    expect(rows[1]).toContain(`"'=HYPERLINK(""x"")"`);
-    expect(rows[2]).toContain('Citation · Lost,Which tools track AI search?');
-    expect(rows[2]).toContain('ChatGPT; Gemini,United States,2026-10-09');
+    expect(rows[2]).toContain(`"'=HYPERLINK(""x"")"`);
+    expect(rows[3]).toContain('Citation · Lost,Which tools track AI search?');
+    expect(rows[3]).toContain('ChatGPT; Gemini,United States,2026-10-09');
   });
 });
 
 describe('actionWorkbook', () => {
-  it('gives the action, its tasks, signals and history a sheet each', () => {
+  it('gives the action, its affected items, tasks, signals and history a sheet each', () => {
     const sheets = actionWorkbook(exported, label);
     expect(sheets.map((s) => s.sheet)).toEqual([
       'sheets.action',
+      'sheets.affected',
       'sheets.tasks',
       'sheets.signals',
       'sheets.history',
@@ -251,12 +272,18 @@ describe('actionWorkbook', () => {
       { value: 'Platforms at send time', fontWeight: 'bold' },
       'Gemini · No runs; ChatGPT · Not cited',
     ]);
-    expect(sheets[1].data[0][1]).toEqual({ value: 'task', fontWeight: 'bold' });
-    expect(sheets[2].data[1].slice(0, 2)).toEqual([
+    expect(sheets[1].data[1].slice(0, 4)).toEqual([
+      'Prompt',
+      'Which tools track AI search?',
+      '~25.1k',
+      'ChatGPT, Gemini',
+    ]);
+    expect(sheets[2].data[0][1]).toEqual({ value: 'task', fontWeight: 'bold' });
+    expect(sheets[3].data[1].slice(0, 2)).toEqual([
       'Citation · Lost',
       'Which tools track AI search?',
     ]);
-    expect(sheets[3].data[1]).toEqual(['2026-10-08', 'Action created']);
+    expect(sheets[4].data[1]).toEqual(['2026-10-08', 'Action created']);
   });
 });
 
@@ -274,11 +301,12 @@ describe('the Excel file', () => {
     const sheets = await readXlsxFile(blob);
     expect(sheets.map((s) => s.sheet)).toEqual([
       'sheets.action',
+      'sheets.affected',
       'sheets.tasks',
       'sheets.signals',
       'sheets.history',
     ]);
-    expect(sheets[1].data[2]).toEqual([2, '=HYPERLINK("x")', 'Skipped', 'Skipped: Done by hand']);
-    expect(sheets[2].data[1][6]).toBe('ChatGPT, Gemini');
+    expect(sheets[2].data[2]).toEqual([2, '=HYPERLINK("x")', 'Skipped', 'Skipped: Done by hand']);
+    expect(sheets[3].data[1][6]).toBe('ChatGPT, Gemini');
   });
 });

@@ -20,6 +20,8 @@ import {
 } from '@/lib/action-center/registry';
 import { SIGNAL_ROW_COLUMNS, mapSignalRows, type Signal, type SignalRow } from '@/lib/signals/map';
 import { OPEN_SIGNAL_STATUSES, type SignalStatus } from '@/lib/signals/registry';
+import { readPromptPlaces } from '@/lib/signals/prompt-places';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { KpiTimeframe } from '@/lib/kpis/registry';
 import {
   parsePriorityReason,
@@ -225,7 +227,7 @@ export interface ActionDetail {
  *  action's kpi_keys — evidence of which goals this work serves. */
 export async function getActionDetail(brandId: string, actionId: string): Promise<ActionDetail> {
   const supabase = await createClient();
-  const [tasksRes, signalsRes, eventsRes, kpisRes] = await Promise.all([
+  const [tasksRes, signalsRes, eventsRes, kpisRes, places] = await Promise.all([
     supabase
       .from('action_tasks')
       .select(
@@ -251,6 +253,9 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
       .select('kpi_key, target, timeframe')
       .eq('brand_id', brandId)
       .eq('is_active', true),
+    // Where each prompt is tracked and its topic, as the Signals page reads
+    // them: the Affected tab's platforms and topics (AC-003).
+    readPromptPlaces(supabase, brandId),
   ]);
   if (tasksRes.error) throw new Error(tasksRes.error.message);
   if (signalsRes.error) throw new Error(signalsRes.error.message);
@@ -269,7 +274,7 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
       skipReason: task.skip_reason,
       details: (task.details ?? null) as ActionTaskDetails | null,
     })),
-    signals: mapSignalRows((signalsRes.data ?? []) as SignalRow[]),
+    signals: mapSignalRows((signalsRes.data ?? []) as SignalRow[], places),
     events: (eventsRes.data ?? []).map((event) => ({
       id: event.id,
       event: event.event,
@@ -496,4 +501,44 @@ export async function deleteTask(brandId: string, actionId: string, taskId: stri
 
   await logEvent(supabase, actionId, 'task_deleted', { taskId });
   await touchAction(supabase, brandId, actionId);
+}
+
+/** Prompt ids per request, so the filter stays well inside a URL's length. */
+const DEMAND_CHUNK = 150;
+
+/**
+ * The estimated monthly AI searches of these prompts, for the Affected tab's
+ * Volume column (AC-003). prompt_volumes is a server-only table, so the
+ * prompts are first checked to be the brand's and visible to the caller
+ * (RLS), and only theirs are read with the admin client.
+ */
+export async function getPromptDemand(
+  brandId: string,
+  promptIds: string[],
+): Promise<Record<string, number>> {
+  const ids = [...new Set(promptIds)];
+  if (ids.length === 0) return {};
+  const supabase = await createClient();
+  const demand: Record<string, number> = {};
+  for (let i = 0; i < ids.length; i += DEMAND_CHUNK) {
+    const chunk = ids.slice(i, i + DEMAND_CHUNK);
+    const { data: visible, error } = await supabase
+      .from('prompts')
+      .select('id, prompt_sets!inner(brand_id)')
+      .eq('prompt_sets.brand_id', brandId)
+      .in('id', chunk);
+    if (error) throw new Error(error.message);
+    const allowed = (visible ?? []).map((row) => row.id as string);
+    if (allowed.length === 0) continue;
+    const { data: rows, error: volumeError } = await supabaseAdmin
+      .from('prompt_volumes')
+      .select('prompt_id, est_ai_volume')
+      .in('prompt_id', allowed);
+    if (volumeError) throw new Error(volumeError.message);
+    for (const row of rows ?? []) {
+      const volume = Number(row.est_ai_volume ?? 0);
+      if (volume > 0) demand[row.prompt_id as string] = volume;
+    }
+  }
+  return demand;
 }

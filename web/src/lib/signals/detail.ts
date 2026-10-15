@@ -988,6 +988,11 @@ function isSiteWide(signal: Signal): boolean {
 }
 
 /** The Where block: the spec's fields for this signal, each with its value or none. */
+/** One of a signal's where fields, whatever its category's panel shows (AC-003). */
+export function signalWhereValue(signal: Signal, key: WhereFieldKey): WhereValue | null {
+  return fieldValue(signal, key);
+}
+
 export function signalWhereFields(signal: Signal): WhereField[] {
   const layout =
     signal.kind === 'first_citation'
