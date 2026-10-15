@@ -1,80 +1,99 @@
 # Visibility scoring reference
 
-The Ansvisor visibility score (0–100, per prompt × platform result) is a
-weighted sum of four signals. Knowing the breakdown lets you tell the
-user **why** a score is what it is, not just what it is.
+The Ansvisor **AI Visibility Score** (0–100) is the Visibility number the
+dashboard shows everywhere. Over the MCP server it is
+`totals.aiVisibilityScore` in `get_visibility_summary`, and each
+competitor's `score`. Knowing the breakdown lets you tell the user
+**why** a score is what it is, not just what it is.
 
 ## The formula
 
+The score is computed over a set of tracked AI answers — brand-wide, per
+prompt, per topic, per platform or per day. The same formula applies to
+every scope, which is why the numbers agree across the dashboard.
+
 ```
-score = mention_pts + citation_pts + citation_ratio_pts + sentiment_pts
-      ≤ 100
+score = 100 × ( 0.60 × mention rate
+              + 0.25 × citation rate
+              + 0.15 × position factor × position support )
 ```
 
-| Component | Max | Formula | Caps at |
+| Component | Weight | What it is | MCP field |
 | --- | --- | --- | --- |
-| Mentions | 40 | `min(mention_count × 10, 40)` | 4 mentions in one response |
-| Citations | 30 | `min(citation_count × 15, 30)` | 2 citations in one response |
-| Citation ratio | 15 | `(brand_citations / total_citations) × 15` | 100% of cites are yours |
-| Sentiment | 15 | positive: +15 · neutral (w/ mentions): +7 · negative or none: 0 | — |
+| Mention rate | 60% | Share of answers that name the brand | `mentionAnswers / resultCount` |
+| Citation rate | 25% | Share of answers that cite the brand's own domain | `citationAnswers / resultCount` |
+| Position factor | 15% | Mean of 1/position over answers that name the brand (1 = always named first) | `positionFactor` |
 
-Total clamps to 100.
+**Position support** damps the position term on thin evidence:
+`mentionAnswers / (mentionAnswers + 20)`. A brand named first in 5
+answers out of thousands does not get the full 15 points; one named in
+hundreds of answers does.
+
+The score is `null` when the scope has no answers. Sentiment is **not**
+part of it.
 
 ## How to read a score
 
-The dashboard shows the **average** score across all tracked results. So
-"average visibility 50" can mean very different shapes:
-
-- **Score ≈ 100 (rare):** brand is mentioned 4+ times, cited 2+ times,
-  all citations point to brand-owned domains, positive tone. Default
-  answer territory.
-- **Score 65–80:** strong. Probably 3–4 mentions, 1–2 citations,
-  positive sentiment. The brand is part of the recommended set.
-- **Score 40–65:** present but not dominant. Either mentioned with no
-  citations (no source authority) or cited without much body mention.
-- **Score 20–40:** fringe. Showing up once per response, no citations,
-  neutral tone. Competitors are eating the spotlight.
-- **Score 0–20:** the brand is barely surfacing — either prompts aren't
-  matching brand territory, or competitors fully own the answer.
+- **80+:** the brand is named in almost every answer, usually early, and
+  its site is cited often. Default answer territory.
+- **60–80:** strong. Named in most answers; citations or position leave
+  some room.
+- **35–60:** present but not dominant. Typically named in about half the
+  answers, or named often but rarely cited.
+- **15–35:** fringe. Named now and then, rarely cited. Competitors own
+  the answer.
+- **Below 15:** barely surfacing — prompts may not match the brand's
+  territory, or competitors fully own it.
 
 ## Component diagnoses
 
-When you see a low score, the breakdown tells you the lever to pull:
+When you see a low score, the components tell you the lever to pull:
 
-- **Low on mentions (`mention_count < 2` typical):** the brand isn't
-  even being named. Probably a content/positioning problem — there's no
-  source the AI is pulling from that connects this prompt to the brand.
-- **Mentions OK, low on citations:** the AI knows the brand exists but
-  is citing competitors as sources. The brand needs publishable,
-  citable content on the topic (definition-first paragraphs, primary
-  research, original data).
-- **Mentions OK, citations OK, low on citation ratio:** competitors are
-  also being cited heavily. The brand needs to **own more of the
-  citable surface** for this topic — more pages, more depth, or
-  acquiring 3rd-party authority that points to it.
-- **Sentiment negative:** rare, but when it happens, ignore SEO and go
-  fix the brand reputation issue surfaced in the response text.
+- **Low mention rate:** the brand isn't being named. A content or
+  positioning problem — no source the AI uses connects this prompt to
+  the brand. This is the heaviest weight, so it moves the score most.
+- **Mentions OK, low citation rate:** the AI knows the brand but cites
+  other sites as sources. The brand needs citable content on the topic
+  (definition-first paragraphs, primary research, original data).
+  `list_citations` shows who gets cited instead.
+- **Mentions OK, low position factor:** the brand is listed, but after
+  competitors. Comparison pages and clear "best for" positioning help.
+
+## Coverage is a different number
+
+`totals.visibilityRatePct` is **coverage**: the share of tracked prompts
+the brand appeared in at all (`visiblePrompts / promptCount × 100`). It
+is a percentage and answers "in how many of my prompts do I show up?",
+not "how strongly?". `get_competitor_comparison` ranks entries by the
+same kind of rate (`visibility_rate_pct`).
+
+`avgVisibility` (on the brand and on competitors) is a **deprecated**
+legacy average from an older formula. Don't quote it.
 
 ## What NOT to say
 
-- _"Aim for 100."_ — 100 requires every response to mention the brand
-  4× with 2 citations of which 100% are owned, positive tone. It is
-  almost never the right target. Aim for category leadership (~65+).
+- _"Aim for 100."_ — 100 needs every answer to name the brand first and
+  cite its site. It is almost never the right target. Aim for category
+  leadership.
 - _"Score went down 5 points, panic."_ — single-digit movement on small
-  sample sizes is noise. Always check `resultCount` before reacting.
-- _"Mentions are good, score should be higher."_ — mentions max out at
-  40 points. Without citations and sentiment, that's the ceiling.
+  samples is noise. Always check `resultCount` before reacting.
+- _"Visibility is 48%."_ — the score has no % sign. Rates and coverage
+  do.
 
 ## Math sanity checks
 
-If you ever need to verify, here are reference shapes:
+Reference shapes (answers = `resultCount`):
 
-| Mentions | Citations | Total cites | Sentiment | Score |
+| Answers | Mentioned in | Cited in | Position factor | Score |
 | --- | --- | --- | --- | --- |
-| 0 | 0 | 0 | none | 0 |
-| 1 | 0 | 0 | neutral | 17 |
-| 2 | 0 | 0 | neutral | 27 |
-| 4 | 0 | 0 | positive | 55 |
-| 4 | 2 | 2 | positive | 100 |
-| 4 | 2 | 5 | positive | 91 |
-| 2 | 1 | 1 | positive | 65 |
+| 100 | 0 | 0 | — | 0 |
+| 100 | 10 | 0 | 1.0 | 11.0 |
+| 100 | 50 | 0 | 0.33 | 33.5 |
+| 100 | 50 | 10 | 0.5 | 37.9 |
+| 100 | 80 | 0 | 0.5 | 54.0 |
+| 100 | 80 | 40 | 1.0 | 70.0 |
+| 100 | 100 | 100 | 1.0 | 97.5 |
+| 10 | 10 | 0 | 1.0 | 65.0 |
+
+The last row is why small samples mislead: 10 answers, all naming the
+brand first, already score 65.
