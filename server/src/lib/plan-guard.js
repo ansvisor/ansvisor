@@ -382,6 +382,25 @@ export async function claimOpportunitySlots(orgId, count) {
   return { unlimited: false, ids };
 }
 
+/**
+ * What one "+ New" request may ask for (CONTENT-003): the plan's per-request
+ * cap and what is left of the month, with the period's end for the message
+ * when nothing is. remaining -1 means unlimited.
+ */
+export async function getOpportunityRequestAllowance(orgId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const quota = await getOpportunityQuotaStatus(orgId);
+  const perRequest = plan.limits.maxOpportunitiesPerRequest ?? 5;
+  const periodEnd = shiftMonthClamped(await quotaPeriodStart(orgId), 1).toISOString();
+  return {
+    planId: plan.id,
+    perRequest,
+    remaining: quota.remaining,
+    max: quota.remaining === -1 ? perRequest : Math.min(perRequest, quota.remaining),
+    periodEnd,
+  };
+}
+
 /** Point each claimed slot at the opportunity it was used for. */
 export async function linkOpportunitySlots(pairs) {
   for (const { usageId, opportunityId } of pairs) {
@@ -417,7 +436,11 @@ export async function getContentUsage(orgId) {
     planName: plan.name,
     periodStart: periodStart.toISOString(),
     periodEnd: shiftMonthClamped(periodStart, 1).toISOString(),
-    opportunities,
+    opportunities: {
+      ...opportunities,
+      // What one "+ New" request may ask for (CONTENT-003).
+      perRequest: plan.limits.maxOpportunitiesPerRequest ?? 5,
+    },
     briefs,
   };
 }

@@ -16,15 +16,20 @@ import supabaseAdmin from '../config/supabase.js';
 import { selectInChunks } from './chunked-in.js';
 import { logger } from './logger.js';
 import {
+  OPPORTUNITIES_PER_RUN,
   OPPORTUNITY_WINDOW_DAYS,
   clusterMetrics,
   coveredClusterIds,
+  openOpportunityOn,
+  openlyCoveredClusterIds,
   opportunityScore,
   pickClusters,
   scoreComponents,
 } from './opportunity-limits.js';
-import { loadClusterOpportunities } from './open-opportunities.js';
+import { loadClusterOpportunities, loadOpportunityBaskets } from './open-opportunities.js';
+import { basket, duplicateThreshold, findDuplicate, storedBasket } from './opportunity-dedup.js';
 import { loadClusters } from './prompt-clusters.js';
+import { cleanOpportunityText } from './opportunity-text.js';
 import { reopenStrengthened } from './opportunity-reopen.js';
 import {
   claimOpportunitySlots,
@@ -148,6 +153,67 @@ function basketSummary(clusterIds, basketRows) {
   };
 }
 
+/** Clusters per basket request; a cluster can hold dozens of fan-out queries. */
+const BASKET_CHUNK = 10;
+
+/**
+ * Drops the open clusters that duplicate an existing opportunity (CONTENT-004)
+ * by adding them to `covered`, and folds each into its match when the match
+ * is still open and has room, counting it on the match as `duplicatesMerged`
+ * for the detail panel. A dismissed match only keeps the cluster out; after
+ * DISMISSED_BLOCK_DAYS it may be suggested again. Returns how many were
+ * skipped.
+ */
+async function skipDuplicates(brandId, open, { clusterById, basketRows, covered }) {
+  if (!open.length) return 0;
+  const existing = (await loadOpportunityBaskets(brandId)).map((row) => ({
+    ...row,
+    basket: storedBasket(row.source_data),
+  }));
+  if (!existing.length) return 0;
+
+  const threshold = duplicateThreshold();
+  let skipped = 0;
+  for (const cand of open) {
+    const c = clusterById.get(cand.id);
+    const candidate = basket({
+      prompts: c.promptTexts,
+      queries: basketSummary([c.id], basketRows).top.map((q) => q.query),
+    });
+    const match = findDuplicate(candidate, existing, { threshold });
+    if (!match) continue;
+    covered.add(cand.id);
+    skipped += 1;
+
+    const row = match.row;
+    const related = row.related_cluster_ids || [];
+    if (
+      row.status === 'dismissed' ||
+      !row.cluster_id ||
+      related.length >= MAX_MERGED_CLUSTERS ||
+      related.includes(cand.id)
+    ) {
+      continue;
+    }
+    row.related_cluster_ids = [...related, cand.id];
+    row.source_data = {
+      ...(row.source_data || {}),
+      duplicatesMerged: (row.source_data?.duplicatesMerged || 0) + 1,
+    };
+    const { error } = await supabaseAdmin
+      .from('content_opportunities')
+      .update({
+        related_cluster_ids: row.related_cluster_ids,
+        source_data: row.source_data,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', row.id);
+    if (error) throw new Error(error.message);
+  }
+  if (skipped) logger.info({ brandId, skipped }, '[opportunities] duplicates skipped');
+  return skipped;
+}
+
 async function loadPromptTexts(promptIds) {
   const { data, error } = await selectInChunks(promptIds, (chunk) =>
     supabaseAdmin.from('prompts').select('id, text').in('id', chunk),
@@ -157,11 +223,75 @@ async function loadPromptTexts(promptIds) {
 }
 
 /**
- * @param {string} brandId
- * @param {{ model?: string, onProgress?: (p: {phase: string, message: string}) => void }} [opts]
- * @returns {Promise<{ generated: number, merged: number, reopened?: number }>}
+ * The clusters a run may write for: those with answers to go on that aren't
+ * covered yet, within the request's focus. "Another angle" (CONTENT-006) is
+ * for its own cluster only.
  */
-export async function generateContentOpportunities(brandId, { model, onProgress } = {}) {
+export function openCandidates(candidates, { covered, inFocus, alternativeOf = null }) {
+  if (alternativeOf) return candidates.filter((c) => c.id === alternativeOf.clusterId);
+  return candidates.filter((c) => c.metrics.tested > 0 && !covered.has(c.id) && inFocus(c));
+}
+
+/**
+ * What the model is told when the user asks for another angle on an existing
+ * opportunity (CONTENT-006): the original, and that this one must differ in
+ * kind, not just in wording.
+ */
+export function alternativeInstruction({ title, description, decision }) {
+  const about = [
+    `"${title}"`,
+    description ? `(${description})` : null,
+    decision ? `decided as "${decision}"` : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return `This cluster already has the opportunity ${about}. The user wants a different angle on the same need: write one opportunity that differs clearly in content type, format, audience or decision. Don't repeat its title or approach.`;
+}
+
+/** Longest idea a "+ New" request may carry into the model prompt. */
+export const IDEA_MAX_LENGTH = 500;
+
+/**
+ * @param {string} brandId
+ * @param {{
+ *   model?: string,
+ *   onProgress?: (p: {phase: string, message: string}) => void,
+ *   count?: number,
+ *   topicId?: string | null,
+ *   promptId?: string | null,
+ *   idea?: string | null,
+ *   source?: 'system' | 'manual' | 'prompt',
+ *   alternativeOf?: { id: string, title: string, description?: string|null, decision?: string|null, clusterId: string } | null,
+ *   explicit?: boolean,
+ * }} [opts] - `count`, the focus (`topicId` / `promptId`) and `idea` come from
+ *   an on-demand request (CONTENT-003); the nightly run passes none of them.
+ *   `alternativeOf` asks for one more opportunity on that opportunity's
+ *   cluster with a different angle (CONTENT-006): the user wants a second
+ *   take on a need that's already covered, so neither coverage nor the
+ *   duplicate check stands in its way, and it isn't merged into anything.
+ *   `explicit` is a request for the focused prompt's cluster itself (PROMPT-006
+ *   "Suggest content"): it is written even if the cluster was covered by a
+ *   dismissed or finished opportunity, never when an open one covers it, and
+ *   never merged away.
+ * @returns {Promise<{ generated: number, merged: number, reopened?: number, duplicates?: number, limited?: boolean, opportunityIds?: string[], existingId?: string }>}
+ */
+export async function generateContentOpportunities(
+  brandId,
+  {
+    model,
+    onProgress,
+    count,
+    topicId = null,
+    promptId = null,
+    idea = null,
+    source = 'system',
+    alternativeOf = null,
+    explicit = false,
+  } = {},
+) {
+  // The user asked for this cluster by name: the duplicate check, merging
+  // into another opportunity and reopening finished ones don't apply.
+  const targeted = !!alternativeOf || explicit;
   onProgress?.({ phase: 'collecting_data', message: 'Fetching clusters and metrics...' });
 
   const { data: brand } = await supabaseAdmin
@@ -178,7 +308,7 @@ export async function generateContentOpportunities(brandId, { model, onProgress 
     .toISOString()
     .slice(0, 10);
   const memberIds = clusters.flatMap((c) => c.prompt_ids);
-  const [prompts, volumes, metricsRes, topicsRes, domainsRes, existing, pagesRes] =
+  const [prompts, volumes, metricsRes, topicsRes, domainsRes, existing, pagesRes, competitorsRes] =
     await Promise.all([
       loadPromptTexts(memberIds),
       selectInChunks(memberIds, (chunk) =>
@@ -200,9 +330,11 @@ export async function generateContentOpportunities(brandId, { model, onProgress 
         .select('url, title, h1, description, lastmod, ai_citations, ga_sessions')
         .eq('brand_id', brandId)
         .eq('fetch_status', 200),
+      supabaseAdmin.from('competitors').select('name').eq('brand_id', brandId),
     ]);
   if (volumes.error) throw new Error(volumes.error.message);
   if (pagesRes.error) throw new Error(pagesRes.error.message);
+  const competitorNamesList = (competitorsRes.data || []).map((c) => c.name);
   if (metricsRes.error) throw new Error(metricsRes.error.message);
 
   const byPrompt = new Map(prompts.map((p) => [p.id, { text: p.text }]));
@@ -235,22 +367,71 @@ export async function generateContentOpportunities(brandId, { model, onProgress 
   };
 
   // Finished opportunities whose signals moved go back to New before any new
-  // ones are written; they keep their clusters, so nothing is duplicated.
+  // ones are written; they keep their clusters, so nothing is duplicated. A
+  // run asked for one cluster leaves that to the next regular run: reopening
+  // that cluster's own would put two open opportunities on it.
   let reopened = 0;
-  try {
-    reopened = await reopenStrengthened(brandId, existing, measure);
-  } catch (err) {
-    logger.error({ err, brandId }, '[opportunities] re-opening finished opportunities failed');
+  if (!targeted) {
+    try {
+      reopened = await reopenStrengthened(brandId, existing, measure);
+    } catch (err) {
+      logger.error({ err, brandId }, '[opportunities] re-opening finished opportunities failed');
+    }
   }
 
   const candidates = clusters.map((c) => ({ id: c.id, topicId: c.topic_id, ...measure([c.id]) }));
-  const wanted = pickClusters(candidates, coveredClusterIds(existing));
+  // A prompt's own request may revisit a cluster whose opportunity was
+  // dismissed or finished, never one with an open opportunity.
+  const covered = explicit ? openlyCoveredClusterIds(existing) : coveredClusterIds(existing);
+
+  // The fan-out baskets of every cluster still open for an opportunity: the
+  // duplicate check compares them, and the prompt shows the picked ones'.
+  // A focused request only considers its topic's clusters or its prompt's.
+  const inFocus = (c) =>
+    (!topicId || c.topicId === topicId) &&
+    (!promptId || clusterById.get(c.id).prompt_ids.includes(promptId));
+  const open = openCandidates(candidates, { covered, inFocus, alternativeOf });
+  const { data: basketRows, error: basketErr } = await selectInChunks(
+    open.map((c) => c.id),
+    (chunk) =>
+      supabaseAdmin
+        .from('prompt_cluster_queries')
+        .select('cluster_id, query, times_searched, included')
+        .in('cluster_id', chunk),
+    BASKET_CHUNK,
+  );
+  if (basketErr) throw new Error(basketErr.message);
+
+  // CONTENT-004: a cluster whose baskets match an existing opportunity is
+  // that opportunity again. It is never written, so it costs neither a model
+  // call nor a slot of the quota; an open match takes it in as a related
+  // cluster, so it is covered from now on.
+  const duplicates = targeted
+    ? 0
+    : await skipDuplicates(brandId, open, {
+        clusterById,
+        basketRows: basketRows || [],
+        covered,
+      });
+
+  const wanted = targeted
+    ? open.slice(0, count ?? 1)
+    : pickClusters(open, covered, count ?? OPPORTUNITIES_PER_RUN, {
+        fill: count !== undefined,
+      });
   if (!wanted.length) {
     logger.info(
-      { brandId, clusters: clusters.length, opportunities: existing.length, reopened },
+      { brandId, clusters: clusters.length, opportunities: existing.length, reopened, duplicates },
       '[opportunities] every cluster with answers already has an opportunity',
     );
-    return { generated: 0, merged: 0, reopened };
+    // A request for one prompt that an open opportunity already answers
+    // points at it (PROMPT-006): regrouping or another run may have covered
+    // the prompt since the request was checked.
+    const promptCluster = promptId
+      ? clusters.find((c) => c.prompt_ids.includes(promptId))?.id
+      : null;
+    const existingId = openOpportunityOn(existing, promptCluster);
+    return { generated: 0, merged: 0, reopened, duplicates, ...(existingId ? { existingId } : {}) };
   }
 
   // Each new opportunity takes one of the organization's monthly slots
@@ -267,19 +448,8 @@ export async function generateContentOpportunities(brandId, { model, onProgress 
       logger.error({ err, brandId }, '[opportunities] handing back slots failed'),
     );
 
-  const { data: basketRows, error: basketErr } = await supabaseAdmin
-    .from('prompt_cluster_queries')
-    .select('cluster_id, query, times_searched, included')
-    .in(
-      'cluster_id',
-      picked.map((c) => c.id),
-    );
-  if (basketErr) {
-    await releaseAll();
-    throw new Error(basketErr.message);
-  }
-
-  const shown = existing
+  // An asked-for opportunity is its own, never folded into another one.
+  const shown = (targeted ? [] : existing)
     .filter(
       (o) =>
         o.status !== 'dismissed' &&
@@ -329,7 +499,11 @@ ${picked.map(clusterLine).join('\n\n')}
 Existing opportunities in other topics:
 ${shown.map((o, i) => `[E${i}] ${o.title} (topic: ${topicName(clusterById.get(o.cluster_id)) || 'none'})`).join('\n') || 'none'}
 
-Write every title and description in ${getLanguageName(brand.language)}.`;
+${alternativeOf ? `${alternativeInstruction(alternativeOf)}\n\n` : ''}${
+    idea
+      ? `The user asked for ideas around: "${idea.slice(0, IDEA_MAX_LENGTH)}". Shape the opportunities toward it wherever the clusters' prompts allow; never invent a need the data doesn't show.\n\n`
+      : ''
+  }Write every title and description in ${getLanguageName(brand.language)}.`;
 
   onProgress?.({ phase: 'analyzing', message: 'Generating opportunities with AI...' });
   const { object } = await generateObject({
@@ -352,6 +526,24 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
     const cand = picked[opp.clusterIndex];
     if (!Number.isInteger(opp.clusterIndex) || !cand || done.has(cand.id)) continue;
     done.add(cand.id);
+
+    // CONTENT-005: any bracketed index the model repeated becomes what it
+    // stood for in this run, and misspelled competitors their real names.
+    const clean = (text) =>
+      cleanOpportunityText(text, {
+        clusters: picked.map((p) => clusterById.get(p.id).label),
+        pages: pagesFor.get(cand.id),
+        existing: shown.map((o) => o.title),
+        competitors: competitorNamesList,
+        // The prompt numbered clusters [0], [1]…: a lone index is one of them.
+        bare: true,
+      });
+    opp.title = clean(opp.title);
+    opp.description = clean(opp.description);
+    opp.supportingAssets = (opp.supportingAssets || []).map((a) => ({
+      ...a,
+      title: clean(a.title),
+    }));
 
     const target = Number.isInteger(opp.sameAs) ? shown[opp.sameAs] : null;
     if (target) {
@@ -410,6 +602,7 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
       impact: opp.impact,
       opportunity_score: cand.score,
       status: 'new',
+      source,
       decision: primary.decision,
       source_data: {
         ...sourceData({
@@ -421,6 +614,9 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
         }),
         targetPages: primary.pages,
         assets,
+        ...(alternativeOf
+          ? { alternativeOf: { id: alternativeOf.id, title: alternativeOf.title } }
+          : {}),
       },
     });
   }
@@ -445,8 +641,15 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
     await releaseOpportunitySlots(slots.ids.slice(created.length));
   }
   logger.info(
-    { brandId, generated: inserts.length, merged, reopened, clusters: clusters.length },
+    { brandId, generated: inserts.length, merged, reopened, duplicates, clusters: clusters.length },
     '[opportunities] generated',
   );
-  return { generated: inserts.length, merged, reopened };
+  // The new rows' ids, so a caller that asked for one can open it.
+  return {
+    generated: inserts.length,
+    merged,
+    reopened,
+    duplicates,
+    opportunityIds: created.map((row) => row.id),
+  };
 }

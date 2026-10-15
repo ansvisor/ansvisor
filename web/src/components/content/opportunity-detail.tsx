@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,8 @@ import {
   Check,
   Copy,
   ExternalLink,
+  Info,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Link } from '@/i18n/navigation';
@@ -36,8 +38,15 @@ import {
   generateBrief,
   getBriefQuota,
   sendOpportunityToActionCenter,
+  suggestAlternative,
+  getGenerationJobStatus,
   type BriefQuota,
 } from '@/lib/actions/content';
+import {
+  AlternativeDialog,
+  DismissReasonDialog,
+  type DismissReason,
+} from '@/components/content/opportunity-angle-dialogs';
 import type { ContentBrief, ContentOpportunity } from '@/types';
 import { getPromptFanout, type FanoutSubQuery } from '@/lib/actions/fanout';
 import {
@@ -49,6 +58,7 @@ import {
 } from '@/components/content/opportunity-basket';
 import { opportunityToMarkdown } from '@/lib/content/opportunity-markdown';
 import { toast } from 'sonner';
+import { suggestedDate } from '@/lib/suggested-date';
 
 export const IMPACT_COLORS: Record<string, string> = {
   high: 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
@@ -104,6 +114,9 @@ function StatCard({
  * actions. Rendered as its own page (/dashboard/content/[id]) and inside the
  * list's drawer, so reviewing one never loses the list's filters.
  */
+/** How long the panel follows an "Another angle" job before giving up. */
+const ALTERNATIVE_TIMEOUT_MS = 3 * 60 * 1000;
+
 export function OpportunityDetail({
   id,
   inDrawer = false,
@@ -116,6 +129,7 @@ export function OpportunityDetail({
   onChanged?: () => void;
 }) {
   const t = useTranslations('content');
+  const locale = useLocale();
 
   const [opportunity, setOpportunity] = useState<ContentOpportunity | null>(null);
   const [loading, setLoading] = useState(true);
@@ -180,12 +194,67 @@ export function OpportunityDetail({
     }
   };
 
-  const handleDismiss = async () => {
+  // "Another angle" (CONTENT-006): generation runs as a content job; the
+  // panel follows it and says when the alternative is in the list.
+  const [alternativeOpen, setAlternativeOpen] = useState(false);
+  const [dismissOpen, setDismissOpen] = useState(false);
+  const [alternativeRunning, setAlternativeRunning] = useState(false);
+
+  const followAlternative = async (jobId: string) => {
+    setAlternativeRunning(true);
+    const startedAt = Date.now();
     try {
-      await updateOpportunityStatus(id, 'dismissed');
+      while (Date.now() - startedAt < ALTERNATIVE_TIMEOUT_MS) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const job = await getGenerationJobStatus(jobId);
+        if (job.status === 'completed') {
+          if (job.result?.limited) toast.error(t('newLimitReached'));
+          else if ((job.result?.generated ?? 0) > 0) toast.success(t('alternative.done'));
+          else toast(t('alternative.none'));
+          onChanged?.();
+          return;
+        }
+        if (job.status === 'failed') {
+          toast.error(job.failedReason || t('alternative.failed'), {
+            description: t('newRefunded'),
+          });
+          return;
+        }
+      }
+      // The job may still finish (and use its slot), so don't promise a refund.
+      toast(t('alternative.stillRunning'));
+    } finally {
+      setAlternativeRunning(false);
+    }
+  };
+
+  const handleAlternative = async (direction: string | null): Promise<boolean> => {
+    const result = await suggestAlternative(id, {
+      direction,
+      idempotencyKey: crypto.randomUUID(),
+    }).catch((err: unknown) => ({
+      ok: false as const,
+      error: err instanceof Error ? err.message : t('alternative.failed'),
+      quotaExhausted: false,
+      noCluster: false,
+    }));
+    if (!result.ok) {
+      toast.error(result.quotaExhausted ? t('newLimitReached') : result.error);
+      return false;
+    }
+    toast(t('alternative.started'));
+    void followAlternative(result.jobId);
+    return true;
+  };
+
+  const handleDismiss = async (reason?: DismissReason) => {
+    try {
+      await updateOpportunityStatus(id, 'dismissed', reason);
       const updated = await getOpportunity(id);
       setOpportunity(updated);
       onChanged?.();
+      // The topic is right, the angle wrong: offer the other angle straight away.
+      if (reason === 'wrong_angle') setAlternativeOpen(true);
       toast.success(t('dismissedToast'), {
         action: {
           label: t('undo'),
@@ -304,6 +373,20 @@ export function OpportunityDetail({
           )}
           <div className="min-w-0 flex-1">
             <h1 className="text-xl font-bold tracking-tight">{opportunity.title}</h1>
+            {sd.alternativeOf && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                <Badge variant="outline" className="mr-1.5 text-[10px] font-normal">
+                  {t('alternative.badge')}
+                </Badge>
+                {t('alternative.of')}{' '}
+                <Link
+                  href={`/dashboard/content?opportunity=${sd.alternativeOf.id}`}
+                  className="text-primary hover:underline"
+                >
+                  {sd.alternativeOf.title}
+                </Link>
+              </p>
+            )}
             {opportunity.description && (
               <p className="text-sm text-muted-foreground mt-1">{opportunity.description}</p>
             )}
@@ -327,9 +410,29 @@ export function OpportunityDetail({
           <Badge variant="outline" className="text-xs tabular-nums">
             Score: {Math.round(opportunity.opportunityScore)}
           </Badge>
-          <span className="text-xs text-muted-foreground ml-auto flex items-center gap-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="ml-auto gap-1 text-xs text-muted-foreground"
+            onClick={() => setAlternativeOpen(true)}
+            disabled={alternativeRunning}
+            title={t('alternative.hint')}
+          >
+            {alternativeRunning ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3 w-3" />
+            )}
+            {alternativeRunning ? t('alternative.running') : t('alternative.button')}
+          </Button>
+          {/* The UI's language, not the browser's: an English page showed "25 Eyl". */}
+          <span
+            className="text-xs text-muted-foreground flex items-center gap-1.5"
+            title={suggestedDate(opportunity.createdAt, locale).full}
+          >
             <Clock className="h-3.5 w-3.5" />
-            {new Date(opportunity.createdAt).toLocaleDateString(undefined, {
+            {new Date(opportunity.createdAt).toLocaleDateString(locale, {
               day: 'numeric',
               month: 'short',
               year: 'numeric',
@@ -358,32 +461,32 @@ export function OpportunityDetail({
               {generatingBrief ? t('generatingBrief') : t('generateBrief')}
             </Button>
           )}
-          {opportunity.clusterId &&
-            (actionId ? (
-              <Link href={`/dashboard/action-center/actions?action=${actionId}`}>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <ExternalLink className="h-4 w-4" />
-                  {t('openInActions')}
-                </Button>
-              </Link>
-            ) : (
-              canSendToActionCenter && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleSendToActionCenter()}
-                  disabled={sendingAction !== null}
-                  className="gap-2"
-                >
-                  {sendingAction === 'all' ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Target className="h-4 w-4" />
-                  )}
-                  {t('sendToActions')}
-                </Button>
-              )
-            ))}
+          {/* Every opportunity can go to the Action Center, cluster or single prompt. */}
+          {actionId ? (
+            <Link href={`/dashboard/action-center/actions?action=${actionId}`}>
+              <Button variant="outline" size="sm" className="gap-2">
+                <ExternalLink className="h-4 w-4" />
+                {t('openInActions')}
+              </Button>
+            </Link>
+          ) : (
+            canSendToActionCenter && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleSendToActionCenter()}
+                disabled={sendingAction !== null}
+                className="gap-2"
+              >
+                {sendingAction === 'all' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Target className="h-4 w-4" />
+                )}
+                {t('sendToActions')}
+              </Button>
+            )
+          )}
           {canSendToWorkflow && (
             <Button
               variant="outline"
@@ -425,7 +528,7 @@ export function OpportunityDetail({
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleDismiss}
+              onClick={() => setDismissOpen(true)}
               className="gap-2 text-muted-foreground hover:text-destructive"
             >
               <X className="h-4 w-4" />
@@ -448,6 +551,18 @@ export function OpportunityDetail({
                   after: Math.round((sd.reopened.visibilityAfter ?? 0) * 10) / 10,
                   now: Math.round(sd.reopened.visibility * 10) / 10,
                 })}
+          </p>
+        </div>
+      )}
+
+      {(sd.duplicatesMerged ?? 0) > 0 && (
+        <div className="flex items-start gap-2 rounded-md border bg-muted/40 px-4 py-3 text-xs">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <p>
+            <span className="font-medium">
+              {t('duplicatesMerged', { count: sd.duplicatesMerged ?? 0 })}
+            </span>{' '}
+            <span className="text-muted-foreground">{t('duplicatesMergedHint')}</span>
           </p>
         </div>
       )}
@@ -713,6 +828,16 @@ export function OpportunityDetail({
           </CardContent>
         </Card>
       )}
+      <AlternativeDialog
+        open={alternativeOpen}
+        onOpenChange={setAlternativeOpen}
+        onSubmit={handleAlternative}
+      />
+      <DismissReasonDialog
+        open={dismissOpen}
+        onOpenChange={setDismissOpen}
+        onChoose={(reason) => void handleDismiss(reason)}
+      />
     </div>
   );
 }

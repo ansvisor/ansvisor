@@ -1,8 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../config/supabase.js', () => ({ default: {} }));
+const tables = {};
+vi.mock('../../config/supabase.js', () => ({
+  default: { from: (table) => tables[table]() },
+}));
 
-const { BASKET_KPIS, basketValues, pageScope } = await import('./basket-metrics.js');
+const { BASKET_KPIS, basketScope, basketValues, pageScope } = await import('./basket-metrics.js');
+
+/** A query builder that resolves to `result` however it is chained. */
+function chain(result) {
+  const b = {
+    select: () => b,
+    eq: () => b,
+    in: () => Promise.resolve(result),
+    maybeSingle: () => Promise.resolve(result),
+  };
+  return b;
+}
 
 describe('pageScope', () => {
   it('turns page URLs into citation keys, hosts and GA paths', () => {
@@ -61,5 +75,29 @@ describe('basketValues', () => {
     expect(Object.keys(basketValues(raw, { pageCount: 1 })).sort()).toEqual(
       Object.keys(BASKET_KPIS).sort(),
     );
+  });
+});
+
+describe('basketScope', () => {
+  it('uses the prompt ids the action was sent with', async () => {
+    expect(await basketScope({ payload: { promptIds: ['p1'], pages: ['u'] } })).toEqual({
+      promptIds: ['p1'],
+      pages: ['u'],
+    });
+  });
+
+  it("falls back to the opportunity's clusters, then to its own prompt", async () => {
+    tables.content_opportunities = () =>
+      chain({ data: { cluster_id: 'c1', related_cluster_ids: [], prompt_id: 'p9' } });
+    tables.prompt_cluster_members = () =>
+      chain({ data: [{ prompt_id: 'p1' }, { prompt_id: 'p2' }], error: null });
+    expect((await basketScope({ payload: { opportunityId: 'o1' } })).promptIds).toEqual([
+      'p1',
+      'p2',
+    ]);
+
+    tables.content_opportunities = () =>
+      chain({ data: { cluster_id: null, related_cluster_ids: [], prompt_id: 'p9' } });
+    expect((await basketScope({ payload: { opportunityId: 'o1' } })).promptIds).toEqual(['p9']);
   });
 });

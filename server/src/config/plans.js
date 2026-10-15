@@ -17,6 +17,7 @@ export const PLANS = {
       maxBriefGenerations: -1,
       improveMonthlyBudgetUsd: -1,
       maxOpportunitiesPerMonth: -1,
+      maxOpportunitiesPerRequest: 5,
       maxSiteAudits: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
@@ -50,6 +51,7 @@ export const PLANS = {
       maxBriefGenerations: 10,
       improveMonthlyBudgetUsd: 0,
       maxOpportunitiesPerMonth: 10,
+      maxOpportunitiesPerRequest: 3,
       maxSiteAudits: 100,
       maxDailyOnDemand: 3,
       onDemandCooldownMinutes: 15,
@@ -84,6 +86,7 @@ export const PLANS = {
       // 1% of the $249 price, spent on Improve model calls (PROMPT-003).
       improveMonthlyBudgetUsd: 2.49,
       maxOpportunitiesPerMonth: 50,
+      maxOpportunitiesPerRequest: 5,
       maxSiteAudits: 500,
       maxDailyOnDemand: 10,
       onDemandCooldownMinutes: 5,
@@ -123,6 +126,7 @@ export const PLANS = {
       // of the contract; an explicit plan_overrides.improveMonthlyBudgetUsd wins.
       improveMonthlyBudgetUsd: 4.99,
       maxOpportunitiesPerMonth: -1,
+      maxOpportunitiesPerRequest: 5,
       maxSiteAudits: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,

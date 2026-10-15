@@ -131,23 +131,63 @@ export function coveredClusterIds(rows) {
   return ids;
 }
 
+/** Statuses that still stand for a need's content work. */
+export const OPEN_OPPORTUNITY_STATUSES = ['new', 'reviewed', 'sent', 'in_progress'];
+
+/**
+ * Clusters with an open opportunity, which is all that holds back a prompt's
+ * own "Suggest content" (PROMPT-006): unlike coveredClusterIds, a dismissed
+ * or finished one doesn't count, since the user is asking again on purpose.
+ */
+export function openlyCoveredClusterIds(rows) {
+  return coveredClusterIds(
+    (rows || []).filter((r) => OPEN_OPPORTUNITY_STATUSES.includes(r.status)),
+  );
+}
+
+/** An open opportunity covering the cluster, as its own or a merged one; null when none. */
+export function openOpportunityOn(rows, clusterId) {
+  if (!clusterId) return null;
+  const match = (rows || []).find(
+    (r) =>
+      OPEN_OPPORTUNITY_STATUSES.includes(r.status) &&
+      (r.cluster_id === clusterId || (r.related_cluster_ids || []).includes(clusterId)),
+  );
+  return match?.id ?? null;
+}
+
 /**
  * The highest-scoring clusters with answers and no opportunity yet, at most
  * one per topic, so a run's few suggestions spread across the brand's topics
  * instead of all landing in its strongest one. The no-topic scope (null)
- * counts as one topic.
+ * counts as one topic. With `fill`, a request for more than one per topic
+ * is topped up from the best of the rest.
  */
-export function pickClusters(candidates, covered, count = OPPORTUNITIES_PER_RUN) {
+export function pickClusters(
+  candidates,
+  covered,
+  count = OPPORTUNITIES_PER_RUN,
+  { fill = false } = {},
+) {
   const topics = new Set();
   const picked = [];
-  for (const c of [...candidates]
+  const ranked = [...candidates]
     .filter((c) => c.metrics.tested > 0 && !covered.has(c.id))
-    .sort((a, b) => b.score - a.score)) {
+    .sort((a, b) => b.score - a.score);
+  for (const c of ranked) {
     const topic = c.topicId ?? null;
     if (topics.has(topic)) continue;
     topics.add(topic);
     picked.push(c);
-    if (picked.length === count) break;
+    if (picked.length === count) return picked;
+  }
+  // A request for more than there are topics (CONTENT-003's "+ New") takes
+  // the next best clusters once every topic has one.
+  if (fill) {
+    for (const c of ranked) {
+      if (picked.length === count) break;
+      if (!picked.includes(c)) picked.push(c);
+    }
   }
   return picked;
 }
