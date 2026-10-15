@@ -3,6 +3,15 @@
 import { unstable_cache } from 'next/cache';
 import { dbClient, withDbClient } from '@/lib/supabase/scoped';
 import { expandDateToEndOfDay } from '@/lib/dates';
+import {
+  comparisonWindows,
+  dailyWindow,
+  deltaDayWindows,
+  visibilityChange,
+  windowBounds,
+  type DayWindow,
+  type MetricWindow,
+} from '@/lib/insights-windows';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import type {
   PromptResult,
@@ -28,6 +37,16 @@ import { getPromptVolumes } from '@/lib/actions/volumes';
 import { getPromptSuggestions } from '@/lib/actions/prompt-suggestions';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import { percentageChange } from '@/lib/metrics';
+import {
+  breakdownDelta,
+  buildBreakdownRows,
+  parseBreakdownGroups,
+  pickDriver,
+  type BreakdownFilters,
+  type BreakdownMetric,
+  type BreakdownRow,
+  type InsightsBreakdown,
+} from '@/lib/insights-breakdown';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import {
   aggregateHeadToHead,
@@ -184,70 +203,9 @@ function modelFilterArray(model: string | undefined): string[] | undefined {
   return list.length > 0 ? list : undefined;
 }
 
-// ── Daily-rollup routing (00066) ────────────────────────────────────────────
-//
-// The aggregate RPCs used to rescan a brand's whole history per page load;
-// past ~55k results that exceeds the authenticated role's 8s statement
-// timeout and the wide presets die. Every preset except 24h now describes its
-// window as whole UTC days, and calls that carry one are answered from the
-// pre-aggregated daily tables instead — cost scales with days in the window,
-// never with accumulated results.
-//
-// Topic-filtered calls deliberately stay on the raw RPCs: topic is a live
-// prompt attribute (reassigning a prompt must move its history), the rollups
-// have no prompt dimension at brand grain, and a topic slice is a small
-// fraction of the scan that made the raw path unaffordable.
-
-/**
- * Whole-day UTC window, 'YYYY-MM-DD' inclusive on both ends. Its presence in
- * an action's opts marks the call as servable from the daily rollups; either
- * bound may be absent (the All-time preset carries an empty window).
- */
-export interface DayWindow {
-  dayFrom?: string;
-  dayTo?: string;
-}
-
-interface WindowedOpts {
-  topicId?: string;
-  days?: DayWindow;
-}
-
-/** The day window to serve from rollups, or null when the raw path must answer. */
-function dailyWindow(opts?: WindowedOpts): DayWindow | null {
-  return opts?.days && !opts.topicId ? opts.days : null;
-}
-
-const DAY_MS = 86_400_000;
-
-function utcToday(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function addDays(day: string, n: number): string {
-  return new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
-}
-
-/**
- * Current + previous equal-length day windows for the ↑/↓ delta math. An
- * unbounded window anchors to the trailing 7 days, mirroring what the raw
- * path's `now() - 7d` default has always compared against. The previous
- * window ends the day BEFORE the current one starts — the raw path's
- * timestamp arithmetic let the two windows share their boundary instant.
- */
-function deltaDayWindows(days: DayWindow): {
-  cur: { dayFrom: string; dayTo: string };
-  prev: { dayFrom: string; dayTo: string };
-} {
-  const curTo = days.dayTo ?? utcToday();
-  const curFrom = days.dayFrom ?? addDays(curTo, -6);
-  const len = Math.round((Date.parse(curTo) - Date.parse(curFrom)) / DAY_MS) + 1;
-  const prevTo = addDays(curFrom, -1);
-  return {
-    cur: { dayFrom: curFrom, dayTo: curTo },
-    prev: { dayFrom: addDays(prevTo, -(len - 1)), dayTo: prevTo },
-  };
-}
+// Daily-rollup routing and the comparison windows live in
+// @/lib/insights-windows, shared with the breakdown panel (VIS-001).
+export type { DayWindow } from '@/lib/insights-windows';
 
 // ── RPC return shapes (mirror supabase/migrations/00031_insights_sentiment_denominator.sql) ─
 
@@ -1931,6 +1889,38 @@ function foldAiVisibility(raw: unknown): AiVisibilityWindow {
   };
 }
 
+/**
+ * ai_visibility_aggregates over one comparison window (VIS-001): the daily
+ * rollups for whole days, the raw rows for a timestamp range. The card, the
+ * breakdown panel and the leaderboard read their Visibility through this, so
+ * the same window always yields the same number.
+ */
+function aiVisibilityWindow(
+  supabase: Awaited<ReturnType<typeof dbClient>>,
+  brandId: string,
+  opts: { model?: string; region?: string; topicId?: string } | undefined,
+  win: MetricWindow,
+) {
+  const base = {
+    p_brand_id: brandId,
+    p_platform: undefined as string | undefined,
+    p_models: modelFilterArray(opts?.model),
+    p_region: opts?.region ?? undefined,
+  };
+  return win.kind === 'days'
+    ? supabase.rpc('ai_visibility_aggregates_daily', {
+        ...base,
+        p_day_from: win.days.dayFrom,
+        p_day_to: win.days.dayTo,
+      })
+    : supabase.rpc('ai_visibility_aggregates', {
+        ...base,
+        p_date_from: win.from,
+        p_date_to: win.to,
+        p_topic_id: opts?.topicId ?? undefined,
+      });
+}
+
 export interface CompetitorComparisonEntry {
   name: string;
   avgVisibilityScore: number;
@@ -2071,25 +2061,16 @@ export async function getCompetitorComparison(
           p_date_from: from,
           p_date_to: to,
         });
-  const visRpc = (win: { dayFrom?: string; dayTo?: string } | null, from?: string, to?: string) =>
-    win
-      ? supabase.rpc('ai_visibility_aggregates_daily', {
-          ...dailyArgs,
-          p_day_from: win.dayFrom,
-          p_day_to: win.dayTo,
-        })
-      : supabase.rpc('ai_visibility_aggregates', {
-          ...baseArgs,
-          p_date_from: from,
-          p_date_to: to,
-        });
+  // Scores and their change use the card's windows (VIS-001), so the
+  // brand's own row always matches the Visibility card.
+  const visWindows = comparisonWindows(opts);
 
   // Brand name + the displayed-period aggregates fire in parallel — all
   // are needed before we can shape the response.
   const [{ data: brand }, { data: aggDisplay, error: aggErr }, visDisplayRes] = await Promise.all([
     supabase.from('brands').select('name').eq('id', brandId).single(),
     compRpc(daily, opts?.dateFrom ?? undefined, expandDateToEndOfDay(opts?.dateTo) ?? undefined),
-    visRpc(daily, opts?.dateFrom ?? undefined, expandDateToEndOfDay(opts?.dateTo) ?? undefined),
+    aiVisibilityWindow(supabase, brandId, opts, visWindows.cur),
   ]);
   if (aggErr) throw new Error(aggErr.message);
   if (visDisplayRes.error) throw new Error(visDisplayRes.error.message);
@@ -2130,14 +2111,15 @@ export async function getCompetitorComparison(
     deltaDays
       ? compRpc(deltaDays.prev)
       : compRpc(null, prevFrom.toISOString(), currentFrom.toISOString()),
-    deltaDays
-      ? visRpc(deltaDays.prev)
-      : visRpc(null, prevFrom.toISOString(), currentFrom.toISOString()),
+    visWindows.prev
+      ? aiVisibilityWindow(supabase, brandId, opts, visWindows.prev)
+      : Promise.resolve({ data: null, error: new Error('no previous window') }),
   ]);
   if (curRes.error) throw new Error(curRes.error.message);
   if (prevRes.error) throw new Error(prevRes.error.message);
   // Score delta compares the displayed window against the one immediately
-  // before it; a previous-window failure only costs the delta, not the page.
+  // before it (none for All time); a previous-window failure only costs the
+  // delta, not the page.
   const visPrev = visPrevRes.error ? null : foldAiVisibility(visPrevRes.data);
   const scoreDiff = (cur: number | null, prev: number | null | undefined): number | null => {
     if (cur === null || prev === null || prev === undefined) return null;
@@ -2501,7 +2483,11 @@ export interface VisibilityRateTrendSummary {
   prevRate: number | null;
   /** rate − prevRate in points, one decimal; null when prevRate is null. */
   change: number | null;
-  /** ISO bounds of the previous window, for the "vs <range>" label. */
+  /**
+   * Inclusive bounds of the previous window, for the "vs <range>" label:
+   * 'YYYY-MM-DD' UTC days for whole-day windows, ISO timestamps for the 24h
+   * and topic views. Empty when there is no previous window (All time).
+   */
   prevFrom: string;
   prevTo: string;
 }
@@ -2551,6 +2537,9 @@ export async function getVisibilityRateTrend(
 ): Promise<VisibilityRateTrendData> {
   const supabase = await dbClient();
   const daily = dailyWindow(opts);
+  // The headline and its change: the same windows the breakdown panel and
+  // the leaderboard use (VIS-001).
+  const windows = comparisonWindows(opts);
   // No explicit lower bound = the "All time" preset: the summary covers
   // everything (matching the leaderboard) and the chart plots an expanding
   // cumulative window instead of a fixed-length rolling one.
@@ -2560,8 +2549,8 @@ export async function getVisibilityRateTrend(
   const boundedFrom = opts?.dateFrom ?? undefined;
   const dateTo = expandDateToEndOfDay(opts?.dateTo) ?? new Date().toISOString();
 
-  // Equal-length window immediately before, for the headline delta
-  // (undefined for all-time — there is no comparable previous window).
+  // On the raw path the chart reads one window further back, to warm up the
+  // rolling window of its earliest points (all-time needs none).
   const windowMs = boundedFrom
     ? new Date(dateTo).getTime() - new Date(boundedFrom).getTime()
     : null;
@@ -2569,7 +2558,6 @@ export async function getVisibilityRateTrend(
     boundedFrom && windowMs !== null
       ? new Date(new Date(boundedFrom).getTime() - windowMs).toISOString()
       : undefined;
-  const prevTo = boundedFrom;
 
   const rateArgs = (from: string | undefined, to: string) => ({
     p_brand_id: brandId,
@@ -2588,8 +2576,8 @@ export async function getVisibilityRateTrend(
     p_day_from: dayFrom,
     p_day_to: dayTo,
   });
-  // Day-window equivalents of the three timestamp windows above: display,
-  // warm-up-extended fetch range, and the previous window for the delta.
+  // The chart's warm-up range on the rollup path starts at the previous
+  // window's first day.
   const deltaDays = daily?.dayFrom ? deltaDayWindows(daily) : null;
 
   const [
@@ -2609,19 +2597,10 @@ export async function getVisibilityRateTrend(
     daily
       ? supabase.rpc('visibility_rate_trend_daily', dayArgs(deltaDays?.prev.dayFrom, daily.dayTo))
       : supabase.rpc('visibility_rate_trend', rateArgs(prevFrom, dateTo)),
-    daily
-      ? supabase.rpc('ai_visibility_aggregates_daily', dayArgs(daily.dayFrom, daily.dayTo))
-      : supabase.rpc('ai_visibility_aggregates', rateArgs(boundedFrom, dateTo)),
-    daily
-      ? deltaDays
-        ? supabase.rpc(
-            'ai_visibility_aggregates_daily',
-            dayArgs(deltaDays.prev.dayFrom, deltaDays.prev.dayTo),
-          )
-        : Promise.resolve({ data: null, error: new Error('no previous window') })
-      : prevFrom && prevTo
-        ? supabase.rpc('ai_visibility_aggregates', rateArgs(prevFrom, prevTo))
-        : Promise.resolve({ data: null, error: new Error('no previous window') }),
+    aiVisibilityWindow(supabase, brandId, opts, windows.cur),
+    windows.prev
+      ? aiVisibilityWindow(supabase, brandId, opts, windows.prev)
+      : Promise.resolve({ data: null, error: new Error('no previous window') }),
   ]);
   if (rpcRes.error) throw new Error(rpcRes.error.message);
   if (visCurRes.error) throw new Error(visCurRes.error.message);
@@ -2653,7 +2632,9 @@ export async function getVisibilityRateTrend(
   // point equal the headline card exactly — the chart's inside and outside
   // can never disagree — and every earlier point answers "what would the
   // headline have shown that day".
-  const windowDays = windowMs !== null ? Math.max(1, Math.round(windowMs / 86_400_000)) : null;
+  // Whole-day windows count their days: rounding the elapsed time made the
+  // 30d chart's newest point cover 29 days before noon UTC.
+  const windowDays = windows.windowDays;
   const dayMs = (day: string) => new Date(day + 'T00:00:00Z').getTime();
   const displayFromMs = boundedFrom ? new Date(boundedFrom).getTime() : Number.NEGATIVE_INFINITY;
 
@@ -2746,15 +2727,17 @@ export async function getVisibilityRateTrend(
   // equal-length window. Same RPC the leaderboard uses.
   const visCur = foldAiVisibility(visCurRes.data);
   const visPrev = visPrevRes.error ? null : foldAiVisibility(visPrevRes.data);
-  const headlineScore = visCur.brandScore ?? 0;
-  const prevScore = visPrev?.brandScore ?? null;
+  const headline = visibilityChange(visCur.brandScore, visPrev?.brandScore ?? null);
 
+  // The window the change was measured against: 'YYYY-MM-DD' days for the
+  // rollup presets, ISO timestamps for the 24h and topic views.
+  const prevWin = windows.prev;
   const summary: VisibilityRateTrendSummary = {
-    rate: headlineScore,
-    prevRate: prevScore,
-    change: prevScore === null ? null : Math.round((headlineScore - prevScore) * 10) / 10,
-    prevFrom: prevFrom ?? '',
-    prevTo: prevTo ?? '',
+    rate: headline.value,
+    prevRate: headline.prev,
+    change: headline.change,
+    prevFrom: prevWin ? windowBounds(prevWin).from : '',
+    prevTo: prevWin ? windowBounds(prevWin).to : '',
   };
 
   return { entities, points, summary };
@@ -2853,334 +2836,149 @@ export async function getHeadToHeadRuns(
 
 // ─── Insights Metric Breakdown (Root-Cause Drilldown) ─────────────────────────
 
-export type BreakdownMetric = 'mentions' | 'visibility';
+export type {
+  BreakdownFilters,
+  BreakdownMetric,
+  BreakdownRow,
+  InsightsBreakdown,
+} from '@/lib/insights-breakdown';
 
 function formatPlatformLabel(slug: string): string {
   return PLATFORM_LABELS[slug] ?? slug;
 }
 
-export interface BreakdownRow {
-  /** Unique identifier for the row: prompt_id / platform name / topic_id. */
-  id: string;
-  /** Display label: prompt text / platform name / topic name. */
-  label: string;
-  /** Optional secondary label (e.g. topic name for a prompt). */
-  sublabel?: string;
-  /** Metric value in the current window. */
-  cur: number;
-  /** Metric value in the previous window. */
-  prev: number;
-  /** Absolute change (cur - prev). */
-  delta: number;
-  /** Percentage change. Null when previous is zero (use delta instead). */
-  deltaPct: number | null;
-  /** Number of result rows that contributed in the current window. */
-  curRuns: number;
-  /** Number of result rows that contributed in the previous window. */
-  prevRuns: number;
-}
-
-export interface InsightsBreakdown {
-  metric: BreakdownMetric;
-  curTotal: number;
-  prevTotal: number;
-  delta: number;
-  deltaPct: number | null;
-  /** Number of full calendar days covered by each comparison window. */
-  windowDays: number;
-  byPrompt: BreakdownRow[];
-  byPlatform: BreakdownRow[];
-  byTopic: BreakdownRow[];
-  /** One-line rule-based root-cause summary for the drop/rise. */
-  rootCause: string;
-}
-
-/** Aggregate a metric over a set of raw prompt_results rows. */
-function aggregateMetric(
-  rows: Array<{
-    mention_count: number;
-    citation_count?: number;
-    visibility_score: number;
-    mention_position?: number | null;
-  }>,
-  metric: BreakdownMetric,
-): { value: number; runs: number } {
-  if (metric === 'visibility') {
-    if (rows.length === 0) return { value: 0, runs: 0 };
-    // AI Visibility Score over the group's answers — the drill-down explains
-    // the same number the KPI card shows, per prompt/platform/topic.
-    let mentionAnswers = 0;
-    let citationAnswers = 0;
-    let posSum = 0;
-    let posN = 0;
-    for (const r of rows) {
-      if ((r.mention_count ?? 0) > 0) mentionAnswers++;
-      if ((r.citation_count ?? 0) > 0) citationAnswers++;
-      const pos = r.mention_position;
-      if (pos !== null && pos !== undefined && pos > 0) {
-        posSum += 1 / pos;
-        posN++;
-      }
-    }
-    return {
-      value:
-        computeAiVisibilityScore({
-          answers: rows.length,
-          mentionAnswers,
-          citationAnswers,
-          positionFactor: posN > 0 ? posSum / posN : null,
-        }) ?? 0,
-      runs: rows.length,
-    };
-  }
-  const value = rows.reduce((s, r) => s + (r.mention_count ?? 0), 0);
-  return { value, runs: rows.length };
-}
-
-function computeDelta(
-  cur: number,
-  prev: number,
-  metric: BreakdownMetric,
-): { delta: number; deltaPct: number | null } {
-  if (metric === 'visibility') {
-    return {
-      delta: Math.round((cur - prev) * 10) / 10,
-      deltaPct: null,
-    };
-  }
-  const delta = cur - prev;
-  const deltaPct = prev > 0 ? Math.round((delta / prev) * 100) : null;
-  return { delta, deltaPct };
-}
-
 /**
- * Returns a per-prompt / per-platform / per-topic breakdown comparing the
- * current window with the previous window of equal duration.
+ * Per-prompt / per-platform / per-topic breakdown of the Visibility or
+ * Mentions card, comparing the window on screen with the one before it.
  *
  * Used by the Insights KPI drill-down Sheet to surface which entities drove a
  * metric change (e.g. "Mentions dropped 12% because prompt X lost 84 mentions
- * on ChatGPT"). Windows mirror `getInsightsSummary` — when `dateFrom` is
- * provided the current window spans [dateFrom, dateTo ?? now] and the previous
- * window has the same length immediately before; otherwise both are 7 days.
+ * on ChatGPT"). VIS-001: the windows are the card's own (comparisonWindows),
+ * the totals come from the card's own aggregates, and the slices are
+ * aggregated in Postgres (insights_breakdown_groups, 00129) — the rows used
+ * to be fetched raw, capped at 1,000 per window, which scored an arbitrary
+ * sample instead of the card's answers.
  */
 export async function getInsightsBreakdown(
   brandId: string,
   metric: BreakdownMetric,
-  opts?: {
-    model?: string;
-    region?: string;
-    dateFrom?: string;
-    dateTo?: string;
-    topicId?: string;
-  },
+  opts?: BreakdownFilters,
 ): Promise<InsightsBreakdown> {
   const supabase = await dbClient();
+  const windows = comparisonWindows(opts);
+  const p_models = modelFilterArray(opts?.model);
+  const p_region = opts?.region ?? undefined;
 
-  let currentFrom: Date;
-  let currentTo: Date;
-
-  if (opts?.dateFrom) {
-    currentFrom = new Date(opts.dateFrom);
-    currentTo = opts.dateTo ? new Date(opts.dateTo) : new Date();
-  } else {
-    currentTo = new Date();
-    currentFrom = new Date();
-    currentFrom.setDate(currentFrom.getDate() - 7);
-  }
-
-  const duration = currentTo.getTime() - currentFrom.getTime();
-  const prevFrom = new Date(currentFrom.getTime() - duration);
-  const prevTo = currentFrom;
-  const windowDays = Math.max(1, Math.round(duration / (24 * 60 * 60 * 1000)));
-
-  const { query: curQuery } = await buildResultsQuery(brandId, {
-    ...opts,
-    dateFrom: currentFrom.toISOString(),
-    dateTo: currentTo.toISOString(),
-  });
-  const { query: prevQuery } = await buildResultsQuery(brandId, {
-    ...opts,
-    dateFrom: prevFrom.toISOString(),
-    dateTo: prevTo.toISOString(),
-  });
-
-  const [curRes, prevRes] = await Promise.all([curQuery, prevQuery]);
-  if (curRes.error) throw new Error(curRes.error.message);
-  if (prevRes.error) throw new Error(prevRes.error.message);
-
-  type Row = {
-    prompt_id: string;
-    platform: string;
-    mention_count: number;
-    citation_count: number;
-    visibility_score: number;
-    mention_position: number | null;
-  };
-  const curRows = (curRes.data ?? []) as unknown as Row[];
-  const prevRows = (prevRes.data ?? []) as unknown as Row[];
-
-  const allPromptIds = new Set<string>();
-  for (const r of curRows) allPromptIds.add(r.prompt_id);
-  for (const r of prevRows) allPromptIds.add(r.prompt_id);
-
-  // Resolve prompt text + topic for every participating prompt.
-  const { data: promptRowsRaw } =
-    allPromptIds.size > 0
-      ? await supabase
-          .from('prompts')
-          .select('id, text, topic_id')
-          .in('id', [...allPromptIds])
-      : { data: [] as unknown[] };
-
-  const promptInfo = new Map<string, { text: string; topicId: string | null }>();
-  const topicIds = new Set<string>();
-  for (const p of (promptRowsRaw ?? []) as Array<{
-    id: string;
-    text: string;
-    topic_id: string | null;
-  }>) {
-    promptInfo.set(p.id, { text: p.text, topicId: p.topic_id });
-    if (p.topic_id) topicIds.add(p.topic_id);
-  }
-
-  const { data: topicRowsRaw } =
-    topicIds.size > 0
-      ? await supabase
-          .from('topics')
-          .select('id, name')
-          .in('id', [...topicIds])
-      : { data: [] as unknown[] };
-
-  const topicNameById = new Map<string, string>();
-  for (const t of (topicRowsRaw ?? []) as Array<{ id: string; name: string }>) {
-    topicNameById.set(t.id, t.name);
-  }
-
-  // ─── Group rows by prompt / platform / topic ────────────────────────────────
-  function groupBy<K extends string>(rows: Row[], keyFn: (r: Row) => K) {
-    const m = new Map<K, Row[]>();
-    for (const r of rows) {
-      const k = keyFn(r);
-      const arr = m.get(k) ?? [];
-      arr.push(r);
-      m.set(k, arr);
-    }
-    return m;
-  }
-
-  function mergeKeys<K>(a: Map<K, unknown>, b: Map<K, unknown>): K[] {
-    const s = new Set<K>();
-    for (const k of a.keys()) s.add(k);
-    for (const k of b.keys()) s.add(k);
-    return [...s];
-  }
-
-  function buildRows(
-    curMap: Map<string, Row[]>,
-    prevMap: Map<string, Row[]>,
-    resolver: (key: string) => { id: string; label: string; sublabel?: string },
-  ): BreakdownRow[] {
-    const keys = mergeKeys(curMap, prevMap);
-    const rows: BreakdownRow[] = keys.map((key) => {
-      const curAgg = aggregateMetric(curMap.get(key) ?? [], metric);
-      const prevAgg = aggregateMetric(prevMap.get(key) ?? [], metric);
-      const { delta, deltaPct } = computeDelta(curAgg.value, prevAgg.value, metric);
-      const { id, label, sublabel } = resolver(key);
-      return {
-        id,
-        label,
-        sublabel,
-        cur: curAgg.value,
-        prev: prevAgg.value,
-        delta,
-        deltaPct,
-        curRuns: curAgg.runs,
-        prevRuns: prevAgg.runs,
-      };
+  const groupsFor = (win: MetricWindow) =>
+    supabase.rpc('insights_breakdown_groups', {
+      p_brand_id: brandId,
+      p_models,
+      p_region,
+      p_topic_id: opts?.topicId ?? undefined,
+      ...(win.kind === 'days'
+        ? { p_day_from: win.days.dayFrom, p_day_to: win.days.dayTo }
+        : { p_date_from: win.from, p_date_to: win.to }),
     });
-    // Sort: biggest drops first, then biggest gains, untouched rows last.
-    rows.sort((a, b) => a.delta - b.delta);
-    return rows;
-  }
+  // The headline numbers: exactly what the Visibility and Mentions cards read.
+  const totalFor = async (win: MetricWindow): Promise<number | null> => {
+    if (metric === 'visibility') {
+      const { data, error } = await aiVisibilityWindow(supabase, brandId, opts, win);
+      if (error) throw new Error(error.message);
+      return foldAiVisibility(data).brandScore;
+    }
+    const { data, error } =
+      win.kind === 'days'
+        ? await supabase.rpc('insights_aggregates_daily', {
+            p_brand_id: brandId,
+            p_platform: undefined,
+            p_models,
+            p_region,
+            p_day_from: win.days.dayFrom,
+            p_day_to: win.days.dayTo,
+          })
+        : await supabase.rpc('insights_aggregates', {
+            p_brand_id: brandId,
+            p_platform: undefined,
+            p_models,
+            p_region,
+            p_date_from: win.from,
+            p_date_to: win.to,
+            p_prompt_id: undefined,
+            p_topic_id: opts?.topicId ?? undefined,
+          });
+    if (error) throw new Error(error.message);
+    // Null for a window with no answers: the Mentions card shows no change
+    // unless both windows have some.
+    const agg = data as unknown as InsightsAggregates | null;
+    return agg && agg.total_results > 0 ? agg.total_mentions : null;
+  };
 
-  const curByPrompt = groupBy(curRows, (r) => r.prompt_id);
-  const prevByPrompt = groupBy(prevRows, (r) => r.prompt_id);
-  const byPrompt = buildRows(curByPrompt, prevByPrompt, (pid) => {
-    const info = promptInfo.get(pid);
-    const topicName = info?.topicId ? topicNameById.get(info.topicId) : undefined;
-    return {
-      id: pid,
-      label: info?.text ?? 'Unknown prompt',
-      sublabel: topicName,
-    };
-  });
+  const [curGroupsRes, prevGroupsRes, curScore, prevScore] = await Promise.all([
+    groupsFor(windows.cur),
+    windows.prev ? groupsFor(windows.prev) : Promise.resolve(null),
+    totalFor(windows.cur),
+    windows.prev ? totalFor(windows.prev) : Promise.resolve(null),
+  ]);
+  if (curGroupsRes.error) throw new Error(curGroupsRes.error.message);
+  if (prevGroupsRes?.error) throw new Error(prevGroupsRes.error.message);
 
-  const curByPlatform = groupBy(curRows, (r) => r.platform);
-  const prevByPlatform = groupBy(prevRows, (r) => r.platform);
-  const byPlatform = buildRows(curByPlatform, prevByPlatform, (plat) => ({
-    id: plat,
-    label: formatPlatformLabel(plat),
-  }));
-
-  const curByTopic = groupBy(curRows, (r) => {
-    const info = promptInfo.get(r.prompt_id);
-    return info?.topicId ?? '__uncategorized__';
-  });
-  const prevByTopic = groupBy(prevRows, (r) => {
-    const info = promptInfo.get(r.prompt_id);
-    return info?.topicId ?? '__uncategorized__';
-  });
-  const byTopic = buildRows(curByTopic, prevByTopic, (tid) => ({
-    id: tid,
-    label:
-      tid === '__uncategorized__' ? 'Uncategorized' : (topicNameById.get(tid) ?? 'Unknown topic'),
-  }));
-
-  // ─── Totals + root-cause summary ────────────────────────────────────────────
-  const curTotalAgg = aggregateMetric(curRows, metric);
-  const prevTotalAgg = aggregateMetric(prevRows, metric);
-  const { delta: totalDelta, deltaPct: totalDeltaPct } = computeDelta(
-    curTotalAgg.value,
-    prevTotalAgg.value,
+  const { byPrompt, byPlatform, byTopic } = buildBreakdownRows(
     metric,
+    parseBreakdownGroups(curGroupsRes.data),
+    prevGroupsRes ? parseBreakdownGroups(prevGroupsRes.data) : null,
+    formatPlatformLabel,
   );
 
-  const metricLabel =
-    metric === 'visibility' ? 'Visibility' : metric === 'mentions' ? 'Mentions' : 'Citations';
+  // Totals and their change, worked out the way each card does.
+  let curTotal: number;
+  let prevTotal: number | null;
+  let totalDelta: number | null;
+  let totalDeltaPct: number | null;
+  if (metric === 'visibility') {
+    const v = visibilityChange(curScore, prevScore);
+    curTotal = v.value;
+    prevTotal = v.prev;
+    totalDelta = v.change;
+    totalDeltaPct = null;
+  } else {
+    curTotal = curScore ?? 0;
+    prevTotal = prevScore;
+    ({ delta: totalDelta, deltaPct: totalDeltaPct } =
+      curScore === null
+        ? { delta: null, deltaPct: null }
+        : breakdownDelta(curTotal, prevTotal, metric));
+  }
 
-  const isDrop = totalDelta < 0;
-  const isFlat = totalDelta === 0;
-
-  // Select the biggest contributor in the same direction as the overall change.
-  // `buildRows` sorts ascending by delta so byPrompt[0] is the largest drop and
-  // byPrompt[last] is the largest gain.
-  const topPrompt = isDrop ? byPrompt[0] : byPrompt[byPrompt.length - 1];
-  const topPlatform = isDrop ? byPlatform[0] : byPlatform[byPlatform.length - 1];
-
-  const promptContributes = !!topPrompt && (isDrop ? topPrompt.delta < 0 : topPrompt.delta > 0);
-  const platformContributes =
-    !!topPlatform && (isDrop ? topPlatform.delta < 0 : topPlatform.delta > 0);
+  // ─── Root-cause summary ─────────────────────────────────────────────────────
+  const metricLabel = metric === 'visibility' ? 'Visibility' : 'Mentions';
+  const windowDays = windows.windowDays;
+  const topPrompt = pickDriver(byPrompt, totalDelta);
+  const topPlatform = pickDriver(byPlatform, totalDelta);
 
   let rootCause: string;
-  if (isFlat) {
+  if (!windows.prev) {
+    rootCause = `${metricLabel} over all time; there is no earlier period of the same length to compare.`;
+  } else if (totalDelta === null) {
+    rootCause = `No answers in one of the two ${windowDays}-day windows, so there is no change to explain yet.`;
+  } else if (totalDelta === 0) {
     rootCause = `${metricLabel} held steady vs the previous ${windowDays}-day window.`;
-  } else if (!promptContributes) {
+  } else if (!topPrompt) {
     const dir = totalDelta > 0 ? 'rose' : 'fell';
     const magnitude = formatTotalMagnitude(totalDelta, totalDeltaPct, metric);
     rootCause = `${metricLabel} ${dir} ${magnitude} vs the previous ${windowDays}d — the change is spread evenly across prompts, no single driver.`;
   } else {
-    const headline = isDrop ? 'Biggest drop' : 'Biggest gain';
-    const promptClause = `"${truncate(topPrompt!.label, 60)}" ${formatContribution(topPrompt!, metric)}`;
-    const platformClause = platformContributes
-      ? ` Top platform ${isDrop ? 'drop' : 'gain'}: ${topPlatform!.label} ${formatContribution(topPlatform!, metric)}.`
+    const headline = totalDelta < 0 ? 'Biggest drop' : 'Biggest gain';
+    const promptClause = `"${truncate(topPrompt.label, 60)}" ${formatContribution(topPrompt, metric)}`;
+    const platformClause = topPlatform
+      ? ` Top platform ${totalDelta < 0 ? 'drop' : 'gain'}: ${topPlatform.label} ${formatContribution(topPlatform, metric)}.`
       : '';
     rootCause = `${headline}: ${promptClause}.${platformClause}`;
   }
 
   return {
     metric,
-    curTotal: curTotalAgg.value,
-    prevTotal: prevTotalAgg.value,
+    curTotal,
+    prevTotal,
     delta: totalDelta,
     deltaPct: totalDeltaPct,
     windowDays,
@@ -3198,12 +2996,12 @@ function truncate(s: string, max: number): string {
 /**
  * Format a single contributor's delta as a human sentence fragment, e.g.:
  *   - mentions:  "lost 84 mentions (−38%)"   or  "gained 12 mentions"
- *   - citations: "lost 7 citations (−15%)"
  *   - visibility: "dropped 2.1 pts"           or  "rose 2.1 pts"
  */
 function formatContribution(row: BreakdownRow, metric: BreakdownMetric): string {
-  const isLoss = row.delta < 0;
-  const abs = Math.abs(row.delta);
+  const delta = row.delta ?? 0;
+  const isLoss = delta < 0;
+  const abs = Math.abs(delta);
 
   if (metric === 'visibility') {
     const verb = isLoss ? 'dropped' : 'rose';

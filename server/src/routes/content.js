@@ -559,6 +559,9 @@ router.get('/brand/:brandId', async (req, res) => {
         ascending: sort === 'oldest',
       });
     }
+    // One generation writes many rows at the same moment and score; id keeps
+    // their order stable, so paging never repeats or skips a row.
+    dataQuery = dataQuery.order('id', { ascending: true });
 
     dataQuery = dataQuery.range(Number(offset), Number(offset) + Number(limit) - 1);
 
