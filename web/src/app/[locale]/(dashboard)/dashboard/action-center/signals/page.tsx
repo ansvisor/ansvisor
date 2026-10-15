@@ -4,7 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { AlertCircle, Download, Radar, Search, TrendingDown, TrendingUp, X } from 'lucide-react';
+import {
+  AlertCircle,
+  Download,
+  Info,
+  Radar,
+  Search,
+  TrendingDown,
+  TrendingUp,
+  X,
+} from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
 import {
@@ -26,6 +35,7 @@ import {
 } from '@/lib/signals/registry';
 import { signalAffected, signalTexts } from '@/lib/signals/display';
 import { isOnPlatform, locationName, platformName } from '@/lib/signals/names';
+import { groupSignals } from '@/lib/signals/group';
 import { getAIProviderDisplayName, type AIProviderKey } from '@/components/ai-provider-avatar';
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
 import { isSuperseded, SignalTable } from '@/components/action-center/signal-table';
@@ -167,7 +177,7 @@ function SignalsContent({ brand }: { brand: Brand }) {
   }, [urlRead, datePreset, category, impact, status, source, platform, search]);
 
   const [selected, setSelected] = useState<Signal | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
 
   // The open drawer lives in the URL (?signal=<id>), mirroring the Actions
   // page: back from a prompt page — or a refresh — restores it, and the
@@ -284,13 +294,18 @@ function SignalsContent({ brand }: { brand: Brand }) {
     URL.revokeObjectURL(url);
   }, [brand.slug, visible, tTexts, tCategories, t]);
 
+  // The list shows copies of one finding as one row, and the counts follow.
+  const groups = useMemo(() => groupSignals(visible), [visible]);
+  const allGroups = useMemo(() => groupSignals(signals ?? []), [signals]);
+
   const categoryCounts = useMemo(() => {
     const counts = new Map<SignalCategory, number>();
-    for (const signal of signals ?? []) {
-      counts.set(signal.category, (counts.get(signal.category) ?? 0) + 1);
+    for (const { signals: members } of allGroups) {
+      const category = members[0].category;
+      counts.set(category, (counts.get(category) ?? 0) + 1);
     }
     return counts;
-  }, [signals]);
+  }, [allGroups]);
 
   // One sparkline series per card, over the window's days (capped at 30
   // points so 90d stays legible at sparkline size).
@@ -317,6 +332,9 @@ function SignalsContent({ brand }: { brand: Brand }) {
     return `${fmt(utcDay(windowDays * 2 - 1))} – ${fmt(utcDay(windowDays))}`;
   }, [windowDays]);
 
+  const countsNote =
+    allGroups.length < (signals?.length ?? 0) ? t('grouped.countsNote') : undefined;
+
   const hasActiveFilters =
     category !== 'all' ||
     impact !== 'all' ||
@@ -334,12 +352,23 @@ function SignalsContent({ brand }: { brand: Brand }) {
     setSearch('');
   };
 
-  const handleStatusChange = async (signal: Signal, nextStatus: SignalStatus) => {
-    setBusyId(signal.id);
+  // One signal from its drawer or row, or every copy a group's menu applies to.
+  const handleStatusChange = async (targets: Signal[], nextStatus: SignalStatus) => {
+    const ids = new Set(targets.map((signal) => signal.id));
+    const withBusy = (on: boolean) =>
+      setBusyIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) {
+          if (on) next.add(id);
+          else next.delete(id);
+        }
+        return next;
+      });
+    withBusy(true);
     try {
-      await updateSignalStatus(brand.id, signal.id, nextStatus);
+      await updateSignalStatus(brand.id, [...ids], nextStatus);
       const patch = (s: Signal) =>
-        s.id === signal.id
+        ids.has(s.id)
           ? {
               ...s,
               status: nextStatus,
@@ -347,11 +376,11 @@ function SignalsContent({ brand }: { brand: Brand }) {
             }
           : s;
       setSignals((prev) => (prev ?? []).map(patch));
-      setSelected((prev) => (prev && prev.id === signal.id ? patch(prev) : prev));
+      setSelected((prev) => (prev && ids.has(prev.id) ? patch(prev) : prev));
     } catch {
       toast.error(t('statusChangeFailed'));
     } finally {
-      setBusyId(null);
+      withBusy(false);
     }
   };
 
@@ -404,6 +433,7 @@ function SignalsContent({ brand }: { brand: Brand }) {
             prev={summary.prevTotal}
             rangeLabel={prevRangeLabel}
             spark={sparkSeries(summary.byDayActive)}
+            note={countsNote}
           />
           <SummaryCard
             label={t('cards.important')}
@@ -411,6 +441,7 @@ function SignalsContent({ brand }: { brand: Brand }) {
             prev={summary.prevImportant}
             rangeLabel={prevRangeLabel}
             spark={sparkSeries(summary.byDayImportant)}
+            note={countsNote}
           />
           <SummaryCard
             label={t('cards.new')}
@@ -418,6 +449,7 @@ function SignalsContent({ brand }: { brand: Brand }) {
             prev={summary.prevNew}
             rangeLabel={prevRangeLabel}
             spark={sparkSeries(summary.byDayNew)}
+            note={countsNote}
           />
           <SummaryCard
             label={t('cards.resolved')}
@@ -425,6 +457,7 @@ function SignalsContent({ brand }: { brand: Brand }) {
             prev={summary.prevResolved}
             rangeLabel={prevRangeLabel}
             spark={sparkSeries(summary.byDayResolved)}
+            note={countsNote}
           />
           <AvgImpactCard summary={summary} days={windowDays} />
         </div>
@@ -434,7 +467,7 @@ function SignalsContent({ brand }: { brand: Brand }) {
         <div className="flex flex-wrap items-center gap-2">
           <CategoryPill
             label={t('allSignals')}
-            count={signals?.length ?? 0}
+            count={allGroups.length}
             isActive={category === 'all'}
             onClick={() => setCategory('all')}
           />
@@ -447,6 +480,12 @@ function SignalsContent({ brand }: { brand: Brand }) {
               onClick={() => setCategory(key)}
             />
           ))}
+          {countsNote && (
+            <span className="flex items-center text-muted-foreground" title={countsNote}>
+              <Info className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="sr-only">{countsNote}</span>
+            </span>
+          )}
         </div>
         <div
           className="flex h-8 overflow-hidden rounded-md border"
@@ -531,10 +570,11 @@ function SignalsContent({ brand }: { brand: Brand }) {
 
       {visible.length > 0 ? (
         <SignalTable
-          signals={visible}
+          groups={groups}
           onSelect={selectSignal}
-          onStatusChange={(signal, next) => void handleStatusChange(signal, next)}
-          busyId={busyId}
+          onStatusChange={(targets, next) => void handleStatusChange(targets, next)}
+          busyIds={busyIds}
+          selectedId={selected?.id ?? null}
         />
       ) : (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
@@ -550,8 +590,8 @@ function SignalsContent({ brand }: { brand: Brand }) {
         onOpenChange={(open) => {
           if (!open) selectSignal(null);
         }}
-        onStatusChange={(signal, next) => void handleStatusChange(signal, next)}
-        isBusy={busyId === selected?.id}
+        onStatusChange={(signal, next) => void handleStatusChange([signal], next)}
+        isBusy={selected ? busyIds.has(selected.id) : false}
       />
     </div>
   );
@@ -563,19 +603,30 @@ function SummaryCard({
   prev,
   rangeLabel,
   spark,
+  note,
 }: {
   label: string;
   value: number;
   prev: number;
   rangeLabel: string;
   spark: KpiTrendPoint[];
+  /** Why the count may be lower than the rows behind it. */
+  note?: string;
 }) {
   const t = useTranslations('actionCenter.signalsPage');
   const change = prev > 0 ? Math.round(((value - prev) / prev) * 100) : null;
   return (
     <Card>
       <CardContent className="p-4">
-        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+        <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+          {label}
+          {note && (
+            <span title={note}>
+              <Info className="h-3 w-3" aria-hidden="true" />
+              <span className="sr-only">{note}</span>
+            </span>
+          )}
+        </p>
         <div className="mt-1 flex items-end justify-between gap-2">
           <span className="text-2xl font-bold tabular-nums">{value}</span>
           {spark.length > 1 && (

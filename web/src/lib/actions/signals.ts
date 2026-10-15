@@ -78,7 +78,9 @@ async function getPromptPlaces(
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase
       .from('prompts')
-      .select('id, platforms, regions, topic_id, is_active, prompt_sets!inner(brand_id)')
+      .select(
+        'id, platforms, regions, topic_id, is_active, prompt_sets!inner(brand_id), topics(name)',
+      )
       .eq('prompt_sets.brand_id', brandId)
       .order('id')
       .range(from, from + 999);
@@ -87,10 +89,13 @@ async function getPromptPlaces(
       return new Map();
     }
     for (const row of data ?? []) {
+      // The generated types read the topic join as a list; it is one topic.
+      const topic = row.topics as { name: string } | { name: string }[] | null;
       places.set(row.id, {
         platforms: row.platforms ?? [],
         regions: row.regions ?? [],
         topicId: row.topic_id,
+        topic: (Array.isArray(topic) ? topic[0]?.name : topic?.name) ?? null,
         isActive: row.is_active,
       });
     }
@@ -166,29 +171,30 @@ export async function getSignalsSummary(
   };
 }
 
-/** Count of untriaged signals, for the Action Center tab badge. A head
- *  count query — no rows transferred, immune to the row cap. */
+/**
+ * Untriaged signals for the Action Center tab badge, counted the way the list
+ * shows them: copies of one finding count once (signals_new_count, 00141).
+ * One number back, immune to the row cap.
+ */
 export async function getNewSignalCount(brandId: string): Promise<number> {
   const supabase = await createClient();
-  const { count, error } = await supabase
-    .from('signals')
-    .select('id', { count: 'exact', head: true })
-    .eq('brand_id', brandId)
-    .eq('status', 'new');
+  const { data, error } = await supabase.rpc('signals_new_count', { p_brand_id: brandId });
   if (error) throw new Error(error.message);
-  return count ?? 0;
+  return Number(data ?? 0);
 }
 
 /**
- * Triage: any org member can move a signal through its lifecycle (RLS
- * enforces membership). Resolving stamps resolved_at; leaving the resolved
- * state clears it so the summary's "Resolved" count stays truthful.
+ * Triage: any org member can move signals through their lifecycle (RLS
+ * enforces membership). Several at once for a group's menu, which acts on
+ * every copy. Resolving stamps resolved_at; leaving the resolved state
+ * clears it so the summary's "Resolved" count stays truthful.
  */
 export async function updateSignalStatus(
   brandId: string,
-  signalId: string,
+  signalIds: string[],
   status: SignalStatus,
 ): Promise<void> {
+  if (signalIds.length === 0) return;
   const supabase = await createClient();
   const { error } = await supabase
     .from('signals')
@@ -198,7 +204,7 @@ export async function updateSignalStatus(
       updated_at: new Date().toISOString(),
     })
     .eq('brand_id', brandId)
-    .eq('id', signalId);
+    .in('id', signalIds);
   if (error) throw new Error(error.message);
 }
 

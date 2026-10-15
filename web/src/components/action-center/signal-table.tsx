@@ -1,9 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   BarChart3,
   Check,
+  ChevronRight,
   Eye,
   Gauge,
   Link2,
@@ -51,6 +53,7 @@ import {
 import { signalAffected, signalTexts } from '@/lib/signals/display';
 import { locationName, platformFamily, platformName } from '@/lib/signals/names';
 import type { SignalWhere } from '@/lib/signals/where';
+import { groupStatus, groupWhere, type SignalGroup } from '@/lib/signals/group';
 import { formatRelative } from '@/lib/format-relative';
 import { cn } from '@/lib/utils';
 
@@ -267,21 +270,128 @@ export function SignalWhereLine({
   );
 }
 
-export function SignalTable({
+/**
+ * The row menu: each choice acts on the signals it applies to, so a group's
+ * menu resolves its open copies and leaves the resolved ones alone. For one
+ * signal it is that signal's own menu.
+ */
+function SignalMenu({
   signals,
-  onSelect,
   onStatusChange,
-  busyId,
+  disabled,
 }: {
   signals: Signal[];
+  onStatusChange: (signals: Signal[], status: SignalStatus) => void;
+  disabled: boolean;
+}) {
+  const t = useTranslations('actionCenter.signalsPage');
+  const fresh = signals.filter((s) => s.status === 'new');
+  const open = signals.filter((s) => s.status === 'new' || s.status === 'acknowledged');
+  const closed = signals.filter((s) => s.status === 'resolved' || s.status === 'dismissed');
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className="rounded p-1 text-muted-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+        disabled={disabled}
+        aria-label={t('menu.label')}
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {fresh.length > 0 && (
+          <DropdownMenuItem onClick={() => onStatusChange(fresh, 'acknowledged')}>
+            <Eye className="h-4 w-4" />
+            {t('menu.acknowledge')}
+          </DropdownMenuItem>
+        )}
+        {open.length > 0 && (
+          <>
+            <DropdownMenuItem onClick={() => onStatusChange(open, 'resolved')}>
+              <Check className="h-4 w-4" />
+              {t('menu.resolve')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onStatusChange(open, 'dismissed')}>
+              <X className="h-4 w-4" />
+              {t('menu.dismiss')}
+            </DropdownMenuItem>
+          </>
+        )}
+        {closed.length > 0 && (
+          <DropdownMenuItem onClick={() => onStatusChange(closed, 'new')}>
+            <RotateCcw className="h-4 w-4" />
+            {t('menu.reopen')}
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function DetectedCell({ iso }: { iso: string }) {
+  const tCommon = useTranslations('common');
+  const detected = new Date(iso);
+  return (
+    <TableCell>
+      <p className="text-xs tabular-nums">
+        {detected.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+        })}
+        {', '}
+        {detected.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+        })}
+      </p>
+      <p className="text-xs text-muted-foreground">{detectedLabel(iso, tCommon)}</p>
+    </TableCell>
+  );
+}
+
+/**
+ * The signals list, one row per group (lib/signals/group.ts). A group of
+ * copies leads with its newest signal and a "×N grouped" toggle; opened, it
+ * lists each copy with the topic and place that tell it apart, and each copy
+ * opens its own drawer and keeps its own status.
+ */
+export function SignalTable({
+  groups,
+  onSelect,
+  onStatusChange,
+  busyIds,
+  selectedId = null,
+}: {
+  groups: SignalGroup[];
   onSelect: (signal: Signal) => void;
-  onStatusChange: (signal: Signal, status: SignalStatus) => void;
-  busyId: string | null;
+  onStatusChange: (signals: Signal[], status: SignalStatus) => void;
+  busyIds: ReadonlySet<string>;
+  /** The signal open in the drawer; its group opens so its row can be seen. */
+  selectedId?: string | null;
 }) {
   const t = useTranslations('actionCenter.signalsPage');
   const tTexts = useTranslations('actionCenter.signalTexts');
   const tCategories = useTranslations('actionCenter.signalCategories');
-  const tCommon = useTranslations('common');
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+
+  // A drawer opened from a link (an action's evidence) can name a copy inside
+  // a closed group; open that group once, when the selection arrives.
+  const [revealed, setRevealed] = useState<string | null>(null);
+  if (selectedId !== revealed) {
+    setRevealed(selectedId);
+    const holder = groups.find(
+      (g) => g.signals.length > 1 && g.signals.some((s) => s.id === selectedId),
+    );
+    if (holder && !expanded.has(holder.key)) setExpanded(new Set(expanded).add(holder.key));
+  }
+
+  const toggle = (key: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const isBusy = (signals: Signal[]) => signals.some((s) => busyIds.has(s.id));
 
   return (
     <div className="overflow-x-auto rounded-lg border">
@@ -301,107 +411,128 @@ export function SignalTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {signals.map((signal) => {
-            const texts = signalTexts(signal, tTexts);
-            const affected = signalAffected(signal, t);
-            const stateKey = SIGNAL_KINDS[signal.kind].stateKey;
-            const detected = new Date(signal.detectedAt);
-            return (
-              <TableRow key={signal.id} className="cursor-pointer" onClick={() => onSelect(signal)}>
+          {groups.flatMap(({ key, signals }) => {
+            const lead = signals[0];
+            const isGroup = signals.length > 1;
+            const isOpen = isGroup && expanded.has(key);
+            const texts = signalTexts(lead, tTexts);
+            const affected = signalAffected(lead, t);
+            const stateKey = SIGNAL_KINDS[lead.kind].stateKey;
+            const status = isGroup ? groupStatus(signals) : lead.status;
+            const superseded = signals.every(isSuperseded);
+            const where = isGroup ? groupWhere(signals) : lead.where;
+            // Copies are one prompt text tracked as several prompts.
+            const affectedLabel = isGroup
+              ? t('affected.prompts', { count: signals.length })
+              : affected.label;
+
+            const rows = [
+              <TableRow
+                key={key}
+                className="cursor-pointer"
+                onClick={() => (isGroup ? toggle(key) : onSelect(lead))}
+              >
                 <TableCell className="max-w-[360px]">
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-muted/40">
-                      <SignalKindIcon kind={signal.kind} category={signal.category} />
+                      <SignalKindIcon kind={lead.kind} category={lead.category} />
                     </div>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{texts.title}</p>
                       <p className="truncate text-xs text-muted-foreground">{texts.description}</p>
+                      {isGroup && (
+                        <button
+                          type="button"
+                          aria-expanded={isOpen}
+                          aria-label={t('grouped.toggle', { count: signals.length })}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggle(key);
+                          }}
+                          className="mt-1 inline-flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                        >
+                          <ChevronRight
+                            className={cn('h-3 w-3 transition-transform', isOpen && 'rotate-90')}
+                            aria-hidden="true"
+                          />
+                          {t('grouped.badge', { count: signals.length })}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </TableCell>
                 <TableCell>
-                  <p className="text-xs font-medium">{tCategories(signal.category)}</p>
+                  <p className="text-xs font-medium">{tCategories(lead.category)}</p>
                   <p className={cn('text-xs', STATE_TEXT[stateKey] ?? 'text-muted-foreground')}>
                     {t(`states.${stateKey}`)}
                   </p>
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs">{t(`impact.${signal.impact}`)}</span>
-                    <ImpactDots impact={signal.impact} />
+                    <span className="text-xs">{t(`impact.${lead.impact}`)}</span>
+                    <ImpactDots impact={lead.impact} />
                   </div>
                 </TableCell>
                 <TableCell>
-                  <SourceList sources={signal.source} />
+                  <SourceList sources={lead.source} />
                 </TableCell>
                 <TableCell className="max-w-[180px]">
-                  <p className="text-xs font-medium">{affected.label}</p>
+                  <p className="text-xs font-medium">{affectedLabel}</p>
                   {affected.detail && (
                     <p className="truncate text-xs text-muted-foreground">{affected.detail}</p>
                   )}
-                  <SignalWhereLine
-                    where={signal.where}
-                    besides={[affected.label, affected.detail]}
-                  />
+                  <SignalWhereLine where={where} besides={[affectedLabel, affected.detail]} />
                 </TableCell>
+                <DetectedCell iso={lead.detectedAt} />
                 <TableCell>
-                  <p className="text-xs tabular-nums">
-                    {detected.toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                    {', '}
-                    {detected.toLocaleTimeString('en-US', {
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    })}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {detectedLabel(signal.detectedAt, tCommon)}
-                  </p>
-                </TableCell>
-                <TableCell>
-                  <SignalStatusBadge status={signal.status} superseded={isSuperseded(signal)} />
+                  <SignalStatusBadge status={status} superseded={superseded} />
                 </TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      className="rounded p-1 text-muted-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
-                      disabled={busyId === signal.id}
-                      aria-label={t('menu.label')}
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {signal.status === 'new' && (
-                        <DropdownMenuItem onClick={() => onStatusChange(signal, 'acknowledged')}>
-                          <Eye className="h-4 w-4" />
-                          {t('menu.acknowledge')}
-                        </DropdownMenuItem>
-                      )}
-                      {(signal.status === 'new' || signal.status === 'acknowledged') && (
-                        <>
-                          <DropdownMenuItem onClick={() => onStatusChange(signal, 'resolved')}>
-                            <Check className="h-4 w-4" />
-                            {t('menu.resolve')}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onStatusChange(signal, 'dismissed')}>
-                            <X className="h-4 w-4" />
-                            {t('menu.dismiss')}
-                          </DropdownMenuItem>
-                        </>
-                      )}
-                      {(signal.status === 'resolved' || signal.status === 'dismissed') && (
-                        <DropdownMenuItem onClick={() => onStatusChange(signal, 'new')}>
-                          <RotateCcw className="h-4 w-4" />
-                          {t('menu.reopen')}
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <SignalMenu
+                    signals={signals}
+                    onStatusChange={onStatusChange}
+                    disabled={isBusy(signals)}
+                  />
                 </TableCell>
-              </TableRow>
-            );
+              </TableRow>,
+            ];
+
+            if (isOpen) {
+              for (const signal of signals) {
+                const topic = signal.where.topics[0];
+                rows.push(
+                  <TableRow
+                    key={signal.id}
+                    className="cursor-pointer bg-muted/30"
+                    onClick={() => onSelect(signal)}
+                  >
+                    <TableCell className="max-w-[360px]">
+                      <p className="truncate pl-11 text-xs">
+                        {topic ? t('grouped.topic', { topic }) : t('grouped.noTopic')}
+                      </p>
+                    </TableCell>
+                    <TableCell />
+                    <TableCell />
+                    <TableCell />
+                    <TableCell className="max-w-[180px]">
+                      <SignalWhereLine where={signal.where} />
+                    </TableCell>
+                    <TableCell />
+                    <TableCell>
+                      <SignalStatusBadge status={signal.status} superseded={isSuperseded(signal)} />
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <SignalMenu
+                        signals={[signal]}
+                        onStatusChange={onStatusChange}
+                        disabled={busyIds.has(signal.id)}
+                      />
+                    </TableCell>
+                  </TableRow>,
+                );
+              }
+            }
+            return rows;
           })}
         </TableBody>
       </Table>

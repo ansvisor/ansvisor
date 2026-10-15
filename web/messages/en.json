@@ -264,6 +264,13 @@
         "platforms": "Tracked on {names}",
         "locations": "Tracked in {names}"
       },
+      "grouped": {
+        "badge": "×{count} grouped",
+        "toggle": "{count} grouped signals, one per prompt",
+        "topic": "In {topic}",
+        "noTopic": "No topic",
+        "countsNote": "Copies of one finding count once: the same prompt text, found in the same run, tracked as several prompts."
+      },
       "status": {
         "new": "New",
         "acknowledged": "Acknowledged",
