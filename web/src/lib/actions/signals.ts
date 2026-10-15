@@ -18,7 +18,7 @@ import type {
   SignalStatus,
 } from '@/lib/signals/registry';
 import { SIGNAL_ROW_COLUMNS, mapSignalRows, type Signal, type SignalRow } from '@/lib/signals/map';
-import type { PromptPlace } from '@/lib/signals/where';
+import { readPromptPlaces } from '@/lib/signals/prompt-places';
 
 export type { Signal } from '@/lib/signals/map';
 
@@ -58,49 +58,48 @@ export async function getSignals(brandId: string, filters: SignalFilters): Promi
   if (filters.status) query = query.eq('status', filters.status);
   if (filters.source) query = query.contains('source', [filters.source]);
 
-  const [{ data, error }, prompts] = await Promise.all([query, getPromptPlaces(supabase, brandId)]);
+  const [{ data, error }, prompts] = await Promise.all([
+    query,
+    readPromptPlaces(supabase, brandId),
+  ]);
   if (error) throw new Error(error.message);
 
   return mapSignalRows((data ?? []) as SignalRow[], prompts);
 }
 
+/** An action a signal feeds, as its drawer lists it under "Used by actions". */
+export interface SignalAction {
+  id: string;
+  actionNo: number;
+  kind: string;
+  status: string;
+  payload: Record<string, unknown>;
+}
+
 /**
- * Where each of the brand's prompts is tracked, by id. Paged, because a
- * brand can hold more prompts than one PostgREST response carries. A failed
- * read costs the Where line, not the page, so it is logged and the page
- * shows signals without it.
+ * The actions behind a signal's `action_id` (spec §10: signal → action
+ * traceability). Read when a drawer opens rather than with the list, so the
+ * list stays one query of signals.
  */
-async function getPromptPlaces(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+export async function getSignalActions(
   brandId: string,
-): Promise<Map<string, PromptPlace>> {
-  const places = new Map<string, PromptPlace>();
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await supabase
-      .from('prompts')
-      .select(
-        'id, platforms, regions, topic_id, is_active, prompt_sets!inner(brand_id), topics(name)',
-      )
-      .eq('prompt_sets.brand_id', brandId)
-      .order('id')
-      .range(from, from + 999);
-    if (error) {
-      console.error('[signals] prompt places read failed:', error.message);
-      return new Map();
-    }
-    for (const row of data ?? []) {
-      // The generated types read the topic join as a list; it is one topic.
-      const topic = row.topics as { name: string } | { name: string }[] | null;
-      places.set(row.id, {
-        platforms: row.platforms ?? [],
-        regions: row.regions ?? [],
-        topicId: row.topic_id,
-        topic: (Array.isArray(topic) ? topic[0]?.name : topic?.name) ?? null,
-        isActive: row.is_active,
-      });
-    }
-    if ((data ?? []).length < 1000) return places;
-  }
+  actionIds: string[],
+): Promise<SignalAction[]> {
+  if (actionIds.length === 0) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('actions')
+    .select('id, action_no, kind, status, payload')
+    .eq('brand_id', brandId)
+    .in('id', actionIds);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    actionNo: Number(row.action_no),
+    kind: row.kind,
+    status: row.status,
+    payload: (row.payload ?? {}) as Record<string, unknown>,
+  }));
 }
 
 export interface SignalsSummary {

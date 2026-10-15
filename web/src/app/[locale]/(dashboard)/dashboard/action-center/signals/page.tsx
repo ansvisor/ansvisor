@@ -586,6 +586,7 @@ function SignalsContent({ brand }: { brand: Brand }) {
       )}
 
       <SignalDrawer
+        brandId={brand.id}
         signal={selected}
         onOpenChange={(open) => {
           if (!open) selectSignal(null);
