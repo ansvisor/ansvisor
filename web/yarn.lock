@@ -8173,6 +8173,13 @@ wrappy@1:
   resolved "https://registry.npmjs.org/wrappy/-/wrappy-1.0.2.tgz"
   integrity sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==
 
+write-excel-file@4.1.1:
+  version "4.1.1"
+  resolved "https://registry.yarnpkg.com/write-excel-file/-/write-excel-file-4.1.1.tgz#b2c7065605d87b8d43601f63c4a726b7fba1be3c"
+  integrity sha512-MUnCnNtQrcZek832ZcU24uU0rSphFmKPD1DvIjXOlygVb93CV7Tme6H3jUTkxsMmjB2W7HIzERzjqTi5kui71A==
+  dependencies:
+    fflate "^0.8.2"
+
 ws@^8.18.0:
   version "8.21.0"
   resolved "https://registry.yarnpkg.com/ws/-/ws-8.21.0.tgz#012e413fc07429945121b0c153158c4343086951"

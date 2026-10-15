@@ -1,4 +1,4 @@
-import type { ActionItem } from '@/lib/actions/action-center';
+import type { ActionEvent, ActionItem } from '@/lib/actions/action-center';
 import { isActionKind } from '@/lib/action-center/registry';
 
 /**
@@ -100,6 +100,23 @@ export function eventTaskText(
   if (typeof key !== 'string' || key.length === 0) return '';
   if (t.has && !t.has(key)) return humanizeKind(key).toLowerCase();
   return t(key);
+}
+
+/** A History entry as a sentence: what happened, to what, by which tool. */
+export function actionEventText(
+  event: ActionEvent,
+  t: Translator,
+  tTasks: Translator & { has?: (key: string) => boolean },
+): string {
+  return t(`drawer.events.${event.event}`, {
+    to: String(event.data.to ?? ''),
+    count: Number(event.data.count ?? 0),
+    // Work the product did itself names the task in the reader's language
+    // and the tool as it is recorded — the tool id is the audit fact, so it
+    // is not translated.
+    task: eventTaskText(event.data.task, tTasks),
+    tool: String(event.data.tool ?? ''),
+  });
 }
 
 /**

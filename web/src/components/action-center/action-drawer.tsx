@@ -48,9 +48,9 @@ import {
 } from '@/lib/action-center/registry';
 import {
   actionContextTags,
+  actionEventText,
   actionGoal,
   actionTexts,
-  eventTaskText,
   memberLabel,
   taskText,
 } from '@/lib/action-center/display';
@@ -59,6 +59,7 @@ import { isKpiKey } from '@/lib/kpis/registry';
 import { ImpactDots, isSuperseded, SignalStatusBadge } from './signal-table';
 import { ActionIcon } from './action-table';
 import { OpportunityContext } from './opportunity-context';
+import { ActionExportButtons } from './action-export-buttons';
 import { ImproveContext } from './improve-context';
 import { cn } from '@/lib/utils';
 
@@ -187,6 +188,7 @@ export function ActionDrawer({
               </Badge>
             ))}
           </div>
+          <ActionExportButtons action={action} detail={detail} />
         </SheetHeader>
 
         <nav className="flex gap-4 border-b px-6" aria-label={t('table.action')}>
@@ -356,18 +358,7 @@ export function ActionDrawer({
                 <div key={event.id} className="flex gap-3">
                   <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-foreground/50" />
                   <div>
-                    <p className="text-xs font-medium">
-                      {t(`drawer.events.${event.event}`, {
-                        to: String(event.data.to ?? ''),
-                        count: Number(event.data.count ?? 0),
-                        // Work the product did itself names the task in the
-                        // reader's language and the tool as it is recorded —
-                        // the tool id is the audit fact, so it is not
-                        // translated.
-                        task: eventTaskText(event.data.task, tTasks),
-                        tool: String(event.data.tool ?? ''),
-                      })}
-                    </p>
+                    <p className="text-xs font-medium">{actionEventText(event, t, tTasks)}</p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(event.createdAt).toLocaleDateString('en-US', {
                         month: 'short',
