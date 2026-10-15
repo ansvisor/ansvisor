@@ -70,9 +70,14 @@ export type ReadLabel =
   | { kind: 'mentioned' }
   | { kind: 'no_runs' };
 
+/**
+ * "Not mentioned" follows the Improve tab's rule, as the verdict does: the
+ * server's `state` is not_mentioned when the brand is in fewer than half the
+ * runs, so 1 mention in 10 runs reads "Not mentioned", not its position.
+ */
 export function readLabel(read: PlatformRead | null): ReadLabel {
   if (!read || !read.runs) return { kind: 'no_runs' };
-  if (!read.mentionedRuns) return { kind: 'not_mentioned' };
+  if (read.state === 'not_mentioned' || !read.mentionedRuns) return { kind: 'not_mentioned' };
   if (read.mentionPosition === null) return { kind: 'mentioned' };
   return { kind: 'position', value: `#${read.mentionPosition.toFixed(1)}` };
 }

@@ -65,6 +65,9 @@ describe('readLabel', () => {
     expect(readLabel(read({ mentionedRuns: 0, mentionPosition: null }))).toEqual({
       kind: 'not_mentioned',
     });
+    expect(
+      readLabel(read({ runs: 10, mentionedRuns: 1, mentionPosition: 1, state: 'not_mentioned' })),
+    ).toEqual({ kind: 'not_mentioned' });
     expect(readLabel(read({ mentionPosition: null }))).toEqual({ kind: 'mentioned' });
     expect(readLabel(read({ runs: 0 }))).toEqual({ kind: 'no_runs' });
     expect(readLabel(null)).toEqual({ kind: 'no_runs' });

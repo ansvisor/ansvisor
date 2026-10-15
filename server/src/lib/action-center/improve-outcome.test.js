@@ -10,6 +10,7 @@ const {
   outcomeWindow,
   platformVerdict,
   refreshImproveOutcome,
+  sweepImproveOutcomes,
   trackingEndsAt,
 } = await import('./improve-outcome.js');
 
@@ -36,6 +37,26 @@ describe('platformVerdict', () => {
     expect(platformVerdict(missing, snap('a'))).toBe('improved');
     expect(platformVerdict(snap('a'), missing)).toBe('declined');
     expect(platformVerdict(missing, missing)).toBe('unchanged');
+  });
+
+  it('uses the Improve tab rule: fewer than half the runs is still not mentioned', () => {
+    const none = snap('a', {
+      runs: 10,
+      mentionedRuns: 0,
+      mentionPosition: null,
+      state: 'not_mentioned',
+    });
+    const oneInTen = snap('a', {
+      runs: 10,
+      mentionedRuns: 1,
+      mentionPosition: 1,
+      state: 'not_mentioned',
+    });
+    const half = snap('a', { runs: 10, mentionedRuns: 5, mentionPosition: 3 });
+    expect(platformVerdict(none, oneInTen)).toBe('unchanged');
+    expect(platformVerdict(oneInTen, none)).toBe('unchanged');
+    expect(platformVerdict(oneInTen, half)).toBe('improved');
+    expect(platformVerdict(half, oneInTen)).toBe('declined');
   });
 
   it(`needs the position to move at least ${POSITION_CHANGE}`, () => {
@@ -79,6 +100,22 @@ describe('compareOutcome', () => {
       avgAfter: 2.2,
     });
   });
+
+  it('leaves a not-mentioned side out of the position delta', () => {
+    const result = compareOutcome(
+      [
+        snap('chatgpt-web', {
+          runs: 10,
+          mentionedRuns: 1,
+          mentionPosition: 1,
+          state: 'not_mentioned',
+        }),
+      ],
+      [snap('chatgpt-web', { runs: 10, mentionedRuns: 8, mentionPosition: 3 })],
+    );
+    expect(result.platforms[0].verdict).toBe('improved');
+    expect(result.summary).toMatchObject({ avgBefore: null, avgAfter: null });
+  });
 });
 
 describe('windows', () => {
@@ -100,20 +137,27 @@ describe('windows', () => {
   });
 });
 
-/** prompt_results, brand_domains, and the writes a refresh makes. */
-function mockDb(results) {
-  const writes = { updated: [], inserted: [], windows: [] };
+/** actions, prompt_results, brand_domains, and the writes a refresh makes. */
+function mockDb(results, { actions = [] } = {}) {
+  const writes = { updated: [], inserted: [], windows: [], filters: [] };
   from.mockImplementation((table) => {
     const b = {
       select: () => b,
       eq: () => b,
-      in: () => b,
+      in: (column, values) => {
+        writes.filters.push({ table, in: [column, values] });
+        return b;
+      },
+      or: (filter) => {
+        writes.filters.push({ table, or: filter });
+        return b;
+      },
       gte: (_c, v) => {
         writes.windows.push(v);
         return b;
       },
       lte: () => b,
-      limit: () => Promise.resolve({ data: results, error: null }),
+      limit: () => Promise.resolve({ data: table === 'actions' ? actions : results, error: null }),
       update: (patch) => {
         writes.updated.push(patch);
         return { eq: () => Promise.resolve({ error: null }) };
@@ -161,6 +205,32 @@ describe('refreshImproveOutcome', () => {
     expect(writes.inserted).toHaveLength(0);
   });
 
+  it('keeps 1 mention in 10 runs as not mentioned, like the Improve tab', async () => {
+    mockDb([row(1), ...Array.from({ length: 9 }, () => ({ ...row(null), mention_count: 0 }))]);
+    const outcome = await refreshImproveOutcome(
+      action({
+        baseline: {
+          platforms: [
+            snap('chatgpt-web', {
+              runs: 10,
+              mentionedRuns: 0,
+              mentionPosition: null,
+              state: 'not_mentioned',
+            }),
+          ],
+        },
+      }),
+      { now: new Date('2026-10-20T06:00:00.000Z') },
+    );
+    expect(outcome.platforms[0].after).toMatchObject({
+      runs: 10,
+      mentionedRuns: 1,
+      state: 'not_mentioned',
+    });
+    expect(outcome.platforms[0].verdict).toBe('unchanged');
+    expect(outcome.summary.improved).toBe(0);
+  });
+
   it('records the final read in History 30 days after completion, over the 7 days ending then', async () => {
     const writes = mockDb([row(1)]);
     const outcome = await refreshImproveOutcome(
@@ -186,5 +256,23 @@ describe('refreshImproveOutcome', () => {
     const done = { final: true, summary: {} };
     expect(await refreshImproveOutcome(action({ position_outcome: done }))).toBe(done);
     expect(writes.updated).toHaveLength(0);
+  });
+});
+
+describe('sweepImproveOutcomes', () => {
+  it('leaves final reads out of the query, so they never fill the limit', async () => {
+    const writes = mockDb([row(1)], { actions: [action({ id: 'a1' }), action({ id: 'a2' })] });
+    const result = await sweepImproveOutcomes({ now: new Date('2026-10-20T06:00:00.000Z') });
+    const query = writes.filters.filter((f) => f.table === 'actions');
+    expect(query).toContainEqual({
+      table: 'actions',
+      in: ['status', ['new', 'in_progress', 'on_hold', 'completed']],
+    });
+    expect(query).toContainEqual({
+      table: 'actions',
+      or: 'position_outcome.is.null,position_outcome->>final.neq.true',
+    });
+    expect(result).toEqual({ refreshed: 2 });
+    expect(writes.updated).toHaveLength(2);
   });
 });

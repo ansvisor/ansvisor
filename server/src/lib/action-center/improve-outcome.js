@@ -86,7 +86,12 @@ export async function readPlatformStates({ promptId, brandId, region, platforms,
   );
 }
 
-const mentioned = (p) => p.runs > 0 && p.mentionedRuns > 0;
+/**
+ * Mentioned or not, by the Improve tab's rule: classifyPlatform already set
+ * `state`, and a brand in fewer than MIN_MENTION_RATE of the runs is
+ * not_mentioned there, so 1 mention in 10 runs is still not mentioned.
+ */
+const mentioned = (p) => p.runs > 0 && p.state !== 'no_runs' && p.state !== 'not_mentioned';
 
 /**
  * - not_enough_data  no runs before or after
@@ -116,12 +121,15 @@ export function compareOutcome(baselinePlatforms, currentPlatforms) {
     return { platform: before.platform, before, after, verdict: platformVerdict(before, after) };
   });
   const count = (v) => platforms.filter((p) => p.verdict === v).length;
-  // The panel's one-line delta: the mean position over the platforms ranked on both sides.
+  // The panel's one-line delta: the mean position over the platforms mentioned
+  // and ranked on both sides, so a not-mentioned side's stray position is left out.
   const ranked = platforms.filter(
     (p) =>
       p.verdict !== 'not_enough_data' &&
+      mentioned(p.before) &&
+      mentioned(p.after) &&
       p.before.mentionPosition !== null &&
-      p.after?.mentionPosition != null,
+      p.after.mentionPosition != null,
   );
   const mean = (xs) => (xs.length ? round1(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
   return {
@@ -195,6 +203,8 @@ export async function refreshImproveOutcome(action, { now = new Date() } = {}) {
 /**
  * The daily refresh: every Improve action still open, and every completed one
  * whose final read hasn't been recorded. Dismissed actions are not tracked.
+ * Final reads are left out by the query itself: they pile up over time and
+ * would otherwise fill the limit before the actions still being tracked.
  */
 export async function sweepImproveOutcomes({ now = new Date() } = {}) {
   const { data: actions, error } = await supabaseAdmin
@@ -202,12 +212,12 @@ export async function sweepImproveOutcomes({ now = new Date() } = {}) {
     .select('id, brand_id, status, payload, baseline, completed_at, position_outcome')
     .eq('kind', 'prompt_improve')
     .in('status', [...OPEN, 'completed'])
+    .or('position_outcome.is.null,position_outcome->>final.neq.true')
     .limit(1000);
   if (error) throw new Error(error.message);
 
   let refreshed = 0;
   for (const action of actions ?? []) {
-    if (action.position_outcome?.final) continue;
     try {
       await refreshImproveOutcome(action, { now });
       refreshed += 1;
