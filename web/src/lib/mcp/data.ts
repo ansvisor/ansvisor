@@ -2487,8 +2487,37 @@ export interface ActionListRow {
   assignee: { id: string; full_name: string | null } | null;
   due_date: string | null;
   task_progress: { completed: number; total: number };
+  priority: ActionPriorityForMcp | null;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * An action's priority (AC-006): its 0–100 score, its level, and the facts
+ * the score rests on (change, subject, demand, commercial intent, whether the
+ * ground was held before, days since the evidence, and each factor 0–1).
+ * Null until the server has scored the action.
+ */
+export interface ActionPriorityForMcp {
+  score: number;
+  level: string | null;
+  reason: Record<string, unknown> | null;
+}
+
+function priorityFor(row: {
+  priority_score?: number | null;
+  priority_level?: string | null;
+  priority_reason?: unknown;
+}): ActionPriorityForMcp | null {
+  if (row.priority_score === null || row.priority_score === undefined) return null;
+  return {
+    score: Number(row.priority_score),
+    level: row.priority_level ?? null,
+    reason:
+      row.priority_reason && typeof row.priority_reason === 'object'
+        ? (row.priority_reason as Record<string, unknown>)
+        : null,
+  };
 }
 
 export interface ListActionsParams {
@@ -2496,6 +2525,8 @@ export interface ListActionsParams {
   status?: string;
   category?: string;
   limit?: number;
+  /** `updated` (default): most recently updated first; `priority`: highest priority first. */
+  sort?: 'updated' | 'priority';
 }
 
 export async function listActionsFor(
@@ -2508,11 +2539,16 @@ export async function listActionsFor(
   let query = supabaseAdmin
     .from('actions')
     .select(
-      'id, action_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at',
+      'id, action_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason',
     )
-    .eq('brand_id', params.brandId)
-    .order('updated_at', { ascending: false })
-    .limit(limit);
+    .eq('brand_id', params.brandId);
+  query =
+    params.sort === 'priority'
+      ? query
+          .order('priority_score', { ascending: false, nullsFirst: false })
+          .order('updated_at', { ascending: false })
+      : query.order('updated_at', { ascending: false });
+  query = query.limit(limit);
   if (params.status) query = query.eq('status', params.status);
   if (params.category) query = query.eq('category', params.category);
 
@@ -2553,6 +2589,7 @@ export async function listActionsFor(
       : null,
     due_date: r.due_date ?? null,
     task_progress: progress.get(r.id) ?? { completed: 0, total: 0 },
+    priority: priorityFor(r),
     created_at: r.created_at,
     updated_at: r.updated_at,
   }));
@@ -2571,6 +2608,7 @@ export interface ActionDetailForMcp {
   kpi_keys: string[];
   assignee: { id: string; full_name: string | null } | null;
   due_date: string | null;
+  priority: ActionPriorityForMcp | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
@@ -2599,7 +2637,7 @@ export async function getActionFor(
   const { data: action, error } = await supabaseAdmin
     .from('actions')
     .select(
-      'id, action_no, brand_id, category, kind, impact, status, outcome, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, brands!inner(organization_id)',
+      'id, action_no, brand_id, category, kind, impact, status, outcome, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, priority_score, priority_level, priority_reason, brands!inner(organization_id)',
     )
     .eq('id', actionId)
     .eq('brands.organization_id', auth.organizationId)
@@ -2647,6 +2685,7 @@ export async function getActionFor(
       ? { id: action.assignee_id, full_name: names.get(action.assignee_id) ?? null }
       : null,
     due_date: action.due_date ?? null,
+    priority: priorityFor(action),
     created_at: action.created_at,
     updated_at: action.updated_at,
     completed_at: action.completed_at ?? null,

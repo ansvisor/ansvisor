@@ -24,6 +24,8 @@ export interface ActionExport {
   /** "AC-52". */
   ref: string;
   title: string;
+  /** The score ("94") and "Why this priority?"; null before the action is scored. */
+  priority: { label: string; why: string } | null;
   category: string;
   impact: string;
   status: string;
@@ -83,6 +85,7 @@ export interface ExportSignal {
 /** The labels an `ActionExport` is built from, each already in the reader's language. */
 export interface ExportTexts {
   title: string;
+  priority: { label: string; why: string } | null;
   why: string;
   goal: string;
   category: string;
@@ -129,6 +132,7 @@ export function buildActionExport(
   return {
     ref: `AC-${action.actionNo}`,
     title: texts.title,
+    priority: texts.priority,
     category: texts.category,
     impact: texts.impact,
     status: texts.status,
@@ -210,6 +214,7 @@ export function actionMarkdown(a: ActionExport, label: Labels): string {
   const lines = [
     `# ${a.title} (${a.ref})`,
     facts([
+      ['priority', a.priority?.label ?? ''],
       ['category', a.category],
       ['impact', a.impact],
       ['status', a.status],
@@ -219,6 +224,7 @@ export function actionMarkdown(a: ActionExport, label: Labels): string {
       ['dueDate', a.dueDate],
     ]),
     a.tags.length ? `${label('tags')}: ${a.tags.join(', ')}` : '',
+    a.priority?.why ? `${label('priorityWhy')}: ${a.priority.why}` : '',
     `${label('why')}: ${a.why}`,
     `${label('goal')}: ${a.goal}`,
     a.kpis.length ? `${label('kpis')}: ${a.kpis.join(', ')}` : '',
@@ -309,6 +315,8 @@ export function actionWorkbook(a: ActionExport, label: Labels): Sheet<Blob>[] {
   const summary: [string, string][] = [
     [label('action'), a.ref],
     [label('title'), a.title],
+    [label('priority'), a.priority?.label ?? ''],
+    [label('priorityWhy'), a.priority?.why ?? ''],
     [label('category'), a.category],
     [label('impact'), a.impact],
     [label('status'), a.status],

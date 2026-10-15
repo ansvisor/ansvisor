@@ -858,7 +858,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'list_actions',
     {
       description:
-        'List the Action Center actions for a brand: what the product thinks should be done about its AI visibility. Each action was consolidated from one or more detected signals and carries a task plan. Returns category, kind, impact, status, outcome, assignee, due date and task progress, most recently updated first. `kind` is an opaque definition id (e.g. "close_competitor_gap"); the action payload with the specifics is on get_action. Use this to see open work ("what should we do next?") or to check what is in progress.',
+        'List the Action Center actions for a brand: what the product thinks should be done about its AI visibility. Each action was consolidated from one or more detected signals and carries a task plan. Returns category, kind, impact, priority (a 0–100 score, its level — critical, high, medium or low — and the facts it rests on; null until scored), status, outcome, assignee, due date and task progress, most recently updated first, or highest priority first with sort "priority". `kind` is an opaque definition id (e.g. "close_competitor_gap"); the action payload with the specifics is on get_action. Use this to see open work ("what should we do next?") or to check what is in progress.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         status: z
@@ -876,6 +876,12 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           .max(200)
           .optional()
           .describe('Row cap limit (default 50, max 200).'),
+        sort: z
+          .enum(['updated', 'priority'])
+          .optional()
+          .describe(
+            'Order: "updated" (default) most recently updated first; "priority" highest priority score first — the order to work on them.',
+          ),
       },
     },
     async (args) => {
@@ -884,6 +890,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         status: args.status,
         category: args.category,
         limit: args.limit,
+        sort: args.sort,
       });
       if (actions === null) {
         return {
@@ -901,7 +908,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'get_action',
     {
       description:
-        'Get one Action Center action in full: its payload (the prompts, pages, competitors or numbers it is about), the signals that triggered it, its task list and its event trail. Each task carries `mode` (who carries it out: system, agent, human or human_or_agent) and `permission` (read, write or execute). Read both before proposing to act on a task — anything beyond read needs a human to approve it in the dashboard. A task is described by `title` when someone wrote one, otherwise by `task_key` with `title_params`.',
+        'Get one Action Center action in full: its priority (score, level and the facts it rests on), its payload (the prompts, pages, competitors or numbers it is about), the signals that triggered it, its task list and its event trail. Each task carries `mode` (who carries it out: system, agent, human or human_or_agent) and `permission` (read, write or execute). Read both before proposing to act on a task — anything beyond read needs a human to approve it in the dashboard. A task is described by `title` when someone wrote one, otherwise by `task_key` with `title_params`.',
       inputSchema: {
         action_id: relaxedUuid.describe('Action UUID, from list_actions or list_action_history.'),
       },

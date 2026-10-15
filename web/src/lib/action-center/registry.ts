@@ -130,6 +130,9 @@ export const ACTION_STATUSES: readonly ActionStatus[] = [
   'dismissed',
 ];
 
+/** Statuses of an action still to be worked on. */
+export const OPEN_ACTION_STATUSES: readonly ActionStatus[] = ['new', 'in_progress', 'on_hold'];
+
 export const ACTION_OUTCOMES: readonly ActionOutcome[] = [
   'pending_measurement',
   'improved',

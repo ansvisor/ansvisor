@@ -609,7 +609,7 @@
       "subtitle": "Know what changed, what matters, and what to do next.",
       "cards": {
         "top": "Top Actions",
-        "topSub": "Highest priority right now",
+        "topSub": "Highest-priority actions to work on next",
         "atRisk": "At Risk",
         "atRiskSub": "Recover and Fix — visibility or traffic declining",
         "opportunities": "Opportunities",
@@ -638,6 +638,7 @@
         "updated": "Recently updated"
       },
       "table": {
+        "priority": "Priority",
         "action": "Action",
         "impact": "Impact",
         "status": "Status",
@@ -687,6 +688,67 @@
         "description": "Select a brand to view its actions."
       },
       "updateFailed": "Couldn't update the action.",
+      "priority": {
+        "label": "Priority",
+        "levels": {
+          "critical": "Critical",
+          "high": "High",
+          "medium": "Medium",
+          "low": "Low"
+        },
+        "notScored": "Not scored yet",
+        "levelTitle": "{level} priority",
+        "why": "Why this priority?",
+        "reason": {
+          "change": {
+            "lost": "Lost ground on {subject}",
+            "dropped": "A sharp drop on {subject}",
+            "slipping": "Slipping on {subject}",
+            "gap": "A gap to close on {subject}",
+            "issue": "A site issue on {subject}",
+            "opportunity": "Room to grow on {subject}",
+            "gain": "A gain on {subject}",
+            "none": "Its findings have resolved"
+          },
+          "subject": {
+            "prompts": "{count, plural, one {# {demand}prompt} other {# {demand}prompts}}",
+            "pages": "{count, plural, one {# {demand}page} other {# {demand}pages}}",
+            "queries": "{count, plural, one {# {demand}query} other {# {demand}queries}}",
+            "topics": "{count, plural, one {# {demand}topic} other {# {demand}topics}}",
+            "platforms": "{count, plural, one {# platform} other {# platforms}}",
+            "regions": "{count, plural, one {# region} other {# regions}}",
+            "competitors": "{count, plural, one {# competitor} other {# competitors}}",
+            "sources": "{count, plural, one {# source} other {# sources}}"
+          },
+          "alone": {
+            "lost": "Lost ground",
+            "dropped": "A sharp drop",
+            "slipping": "Slipping",
+            "gap": "A gap to close",
+            "issue": "A site issue",
+            "opportunity": "Room to grow",
+            "gain": "A gain"
+          },
+          "demand": {
+            "high": "high-demand",
+            "low": "low-demand"
+          },
+          "when": {
+            "today": "today",
+            "days": "{days, plural, one {# day ago} other {# days ago}}"
+          },
+          "highDemand": "high search demand",
+          "commercial": "commercial intent",
+          "heldBefore": "previously visible",
+          "sources": "confirmed by {count} sources",
+          "sentence": {
+            "withWhen": "{what} {when}",
+            "withExtras": "{text} — {extras}",
+            "separator": ", ",
+            "end": "{text}."
+          }
+        }
+      },
       "export": {
         "copyAll": "Copy Data",
         "csv": "Export CSV",
@@ -711,6 +773,8 @@
         },
         "action": "Action",
         "title": "Title",
+        "priority": "Priority",
+        "priorityWhy": "Why this priority",
         "category": "Category",
         "impact": "Impact",
         "status": "Status",

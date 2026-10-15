@@ -72,6 +72,17 @@ const action = {
   taskTotal: 1,
   taskCompleted: 0,
   signalCount: 1,
+  priorityScore: 84,
+  priorityLevel: 'high',
+  priorityReason: {
+    change: 'dropped',
+    subject: { entity: 'prompts', count: 3 },
+    demand: 'high',
+    commercial: true,
+    heldBefore: true,
+    days: 2,
+    sources: 1,
+  },
 } as ActionItem;
 
 const detail = {
@@ -149,6 +160,10 @@ describe('ActionExportButtons', () => {
     await act(async () => button('Copy Data').click());
     const shown = document.querySelector('textarea')?.value ?? '';
     expect(shown).toMatch(/^# Recover lost visibility \(AC-52\)\n/);
+    expect(shown).toContain('Priority: 84 · Category: Recover');
+    expect(shown).toContain(
+      'Why this priority: A sharp drop on 3 high-demand prompts 2 days ago — commercial intent, previously visible.',
+    );
     expect(shown).toContain('## Tasks (1)\n1. Refresh /pricing (To Do)');
     expect(shown).toContain('## Signals (1)\n- Visibility · ');
     expect(shown).toContain('## History (1)\n- 2026-10-08 · ');

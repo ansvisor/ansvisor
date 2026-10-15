@@ -282,8 +282,8 @@ intent, not during exploratory queries.
 
 | Tool | What it does | Writes |
 | --- | --- | --- |
-| `list_actions` | Recommended actions for a brand with status, impact, assignee, due date, and task progress. | |
-| `get_action` | One action in full: payload, triggering signals, tasks (`mode`, `permission`), and event trail. | |
+| `list_actions` | Recommended actions for a brand with priority (0–100 score, level and reasons), status, impact, assignee, due date, and task progress. `sort: "priority"` lists them highest priority first. | |
+| `get_action` | One action in full: priority, payload, triggering signals, tasks (`mode`, `permission`), and event trail. | |
 | `list_signals` | Detected changes (visibility, citations, traffic) with before/after values and linked `action_id`. | |
 | `list_action_history` | Closed actions with measured outcomes and before/after validation results. | |
 | `update_task_status` | Record progress on a task (`in_progress`, `completed`, `skipped`, `failed`); does not execute the task. | **yes** |

@@ -24,17 +24,14 @@ import {
   ACTION_IMPACTS,
   ACTION_SORTS,
   ACTION_STATUSES,
+  OPEN_ACTION_STATUSES,
   type ActionCategory,
   type ActionImpact,
   type ActionSort,
   type ActionStatus,
 } from '@/lib/action-center/registry';
-import {
-  actionContextTags,
-  actionTexts,
-  comparePriority,
-  memberLabel,
-} from '@/lib/action-center/display';
+import { actionContextTags, actionTexts, memberLabel } from '@/lib/action-center/display';
+import { compareImpact, comparePriority, topActionIds } from '@/lib/action-center/priority';
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
 import { ActionTable } from '@/components/action-center/action-table';
 import { ActionDrawer } from '@/components/action-center/action-drawer';
@@ -54,6 +51,8 @@ import { toCsv } from '@/lib/csv';
 
 const ACTION_EXPORT_HEADERS = [
   'number',
+  'priority_score',
+  'priority_level',
   'title',
   'category',
   'impact',
@@ -65,9 +64,7 @@ const ACTION_EXPORT_HEADERS = [
   'created',
 ];
 
-const OPEN_STATUSES: ActionStatus[] = ['new', 'in_progress', 'on_hold'];
-
-const isOpen = (action: ActionItem) => OPEN_STATUSES.includes(action.status);
+const isOpen = (action: ActionItem) => OPEN_ACTION_STATUSES.includes(action.status);
 
 /**
  * What each summary card counts, one predicate per card.
@@ -79,14 +76,14 @@ const isOpen = (action: ActionItem) => OPEN_STATUSES.includes(action.status);
  * the count and the filter read the same predicate they cannot disagree.
  */
 const CARD_FILTERS = {
-  top: (action: ActionItem) => isOpen(action) && action.impact === 'high',
   atRisk: (action: ActionItem) =>
     isOpen(action) && (action.category === 'recover' || action.category === 'fix'),
   opportunities: (action: ActionItem) => isOpen(action) && action.category === 'growth',
   inProgress: (action: ActionItem) => action.status === 'in_progress',
 } as const;
 
-type CardFocus = keyof typeof CARD_FILTERS;
+/** Top Actions is the five highest-priority open actions (AC-006), not a predicate. */
+type CardFocus = keyof typeof CARD_FILTERS | 'top';
 
 export default function ActionCenterActionsPage() {
   const brand = useBrandStore((s) => s.getActiveBrand());
@@ -209,10 +206,14 @@ function ActionsContent({ brand }: { brand: Brand }) {
     [actions, selectedId],
   );
 
+  // The card and its filter read one set, so they cannot disagree.
+  const topIds = useMemo(() => topActionIds(actions ?? []), [actions]);
+
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
     const filtered = (actions ?? []).filter((action) => {
-      if (focus && !CARD_FILTERS[focus](action)) return false;
+      if (focus === 'top' ? !topIds.has(action.id) : focus && !CARD_FILTERS[focus](action))
+        return false;
       if (category !== 'all' && action.category !== category) return false;
       if (impact !== 'all' && action.impact !== impact) return false;
       if (status !== 'all' && action.status !== status) return false;
@@ -231,7 +232,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
     return filtered.sort((a, b) => {
       switch (sort) {
         case 'impact':
-          return comparePriority(a, b);
+          return compareImpact(a, b);
         case 'newest':
           return b.createdAt.localeCompare(a.createdAt);
         case 'due_date':
@@ -242,13 +243,15 @@ function ActionsContent({ brand }: { brand: Brand }) {
           return comparePriority(a, b);
       }
     });
-  }, [actions, focus, category, impact, status, assignee, search, sort, tTexts, t]);
+  }, [actions, topIds, focus, category, impact, status, assignee, search, sort, tTexts, t]);
 
   const handleExportCsv = useCallback(() => {
     if (visible.length === 0) return;
 
     const rows = visible.map((action) => ({
       number: action.actionNo,
+      priority_score: action.priorityScore ?? '',
+      priority_level: action.priorityLevel ? t(`priority.levels.${action.priorityLevel}`) : '',
       title: actionTexts(action, tTexts).title,
       category: tCategories(action.category),
       impact: t(`impact.${action.impact}`),
@@ -287,14 +290,14 @@ function ActionsContent({ brand }: { brand: Brand }) {
     const open = all.filter(isOpen);
     const impacts = open.map((action) => action.impact);
     return {
-      top: all.filter(CARD_FILTERS.top).length,
+      top: topIds.size,
       atRisk: all.filter(CARD_FILTERS.atRisk).length,
       opportunities: all.filter(CARD_FILTERS.opportunities).length,
       inProgress: all.filter(CARD_FILTERS.inProgress).length,
       potential: impacts.includes('high') ? 'high' : impacts.includes('medium') ? 'medium' : 'low',
       hasOpen: open.length > 0,
     };
-  }, [actions]);
+  }, [actions, topIds]);
 
   const hasActiveFilters =
     focus !== null ||

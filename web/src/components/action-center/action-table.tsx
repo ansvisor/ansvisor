@@ -26,6 +26,7 @@ import {
 import type { ActionItem } from '@/lib/actions/action-center';
 import type { ActionCategory, ActionKind, ActionStatus } from '@/lib/action-center/registry';
 import { actionContextTags, actionTexts } from '@/lib/action-center/display';
+import type { PriorityLevel } from '@/lib/action-center/priority';
 import { ImpactDots } from './signal-table';
 import { formatRelative } from '@/lib/format-relative';
 import { cn } from '@/lib/utils';
@@ -92,6 +93,46 @@ export function ActionStatusBadge({ status }: { status: ActionStatus }) {
   );
 }
 
+export const PRIORITY_BADGE: Record<PriorityLevel, string> = {
+  critical: 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
+  high: 'border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-400',
+  medium: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  low: 'border-border bg-muted/50 text-muted-foreground',
+};
+
+/**
+ * The priority score alone (AC-006), coloured by its level; the level is
+ * named on hover and to screen readers, so "High" is not shown twice beside
+ * the Impact column. A dash until the server has scored the action.
+ */
+export function PriorityBadge({
+  score,
+  level,
+}: {
+  score: number | null;
+  level: PriorityLevel | null;
+}) {
+  const t = useTranslations('actionCenter.actionsPage.priority');
+  if (score === null || level === null) {
+    return (
+      <span className="text-xs text-muted-foreground" title={t('notScored')}>
+        —
+      </span>
+    );
+  }
+  const name = t('levelTitle', { level: t(`levels.${level}`) });
+  return (
+    <Badge
+      variant="outline"
+      title={name}
+      className={cn('font-semibold tabular-nums', PRIORITY_BADGE[level])}
+    >
+      {score}
+      <span className="sr-only">{name}</span>
+    </Badge>
+  );
+}
+
 export function AssigneeAvatar({ assignee }: { assignee: ActionItem['assignee'] }) {
   if (!assignee) return <span className="text-xs text-muted-foreground">—</span>;
   const initials = (assignee.fullName ?? '?')
@@ -126,6 +167,7 @@ export function ActionTable({
         <TableHeader>
           <TableRow>
             <TableHead className="text-xs">{t('table.action')}</TableHead>
+            <TableHead className="text-xs">{t('table.priority')}</TableHead>
             <TableHead className="text-xs">{t('table.impact')}</TableHead>
             <TableHead className="text-xs">{t('table.status')}</TableHead>
             <TableHead className="text-xs">{t('table.assignee')}</TableHead>
@@ -163,6 +205,9 @@ export function ActionTable({
                       </div>
                     </div>
                   </div>
+                </TableCell>
+                <TableCell>
+                  <PriorityBadge score={action.priorityScore} level={action.priorityLevel} />
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1.5">

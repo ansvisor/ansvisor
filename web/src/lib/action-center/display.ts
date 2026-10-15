@@ -153,18 +153,6 @@ export function actionContextTags(action: ActionItem, t: Translator): string[] {
   return tags;
 }
 
-const IMPACT_RANK: Record<ActionItem['impact'], number> = { high: 3, medium: 2, low: 1 };
-
-/** Priority: impact first, then weight of evidence, then recency. The
- *  scoring formula stays out of the UI per the brief — this order IS it. */
-export function comparePriority(a: ActionItem, b: ActionItem): number {
-  return (
-    IMPACT_RANK[b.impact] - IMPACT_RANK[a.impact] ||
-    b.signalCount - a.signalCount ||
-    b.updatedAt.localeCompare(a.updatedAt)
-  );
-}
-
 /**
  * How a team member is named in an assignee picker.
  *

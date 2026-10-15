@@ -57,7 +57,8 @@ import {
 import { signalTexts } from '@/lib/signals/display';
 import { isKpiKey } from '@/lib/kpis/registry';
 import { ImpactDots, isSuperseded, SignalStatusBadge } from './signal-table';
-import { ActionIcon } from './action-table';
+import { ActionIcon, PriorityBadge } from './action-table';
+import { priorityReasonText } from '@/lib/action-center/priority';
 import { OpportunityContext } from './opportunity-context';
 import { ActionExportButtons } from './action-export-buttons';
 import { ImproveContext } from './improve-context';
@@ -93,6 +94,7 @@ export function ActionDrawer({
   const tRegistry = useTranslations('actionCenter.registry');
   const tTasks = useTranslations('actionCenter.actionTasks');
   const tTaskStatus = useTranslations('actionCenter.taskStatus');
+  const tPriority = useTranslations('actionCenter.actionsPage.priority');
 
   const router = useRouter();
   const [tab, setTab] = useState<DrawerTab>('overview');
@@ -160,6 +162,9 @@ export function ActionDrawer({
             <Badge variant="outline" className="text-[10px]">
               {tCategories(action.category)}
             </Badge>
+            {action.priorityScore !== null && (
+              <PriorityBadge score={action.priorityScore} level={action.priorityLevel} />
+            )}
             <span className="flex items-center gap-1.5 text-muted-foreground">
               <ImpactDots impact={action.impact} />
               {t(`impact.${action.impact}`)}
@@ -220,6 +225,15 @@ export function ActionDrawer({
             </div>
           ) : tab === 'overview' ? (
             <>
+              {action.priorityReason && (
+                <>
+                  <section>
+                    <p className="text-xs font-medium text-muted-foreground">{t('priority.why')}</p>
+                    <p className="mt-1">{priorityReasonText(action.priorityReason, tPriority)}</p>
+                  </section>
+                  <Separator />
+                </>
+              )}
               <section>
                 <p className="text-xs font-medium text-muted-foreground">{t('drawer.why')}</p>
                 <p className="mt-1">{texts.description}</p>

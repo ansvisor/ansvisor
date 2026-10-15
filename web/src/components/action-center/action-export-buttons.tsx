@@ -25,6 +25,7 @@ import {
   type ExportFact,
 } from '@/lib/action-center/export';
 import { opportunityLists } from '@/lib/content/opportunity-lists';
+import { priorityReasonText } from '@/lib/action-center/priority';
 import { isKpiKey } from '@/lib/kpis/registry';
 import { signalAffected, signalTexts } from '@/lib/signals/display';
 import { SIGNAL_KINDS } from '@/lib/signals/registry';
@@ -74,6 +75,7 @@ export function ActionExportButtons({
   const tSignals = useTranslations('actionCenter.signalsPage');
   const tSignalTexts = useTranslations('actionCenter.signalTexts');
   const tSignalCategories = useTranslations('actionCenter.signalCategories');
+  const tPriority = useTranslations('actionCenter.actionsPage.priority');
   const [isBusy, setIsBusy] = useState(false);
   // The Markdown Copy Data shows, and what to say once it is copied.
   const [preview, setPreview] = useState<{ text: string; copied: string } | null>(null);
@@ -176,6 +178,15 @@ export function ActionExportButtons({
       detail,
       {
         title: texts.title,
+        priority:
+          action.priorityScore !== null
+            ? {
+                label: String(action.priorityScore),
+                why: action.priorityReason
+                  ? priorityReasonText(action.priorityReason, tPriority)
+                  : '',
+              }
+            : null,
         why: texts.description,
         goal: actionGoal(action.kind, tTexts, action.payload),
         category: tCategories(action.category),
