@@ -71,6 +71,8 @@ import {
   affectedTotal,
 } from '@/lib/action-center/affected';
 import { ImproveContext } from './improve-context';
+import { ImproveOutcomeCard } from './improve-outcome-card';
+import { improvePlatformLabels } from '@/lib/improve-outcome';
 import { cn } from '@/lib/utils';
 
 type DrawerTab = 'overview' | 'affected' | 'tasks' | 'signals' | 'history';
@@ -208,7 +210,7 @@ export function ActionDrawer({
   return (
     <Sheet open={Boolean(action)} onOpenChange={onOpenChange}>
       <SheetContent className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
-        <SheetHeader className="border-b px-6 py-4">
+        <SheetHeader className="border-b px-6 py-4 pr-12">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge variant="outline" className="text-[10px]">
               {tCategories(action.category)}
@@ -340,6 +342,15 @@ export function ActionDrawer({
               {action.kind === 'prompt_improve' ? (
                 <>
                   <Separator />
+                  {detail.positionOutcome && (
+                    <>
+                      <ImproveOutcomeCard
+                        outcome={detail.positionOutcome}
+                        labels={improvePlatformLabels(action.payload)}
+                      />
+                      <Separator />
+                    </>
+                  )}
                   <ImproveContext payload={action.payload ?? {}} />
                 </>
               ) : opportunityId ? (

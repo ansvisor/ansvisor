@@ -1,5 +1,13 @@
+import { createTranslator } from 'next-intl';
 import { describe, expect, it } from 'vitest';
-import { actionGoal, actionTexts, eventTaskText, humanizeKind, taskText } from './display';
+import {
+  actionEventText,
+  actionGoal,
+  actionTexts,
+  eventTaskText,
+  humanizeKind,
+  taskText,
+} from './display';
 import { ACTION_KINDS } from './registry';
 import type { ActionItem } from '@/lib/actions/action-center';
 import messages from '../../../messages/en.json';
@@ -188,5 +196,27 @@ describe('eventTaskText', () => {
     expect(eventTaskText(undefined, withHas)).toBe('');
     expect(eventTaskText('', withHas)).toBe('');
     expect(eventTaskText(42, withHas)).toBe('');
+  });
+});
+
+describe('actionEventText', () => {
+  const page = createTranslator({ locale: 'en', messages, namespace: 'actionCenter.actionsPage' });
+  const tPage = (key: string, values?: Record<string, string | number>) =>
+    page(key as Parameters<typeof page>[0], values);
+  const event = (name: string, data: Record<string, unknown>) => ({
+    id: 'e1',
+    event: name,
+    data,
+    actorId: null,
+    createdAt: '2026-10-16T00:00:00Z',
+  });
+
+  it('reads the 30-day position result with its counts', () => {
+    expect(
+      actionEventText(event('position_outcome_recorded', { improved: 2, measurable: 3 }), tPage, t),
+    ).toBe('30-day result: position improved on 2 of 3 platforms');
+    expect(
+      actionEventText(event('position_outcome_recorded', { improved: 0, measurable: 0 }), tPage, t),
+    ).toBe('30-day result: not enough data to compare positions');
   });
 });

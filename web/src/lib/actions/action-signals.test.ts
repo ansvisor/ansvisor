@@ -24,6 +24,7 @@ vi.mock('@/lib/supabase/server', () => ({
       }
       chain.then = (resolve: (value: unknown) => unknown) =>
         resolve({ data: rows[table] ?? [], error: null });
+      chain.maybeSingle = async () => ({ data: rows[table]?.[0] ?? null, error: null });
       return chain;
     },
   })),
