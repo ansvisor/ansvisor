@@ -77,7 +77,15 @@ export interface ExportTask {
   number: number;
   title: string;
   status: string;
-  /** What the task carries beyond its title, and why it was skipped. */
+  /** "Content", "Outreach"…; empty when the task has none (AC-004). */
+  type: string;
+  where: string;
+  why: string;
+  how: string[];
+  doneWhen: string;
+  /** "~2h · Content writer". */
+  effort: string;
+  /** What else the task carries (an Improve task's body and evidence), and why it was skipped. */
   details: string;
 }
 
@@ -127,6 +135,8 @@ export interface ExportTexts {
   event: (event: ActionDetail['events'][number]) => string;
   /** "Skipped: {reason}". */
   skipped: (reason: string) => string;
+  /** "Content", "On-page"…, for a task's type (AC-004). */
+  taskType: (type: string) => string;
   /** What an AI answer a task rests on is called; its id means nothing outside. */
   answerSource: string;
 }
@@ -139,6 +149,13 @@ function dayOf(iso: string | null | undefined, timeZone: string): string {
   if (!iso) return '';
   return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : dayIn(iso, timeZone);
 }
+
+/** A field on one line: an export row or a Markdown list item holds no line breaks. */
+const oneLine = (value: string | null | undefined): string =>
+  (value ?? '').replace(/\s*\n+\s*/g, ' ').trim();
+
+/** "1) Add a table. 2) Update the title." */
+const steps = (how: string[]): string => how.map((step, i) => `${i + 1}) ${step}`).join(' ');
 
 /** The action and its detail, labelled, in the order the drawer shows them. */
 export function buildActionExport(
@@ -166,11 +183,12 @@ export function buildActionExport(
     link: `${origin}/dashboard/action-center/actions?action=${action.id}`,
     affected: texts.affected,
     tasks: detail.tasks.map((task, i) => {
-      const details = task.details
+      const d = task.details;
+      const details: (string | null)[] = d
         ? [
-            task.details.body,
-            task.details.platformLabel,
-            ...task.details.sources.map((source) =>
+            d.body,
+            d.platformLabel,
+            ...d.sources.map((source) =>
               source.type === 'answer' ? texts.answerSource : source.ref,
             ),
           ]
@@ -180,9 +198,15 @@ export function buildActionExport(
         number: i + 1,
         title: texts.taskTitle(task),
         status: texts.taskStatus(task.status),
+        type: d?.type ? texts.taskType(d.type) : '',
+        where: oneLine(d?.where),
+        why: oneLine(d?.why),
+        how: (d?.how ?? []).map(oneLine),
+        doneWhen: oneLine(d?.doneWhen),
+        effort: [d?.effort, d?.role].filter(Boolean).join(' · '),
         details: details
-          .filter(Boolean)
-          .map((part) => part.replace(/\s*\n+\s*/g, ' '))
+          .filter((part): part is string => !!part)
+          .map(oneLine)
           .join(' · '),
       };
     }),
@@ -275,7 +299,14 @@ export function actionMarkdown(a: ActionExport, label: Labels): string {
 
   lines.push('', `## ${label('tasksHeading', { count: a.tasks.length })}`);
   for (const task of a.tasks) {
-    lines.push(`${task.number}. ${task.title} (${task.status})`);
+    lines.push(
+      `${task.number}. ${task.title} (${task.status})${task.type ? ` · ${task.type}` : ''}`,
+    );
+    if (task.where) lines.push(`   ${label('taskWhere')}: ${task.where}`);
+    if (task.why) lines.push(`   ${label('taskWhy')}: ${task.why}`);
+    if (task.how.length) lines.push(`   ${label('taskHow')}: ${steps(task.how)}`);
+    if (task.doneWhen) lines.push(`   ${label('taskDoneWhen')}: ${task.doneWhen}`);
+    if (task.effort) lines.push(`   ${label('taskEffort')}: ${task.effort}`);
     if (task.details) lines.push(`   ${task.details}`);
   }
 
@@ -303,6 +334,11 @@ export const ACTION_CSV_HEADERS = [
   'type',
   'entity',
   'details',
+  'where',
+  'why',
+  'how',
+  'done_when',
+  'effort',
   'status',
   'category',
   'impact',
@@ -337,7 +373,13 @@ export function actionCsv(a: ActionExport): string {
       action: a.ref,
       ref: task.number,
       title: task.title,
+      type: task.type,
       details: task.details,
+      where: task.where,
+      why: task.why,
+      how: steps(task.how),
+      done_when: task.doneWhen,
+      effort: task.effort,
       status: task.status,
       link: a.link,
     })),
@@ -433,10 +475,43 @@ export function actionWorkbook(a: ActionExport, label: Labels): Sheet<Blob>[] {
     {
       sheet: label('sheets.tasks'),
       stickyRowsCount: 1,
-      columns: [{ width: 5 }, { width: 60 }, { width: 14 }, { width: 70 }],
+      columns: [
+        { width: 5 },
+        { width: 60 },
+        { width: 12 },
+        { width: 14 },
+        { width: 40 },
+        { width: 50 },
+        { width: 60 },
+        { width: 40 },
+        { width: 20 },
+        { width: 50 },
+      ],
       data: [
-        ['#', label('task'), label('status'), label('details')].map(bold),
-        ...a.tasks.map((task) => [task.number, task.title, task.status, task.details]),
+        [
+          '#',
+          label('task'),
+          label('type'),
+          label('status'),
+          label('taskWhere'),
+          label('taskWhy'),
+          label('taskHow'),
+          label('taskDoneWhen'),
+          label('taskEffort'),
+          label('details'),
+        ].map(bold),
+        ...a.tasks.map((task) => [
+          task.number,
+          task.title,
+          task.type,
+          task.status,
+          task.where,
+          task.why,
+          steps(task.how),
+          task.doneWhen,
+          task.effort,
+          task.details,
+        ]),
       ],
     },
     {

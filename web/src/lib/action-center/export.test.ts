@@ -131,6 +131,7 @@ const texts: ExportTexts = {
   }),
   event: () => 'Action created',
   skipped: (reason) => `Skipped: ${reason}`,
+  taskType: (type) => ({ content: 'Content', outreach: 'Outreach' })[type] ?? type,
   answerSource: 'AI answer',
 };
 
@@ -306,7 +307,85 @@ describe('the Excel file', () => {
       'sheets.signals',
       'sheets.history',
     ]);
-    expect(sheets[2].data[2]).toEqual([2, '=HYPERLINK("x")', 'Skipped', 'Skipped: Done by hand']);
+    expect(sheets[2].data[2]).toEqual([
+      2,
+      '=HYPERLINK("x")',
+      null,
+      'Skipped',
+      null,
+      null,
+      null,
+      null,
+      null,
+      'Skipped: Done by hand',
+    ]);
     expect(sheets[3].data[1][6]).toBe('ChatGPT, Gemini');
+  });
+});
+
+describe('a task with AC-004 fields', () => {
+  const concrete = buildActionExport(
+    action,
+    {
+      ...detail,
+      tasks: [
+        {
+          ...detail.tasks[0],
+          status: 'todo',
+          details: {
+            body: null,
+            platform: null,
+            platformLabel: null,
+            sources: [],
+            where: 'acme.example/blog/best-tools · 3 prompts on ChatGPT',
+            why: 'Cited #2 until Oct 8.\nThe pages cited now have a dated table.',
+            how: ['Add a feature table.', 'Put "2026" in the title.'],
+            doneWhen: 'Cited again on 2 of 3 platforms within 14 days.',
+            type: 'content',
+            effort: '~2h',
+            role: 'Content writer',
+          },
+        },
+      ],
+    },
+    texts,
+    { origin: 'https://app.example', timeZone: 'Europe/Istanbul' },
+  );
+
+  it('writes each field on its own line in Copy Data', () => {
+    expect(actionMarkdown(concrete, label)).toContain(
+      [
+        '1. Add a 2026 comparison table to /blog/best-tools (todo) · Content',
+        '   taskWhere: acme.example/blog/best-tools · 3 prompts on ChatGPT',
+        '   taskWhy: Cited #2 until Oct 8. The pages cited now have a dated table.',
+        '   taskHow: 1) Add a feature table. 2) Put "2026" in the title.',
+        '   taskDoneWhen: Cited again on 2 of 3 platforms within 14 days.',
+        '   taskEffort: ~2h · Content writer',
+      ].join('\n'),
+    );
+  });
+
+  it('gives each field its own column in the CSV and the workbook', () => {
+    const [head, , task] = actionCsv(concrete).split('\n');
+    const cells = Object.fromEntries(
+      head.split(',').map((name, i) => [name, task.match(/("([^"]|"")*"|[^,]*)(,|$)/g)?.[i]]),
+    );
+    expect(cells.type).toBe('Content,');
+    expect(cells.how).toBe('"1) Add a feature table. 2) Put ""2026"" in the title.",');
+    expect(cells.done_when).toBe('Cited again on 2 of 3 platforms within 14 days.,');
+
+    const sheet = actionWorkbook(concrete, label)[2];
+    expect(sheet.data[1]).toEqual([
+      1,
+      'Add a 2026 comparison table to /blog/best-tools',
+      'Content',
+      'todo',
+      'acme.example/blog/best-tools · 3 prompts on ChatGPT',
+      'Cited #2 until Oct 8. The pages cited now have a dated table.',
+      '1) Add a feature table. 2) Put "2026" in the title.',
+      'Cited again on 2 of 3 platforms within 14 days.',
+      '~2h · Content writer',
+      '',
+    ]);
   });
 });

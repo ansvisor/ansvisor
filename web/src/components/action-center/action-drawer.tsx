@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { toast } from 'sonner';
-import { Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,8 +33,8 @@ import {
   getPromptDemand,
   setActionDueDate,
   updateActionStatus,
+  updateTaskDetails,
   updateTaskStatus,
-  updateTaskTitle,
   type ActionDetail,
   type ActionItem,
   type ActionTask,
@@ -72,6 +72,8 @@ import {
 } from '@/lib/action-center/affected';
 import { actionStory } from '@/lib/action-center/story';
 import { ImproveContext } from './improve-context';
+import { TaskDetailForm, TaskDetailView, TaskTypeBadge } from './task-detail';
+import { hasTaskSpec, type TaskDetailsEdit } from '@/lib/action-center/task-details';
 import { ImproveOutcomeCard } from './improve-outcome-card';
 import { improvePlatformLabels } from '@/lib/improve-outcome';
 import { cn } from '@/lib/utils';
@@ -115,7 +117,6 @@ export function ActionDrawer({
   const router = useRouter();
   const [tab, setTab] = useState<DrawerTab>('overview');
   const [detail, setDetail] = useState<ActionDetail | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
 
   // Traceability: a signal card jumps to the Signals page with that signal's
@@ -124,15 +125,14 @@ export function ActionDrawer({
     router.push(`/dashboard/action-center/signals?signal=${signalId}`);
   };
 
+  // A reload after a change keeps the detail on screen until the new one is
+  // in, so an opened task stays open; only a first load shows placeholders.
   const load = useCallback(async () => {
     if (!action) return;
-    setIsLoading(true);
     try {
       setDetail(await getActionDetail(brandId, action.id));
     } catch {
       toast.error(t('error.title'));
-    } finally {
-      setIsLoading(false);
     }
   }, [brandId, action, t]);
 
@@ -233,17 +233,23 @@ export function ActionDrawer({
     ? (action.payload.pages as unknown[]).filter((u): u is string => typeof u === 'string')
     : [];
 
-  const mutate = async (fn: () => Promise<void>) => {
+  /** Runs a change, then reloads; false when the change failed (and said so). */
+  const mutate = async (fn: () => Promise<void>): Promise<boolean> => {
     setIsBusy(true);
     try {
       await fn();
-      await load();
-      onChanged();
     } catch {
       toast.error(t('updateFailed'));
+      setIsBusy(false);
+      return false;
+    }
+    try {
+      await load();
+      onChanged();
     } finally {
       setIsBusy(false);
     }
+    return true;
   };
 
   return (
@@ -325,7 +331,7 @@ export function ActionDrawer({
         </nav>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-4 text-sm">
-          {isLoading || !detail || !ready ? (
+          {!detail || !ready ? (
             <div className="space-y-3">
               {[0, 1, 2].map((i) => (
                 <Skeleton key={i} className="h-16 w-full" />
@@ -435,8 +441,8 @@ export function ActionDrawer({
                         updateTaskStatus(brandId, action.id, task.id, status, skipReason),
                       )
                     }
-                    onRename={(title) =>
-                      void mutate(() => updateTaskTitle(brandId, action.id, task.id, title))
+                    onEdit={(edit) =>
+                      mutate(() => updateTaskDetails(brandId, action.id, task.id, edit))
                     }
                     onDelete={() => void mutate(() => deleteTask(brandId, action.id, task.id))}
                   />
@@ -579,12 +585,10 @@ export function ActionDrawer({
 type TaskTranslator = (key: string, values?: Record<string, string | number>) => string;
 
 /**
- * One task: its text, its status, and the two edits a person can make to it.
+ * One task: its text, type and status, opening onto its details (AC-004).
  *
- * Renaming happens in place rather than in a dialog — the text is one line and
- * a dialog for one line is a detour. Escape abandons the edit, Enter or blur
- * commits it, and an empty value is treated as abandonment rather than as a
- * request to blank the task out, which the database would refuse anyway.
+ * The text opens the task rather than renaming it: a task is read before it
+ * is edited, and its text is one of the fields the details' Edit changes.
  */
 function TaskRow({
   task,
@@ -593,7 +597,7 @@ function TaskRow({
   statusLabel,
   t,
   onStatusChange,
-  onRename,
+  onEdit,
   onDelete,
 }: {
   task: ActionTask;
@@ -602,63 +606,55 @@ function TaskRow({
   statusLabel: TaskTranslator;
   t: TaskTranslator;
   onStatusChange: (status: TaskStatus, skipReason?: string) => void;
-  onRename: (title: string) => void;
+  /** Resolves true once saved; false when the save failed. */
+  onEdit: (edit: TaskDetailsEdit & { title: string | null }) => Promise<boolean>;
   onDelete: () => void;
 }) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const isEditing = draft !== null;
+  // A task sent from the Improve tab opens on its suggestion, as it always
+  // showed it; the rest open on a click.
+  const [open, setOpen] = useState(
+    () => !!task.details && !hasTaskSpec(task.details) && !!task.details.body,
+  );
+  const [editing, setEditing] = useState(false);
   // Choosing Skipped opens a reason field rather than committing: a skip
   // without a reason cannot be told apart from an abandoned task later.
   const [skipDraft, setSkipDraft] = useState<string | null>(null);
-
-  const commit = () => {
-    const next = (draft ?? '').trim();
-    if (next && next !== text) onRename(next);
-    setDraft(null);
-  };
+  const locked = disabled || editing || skipDraft !== null;
 
   return (
     <div className="rounded-md border">
       {/* Top-aligned so a task that wraps keeps its controls beside its first
           line. */}
       <div className="flex items-start justify-between gap-2 px-3 py-2">
-        {isEditing ? (
-          <Input
-            autoFocus
-            value={draft}
-            maxLength={200}
-            disabled={disabled}
-            aria-label={t('drawer.taskText')}
-            className="h-7 min-w-0 flex-1 text-sm"
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                commit();
-              } else if (e.key === 'Escape') {
-                e.preventDefault();
-                setDraft(null);
-              }
-            }}
-          />
-        ) : (
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => setDraft(text)}
-            title={t('drawer.renameTask')}
+        <button
+          type="button"
+          // Not while editing: closing would drop what was typed.
+          onClick={() => !editing && setOpen((current) => !current)}
+          aria-expanded={open}
+          title={open ? t('drawer.task.hideDetails') : t('drawer.task.showDetails')}
+          className="flex min-w-0 flex-1 items-start gap-1 rounded px-1 py-1 text-left text-sm leading-snug hover:bg-muted/60"
+        >
+          <ChevronRight
             className={cn(
-              // Wraps rather than truncates: a task is read, not scanned,
-              // and "Create a content brief for 23 prom…" says nothing.
-              'min-w-0 flex-1 rounded px-1 py-1 text-left text-sm leading-snug break-words hover:bg-muted/60',
+              'mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
+              open && 'rotate-90',
+            )}
+          />
+          {/* Wraps rather than truncates: a task is read, not scanned, and
+              "Create a content brief for 23 prom…" says nothing. */}
+          <span
+            className={cn(
+              'min-w-0 break-words',
               (task.status === 'completed' || UNCOUNTED_TASK_STATUSES.includes(task.status)) &&
                 'text-muted-foreground line-through',
             )}
           >
             {task.position}. {text}
-          </button>
-        )}
+          </span>
+        </button>
+        <div className="mt-1.5 shrink-0">
+          <TaskTypeBadge type={task.details?.type ?? null} />
+        </div>
         <Select
           value={task.status}
           onValueChange={(value) => {
@@ -666,7 +662,7 @@ function TaskRow({
             if (next === 'skipped') setSkipDraft('');
             else onStatusChange(next);
           }}
-          disabled={disabled || isEditing || skipDraft !== null}
+          disabled={locked}
           items={TASK_STATUSES.map((status) => ({ value: status, label: statusLabel(status) }))}
         >
           <SelectTrigger className="h-7 w-32 shrink-0 text-xs">
@@ -684,7 +680,7 @@ function TaskRow({
           type="button"
           variant="ghost"
           size="icon"
-          disabled={disabled || isEditing || skipDraft !== null}
+          disabled={locked}
           onClick={onDelete}
           aria-label={t('drawer.deleteTask')}
           className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
@@ -693,7 +689,25 @@ function TaskRow({
         </Button>
       </div>
 
-      {task.details && <TaskDetails details={task.details} />}
+      {open &&
+        (editing ? (
+          <TaskDetailForm
+            text={text}
+            details={task.details}
+            disabled={disabled}
+            onSave={async (edit) => {
+              // The form stays until the save lands, so a failure keeps what was typed.
+              if (await onEdit(edit)) setEditing(false);
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <TaskDetailView
+            details={task.details}
+            disabled={disabled || skipDraft !== null}
+            onEdit={() => setEditing(true)}
+          />
+        ))}
 
       {skipDraft !== null && (
         <div className="flex items-center gap-2 border-t bg-muted/30 px-3 py-2">
@@ -825,32 +839,6 @@ function AddTaskForm({
       >
         {t('drawer.addTaskCancel')}
       </Button>
-    </div>
-  );
-}
-
-/** A task sent from the Improve tab: its platform, body and evidence (PROMPT-004). */
-function TaskDetails({ details }: { details: NonNullable<ActionTask['details']> }) {
-  return (
-    <div className="space-y-1.5 px-4 pb-3">
-      {details.body && (
-        <p className="text-xs leading-relaxed text-muted-foreground">{details.body}</p>
-      )}
-      <div className="flex flex-wrap gap-1">
-        <Badge variant="secondary" className="text-[10px]">
-          {details.platformLabel}
-        </Badge>
-        {details.sources.map((source) => (
-          <Badge
-            key={`${source.type}:${source.ref}`}
-            variant="outline"
-            title={source.ref}
-            className="max-w-full truncate text-[10px] font-normal text-muted-foreground"
-          >
-            {source.type === 'answer' ? 'AI answer' : source.ref}
-          </Badge>
-        ))}
-      </div>
     </div>
   );
 }

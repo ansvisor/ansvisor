@@ -85,6 +85,7 @@ export function ActionExportButtons({
   const tRegistry = useTranslations('actionCenter.registry');
   const tTasks = useTranslations('actionCenter.actionTasks');
   const tTaskStatus = useTranslations('actionCenter.taskStatus');
+  const tTaskTypes = useTranslations('actionCenter.taskTypes');
   const tSignals = useTranslations('actionCenter.signalsPage');
   const tSignalTexts = useTranslations('actionCenter.signalTexts');
   const tSignalCategories = useTranslations('actionCenter.signalCategories');
@@ -235,6 +236,7 @@ export function ActionExportButtons({
         },
         event: (event) => actionEventText(event, t, tTasks),
         skipped: (reason) => tExport('skipped', { reason }),
+        taskType: (type) => tTaskTypes(type),
         answerSource: tExport('answerSource'),
       },
       { origin, timeZone: viewerTimeZone() },

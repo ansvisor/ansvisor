@@ -25,6 +25,13 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { KpiTimeframe } from '@/lib/kpis/registry';
 import { parseImproveOutcome, type ImproveOutcome } from '@/lib/improve-outcome';
 import {
+  cleanTaskDetailsEdit,
+  isTaskDetailsEdit,
+  parseTaskDetails,
+  type ActionTaskDetails,
+  type TaskDetailsEdit,
+} from '@/lib/action-center/task-details';
+import {
   parsePriorityReason,
   storedPriorityLevel,
   type PriorityLevel,
@@ -189,17 +196,11 @@ export interface ActionTask {
   /** Why the task was skipped; null for every other status. */
   skipReason: string | null;
   /**
-   * What a task sent from the Improve tab carries beyond its title (PROMPT-004):
-   * its body, platform and evidence. Null for library and hand-added tasks.
+   * What the task carries beyond its title: where, why, how, done-when, type
+   * and effort (AC-004), and for a task sent from the Improve tab its body,
+   * platform and evidence (PROMPT-004). Null when it carries nothing.
    */
   details: ActionTaskDetails | null;
-}
-
-export interface ActionTaskDetails {
-  body: string;
-  platform: string;
-  platformLabel: string;
-  sources: { type: string; ref: string }[];
 }
 
 export interface ActionEvent {
@@ -281,7 +282,7 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
       titleParams: (task.title_params ?? {}) as Record<string, string | number>,
       dependsOn: (task.depends_on ?? []) as string[],
       skipReason: task.skip_reason,
-      details: (task.details ?? null) as ActionTaskDetails | null,
+      details: parseTaskDetails(task.details),
     })),
     signals: mapSignalRows((signalsRes.data ?? []) as SignalRow[], places),
     events: (eventsRes.data ?? []).map((event) => ({
@@ -451,27 +452,51 @@ export async function addTask(brandId: string, actionId: string, title: string):
 }
 
 /**
- * Rename a task. A generated task keeps its `task_key` for provenance — which
- * template it grew from stays answerable — and the title simply wins at render
- * time.
+ * Edit a task's text and its details (AC-004): where, why, how, done-when,
+ * type, effort and role. `title` is null to leave the text as it is, so a
+ * library task keeps rendering from its template in the reader's language.
+ *
+ * The fields are merged into what the task already carries, so a task sent
+ * from the Improve tab keeps its body, platform and evidence.
  */
-export async function updateTaskTitle(
+export async function updateTaskDetails(
   brandId: string,
   actionId: string,
   taskId: string,
-  title: string,
+  edit: TaskDetailsEdit & { title: string | null },
 ): Promise<void> {
+  if (!isTaskDetailsEdit(edit) || (edit.title !== null && typeof edit.title !== 'string')) {
+    throw new Error('Invalid task details');
+  }
   const supabase = await createClient();
-  const text = cleanTaskTitle(title);
+  const { data: row, error: readError } = await supabase
+    .from('action_tasks')
+    .select('details')
+    .eq('action_id', actionId)
+    .eq('id', taskId)
+    .maybeSingle();
+  if (readError) throw new Error(readError.message);
+  if (!row) throw new Error('Task not found');
+
+  const stored =
+    row.details && typeof row.details === 'object' && !Array.isArray(row.details)
+      ? (row.details as Record<string, unknown>)
+      : {};
+  const details = { ...stored, ...cleanTaskDetailsEdit(edit) };
+  const title = edit.title === null ? null : cleanTaskTitle(edit.title);
 
   const { error } = await supabase
     .from('action_tasks')
-    .update({ title: text, updated_at: new Date().toISOString() })
+    .update({
+      details,
+      ...(title === null ? {} : { title }),
+      updated_at: new Date().toISOString(),
+    })
     .eq('action_id', actionId)
     .eq('id', taskId);
   if (error) throw new Error(error.message);
 
-  await logEvent(supabase, actionId, 'task_renamed', { taskId, title: text });
+  await logEvent(supabase, actionId, 'task_edited', { taskId, title });
   await touchAction(supabase, brandId, actionId);
 }
 
