@@ -906,7 +906,7 @@ async function loadWindowedInsights(
       null,
       'visibility trend',
     ),
-    getSamePromptComparison(brandId, filterOpts),
+    lenient(getSamePromptComparison(brandId, filterOpts), null, 'same-prompt comparison'),
     lenient(getCoverageKpi(brandId, filterOpts), null, 'coverage'),
     lenient(getKpiSeries(brandId, filterOpts), null, 'KPI sparklines'),
     lenient(getPlatformData(brandId, filterOpts), null, 'platforms'),
@@ -1129,9 +1129,9 @@ async function getPlatformData(
 /**
  * The comparison windows' totals over the prompts answered in both
  * (VIS-002): the daily rollups for whole days, the raw rows for the 24h and
- * topic views. Null without a previous window, while the rollups behind it
- * are not yet backfilled (00130), or when the read fails — the page then
- * compares all prompts, as it always did.
+ * topic views. Null without a previous window, or while the rollups behind it
+ * are not yet backfilled (00130) — the page then compares all prompts, as it
+ * always did. A failed read throws, so strict mode keeps it out of the cache.
  */
 async function getSamePromptComparison(
   brandId: string,
@@ -1170,10 +1170,7 @@ async function getSamePromptComparison(
     });
   }
   const { data, error } = res;
-  if (error) {
-    console.error('[insights] same-prompt comparison failed', error);
-    return null;
-  }
+  if (error) throw new Error(error.message);
   return parseSamePromptComparison(data);
 }
 
@@ -3360,7 +3357,11 @@ export async function getInsightsBreakdown(
     windows.prev ? groupsFor(windows.prev) : Promise.resolve(null),
     totalFor(windows.cur),
     windows.prev ? totalFor(windows.prev) : Promise.resolve(null),
-    getSamePromptComparison(brandId, opts, windows),
+    // Without it the panel compares all prompts, as the cards then do.
+    getSamePromptComparison(brandId, opts, windows).catch((err) => {
+      console.error('[insights] same-prompt comparison failed', err);
+      return null;
+    }),
   ]);
   if (curGroupsRes.error) throw new Error(curGroupsRes.error.message);
   if (prevGroupsRes?.error) throw new Error(prevGroupsRes.error.message);

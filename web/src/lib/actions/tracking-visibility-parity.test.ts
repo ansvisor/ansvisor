@@ -63,6 +63,7 @@ const SAME_PAYLOAD = {
   prev: sameTotals(780, 200, 260),
 };
 let SAME: unknown = null;
+let SAME_ERROR: { message: string } | null = null;
 
 const groups = {
   groups: [
@@ -117,7 +118,10 @@ function rpc(name: string, args: Record<string, unknown>) {
   else if (name.startsWith('visibility_rate_trend')) data = [];
   else if (name.startsWith('competitor_aggregates')) data = competitorAgg;
   else if (name.startsWith('insights_aggregates')) data = isPrev(args) ? SUMMARY_PREV : SUMMARY_CUR;
-  else if (name.startsWith('insights_same_prompt_compare')) data = SAME;
+  else if (name.startsWith('insights_same_prompt_compare')) {
+    if (SAME_ERROR) return Promise.resolve({ data: null, error: SAME_ERROR });
+    data = SAME;
+  }
   return Promise.resolve({ data, error: null });
 }
 
@@ -253,6 +257,7 @@ describe('Same prompts parity (VIS-002)', () => {
     PREV = visibilityPayload(1600, 400, 176);
     SUMMARY_PREV = summaryPayload(1600, 500);
     SAME = SAME_PAYLOAD;
+    SAME_ERROR = null;
   });
 
   /** What the page gets: the cards, re-measured on the shared prompts. */
@@ -312,6 +317,19 @@ describe('Same prompts parity (VIS-002)', () => {
     expect(card.comparison).toBeNull();
     expect(panel.comparison).toBeNull();
     expect(panel.delta).toBe(card.trend!.summary.change);
+  });
+
+  it('compares all prompts in the panel when the shared-prompt read fails', async () => {
+    SAME_ERROR = { message: 'canceling statement due to statement timeout' };
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const card = (await getVisibilityRateTrend('b1', thirtyDays)).summary;
+    const panel = await getInsightsBreakdown('b1', 'visibility', thirtyDays);
+
+    expect(panel.comparison).toBeNull();
+    expect(panel.delta).toBe(card.change);
+    expect(panel.comparedCur).toBe(panel.curTotal);
+    expect(errorLog).toHaveBeenCalled();
+    errorLog.mockRestore();
   });
 
   it('reads the shared prompts over the card\u2019s whole days', async () => {
