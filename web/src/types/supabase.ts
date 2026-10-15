@@ -171,6 +171,7 @@ export type Database = {
           kpi_keys: string[]
           outcome: string
           payload: Json
+          position_outcome: Json | null
           priority_level: string | null
           priority_reason: Json | null
           priority_score: number | null
@@ -196,6 +197,7 @@ export type Database = {
           kpi_keys?: string[]
           outcome?: string
           payload?: Json
+          position_outcome?: Json | null
           priority_level?: string | null
           priority_reason?: Json | null
           priority_score?: number | null
@@ -221,6 +223,7 @@ export type Database = {
           kpi_keys?: string[]
           outcome?: string
           payload?: Json
+          position_outcome?: Json | null
           priority_level?: string | null
           priority_reason?: Json | null
           priority_score?: number | null
@@ -3119,6 +3122,19 @@ export type Database = {
         }
         Returns: Json
       }
+      insights_breakdown_groups: {
+        Args: {
+          p_brand_id: string
+          p_date_from?: string
+          p_date_to?: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_region?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
       insights_filter_options: {
         Args: { p_brand_id: string }
         Returns: {
@@ -3156,6 +3172,24 @@ export type Database = {
           p_topic_id?: string
         }
         Returns: Json
+      }
+      prompt_position_summaries: {
+        Args: {
+          p_brand_id: string
+          p_date_from?: string
+          p_date_to?: string
+          p_region?: string
+        }
+        Returns: {
+          entity_count: number
+          entity_sum: number
+          mention_answers: number
+          platform: string
+          position_count: number
+          position_sum: number
+          prompt_id: string
+          runs: number
+        }[]
       }
       prompt_visibility_summaries: {
         Args: {
