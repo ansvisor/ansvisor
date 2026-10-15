@@ -1,8 +1,9 @@
 # Sentiment interpretation
 
 Each tracked AI response is tagged `positive`, `neutral`, or `negative`.
-Sentiment is the smallest component of the visibility score (max 15
-points) but it's the loudest **signal** about why a number changed.
+Sentiment is **not** part of the visibility score (see
+[`visibility-scoring.md`](visibility-scoring.md)), but it's the loudest
+**signal** about why a number changed.
 
 ## Three rules of thumb
 
