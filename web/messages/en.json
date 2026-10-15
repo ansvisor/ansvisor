@@ -349,6 +349,12 @@
         "viewPrompt": "View prompt",
         "notAvailable": "Not available",
         "allPlatforms": "All tracked platforms",
+        "cited": {
+          "position": "#{position}",
+          "lastCited": "last cited {date}",
+          "answers": "{count, plural, one {in # answer} other {in # answers}}",
+          "answersOf": "in {count} of {of, plural, one {# latest answer} other {# latest answers}}"
+        },
         "loading": "Loading…",
         "more": "+{count} more",
         "usedBy": "Used by actions",
@@ -399,6 +405,7 @@
           "periods": {
             "week_over_week": "Last 7 days against the 7 days before",
             "last_7_days": "Last 7 days",
+            "last_14_days": "Days with answers in the last 14 days",
             "latest": "Latest data"
           },
           "metrics": {
@@ -415,11 +422,14 @@
             "engagement_rank": "Engagement rank",
             "prompts": "Prompts",
             "pages": "Pages",
-            "queries": "Queries"
+            "queries": "Queries",
+            "cited_days": "Cited days"
           },
           "roles": {
             "before": "previous 7 days",
             "after": "last 7 days",
+            "earlier": "earlier days",
+            "latest": "latest days",
             "change": "change",
             "you": "you",
             "competitor": "{name}",
@@ -459,7 +469,9 @@
       },
       "lost_citations": {
         "title": "Citations lost for “{prompt}”",
-        "description": "Your pages are no longer cited in answers to this prompt."
+        "titleOn": "Citations lost on {platform} for “{prompt}”",
+        "description": "Your pages are no longer cited in answers to this prompt.",
+        "descriptionPage": "{page} is no longer cited on {platforms}."
       },
       "first_citation": {
         "title": "First citation for {url}",

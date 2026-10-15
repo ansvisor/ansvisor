@@ -272,6 +272,62 @@ describe('signalDetailForApi', () => {
       unit: 'percent',
       subject: null,
       subject_type: null,
+      of: null,
+    });
+  });
+});
+
+describe('a lost citation with its evidence recorded', () => {
+  const recorded = signal({
+    category: 'citation',
+    kind: 'lost_citations',
+    payload: {
+      promptId: 'p1',
+      promptText: 'Best coffee subscription?',
+      platforms: ['chatgpt-web'],
+      regions: ['US'],
+      citedDays: 9,
+      days: 11,
+      quietDays: 3,
+      lostUrls: [
+        { url: 'https://coffee.example/guide', position: 2, lastCitedAt: '2026-10-08T05:00:00Z' },
+      ],
+      citedNow: [
+        { url: 'https://rival.example/best', domain: 'rival.example', answers: 3, position: 1 },
+      ],
+    },
+    where: { platforms: ['chatgpt-web'], regions: ['US'], topics: ['Coffee'] },
+  });
+
+  it('names the page lost and the pages cited now, on the platforms it was lost on', () => {
+    expect(signalWhereFields(recorded).map((f) => f.key)).toEqual([
+      'prompt',
+      'topic',
+      'platforms',
+      'locations',
+      'lostUrl',
+      'citedNow',
+    ]);
+    const byKey = Object.fromEntries(signalWhereFields(recorded).map((f) => [f.key, f.value]));
+    expect(byKey.lostUrl).toEqual({
+      type: 'citations',
+      items: [
+        { url: 'https://coffee.example/guide', position: 2, lastCitedAt: '2026-10-08T05:00:00Z' },
+      ],
+    });
+    expect(byKey.citedNow).toEqual({
+      type: 'citations',
+      items: [{ url: 'https://rival.example/best', position: 1, answers: 3 }],
+    });
+  });
+
+  it('counts its cited days before and since', () => {
+    expect(signalChange(recorded)).toEqual({
+      period: 'last_14_days',
+      figures: [
+        { metric: 'cited_days', role: 'earlier', value: 9, of: 11 },
+        { metric: 'cited_days', role: 'latest', value: 0, of: 3 },
+      ],
     });
   });
 });

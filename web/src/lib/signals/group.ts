@@ -64,3 +64,28 @@ export function groupStatus(signals: Signal[]): SignalStatus {
 export function groupWhere(signals: Signal[]): SignalWhere {
   return mergeWhere(signals.map((signal) => signal.where));
 }
+
+/**
+ * The signal a group's row is titled from: its newest copy, with the
+ * platforms every copy was lost on. A lost citation lost on one platform
+ * names it in its title; a group must not name only its first copy's, nor
+ * name any while a copy's platforms were never recorded.
+ */
+export function groupLead(signals: Signal[]): Signal {
+  const lead = signals[0];
+  const recorded = signals.map((s) =>
+    Array.isArray(s.payload?.platforms)
+      ? s.payload.platforms.filter((p): p is string => typeof p === 'string')
+      : null,
+  );
+  if (recorded.every((platforms) => platforms === null)) return lead;
+  if (recorded.some((platforms) => platforms === null)) {
+    const payload = { ...lead.payload };
+    delete payload.platforms;
+    return { ...lead, payload };
+  }
+  return {
+    ...lead,
+    payload: { ...lead.payload, platforms: [...new Set(recorded.flat() as string[])] },
+  };
+}

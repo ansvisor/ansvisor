@@ -27,7 +27,8 @@
  */
 
 import supabaseAdmin from '../../config/supabase.js';
-import { computePulseMetrics } from '../pulse/metrics.js';
+import { computePulseMetrics, LOST_CITATION_WINDOW_DAYS } from '../pulse/metrics.js';
+import { lostCitationEvidence } from './lost-citation-evidence.js';
 import { logger } from '../logger.js';
 import { resolve } from '../../config/action-engine.js';
 import { EXCLUSIVE_KIND_GROUPS, LIBRARY_KINDS } from './library/kinds.js';
@@ -526,6 +527,64 @@ const GROUP_OF = new Map(
 );
 
 /**
+ * A lost citation arrives from the pulse naming only its prompt. Before it is
+ * written, it gets what the drawer shows (AC-001): the brand's page that was
+ * cited and when, the platforms it was lost on, who is cited now, and its
+ * cited days before and after. Best effort: without it the signal is still
+ * true and is recorded as before.
+ */
+export async function attachLostCitationEvidence(brandId, candidates, now) {
+  const lost = candidates.filter(
+    (c) => c.kind === 'lost_citations' && typeof c.payload?.promptId === 'string',
+  );
+  if (lost.length === 0) return;
+  try {
+    const evidence = await lostCitationEvidence(
+      brandId,
+      lost.map((c) => c.payload.promptId),
+      {
+        now,
+        windowDays: LOST_CITATION_WINDOW_DAYS,
+        quietDays: detection.lostCitationQuietDays,
+      },
+    );
+    for (const candidate of lost) {
+      const found = evidence.get(candidate.payload.promptId);
+      if (found) candidate.payload = { ...candidate.payload, ...found };
+    }
+  } catch (err) {
+    logger.warn({ brandId, err: err.message }, '[signals] lost-citation evidence unavailable');
+  }
+}
+
+const EVIDENCE_FIELDS = [
+  'platforms',
+  'regions',
+  'citedDays',
+  'days',
+  'quietDays',
+  'lostUrls',
+  'citedNow',
+];
+
+/**
+ * A night whose evidence read failed refreshes a lost citation with the bare
+ * pulse payload. Keep what an earlier night recorded instead: it is older,
+ * and still truer than nothing.
+ */
+export function keepRecordedEvidence(candidates, existing) {
+  for (const candidate of candidates) {
+    if (candidate.kind !== 'lost_citations' || 'citedDays' in (candidate.payload ?? {})) continue;
+    const recorded = existing.get(candidate.dedupKey)?.payload ?? {};
+    if (!('citedDays' in recorded)) continue;
+    const kept = Object.fromEntries(
+      EVIDENCE_FIELDS.filter((key) => key in recorded).map((key) => [key, recorded[key]]),
+    );
+    candidate.payload = { ...candidate.payload, ...kept };
+  }
+}
+
+/**
  * Open, persistent signals nothing detected tonight, split by why.
  *
  * - `superseded`: the subject is still there under another kind of the same
@@ -589,6 +648,7 @@ export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) 
     const candidate = fromPulseEntry(entry);
     if (candidate) candidates.push(candidate);
   }
+  await attachLostCitationEvidence(brandId, candidates, now);
   candidates.push(...(await pageOpportunityCandidates(brandId)));
   candidates.push(...(await uncitedMentionCandidates(brandId, now)));
   candidates.push(...(await auditCandidates(brandId, now)));
@@ -622,6 +682,7 @@ export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) 
     .limit(1000);
   if (readErr) throw new Error(readErr.message);
   const existing = new Map((existingRows ?? []).map((row) => [row.dedup_key, row]));
+  keepRecordedEvidence(candidates, existing);
 
   const nowIso = now.toISOString();
   let inserted = 0;

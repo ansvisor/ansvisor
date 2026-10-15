@@ -38,7 +38,9 @@ export type SignalMetric =
   /** How many things a grouped finding covers. */
   | 'prompts'
   | 'pages'
-  | 'queries';
+  | 'queries'
+  /** Result days on which an answer cited the brand. */
+  | 'cited_days';
 
 export type SignalUnit = 'percent' | 'points' | 'count' | 'rank';
 
@@ -57,6 +59,7 @@ export const METRIC_UNITS: Record<SignalMetric, SignalUnit> = {
   prompts: 'count',
   pages: 'count',
   queries: 'count',
+  cited_days: 'count',
 };
 
 /**
@@ -67,6 +70,9 @@ export const METRIC_UNITS: Record<SignalMetric, SignalUnit> = {
 export type FigureRole =
   | 'before'
   | 'after'
+  /** The earlier result days of a window, and its latest few. */
+  | 'earlier'
+  | 'latest'
   | 'change'
   | 'you'
   | 'competitor'
@@ -84,10 +90,12 @@ export interface SignalFigure {
   /** The competitor's name, or the platform slug or location code compared. */
   subject?: string;
   subjectType?: 'competitor' | 'platform' | 'location';
+  /** Out of how many, for a count of days: 9 of 11. */
+  of?: number;
 }
 
 /** The window the figures cover. The detectors all read 7-day windows. */
-export type ChangePeriod = 'week_over_week' | 'last_7_days' | 'latest';
+export type ChangePeriod = 'week_over_week' | 'last_7_days' | 'last_14_days' | 'latest';
 
 export interface SignalChange {
   period: ChangePeriod;
@@ -159,6 +167,25 @@ export function signalChange(signal: Signal): SignalChange | null {
   }
 
   switch (signal.kind) {
+    case 'lost_citations': {
+      // Recorded with the evidence (server signals/lost-citation-evidence.js):
+      // cited on `citedDays` of the `days` earlier result days, on none of
+      // the latest `quietDays`.
+      const { citedDays, days, quietDays } = p;
+      if (typeof citedDays !== 'number' || typeof days !== 'number') return null;
+      return {
+        period: 'last_14_days',
+        figures: [
+          { metric: 'cited_days', role: 'earlier', value: citedDays, of: days },
+          {
+            metric: 'cited_days',
+            role: 'latest',
+            value: 0,
+            of: typeof quietDays === 'number' ? quietDays : 0,
+          },
+        ],
+      };
+    }
     case 'platform_gap':
       if (prev === null || cur === null) return null;
       return {
@@ -338,8 +365,33 @@ export type WhereValue =
   | { type: 'platforms'; slugs: readonly string[] }
   /** Every tracked platform: a finding about the whole brand or a location. */
   | { type: 'all_platforms' }
+  /** Cited pages: the brand's lost ones, or those cited in their place. */
+  | { type: 'citations'; items: CitedPage[] }
   | { type: 'locations'; codes: readonly string[] }
   | { type: 'number'; value: number };
+
+export interface CitedPage {
+  url: string;
+  /** Its position among the answer's citations, 1 first. */
+  position: number | null;
+  lastCitedAt?: string;
+  answers?: number;
+  /** Of how many answers read back: a sample of the quiet days' answers. */
+  answersRead?: number;
+}
+
+function citedPages(value: unknown): CitedPage[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((v): v is Record<string, unknown> => typeof v?.url === 'string')
+    .map((v) => ({
+      url: v.url as string,
+      position: typeof v.position === 'number' ? v.position : null,
+      ...(typeof v.lastCitedAt === 'string' ? { lastCitedAt: v.lastCitedAt } : {}),
+      ...(typeof v.answers === 'number' ? { answers: v.answers } : {}),
+      ...(typeof v.answersRead === 'number' ? { answersRead: v.answersRead } : {}),
+    }));
+}
 
 export interface WhereField {
   key: WhereFieldKey;
@@ -541,11 +593,18 @@ function fieldValue(signal: Signal, key: WhereFieldKey): WhereValue | null {
         : null;
     case 'engagementRank':
       return typeof p.valueRank === 'number' ? { type: 'number', value: p.valueRank } : null;
-    case 'lostUrl':
+    case 'lostUrl': {
+      const lost = citedPages(p.lostUrls);
+      if (lost.length) return { type: 'citations', items: lost };
       // An owned page that stopped being cited is the lost URL itself.
       return signal.kind === 'owned_page_citation_lost' && targets.length
         ? { type: 'list', items: targets.map(label), total }
         : null;
+    }
+    case 'citedNow': {
+      const now = citedPages(p.citedNow);
+      return now.length ? { type: 'citations', items: now } : null;
+    }
     case 'evidence': {
       const checks = targets.flatMap((t) =>
         Array.isArray(t.checks) ? t.checks.filter((c): c is string => typeof c === 'string') : [],
@@ -567,7 +626,11 @@ const TRACKED: Partial<Record<WhereFieldKey, WhereFieldKey>> = {
 
 function placeIsNamed(signal: Signal): boolean {
   const p = signal.payload ?? {};
-  return typeof p.platform === 'string' || typeof p.region === 'string';
+  return (
+    typeof p.platform === 'string' ||
+    typeof p.region === 'string' ||
+    (Array.isArray(p.platforms) && p.platforms.length > 0)
+  );
 }
 
 /** The Where block: the spec's fields for this signal, each with its value or none. */
@@ -667,6 +730,14 @@ function apiValue(value: WhereValue): unknown {
       return value.slugs.map((slug) => ({ slug, name: platformName(slug) }));
     case 'all_platforms':
       return 'all';
+    case 'citations':
+      return value.items.map((page) => ({
+        url: page.url,
+        position: page.position,
+        ...(page.lastCitedAt ? { last_cited_at: page.lastCitedAt } : {}),
+        ...(page.answers !== undefined ? { answers: page.answers } : {}),
+        ...(page.answersRead !== undefined ? { answers_read: page.answersRead } : {}),
+      }));
     case 'locations':
       return value.codes.map((code) => ({ code, name: locationName(code) }));
   }
@@ -702,6 +773,7 @@ export function signalDetailForApi(signal: Signal, actions: SignalActionRef[]) {
         unit: METRIC_UNITS[f.metric],
         subject: f.subject ?? null,
         subject_type: f.subjectType ?? null,
+        of: f.of ?? null,
       })),
     },
     evidence: {

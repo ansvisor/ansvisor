@@ -53,7 +53,7 @@ import {
 import { signalAffected, signalTexts } from '@/lib/signals/display';
 import { locationName, platformFamily, platformName } from '@/lib/signals/names';
 import type { SignalWhere } from '@/lib/signals/where';
-import { groupStatus, groupWhere, type SignalGroup } from '@/lib/signals/group';
+import { groupLead, groupStatus, groupWhere, type SignalGroup } from '@/lib/signals/group';
 import { formatRelative } from '@/lib/format-relative';
 import { cn } from '@/lib/utils';
 
@@ -415,7 +415,7 @@ export function SignalTable({
             const lead = signals[0];
             const isGroup = signals.length > 1;
             const isOpen = isGroup && expanded.has(key);
-            const texts = signalTexts(lead, tTexts);
+            const texts = signalTexts(isGroup ? groupLead(signals) : lead, tTexts);
             const affected = signalAffected(lead, t);
             const stateKey = SIGNAL_KINDS[lead.kind].stateKey;
             const status = isGroup ? groupStatus(signals) : lead.status;

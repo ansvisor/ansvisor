@@ -127,6 +127,34 @@ function WhereValueView({ value }: { value: WhereValue }) {
       );
     case 'all_platforms':
       return <span>{t('drawer.allPlatforms')}</span>;
+    case 'citations':
+      return (
+        <ul className="space-y-1">
+          {value.items.map((page, i) => (
+            <li key={i}>
+              <span className="break-all">{page.url.replace(/^https?:\/\//, '')}</span>
+              <span className="block text-xs text-muted-foreground">
+                {[
+                  page.position !== null && t('drawer.cited.position', { position: page.position }),
+                  page.lastCitedAt &&
+                    t('drawer.cited.lastCited', {
+                      date: format.dateTime(new Date(page.lastCitedAt), {
+                        month: 'short',
+                        day: 'numeric',
+                      }),
+                    }),
+                  page.answers !== undefined &&
+                    (page.answersRead !== undefined
+                      ? t('drawer.cited.answersOf', { count: page.answers, of: page.answersRead })
+                      : t('drawer.cited.answers', { count: page.answers })),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            </li>
+          ))}
+        </ul>
+      );
     case 'locations':
       return <span>{value.codes.map(locationName).join(', ')}</span>;
   }
@@ -157,9 +185,10 @@ function useFigureText() {
   const t = useTranslations('actionCenter.signalsPage.drawer.change');
   const format = useFormatter();
 
-  const value = (figure: Pick<SignalFigure, 'metric' | 'value'>, signed = false) => {
+  const value = (figure: Pick<SignalFigure, 'metric' | 'value' | 'of'>, signed = false) => {
     const unit = METRIC_UNITS[figure.metric];
     const n = format.number(Math.abs(figure.value), { maximumFractionDigits: 1 });
+    if (figure.of !== undefined) return `${n} / ${format.number(figure.of)}`;
     const sign = signed ? (figure.value > 0 ? '+' : figure.value < 0 ? '−' : '') : '';
     if (unit === 'percent') return signed ? t('points', { value: `${sign}${n}` }) : `${n}%`;
     if (unit === 'points') return t('points', { value: `${sign}${n}` });
@@ -180,7 +209,7 @@ function useFigureText() {
   // "Mention rate · United States (best)": the metric, whose, and when.
   const label = (figure: SignalFigure) => {
     const name = subject(figure);
-    const overTime = ['before', 'after', 'change'].includes(figure.role);
+    const overTime = ['before', 'after', 'earlier', 'latest', 'change'].includes(figure.role);
     return [
       t(`metrics.${figure.metric}`),
       overTime && name ? name : null,
@@ -212,10 +241,14 @@ export function SignalChangeBlock({ signal }: { signal: Signal }) {
           </p>
           <div className="mt-2 space-y-2">
             {groupByMetric(change.figures).map((figures) => {
-              const before = figures.find((f) => f.role === 'before');
-              const after = figures.find((f) => f.role === 'after');
+              const before = figures.find((f) => f.role === 'before' || f.role === 'earlier');
+              const after = figures.find((f) => f.role === 'after' || f.role === 'latest');
               if (before && after) {
-                const delta = { metric: after.metric, value: after.value - before.value };
+                // Days out of different totals have no meaningful difference.
+                const delta =
+                  after.of === undefined
+                    ? { metric: after.metric, value: after.value - before.value }
+                    : { metric: after.metric, value: 0 };
                 // A rise is good news for the brand's own numbers and bad news
                 // for a competitor's.
                 const good = delta.value >= 0 !== (after.subjectType === 'competitor');

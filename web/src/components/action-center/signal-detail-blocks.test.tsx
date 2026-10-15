@@ -170,6 +170,45 @@ describe('SignalWhereBlock', () => {
   });
 });
 
+describe('a lost citation with its evidence', () => {
+  const recorded = signal({
+    category: 'citation',
+    kind: 'lost_citations',
+    previousValue: null,
+    currentValue: null,
+    changeValue: null,
+    payload: {
+      promptId: 'p1',
+      promptText: 'Best coffee subscription?',
+      platforms: ['chatgpt-web'],
+      citedDays: 9,
+      days: 11,
+      quietDays: 3,
+      lostUrls: [
+        { url: 'https://coffee.example/guide', position: 2, lastCitedAt: '2026-10-08T05:00:00Z' },
+      ],
+      citedNow: [{ url: 'https://rival.example/best', answers: 3, answersRead: 4, position: 1 }],
+    },
+    where: { platforms: ['chatgpt-web'], regions: [], topics: [] },
+  });
+
+  it('shows the page lost, the pages cited now, and the cited days', () => {
+    render(<SignalWhereBlock signal={recorded} />);
+    const rows = [...container.querySelectorAll('dt')].map(
+      (dt) => `${dt.textContent}: ${dt.nextElementSibling?.textContent}`,
+    );
+    expect(rows).toContain('Your page cited before: coffee.example/guide#2 · last cited Oct 8');
+    expect(rows).toContain('Cited now: rival.example/best#1 · in 3 of 4 latest answers');
+    expect(rows).toContain('Platforms: ChatGPT');
+
+    render(<SignalChangeBlock signal={recorded} />);
+    const text = container.textContent ?? '';
+    expect(text).toContain('Days with answers in the last 14 days');
+    expect(text).toContain('Cited days · earlier days9 / 11');
+    expect(text).toContain('Cited days · latest days0 / 3');
+  });
+});
+
 describe('SignalEvidenceBlock', () => {
   it('links the answers and the action the signal is used by', async () => {
     getSignalActions.mockResolvedValue([

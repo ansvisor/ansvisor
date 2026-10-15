@@ -87,15 +87,29 @@ export function signalWhere(
       .map((id) => prompts.get(id))
       .filter((p): p is PromptPlace => p !== undefined);
   }
-  if (places.length === 0) return NO_WHERE;
+  const tracked =
+    places.length === 0
+      ? NO_WHERE
+      : mergeWhere(
+          places.map((p) => ({
+            platforms: p.platforms.filter((x) => !IGNORED_PLATFORMS.has(x)),
+            regions: p.regions,
+            topics: p.topic ? [p.topic] : [],
+          })),
+        );
 
-  return mergeWhere(
-    places.map((p) => ({
-      platforms: p.platforms.filter((x) => !IGNORED_PLATFORMS.has(x)),
-      regions: p.regions,
-      topics: p.topic ? [p.topic] : [],
-    })),
-  );
+  // A lost citation records the platforms and locations it was lost on
+  // (server signals/lost-citation-evidence.js): where it happened, which
+  // beats where its prompt is tracked.
+  const lostOn = strings(payload.platforms);
+  if (lostOn.length === 0) return tracked;
+  return { platforms: lostOn, regions: strings(payload.regions), topics: tracked.topics };
+}
+
+function strings(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === 'string' && v !== '')
+    : [];
 }
 
 /**

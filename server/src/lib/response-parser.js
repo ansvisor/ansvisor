@@ -66,13 +66,13 @@ export function extractHostname(rawUrl) {
 }
 
 /**
- * Count the citations that point at one of the brand's own domains: exact
- * host or subdomain match, same rule as the web classifier's 'you' category.
- * The old substring check (url.includes(domain)) also matched the brand's
- * domain inside another site's path or query string, and disagreed with the
+ * Whether a URL is on one of the brand's own domains: exact host or
+ * subdomain match, same rule as the web classifier's 'you' category. The old
+ * substring check (url.includes(domain)) also matched the brand's domain
+ * inside another site's path or query string, and disagreed with the
  * Citations page over www/subdomain variants.
  */
-export function countOwnDomainCitations(citations, brandDomains) {
+export function ownDomainMatcher(brandDomains) {
   const normalized = (brandDomains || [])
     .map(
       (d) =>
@@ -82,14 +82,18 @@ export function countOwnDomainCitations(citations, brandDomains) {
           .toLowerCase(),
     )
     .filter(Boolean);
-  if (normalized.length === 0) return 0;
+  return (url) => {
+    const host = extractHostname(url || '');
+    return Boolean(host) && normalized.some((d) => host === d || host.endsWith(`.${d}`));
+  };
+}
 
+/** Count the citations that point at one of the brand's own domains. */
+export function countOwnDomainCitations(citations, brandDomains) {
+  const isOwn = ownDomainMatcher(brandDomains);
   let count = 0;
   for (const cite of citations || []) {
-    const host = extractHostname(cite?.url || '');
-    if (host && normalized.some((d) => host === d || host.endsWith(`.${d}`))) {
-      count++;
-    }
+    if (isOwn(cite?.url)) count++;
   }
   return count;
 }
