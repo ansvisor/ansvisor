@@ -235,6 +235,30 @@ export function affectedOf(signals: Signal[], payload: Record<string, unknown> =
 
 const str = (value: unknown) => (typeof value === 'string' ? value : '');
 
+/** A URL without its scheme and "www.": "acme.example/pricing". */
+export function bareUrl(url: string): string {
+  return url.replace(/^https?:\/\/(www\.)?/, '');
+}
+
+/** "/blog/best-tools?ref=a" for an absolute URL; the value itself otherwise. */
+export function pathOf(url: string): string {
+  try {
+    const { pathname, search } = new URL(url);
+    return `${pathname}${search}`;
+  } catch {
+    return url;
+  }
+}
+
+/** "acme.example" for an absolute URL; null otherwise. */
+export function hostOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
 /** An action a person sent: what it was sent about, from its payload. */
 function affectedFromPayload(payload: Record<string, unknown>): Affected {
   const out: Affected = empty();

@@ -182,6 +182,24 @@ describe('ActionExportButtons', () => {
     expect(document.querySelector('button[aria-label="Copied"]')).not.toBeNull();
   });
 
+  it('uses the Why and Goal the drawer wrote from the action’s data (AC-003)', async () => {
+    render(
+      <ActionExportButtons
+        action={action}
+        detail={detail}
+        story={{
+          family: 'visibilityLoss',
+          why: 'Your AI visibility fell from 40% to 20% on Gemini on Oct 8.',
+          goal: 'AI visibility back to 40% on Gemini by Nov 7.',
+        }}
+      />,
+    );
+    await act(async () => button('Copy Data').click());
+    const shown = document.querySelector('textarea')?.value ?? '';
+    expect(shown).toContain('Why: Your AI visibility fell from 40% to 20% on Gemini on Oct 8.');
+    expect(shown).toContain('Goal: AI visibility back to 40% on Gemini by Nov 7.');
+  });
+
   it("copies with the browser's command where the clipboard is blocked", async () => {
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,

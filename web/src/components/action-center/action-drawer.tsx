@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { toast } from 'sonner';
 import { Plus, Trash2 } from 'lucide-react';
@@ -70,6 +70,7 @@ import {
   affectedSignals,
   affectedTotal,
 } from '@/lib/action-center/affected';
+import { actionStory } from '@/lib/action-center/story';
 import { ImproveContext } from './improve-context';
 import { ImproveOutcomeCard } from './improve-outcome-card';
 import { improvePlatformLabels } from '@/lib/improve-outcome';
@@ -108,6 +109,8 @@ export function ActionDrawer({
   const tTasks = useTranslations('actionCenter.actionTasks');
   const tTaskStatus = useTranslations('actionCenter.taskStatus');
   const tPriority = useTranslations('actionCenter.actionsPage.priority');
+  const tStory = useTranslations('actionCenter.actionsPage.drawer.story');
+  const format = useFormatter();
 
   const router = useRouter();
   const [tab, setTab] = useState<DrawerTab>('overview');
@@ -140,35 +143,71 @@ export function ActionDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [action?.id]);
 
-  // What the action is about, item by item (AC-003), from the signals it rests on.
-  const affected = useMemo(
-    () =>
-      action && detail
-        ? affectedOf(affectedSignals(detail.signals, action.id), action.payload ?? {})
-        : null,
+  // The signals the action rests on, and what they affect, item by item (AC-003).
+  const evidence = useMemo(
+    () => (action && detail ? affectedSignals(detail.signals, action.id) : null),
     [action, detail],
   );
+  const affected = useMemo(
+    () => (action && evidence ? affectedOf(evidence, action.payload ?? {}) : null),
+    [action, evidence],
+  );
 
-  // Each affected prompt's demand. Best effort: without it the column is left out.
-  const [volumes, setVolumes] = useState<Map<string, number> | null>(null);
+  // Each affected prompt's demand. Best effort: without it the column is left
+  // out. Kept with the prompts it was read for, so a read still under way is
+  // told apart from one that failed.
   const promptIdsKey = (affected?.prompts ?? [])
     .map((row) => row.id)
     .filter(Boolean)
     .join(',');
+  const demandKey = `${brandId}:${promptIdsKey}`;
+  const [demand, setDemand] = useState<{
+    key: string;
+    volumes: Map<string, number> | null;
+  } | null>(null);
   useEffect(() => {
-    setVolumes(null);
     if (!promptIdsKey) return;
     let cancelled = false;
+    const key = `${brandId}:${promptIdsKey}`;
     getPromptDemand(brandId, promptIdsKey.split(',')).then(
-      (demand) => {
-        if (!cancelled) setVolumes(new Map(Object.entries(demand)));
+      (read) => {
+        if (!cancelled) setDemand({ key, volumes: new Map(Object.entries(read)) });
       },
-      () => undefined,
+      () => {
+        if (!cancelled) setDemand({ key, volumes: null });
+      },
     );
     return () => {
       cancelled = true;
     };
   }, [brandId, promptIdsKey]);
+  const demandRead = !promptIdsKey || demand?.key === demandKey;
+  const volumes = promptIdsKey && demand?.key === demandKey ? demand.volumes : null;
+  // The detail and its demand are both in: the Why names the prompts' demand,
+  // so it waits for it rather than reading one way and then another.
+  const ready = detail !== null && demandRead;
+
+  // Why and Goal in the action's own terms (AC-003); null for an action a
+  // person sent, which carries its own.
+  const story = useMemo(
+    () =>
+      action && evidence
+        ? actionStory(
+            {
+              signals: evidence,
+              volumes,
+              createdAt: action.createdAt,
+              dueDate: action.dueDate,
+            },
+            tStory,
+            {
+              day: (date) => format.dateTime(date, { month: 'short', day: 'numeric' }),
+              list: (items) => format.list(items, { type: 'conjunction' }),
+            },
+          )
+        : null,
+    [action, evidence, volumes, tStory, format],
+  );
 
   if (!action) return null;
   const texts = actionTexts(action, tTexts);
@@ -232,7 +271,9 @@ export function ActionDrawer({
             </div>
             <div className="min-w-0">
               <SheetTitle>{texts.title}</SheetTitle>
-              <SheetDescription>{texts.description}</SheetDescription>
+              <SheetDescription>
+                {ready ? (story?.why ?? texts.description) : null}
+              </SheetDescription>
             </div>
           </div>
           <div className="flex flex-wrap gap-1">
@@ -255,9 +296,10 @@ export function ActionDrawer({
           </div>
           <ActionExportButtons
             action={action}
-            detail={detail}
+            detail={ready ? detail : null}
             affected={affected}
             volumes={volumes}
+            story={story}
           />
         </SheetHeader>
 
@@ -283,7 +325,7 @@ export function ActionDrawer({
         </nav>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-4 text-sm">
-          {isLoading || !detail ? (
+          {isLoading || !detail || !ready ? (
             <div className="space-y-3">
               {[0, 1, 2].map((i) => (
                 <Skeleton key={i} className="h-16 w-full" />
@@ -302,7 +344,7 @@ export function ActionDrawer({
               )}
               <section>
                 <p className="text-xs font-medium text-muted-foreground">{t('drawer.why')}</p>
-                <p className="mt-1">{texts.description}</p>
+                <p className="mt-1">{story?.why ?? texts.description}</p>
                 {detail.signals.length > 0 && (
                   <SupportingSignals
                     actionId={action.id}
@@ -315,7 +357,9 @@ export function ActionDrawer({
               <Separator />
               <section>
                 <p className="text-xs font-medium text-muted-foreground">{t('drawer.goal')}</p>
-                <p className="mt-1">{actionGoal(action.kind, tTexts, action.payload)}</p>
+                <p className="mt-1">
+                  {story?.goal ?? actionGoal(action.kind, tTexts, action.payload)}
+                </p>
               </section>
               <Separator />
               <section>

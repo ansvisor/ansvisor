@@ -32,6 +32,7 @@ import { signalAffected, signalTexts, signalTypeLabel } from '@/lib/signals/disp
 import { viewerTimeZone } from '@/lib/time-zone';
 import { isSuperseded } from './signal-table';
 import { leaderText, type Affected } from '@/lib/action-center/affected';
+import type { ActionStory } from '@/lib/action-center/story';
 import { platformName } from '@/lib/signals/names';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import { formatCompactNumber } from '@/lib/format';
@@ -64,12 +65,15 @@ export function ActionExportButtons({
   detail,
   affected = null,
   volumes = null,
+  story = null,
 }: {
   action: ActionItem;
   detail: ActionDetail | null;
   /** The Affected tab's list and its prompts' demand, as the drawer shows them (AC-003). */
   affected?: Affected | null;
   volumes?: Map<string, number> | null;
+  /** Why and Goal as the drawer words them, from the action's data (AC-003). */
+  story?: ActionStory | null;
 }) {
   const t = useTranslations('actionCenter.actionsPage');
   const tExport = useTranslations('actionCenter.actionsPage.export');
@@ -201,8 +205,8 @@ export function ActionExportButtons({
                   : '',
               }
             : null,
-        why: texts.description,
-        goal: actionGoal(action.kind, tTexts, action.payload),
+        why: story?.why ?? texts.description,
+        goal: story?.goal ?? actionGoal(action.kind, tTexts, action.payload),
         category: tCategories(action.category),
         status: t(`status.${action.status}`),
         tags: actionContextTags(action, t),

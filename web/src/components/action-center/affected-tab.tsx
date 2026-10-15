@@ -13,7 +13,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
+  bareUrl,
+  hostOf,
   leaderText,
+  pathOf,
   type Affected,
   type AffectedPage,
   type AffectedPrompt,
@@ -278,11 +281,7 @@ function Urls({
   return (
     <div className="space-y-0.5">
       {urls.map((url) => {
-        const text = short
-          ? domainOf(url)
-          : path
-            ? pathOf(url)
-            : url.replace(/^https?:\/\/(www\.)?/, '');
+        const text = short ? (hostOf(url) ?? url) : path ? pathOf(url) : bareUrl(url);
         return /^https?:\/\//.test(url) ? (
           <a
             key={url}
@@ -303,21 +302,4 @@ function Urls({
       })}
     </div>
   );
-}
-
-function pathOf(url: string): string {
-  try {
-    const { pathname, search } = new URL(url);
-    return `${pathname}${search}`;
-  } catch {
-    return url;
-  }
-}
-
-function domainOf(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return url;
-  }
 }
