@@ -3074,6 +3074,19 @@ export type Database = {
         }
         Returns: Json
       }
+      insights_breakdown_groups: {
+        Args: {
+          p_brand_id: string
+          p_date_from?: string
+          p_date_to?: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_region?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
       insights_filter_options: {
         Args: { p_brand_id: string }
         Returns: {
