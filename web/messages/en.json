@@ -349,6 +349,14 @@
         "viewPrompt": "View prompt",
         "notAvailable": "Not available",
         "allPlatforms": "All tracked platforms",
+        "mentions": {
+          "sentiment": {
+            "positive": "Positive",
+            "neutral": "Neutral",
+            "negative": "Negative"
+          },
+          "quotedFrom": "{platform}, {date}"
+        },
         "positions": {
           "you": "You",
           "new": "new",
@@ -397,7 +405,8 @@
           "crawlers": "Affected crawlers",
           "evidence": "Failed checks",
           "competitorPositions": "Positions by prompt",
-          "winningSources": "Sources behind their wins"
+          "winningSources": "Sources behind their wins",
+          "mentionDetails": "Mentions by prompt"
         },
         "scopes": {
           "all_prompts": "All prompts",

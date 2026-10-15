@@ -47,6 +47,47 @@ function countOccurrences(text, term) {
 }
 
 /**
+ * A short quote of the answer around the brand's first mention, for the
+ * Action Center's mention evidence (AC-001): the same name and domain
+ * matching as the mention count, on the answer stripped of links and
+ * markdown marks, cut to about `radius` characters on each side. Null when
+ * the answer does not name the brand.
+ */
+export function mentionExcerpt(text, brand, radius = 110) {
+  // Markdown's marks only: headings, quotes and list bullets at the start of
+  // a line, bold and code anywhere. A "#1" or "A > B" in a sentence stays.
+  const clean = stripUrls(String(text ?? ''))
+    .replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, '')
+    .replace(/^[ \t]*>[ \t]?/gm, '')
+    .replace(/^[ \t]*[*+-][ \t]+/gm, '')
+    .replace(/\*\*|__|`/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  let at = -1;
+  let length = 0;
+  for (const term of [brand?.brandName, ...(brand?.domains ?? [])].filter(Boolean)) {
+    const index = firstOccurrenceIndex(clean, term);
+    if (index >= 0 && (at < 0 || index < at)) {
+      at = index;
+      length = term.length;
+    }
+  }
+  if (at < 0) return null;
+  // Cut on spaces, so the quote starts and ends on whole words.
+  let start = Math.max(0, at - radius);
+  if (start > 0) {
+    const space = clean.indexOf(' ', start);
+    start = space >= 0 && space < at ? space + 1 : start;
+  }
+  let end = Math.min(clean.length, at + length + radius);
+  if (end < clean.length) {
+    const space = clean.lastIndexOf(' ', end);
+    end = space > at + length ? space : end;
+  }
+  return `${start > 0 ? '…' : ''}${clean.slice(start, end).trim()}${end < clean.length ? '…' : ''}`;
+}
+
+/**
  * Normalized hostname of a URL ("https://www.FOO.com/bar" → "foo.com").
  * Mirrors extractHostname in web/src/lib/citations/classify.ts — keep the two
  * in sync: citation_count must agree with the Citations page's read-time

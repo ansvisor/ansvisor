@@ -260,6 +260,45 @@ describe('a competitor signal with its evidence', () => {
   });
 });
 
+describe('an uncited-mentions signal with its evidence', () => {
+  it('lists each prompt with its platforms, position, sentiment and a quote', () => {
+    render(
+      <SignalWhereBlock
+        signal={signal({
+          category: 'mention',
+          kind: 'uncited_mentions',
+          currentValue: 4,
+          payload: {
+            promptIds: ['p1'],
+            mentions: [
+              {
+                promptId: 'p1',
+                promptText: 'Best coffee subscription?',
+                platforms: ['gemini-web', 'chatgpt-web'],
+                answers: 3,
+                position: 2,
+                sentiment: 'positive',
+                excerpt: '…Acme Coffee ships beans weekly.',
+                excerptPlatform: 'gemini-web',
+                excerptAt: '2026-10-14T05:00:00Z',
+              },
+            ],
+          },
+          where: NO_WHERE,
+        })}
+      />,
+    );
+    const rows = [...container.querySelectorAll('dt')].map(
+      (dt) => `${dt.textContent}: ${dt.nextElementSibling?.textContent}`,
+    );
+    expect(rows).toContain(
+      'Mentions by prompt: Best coffee subscription?Gemini, ChatGPT · #2 · Positive · in 3 answers' +
+        '“…Acme Coffee ships beans weekly.”Gemini, Oct 14',
+    );
+    expect(rows.some((r) => r.startsWith('Sentiment'))).toBe(false);
+  });
+});
+
 describe('SignalEvidenceBlock', () => {
   it('links the answers and the action the signal is used by', async () => {
     getSignalActions.mockResolvedValue([

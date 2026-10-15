@@ -148,6 +148,50 @@ function WhereValueView({ value }: { value: WhereValue }) {
           ))}
         </ul>
       );
+    case 'mentions':
+      return (
+        <ul className="space-y-2.5">
+          {value.items.map((m) => (
+            <li key={m.promptId}>
+              <Link
+                href={`/dashboard/prompts/${m.promptId}`}
+                className="break-words underline-offset-2 hover:underline"
+              >
+                {m.promptText || t('drawer.positions.untitled')}
+              </Link>
+              <span className="block text-xs text-muted-foreground">
+                {[
+                  m.platforms.map(platformName).join(', '),
+                  m.position !== null &&
+                    t('drawer.cited.position', {
+                      position: format.number(m.position, { maximumFractionDigits: 1 }),
+                    }),
+                  m.sentiment && t(`drawer.mentions.sentiment.${m.sentiment}`),
+                  t('drawer.cited.answers', { count: m.answers }),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+              {m.excerpt && (
+                <blockquote className="mt-1 border-l-2 pl-2 text-xs text-muted-foreground italic">
+                  “{m.excerpt}”
+                  {m.excerptPlatform && m.excerptAt && (
+                    <span className="mt-0.5 block not-italic">
+                      {t('drawer.mentions.quotedFrom', {
+                        platform: platformName(m.excerptPlatform),
+                        date: format.dateTime(new Date(m.excerptAt), {
+                          month: 'short',
+                          day: 'numeric',
+                        }),
+                      })}
+                    </span>
+                  )}
+                </blockquote>
+              )}
+            </li>
+          ))}
+        </ul>
+      );
     case 'sources':
       return (
         <ul className="space-y-1">

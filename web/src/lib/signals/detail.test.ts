@@ -393,3 +393,67 @@ describe('a competitor signal with its evidence recorded', () => {
     expect(where.winning_sources).toEqual([{ domain: 'g2.example', answers: 2, answers_read: 3 }]);
   });
 });
+
+describe('an uncited-mentions signal', () => {
+  const base = {
+    category: 'mention' as const,
+    kind: 'uncited_mentions' as const,
+    currentValue: 4,
+    where: { platforms: ['chatgpt-web', 'claude'], regions: ['US'], topics: [] },
+  };
+  const mention = {
+    promptId: 'p1',
+    promptText: 'Best coffee subscription?',
+    platforms: ['gemini-web'],
+    answers: 3,
+    position: 2,
+    sentiment: 'positive',
+    excerpt: '…Acme Coffee ships beans weekly.',
+    excerptPlatform: 'gemini-web',
+    excerptAt: '2026-10-14T05:00:00Z',
+  };
+
+  it('asks for position, sentiment and an excerpt until its evidence is recorded', () => {
+    const keys = signalWhereFields(signal({ ...base, payload: { promptIds: ['p1', 'p2'] } })).map(
+      (f) => `${f.key}${f.value ? '' : ' (n/a)'}`,
+    );
+    expect(keys).toEqual([
+      'prompts',
+      'trackedOn',
+      'trackedIn',
+      'position (n/a)',
+      'sentiment (n/a)',
+      'excerpt (n/a)',
+    ]);
+  });
+
+  it('gives them per prompt once recorded, on the platforms that mention it', () => {
+    const recorded = signal({ ...base, payload: { promptIds: ['p1', 'p2'], mentions: [mention] } });
+    const fields = signalWhereFields(recorded);
+    // The evidence names the platforms; the locations are still where the
+    // prompts are tracked.
+    expect(fields.map((f) => f.key)).toEqual([
+      'prompts',
+      'platforms',
+      'trackedIn',
+      'mentionDetails',
+    ]);
+    expect(fields.find((f) => f.key === 'platforms')?.value).toEqual({
+      type: 'platforms',
+      slugs: ['gemini-web'],
+    });
+    expect(signalDetailForApi(recorded, []).where.mention_details).toEqual([
+      {
+        prompt_id: 'p1',
+        prompt_text: 'Best coffee subscription?',
+        platforms: [{ slug: 'gemini-web', name: 'Gemini' }],
+        answers: 3,
+        position: 2,
+        sentiment: 'positive',
+        excerpt: '…Acme Coffee ships beans weekly.',
+        excerpt_platform: 'gemini-web',
+        excerpt_at: '2026-10-14T05:00:00Z',
+      },
+    ]);
+  });
+});

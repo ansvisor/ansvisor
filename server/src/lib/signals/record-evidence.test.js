@@ -34,8 +34,21 @@ vi.mock('./competitor-evidence.js', () => ({
   },
 }));
 
-const { attachCompetitorEvidence, attachLostCitationEvidence, keepRecordedEvidence } =
-  await import('./record.js');
+let mentionRead = { calls: [], result: [], fail: false };
+vi.mock('./mention-evidence.js', () => ({
+  mentionEvidence: async (...args) => {
+    mentionRead.calls.push(args);
+    if (mentionRead.fail) throw new Error('timeout');
+    return mentionRead.result;
+  },
+}));
+
+const {
+  attachCompetitorEvidence,
+  attachLostCitationEvidence,
+  attachMentionEvidence,
+  keepRecordedEvidence,
+} = await import('./record.js');
 
 const lost = (promptId) => ({
   kind: 'lost_citations',
@@ -56,6 +69,7 @@ const evidence = {
 beforeEach(() => {
   read = { calls: [], result: new Map(), fail: false };
   competitorRead = { calls: [], result: new Map(), fail: false };
+  mentionRead = { calls: [], result: [], fail: false };
 });
 
 describe('attachLostCitationEvidence', () => {
@@ -189,5 +203,37 @@ describe('attachCompetitorEvidence', () => {
       new Map([['competitor_leads:c1', { payload: { competitorId: 'c1', ...found } }]]),
     );
     expect(candidates[0].payload).toEqual({ competitorId: 'c1', ...found });
+  });
+});
+
+describe('attachMentionEvidence', () => {
+  const mentions = [{ promptId: 'p1', platforms: ['chatgpt-web'], position: 2, excerpt: '…Acme…' }];
+  const uncited = () => ({
+    kind: 'uncited_mentions',
+    dedupKey: 'uncited_mentions',
+    payload: { promptIds: ['p1', 'p2'] },
+  });
+
+  it("describes the signal's prompts, and leaves other kinds alone", async () => {
+    mentionRead.result = mentions;
+    const candidates = [uncited(), { kind: 'prompt_gain', payload: { promptIds: ['p1'] } }];
+    await attachMentionEvidence('b1', candidates, new Date('2026-10-15T00:00:00Z'));
+    expect(mentionRead.calls).toEqual([
+      ['b1', ['p1', 'p2'], { now: new Date('2026-10-15T00:00:00Z'), windowDays: 7 }],
+    ]);
+    expect(candidates[0].payload).toEqual({ promptIds: ['p1', 'p2'], mentions });
+    expect(candidates[1].payload).toEqual({ promptIds: ['p1'] });
+  });
+
+  it("records it without evidence when the read fails, keeping an earlier night's", async () => {
+    mentionRead.fail = true;
+    const candidates = [uncited()];
+    await expect(attachMentionEvidence('b1', candidates, new Date())).resolves.toBeUndefined();
+    expect(candidates[0].payload).toEqual({ promptIds: ['p1', 'p2'] });
+    keepRecordedEvidence(
+      candidates,
+      new Map([['uncited_mentions', { payload: { promptIds: ['p1'], mentions } }]]),
+    );
+    expect(candidates[0].payload).toEqual({ promptIds: ['p1', 'p2'], mentions });
   });
 });

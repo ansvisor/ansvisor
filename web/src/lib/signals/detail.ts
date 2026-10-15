@@ -354,7 +354,9 @@ export type WhereFieldKey =
   | 'crawlers'
   | 'evidence'
   | 'competitorPositions'
-  | 'winningSources';
+  | 'winningSources'
+  /** Per prompt: platforms, position, sentiment and a quote, for mentions. */
+  | 'mentionDetails';
 
 export type WhereValue =
   | { type: 'text'; text: string }
@@ -371,6 +373,8 @@ export type WhereValue =
   | { type: 'positions'; competitor: string; items: PromptPosition[] }
   /** Domains cited in the answers a competitor wins. */
   | { type: 'sources'; items: WinningSource[] }
+  /** The brand's mentions on each prompt: where, how high, in what tone. */
+  | { type: 'mentions'; items: PromptMention[] }
   | { type: 'locations'; codes: readonly string[] }
   | { type: 'number'; value: number };
 
@@ -404,6 +408,43 @@ export interface PromptPosition {
   platform: string;
   competitor: { now: number | null; before: number | null };
   you: { now: number | null; before: number | null };
+}
+
+export interface PromptMention {
+  promptId: string;
+  promptText: string;
+  platforms: string[];
+  answers: number;
+  /** Median position among the brands named, 1 first; null when not ranked. */
+  position: number | null;
+  sentiment: 'positive' | 'neutral' | 'negative' | null;
+  /** A quote of the newest answer around the mention, and where it came from. */
+  excerpt: string | null;
+  excerptPlatform: string | null;
+  excerptAt: string | null;
+}
+
+const SENTIMENTS = new Set(['positive', 'neutral', 'negative']);
+
+function promptMentions(value: unknown): PromptMention[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((v): v is Record<string, unknown> => typeof v?.promptId === 'string')
+    .map((v) => ({
+      promptId: v.promptId as string,
+      promptText: typeof v.promptText === 'string' ? v.promptText : '',
+      platforms: Array.isArray(v.platforms)
+        ? v.platforms.filter((x): x is string => typeof x === 'string')
+        : [],
+      answers: num(v.answers) ?? 0,
+      position: num(v.position),
+      sentiment: SENTIMENTS.has(v.sentiment as string)
+        ? (v.sentiment as PromptMention['sentiment'])
+        : null,
+      excerpt: typeof v.excerpt === 'string' && v.excerpt ? v.excerpt : null,
+      excerptPlatform: typeof v.excerptPlatform === 'string' ? v.excerptPlatform : null,
+      excerptAt: typeof v.excerptAt === 'string' ? v.excerptAt : null,
+    }));
 }
 
 export interface WinningSource {
@@ -475,7 +516,16 @@ const LAYOUT: Record<SignalCategory, WhereFieldKey[]> = {
     'competitorsNamed',
     'bestPage',
   ],
-  mention: ['prompt', 'prompts', 'platforms', 'locations', 'position', 'sentiment', 'excerpt'],
+  mention: [
+    'prompt',
+    'prompts',
+    'platforms',
+    'locations',
+    'mentionDetails',
+    'position',
+    'sentiment',
+    'excerpt',
+  ],
   traffic: ['scope', 'url', 'pages', 'queries', 'engagementRank', 'aiReferrals', 'citablePrompts'],
   technical: ['url', 'pages', 'issue', 'crawlers', 'evidence'],
   competitor: [
@@ -507,6 +557,7 @@ const CITATION_LOSS_LAYOUT: WhereFieldKey[] = [
 // A field that only some signals of a category have is shown when it has a
 // value; the spec's required fields are shown either way.
 const OPTIONAL: ReadonlySet<WhereFieldKey> = new Set([
+  'mentionDetails',
   'scope',
   'prompt',
   'prompts',
@@ -600,12 +651,18 @@ function fieldValue(signal: Signal, key: WhereFieldKey): WhereValue | null {
       return topics[0] ? { type: 'text', text: topics[0] } : null;
     }
     case 'platforms': {
+      // Recorded evidence says where it happened: the platforms a competitor
+      // leads on, or those whose answers name the brand without citing it.
+      const recorded = [
+        ...new Set([
+          ...promptPositions(p.positions).map((row) => row.platform),
+          ...promptMentions(p.mentions).flatMap((m) => m.platforms),
+        ]),
+      ].filter(Boolean);
+      if (recorded.length) return { type: 'platforms', slugs: recorded };
       if (signal.where.platforms.length) {
         return { type: 'platforms', slugs: signal.where.platforms };
       }
-      // A competitor's recorded positions say which platforms it leads on.
-      const leading = [...new Set(promptPositions(p.positions).map((row) => row.platform))];
-      if (leading.length) return { type: 'platforms', slugs: leading.filter(Boolean) };
       if (
         signal.kind === 'sharp_drop' ||
         signal.kind === 'visibility_slipping' ||
@@ -667,6 +724,10 @@ function fieldValue(signal: Signal, key: WhereFieldKey): WhereValue | null {
         ? { type: 'positions', competitor: str(p, 'competitorName'), items: rows }
         : null;
     }
+    case 'mentionDetails': {
+      const mentions = promptMentions(p.mentions);
+      return mentions.length ? { type: 'mentions', items: mentions } : null;
+    }
     case 'winningSources': {
       const sources = winningSourcesOf(p.winningSources);
       return sources.length ? { type: 'sources', items: sources } : null;
@@ -690,15 +751,25 @@ const TRACKED: Partial<Record<WhereFieldKey, WhereFieldKey>> = {
   locations: 'trackedIn',
 };
 
-function placeIsNamed(signal: Signal): boolean {
+/**
+ * Whether a signal's platforms and its locations say where it happened, each
+ * on its own: a lost citation records both, a competitor's positions and a
+ * mention's evidence record platforms only, so their locations are still
+ * where the prompts are tracked.
+ */
+function namedPlaces(signal: Signal): { platforms: boolean; locations: boolean } {
   const p = signal.payload ?? {};
-  return (
-    typeof p.platform === 'string' ||
-    typeof p.region === 'string' ||
-    (Array.isArray(p.platforms) && p.platforms.length > 0) ||
-    // A competitor's recorded positions name the platforms it leads on.
-    (Array.isArray(p.positions) && p.positions.length > 0)
-  );
+  const some = (value: unknown) => Array.isArray(value) && value.length > 0;
+  const lost = some(p.platforms);
+  return {
+    platforms:
+      typeof p.platform === 'string' ||
+      typeof p.region === 'string' ||
+      lost ||
+      some(p.positions) ||
+      some(p.mentions),
+    locations: typeof p.platform === 'string' || typeof p.region === 'string' || lost,
+  };
 }
 
 /** The Where block: the spec's fields for this signal, each with its value or none. */
@@ -709,8 +780,13 @@ export function signalWhereFields(signal: Signal): WhereField[] {
       : CITATION_LOSS.includes(signal.kind)
         ? CITATION_LOSS_LAYOUT
         : LAYOUT[signal.category];
-  const named = placeIsNamed(signal);
+  const named = namedPlaces(signal);
+  // A mention's position, sentiment and quote are given per prompt when the
+  // evidence is recorded; asked for on their own only when it is not.
+  const perPrompt = promptMentions(signal.payload?.mentions).length > 0;
+  const covered = new Set<WhereFieldKey>(perPrompt ? ['position', 'sentiment', 'excerpt'] : []);
   return layout
+    .filter((key) => !covered.has(key))
     .map((key) => {
       const value = fieldValue(signal, key);
       const tracked = TRACKED[key];
@@ -718,8 +794,9 @@ export function signalWhereFields(signal: Signal): WhereField[] {
         // Only a value read from the prompts is renamed; a missing one keeps
         // the spec's question ("which platforms?").
         key:
-          tracked && !named && (value?.type === 'platforms' || value?.type === 'locations')
-            ? tracked
+          (value?.type === 'platforms' && !named.platforms) ||
+          (value?.type === 'locations' && !named.locations)
+            ? (tracked ?? key)
             : key,
         value,
       };
@@ -805,6 +882,18 @@ function apiValue(value: WhereValue): unknown {
         platform: { slug: row.platform, name: platformName(row.platform) },
         competitor: row.competitor,
         you: row.you,
+      }));
+    case 'mentions':
+      return value.items.map((m) => ({
+        prompt_id: m.promptId,
+        prompt_text: m.promptText,
+        platforms: m.platforms.map((slug) => ({ slug, name: platformName(slug) })),
+        answers: m.answers,
+        position: m.position,
+        sentiment: m.sentiment,
+        excerpt: m.excerpt,
+        excerpt_platform: m.excerptPlatform,
+        excerpt_at: m.excerptAt,
       }));
     case 'sources':
       return value.items.map((source) => ({
