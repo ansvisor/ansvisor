@@ -116,6 +116,8 @@ export function actionEventText(
     // is not translated.
     task: eventTaskText(event.data.task, tTasks),
     tool: String(event.data.tool ?? ''),
+    improved: Number(event.data.improved ?? 0),
+    measurable: Number(event.data.measurable ?? 0),
   });
 }
 

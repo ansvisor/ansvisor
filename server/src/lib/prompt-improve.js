@@ -55,6 +55,8 @@ const EXCERPT_CHARS = 1200;
  * Below this share of runs mentioning the brand, the platform counts as not
  * mentioned: a brand in 8 of 120 answers is mostly missing there, and needs
  * coverage advice, not positioning advice, however high those 8 ranked.
+ * Mirrored in web/src/lib/prompt-improve.ts for the Tracked Prompts Positions
+ * column — keep the two in sync.
  */
 export const MIN_MENTION_RATE = 0.5;
 
