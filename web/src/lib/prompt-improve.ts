@@ -117,6 +117,15 @@ export const STATE_ORDER: ImproveState[] = [
   'no_runs',
 ];
 
+/**
+ * Below this share of runs mentioning the brand, a platform counts as not
+ * mentioned, however high those few ranked. The Tracked Prompts Positions
+ * column applies it too, so its "missing" matches this tab's "Not mentioned".
+ * Mirrors MIN_MENTION_RATE in server/src/lib/prompt-improve.js — keep the two
+ * in sync.
+ */
+export const MIN_MENTION_RATE = 0.5;
+
 /** "mentioned in 8 of 120 runs": why a platform's state is what it is. */
 export function mentionRateLabel(p: Pick<ImprovePlatform, 'runs' | 'mentionedRuns'>): string {
   return `mentioned in ${p.mentionedRuns} of ${p.runs} run${p.runs === 1 ? '' : 's'}`;

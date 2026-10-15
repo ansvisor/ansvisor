@@ -75,25 +75,21 @@ describe('improveWhy / improveGoal', () => {
 });
 
 describe('improveBaseline', () => {
-  it('keeps the positions per platform at send time', () => {
-    expect(
-      improveBaseline(
-        [P('chatgpt-web', 'mentioned_late', { runs: 8, mentionedRuns: 8, mentionPosition: 3.4 })],
-        '2026-10-13T10:00:00.000Z',
-      ),
-    ).toEqual({
+  it('keeps the 7-day read per platform at send time, with its window', () => {
+    const window = { from: '2026-10-06T10:00:00.000Z', to: '2026-10-13T10:00:00.000Z' };
+    const snapshot = {
+      platform: 'chatgpt-web',
+      state: 'mentioned_late',
+      runs: 8,
+      mentionedRuns: 8,
+      citedRuns: 0,
+      mentionPosition: 3.4,
+      citationRank: null,
+    };
+    expect(improveBaseline([snapshot], '2026-10-13T10:00:00.000Z', window)).toEqual({
       capturedAt: '2026-10-13T10:00:00.000Z',
-      platforms: [
-        {
-          platform: 'chatgpt-web',
-          state: 'mentioned_late',
-          runs: 8,
-          mentionedRuns: 8,
-          citedRuns: null,
-          mentionPosition: 3.4,
-          citationRank: null,
-        },
-      ],
+      window,
+      platforms: [snapshot],
     });
   });
 });
