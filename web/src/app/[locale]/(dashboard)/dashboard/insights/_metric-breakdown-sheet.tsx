@@ -131,6 +131,8 @@ function BreakdownSkeleton() {
 
 function BreakdownBody({ data, metric }: { data: InsightsBreakdown; metric: BreakdownMetric }) {
   const [tab, setTab] = useState<'prompts' | 'platforms' | 'topics'>('prompts');
+  const samePrompts = data.comparison?.basis === 'same';
+  const newCount = data.comparison?.newPrompts ?? 0;
 
   const pickRows = () =>
     tab === 'prompts' ? data.byPrompt : tab === 'platforms' ? data.byPlatform : data.byTopic;
@@ -152,14 +154,30 @@ function BreakdownBody({ data, metric }: { data: InsightsBreakdown; metric: Brea
             </div>
             {data.windowDays !== null && (
               <div className="text-xs text-muted-foreground">
-                vs previous{' '}
-                {data.prevTotal === null ? (
-                  'no data'
+                {samePrompts && data.comparison!.samePrompts === 0 ? (
+                  'No prompt was answered in both periods'
+                ) : samePrompts ? (
+                  <>
+                    Same {data.comparison!.samePrompts}{' '}
+                    {data.comparison!.samePrompts === 1 ? 'prompt' : 'prompts'}:{' '}
+                    <span className="tabular-nums">
+                      {data.prevTotal === null ? '—' : formatValue(data.prevTotal, metric)} →{' '}
+                      {formatValue(data.comparedCur, metric)}
+                      {METRIC_UNIT[metric]}
+                    </span>
+                  </>
                 ) : (
-                  <span className="tabular-nums">
-                    {formatValue(data.prevTotal, metric)}
-                    {METRIC_UNIT[metric]}
-                  </span>
+                  <>
+                    vs previous{' '}
+                    {data.prevTotal === null ? (
+                      'no data'
+                    ) : (
+                      <span className="tabular-nums">
+                        {formatValue(data.prevTotal, metric)}
+                        {METRIC_UNIT[metric]}
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -169,6 +187,13 @@ function BreakdownBody({ data, metric }: { data: InsightsBreakdown; metric: Brea
           )}
         </div>
         <RootCauseSummary data={data} metric={metric} />
+        {newCount > 0 && (
+          <div className="mt-2 border-t pt-2 text-xs text-muted-foreground">
+            {samePrompts
+              ? `Not counted in the change: ${newCount} new ${newCount === 1 ? 'prompt' : 'prompts'} this period.`
+              : `The change includes ${newCount} new ${newCount === 1 ? 'prompt' : 'prompts'} added this period.`}
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
