@@ -6,7 +6,13 @@ import {
   isCloud,
   isSubscriptionActive,
 } from '../config/plans.js';
-import { anchoredPeriodStart } from './quota-period.js';
+import { anchoredPeriodStart, shiftMonthClamped } from './quota-period.js';
+import {
+  IMPROVE_BUDGET_SHARE,
+  estimateGenerationsLeft,
+  medianCost,
+  typicalCostUsd,
+} from './improve-cost.js';
 
 export class PlanLimitError extends Error {
   constructor(message, statusCode = 403) {
@@ -19,6 +25,11 @@ export class PlanLimitError extends Error {
 /**
  * Enterprise orgs can have per-customer limit overrides stored in
  * organizations.plan_overrides (jsonb) — mirrors web getOrgPlan().
+ *
+ * `contractMonthlyUsd` is the contract's monthly value, entered when the deal
+ * is signed. It sets the Improve budget to the same 1% share of the contract
+ * the other plans get of their price (never below the plan default), unless
+ * `improveMonthlyBudgetUsd` is set explicitly, which wins.
  */
 export function applyPlanOverrides(plan, org) {
   if (
@@ -27,7 +38,16 @@ export function applyPlanOverrides(plan, org) {
     typeof org.plan_overrides === 'object' &&
     !Array.isArray(org.plan_overrides)
   ) {
-    return { ...plan, limits: { ...plan.limits, ...org.plan_overrides } };
+    const overrides = org.plan_overrides;
+    const limits = { ...plan.limits, ...overrides };
+    const usd = Number(overrides.contractMonthlyUsd);
+    if (overrides.improveMonthlyBudgetUsd === undefined && Number.isFinite(usd) && usd > 0) {
+      limits.improveMonthlyBudgetUsd = Math.max(
+        plan.limits.improveMonthlyBudgetUsd ?? 0,
+        Math.round(usd * IMPROVE_BUDGET_SHARE * 100) / 100,
+      );
+    }
+    return { ...plan, limits };
   }
   return plan;
 }
@@ -265,6 +285,164 @@ export async function getBriefQuotaStatus(orgId) {
 
   const used = await countBriefUsageThisMonth(orgId);
   return { used, limit: max, remaining: Math.max(0, max - used) };
+}
+
+async function improveSpendThisPeriod(orgId) {
+  const periodStart = await quotaPeriodStart(orgId);
+  const { data } = await supabaseAdmin
+    .from('prompt_improve_usage')
+    .select('cost_usd')
+    .eq('organization_id', orgId)
+    .gte('used_at', periodStart.toISOString())
+    .order('used_at', { ascending: false })
+    .limit(5000);
+  const costs = (data ?? []).map((r) => Number(r.cost_usd) || 0);
+  const spent = costs.reduce((a, b) => a + b, 0);
+  return { spent, typical: medianCost(costs.slice(0, 20)) };
+}
+
+/**
+ * Improve-tab budget (PROMPT-003): a monthly USD budget per organization,
+ * 1% of the plan price (plan.limits.improveMonthlyBudgetUsd), charged with
+ * each generation's real token cost so the share holds for any model. Users
+ * see an estimate of generations left, not dollars. -1 is unlimited.
+ */
+export async function getImproveQuotaStatus(orgId, modelId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const budget = plan.limits.improveMonthlyBudgetUsd ?? -1;
+  if (budget === -1) return { unlimited: true, planName: plan.name };
+  const { spent, typical } = await improveSpendThisPeriod(orgId);
+  const remaining = Math.max(0, budget - spent);
+  return {
+    unlimited: false,
+    planName: plan.name,
+    budgetUsd: budget,
+    spentUsd: spent,
+    remainingUsd: remaining,
+    generationsLeft: estimateGenerationsLeft(remaining, typical ?? typicalCostUsd(modelId)),
+    percentLeft: budget > 0 ? Math.round((remaining / budget) * 100) : 0,
+  };
+}
+
+/** Throws PlanLimitError (429) once the period's Improve budget is spent. */
+export async function enforceImproveQuota(orgId, modelId) {
+  const quota = await getImproveQuotaStatus(orgId, modelId);
+  if (!quota.unlimited && quota.remainingUsd <= 0) {
+    throw new PlanLimitError(
+      `This month's suggestion budget on the ${quota.planName} plan is used up. It resets when your subscription renews.`,
+      429,
+    );
+  }
+  return quota;
+}
+
+async function countOpportunityUsage(orgId, since) {
+  const { count } = await supabaseAdmin
+    .from('opportunity_usage')
+    .select('*', { count: 'exact', head: true })
+    .eq('organization_id', orgId)
+    .gte('used_at', since.toISOString());
+  return count || 0;
+}
+
+/**
+ * Get the monthly content opportunity quota without enforcing (CONTENT-001).
+ * Returns { used, limit, remaining }; limit -1 is unlimited.
+ */
+export async function getOpportunityQuotaStatus(orgId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const max = plan.limits.maxOpportunitiesPerMonth ?? -1;
+  if (max === -1) return { used: 0, limit: -1, remaining: -1 };
+
+  const used = await countOpportunityUsage(orgId, await quotaPeriodStart(orgId));
+  return { used, limit: max, remaining: Math.max(0, max - used) };
+}
+
+/**
+ * Claim up to `count` of this period's opportunity slots before generating.
+ * Atomic per organization (claim_opportunity_usage), so concurrent runs can't
+ * overshoot. Returns { unlimited, ids }: link each id to the opportunity it
+ * becomes (linkOpportunitySlots) and hand back the rest (releaseOpportunitySlots).
+ */
+export async function claimOpportunitySlots(orgId, count) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const max = plan.limits.maxOpportunitiesPerMonth ?? -1;
+  if (max === -1) return { unlimited: true, ids: [] };
+  if (count <= 0) return { unlimited: false, ids: [] };
+
+  const { data, error } = await supabaseAdmin.rpc('claim_opportunity_usage', {
+    p_organization_id: orgId,
+    p_since: (await quotaPeriodStart(orgId)).toISOString(),
+    p_limit: max,
+    p_count: count,
+  });
+  if (error) throw new Error(error.message);
+  // A setof uuid comes back as bare ids or as one-key rows, by client version.
+  const ids = (data ?? []).map((r) => (typeof r === 'string' ? r : Object.values(r)[0]));
+  return { unlimited: false, ids };
+}
+
+/**
+ * What one "+ New" request may ask for (CONTENT-003): the plan's per-request
+ * cap and what is left of the month, with the period's end for the message
+ * when nothing is. remaining -1 means unlimited.
+ */
+export async function getOpportunityRequestAllowance(orgId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const quota = await getOpportunityQuotaStatus(orgId);
+  const perRequest = plan.limits.maxOpportunitiesPerRequest ?? 5;
+  const periodEnd = shiftMonthClamped(await quotaPeriodStart(orgId), 1).toISOString();
+  return {
+    planId: plan.id,
+    perRequest,
+    remaining: quota.remaining,
+    max: quota.remaining === -1 ? perRequest : Math.min(perRequest, quota.remaining),
+    periodEnd,
+  };
+}
+
+/** Point each claimed slot at the opportunity it was used for. */
+export async function linkOpportunitySlots(pairs) {
+  for (const { usageId, opportunityId } of pairs) {
+    const { error } = await supabaseAdmin
+      .from('opportunity_usage')
+      .update({ opportunity_id: opportunityId })
+      .eq('id', usageId);
+    if (error) throw new Error(error.message);
+  }
+}
+
+/** Hand back slots that were claimed but not used (merged, skipped or failed). */
+export async function releaseOpportunitySlots(ids) {
+  if (!ids.length) return;
+  const { error } = await supabaseAdmin.from('opportunity_usage').delete().in('id', ids);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Both monthly content counters with the period they belong to, for the
+ * Content page and GET /content/usage (CONTENT-001). Opportunities and briefs
+ * are separate pools that renew together with the subscription.
+ */
+export async function getContentUsage(orgId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const periodStart = await quotaPeriodStart(orgId);
+  const [opportunities, briefs] = await Promise.all([
+    getOpportunityQuotaStatus(orgId),
+    getBriefQuotaStatus(orgId),
+  ]);
+  return {
+    plan: plan.id,
+    planName: plan.name,
+    periodStart: periodStart.toISOString(),
+    periodEnd: shiftMonthClamped(periodStart, 1).toISOString(),
+    opportunities: {
+      ...opportunities,
+      // What one "+ New" request may ask for (CONTENT-003).
+      perRequest: plan.limits.maxOpportunitiesPerRequest ?? 5,
+    },
+    briefs,
+  };
 }
 
 async function countSiteAuditUsageThisMonth(orgId) {

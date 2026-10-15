@@ -2,7 +2,8 @@
 
 /**
  * Positions panel for one tracked prompt: per-platform mention and citation
- * results over the Prompts table's window and location.
+ * results over a window and the Prompts table's location. The window opens on
+ * the table's and can be changed inside the panel without touching the table.
  *
  * The 24h window shows each platform's latest answer; longer windows show
  * days — how many were tracked, mentioned and cited, with a block per day and
@@ -39,8 +40,12 @@ import { cn } from '@/lib/utils';
 import { formatRegionDisplay } from '@/lib/region';
 import { positionTone } from '@/lib/position-tone';
 import { CONTACT_SALES_URL, type PlanId } from '@/config/plans';
-import type { PromptRangePreset } from '@/config/prompt-options';
+import { PROMPT_RANGE_PRESETS, type PromptRangePreset } from '@/config/prompt-options';
+import type { PositionsRange } from '@/lib/positions-range';
+import { DateRangeFilter } from '@/components/filters/date-range-filter';
+import { ImproveTab, useImprove, type ImproveController } from './prompt-improve-tab';
 import { getPromptPositions, type PromptPositionsData } from '@/lib/actions/prompt-positions';
+import { viewerTimeZone } from '@/lib/time-zone';
 import type {
   AnswerView,
   PlatformDay,
@@ -48,6 +53,8 @@ import type {
   PositionStats,
 } from '@/lib/prompt-positions';
 import type { Sentiment } from '@/types';
+
+export type { PositionsRange } from '@/lib/positions-range';
 
 export interface PositionsPrompt {
   id: string;
@@ -57,49 +64,73 @@ export interface PositionsPrompt {
 interface Props {
   /** The prompt to show; null keeps the panel closed. */
   prompt: PositionsPrompt | null;
-  /** The table's window: the same bounds its Mentions / Citations columns read. */
+  /** The panel's selected range; it opens on the table's. */
+  range: PositionsRange;
+  /** `range` resolved to the bounds the data is read over. */
   window: { from: string; to?: string };
-  preset: PromptRangePreset;
+  /** Changes the panel's range only; the table keeps its own. */
+  onRangeChange: (range: PositionsRange) => void;
   /** The table's location; empty means every location. */
   region: string;
+  /** The tab the panel opens on: Improve when opened from the row menu (PROMPT-006). */
+  initialTab?: 'platforms' | 'improve';
   onClose: () => void;
 }
 
 const DAYS_PAGE = 10;
 const HISTORY_PAGE = 7;
 
-const DATE_FMT = new Intl.DateTimeFormat('en-US', {
+// Days arrive as YYYY-MM-DD already in the viewer's time zone, so they are
+// printed as plain calendar dates (read at UTC midnight, never shifted).
+const DAY_FMT = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
   month: 'short',
   day: 'numeric',
   year: 'numeric',
 });
-const SHORT_DATE_FMT = new Intl.DateTimeFormat('en-US', {
+const SHORT_DAY_FMT = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
   month: 'short',
   day: 'numeric',
 });
+// Answer times are instants, shown on the viewer's clock with its zone.
+const DATE_FMT = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
 const TIME_FMT = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'UTC',
   hour: '2-digit',
   minute: '2-digit',
   hourCycle: 'h23',
+  timeZoneName: 'short',
 });
 
-const formatDay = (day: string) => DATE_FMT.format(new Date(`${day}T00:00:00Z`));
-const formatTime = (iso: string) => `${TIME_FMT.format(new Date(iso))} UTC`;
+const formatDay = (day: string) => DAY_FMT.format(new Date(`${day}T00:00:00Z`));
+const formatTime = (iso: string) => TIME_FMT.format(new Date(iso));
 const formatDateTime = (iso: string) =>
-  `${DATE_FMT.format(new Date(iso))}, ${TIME_FMT.format(new Date(iso))} UTC`;
+  `${DATE_FMT.format(new Date(iso))}, ${TIME_FMT.format(new Date(iso))}`;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const pct = (n: number, of: number) => (of > 0 ? `${Math.round((n / of) * 100)}%` : '—');
 
-function windowTitle(preset: PromptRangePreset, window: { from: string; to?: string }): string {
-  if (preset !== 'custom') return `Last ${preset}`;
-  const to = window.to ?? new Date().toISOString();
-  return `Custom: ${SHORT_DATE_FMT.format(new Date(window.from))} – ${DATE_FMT.format(new Date(to))}`;
+// The resolved dates follow in the caption, so a custom range isn't spelled out twice.
+function windowTitle(preset: PromptRangePreset): string {
+  return preset === 'custom' ? 'Custom range' : `Last ${preset}`;
 }
 
-export function PromptPositionsSheet({ prompt, window, preset, region, onClose }: Props) {
+export function PromptPositionsSheet({
+  prompt,
+  range,
+  window,
+  onRangeChange,
+  region,
+  initialTab = 'platforms',
+  onClose,
+}: Props) {
+  const preset = range.preset;
+  // A range change asked for while the Improve tab has unsent edits waits here
+  // until the user confirms discarding them.
+  const [pendingRange, setPendingRange] = useState<PositionsRange | null>(null);
   // Everything the data depends on. A response is shown only while its key
   // still matches, so another prompt's (or window's) numbers never linger.
   const key = prompt ? `${prompt.id}|${window.from}|${window.to ?? ''}|${region}` : '';
@@ -113,7 +144,12 @@ export function PromptPositionsSheet({ prompt, window, preset, region, onClose }
   useEffect(() => {
     if (!prompt) return;
     let cancelled = false;
-    getPromptPositions(prompt.id, { from: window.from, to: window.to, region: region || undefined })
+    getPromptPositions(prompt.id, {
+      from: window.from,
+      to: window.to,
+      region: region || undefined,
+      timeZone: viewerTimeZone(),
+    })
       .then((data) => {
         if (cancelled) return;
         setLoaded({ key, data, error: data ? null : 'This prompt is no longer available.' });
@@ -136,6 +172,23 @@ export function PromptPositionsSheet({ prompt, window, preset, region, onClose }
   const current = loaded?.key === key && key !== '' ? loaded : null;
   const data = current?.data ?? null;
   const latestMode = preset === '24h';
+
+  const improve = useImprove({
+    promptId: prompt?.id ?? null,
+    range: {
+      preset,
+      from: window.from,
+      to: window.to,
+      customFrom: preset === 'custom' ? range.from : undefined,
+      customTo: preset === 'custom' ? range.to : undefined,
+      region,
+    },
+    planId: data?.planId ?? null,
+  });
+  const changeRange = (next: PositionsRange) => {
+    if (improve.dirty) setPendingRange(next);
+    else onRangeChange(next);
+  };
 
   const retry = () => {
     setLoaded(null);
@@ -161,7 +214,7 @@ export function PromptPositionsSheet({ prompt, window, preset, region, onClose }
           )}
           <SheetDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
             <CalendarDays className="h-3.5 w-3.5" />
-            <span className="font-medium text-foreground">{windowTitle(preset, window)}</span>
+            <span className="font-medium text-foreground">{windowTitle(preset)}</span>
             {data && latestMode && (
               <span>
                 Last run:{' '}
@@ -170,8 +223,8 @@ export function PromptPositionsSheet({ prompt, window, preset, region, onClose }
             )}
             {data && !latestMode && data.summary.days.length > 0 && (
               <span>
-                {SHORT_DATE_FMT.format(new Date(`${data.summary.days[0]}T00:00:00Z`))} –{' '}
-                {formatDay(data.summary.days[data.summary.days.length - 1])} (UTC)
+                {SHORT_DAY_FMT.format(new Date(`${data.summary.days[0]}T00:00:00Z`))} –{' '}
+                {formatDay(data.summary.days[data.summary.days.length - 1])}
               </span>
             )}
             {region && <span>· {formatRegionDisplay(region)}</span>}
@@ -181,12 +234,48 @@ export function PromptPositionsSheet({ prompt, window, preset, region, onClose }
               </Badge>
             )}
           </SheetDescription>
+          <div className="flex flex-wrap items-end gap-3 pt-1">
+            <DateRangeFilter
+              label="Period"
+              value={preset}
+              presets={PROMPT_RANGE_PRESETS}
+              onChange={(next) => changeRange({ ...range, preset: next })}
+              from={range.from}
+              to={range.to}
+              onFromChange={(from) => changeRange({ ...range, from })}
+              onToChange={(to) => changeRange({ ...range, to })}
+            />
+          </div>
+          {pendingRange && (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs dark:border-amber-900/50 dark:bg-amber-950/30">
+              <span className="text-amber-900 dark:text-amber-200">
+                Changing the period discards your unsent Improve edits.
+              </span>
+              <Button size="xs" variant="outline" onClick={() => setPendingRange(null)}>
+                Keep editing
+              </Button>
+              <Button
+                size="xs"
+                onClick={() => {
+                  onRangeChange(pendingRange);
+                  setPendingRange(null);
+                }}
+              >
+                Discard & change
+              </Button>
+            </div>
+          )}
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {prompt && !current && <PositionsSkeleton />}
           {current?.error && <LoadError message={current.error} onRetry={retry} />}
-          {data && (latestMode ? <LatestView data={data} /> : <PeriodView data={data} />)}
+          {data &&
+            (latestMode ? (
+              <LatestView data={data} improve={improve} initialTab={initialTab} />
+            ) : (
+              <PeriodView data={data} improve={improve} initialTab={initialTab} />
+            ))}
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t px-5 py-3">
@@ -315,11 +404,12 @@ function CitationStatus({ answer }: { answer: AnswerView }) {
 /** One answer: its mention and its citation side by side. */
 function AnswerLine({ answer, showTime }: { answer: AnswerView; showTime: boolean }) {
   return (
-    <div className="grid grid-cols-1 gap-1 text-xs sm:grid-cols-[5.5rem_1fr_1fr] sm:gap-3">
+    <div className="grid grid-cols-1 gap-1 text-xs sm:grid-cols-[6rem_1fr_1fr] sm:gap-3">
       {showTime ? (
         <span className="tabular-nums text-muted-foreground">
-          {formatTime(answer.at)}
-          {answer.region ? ` · ${formatRegionDisplay(answer.region)}` : ''}
+          {/* The time keeps its zone on one line ("16:28 GMT+5:30"). */}
+          <span className="block whitespace-nowrap">{formatTime(answer.at)}</span>
+          {answer.region && <span className="block">{formatRegionDisplay(answer.region)}</span>}
         </span>
       ) : (
         <span className="hidden sm:block" />
@@ -378,7 +468,28 @@ function avgLabel(stats: PositionStats | null): string {
 
 // ─── 24h: each platform's latest answer ───────────────────────────────────────
 
-function LatestView({ data }: { data: PromptPositionsData }) {
+function ImproveTrigger({ improve }: { improve: ImproveController }) {
+  return (
+    <TabsTrigger value="improve">
+      Improve
+      {improve.count !== null && improve.count > 0 && (
+        <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">
+          {improve.count}
+        </Badge>
+      )}
+    </TabsTrigger>
+  );
+}
+
+function LatestView({
+  data,
+  improve,
+  initialTab,
+}: {
+  data: PromptPositionsData;
+  improve: ImproveController;
+  initialTab: 'platforms' | 'improve';
+}) {
   const included = data.platforms.filter((p) => p.access.state === 'included');
   const answered = included.filter((p) => p.latest);
   const mentioned = answered.filter((p) => p.latest!.mentioned).length;
@@ -404,15 +515,26 @@ function LatestView({ data }: { data: PromptPositionsData }) {
         <Stat label="Avg. position" value={avg} sub="when mentioned" />
       </div>
 
-      <div className="divide-y rounded-lg border">
-        {data.platforms.map((p) =>
-          p.access.state === 'locked' ? (
-            <LockedRow key={p.id} platform={p} planId={data.planId} />
-          ) : (
-            <LatestRow key={p.id} platform={p} />
-          ),
-        )}
-      </div>
+      <Tabs defaultValue={initialTab}>
+        <TabsList>
+          <TabsTrigger value="platforms">Platform results</TabsTrigger>
+          <ImproveTrigger improve={improve} />
+        </TabsList>
+        <TabsContent value="platforms" className="mt-3">
+          <div className="divide-y rounded-lg border">
+            {data.platforms.map((p) =>
+              p.access.state === 'locked' ? (
+                <LockedRow key={p.id} platform={p} planId={data.planId} />
+              ) : (
+                <LatestRow key={p.id} platform={p} />
+              ),
+            )}
+          </div>
+        </TabsContent>
+        <TabsContent value="improve" className="mt-3">
+          <ImproveTab improve={improve} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -464,7 +586,15 @@ function LatestRow({ platform: p }: { platform: PlatformPositions }) {
 
 // ─── 7d / 30d / 90d / custom: days ────────────────────────────────────────────
 
-function PeriodView({ data }: { data: PromptPositionsData }) {
+function PeriodView({
+  data,
+  improve,
+  initialTab,
+}: {
+  data: PromptPositionsData;
+  improve: ImproveController;
+  initialTab: 'platforms' | 'improve';
+}) {
   const s = data.summary;
   return (
     <div className="space-y-4">
@@ -501,10 +631,11 @@ function PeriodView({ data }: { data: PromptPositionsData }) {
         </p>
       )}
 
-      <Tabs defaultValue="platforms">
+      <Tabs defaultValue={initialTab}>
         <TabsList>
           <TabsTrigger value="platforms">Platform results</TabsTrigger>
           <TabsTrigger value="history">Daily history ({s.trackedDays})</TabsTrigger>
+          <ImproveTrigger improve={improve} />
         </TabsList>
         <TabsContent value="platforms" className="mt-3 space-y-3">
           <HeatmapLegend />
@@ -518,12 +649,15 @@ function PeriodView({ data }: { data: PromptPositionsData }) {
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            Each block is one UTC day in the selected range. Hover a block for that day&apos;s
-            positions; open a platform for every run.
+            Each block is one day in the selected range, in your time zone. Hover a block for that
+            day&apos;s positions; open a platform for every run.
           </p>
         </TabsContent>
         <TabsContent value="history" className="mt-3">
           <DailyHistory platforms={data.platforms} />
+        </TabsContent>
+        <TabsContent value="improve" className="mt-3">
+          <ImproveTab improve={improve} />
         </TabsContent>
       </Tabs>
     </div>

@@ -4,7 +4,8 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
-import { Link } from '@/i18n/navigation';
+import { Link, usePathname, useRouter } from '@/i18n/navigation';
+import { PROMPTS_BASE, sectionFor, sectionFromPath } from '@/lib/prompts-routes';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -44,6 +45,15 @@ import {
 } from '@/components/ui/select';
 import { CompetitionBars } from '@/components/ui/competition-bars';
 import { WorkStatusBadge } from '@/components/prompts/work-status';
+import { BulkImportPrompts } from '@/components/prompts/bulk-import-prompts';
+import { promptKey } from '@/lib/prompt-import';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { setPromptWorkStatus, type PromptWorkStatus } from '@/lib/actions/prompt-workflow';
 import {
   TrendingUp,
@@ -67,6 +77,11 @@ import {
   Sparkles,
   ArrowUp,
   ArrowDown,
+  ExternalLink,
+  MoreHorizontal,
+  Pause,
+  Play,
+  Lightbulb,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { PlatformDotState, PromptPositionCell } from '@/lib/prompt-position-summary';
@@ -79,10 +94,12 @@ import {
   type VolumeErrorCode,
 } from '@/lib/actions/volumes';
 import {
-  addPromptToBrand,
   deletePrompt,
   getPromptsPageData,
+  importPrompts,
+  setPromptActive,
   updatePrompt,
+  type LocationQuota,
 } from '@/lib/actions/prompt';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUserRole } from '@/hooks/use-user-role';
@@ -101,23 +118,36 @@ import {
 } from '@/config/prompt-options';
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { getBrandFilterOptions } from '@/lib/actions/tracking';
-import { formatRegionDisplay } from '@/lib/region';
+import { formatRegionDisplay, isValidLocation, locationCode } from '@/lib/region';
 import { SuggestionsTab } from './_suggestions-tab';
-import { PLANS } from '@/config/plans';
+import { CONTACT_SALES_URL, PLANS } from '@/config/plans';
+import { getPromptUsage, isPromptLimitReached } from '@/lib/prompt-usage';
 import { getTopics } from '@/lib/actions/topic';
-import { analyzeNewPrompt, type PromptVisibilitySummary } from '@/lib/actions/tracking';
+import type { PromptVisibilitySummary } from '@/lib/actions/tracking';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import type { PromptVolume, Prompt, Topic } from '@/types';
 import { toast } from 'sonner';
+import {
+  getContentUsage,
+  getGenerationJobStatus,
+  getOpenSuggestionForPrompt,
+  suggestContentForPrompt,
+} from '@/lib/actions/content';
+import { hasContentQuota, type ContentUsage } from '@/lib/content-usage';
+import { waitForContentJob } from '@/lib/content-job';
 import { toCsv } from '@/lib/csv';
 import { formatRelative } from '@/lib/format-relative';
 import { compareNullsLast, type SortDir } from './prompt-sort';
 import { formatCompactNumber } from '@/lib/format';
 import { usePagination, TablePager } from '@/components/table-pager';
+import { PromptPositionsSheet } from '@/components/prompts/prompt-positions-sheet';
 import {
-  PromptPositionsSheet,
-  type PositionsPrompt,
-} from '@/components/prompts/prompt-positions-sheet';
+  panelRangeFromTable,
+  parsePositionsRange,
+  positionsUrlParams,
+  type PositionsRange,
+} from '@/lib/positions-range';
+import { viewerTimeZone } from '@/lib/time-zone';
 
 // ─── Info Tooltip ─────────────────────────────────────────────────────────────
 
@@ -508,6 +538,107 @@ function PromptFormFields({
   );
 }
 
+/** The brand's tracking location, as new prompts get it (addPromptToSet). */
+function brandLocation(region: string | undefined, state: string | undefined): string {
+  const country = region ?? 'US';
+  const candidate = locationCode(country, state ?? null);
+  return isValidLocation(candidate) ? candidate : country;
+}
+
+// ─── Tracked prompt limit (PROMPT-009) ────────────────────────────────────────
+
+const PROMPT_USAGE_TOOLTIP =
+  'Your plan limits active prompt locations across every brand in your organization. ' +
+  "Each prompt counts once per location it targets; paused prompts don't count, and " +
+  'resuming one needs a free slot. Pause or remove prompts or locations to free slots.';
+
+/**
+ * "187 / 200 prompt locations · Growth plan" with a thin progress bar. The
+ * numbers are the ones the plan-limit guard enforces (getLocationQuota), so
+ * the counter can't promise a slot that a save would then reject.
+ */
+function PromptUsageMeter({ quota }: { quota: LocationQuota }) {
+  const usage = getPromptUsage(quota.used, quota.maxPrompts);
+
+  if (usage.state === 'unlimited') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+        <span className="tabular-nums">{quota.used}</span> active prompt locations · Unlimited
+        <InfoTip content={PROMPT_USAGE_TOOLTIP} />
+      </span>
+    );
+  }
+
+  const tone =
+    usage.state === 'warning'
+      ? { text: 'text-amber-600 dark:text-amber-500', bar: 'bg-amber-500' }
+      : usage.state === 'full' || usage.state === 'over'
+        ? { text: 'text-red-600 dark:text-red-500', bar: 'bg-red-500' }
+        : { text: 'text-muted-foreground', bar: 'bg-primary' };
+  const status =
+    usage.state === 'full'
+      ? 'Limit reached'
+      : usage.state === 'over'
+        ? 'Over limit'
+        : `${usage.remaining} slot${usage.remaining === 1 ? '' : 's'} left`;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+      <span className="text-muted-foreground">
+        <span className={cn('font-medium tabular-nums', tone.text)}>
+          {quota.used} / {quota.maxPrompts}
+        </span>{' '}
+        active prompt locations · {quota.planName} plan
+      </span>
+      <div
+        className="h-1.5 w-24 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-label="Active prompt locations used"
+        aria-valuemin={0}
+        aria-valuemax={quota.maxPrompts}
+        aria-valuenow={Math.min(quota.used, quota.maxPrompts)}
+      >
+        <div
+          className={cn('h-full rounded-full', tone.bar)}
+          style={{ width: `${usage.percent}%` }}
+        />
+      </div>
+      <span className={cn('font-medium', tone.text)}>{status}</span>
+      <InfoTip content={PROMPT_USAGE_TOOLTIP} />
+    </div>
+  );
+}
+
+/**
+ * Where to go when the limit is reached. Starter can upgrade to Growth in
+ * billing; Growth and Enterprise (custom limits) are raised by Ansvisor.
+ */
+function PromptLimitActions({ planId }: { planId: LocationQuota['planId'] }) {
+  const contact = (
+    <a
+      href={CONTACT_SALES_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={buttonVariants({
+        variant: planId === 'starter' ? 'outline' : 'default',
+        size: 'sm',
+      })}
+    >
+      Contact us
+      <ExternalLink />
+    </a>
+  );
+  if (planId !== 'starter') return contact;
+  return (
+    <>
+      <Link href="/dashboard/settings?tab=billing" className={buttonVariants({ size: 'sm' })}>
+        Upgrade plan
+      </Link>
+      {contact}
+    </>
+  );
+}
+
 /**
  * Quick-add dialog for the active brand (#460). Same mechanism as the Add
  * Prompt card on brands/[id]/prompts: topic select + the grouped
@@ -519,16 +650,28 @@ function PromptFormFields({
 function AddPromptDialog({
   brandId,
   shoppingEnabled,
+  locationQuota,
+  existingTexts,
+  defaultRegion,
   open,
   onClose,
   onAdded,
 }: {
   brandId: string;
   shoppingEnabled: boolean;
+  /** Texts the brand already tracks, for Bulk import's duplicate check. */
+  existingTexts: string[];
+  /** The brand's location, for Bulk import rows that name none. */
+  defaultRegion: string;
+  /** When the plan limit is already reached, the dialog explains it instead of the form. */
+  locationQuota: LocationQuota | null;
   open: boolean;
   onClose: () => void;
   onAdded: () => void;
 }) {
+  const limitReached =
+    !!locationQuota &&
+    isPromptLimitReached(getPromptUsage(locationQuota.used, locationQuota.maxPrompts));
   const { allowedScraperIds, allowedModelIds, visibleScrapers, visibleModels } =
     useAllowedEngines(shoppingEnabled);
 
@@ -539,6 +682,12 @@ function AddPromptDialog({
   const [topics, setTopics] = useState<Topic[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [mode, setMode] = useState<'single' | 'bulk'>('single');
+  // Prompts queued with "Add to list", not saved yet: each keeps the topic and
+  // engines chosen when it was queued.
+  const [staged, setStaged] = useState<
+    { key: string; text: string; category: string; platforms: string[]; models: string[] }[]
+  >([]);
 
   // Reset to a fresh form on every open: all allowed engines pre-selected
   // (matching the brand page's defaults) and topics fetched lazily — the
@@ -547,6 +696,8 @@ function AddPromptDialog({
     if (!open) return;
     setText('');
     setError(null);
+    setMode('single');
+    setStaged([]);
     setScrapers(allowedScraperIds);
     setModels(allowedModelIds);
     let cancelled = false;
@@ -568,35 +719,83 @@ function AddPromptDialog({
     onClose();
   };
 
-  const handleAdd = async () => {
-    if (!text.trim() || (scrapers.length === 0 && models.length === 0) || saving) return;
+  const enginesChosen = scrapers.length > 0 || models.length > 0;
+  const takenKeys = new Set([...existingTexts, ...staged.map((s) => s.text)].map(promptKey));
+
+  /** Queue the typed prompt below the form and clear the field for the next one. */
+  const addToList = () => {
+    const value = text.trim().replace(/\s+/g, ' ');
+    if (!value || !enginesChosen || saving) return;
+    if (takenKeys.has(promptKey(value))) {
+      setError('This prompt is already tracked or in the list.');
+      return;
+    }
+    setStaged((list) => [
+      ...list,
+      { key: `${Date.now()}-${list.length}`, text: value, category, platforms: scrapers, models },
+    ]);
+    setText('');
+    setError(null);
+  };
+
+  // What a save writes: the list, plus a typed prompt not queued yet.
+  const typed = text.trim().replace(/\s+/g, ' ');
+  const typedCounts = !!typed && enginesChosen && !takenKeys.has(promptKey(typed));
+  const toSave = [
+    ...staged,
+    ...(typedCounts ? [{ key: 'typed', text: typed, category, platforms: scrapers, models }] : []),
+  ];
+
+  /**
+   * Save the list in one locked call (the same path as Bulk import, so the
+   * plan limit holds the same way), then close or stay open for more.
+   */
+  const handleSave = async (closeAfter: boolean) => {
+    if (toSave.length === 0 || saving) return;
+    if (typed && !typedCounts && staged.length === 0) {
+      setError('This prompt is already tracked or in the list.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      const result = await addPromptToBrand(brandId, {
-        text,
-        category: category || undefined,
-        platforms: scrapers,
-        models,
-      });
+      const result = await importPrompts(
+        brandId,
+        toSave.map((s, idx) => ({
+          idx,
+          text: s.text,
+          topic: s.category || null,
+          platforms: s.platforms,
+          models: s.models,
+          regions: [defaultRegion],
+        })),
+      );
       if ('error' in result) {
         setError(result.error);
         return;
       }
-      // Send the prompt off to be analyzed straight away instead of leaving it
-      // idle until tomorrow's scheduled run. Only this prompt is submitted, and
-      // a refusal (daily cap, cooldown, paused brand) is not an error — the
-      // prompt is saved either way, so the message just says which happened.
-      const { started } = await analyzeNewPrompt(brandId, result.prompt.id);
-      onClose();
+      const added = result.importedIdx.length;
+      const skipped = toSave.length - added;
+      if (added === 0) {
+        setError(
+          'Nothing was added: your plan limit is reached, or these prompts are already tracked.',
+        );
+        return;
+      }
       toast.success(
-        started
-          ? 'Prompt added — analyzing it now.'
-          : 'Prompt added — it will be picked up by the next tracking run.',
+        `${added} prompt${added === 1 ? '' : 's'} added${skipped ? ` · ${skipped} not added (plan limit or duplicate)` : ''}`,
+        {
+          description: result.analysisStarted
+            ? 'Analyzing them now.'
+            : 'They will be picked up by the next tracking run.',
+        },
       );
+      setStaged([]);
+      setText('');
+      if (closeAfter) onClose();
       onAdded();
     } catch {
-      setError('Failed to add prompt. Please try again.');
+      setError('Failed to add prompts. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -604,7 +803,12 @@ function AddPromptDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+      <DialogContent
+        className={cn(
+          'max-h-[85vh] overflow-y-auto',
+          mode === 'bulk' && !limitReached ? 'sm:max-w-3xl' : 'sm:max-w-md',
+        )}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
             <Plus className="h-4 w-4" />
@@ -614,51 +818,153 @@ function AddPromptDialog({
             Track a new prompt for this brand across the selected platforms.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
-          <PromptFormFields
-            autoFocus
-            text={text}
-            onTextChange={(value) => {
-              setText(value);
-              if (error) setError(null);
-            }}
-            onSubmit={handleAdd}
-            category={category}
-            onCategoryChange={setCategory}
-            topics={topics}
-            scrapers={scrapers}
-            models={models}
-            setScrapers={setScrapers}
-            setModels={setModels}
-            visibleScrapers={visibleScrapers}
-            visibleModels={visibleModels}
-            saving={saving}
-          />
+        {limitReached && locationQuota ? (
+          <>
+            <div className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm dark:border-red-900/50 dark:bg-red-950/30">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-500" />
+              <div className="space-y-1">
+                <p className="font-medium text-red-900 dark:text-red-200">
+                  You&apos;ve reached your prompt limit
+                </p>
+                <p className="text-red-800/80 dark:text-red-300/80">
+                  Your {locationQuota.planName} plan tracks up to {locationQuota.maxPrompts} active
+                  prompt locations and {locationQuota.used} are in use. Each prompt counts once per
+                  location it targets; paused prompts don&apos;t count. Pause or remove prompts or
+                  locations to free a slot, or{' '}
+                  {locationQuota.planId === 'starter' ? 'upgrade your plan' : 'contact us'} to track
+                  more.
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={handleClose}>
+                Close
+              </Button>
+              <PromptLimitActions planId={locationQuota.planId} />
+            </DialogFooter>
+          </>
+        ) : (
+          <Tabs value={mode} onValueChange={(v) => setMode(v as 'single' | 'bulk')}>
+            <TabsList>
+              <TabsTrigger value="single">Single</TabsTrigger>
+              <TabsTrigger value="bulk">Bulk import</TabsTrigger>
+            </TabsList>
+            <TabsContent value="single" className="mt-3 space-y-4">
+              <div className="space-y-3">
+                <PromptFormFields
+                  autoFocus
+                  text={text}
+                  onTextChange={(value) => {
+                    setText(value);
+                    if (error) setError(null);
+                  }}
+                  onSubmit={addToList}
+                  category={category}
+                  onCategoryChange={setCategory}
+                  topics={topics}
+                  scrapers={scrapers}
+                  models={models}
+                  setScrapers={setScrapers}
+                  setModels={setModels}
+                  visibleScrapers={visibleScrapers}
+                  visibleModels={visibleModels}
+                  saving={saving}
+                />
 
-          {error && <p className="text-xs text-red-500">{error}</p>}
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={handleClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={handleAdd}
-            disabled={saving || !text.trim() || (scrapers.length === 0 && models.length === 0)}
-          >
-            {saving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Adding…
-              </>
-            ) : (
-              <>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Prompt
-              </>
-            )}
-          </Button>
-        </DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addToList}
+                  disabled={saving || !text.trim() || !enginesChosen}
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Add to list
+                </Button>
+
+                {error && <p className="text-xs text-red-500">{error}</p>}
+
+                {staged.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Ready to save ({staged.length})
+                    </p>
+                    <ul className="max-h-48 divide-y overflow-y-auto rounded-md border">
+                      {staged.map((s) => (
+                        <li key={s.key} className="flex items-start gap-2 px-3 py-2 text-sm">
+                          <div className="min-w-0 flex-1">
+                            <p className="break-words">{s.text}</p>
+                            {s.category && (
+                              <p className="text-xs text-muted-foreground">{s.category}</p>
+                            )}
+                          </div>
+                          <Button
+                            type="button"
+                            size="icon-xs"
+                            variant="ghost"
+                            aria-label={`Remove "${s.text}" from the list`}
+                            disabled={saving}
+                            onClick={() =>
+                              setStaged((list) => list.filter((item) => item.key !== s.key))
+                            }
+                          >
+                            <X />
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+              <DialogFooter className="gap-2 sm:gap-2">
+                <Button type="button" variant="outline" onClick={handleClose} disabled={saving}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleSave(false)}
+                  disabled={saving || toSave.length === 0}
+                >
+                  Save &amp; add more
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => handleSave(true)}
+                  disabled={saving || toSave.length === 0}
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      {toSave.length > 1 ? `Save ${toSave.length} & close` : 'Save & close'}
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </TabsContent>
+            <TabsContent value="bulk" className="mt-3">
+              <BulkImportPrompts
+                brandId={brandId}
+                existingTexts={existingTexts}
+                defaults={{ platforms: scrapers, models }}
+                defaultRegion={defaultRegion}
+                quota={locationQuota}
+                limitActions={
+                  locationQuota ? <PromptLimitActions planId={locationQuota.planId} /> : null
+                }
+                onImported={() => {
+                  onClose();
+                  onAdded();
+                }}
+              />
+            </TabsContent>
+          </Tabs>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -739,19 +1045,35 @@ function EditPromptDialog({
     if (!prompt || !text.trim() || (scrapers.length === 0 && models.length === 0) || busy) return;
     setSaving(true);
     setError(null);
+    let activeChanged = false;
     try {
+      // Pausing or resuming goes first and on its own: resuming needs a free
+      // slot on the plan, and a refusal has to reach the dialog as a message.
+      if (isActive !== prompt.isActive) {
+        const result = await setPromptActive(prompt.id, isActive);
+        if ('error' in result) {
+          setError(
+            result.code === 'plan_limit'
+              ? result.error
+              : 'Failed to update prompt. Please try again.',
+          );
+          return;
+        }
+        activeChanged = true;
+      }
       await updatePrompt(prompt.id, {
         text: text.trim(),
         category: category || undefined,
         platforms: scrapers,
         models,
-        isActive,
       });
       onClose();
       toast.success('Prompt updated.');
       onChanged();
     } catch {
       setError('Failed to update prompt. Please try again.');
+      // The pause or resume already went through; show it in the table.
+      if (activeChanged) onChanged();
     } finally {
       setSaving(false);
     }
@@ -972,6 +1294,7 @@ export default function PromptsPage() {
   const analysisGenRef = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
   const [quota, setQuota] = useState<VolumeQuota | null>(null);
+  const [locationQuota, setLocationQuota] = useState<LocationQuota | null>(null);
   const [addPromptOpen, setAddPromptOpen] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
   const { canManage } = useUserRole();
@@ -982,8 +1305,12 @@ export default function PromptsPage() {
     (s) => s.brands.find((brand) => brand.id === s.activeBrandId) ?? null,
   );
   const searchParams = useSearchParams();
+  // On /dashboard/prompts/{tracked,suggestions,fan-outs,insights} the route
+  // names the view (PROMPT-001); ?tab= / ?view= are the older links' shape.
+  const section = sectionFromPath(usePathname());
 
   const initialTab: TabId = (() => {
+    if (section) return section.tab;
     const raw = searchParams.get('tab');
     if ((VALID_TABS as readonly string[]).includes(raw ?? '')) return raw as TabId;
     return 'all';
@@ -994,6 +1321,7 @@ export default function PromptsPage() {
   // what could be. A sub-tab rather than a fourth top-level tab, because the
   // date range, the Add prompt action and the export all belong to both.
   const initialView: PromptsView = (() => {
+    if (section) return section.view;
     const raw = searchParams.get('view');
     if ((PROMPT_VIEWS as readonly string[]).includes(raw ?? '')) return raw as PromptsView;
     // Links written before the split point at the suggestions card's anchor.
@@ -1015,7 +1343,9 @@ export default function PromptsPage() {
   const [rangePreset, setRangePreset] = useState<PromptRangePreset>(initialRange);
   // Which tracked location the health columns describe. Empty = every
   // location blended, which is what the table has always shown (#691).
-  const [regionFilter, setRegionFilter] = useState('');
+  // In the URL like the range, so it survives moving between the Prompts
+  // routes from the sidebar (PROMPT-001).
+  const [regionFilter, setRegionFilter] = useState(() => searchParams.get('region') ?? '');
   const [availableRegions, setAvailableRegions] = useState<string[]>([]);
   const [customFrom, setCustomFrom] = useState(() => searchParams.get('from') ?? '');
   const [customTo, setCustomTo] = useState(() => searchParams.get('to') ?? '');
@@ -1043,38 +1373,37 @@ export default function PromptsPage() {
   // blocked Next's server-action queue, so the page's data fetch never even
   // dispatched (the "prompts table spins forever" bug). replaceState updates
   // the URL with no server request; Next's router syncs with the History API.
+  //
+  // The tab and view live in the path (PROMPT-001): /dashboard/prompts/tracked,
+  // /suggestions, /fan-outs, /insights — the routes the sidebar's Prompts
+  // submenu links to, so the sidebar and these tabs always agree. The path is
+  // rewritten in place under any locale prefix.
   useEffect(() => {
-    const currentTab = searchParams.get('tab');
-    const currentRange = searchParams.get('range');
     // The default range stays out of the URL so shared links keep their
     // existing shape unless the user actually picked a different window.
-    const wantRange = rangePreset === DEFAULT_PROMPT_RANGE_PRESET ? null : rangePreset;
-    const wantView = view === 'tracked' ? null : view;
-    const wantFrom = rangePreset === 'custom' && customFrom ? customFrom : null;
-    const wantTo = rangePreset === 'custom' && customTo ? customTo : null;
-    if (
-      currentTab === tab &&
-      searchParams.get('view') === wantView &&
-      currentRange === wantRange &&
-      searchParams.get('from') === wantFrom &&
-      searchParams.get('to') === wantTo
-    ) {
+    const want: Record<string, string | null> = {
+      range: rangePreset === DEFAULT_PROMPT_RANGE_PRESET ? null : rangePreset,
+      from: rangePreset === 'custom' && customFrom ? customFrom : null,
+      to: rangePreset === 'custom' && customTo ? customTo : null,
+      region: regionFilter || null,
+      tab: null,
+      view: null,
+    };
+    const { pathname, search, hash } = window.location;
+    const at = pathname.indexOf(PROMPTS_BASE);
+    const wantPath = `${at > 0 ? pathname.slice(0, at) : ''}${sectionFor(tab, view).href}`;
+    const params = new URLSearchParams(search);
+    if (pathname === wantPath && Object.entries(want).every(([k, v]) => params.get(k) === v)) {
       return;
     }
-    const params = new URLSearchParams(Array.from(searchParams.entries()));
-    params.set('tab', tab);
-    if (wantView) params.set('view', wantView);
-    else params.delete('view');
-    if (wantRange) params.set('range', wantRange);
-    else params.delete('range');
-    if (wantFrom) params.set('from', wantFrom);
-    else params.delete('from');
-    if (wantTo) params.set('to', wantTo);
-    else params.delete('to');
-    // Keep the hash: deep links like #prompt-opportunities arrive without a
-    // tab param, and this sync must not strip their anchor from the URL.
-    window.history.replaceState(null, '', `?${params.toString()}${window.location.hash}`);
-  }, [tab, view, rangePreset, customFrom, customTo, searchParams]);
+    for (const [k, v] of Object.entries(want)) {
+      if (v) params.set(k, v);
+      else params.delete(k);
+    }
+    const query = params.toString();
+    // Keep the hash: deep links like #prompt-opportunities must keep their anchor.
+    window.history.replaceState(null, '', `${wantPath}${query ? `?${query}` : ''}${hash}`);
+  }, [tab, view, rangePreset, customFrom, customTo, regionFilter, searchParams]);
 
   // Deep link from the Insights Recommendations row (#459): the target card
   // only exists once the Insights tab's volume data has rendered, so a bare
@@ -1112,6 +1441,7 @@ export default function PromptsPage() {
         if (isCancelled?.()) return;
         setVolumes(page.volumes);
         if (page.quota) setQuota(page.quota);
+        setLocationQuota(page.locationQuota);
         const prompts = page.promptSets.flatMap((ps) => ps.prompts);
         setAllPrompts(prompts);
         setVisibility(page.visibility);
@@ -1506,6 +1836,43 @@ export default function PromptsPage() {
           </div>
         </div>
 
+        {/* Tracked vs suggested: two views of the same roster. A segmented
+            control rather than a second Tabs, so it reads as a filter on
+            this panel and not as another level of page navigation. It sits
+            above the filter bar so the controls go from general to specific:
+            which area, which list, then which period. */}
+        {tab === 'all' && (
+          <div
+            className="mt-4 inline-flex w-fit rounded-lg border p-1"
+            role="tablist"
+            aria-label="Prompt view"
+          >
+            {(
+              [
+                { id: 'tracked' as const, label: 'Tracked Prompts', Icon: ListChecks },
+                { id: 'suggestions' as const, label: 'Prompt Suggestions', Icon: Sparkles },
+              ] satisfies { id: PromptsView; label: string; Icon: typeof ListChecks }[]
+            ).map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={view === id}
+                onClick={() => setView(id)}
+                className={cn(
+                  'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                  view === id
+                    ? 'bg-muted text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Filter bar — same shape and position as Visibility and Citations
             (#713). It sits outside the tab panels because the range governs
             both All Prompts and Query Fan-out.
@@ -1558,39 +1925,6 @@ export default function PromptsPage() {
 
         {/* ─── All Prompts tab ─────────────────────────────────────────── */}
         <TabsContent value="all" className="mt-4 space-y-4">
-          {/* Tracked vs suggested: two views of the same roster. A segmented
-              control rather than a second Tabs, so it reads as a filter on
-              this panel and not as another level of page navigation. */}
-          <div
-            className="inline-flex rounded-lg border p-1"
-            role="tablist"
-            aria-label="Prompt view"
-          >
-            {(
-              [
-                { id: 'tracked' as const, label: 'Tracked Prompts', Icon: ListChecks },
-                { id: 'suggestions' as const, label: 'Prompt Suggestions', Icon: Sparkles },
-              ] satisfies { id: PromptsView; label: string; Icon: typeof ListChecks }[]
-            ).map(({ id, label, Icon }) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={view === id}
-                onClick={() => setView(id)}
-                className={cn(
-                  'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                  view === id
-                    ? 'bg-muted text-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </button>
-            ))}
-          </div>
-
           {view === 'suggestions' ? (
             activeBrandId && (
               <>
@@ -1646,8 +1980,10 @@ export default function PromptsPage() {
                 positionsWindow={positionsWindow}
                 positionsPreset={range ? rangePreset : '30d'}
                 regionFilter={regionFilter}
+                locationQuota={locationQuota}
                 onAddPrompt={canManage ? () => setAddPromptOpen(true) : undefined}
                 onEditPrompt={canManage ? setEditingPrompt : undefined}
+                onChanged={loadData}
               />
             </>
           )}
@@ -2013,6 +2349,9 @@ export default function PromptsPage() {
         <AddPromptDialog
           brandId={activeBrandId}
           shoppingEnabled={!!activeBrand?.shoppingModeEnabled}
+          locationQuota={locationQuota}
+          existingTexts={allPrompts.map((p) => p.text)}
+          defaultRegion={brandLocation(activeBrand?.region, activeBrand?.state)}
           open={addPromptOpen}
           onClose={() => setAddPromptOpen(false)}
           onAdded={loadData}
@@ -2074,6 +2413,108 @@ const DOT_LABEL: Record<PlatformDotState, string> = {
   no_runs: 'no runs',
 };
 
+/** How long a row deleted from its menu can be restored (PROMPT-006). */
+const DELETE_UNDO_MS = 10_000;
+
+/**
+ * The row's ⋯ menu (PROMPT-006): Edit, pause or resume tracking, open the
+ * Positions panel on Improve, suggest content, and Delete behind a
+ * confirmation. Base UI's menu opens from mouse and keyboard and closes on
+ * Esc and outside clicks.
+ */
+function RowActionsMenu({
+  prompt,
+  onEdit,
+  onToggleActive,
+  onImprove,
+  onSuggestContent,
+  onOpenSuggestion,
+  suggesting,
+  suggestDisabledReason,
+  onDelete,
+}: {
+  prompt: Prompt;
+  onEdit: () => void;
+  onToggleActive: () => void;
+  onImprove: () => void;
+  /** One content opportunity for this prompt (PROMPT-006). */
+  onSuggestContent: () => void;
+  /** Opens one of the prompt's content opportunities. */
+  onOpenSuggestion: (opportunityId: string) => void;
+  /** A suggestion for this prompt is being written. */
+  suggesting: boolean;
+  /** Why Suggest content can't run now (the month's quota is used up). */
+  suggestDisabledReason: string | null;
+  onDelete: () => void;
+}) {
+  // With the month's quota used up, a prompt that already has a suggestion
+  // can still open it, which costs nothing; the menu asks as it opens.
+  const [openSuggestionId, setOpenSuggestionId] = useState<string | null>(null);
+  const lookUpSuggestion = (open: boolean) => {
+    if (!open || suggestDisabledReason === null) return;
+    getOpenSuggestionForPrompt(prompt.id).then(setOpenSuggestionId, () =>
+      setOpenSuggestionId(null),
+    );
+  };
+
+  return (
+    <DropdownMenu onOpenChange={lookUpSuggestion}>
+      <DropdownMenuTrigger
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        aria-label={`Actions for ${prompt.text}`}
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuItem className="gap-2" onClick={onEdit}>
+          <Pencil className="h-3.5 w-3.5" />
+          Edit
+        </DropdownMenuItem>
+        <DropdownMenuItem className="gap-2" onClick={onToggleActive}>
+          {prompt.isActive ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+          {prompt.isActive ? 'Pause tracking' : 'Resume tracking'}
+        </DropdownMenuItem>
+        <DropdownMenuItem className="gap-2" onClick={onImprove}>
+          <TrendingUp className="h-3.5 w-3.5" />
+          Improve position…
+        </DropdownMenuItem>
+        {suggestDisabledReason !== null && openSuggestionId ? (
+          <DropdownMenuItem className="gap-2" onClick={() => onOpenSuggestion(openSuggestionId)}>
+            <Lightbulb className="h-3.5 w-3.5" />
+            Open content suggestion
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem
+            className="gap-2"
+            onClick={onSuggestContent}
+            disabled={suggesting || suggestDisabledReason !== null}
+          >
+            {suggesting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Lightbulb className="h-3.5 w-3.5" />
+            )}
+            <span className="flex flex-col">
+              <span>{suggesting ? 'Writing a suggestion…' : 'Suggest content'}</span>
+              {suggestDisabledReason && (
+                <span className="text-[11px] text-muted-foreground">{suggestDisabledReason}</span>
+              )}
+            </span>
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="gap-2 text-red-600 focus:text-red-600 dark:text-red-400"
+          onClick={onDelete}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // ─── All Prompts Tab ──────────────────────────────────────────────────────────
 
 const WORK_FILTER_LABELS: Record<string, string> = {
@@ -2086,7 +2527,7 @@ const WORK_FILTER_LABELS: Record<string, string> = {
 
 function AllPromptsTab({
   loading,
-  prompts,
+  prompts: allRows,
   activeBrandId,
   volumeByPromptId,
   visibility,
@@ -2095,8 +2536,10 @@ function AllPromptsTab({
   positionsWindow,
   positionsPreset,
   regionFilter,
+  locationQuota,
   onAddPrompt,
   onEditPrompt,
+  onChanged,
 }: {
   loading: boolean;
   prompts: Prompt[];
@@ -2112,12 +2555,224 @@ function AllPromptsTab({
   positionsPreset: PromptRangePreset;
   /** Selected location; empty means every location. */
   regionFilter: string;
+  /** Org-wide tracked-location usage for the header counter; null hides it. */
+  locationQuota: LocationQuota | null;
   /** Opens the Add Prompt dialog; undefined when the user can't write (member role). */
   onAddPrompt?: () => void;
-  /** Opens the Edit Prompt dialog for a row; undefined hides the pencil (member role). */
+  /** Opens the Edit Prompt dialog for a row; undefined hides the row menu (member role). */
   onEditPrompt?: (prompt: Prompt) => void;
+  /** Reloads the page data after a row is paused, resumed or deleted from its menu. */
+  onChanged: () => void;
 }) {
   const tCommon = useTranslations('common');
+  // Rows deleted from the row menu, hidden at once and deleted for real after
+  // the Undo window (PROMPT-006). There is no soft delete for prompts — a
+  // delete drops their history — so the delay is the undo: closing the page
+  // inside the window simply leaves the prompt in place.
+  const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(() => new Set());
+  const deleteTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const [confirmDelete, setConfirmDelete] = useState<Prompt | null>(null);
+  const [positionsTab, setPositionsTab] = useState<'platforms' | 'improve'>('platforms');
+  const prompts = useMemo(
+    () => allRows.filter((p) => !pendingDeletes.has(p.id)),
+    [allRows, pendingDeletes],
+  );
+
+  const undoDelete = useCallback((id: string) => {
+    const timer = deleteTimers.current.get(id);
+    if (timer) clearTimeout(timer);
+    deleteTimers.current.delete(id);
+    setPendingDeletes((set) => {
+      const next = new Set(set);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const deleteWithUndo = useCallback(
+    (prompt: Prompt) => {
+      setPendingDeletes((set) => new Set(set).add(prompt.id));
+      const timer = setTimeout(async () => {
+        deleteTimers.current.delete(prompt.id);
+        try {
+          await deletePrompt(prompt.id);
+          onChanged();
+        } catch {
+          toast.error('Failed to delete the prompt.');
+          undoDelete(prompt.id);
+        }
+      }, DELETE_UNDO_MS);
+      deleteTimers.current.set(prompt.id, timer);
+      toast('Prompt deleted', {
+        description: prompt.text,
+        duration: DELETE_UNDO_MS,
+        action: { label: 'Undo', onClick: () => undoDelete(prompt.id) },
+      });
+    },
+    [onChanged, undoDelete],
+  );
+
+  // A pending delete still lands if the table unmounts inside the window
+  // (switching tabs, changing brand); only an Undo or closing the page stops it.
+  useEffect(() => {
+    const timers = deleteTimers.current;
+    return () => {
+      for (const [id, timer] of timers) {
+        clearTimeout(timer);
+        void deletePrompt(id);
+      }
+      timers.clear();
+    };
+  }, []);
+
+  const toggleActive = useCallback(
+    async (prompt: Prompt) => {
+      try {
+        const result = await setPromptActive(prompt.id, !prompt.isActive);
+        if ('error' in result) {
+          // Resuming needs a free slot on the plan; the message says how many.
+          toast.error(
+            result.code === 'plan_limit'
+              ? 'Not enough room to resume'
+              : 'Failed to update the prompt.',
+            { description: result.code === 'plan_limit' ? result.error : prompt.text },
+          );
+          return;
+        }
+        toast.success(prompt.isActive ? 'Tracking paused' : 'Tracking resumed', {
+          description: prompt.text,
+        });
+        onChanged();
+      } catch {
+        toast.error('Failed to update the prompt.');
+      }
+    },
+    [onChanged],
+  );
+
+  // "Suggest content" (PROMPT-006): one content opportunity for a prompt,
+  // against the month's content quota. The quota is read up front so the
+  // menu can say when nothing is left; the server enforces it either way.
+  const router = useRouter();
+  const [contentUsage, setContentUsage] = useState<ContentUsage | null>(null);
+  const [usageVersion, setUsageVersion] = useState(0);
+  const [suggestingIds, setSuggestingIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    getContentUsage().then(
+      (usage) => !cancelled && setContentUsage(usage),
+      () => !cancelled && setContentUsage(null),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrandId, usageVersion]);
+  const hasOpportunityLimit =
+    hasContentQuota(contentUsage) && contentUsage.opportunities.limit !== -1;
+  const suggestDisabledReason =
+    hasOpportunityLimit && contentUsage.opportunities.remaining <= 0
+      ? contentUsage.periodEnd
+        ? `Limit reached · resets ${new Date(contentUsage.periodEnd).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            timeZone: 'UTC',
+          })}`
+        : 'Monthly limit reached'
+      : null;
+
+  const openOpportunity = useCallback(
+    (id: string) => router.push(`/dashboard/content?opportunity=${id}`),
+    [router],
+  );
+  const suggestContent = useCallback(
+    async (prompt: Prompt) => {
+      // Only a plan with a monthly limit has a quota to say was left alone.
+      const quotaUntouched = hasOpportunityLimit
+        ? 'Nothing was used from your monthly content quota.'
+        : undefined;
+      setSuggestingIds((set) => new Set(set).add(prompt.id));
+      const toastId = toast.loading('Writing a content suggestion…', {
+        description: prompt.text,
+      });
+      // CONTENT-004: an open suggestion already answers this prompt.
+      const showExisting = (id: string) =>
+        toast.info('This prompt already has a content suggestion', {
+          id: toastId,
+          description: prompt.text,
+          duration: 10_000,
+          action: { label: 'Open existing', onClick: () => openOpportunity(id) },
+        });
+      try {
+        const started = await suggestContentForPrompt(prompt.id, crypto.randomUUID());
+        if (!started.ok) {
+          toast.error(started.quotaExhausted ? 'Monthly content limit reached.' : started.error, {
+            id: toastId,
+            description: prompt.text,
+          });
+          return;
+        }
+        if ('existingId' in started) {
+          showExisting(started.existingId);
+          return;
+        }
+
+        const outcome = await waitForContentJob(started.jobId, {
+          getStatus: getGenerationJobStatus,
+        });
+        if (outcome.kind === 'completed') {
+          const createdId = outcome.result.opportunityIds?.[0];
+          if (createdId) {
+            toast.success('Content suggestion created', {
+              id: toastId,
+              description: prompt.text,
+              duration: 10_000,
+              action: { label: 'Open', onClick: () => openOpportunity(createdId) },
+            });
+          } else if (outcome.result.existingId) {
+            // Covered while the job ran, e.g. once the prompt was regrouped.
+            showExisting(outcome.result.existingId);
+          } else if (outcome.result.limited) {
+            toast.error('Monthly content limit reached.', { id: toastId });
+          } else {
+            toast.info("Couldn't write a suggestion for this prompt yet", {
+              id: toastId,
+              // Not grouped with other prompts yet, or no answers to go on.
+              description: [
+                'It needs tracked answers and a prompt group first; both come with its next tracking run.',
+                quotaUntouched,
+              ]
+                .filter(Boolean)
+                .join(' '),
+            });
+          }
+        } else if (outcome.kind === 'failed') {
+          toast.error("Couldn't write a content suggestion", {
+            id: toastId,
+            description: quotaUntouched,
+          });
+        } else {
+          toast.info('Still writing the content suggestion', {
+            id: toastId,
+            description: 'It will appear in Content when it is done.',
+          });
+        }
+      } catch (err) {
+        // Nothing may be left spinning, whatever went wrong on the way.
+        toast.error("Couldn't write a content suggestion", {
+          id: toastId,
+          description: err instanceof Error ? err.message : quotaUntouched,
+        });
+      } finally {
+        setSuggestingIds((set) => {
+          const next = new Set(set);
+          next.delete(prompt.id);
+          return next;
+        });
+        setUsageVersion((v) => v + 1);
+      }
+    },
+    [openOpportunity, hasOpportunityLimit],
+  );
   const [search, setSearch] = useState('');
   const [workFilter, setWorkFilter] = useState<'all' | 'none' | PromptWorkStatus>('all');
   // Quick filter: prompts late or missing on at least one engine.
@@ -2129,12 +2784,56 @@ function AllPromptsTab({
     new Map(),
   );
   const searchParams = useSearchParams();
-  // The row whose Positions panel is open. It lives here, beside the table,
-  // so closing the panel leaves search, sort, page and scroll as they were.
-  const [positionsFor, setPositionsFor] = useState<PositionsPrompt | null>(null);
+  // The row whose Positions panel is open, and the panel's own range. They
+  // live here, beside the table, so closing the panel leaves search, sort,
+  // page and scroll as they were. Both are mirrored to the URL
+  // (?positions=<id>&positionsRange=7d) so an open panel can be shared.
+  const [positionsId, setPositionsId] = useState<string | null>(() =>
+    searchParams.get('positions'),
+  );
+  const [positionsRange, setPositionsRange] = useState<PositionsRange>(() =>
+    parsePositionsRange(searchParams, positionsPreset),
+  );
+  const panelWindow = useMemo(
+    () =>
+      resolvePromptRange(positionsRange.preset, {
+        from: positionsRange.from,
+        to: positionsRange.to,
+      }),
+    [positionsRange],
+  );
   // A brand switch or reload that drops the prompt must not leave its panel up.
-  const openPositions =
-    positionsFor && prompts.some((p) => p.id === positionsFor.id) ? positionsFor : null;
+  const openPositions = useMemo(() => {
+    const p = positionsId ? prompts.find((row) => row.id === positionsId) : undefined;
+    return p ? { id: p.id, text: p.text } : null;
+  }, [positionsId, prompts]);
+  // Adjust-state-during-render (as in usePagination): clear the id once the
+  // list has loaded without it, so the URL drops it too.
+  if (!loading && positionsId && !openPositions) setPositionsId(null);
+
+  // The panel opens on the table's window; changing it there only moves the panel.
+  const openPositionsPanel = useCallback(
+    (promptId: string, tab: 'platforms' | 'improve' = 'platforms') => {
+      setPositionsTab(tab);
+      setPositionsRange(panelRangeFromTable(positionsPreset, positionsWindow, viewerTimeZone()));
+      setPositionsId(promptId);
+    },
+    [positionsPreset, positionsWindow],
+  );
+
+  // Shallow URL sync, same reasoning as the page's tab sync. Reads the live
+  // location rather than `searchParams`, which can lag a sibling effect's
+  // replaceState in the same commit and would drop its params.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const want = positionsUrlParams(positionsId, positionsRange);
+    if (Object.entries(want).every(([k, v]) => params.get(k) === v)) return;
+    for (const [k, v] of Object.entries(want)) {
+      if (v) params.set(k, v);
+      else params.delete(k);
+    }
+    window.history.replaceState(null, '', `?${params.toString()}${window.location.hash}`);
+  }, [positionsId, positionsRange]);
 
   const statusOf = useCallback(
     (p: Prompt) => (statusOverrides.has(p.id) ? statusOverrides.get(p.id)! : p.workStatus),
@@ -2285,6 +2984,11 @@ function AllPromptsTab({
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <CardTitle className="text-sm font-medium">All Prompts ({prompts.length})</CardTitle>
+            {locationQuota && (
+              <div className="mt-1">
+                <PromptUsageMeter quota={locationQuota} />
+              </div>
+            )}
             <p className="text-xs text-muted-foreground mt-0.5">
               {onEditPrompt
                 ? 'Every tracked prompt for this brand · edit or pause any row in place'
@@ -2333,7 +3037,7 @@ function AllPromptsTab({
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <Table>
+        <Table stickyHeader stickyFirstColumn>
           <TableHeader>
             <TableRow>
               <TableHead className="pl-6">Prompt</TableHead>
@@ -2421,7 +3125,11 @@ function AllPromptsTab({
               >
                 Last run
               </SortableHead>
-              {onEditPrompt && <TableHead className="text-right pr-6 w-[60px]">Edit</TableHead>}
+              {onEditPrompt && (
+                <TableHead className="text-right pr-6 w-[60px]">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -2539,7 +3247,7 @@ function AllPromptsTab({
                             variant="outline"
                             aria-label={`View positions for ${p.text}`}
                             title="See positions"
-                            onClick={() => setPositionsFor({ id: p.id, text: p.text })}
+                            onClick={() => openPositionsPanel(p.id)}
                           >
                             <BarChart3 />
                           </Button>
@@ -2574,15 +3282,17 @@ function AllPromptsTab({
                   </TableCell>
                   {onEditPrompt && (
                     <TableCell className="text-right pr-6">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 w-7 p-0"
-                        aria-label="Edit prompt"
-                        onClick={() => onEditPrompt(p)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
+                      <RowActionsMenu
+                        prompt={p}
+                        onEdit={() => onEditPrompt(p)}
+                        onToggleActive={() => void toggleActive(p)}
+                        onImprove={() => openPositionsPanel(p.id, 'improve')}
+                        onSuggestContent={() => void suggestContent(p)}
+                        onOpenSuggestion={openOpportunity}
+                        suggesting={suggestingIds.has(p.id)}
+                        suggestDisabledReason={suggestDisabledReason}
+                        onDelete={() => setConfirmDelete(p)}
+                      />
                     </TableCell>
                   )}
                 </TableRow>
@@ -2606,11 +3316,40 @@ function AllPromptsTab({
       </CardContent>
       <PromptPositionsSheet
         prompt={openPositions}
-        window={positionsWindow}
-        preset={positionsPreset}
+        range={positionsRange}
+        window={panelWindow}
+        onRangeChange={setPositionsRange}
         region={regionFilter}
-        onClose={() => setPositionsFor(null)}
+        initialTab={positionsTab}
+        onClose={() => setPositionsId(null)}
       />
+      <Dialog open={confirmDelete !== null} onOpenChange={(v) => !v && setConfirmDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Delete prompt and its history?</DialogTitle>
+            <DialogDescription className="break-words">
+              &ldquo;{confirmDelete?.text}&rdquo; and its tracking results will be removed. You can
+              undo for 10 seconds.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setConfirmDelete(null)}>
+              Keep it
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                if (confirmDelete) deleteWithUndo(confirmDelete);
+                setConfirmDelete(null);
+              }}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
