@@ -2641,7 +2641,12 @@ function AllPromptsTab({
           error: 'unreachable',
         }));
         if ('error' in result) {
-          toast.error(`Failed to ${verb} the prompts.`);
+          // Resuming needs free slots on the plan; the message says how many.
+          const planLimit = 'code' in result && result.code === 'plan_limit';
+          toast.error(
+            planLimit ? 'Not enough room to resume' : `Failed to ${verb} the prompts.`,
+            planLimit ? { description: result.error } : undefined,
+          );
           return;
         }
         if (result.updated > 0) {

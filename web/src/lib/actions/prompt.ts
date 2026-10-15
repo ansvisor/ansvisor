@@ -724,6 +724,51 @@ export async function addPromptToBrand(
 
 export type SetPromptActiveResult = { prompt: Prompt } | { error: string; code?: 'plan_limit' };
 
+type ResumeRow = {
+  regions: unknown;
+  is_active: boolean | null;
+  prompt_sets: unknown;
+};
+
+/**
+ * Whether the plan has room for these prompts to be active: the paused ones
+ * among them bring all their locations back (activationDelta), so resuming is
+ * measured like adding them. Null to allow, or the refusal as a value.
+ */
+async function resumeLimitError(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  rows: ResumeRow[],
+): Promise<{ error: string; code?: 'plan_limit' } | null> {
+  const adding = activationDelta(
+    rows.map((row) => ({
+      isActive: row.is_active !== false,
+      regions: row.regions as string[] | null,
+    })),
+  );
+  if (adding <= 0) return null;
+  const orgIds = new Set(
+    rows.map(
+      (row) =>
+        (row.prompt_sets as { brands: { organization_id: string } } | null)?.brands
+          ?.organization_id,
+    ),
+  );
+  // One brand's prompts, so one organization's plan.
+  const [orgId] = orgIds;
+  if (orgIds.size !== 1 || !orgId) return { error: 'Prompt not found' };
+  let limitError: string | null;
+  try {
+    const [plan, usage] = await Promise.all([
+      getOrgPlan(orgId),
+      getOrgLocationUsage(supabase, orgId),
+    ]);
+    limitError = locationLimitMessage(plan, usage.total, adding);
+  } catch {
+    return { error: "Couldn't check your plan's prompt limit. Please try again." };
+  }
+  return limitError ? { code: 'plan_limit', error: limitError } : null;
+}
+
 /**
  * Pause or resume one prompt — the only way a prompt's active state changes
  * after it is created. Pausing frees its locations on the plan (00128).
@@ -745,25 +790,8 @@ export async function setPromptActive(
       .eq('id', id)
       .single();
     if (error || !row) return { error: 'Prompt not found' };
-    const adding = activationDelta([
-      { isActive: row.is_active !== false, regions: row.regions as string[] | null },
-    ]);
-    const orgId = (row.prompt_sets as unknown as { brands: { organization_id: string } } | null)
-      ?.brands?.organization_id;
-    if (adding > 0) {
-      if (!orgId) return { error: 'Prompt not found' };
-      let limitError: string | null;
-      try {
-        const [plan, usage] = await Promise.all([
-          getOrgPlan(orgId),
-          getOrgLocationUsage(supabase, orgId),
-        ]);
-        limitError = locationLimitMessage(plan, usage.total, adding);
-      } catch {
-        return { error: "Couldn't check your plan's prompt limit. Please try again." };
-      }
-      if (limitError) return { code: 'plan_limit', error: limitError };
-    }
+    const refused = await resumeLimitError(supabase, [row as ResumeRow]);
+    if (refused) return refused;
   }
 
   const { data, error } = await supabase
@@ -908,18 +936,31 @@ export async function deletePrompt(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+export type SetPromptsActiveResult = { updated: number } | { error: string; code?: 'plan_limit' };
+
 /**
  * Pause or resume several prompts in one write, from the prompts table's
  * bulk action bar (PROMPT-006). At most a page of rows; RLS keeps it to the
- * caller's prompts, so `updated` can be fewer than asked. Errors come back as
- * values.
+ * caller's prompts, so `updated` can be fewer than asked. Resuming is metered
+ * as setPromptActive meters one: when the plan has no room for every paused
+ * prompt's locations, nothing is written. Errors come back as values.
  */
 export async function setPromptsActive(
   ids: string[],
   isActive: boolean,
-): Promise<{ updated: number } | { error: string }> {
+): Promise<SetPromptsActiveResult> {
   if (ids.length === 0) return { updated: 0 };
   const supabase = await createClient();
+
+  if (isActive) {
+    const { data: rows, error } = await supabase
+      .from('prompts')
+      .select('regions, is_active, prompt_sets!inner(brands!inner(organization_id))')
+      .in('id', ids);
+    if (error) return { error: error.message };
+    const refused = await resumeLimitError(supabase, (rows ?? []) as ResumeRow[]);
+    if (refused) return refused;
+  }
 
   const { data, error } = await supabase
     .from('prompts')
