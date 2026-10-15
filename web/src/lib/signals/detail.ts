@@ -375,6 +375,10 @@ export type WhereValue =
   | { type: 'sources'; items: WinningSource[] }
   /** The brand's mentions on each prompt: where, how high, in what tone. */
   | { type: 'mentions'; items: PromptMention[] }
+  /** What each failed audit check found, page by page. */
+  | { type: 'issues'; items: PageIssue[] }
+  /** AI crawlers by robots.txt user agent (`gptbot`). */
+  | { type: 'crawlers'; agents: string[] }
   | { type: 'locations'; codes: readonly string[] }
   | { type: 'number'; value: number };
 
@@ -445,6 +449,53 @@ function promptMentions(value: unknown): PromptMention[] {
       excerptPlatform: typeof v.excerptPlatform === 'string' ? v.excerptPlatform : null,
       excerptAt: typeof v.excerptAt === 'string' ? v.excerptAt : null,
     }));
+}
+
+/** A failed audit check on a page, with the check's own evidence. */
+export interface PageIssue {
+  page: string;
+  check: string;
+  label: string;
+  evidence: Record<string, unknown>;
+}
+
+/**
+ * The failed checks on each page. Findings recorded before the checks'
+ * evidence name the checks only: their key stands in for the label.
+ */
+function pageIssues(targets: Target[]): PageIssue[] {
+  return targets.flatMap((t) => {
+    const page = label(t);
+    const issues: Record<string, unknown>[] = Array.isArray(t.issues)
+      ? t.issues
+      : Array.isArray(t.checks)
+        ? t.checks.map((check: unknown) => ({ check }))
+        : [];
+    return issues
+      .filter((i) => typeof i?.check === 'string')
+      .map((i) => ({
+        page,
+        check: i.check as string,
+        label: typeof i.label === 'string' ? i.label : (i.check as string),
+        evidence:
+          i.evidence && typeof i.evidence === 'object'
+            ? (i.evidence as Record<string, unknown>)
+            : {},
+      }));
+  });
+}
+
+/**
+ * The AI crawlers robots.txt blocks, from the bot check's evidence. Audits
+ * from before it named them only say some bot is blocked, among bots it may
+ * allow, so they name none.
+ */
+function blockedCrawlers(issues: PageIssue[]): string[] {
+  const agents = issues
+    .filter((i) => i.check === 'ai-bot-access')
+    .flatMap((i) => (Array.isArray(i.evidence.blockedBots) ? i.evidence.blockedBots : []))
+    .filter((a): a is string => typeof a === 'string');
+  return [...new Set(agents)];
 }
 
 export interface WinningSource {
@@ -527,7 +578,7 @@ const LAYOUT: Record<SignalCategory, WhereFieldKey[]> = {
     'excerpt',
   ],
   traffic: ['scope', 'url', 'pages', 'queries', 'engagementRank', 'aiReferrals', 'citablePrompts'],
-  technical: ['url', 'pages', 'issue', 'crawlers', 'evidence'],
+  technical: ['url', 'pages', 'issue', 'evidence'],
   competitor: [
     'competitor',
     'domain',
@@ -539,6 +590,9 @@ const LAYOUT: Record<SignalCategory, WhereFieldKey[]> = {
     'winningSources',
   ],
 };
+
+// Only a blocked crawler has crawlers to name; another technical issue has none.
+const CRAWLER_LAYOUT: WhereFieldKey[] = ['pages', 'issue', 'crawlers', 'evidence'];
 
 // A first citation is a gain: the page and the prompt, not who replaced it.
 const FIRST_CITATION_LAYOUT: WhereFieldKey[] = ['url', 'prompt', 'platforms', 'locations'];
@@ -576,6 +630,7 @@ interface Target {
   label?: unknown;
   competitor?: unknown;
   checks?: unknown;
+  issues?: unknown;
   page?: unknown;
 }
 
@@ -732,12 +787,17 @@ function fieldValue(signal: Signal, key: WhereFieldKey): WhereValue | null {
       const sources = winningSourcesOf(p.winningSources);
       return sources.length ? { type: 'sources', items: sources } : null;
     }
+    case 'issue': {
+      const labels = [...new Set(pageIssues(targets).map((i) => i.label))];
+      return labels.length ? { type: 'list', items: labels, total: labels.length } : null;
+    }
+    case 'crawlers': {
+      const agents = blockedCrawlers(pageIssues(targets));
+      return agents.length ? { type: 'crawlers', agents } : null;
+    }
     case 'evidence': {
-      const checks = targets.flatMap((t) =>
-        Array.isArray(t.checks) ? t.checks.filter((c): c is string => typeof c === 'string') : [],
-      );
-      const unique = [...new Set(checks)];
-      return unique.length ? { type: 'list', items: unique, total: unique.length } : null;
+      const issues = pageIssues(targets);
+      return issues.length ? { type: 'issues', items: issues } : null;
     }
     default:
       return null;
@@ -777,9 +837,11 @@ export function signalWhereFields(signal: Signal): WhereField[] {
   const layout =
     signal.kind === 'first_citation'
       ? FIRST_CITATION_LAYOUT
-      : CITATION_LOSS.includes(signal.kind)
-        ? CITATION_LOSS_LAYOUT
-        : LAYOUT[signal.category];
+      : signal.kind === 'crawler_blocked'
+        ? CRAWLER_LAYOUT
+        : CITATION_LOSS.includes(signal.kind)
+          ? CITATION_LOSS_LAYOUT
+          : LAYOUT[signal.category];
   const named = namedPlaces(signal);
   // A mention's position, sentiment and quote are given per prompt when the
   // evidence is recorded; asked for on their own only when it is not.
@@ -895,6 +957,15 @@ function apiValue(value: WhereValue): unknown {
         excerpt_platform: m.excerptPlatform,
         excerpt_at: m.excerptAt,
       }));
+    case 'issues':
+      return value.items.map((issue) => ({
+        page: issue.page,
+        check: issue.check,
+        label: issue.label,
+        evidence: issue.evidence,
+      }));
+    case 'crawlers':
+      return value.agents;
     case 'sources':
       return value.items.map((source) => ({
         domain: source.domain,

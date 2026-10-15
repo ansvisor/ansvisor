@@ -39,6 +39,41 @@ export const https = {
   },
 };
 
+/**
+ * robots.txt as its groups: the user agents a group names and whether its
+ * rules disallow or allow the whole site. Consecutive user-agent lines share
+ * a group; comments and blank lines are skipped. An agent is kept as the
+ * crawler matches it: its name in lower case, up to a version ("GPTBot/1.1").
+ */
+export function robotsGroups(robotsTxt) {
+  const groups = [];
+  let current = null;
+  let agentLine = false;
+  for (const raw of String(robotsTxt ?? '').split(/\r?\n/)) {
+    const line = raw.replace(/#.*/, '').trim();
+    if (!line || !line.includes(':')) continue;
+    const at = line.indexOf(':');
+    const field = line.slice(0, at).trim().toLowerCase();
+    const value = line.slice(at + 1).trim();
+    if (field === 'user-agent') {
+      if (!current || !agentLine) {
+        current = { agents: [], disallowAll: false, allowAll: false };
+        groups.push(current);
+      }
+      const agent = value.toLowerCase();
+      current.agents.push(agent.match(/^[a-z_-]+/)?.[0] ?? agent);
+      agentLine = true;
+    } else {
+      agentLine = false;
+      if (current && value === '/') {
+        if (field === 'disallow') current.disallowAll = true;
+        if (field === 'allow') current.allowAll = true;
+      }
+    }
+  }
+  return groups;
+}
+
 export const aiBotAccess = {
   key: 'ai-bot-access',
   evaluate(ctx) {
@@ -48,12 +83,17 @@ export const aiBotAccess = {
     }
     const lower = ctx.robotsTxt.toLowerCase();
     const mentioned = AI_BOTS.filter((b) => lower.includes(b));
-    // Detect an explicit block: a mentioned AI UA followed by "disallow: /".
-    const blocked = mentioned.some((b) => {
-      const idx = lower.indexOf(b);
-      const after = lower.slice(idx, idx + 200);
-      return /disallow:\s*\/\s*(\n|$)/.test(after);
+    // An explicit block: the bot's own groups disallow the whole site and
+    // none allows it back ("Allow: /" wins a tie). Read group by group, as
+    // crawlers do; scanning the text after a bot's name also caught the next
+    // group's rules, and blocked a bot that robots.txt allows. The Action
+    // Center names the crawlers a block affects.
+    const groups = robotsGroups(ctx.robotsTxt);
+    const blockedBots = mentioned.filter((b) => {
+      const own = groups.filter((g) => g.agents.includes(b));
+      return own.some((g) => g.disallowAll) && !own.some((g) => g.allowAll);
     });
+    const blocked = blockedBots.length > 0;
 
     let status = 'warn';
     let score = 0.5;
@@ -64,7 +104,7 @@ export const aiBotAccess = {
       status = 'pass';
       score = 1;
     }
-    return { status, score, evidence: { aiBotsMentioned: mentioned, blocked } };
+    return { status, score, evidence: { aiBotsMentioned: mentioned, blocked, blockedBots } };
   },
 };
 

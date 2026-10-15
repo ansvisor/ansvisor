@@ -349,6 +349,29 @@
         "viewPrompt": "View prompt",
         "notAvailable": "Not available",
         "allPlatforms": "All tracked platforms",
+        "checkEvidence": {
+          "yes": "yes",
+          "no": "no",
+          "keys": {
+            "aiBotsMentioned": "In robots.txt",
+            "ageDays": "Age in days",
+            "newest": "Newest date",
+            "dateSignals": "Date signals",
+            "blockCount": "JSON-LD blocks",
+            "blocks": "JSON-LD blocks",
+            "parsed": "Parsed",
+            "wellFormedNodes": "Well-formed nodes",
+            "types": "Schema types",
+            "faqPage": "FAQ schema",
+            "questionCount": "Questions",
+            "internalLinks": "Internal links",
+            "matches": "Wikidata matches",
+            "qid": "Wikidata ID",
+            "label": "Wikidata label",
+            "description": "Wikidata description",
+            "note": "Note"
+          }
+        },
         "mentions": {
           "sentiment": {
             "positive": "Positive",

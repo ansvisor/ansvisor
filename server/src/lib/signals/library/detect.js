@@ -25,6 +25,7 @@ import { resolve } from '../../../config/action-engine.js';
 import { resolveBrandSources } from '../../action-center/sources.js';
 import * as c from './classify.js';
 import { isTransientDbError } from '../../pulse/metrics.js';
+import { describeSignal } from '../../audit/rubric.js';
 
 const { library: t } = resolve();
 const DAY_MS = 86_400_000;
@@ -714,7 +715,7 @@ const FAMILIES = [
       const failures = await selectAll(() =>
         supabaseAdmin
           .from('audit_signal_results')
-          .select('audit_id, signal_key')
+          .select('audit_id, signal_key, evidence')
           .in('audit_id', ids)
           .eq('status', 'fail'),
       );
@@ -725,8 +726,15 @@ const FAMILIES = [
         if (!kind) continue;
         const page = pageOf.get(f.audit_id);
         const set = (groups[kind] ??= new Map());
-        const entry = set.get(page) ?? { page, checks: [] };
+        const entry = set.get(page) ?? { page, checks: [], issues: [] };
         entry.checks.push(f.signal_key);
+        // What the check found, named as the audit names it (AC-001): the
+        // drawer shows it as the issue's evidence.
+        entry.issues.push({
+          check: f.signal_key,
+          label: describeSignal(f.signal_key)?.label ?? f.signal_key,
+          evidence: f.evidence ?? {},
+        });
         set.set(page, entry);
       }
       return Object.entries(groups).map(([kind, pages]) =>
@@ -734,7 +742,7 @@ const FAMILIES = [
           kind,
           'pages',
           [...pages.values()],
-          (e) => ({ id: e.page, label: e.page, checks: e.checks }),
+          (e) => ({ id: e.page, label: e.page, checks: e.checks, issues: e.issues }),
           AUDIT,
         ),
       );

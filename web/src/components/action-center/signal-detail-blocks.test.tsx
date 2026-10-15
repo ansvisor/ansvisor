@@ -299,6 +299,87 @@ describe('an uncited-mentions signal with its evidence', () => {
   });
 });
 
+describe("a technical finding with its checks' evidence", () => {
+  it('shows the crawlers it blocks and what each check found, page by page', () => {
+    render(
+      <SignalWhereBlock
+        signal={signal({
+          category: 'technical',
+          kind: 'crawler_blocked',
+          currentValue: 1,
+          payload: {
+            entity: 'pages',
+            targets: [
+              {
+                id: '/pricing',
+                label: '/pricing',
+                issues: [
+                  {
+                    check: 'ai-bot-access',
+                    label: 'AI bot access (robots.txt)',
+                    evidence: {
+                      aiBotsMentioned: ['gptbot', 'claudebot'],
+                      blocked: true,
+                      blockedBots: ['gptbot'],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          where: NO_WHERE,
+        })}
+      />,
+    );
+    const rows = [...container.querySelectorAll('dt')].map(
+      (dt) => `${dt.textContent}: ${dt.nextElementSibling?.textContent}`,
+    );
+    expect(rows).toContain('Affected crawlers: GPTBot (OpenAI)');
+    expect(rows).toContain(
+      'Failed checks: /pricingAI bot access (robots.txt) · In robots.txt: GPTBot (OpenAI), ClaudeBot (Anthropic)',
+    );
+  });
+
+  it('names what a check found, and leaves out the model that judged it', () => {
+    render(
+      <SignalWhereBlock
+        signal={signal({
+          category: 'technical',
+          kind: 'content_gap',
+          currentValue: 1,
+          payload: {
+            entity: 'pages',
+            targets: [
+              {
+                id: '/guide',
+                label: '/guide',
+                issues: [
+                  {
+                    check: 'query-coverage',
+                    label: 'Query coverage',
+                    evidence: { reason: 'No pricing answers.', model: 'openai/gpt-4.1-mini' },
+                  },
+                  {
+                    check: 'freshness',
+                    label: 'Freshness',
+                    evidence: { ageDays: 412, newest: '2025-08-30', pages: [{ url: '/a' }] },
+                  },
+                ],
+              },
+            ],
+          },
+          where: NO_WHERE,
+        })}
+      />,
+    );
+    const lines = [...container.querySelectorAll('dd li span.block')].map((el) => el.textContent);
+    expect(lines).toEqual([
+      'Query coverage · No pricing answers.',
+      'Freshness · Age in days: 412 · Newest date: 2025-08-30',
+    ]);
+  });
+});
+
 describe('SignalEvidenceBlock', () => {
   it('links the answers and the action the signal is used by', async () => {
     getSignalActions.mockResolvedValue([

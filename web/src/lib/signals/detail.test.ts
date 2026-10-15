@@ -208,13 +208,20 @@ describe('signalWhereFields', () => {
       },
       currentValue: 1,
     });
+    // Recorded before the checks' evidence: the failed checks by name, page
+    // by page, in the same shape. A stale page has no crawlers to name.
+    const check = (name: string) => ({ page: '/pricing', check: name, label: name, evidence: {} });
     expect(signalWhereFields(audit)).toEqual([
       { key: 'pages', value: { type: 'list', items: ['/pricing'], total: 1 } },
-      { key: 'crawlers', value: null },
+      { key: 'issue', value: { type: 'list', items: ['dateModified', 'freshness'], total: 2 } },
       {
         key: 'evidence',
-        value: { type: 'list', items: ['dateModified', 'freshness'], total: 2 },
+        value: { type: 'issues', items: [check('dateModified'), check('freshness')] },
       },
+    ]);
+    expect(signalDetailForApi(audit, []).where.evidence).toEqual([
+      check('dateModified'),
+      check('freshness'),
     ]);
   });
 });
@@ -455,5 +462,55 @@ describe('an uncited-mentions signal', () => {
         excerpt_at: '2026-10-14T05:00:00Z',
       },
     ]);
+  });
+});
+
+describe("a technical finding with its checks' evidence", () => {
+  const issue = {
+    check: 'ai-bot-access',
+    label: 'AI bot access (robots.txt)',
+    evidence: { aiBotsMentioned: ['gptbot', 'claudebot'], blocked: true, blockedBots: ['gptbot'] },
+  };
+  const blocked = signal({
+    category: 'technical',
+    kind: 'crawler_blocked',
+    payload: {
+      entity: 'pages',
+      targets: [{ id: '/pricing', label: '/pricing', checks: ['ai-bot-access'], issues: [issue] }],
+    },
+    currentValue: 1,
+  });
+
+  it('names the issue, the crawlers it blocks, and what the check found', () => {
+    expect(signalWhereFields(blocked)).toEqual([
+      { key: 'pages', value: { type: 'list', items: ['/pricing'], total: 1 } },
+      { key: 'issue', value: { type: 'list', items: ['AI bot access (robots.txt)'], total: 1 } },
+      { key: 'crawlers', value: { type: 'crawlers', agents: ['gptbot'] } },
+      {
+        key: 'evidence',
+        value: { type: 'issues', items: [{ page: '/pricing', ...issue }] },
+      },
+    ]);
+    expect(signalDetailForApi(blocked, []).where.crawlers).toEqual(['gptbot']);
+  });
+
+  it("doesn't guess the crawlers from an audit that only said one was blocked", () => {
+    // That audit also listed bots robots.txt allows.
+    const older = signal({
+      ...blocked,
+      payload: {
+        entity: 'pages',
+        targets: [
+          {
+            id: '/pricing',
+            issues: [
+              { ...issue, evidence: { aiBotsMentioned: ['gptbot', 'claudebot'], blocked: true } },
+            ],
+          },
+        ],
+      },
+    });
+    const byKey = Object.fromEntries(signalWhereFields(older).map((f) => [f.key, f.value]));
+    expect(byKey.crawlers).toBeNull();
   });
 });

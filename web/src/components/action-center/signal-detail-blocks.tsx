@@ -7,7 +7,7 @@ import { Link } from '@/i18n/navigation';
 import { AIProviderAvatar } from '@/components/ai-provider-avatar';
 import { getSignalActions, type Signal, type SignalAction } from '@/lib/actions/signals';
 import { actionTexts } from '@/lib/action-center/display';
-import { locationName, platformFamily, platformName } from '@/lib/signals/names';
+import { crawlerName, locationName, platformFamily, platformName } from '@/lib/signals/names';
 import {
   METRIC_UNITS,
   signalChange,
@@ -40,6 +40,65 @@ function More({ shown, total }: { shown: number; total: number }) {
   return total > shown ? (
     <li className="text-xs text-muted-foreground">{t('more', { count: total - shown })}</li>
   ) : null;
+}
+
+// The keys audit checks write when they fail, named in the messages; the
+// rest are shown as written. A model name, and what the crawlers row
+// already says, are left out.
+const EVIDENCE_KEYS = [
+  'aiBotsMentioned',
+  'ageDays',
+  'newest',
+  'dateSignals',
+  'blockCount',
+  'blocks',
+  'parsed',
+  'wellFormedNodes',
+  'types',
+  'faqPage',
+  'questionCount',
+  'internalLinks',
+  'matches',
+  'qid',
+  'label',
+  'description',
+  'note',
+] as const;
+const HIDDEN_EVIDENCE = new Set(['model', 'blocked', 'blockedBots']);
+
+/**
+ * An audit check's evidence as a line: "Age in days: 412 · Newest date:
+ * 2025-08-30". The checks write small flat objects meant to be shown; lists
+ * are joined and empty values left out.
+ */
+function describeEvidence(
+  evidence: Record<string, unknown>,
+  t: ReturnType<typeof useTranslations>,
+): string {
+  const show = (key: string, value: unknown): string | null => {
+    if (value === null || value === undefined || value === '') return null;
+    if (Array.isArray(value)) {
+      const items = value.filter((v) => typeof v === 'string' || typeof v === 'number');
+      if (items.length === 0) return null;
+      return items.map((v) => (key === 'aiBotsMentioned' ? crawlerName(String(v)) : v)).join(', ');
+    }
+    if (typeof value === 'boolean')
+      return value ? t('drawer.checkEvidence.yes') : t('drawer.checkEvidence.no');
+    if (typeof value === 'object') return null;
+    return String(value);
+  };
+  const name = (key: string) =>
+    (EVIDENCE_KEYS as readonly string[]).includes(key)
+      ? t(`drawer.checkEvidence.keys.${key as (typeof EVIDENCE_KEYS)[number]}`)
+      : key;
+  return Object.entries(evidence)
+    .filter(([key]) => !HIDDEN_EVIDENCE.has(key))
+    .map(([key, value]) => {
+      const shown = show(key, value);
+      return shown === null ? null : key === 'reason' ? shown : `${name(key)}: ${shown}`;
+    })
+    .filter(Boolean)
+    .join(' · ');
 }
 
 function WhereValueView({ value }: { value: WhereValue }) {
@@ -148,6 +207,35 @@ function WhereValueView({ value }: { value: WhereValue }) {
           ))}
         </ul>
       );
+    case 'crawlers':
+      return <span>{value.agents.map(crawlerName).join(', ')}</span>;
+    case 'issues': {
+      // Page by page, each failed check with what it found.
+      const byPage = new Map<string, typeof value.items>();
+      for (const issue of value.items) {
+        byPage.set(issue.page, [...(byPage.get(issue.page) ?? []), issue]);
+      }
+      const pages = [...byPage].slice(0, LIST_LIMIT);
+      return (
+        <ul className="space-y-2">
+          {pages.map(([page, issues]) => (
+            <li key={page}>
+              <span className="break-all">{page}</span>
+              {issues.map((issue) => {
+                const found = describeEvidence(issue.evidence, t);
+                return (
+                  <span key={issue.check} className="block text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">{issue.label}</span>
+                    {found && ` · ${found}`}
+                  </span>
+                );
+              })}
+            </li>
+          ))}
+          <More shown={pages.length} total={byPage.size} />
+        </ul>
+      );
+    }
     case 'mentions':
       return (
         <ul className="space-y-2.5">
