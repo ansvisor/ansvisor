@@ -14412,6 +14412,121 @@ comment on function public.import_prompts(uuid, uuid, integer, jsonb) is
   'Bulk-inserts prompts [{idx, text, category, topic_id, platforms, models, regions}] in order under a per-organization advisory lock, stopping before the org would exceed p_max_locations tracked locations (-1 = unlimited). Returns the (idx, id) of each inserted row. PROMPT-005.';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00123_prompt_position_summaries.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Per-prompt, per-platform position aggregates for the Tracked Prompts table
+-- (PROMPT-007): the Positions column's average position, its trend against
+-- the previous period, and a dot per platform.
+--
+-- One GROUP BY in Postgres, like prompt_visibility_summaries (00025/00072),
+-- rather than pulling every answer of every prompt into the page. The web
+-- adds the sums up over the plan-included platforms, which keeps the average
+-- the same as the Positions panel's: the mean mention position over the
+-- answers that mention the brand.
+--
+-- Sums and counts rather than averages, so platforms can be combined without
+-- weighting errors. chatgpt-shopping is excluded like every analytical
+-- surface (#155); p_region scopes to one tracked location (#691).
+
+create or replace function public.prompt_position_summaries(
+  p_brand_id  uuid,
+  p_date_from timestamptz default null,
+  p_date_to   timestamptz default null,
+  p_region    text default null
+)
+returns table (
+  prompt_id       uuid,
+  platform        text,
+  runs            bigint,
+  mention_answers bigint,
+  -- Over answers that mention the brand and store a position.
+  position_sum    double precision,
+  position_count  bigint,
+  -- How many brands those answers named, for Early / Mid / Late.
+  entity_sum      double precision,
+  entity_count    bigint
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select pr.prompt_id,
+         pr.platform,
+         count(*)::bigint as runs,
+         count(*) filter (where pr.mention_count > 0)::bigint as mention_answers,
+         coalesce(sum(pr.mention_position) filter (
+           where pr.mention_count > 0 and pr.mention_position > 0), 0)::double precision
+                                                              as position_sum,
+         count(*) filter (
+           where pr.mention_count > 0 and pr.mention_position > 0)::bigint as position_count,
+         coalesce(sum(pr.mentioned_entity_count) filter (
+           where pr.mention_count > 0 and pr.mention_position > 0
+             and pr.mentioned_entity_count > 0), 0)::double precision as entity_sum,
+         count(*) filter (
+           where pr.mention_count > 0 and pr.mention_position > 0
+             and pr.mentioned_entity_count > 0)::bigint      as entity_count
+  from public.prompt_results pr
+  where pr.brand_id = p_brand_id
+    and pr.prompt_id is not null
+    and pr.platform <> 'chatgpt-shopping'
+    and (p_date_from is null or pr.created_at >= p_date_from)
+    and (p_date_to   is null or pr.created_at <= p_date_to)
+    and (p_region    is null or pr.region = p_region)
+  group by pr.prompt_id, pr.platform
+$$;
+
+grant execute on function
+  public.prompt_position_summaries(uuid, timestamptz, timestamptz, text)
+  to authenticated;
+
+comment on function
+  public.prompt_position_summaries(uuid, timestamptz, timestamptz, text) is
+  'Per-prompt, per-platform mention position sums for the Tracked Prompts Positions column (PROMPT-007). Sums, not averages, so platforms combine exactly.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00124_prompt_improve_outcome.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Did an Improve action move the prompt's positions? (PROMPT-008)
+--
+-- actions.baseline already holds the prompt's last 7 days per platform at
+-- send time (from-prompt-improve.js). position_outcome is the same 7-day read
+-- taken again every day while the action is open and for 30 days after it is
+-- completed (improve-outcome.js), shown by the action's Outcome card, the
+-- Positions panel and History:
+--
+--   { measuredAt, window: { from, to }, final,
+--     platforms: [{ platform, before, after, verdict }],
+--     summary: { total, measurable, improved, declined, avgBefore, avgAfter } }
+--
+-- verdict is improved | declined | unchanged | not_enough_data. final is true
+-- for the read at day 30 after completion, which is not refreshed again.
+alter table public.actions add column if not exists position_outcome jsonb;
+
+comment on column public.actions.position_outcome is
+  'Improve actions (PROMPT-008): the latest 7-day positions per platform next to the baseline, refreshed daily until 30 days after completion. Null for other kinds.';
+
+-- The baseline is what the outcome is measured against, so it is fixed once
+-- the action exists. Enforced here rather than trusted to every writer.
+create or replace function public.actions_keep_improve_baseline()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if old.kind = 'prompt_improve' and new.baseline is distinct from old.baseline then
+    raise exception 'The baseline of an Improve action cannot be changed';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists actions_keep_improve_baseline on public.actions;
+create trigger actions_keep_improve_baseline
+  before update of baseline on public.actions
+  for each row execute function public.actions_keep_improve_baseline();
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00125_opportunity_usage.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- Monthly content opportunity quota (CONTENT-001).
