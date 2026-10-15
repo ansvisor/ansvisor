@@ -6,7 +6,7 @@
 
 import { describe, expect, test } from 'vitest';
 import type { GenerationJobStatus } from '@/lib/actions/content';
-import { waitForContentJob } from './content-job';
+import { suggestForPrompt, waitForContentJob } from './content-job';
 
 const status = (s: Partial<GenerationJobStatus>): GenerationJobStatus => ({
   status: 'active',
@@ -71,5 +71,70 @@ describe('waitForContentJob', () => {
       ...fakeClock(),
     });
     expect(outcome).toEqual({ kind: 'timeout' });
+  });
+});
+
+describe('suggestForPrompt', () => {
+  const run = (
+    start: Parameters<typeof suggestForPrompt>[1]['start'],
+    getStatus: Parameters<typeof suggestForPrompt>[1]['getStatus'] = async () =>
+      status({ status: 'active' }),
+  ) => suggestForPrompt('p1', { start, getStatus, newKey: () => 'key-1', ...fakeClock() });
+
+  test('follows the job to the opportunity it created', async () => {
+    const outcome = await run(
+      async () => ({ ok: true, jobId: 'j1' }),
+      async () => status({ status: 'completed', result: { generated: 1, opportunityIds: ['o1'] } }),
+    );
+    expect(outcome).toEqual({ kind: 'created', opportunityId: 'o1' });
+  });
+
+  test('offers the open opportunity, whether known up front or found by the job', async () => {
+    expect(await run(async () => ({ ok: true, existingId: 'o2' }))).toEqual({
+      kind: 'existing',
+      opportunityId: 'o2',
+    });
+    expect(
+      await run(
+        async () => ({ ok: true, jobId: 'j1' }),
+        async () => status({ status: 'completed', result: { generated: 0, existingId: 'o3' } }),
+      ),
+    ).toEqual({ kind: 'existing', opportunityId: 'o3' });
+  });
+
+  test('tells a used-up quota from nothing to write yet', async () => {
+    expect(
+      await run(async () => ({ ok: false, error: 'Monthly limit', quotaExhausted: true })),
+    ).toEqual({ kind: 'limited' });
+    expect(
+      await run(
+        async () => ({ ok: true, jobId: 'j1' }),
+        async () => status({ status: 'completed', result: { generated: 0, limited: true } }),
+      ),
+    ).toEqual({ kind: 'limited' });
+    expect(
+      await run(
+        async () => ({ ok: true, jobId: 'j1' }),
+        async () => status({ status: 'completed', result: { generated: 0 } }),
+      ),
+    ).toEqual({ kind: 'nothing' });
+  });
+
+  test('turns a refusal, a failed job or a throw into failed', async () => {
+    expect(await run(async () => ({ ok: false, error: 'Prompt not found' }))).toEqual({
+      kind: 'failed',
+      message: 'Prompt not found',
+    });
+    expect(
+      await run(
+        async () => ({ ok: true, jobId: 'j1' }),
+        async () => status({ status: 'failed', failedReason: 'No AI key' }),
+      ),
+    ).toEqual({ kind: 'failed', message: 'No AI key' });
+    expect(
+      await run(async () => {
+        throw new Error('crypto.randomUUID is not a function');
+      }),
+    ).toEqual({ kind: 'failed', message: 'crypto.randomUUID is not a function' });
   });
 });
