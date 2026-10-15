@@ -18,6 +18,8 @@ import { UNCOUNTED_TASK_STATUSES } from '@/lib/action-center/registry';
 import { ImpactDots } from './signal-table';
 import { ActionIcon } from './action-table';
 import { HistoryStatusBadge } from './history-table';
+import { ImproveOutcomeCard } from './improve-outcome-card';
+import { improvePlatformLabels } from '@/lib/improve-outcome';
 import { cn } from '@/lib/utils';
 
 /**
@@ -103,7 +105,7 @@ export function HistoryDrawer({
   return (
     <Sheet open={Boolean(item)} onOpenChange={onOpenChange}>
       <SheetContent className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-lg">
-        <SheetHeader className="border-b px-6 py-4">
+        <SheetHeader className="border-b px-6 py-4 pr-12">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge variant="outline" className="text-[10px]">
               {tTypes(item.type)}
@@ -193,6 +195,16 @@ export function HistoryDrawer({
           </section>
 
           <Separator />
+
+          {item.positionOutcome && (
+            <>
+              <ImproveOutcomeCard
+                outcome={item.positionOutcome}
+                labels={improvePlatformLabels(item.payload)}
+              />
+              <Separator />
+            </>
+          )}
 
           <section>
             <p className="text-xs font-medium text-muted-foreground">{t('drawer.affected')}</p>

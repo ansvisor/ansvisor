@@ -1,5 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PLANS, type Plan } from '@/config/plans';
+import { getPromptVolumes, type VolumeQuota } from '@/lib/actions/volumes';
+import { getPromptVisibilitySummaries } from '@/lib/actions/tracking';
 
 /**
  * setPromptActive meters resuming like adding (00128): only active prompts
@@ -13,6 +15,9 @@ let usedLocations = 0;
 let usageFails = false;
 let plan: Plan;
 let writes: unknown[] = [];
+let promptSetRows: Record<string, unknown>[] = [];
+let positionData: Record<string, unknown>[] = [];
+let positionsError: string | null = null;
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/actions/volumes', () => ({ getPromptVolumes: vi.fn() }));
@@ -24,13 +29,24 @@ vi.mock('@/lib/guards/plan-guard', () => ({
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
-    rpc: async () =>
-      usageFails
+    rpc: async (fn: string) => {
+      if (fn === 'prompt_position_summaries') {
+        return positionsError
+          ? { data: null, error: { message: positionsError } }
+          : { data: positionData, error: null };
+      }
+      return usageFails
         ? { data: null, error: { message: 'rpc failed' } }
-        : { data: [{ brand_id: 'b1', locations: usedLocations }], error: null },
-    from: () => ({
+        : { data: [{ brand_id: 'b1', locations: usedLocations }], error: null };
+    },
+    from: (table: string) => ({
       select: () => ({
         eq: () => ({
+          order: async () =>
+            table === 'prompt_sets'
+              ? { data: promptSetRows, error: null }
+              : { data: null, error: { message: `unexpected ${table}` } },
+          maybeSingle: async () => ({ data: { organization_id: 'org-1' }, error: null }),
           single: async () =>
             promptRow
               ? {
@@ -57,7 +73,7 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { setPromptActive, updatePromptLocations } = await import('./prompt');
+const { getPromptsPageData, setPromptActive, updatePromptLocations } = await import('./prompt');
 
 const capped = (maxPrompts: number): Plan => ({
   ...PLANS.starter,
@@ -166,5 +182,75 @@ describe('updatePromptLocations on paused prompts', () => {
 
     expect(result).toMatchObject({ code: 'plan_limit' });
     expect(writes).toEqual([]);
+  });
+});
+
+describe('getPromptsPageData', () => {
+  beforeEach(() => {
+    plan = capped(50);
+    promptRow = null;
+    promptSetRows = [
+      {
+        id: 'ps1',
+        brand_id: 'b1',
+        name: 'Prompts',
+        created_at: '2026-10-01T00:00:00.000Z',
+        updated_at: '2026-10-01T00:00:00.000Z',
+        prompts: [
+          {
+            id: 'p1',
+            prompt_set_id: 'ps1',
+            text: 'best crm for startups',
+            platforms: ['chatgpt-web'],
+            regions: ['US'],
+            models: [],
+            is_active: true,
+            prompt_target_urls: [],
+            created_at: '2026-10-01T00:00:00.000Z',
+          },
+        ],
+      },
+    ];
+    positionData = [
+      {
+        prompt_id: 'p1',
+        platform: 'chatgpt-web',
+        runs: 4,
+        mention_answers: 4,
+        position_sum: 8,
+        position_count: 4,
+        entity_sum: 20,
+        entity_count: 4,
+      },
+    ];
+    positionsError = null;
+    vi.mocked(getPromptVolumes).mockResolvedValue({ volumes: [], quota: {} as VolumeQuota });
+    vi.mocked(getPromptVisibilitySummaries).mockResolvedValue({});
+    // The location quota fails here (no brand row), which the page also absorbs.
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('fills the Positions column from the position summaries', async () => {
+    const page = await getPromptsPageData('b1');
+
+    expect(page.positions.p1.avg).toBe(2);
+    expect(page.positions.p1.dots.map((d) => d.id)).toEqual(['chatgpt-web']);
+  });
+
+  it('shows — in the Positions column when the position query fails, instead of failing the page', async () => {
+    positionsError = 'canceling statement due to statement timeout';
+
+    const page = await getPromptsPageData('b1');
+
+    expect(page.promptSets[0].prompts.map((p) => p.id)).toEqual(['p1']);
+    expect(page.positions.p1).toEqual({ avg: null, delta: null, dots: [], lateOrMissing: false });
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('position summaries'),
+      expect.any(Error),
+    );
   });
 });
