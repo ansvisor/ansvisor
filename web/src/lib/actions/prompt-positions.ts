@@ -14,6 +14,7 @@ import {
 } from '@/lib/prompt-positions';
 import { isTimeZone } from '@/lib/time-zone';
 import type { Sentiment } from '@/types';
+import { pickImprovingAction, type ImprovingAction } from '@/lib/improve-outcome';
 
 export interface PromptPositionsData {
   prompt: { id: string; text: string; topicName: string | null; isActive: boolean };
@@ -21,6 +22,8 @@ export interface PromptPositionsData {
   window: { from: string; to: string };
   summary: PositionsSummary;
   platforms: PlatformPositions[];
+  /** An Improve action sent for this prompt that is still tracked (PROMPT-008). */
+  improving: ImprovingAction | null;
 }
 
 /** 90 days × 8 engines × a few locations, with room to spare. */
@@ -67,13 +70,22 @@ export async function getPromptPositions(
   const brandId = promptSet?.brand_id as string | undefined;
   if (!brandId) return null;
 
-  const [{ data: brand }, { data: domainRows }, { data: topic }] = await Promise.all([
-    supabase.from('brands').select('organization_id').eq('id', brandId).maybeSingle(),
-    supabase.from('brand_domains').select('domain').eq('brand_id', brandId),
-    prompt.topic_id
-      ? supabase.from('topics').select('name').eq('id', prompt.topic_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-  ]);
+  const [{ data: brand }, { data: domainRows }, { data: topic }, { data: improveRows }] =
+    await Promise.all([
+      supabase.from('brands').select('organization_id').eq('id', brandId).maybeSingle(),
+      supabase.from('brand_domains').select('domain').eq('brand_id', brandId),
+      prompt.topic_id
+        ? supabase.from('topics').select('name').eq('id', prompt.topic_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase
+        .from('actions')
+        .select('id, action_no, status, position_outcome')
+        .eq('brand_id', brandId)
+        .eq('kind', 'prompt_improve')
+        .eq('payload->>promptId', promptId)
+        .order('created_at', { ascending: false })
+        .limit(10),
+    ]);
   if (!brand?.organization_id) return null;
 
   const plan = await getOrgPlan(brand.organization_id as string);
@@ -158,5 +170,6 @@ export async function getPromptPositions(
     window,
     summary,
     platforms: rowsByPlatform,
+    improving: pickImprovingAction(improveRows ?? []),
   };
 }
