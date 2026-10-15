@@ -23,16 +23,16 @@ type ServerSupabase = Awaited<ReturnType<typeof createClient>>;
  * or missing region list still runs once (the worker falls back to a single
  * untargeted pass), so it costs one.
  *
- * Mirrored in SQL by `org_prompt_location_usage` (00070) as
- * `greatest(coalesce(array_length(regions,1),0),1)` — the two definitions
- * must not drift.
+ * Mirrored in SQL by `org_prompt_location_usage` (00070, active prompts only
+ * since 00128) as `greatest(coalesce(array_length(regions,1),0),1)` — the
+ * two definitions must not drift.
  */
 export function promptLocationCount(regions: readonly unknown[] | null | undefined): number {
   return Array.isArray(regions) && regions.length > 0 ? regions.length : 1;
 }
 
 export interface OrgLocationUsage {
-  /** Tracked locations across every prompt in the org. */
+  /** Active locations across every prompt in the org; paused prompts don't count (00128). */
   total: number;
   /**
    * Tracked locations per brand — for replace-style saves (savePromptSet
@@ -76,9 +76,21 @@ export async function getOrgLocationUsage(
 }
 
 /**
- * The one quota decision: may a change that adds `adding` locations proceed
- * when `used` are already tracked? Returns null to allow, or the user-facing
- * rejection message.
+ * Locations that making these prompts active adds to the plan's count: each
+ * one that is paused now brings all its locations back. Resuming is metered
+ * like adding, so pausing prompts, filling their room with new ones and
+ * resuming the old ones can't get past the limit.
+ */
+export function activationDelta(
+  prompts: readonly { isActive: boolean; regions?: readonly unknown[] | null }[],
+): number {
+  return prompts.reduce((sum, p) => (p.isActive ? sum : sum + promptLocationCount(p.regions)), 0);
+}
+
+/**
+ * The one quota decision: may a change that adds `adding` active locations
+ * proceed when `used` are already active? Returns null to allow, or the
+ * user-facing rejection message.
  *
  * The rules every caller relies on:
  *  - `maxPrompts === -1` (self-host, enterprise) is unlimited — always null.
@@ -94,10 +106,10 @@ export function locationLimitMessage(plan: Plan, used: number, adding: number): 
   if (total <= max) return null;
   const over = total - max;
   return (
-    `Your ${plan.name} plan allows up to ${max} tracked prompt locations — each prompt ` +
-    `counts once per location it targets. This change would use ${total} ` +
-    `(${used} in place + ${adding} added). Remove ${over} location${over === 1 ? '' : 's'} ` +
-    `to continue, or upgrade your plan.`
+    `Your ${plan.name} plan allows up to ${max} active prompt locations — each prompt ` +
+    `counts once per location it targets, and paused prompts don't count. This change ` +
+    `would use ${total} (${used} in place + ${adding} added). Remove or pause ${over} ` +
+    `location${over === 1 ? '' : 's'} to continue, or upgrade your plan.`
   );
 }
 
@@ -106,6 +118,8 @@ export function locationLimitMessage(plan: Plan, used: number, adding: number): 
 export interface PromptLocations {
   id: string;
   regions: string[];
+  /** Paused prompts take no room on the plan, so their changes cost nothing. */
+  isActive?: boolean;
 }
 
 export interface BulkLocationChange {
@@ -123,7 +137,7 @@ export interface BulkLocationPlan {
   unchanged: number;
   /** Would have been left with no location at all, so they were left alone. */
   blocked: number;
-  /** Locations the whole batch adds — what the plan cap is measured against. */
+  /** Active locations the whole batch adds — what the plan cap is measured against. */
   delta: number;
 }
 
@@ -173,7 +187,8 @@ export function planBulkLocationChange(
 
     const delta = promptLocationCount(next) - promptLocationCount(current);
     plan.changes.push({ promptId: prompt.id, regions: next, delta });
-    plan.delta += delta;
+    // A paused prompt's locations count only once it is resumed.
+    if (prompt.isActive !== false) plan.delta += delta;
   }
 
   return plan;
