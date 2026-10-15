@@ -131,6 +131,23 @@ describe('windowDays', () => {
       '2026-10-03',
     ]);
   });
+
+  it("counts the viewer's days: a whole-day range in Istanbul stays three days", () => {
+    expect(
+      windowDays(
+        '2026-09-30T21:00:00.000Z',
+        '2026-10-03T20:59:59.999Z',
+        new Set(),
+        'Europe/Istanbul',
+      ),
+    ).toEqual(['2026-10-01', '2026-10-02', '2026-10-03']);
+  });
+
+  it('returns no days, rather than failing, for a window that ends before it starts', () => {
+    expect(windowDays('2026-10-05T00:00:00.000Z', '2026-10-03T00:00:00.000Z', new Set())).toEqual(
+      [],
+    );
+  });
 });
 
 describe('countRuns', () => {
@@ -174,6 +191,16 @@ const PLATFORMS = [
 const WEEK = { from: '2026-10-04T00:00:00.000Z', to: '2026-10-10T23:59:59.999Z' };
 
 describe('summarizePositions', () => {
+  it("files an answer under the viewer's day, not the UTC one", () => {
+    const late = answer({ createdAt: '2026-10-08T22:30:00Z', mentioned: true, mentionPosition: 1 });
+    const utc = summarizePositions([late], PLATFORMS, WEEK);
+    const istanbul = summarizePositions([late], PLATFORMS, WEEK, 'Europe/Istanbul');
+    expect(utc.platforms[0].days[0].day).toBe('2026-10-08');
+    // 22:30 UTC is 01:30 the next morning in Istanbul (UTC+3).
+    expect(istanbul.platforms[0].days[0].day).toBe('2026-10-09');
+    expect(istanbul.summary.mentionedDays).toBe(1);
+  });
+
   it('counts a day once however many answers it has, and keeps every answer', () => {
     const { platforms } = summarizePositions(
       [
