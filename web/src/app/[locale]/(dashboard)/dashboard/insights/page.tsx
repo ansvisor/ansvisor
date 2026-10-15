@@ -113,6 +113,7 @@ import { usePlanContext } from '@/components/providers/plan-provider';
 import { formatCompactNumber } from '@/lib/format';
 import { toast } from 'sonner';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
+import type { PromptComparison } from '@/lib/insights-same-prompts';
 
 // ─── Filter Types ─────────────────────────────────────────────────────────────
 
@@ -127,6 +128,8 @@ interface InsightsFilters {
   region: string;
   model: string;
   topic: string;
+  /** "Compare: Same prompts" (VIS-002): changes compare only prompts answered in both periods. */
+  samePrompts: boolean;
 }
 
 const DEFAULT_FILTERS: InsightsFilters = {
@@ -136,12 +139,14 @@ const DEFAULT_FILTERS: InsightsFilters = {
   region: '',
   model: '',
   topic: '',
+  samePrompts: true,
 };
 
 /**
  * The filters as kept in the URL (#917): ?range=, plus ?from=/&to= for a
- * custom range, and ?region=, ?model=, ?topic=. Defaults are left out, and an
- * unknown range falls back to the default.
+ * custom range, ?region=, ?model=, ?topic=, and ?compare=all when "Same
+ * prompts" is off. Defaults are left out, and an unknown range falls back to
+ * the default.
  */
 function filtersFromUrl(): InsightsFilters {
   const datePreset = readUrlChoice<DatePreset>(
@@ -156,6 +161,7 @@ function filtersFromUrl(): InsightsFilters {
     region: readUrlParam('region'),
     model: readUrlParam('model'),
     topic: readUrlParam('topic'),
+    samePrompts: readUrlParam('compare') !== 'all',
   };
 }
 
@@ -169,6 +175,7 @@ function writeFiltersToUrl(f: InsightsFilters) {
       region: f.region,
       model: f.model,
       topic: f.topic,
+      compare: f.samePrompts ? null : 'all',
     },
     { range: DEFAULT_FILTERS.datePreset },
   );
@@ -542,6 +549,7 @@ function FilterBar({
   availableTopics: Topic[];
 }) {
   const t = useTranslations('common');
+  const tInsights = useTranslations('insights');
   const set = (patch: Partial<InsightsFilters>) => onChange({ ...filters, ...patch });
 
   return (
@@ -651,6 +659,35 @@ function FilterBar({
             })}
           </SelectContent>
         </Select>
+      </div>
+      {/* Compare: Same prompts (VIS-002) */}
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+          {tInsights('compare.label')}
+        </label>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={filters.samePrompts}
+          title={tInsights('compare.hint')}
+          onClick={() => set({ samePrompts: !filters.samePrompts })}
+          className="inline-flex h-8 items-center gap-2 rounded-md border bg-background px-2.5 text-xs transition-colors hover:bg-muted/50"
+        >
+          <span
+            className={cn(
+              'relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors',
+              filters.samePrompts ? 'bg-primary' : 'bg-muted-foreground/30',
+            )}
+          >
+            <span
+              className={cn(
+                'block h-3 w-3 rounded-full bg-background shadow transition-transform',
+                filters.samePrompts ? 'translate-x-3.5' : 'translate-x-0.5',
+              )}
+            />
+          </span>
+          {tInsights('compare.samePrompts')}
+        </button>
       </div>
     </div>
   );
@@ -1034,6 +1071,7 @@ export default function InsightsPage() {
   const [rateTrend, setRateTrend] = useState<VisibilityRateTrendData | null>(null);
   const [sovData, setSovData] = useState<ShareOfVoiceData | null>(null);
   const [recommendations, setRecommendations] = useState<InsightsRecommendations | null>(null);
+  const [comparison, setComparison] = useState<PromptComparison | null>(null);
   const [breakdownMetric, setBreakdownMetric] = useState<BreakdownMetric | null>(null);
   // The window and filters the cards were last loaded with (the 24h view
   // anchored to its tracking run): the breakdown panel explains those exact
@@ -1083,6 +1121,7 @@ export default function InsightsPage() {
           // rollups (00066). Absent for 24h, whose anchored window above is
           // timestamp-shaped and stays on the raw path.
           days,
+          samePrompts: f.samePrompts,
         };
 
         const hasFilters = Boolean(f.datePreset !== 'all' || f.model || f.region || f.topic);
@@ -1119,6 +1158,7 @@ export default function InsightsPage() {
         setCompetitorData(insights.competitors.brands.length > 1 ? insights.competitors : null);
         setSovData(insights.sov.byPlatform.length > 0 ? insights.sov : null);
         setRecommendations(insights.recommendations);
+        setComparison(insights.comparison);
         setHasAnyData(insights.hasAnyData);
 
         // Group raw model slugs by their resolved display name so different
@@ -1711,6 +1751,18 @@ export default function InsightsPage() {
                               <span className="text-muted-foreground">
                                 vs {formatWindowBound(rateTrend.summary.prevFrom)} –{' '}
                                 {formatWindowBound(rateTrend.summary.prevTo)}
+                              </span>
+                            )}
+                            {/* Shown even without a change: when every prompt is new,
+                                this is why there is nothing to compare. */}
+                            {comparison && comparison.newPrompts > 0 && (
+                              <span className="text-muted-foreground" title={t('compare.hint')}>
+                                {rateTrend.summary.change !== null &&
+                                  rateTrend.summary.prevFrom &&
+                                  '· '}
+                                {comparison.basis === 'same'
+                                  ? t('compare.newExcluded', { count: comparison.newPrompts })
+                                  : t('compare.newIncluded', { count: comparison.newPrompts })}
                               </span>
                             )}
                           </div>
