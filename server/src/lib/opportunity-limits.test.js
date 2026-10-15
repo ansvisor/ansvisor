@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
+  OPEN_OPPORTUNITY_STATUSES,
   OPPORTUNITIES_PER_RUN,
   SCORE_WEIGHTS,
   clusterMetrics,
   coveredClusterIds,
+  openOpportunityOn,
+  openlyCoveredClusterIds,
   opportunityScore,
   pickClusters,
   scoreComponents,
@@ -96,6 +99,27 @@ describe('cluster selection', () => {
     expect([...covered].sort()).toEqual(['c1', 'c2', 'c3']);
   });
 
+  it("holds a prompt's own request back only with an open opportunity (PROMPT-006)", () => {
+    const rows = [
+      { cluster_id: 'c1', related_cluster_ids: ['c2'], status: 'in_progress' },
+      { cluster_id: 'c3', related_cluster_ids: [], status: 'dismissed' },
+      { cluster_id: 'c4', related_cluster_ids: [], status: 'done' },
+      { cluster_id: 'c5', related_cluster_ids: [], status: 'archived' },
+    ];
+    expect([...openlyCoveredClusterIds(rows)].sort()).toEqual(['c1', 'c2']);
+    expect(OPEN_OPPORTUNITY_STATUSES).toEqual(['new', 'reviewed', 'sent', 'in_progress']);
+  });
+
+  it('names the open opportunity that covers a cluster, merged ones included', () => {
+    const rows = [
+      { id: 'o1', cluster_id: 'c1', related_cluster_ids: [], status: 'dismissed' },
+      { id: 'o2', cluster_id: 'c9', related_cluster_ids: ['c1'], status: 'sent' },
+    ];
+    expect(openOpportunityOn(rows, 'c1')).toBe('o2');
+    expect(openOpportunityOn(rows, 'c2')).toBeNull();
+    expect(openOpportunityOn(rows, null)).toBeNull();
+  });
+
   it('takes the best uncovered clusters that have answers', () => {
     const cand = (id, score, tested = 1) => ({ id, score, topicId: id, metrics: { tested } });
     const picked = pickClusters(
@@ -125,6 +149,22 @@ describe('cluster selection', () => {
       new Set(),
     );
     expect(picked.map((c) => c.id)).toEqual(['a1', 'none1', 'b1']);
+  });
+
+  it('tops up from the best of the rest when asked for more than there are topics', () => {
+    const cand = (id, score, topicId) => ({ id, score, topicId, metrics: { tested: 1 } });
+    const candidates = [
+      cand('a1', 95, 'a'),
+      cand('a2', 90, 'a'),
+      cand('a3', 60, 'a'),
+      cand('b1', 50, 'b'),
+    ];
+    expect(pickClusters(candidates, new Set(), 3).map((c) => c.id)).toEqual(['a1', 'b1']);
+    expect(pickClusters(candidates, new Set(), 3, { fill: true }).map((c) => c.id)).toEqual([
+      'a1',
+      'b1',
+      'a2',
+    ]);
   });
 });
 

@@ -17,8 +17,22 @@ import { compareOutcome, outcomeWindow, readPlatformStates } from './improve-out
 
 export const IMPROVE_ACTION_KIND = 'prompt_improve';
 
-/** What a completed Improve action is measured on (basket scope: its prompt). */
-const KPI_KEYS = ['ai_visibility', 'citations', 'mentions'];
+/**
+ * What a completed Improve action is measured on (basket scope: its prompt).
+ * Citations are counted on the basket's pages, so they're measured only when
+ * the action names brand pages; otherwise the metric could only ever be null.
+ */
+export function improveKpiKeys(pages) {
+  return pages.length ? ['ai_visibility', 'citations', 'mentions'] : ['ai_visibility', 'mentions'];
+}
+
+/** The brand pages the selected suggestions work on: their brand_page sources. */
+export function improvePages(suggestions) {
+  const pages = suggestions.flatMap((s) =>
+    (s.sources ?? []).filter((src) => src?.type === 'brand_page').map((src) => src.ref),
+  );
+  return [...new Set(pages.filter((ref) => typeof ref === 'string' && ref.trim()))];
+}
 
 const GAP_POINTS = { not_mentioned: 3, mentioned_late: 2, not_cited: 1 };
 
@@ -154,6 +168,7 @@ export async function sendImproveToActionCenter({
 
   const sentAt = new Date();
   const now = sentAt.toISOString();
+  const pages = improvePages(suggestions);
   const window = outcomeWindow(sentAt);
   const snapshots = await readPlatformStates({
     promptId: prompt.id,
@@ -167,8 +182,10 @@ export async function sendImproveToActionCenter({
     title: `Improve position: "${prompt.text}"`,
     promptId: prompt.id,
     promptText: prompt.text,
-    // Measured on this prompt alone (validate.js basket scope).
+    // Measured on this prompt alone, and on the brand pages the suggestions
+    // name for citations (validate.js basket scope).
     promptIds: [prompt.id],
+    pages,
     rangeKey: set.range_key,
     region: set.region || null,
     platforms: platforms.map((p) => ({ id: p.id, label: label(p.id), state: p.state })),
@@ -188,7 +205,7 @@ export async function sendImproveToActionCenter({
       definition_version: 1,
       impact: improveImpact(platforms, volumeRow?.est_ai_volume),
       payload,
-      kpi_keys: KPI_KEYS,
+      kpi_keys: improveKpiKeys(pages),
       baseline: improveBaseline(snapshots, now, window),
       // The first read is the baseline itself; the daily sweep moves it on.
       position_outcome: {

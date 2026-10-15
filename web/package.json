@@ -44,6 +44,7 @@
     "react-dom": "19.2.3",
     "react-is": "^19.2.4",
     "react-markdown": "^10.1.0",
+    "read-excel-file": "9.3.12",
     "recharts": "^3.8.0",
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",

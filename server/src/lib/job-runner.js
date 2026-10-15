@@ -233,10 +233,10 @@ async function attemptContentJob(jobId, io) {
   let retrying = false;
 
   try {
-    const { brandId, model } = jobRow.data;
+    const { brandId, model, request } = jobRow.data;
     const proxy = createJobProxy(jobId, abortController.signal);
 
-    const result = await processContentJob({ brandId, model, job: proxy });
+    const result = await processContentJob({ brandId, model, job: proxy, request });
 
     await completeJob(jobId, result);
 

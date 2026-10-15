@@ -4,7 +4,10 @@ import Image from 'next/image';
 import { useTheme } from 'next-themes';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useSearchParams } from 'next/navigation';
 import { usePathname, Link } from '@/i18n/navigation';
+import { getTrackedPromptCount } from '@/lib/actions/prompt';
+import { carriedParams, PROMPTS_BASE } from '@/lib/prompts-routes';
 import { dashboardNav } from '@/config/dashboard';
 import {
   getDashboardNavLabel,
@@ -24,6 +27,7 @@ import { Separator } from '@/components/ui/separator';
 import { BrandSwitcher } from '@/components/layout/brand-switcher';
 import { UserProfileNavItem } from '@/components/layout/user-profile-nav-item';
 import {
+  ChevronDown,
   ChevronsLeft,
   ChevronsRight,
   Crown,
@@ -35,6 +39,68 @@ import {
 /** How long the pointer rests on the collapsed sidebar before it opens. */
 const PEEK_DELAY_MS = 150;
 
+/**
+ * The menu's viewport. Its edges fade out where items are hidden above or
+ * below, by as much as has scrolled out (up to 1.5rem), so a long menu says
+ * there's more without a heavier control (prefixed too, for Chromium before
+ * 120). The scroll padding keeps an item scrolled into view (the current
+ * page, keyboard focus) clear of the fade. It only scrolls up and down: while
+ * a collapsed sidebar widens, its labels would otherwise scroll it sideways.
+ * Base UI makes it a tab stop once it overflows, so its focus ring sits
+ * inside, where the fade can't clip it.
+ */
+const NAV_VIEWPORT =
+  'px-2 py-3 scroll-py-6 overflow-x-hidden! focus-visible:ring-inset [--nav-fade:1.5rem] [--nav-mask:linear-gradient(to_bottom,transparent,#000_min(var(--nav-fade),var(--scroll-area-overflow-y-start,0px)),#000_calc(100%_-_min(var(--nav-fade),var(--scroll-area-overflow-y-end,0px))),transparent)] [mask-image:var(--nav-mask)] [-webkit-mask-image:var(--nav-mask)]';
+
+/**
+ * A slim scrollbar over the menu's right edge: it shows only while the pointer
+ * is on the menu or it is scrolling, and never takes width from the items.
+ */
+const NAV_SCROLLBAR =
+  'data-vertical:w-2 opacity-0 transition-opacity duration-300 data-hovering:opacity-100 data-scrolling:opacity-100 data-scrolling:duration-75 [&>[data-slot=scroll-area-thumb]]:bg-muted-foreground/25 [&>[data-slot=scroll-area-thumb]:hover]:bg-muted-foreground/45';
+
+/** Where the Prompts submenu's open/closed state is remembered (PROMPT-001). */
+const SUBMENU_KEY = 'ansvisor.sidebar.promptsOpen';
+
+/**
+ * Arrow keys in the sidebar's links (PROMPT-001): up and down move between
+ * them; right opens a submenu (or enters it), left leaves or closes it.
+ * Enter follows the focused link, as links do.
+ */
+function handleNavKeys(
+  e: React.KeyboardEvent<HTMLElement>,
+  setSubmenuOpen: (open: boolean) => void,
+) {
+  const items = [...e.currentTarget.querySelectorAll<HTMLElement>('[data-nav-item]')];
+  const current = document.activeElement as HTMLElement | null;
+  const i = current ? items.indexOf(current) : -1;
+  if (i < 0) return;
+  const focus = (el: HTMLElement | undefined) => {
+    if (!el) return;
+    e.preventDefault();
+    el.focus();
+  };
+  const isParent = current?.dataset.navItem === 'parent';
+  const isChild = current?.dataset.navItem === 'child';
+  if (e.key === 'ArrowDown') focus(items[i + 1]);
+  else if (e.key === 'ArrowUp') focus(items[i - 1]);
+  else if (e.key === 'ArrowRight' && isParent) {
+    e.preventDefault();
+    if (current?.getAttribute('aria-expanded') === 'true') focus(items[i + 1]);
+    else setSubmenuOpen(true);
+  } else if (e.key === 'ArrowLeft' && isParent) {
+    e.preventDefault();
+    setSubmenuOpen(false);
+  } else if (e.key === 'ArrowLeft' && isChild) {
+    focus(
+      items
+        .slice(0, i)
+        .reverse()
+        .find((el) => el.dataset.navItem === 'parent'),
+    );
+  }
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const { isCollapsed, toggleCollapse } = useSidebarStore();
@@ -45,6 +111,13 @@ export function Sidebar() {
   const peekTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const asideRef = useRef<HTMLElement>(null);
   const compact = isCollapsed && !peeking && !menuOpen;
+  const searchParams = useSearchParams();
+  const underPrompts = pathname.startsWith(PROMPTS_BASE);
+  // The Prompts submenu: remembered per browser, and open whenever a Prompts
+  // route is showing so the current view is always visible in it.
+  const [submenuOpen, setSubmenuOpenState] = useState(true);
+  const [trackedCount, setTrackedCount] = useState<number | null>(null);
+  const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const t = useTranslations('nav');
   const tBrands = useTranslations('brands');
   const { canUse, requiredPlanFor, isCloud } = useFeatureGate();
@@ -72,6 +145,62 @@ export function Sidebar() {
   }, []);
 
   useEffect(() => () => clearTimeout(peekTimer.current), []);
+
+  // When the menu is longer than the window, the current page's item is
+  // scrolled into view, so it is never hidden below the fold: on every page
+  // change, and when the sidebar opens or closes (its layout changes) unless
+  // the user has scrolled the menu since, which then stays where they put it.
+  const menuScrolledByUser = useRef(false);
+  useEffect(() => {
+    menuScrolledByUser.current = false;
+  }, [pathname]);
+  useEffect(() => {
+    if (menuScrolledByUser.current) return;
+    asideRef.current
+      ?.querySelector<HTMLElement>('nav [aria-current="page"]')
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [pathname, compact]);
+  const markMenuScrolled = () => {
+    menuScrolledByUser.current = true;
+  };
+
+  useEffect(() => {
+    let stored: string | null = null;
+    try {
+      stored = localStorage.getItem(SUBMENU_KEY);
+    } catch {
+      // Storage can be unavailable (private mode); the default stands.
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (stored !== null) setSubmenuOpenState(stored === '1');
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (underPrompts) setSubmenuOpenState(true);
+  }, [underPrompts]);
+
+  // The count beside Tracked Prompts, refreshed on brand switch and on every
+  // page change so adding or deleting prompts shows up.
+  useEffect(() => {
+    if (!activeBrandId) return;
+    let cancelled = false;
+    getTrackedPromptCount(activeBrandId)
+      .then((n) => !cancelled && setTrackedCount(n))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrandId, pathname]);
+
+  const setSubmenuOpen = (open: boolean) => {
+    setSubmenuOpenState(open);
+    try {
+      localStorage.setItem(SUBMENU_KEY, open ? '1' : '0');
+    } catch {
+      // Not remembered this time; nothing else depends on it.
+    }
+  };
 
   const logoSrc = mounted && resolvedTheme === 'dark' ? '/logo_dark.svg' : '/logo_light.svg';
 
@@ -126,6 +255,13 @@ export function Sidebar() {
         ref={asideRef}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
+        // Keyboard users open a collapsed sidebar by tabbing into it, as
+        // pointer users do by hovering.
+        onFocus={() => isCollapsed && setPeeking(true)}
+        onBlur={(e) => {
+          if (!asideRef.current?.contains(e.relatedTarget as Node | null)) setPeeking(false);
+        }}
+        onKeyDown={(e) => handleNavKeys(e, setSubmenuOpen)}
         className={cn(
           'absolute inset-y-0 left-0 z-40 flex flex-col border-r bg-sidebar transition-[width] duration-200',
           compact ? 'w-16' : 'w-60',
@@ -155,7 +291,21 @@ export function Sidebar() {
           <BrandSwitcher collapsed={compact} onOpenChange={handleMenuOpenChange} />
         </div>
 
-        <ScrollArea className="flex-1 px-2 py-3">
+        {/* Only the menu scrolls; the logo, the brand switcher and the footer
+            stay put. min-h-0 lets it shrink below its content in the column. */}
+        <ScrollArea
+          className="min-h-0 flex-1"
+          viewportClassName={NAV_VIEWPORT}
+          scrollbarClassName={NAV_SCROLLBAR}
+          onWheel={markMenuScrolled}
+          onTouchMove={markMenuScrolled}
+          onPointerDown={(e) => {
+            // Dragging the scrollbar counts; clicking an item doesn't.
+            if ((e.target as Element).closest('[data-slot="scroll-area-scrollbar"]')) {
+              markMenuScrolled();
+            }
+          }}
+        >
           {dashboardNav.map((group, i) => (
             <div key={i} className="mb-4">
               {group.title && !compact && (
@@ -223,8 +373,77 @@ export function Sidebar() {
                     );
                   }
 
+                  if (item.children?.length && !compact) {
+                    // Expandable item (PROMPT-001): the row toggles the
+                    // submenu, whose links are the item's views.
+                    const carry = underPrompts ? carriedParams(searchParams.toString()) : '';
+                    const submenuId = `submenu-${item.href.replace(/\W+/g, '-')}`;
+                    return (
+                      <div key={item.href}>
+                        <button
+                          type="button"
+                          data-nav-item="parent"
+                          aria-expanded={submenuOpen}
+                          aria-controls={submenuId}
+                          onClick={() => setSubmenuOpen(!submenuOpen)}
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                            isActive
+                              ? 'text-primary'
+                              : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                          )}
+                        >
+                          <item.icon className="h-4 w-4 shrink-0" />
+                          <span className="flex-1 truncate">{label}</span>
+                          <ChevronDown
+                            className={cn(
+                              'h-3.5 w-3.5 shrink-0 transition-transform',
+                              !submenuOpen && '-rotate-90',
+                            )}
+                          />
+                        </button>
+                        {submenuOpen && (
+                          <ul id={submenuId} className="mt-0.5 ml-[18px] space-y-0.5 border-l pl-2">
+                            {item.children.map((child) => {
+                              const childActive = pathname === child.href;
+                              return (
+                                <li key={child.href}>
+                                  <Link
+                                    href={`${child.href}${carry}`}
+                                    data-nav-item="child"
+                                    aria-current={childActive ? 'page' : undefined}
+                                    className={cn(
+                                      'flex items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                                      childActive
+                                        ? 'bg-primary/10 font-medium text-primary'
+                                        : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                                    )}
+                                  >
+                                    <span className="flex-1 truncate">
+                                      {getDashboardNavLabel(child.title, t, tBrands)}
+                                    </span>
+                                    {child.href.endsWith('/tracked') && trackedCount !== null && (
+                                      <span className="text-[11px] tabular-nums text-muted-foreground">
+                                        {trackedCount.toLocaleString()}
+                                      </span>
+                                    )}
+                                  </Link>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </div>
+                    );
+                  }
+
                   return (
-                    <Link key={item.href} href={item.href}>
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      data-nav-item="link"
+                      aria-current={isActive ? 'page' : undefined}
+                    >
                       <span
                         className={cn(
                           'flex items-center gap-3 rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors',

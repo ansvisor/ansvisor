@@ -46,6 +46,7 @@ import type { PositionsRange } from '@/lib/positions-range';
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { ImproveTab, useImprove, type ImproveController } from './prompt-improve-tab';
 import { getPromptPositions, type PromptPositionsData } from '@/lib/actions/prompt-positions';
+import { viewerTimeZone } from '@/lib/time-zone';
 import type {
   AnswerView,
   PlatformDay,
@@ -73,34 +74,44 @@ interface Props {
   onRangeChange: (range: PositionsRange) => void;
   /** The table's location; empty means every location. */
   region: string;
+  /** The tab the panel opens on: Improve when opened from the row menu (PROMPT-006). */
+  initialTab?: 'platforms' | 'improve';
   onClose: () => void;
 }
 
 const DAYS_PAGE = 10;
 const HISTORY_PAGE = 7;
 
-const DATE_FMT = new Intl.DateTimeFormat('en-US', {
+// Days arrive as YYYY-MM-DD already in the viewer's time zone, so they are
+// printed as plain calendar dates (read at UTC midnight, never shifted).
+const DAY_FMT = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
   month: 'short',
   day: 'numeric',
   year: 'numeric',
 });
-const SHORT_DATE_FMT = new Intl.DateTimeFormat('en-US', {
+const SHORT_DAY_FMT = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
   month: 'short',
   day: 'numeric',
 });
+// Answer times are instants, shown on the viewer's clock with its zone.
+const DATE_FMT = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
 const TIME_FMT = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'UTC',
   hour: '2-digit',
   minute: '2-digit',
   hourCycle: 'h23',
+  timeZoneName: 'short',
 });
 
-const formatDay = (day: string) => DATE_FMT.format(new Date(`${day}T00:00:00Z`));
-const formatTime = (iso: string) => `${TIME_FMT.format(new Date(iso))} UTC`;
+const formatDay = (day: string) => DAY_FMT.format(new Date(`${day}T00:00:00Z`));
+const formatTime = (iso: string) => TIME_FMT.format(new Date(iso));
 const formatDateTime = (iso: string) =>
-  `${DATE_FMT.format(new Date(iso))}, ${TIME_FMT.format(new Date(iso))} UTC`;
+  `${DATE_FMT.format(new Date(iso))}, ${TIME_FMT.format(new Date(iso))}`;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const pct = (n: number, of: number) => (of > 0 ? `${Math.round((n / of) * 100)}%` : '—');
 
@@ -115,6 +126,7 @@ export function PromptPositionsSheet({
   window,
   onRangeChange,
   region,
+  initialTab = 'platforms',
   onClose,
 }: Props) {
   const preset = range.preset;
@@ -134,7 +146,12 @@ export function PromptPositionsSheet({
   useEffect(() => {
     if (!prompt) return;
     let cancelled = false;
-    getPromptPositions(prompt.id, { from: window.from, to: window.to, region: region || undefined })
+    getPromptPositions(prompt.id, {
+      from: window.from,
+      to: window.to,
+      region: region || undefined,
+      timeZone: viewerTimeZone(),
+    })
       .then((data) => {
         if (cancelled) return;
         setLoaded({ key, data, error: data ? null : 'This prompt is no longer available.' });
@@ -228,8 +245,8 @@ export function PromptPositionsSheet({
             )}
             {data && !latestMode && data.summary.days.length > 0 && (
               <span>
-                {SHORT_DATE_FMT.format(new Date(`${data.summary.days[0]}T00:00:00Z`))} –{' '}
-                {formatDay(data.summary.days[data.summary.days.length - 1])} (UTC)
+                {SHORT_DAY_FMT.format(new Date(`${data.summary.days[0]}T00:00:00Z`))} –{' '}
+                {formatDay(data.summary.days[data.summary.days.length - 1])}
               </span>
             )}
             {region && <span>· {formatRegionDisplay(region)}</span>}
@@ -277,9 +294,9 @@ export function PromptPositionsSheet({
           {current?.error && <LoadError message={current.error} onRetry={retry} />}
           {data &&
             (latestMode ? (
-              <LatestView data={data} improve={improve} />
+              <LatestView data={data} improve={improve} initialTab={initialTab} />
             ) : (
-              <PeriodView data={data} improve={improve} />
+              <PeriodView data={data} improve={improve} initialTab={initialTab} />
             ))}
         </div>
 
@@ -409,11 +426,12 @@ function CitationStatus({ answer }: { answer: AnswerView }) {
 /** One answer: its mention and its citation side by side. */
 function AnswerLine({ answer, showTime }: { answer: AnswerView; showTime: boolean }) {
   return (
-    <div className="grid grid-cols-1 gap-1 text-xs sm:grid-cols-[5.5rem_1fr_1fr] sm:gap-3">
+    <div className="grid grid-cols-1 gap-1 text-xs sm:grid-cols-[6rem_1fr_1fr] sm:gap-3">
       {showTime ? (
         <span className="tabular-nums text-muted-foreground">
-          {formatTime(answer.at)}
-          {answer.region ? ` · ${formatRegionDisplay(answer.region)}` : ''}
+          {/* The time keeps its zone on one line ("16:28 GMT+5:30"). */}
+          <span className="block whitespace-nowrap">{formatTime(answer.at)}</span>
+          {answer.region && <span className="block">{formatRegionDisplay(answer.region)}</span>}
         </span>
       ) : (
         <span className="hidden sm:block" />
@@ -485,7 +503,15 @@ function ImproveTrigger({ improve }: { improve: ImproveController }) {
   );
 }
 
-function LatestView({ data, improve }: { data: PromptPositionsData; improve: ImproveController }) {
+function LatestView({
+  data,
+  improve,
+  initialTab,
+}: {
+  data: PromptPositionsData;
+  improve: ImproveController;
+  initialTab: 'platforms' | 'improve';
+}) {
   const included = data.platforms.filter((p) => p.access.state === 'included');
   const answered = included.filter((p) => p.latest);
   const mentioned = answered.filter((p) => p.latest!.mentioned).length;
@@ -511,7 +537,7 @@ function LatestView({ data, improve }: { data: PromptPositionsData; improve: Imp
         <Stat label="Avg. position" value={avg} sub="when mentioned" />
       </div>
 
-      <Tabs defaultValue="platforms">
+      <Tabs defaultValue={initialTab}>
         <TabsList>
           <TabsTrigger value="platforms">Platform results</TabsTrigger>
           <ImproveTrigger improve={improve} />
@@ -582,7 +608,15 @@ function LatestRow({ platform: p }: { platform: PlatformPositions }) {
 
 // ─── 7d / 30d / 90d / custom: days ────────────────────────────────────────────
 
-function PeriodView({ data, improve }: { data: PromptPositionsData; improve: ImproveController }) {
+function PeriodView({
+  data,
+  improve,
+  initialTab,
+}: {
+  data: PromptPositionsData;
+  improve: ImproveController;
+  initialTab: 'platforms' | 'improve';
+}) {
   const s = data.summary;
   return (
     <div className="space-y-4">
@@ -619,7 +653,7 @@ function PeriodView({ data, improve }: { data: PromptPositionsData; improve: Imp
         </p>
       )}
 
-      <Tabs defaultValue="platforms">
+      <Tabs defaultValue={initialTab}>
         <TabsList>
           <TabsTrigger value="platforms">Platform results</TabsTrigger>
           <TabsTrigger value="history">Daily history ({s.trackedDays})</TabsTrigger>
@@ -637,8 +671,8 @@ function PeriodView({ data, improve }: { data: PromptPositionsData; improve: Imp
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            Each block is one UTC day in the selected range. Hover a block for that day&apos;s
-            positions; open a platform for every run.
+            Each block is one day in the selected range, in your time zone. Hover a block for that
+            day&apos;s positions; open a platform for every run.
           </p>
         </TabsContent>
         <TabsContent value="history" className="mt-3">

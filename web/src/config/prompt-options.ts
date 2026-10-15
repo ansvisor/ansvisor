@@ -1,3 +1,5 @@
+import { dayRangeBounds, viewerTimeZone } from '@/lib/time-zone';
+
 export const REGIONS = [
   { code: 'US', label: 'United States' },
   { code: 'GB', label: 'United Kingdom' },
@@ -181,19 +183,23 @@ export interface PromptRange {
 
 /**
  * Resolve a preset (plus the custom inputs) into the bounds both data paths
- * take. A custom range is clamped to PROMPT_RANGE_MAX_DAYS and never extends
- * into the future, so the two tabs cannot disagree about what they read.
+ * take. A custom range runs from the start of its first day to the end of its
+ * last in the viewer's time zone, is clamped to PROMPT_RANGE_MAX_DAYS and
+ * never extends into the future, so the two tabs cannot disagree about what
+ * they read.
  */
 export function resolvePromptRange(
   preset: PromptRangePreset,
   custom?: { from?: string; to?: string },
+  timeZone: string = viewerTimeZone(),
 ): PromptRange {
   const now = Date.now();
   const dayMs = 86_400_000;
 
   if (preset === 'custom') {
-    const parsedTo = custom?.to ? Date.parse(`${custom.to}T23:59:59.999Z`) : NaN;
-    const parsedFrom = custom?.from ? Date.parse(custom.from) : NaN;
+    const bounds = dayRangeBounds(custom?.from, custom?.to, timeZone);
+    const parsedTo = bounds.to ? Date.parse(bounds.to) : NaN;
+    const parsedFrom = bounds.from ? Date.parse(bounds.from) : NaN;
     const to = Number.isFinite(parsedTo) ? Math.min(parsedTo, now) : now;
     const earliest = to - PROMPT_RANGE_MAX_DAYS * dayMs;
     const from = Number.isFinite(parsedFrom)
