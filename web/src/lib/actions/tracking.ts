@@ -193,10 +193,11 @@ function modelFilterArray(model: string | undefined): string[] | undefined {
 // pre-aggregated daily tables instead — cost scales with days in the window,
 // never with accumulated results.
 //
-// Topic-filtered calls deliberately stay on the raw RPCs: topic is a live
-// prompt attribute (reassigning a prompt must move its history), the rollups
-// have no prompt dimension at brand grain, and a topic slice is a small
-// fraction of the scan that made the raw path unaffordable.
+// Topic-filtered calls are served from the rollups too (00139): with
+// p_topic_id the read functions answer from the prompt-grain tables, keyed
+// through the prompt's current topic, so reassigning a prompt still moves its
+// history. Every daily call must pass p_topic_id along — without it the
+// rollup answers for the whole brand.
 
 /**
  * Whole-day UTC window, 'YYYY-MM-DD' inclusive on both ends. Its presence in
@@ -209,13 +210,12 @@ export interface DayWindow {
 }
 
 interface WindowedOpts {
-  topicId?: string;
   days?: DayWindow;
 }
 
 /** The day window to serve from rollups, or null when the raw path must answer. */
 function dailyWindow(opts?: WindowedOpts): DayWindow | null {
-  return opts?.days && !opts.topicId ? opts.days : null;
+  return opts?.days ?? null;
 }
 
 const DAY_MS = 86_400_000;
@@ -503,6 +503,7 @@ export async function getVisibilityRateKpi(
         p_region: opts?.region ?? undefined,
         p_day_from: daily.dayFrom,
         p_day_to: daily.dayTo,
+        p_topic_id: opts?.topicId ?? undefined,
       })
     : await supabase.rpc('visible_prompt_stats', {
         p_brand_id: brandId,
@@ -576,6 +577,7 @@ export async function getTrackedPromptsKpi(
           p_region: opts?.region ?? undefined,
           p_day_from: daily.dayFrom,
           p_day_to: daily.dayTo,
+          p_topic_id: opts?.topicId ?? undefined,
         })
       : supabase.rpc('tracked_prompt_count', {
           p_brand_id: brandId,
@@ -1389,6 +1391,7 @@ export async function getInsightsSummary(
     p_platform: undefined as string | undefined,
     p_models,
     p_region: opts?.region ?? undefined,
+    p_topic_id: opts?.topicId ?? undefined,
   };
 
   const { data: curData, error } = daily
@@ -2053,6 +2056,7 @@ export async function getCompetitorComparison(
     p_platform: undefined as string | undefined,
     p_models,
     p_region: opts?.region ?? undefined,
+    p_topic_id: opts?.topicId ?? undefined,
   };
 
   // The heaviest reads on the page: competitor_aggregates over the raw rows
@@ -2356,6 +2360,7 @@ export async function getShareOfVoiceData(
           p_region: opts?.region ?? undefined,
           p_day_from: win.dayFrom,
           p_day_to: win.dayTo,
+          p_topic_id: opts?.topicId ?? undefined,
         })
       : supabase.rpc('share_of_voice_aggregates', {
           ...baseArgs,
@@ -2587,6 +2592,7 @@ export async function getVisibilityRateTrend(
     p_region: opts?.region ?? undefined,
     p_day_from: dayFrom,
     p_day_to: dayTo,
+    p_topic_id: opts?.topicId ?? undefined,
   });
   // Day-window equivalents of the three timestamp windows above: display,
   // warm-up-extended fetch range, and the previous window for the delta.
@@ -3257,36 +3263,25 @@ export interface TopicDetailData {
  * Output is identical to the old per-call results — this is a perf refactor.
  */
 export async function getTopicDetail(brandId: string, topicId: string): Promise<TopicDetailData> {
-  // Access first, on the caller's own client: RLS answers whether this user
-  // may see the brand, and the query ties the topic to that brand.
-  const topic = await getTopicById(brandId, topicId);
+  // All time, as whole UTC days: the empty window routes every aggregate to
+  // the daily rollups (00139), whose cost follows days in the window rather
+  // than the topic's accumulated results. Raw, these reads ran 5-15s on a
+  // 91-prompt topic — past the authenticated role's 8s statement timeout.
+  // Everything runs on the caller's own client, so RLS scopes every read.
+  const allTime: DayWindow = {};
+  const [topic, summary, rateTrend, sov, competitors, results] = await Promise.all([
+    getTopicById(brandId, topicId),
+    getInsightsSummary(brandId, { topicId, days: allTime }),
+    // #685 — use the new-formula RPC so the trend sits on the same 0-100
+    // scale as the headline AI Visibility Score. getVisibilityTrend
+    // averaged raw visibility_score over all answers (incl. 0-scored
+    // absent-brand rows).
+    getVisibilityRateTrend(brandId, { topicId, days: allTime }),
+    getShareOfVoiceData(brandId, { topicId, days: allTime }),
+    getCompetitorComparison(brandId, { topicId, days: allTime }),
+    getPromptResults(brandId, { topicId, limit: 50 }),
+  ]);
   if (!topic) throw new Error('Topic not found');
-
-  // Topic-filtered reads cannot use the daily rollups, so they scan raw
-  // results over the topic's whole history. On a 91-prompt topic with 27k
-  // results the calls below ran 5-9s each when run together — past the
-  // authenticated role's 8s statement timeout, so the page never loaded.
-  // They run on the service-role client instead (120s, migration 00100).
-  // That skips RLS, which is safe only because the brand was checked above
-  // and every read in these loaders filters by brand_id.
-  // Imported here, not at module load: the admin client needs the service key
-  // the moment it is created, and most of this module never touches it.
-  const { supabaseAdmin } = await import('@/lib/supabase/admin');
-  const [summary, rateTrend, sov, competitors, results] = await withDbClient(
-    supabaseAdmin as unknown as Awaited<ReturnType<typeof dbClient>>,
-    () =>
-      Promise.all([
-        getInsightsSummary(brandId, { topicId }),
-        // #685 — use the new-formula RPC so the trend sits on the same 0-100
-        // scale as the headline AI Visibility Score. getVisibilityTrend
-        // averaged raw visibility_score over all answers (incl. 0-scored
-        // absent-brand rows).
-        getVisibilityRateTrend(brandId, { topicId }),
-        getShareOfVoiceData(brandId, { topicId }),
-        getCompetitorComparison(brandId, { topicId }),
-        getPromptResults(brandId, { topicId, limit: 50 }),
-      ]),
-  );
 
   // Adapt VisibilityRateTrendData → VisibilityTrendPoint[] so topic_charts.tsx
   // keeps its existing VisibilityTrendPoint shape without modification.
