@@ -209,6 +209,57 @@ describe('a lost citation with its evidence', () => {
   });
 });
 
+describe('a competitor signal with its evidence', () => {
+  it('shows positions by prompt and the sources behind its wins', () => {
+    render(
+      <SignalWhereBlock
+        signal={signal({
+          category: 'competitor',
+          kind: 'competitor_momentum',
+          payload: {
+            entity: 'competitors',
+            competitorName: 'Profound',
+            positions: [
+              {
+                promptId: 'p1',
+                promptText: 'Best AI rank tracker?',
+                platform: 'chatgpt-web',
+                competitor: { now: 1, before: 3 },
+                you: { now: 3, before: 2 },
+              },
+              {
+                promptId: 'p2',
+                promptText: 'AI rank tracker comparison',
+                platform: 'perplexity-web',
+                competitor: { now: 2, before: null },
+                you: { now: null, before: 4 },
+              },
+            ],
+            winningSources: [{ domain: 'g2.example', answers: 2, answersRead: 3 }],
+          },
+          where: NO_WHERE,
+        })}
+      />,
+    );
+    const rows = [...container.querySelectorAll('dt')].map(
+      (dt) => `${dt.textContent}: ${dt.nextElementSibling?.textContent}`,
+    );
+    expect(rows).toContain(
+      'Positions by prompt: Best AI rank tracker?ChatGPT · Profound #1 ↑2 · You #3 ↓1' +
+        'AI rank tracker comparisonPerplexity · Profound #2 new · You — lost',
+    );
+    expect(rows).toContain(
+      'Sources behind their wins: g2.examplecited in 2 of the 3 latest answers they win',
+    );
+    expect(rows).toContain('Platforms: ChatGPTPerplexity');
+    // A competitor's climb and the brand's fall are both bad news.
+    const tone = (text: string) =>
+      [...container.querySelectorAll('span')].find((s) => s.textContent === text)?.className;
+    expect(tone(' ↑2')).toContain('text-red-600');
+    expect(tone(' ↓1')).toContain('text-red-600');
+  });
+});
+
 describe('SignalEvidenceBlock', () => {
   it('links the answers and the action the signal is used by', async () => {
     getSignalActions.mockResolvedValue([

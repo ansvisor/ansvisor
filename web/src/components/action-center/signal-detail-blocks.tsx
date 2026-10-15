@@ -127,6 +127,43 @@ function WhereValueView({ value }: { value: WhereValue }) {
       );
     case 'all_platforms':
       return <span>{t('drawer.allPlatforms')}</span>;
+    case 'positions':
+      return (
+        <ul className="space-y-1.5">
+          {value.items.map((row) => (
+            <li key={`${row.promptId}-${row.platform}`}>
+              <Link
+                href={`/dashboard/prompts/${row.promptId}`}
+                className="break-words underline-offset-2 hover:underline"
+              >
+                {row.promptText || t('drawer.positions.untitled')}
+              </Link>
+              <span className="block text-xs text-muted-foreground">
+                {platformName(row.platform)} ·{' '}
+                {value.competitor || t('drawer.change.roles.unnamed')}{' '}
+                <PositionMove position={row.competitor} side="competitor" /> ·{' '}
+                {t('drawer.positions.you')} <PositionMove position={row.you} side="you" />
+              </span>
+            </li>
+          ))}
+        </ul>
+      );
+    case 'sources':
+      return (
+        <ul className="space-y-1">
+          {value.items.map((source) => (
+            <li key={source.domain}>
+              <span className="break-all">{source.domain}</span>
+              <span className="block text-xs text-muted-foreground">
+                {t('drawer.positions.sourceAnswers', {
+                  count: source.answers,
+                  of: source.answersRead,
+                })}
+              </span>
+            </li>
+          ))}
+        </ul>
+      );
     case 'citations':
       return (
         <ul className="space-y-1">
@@ -158,6 +195,53 @@ function WhereValueView({ value }: { value: WhereValue }) {
     case 'locations':
       return <span>{value.codes.map(locationName).join(', ')}</span>;
   }
+}
+
+/**
+ * "#1 ↑2": a position this week and how it moved since last week (1 is named
+ * first, so a smaller number is up). "—" when not named this week. Coloured
+ * as news for the brand: its own climb is good, a competitor's is not.
+ */
+function PositionMove({
+  position,
+  side,
+}: {
+  position: { now: number | null; before: number | null };
+  side: 'competitor' | 'you';
+}) {
+  const t = useTranslations('actionCenter.signalsPage.drawer.positions');
+  const format = useFormatter();
+  const n = (value: number) => format.number(value, { maximumFractionDigits: 1 });
+  if (position.now === null) {
+    return (
+      <span className="font-medium text-foreground">
+        —
+        {position.before !== null && (
+          <span className="text-red-600 dark:text-red-400"> {t('lost')}</span>
+        )}
+      </span>
+    );
+  }
+  const moved =
+    position.before === null ? null : Math.round((position.before - position.now) * 10) / 10;
+  const tone = (up: boolean) =>
+    up !== (side === 'competitor')
+      ? 'text-green-600 dark:text-green-400'
+      : 'text-red-600 dark:text-red-400';
+  return (
+    <span className="font-medium text-foreground">
+      #{n(position.now)}
+      {moved === null ? (
+        <span className="text-muted-foreground"> {t('new')}</span>
+      ) : moved > 0 ? (
+        <span className={tone(true)}> ↑{n(moved)}</span>
+      ) : moved < 0 ? (
+        <span className={tone(false)}> ↓{n(-moved)}</span>
+      ) : (
+        <span className="text-muted-foreground"> =</span>
+      )}
+    </span>
+  );
 }
 
 export function SignalWhereBlock({ signal }: { signal: Signal }) {

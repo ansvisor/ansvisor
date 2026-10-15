@@ -349,6 +349,13 @@
         "viewPrompt": "View prompt",
         "notAvailable": "Not available",
         "allPlatforms": "All tracked platforms",
+        "positions": {
+          "you": "You",
+          "new": "new",
+          "lost": "lost",
+          "untitled": "Untitled prompt",
+          "sourceAnswers": "cited in {count} of the {of, plural, one {# latest answer} other {# latest answers}} they win"
+        },
         "cited": {
           "position": "#{position}",
           "lastCited": "last cited {date}",

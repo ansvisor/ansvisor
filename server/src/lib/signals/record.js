@@ -29,6 +29,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { computePulseMetrics, LOST_CITATION_WINDOW_DAYS } from '../pulse/metrics.js';
 import { lostCitationEvidence } from './lost-citation-evidence.js';
+import { competitorEvidence } from './competitor-evidence.js';
 import { logger } from '../logger.js';
 import { resolve } from '../../config/action-engine.js';
 import { EXCLUSIVE_KIND_GROUPS, LIBRARY_KINDS } from './library/kinds.js';
@@ -557,30 +558,75 @@ export async function attachLostCitationEvidence(brandId, candidates, now) {
   }
 }
 
-const EVIDENCE_FIELDS = [
-  'platforms',
-  'regions',
-  'citedDays',
-  'days',
-  'quietDays',
-  'lostUrls',
-  'citedNow',
-];
+// What each kind's evidence step writes, and the field that marks it written.
+const EVIDENCE = {
+  lost_citations: {
+    marker: 'citedDays',
+    fields: ['platforms', 'regions', 'citedDays', 'days', 'quietDays', 'lostUrls', 'citedNow'],
+  },
+};
+
+// Signals about one competitor, which get its positions and winning sources.
+const COMPETITOR_KINDS = new Set([
+  'competitor_leads',
+  'competitor_momentum',
+  'competitor_surge',
+  'competitor_crossed',
+  'competitor_overtaken',
+  'competitor_citation_gap',
+]);
+for (const kind of COMPETITOR_KINDS) {
+  EVIDENCE[kind] = { marker: 'positions', fields: ['positions', 'winningSources'] };
+}
 
 /**
- * A night whose evidence read failed refreshes a lost citation with the bare
- * pulse payload. Keep what an earlier night recorded instead: it is older,
+ * A night whose evidence read failed refreshes a signal with its bare
+ * detector payload. Keep what an earlier night recorded instead: it is older,
  * and still truer than nothing.
  */
 export function keepRecordedEvidence(candidates, existing) {
   for (const candidate of candidates) {
-    if (candidate.kind !== 'lost_citations' || 'citedDays' in (candidate.payload ?? {})) continue;
+    const evidence = EVIDENCE[candidate.kind];
+    if (!evidence || evidence.marker in (candidate.payload ?? {})) continue;
     const recorded = existing.get(candidate.dedupKey)?.payload ?? {};
-    if (!('citedDays' in recorded)) continue;
+    if (!(evidence.marker in recorded)) continue;
     const kept = Object.fromEntries(
-      EVIDENCE_FIELDS.filter((key) => key in recorded).map((key) => [key, recorded[key]]),
+      evidence.fields.filter((key) => key in recorded).map((key) => [key, recorded[key]]),
     );
     candidate.payload = { ...candidate.payload, ...kept };
+  }
+}
+
+/** The competitor a signal is about: the library names it, the others key on it. */
+function competitorOf(candidate) {
+  const named = candidate.payload?.competitorId;
+  if (typeof named === 'string' && named) return named;
+  return subjectOf(candidate.dedupKey);
+}
+
+/**
+ * Competitor signals arrive naming the competitor and one number. Before they
+ * are written they get what the drawer shows (AC-001): per prompt and
+ * platform, the competitor's position against the brand's, and the sources
+ * behind its wins. Best effort, like the lost-citation evidence.
+ */
+export async function attachCompetitorEvidence(brandId, candidates, now) {
+  const about = candidates
+    .filter((c) => COMPETITOR_KINDS.has(c.kind))
+    .map((candidate) => ({ candidate, id: competitorOf(candidate) }))
+    .filter(({ id }) => id);
+  if (about.length === 0) return;
+  try {
+    const evidence = await competitorEvidence(brandId, [...new Set(about.map(({ id }) => id))], {
+      now,
+      windowDays: libraryThresholds.windowDays,
+    });
+    for (const { candidate, id } of about) {
+      const found = evidence.get(id);
+      if (found) candidate.payload = { ...candidate.payload, competitorId: id, ...found };
+    }
+  } catch (err) {
+    logger.warn({ brandId, err: err.message }, '[signals] competitor evidence unavailable');
   }
 }
 
@@ -672,6 +718,7 @@ export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) 
   const overflow = library.overflow.filter(
     (candidate) => !(outage && DECLINE_KINDS.has(candidate.kind)),
   );
+  await attachCompetitorEvidence(brandId, [...candidates, ...overflow], now);
 
   // Existing rows decide insert vs update vs reopen. A brand's signal set is
   // small (tens), so reading it whole is cheaper than being clever.
@@ -682,7 +729,7 @@ export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) 
     .limit(1000);
   if (readErr) throw new Error(readErr.message);
   const existing = new Map((existingRows ?? []).map((row) => [row.dedup_key, row]));
-  keepRecordedEvidence(candidates, existing);
+  keepRecordedEvidence([...candidates, ...overflow], existing);
 
   const nowIso = now.toISOString();
   let inserted = 0;

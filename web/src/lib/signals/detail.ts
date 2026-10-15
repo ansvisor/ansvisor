@@ -367,6 +367,10 @@ export type WhereValue =
   | { type: 'all_platforms' }
   /** Cited pages: the brand's lost ones, or those cited in their place. */
   | { type: 'citations'; items: CitedPage[] }
+  /** A competitor's position against the brand's, per prompt and platform. */
+  | { type: 'positions'; competitor: string; items: PromptPosition[] }
+  /** Domains cited in the answers a competitor wins. */
+  | { type: 'sources'; items: WinningSource[] }
   | { type: 'locations'; codes: readonly string[] }
   | { type: 'number'; value: number };
 
@@ -390,6 +394,54 @@ function citedPages(value: unknown): CitedPage[] {
       ...(typeof v.lastCitedAt === 'string' ? { lastCitedAt: v.lastCitedAt } : {}),
       ...(typeof v.answers === 'number' ? { answers: v.answers } : {}),
       ...(typeof v.answersRead === 'number' ? { answersRead: v.answersRead } : {}),
+    }));
+}
+
+/** Positions are averages over the week's answers (1 = named first); null when not named. */
+export interface PromptPosition {
+  promptId: string;
+  promptText: string;
+  platform: string;
+  competitor: { now: number | null; before: number | null };
+  you: { now: number | null; before: number | null };
+}
+
+export interface WinningSource {
+  domain: string;
+  /** Answers it is cited in, of the answers read that the competitor wins. */
+  answers: number;
+  answersRead: number;
+}
+
+function num(value: unknown): number | null {
+  return typeof value === 'number' ? value : null;
+}
+
+function promptPositions(value: unknown): PromptPosition[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((v): v is Record<string, unknown> => typeof v?.promptId === 'string')
+    .map((v) => {
+      const competitor = (v.competitor ?? {}) as Record<string, unknown>;
+      const you = (v.you ?? {}) as Record<string, unknown>;
+      return {
+        promptId: v.promptId as string,
+        promptText: typeof v.promptText === 'string' ? v.promptText : '',
+        platform: typeof v.platform === 'string' ? v.platform : '',
+        competitor: { now: num(competitor.now), before: num(competitor.before) },
+        you: { now: num(you.now), before: num(you.before) },
+      };
+    });
+}
+
+function winningSourcesOf(value: unknown): WinningSource[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((v): v is Record<string, unknown> => typeof v?.domain === 'string')
+    .map((v) => ({
+      domain: v.domain as string,
+      answers: num(v.answers) ?? 0,
+      answersRead: num(v.answersRead) ?? 0,
     }));
 }
 
@@ -547,10 +599,13 @@ function fieldValue(signal: Signal, key: WhereFieldKey): WhereValue | null {
       if (topics.length > 1) return { type: 'list', items: [...topics], total: topics.length };
       return topics[0] ? { type: 'text', text: topics[0] } : null;
     }
-    case 'platforms':
+    case 'platforms': {
       if (signal.where.platforms.length) {
         return { type: 'platforms', slugs: signal.where.platforms };
       }
+      // A competitor's recorded positions say which platforms it leads on.
+      const leading = [...new Set(promptPositions(p.positions).map((row) => row.platform))];
+      if (leading.length) return { type: 'platforms', slugs: leading.filter(Boolean) };
       if (
         signal.kind === 'sharp_drop' ||
         signal.kind === 'visibility_slipping' ||
@@ -559,6 +614,7 @@ function fieldValue(signal: Signal, key: WhereFieldKey): WhereValue | null {
         return { type: 'all_platforms' };
       }
       return null;
+    }
     case 'locations':
       return signal.where.regions.length
         ? { type: 'locations', codes: signal.where.regions }
@@ -605,6 +661,16 @@ function fieldValue(signal: Signal, key: WhereFieldKey): WhereValue | null {
       const now = citedPages(p.citedNow);
       return now.length ? { type: 'citations', items: now } : null;
     }
+    case 'competitorPositions': {
+      const rows = promptPositions(p.positions);
+      return rows.length
+        ? { type: 'positions', competitor: str(p, 'competitorName'), items: rows }
+        : null;
+    }
+    case 'winningSources': {
+      const sources = winningSourcesOf(p.winningSources);
+      return sources.length ? { type: 'sources', items: sources } : null;
+    }
     case 'evidence': {
       const checks = targets.flatMap((t) =>
         Array.isArray(t.checks) ? t.checks.filter((c): c is string => typeof c === 'string') : [],
@@ -629,7 +695,9 @@ function placeIsNamed(signal: Signal): boolean {
   return (
     typeof p.platform === 'string' ||
     typeof p.region === 'string' ||
-    (Array.isArray(p.platforms) && p.platforms.length > 0)
+    (Array.isArray(p.platforms) && p.platforms.length > 0) ||
+    // A competitor's recorded positions name the platforms it leads on.
+    (Array.isArray(p.positions) && p.positions.length > 0)
   );
 }
 
@@ -730,6 +798,20 @@ function apiValue(value: WhereValue): unknown {
       return value.slugs.map((slug) => ({ slug, name: platformName(slug) }));
     case 'all_platforms':
       return 'all';
+    case 'positions':
+      return value.items.map((row) => ({
+        prompt_id: row.promptId,
+        prompt_text: row.promptText,
+        platform: { slug: row.platform, name: platformName(row.platform) },
+        competitor: row.competitor,
+        you: row.you,
+      }));
+    case 'sources':
+      return value.items.map((source) => ({
+        domain: source.domain,
+        answers: source.answers,
+        answers_read: source.answersRead,
+      }));
     case 'citations':
       return value.items.map((page) => ({
         url: page.url,

@@ -20,6 +20,7 @@ import { describe, expect, it } from 'vitest';
 const NIGHTLY_MODULES = [
   'src/lib/signals/record.js',
   'src/lib/signals/lost-citation-evidence.js',
+  'src/lib/signals/competitor-evidence.js',
   'src/lib/pulse/metrics.js',
   'src/lib/action-center/generate.js',
   'src/lib/action-center/validate.js',

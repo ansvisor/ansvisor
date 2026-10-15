@@ -331,3 +331,65 @@ describe('a lost citation with its evidence recorded', () => {
     });
   });
 });
+
+describe('a competitor signal with its evidence recorded', () => {
+  const recorded = signal({
+    category: 'competitor',
+    kind: 'competitor_momentum',
+    payload: {
+      entity: 'competitors',
+      competitorName: 'Profound',
+      competitorId: 'c1',
+      targets: [{ id: 'c1', label: 'Profound' }],
+      positions: [
+        {
+          promptId: 'p1',
+          promptText: 'Best AI rank tracker?',
+          platform: 'chatgpt-web',
+          competitor: { now: 1, before: 3 },
+          you: { now: 3, before: 2 },
+        },
+      ],
+      winningSources: [{ domain: 'g2.example', answers: 2, answersRead: 3 }],
+    },
+    previousValue: 12,
+    currentValue: 31,
+  });
+
+  it('shows its positions by prompt, the sources behind its wins, and where it leads', () => {
+    const byKey = Object.fromEntries(signalWhereFields(recorded).map((f) => [f.key, f.value]));
+    expect(byKey.competitor).toEqual({ type: 'text', text: 'Profound' });
+    expect(byKey.platforms).toEqual({ type: 'platforms', slugs: ['chatgpt-web'] });
+    expect(byKey.competitorPositions).toEqual({
+      type: 'positions',
+      competitor: 'Profound',
+      items: [
+        {
+          promptId: 'p1',
+          promptText: 'Best AI rank tracker?',
+          platform: 'chatgpt-web',
+          competitor: { now: 1, before: 3 },
+          you: { now: 3, before: 2 },
+        },
+      ],
+    });
+    expect(byKey.winningSources).toEqual({
+      type: 'sources',
+      items: [{ domain: 'g2.example', answers: 2, answersRead: 3 }],
+    });
+  });
+
+  it('returns the same over the API', () => {
+    const { where } = signalDetailForApi(recorded, []);
+    expect(where.competitor_positions).toEqual([
+      {
+        prompt_id: 'p1',
+        prompt_text: 'Best AI rank tracker?',
+        platform: { slug: 'chatgpt-web', name: 'ChatGPT' },
+        competitor: { now: 1, before: 3 },
+        you: { now: 3, before: 2 },
+      },
+    ]);
+    expect(where.winning_sources).toEqual([{ domain: 'g2.example', answers: 2, answers_read: 3 }]);
+  });
+});

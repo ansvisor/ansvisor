@@ -25,7 +25,17 @@ vi.mock('./lost-citation-evidence.js', () => ({
   },
 }));
 
-const { attachLostCitationEvidence, keepRecordedEvidence } = await import('./record.js');
+let competitorRead = { calls: [], result: new Map(), fail: false };
+vi.mock('./competitor-evidence.js', () => ({
+  competitorEvidence: async (...args) => {
+    competitorRead.calls.push(args);
+    if (competitorRead.fail) throw new Error('timeout');
+    return competitorRead.result;
+  },
+}));
+
+const { attachCompetitorEvidence, attachLostCitationEvidence, keepRecordedEvidence } =
+  await import('./record.js');
 
 const lost = (promptId) => ({
   kind: 'lost_citations',
@@ -45,6 +55,7 @@ const evidence = {
 
 beforeEach(() => {
   read = { calls: [], result: new Map(), fail: false };
+  competitorRead = { calls: [], result: new Map(), fail: false };
 });
 
 describe('attachLostCitationEvidence', () => {
@@ -110,5 +121,73 @@ describe('keepRecordedEvidence', () => {
       new Map([['lost_citations:p1', { payload: { ...evidence, citedDays: 4 } }]]),
     );
     expect(fresh.payload.citedDays).toBe(10);
+  });
+});
+
+describe('attachCompetitorEvidence', () => {
+  const found = {
+    positions: [
+      { promptId: 'p1', platform: 'chatgpt-web', competitor: { now: 1 }, you: { now: 3 } },
+    ],
+    winningSources: [{ domain: 'g2.example', answers: 2, answersRead: 3 }],
+  };
+
+  it('finds the competitor in the payload or the key, and writes its evidence', async () => {
+    competitorRead.result = new Map([
+      ['c1', found],
+      ['c2', found],
+    ]);
+    const candidates = [
+      {
+        kind: 'competitor_momentum',
+        dedupKey: 'competitor_momentum:c1',
+        payload: { competitorId: 'c1' },
+      },
+      {
+        kind: 'competitor_surge',
+        dedupKey: 'competitor_surge:c2',
+        payload: { competitorName: 'Rival' },
+      },
+      { kind: 'topic_drop', dedupKey: 'topic_drop:t1', payload: {} },
+    ];
+    await attachCompetitorEvidence('b1', candidates, new Date('2026-10-15T00:00:00Z'));
+    expect(competitorRead.calls).toEqual([
+      ['b1', ['c1', 'c2'], { now: new Date('2026-10-15T00:00:00Z'), windowDays: 7 }],
+    ]);
+    expect(candidates[0].payload).toEqual({ competitorId: 'c1', ...found });
+    expect(candidates[1].payload).toEqual({
+      competitorName: 'Rival',
+      competitorId: 'c2',
+      ...found,
+    });
+    expect(candidates[2].payload).toEqual({});
+  });
+
+  it('records the signals without evidence when the read fails', async () => {
+    competitorRead.fail = true;
+    const candidates = [
+      {
+        kind: 'competitor_leads',
+        dedupKey: 'competitor_leads:c1',
+        payload: { competitorId: 'c1' },
+      },
+    ];
+    await expect(attachCompetitorEvidence('b1', candidates, new Date())).resolves.toBeUndefined();
+    expect(candidates[0].payload).toEqual({ competitorId: 'c1' });
+  });
+
+  it("keeps an earlier night's competitor evidence", () => {
+    const candidates = [
+      {
+        kind: 'competitor_leads',
+        dedupKey: 'competitor_leads:c1',
+        payload: { competitorId: 'c1' },
+      },
+    ];
+    keepRecordedEvidence(
+      candidates,
+      new Map([['competitor_leads:c1', { payload: { competitorId: 'c1', ...found } }]]),
+    );
+    expect(candidates[0].payload).toEqual({ competitorId: 'c1', ...found });
   });
 });
