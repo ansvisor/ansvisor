@@ -58,6 +58,7 @@ import {
   type ShareOfVoiceData,
   type InsightsRecommendations,
   type TrackingJobStatus,
+  type BreakdownFilters,
   type BreakdownMetric,
 } from '@/lib/actions/tracking';
 import { getTopics } from '@/lib/actions/topic';
@@ -225,6 +226,21 @@ function getDateRange(
   const dayFrom = from.toISOString().slice(0, 10);
   const dayTo = to.toISOString().slice(0, 10);
   return { dateFrom: `${dayFrom}T00:00:00.000Z`, dateTo: undefined, days: { dayFrom, dayTo } };
+}
+
+/**
+ * A comparison-window bound for the "vs <range>" label. Whole-day windows
+ * come as 'YYYY-MM-DD' UTC days and are shown as those days; the 24h and
+ * topic views come as timestamps and are shown in local time.
+ */
+function formatWindowBound(value: string): string {
+  const dayOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  return new Date(dayOnly ? `${value}T00:00:00Z` : value).toLocaleDateString('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+    ...(dayOnly ? { timeZone: 'UTC' } : {}),
+  });
 }
 
 // ─── Info Tooltip ─────────────────────────────────────────────────────────────
@@ -1019,6 +1035,10 @@ export default function InsightsPage() {
   const [sovData, setSovData] = useState<ShareOfVoiceData | null>(null);
   const [recommendations, setRecommendations] = useState<InsightsRecommendations | null>(null);
   const [breakdownMetric, setBreakdownMetric] = useState<BreakdownMetric | null>(null);
+  // The window and filters the cards were last loaded with (the 24h view
+  // anchored to its tracking run): the breakdown panel explains those exact
+  // numbers rather than recomputing "now" on every render (VIS-001).
+  const [loadedFilters, setLoadedFilters] = useState<BreakdownFilters>();
   const [isExporting, setIsExporting] = useState(false);
   const [cronRun, setCronRun] = useState<TrackingWindow['activeRun']>(null);
   const cronRunRef = useRef<TrackingWindow['activeRun']>(null);
@@ -1085,6 +1105,12 @@ export default function InsightsPage() {
           cronRunRef.current = insights.trackingWindow.activeRun;
           setCronRun(insights.trackingWindow.activeRun);
         }
+        const anchored = insights.trackingWindow?.anchored;
+        setLoadedFilters({
+          ...filterOpts,
+          dateFrom: anchored?.dateFrom ?? filterOpts.dateFrom,
+          dateTo: anchored?.dateTo ?? filterOpts.dateTo,
+        });
         const trend = insights.trend;
         setRateTrend(trend && trend.points.length > 0 ? trend : null);
         setSummary(insights.summary);
@@ -1683,18 +1709,8 @@ export default function InsightsPage() {
                             )}
                             {rateTrend.summary.change !== null && rateTrend.summary.prevFrom && (
                               <span className="text-muted-foreground">
-                                vs{' '}
-                                {new Date(rateTrend.summary.prevFrom).toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: '2-digit',
-                                  year: 'numeric',
-                                })}{' '}
-                                –{' '}
-                                {new Date(rateTrend.summary.prevTo).toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: '2-digit',
-                                  year: 'numeric',
-                                })}
+                                vs {formatWindowBound(rateTrend.summary.prevFrom)} –{' '}
+                                {formatWindowBound(rateTrend.summary.prevTo)}
                               </span>
                             )}
                           </div>
@@ -1796,19 +1812,7 @@ export default function InsightsPage() {
         onOpenChange={(open) => {
           if (!open) setBreakdownMetric(null);
         }}
-        filters={(() => {
-          const { dateFrom, dateTo } = getDateRange(filters.datePreset, {
-            from: filters.dateFrom,
-            to: filters.dateTo,
-          });
-          return {
-            dateFrom,
-            dateTo,
-            region: filters.region || undefined,
-            model: filters.model || undefined,
-            topicId: filters.topic || undefined,
-          };
-        })()}
+        filters={loadedFilters}
       />
     </div>
   );
