@@ -57,6 +57,7 @@ import {
   Trash2,
   Download,
   Plus,
+  ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -80,10 +81,26 @@ import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
 import { WebhookSettingsDialog } from './_webhook-settings';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { OpportunityDetail } from '@/components/content/opportunity-detail';
 import { ContentUsageCard } from '@/components/content/content-usage-card';
 import { hasContentQuota, onDemandMax, type ContentUsage } from '@/lib/content-usage';
 import { suggestedBounds, suggestedDate, type SuggestedRange } from '@/lib/suggested-date';
+import {
+  DEFAULT_OPPORTUNITY_SORT,
+  OPPORTUNITY_SORTS,
+  opportunityScope,
+  type OpportunitySort,
+} from '@/lib/content/opportunity-list';
 import {
   NewOpportunitiesDialog,
   type NewOpportunitiesInput,
@@ -109,7 +126,6 @@ const STATUS_VALUES = [
 const IMPACT_VALUES = ['all', 'high', 'medium', 'low'] as const;
 const TYPE_VALUES = ['all', 'owned', 'earned'] as const;
 const SOURCE_VALUES = ['all', 'system', 'manual', 'prompt'] as const;
-const SORT_VALUES = ['score', 'newest', 'oldest'] as const;
 const SUGGESTED_VALUES = ['all', 'month', 'last30', 'custom'] as const;
 const URL_DEFAULTS = {
   status: 'all',
@@ -119,7 +135,7 @@ const URL_DEFAULTS = {
   suggested: 'all',
   from: '',
   to: '',
-  sort: 'score',
+  sort: DEFAULT_OPPORTUNITY_SORT,
 };
 
 /** When the list was last opened, per brand: rows suggested since get a dot. */
@@ -269,24 +285,32 @@ function SuggestedCell({
 }
 
 /**
- * What an opportunity was built for: a group of related prompts in a topic
- * (cluster opportunities, #857) or a single prompt (the older generator).
+ * What an opportunity was built for, as a tag before its description: a
+ * group of related prompts in a topic (cluster opportunities, #857) in
+ * violet, or a single prompt (the older generator) in grey. Violet keeps it
+ * apart from the impact and status colours on the same row.
  */
 function OpportunityScope({ opp }: { opp: ContentOpportunity }) {
   const t = useTranslations('content.scope');
-  const count = opp.sourceData?.prompts?.length ?? 0;
-  const group = !!opp.clusterId;
-  const label = group
-    ? opp.sourceData?.topicName
-      ? t('group', { topic: opp.sourceData.topicName, count })
-      : t('groupNoTopic', { count })
-    : t('single');
+  const scope = opportunityScope(opp);
+  const group = scope.kind === 'group';
+  const label =
+    scope.kind === 'group'
+      ? scope.topic
+        ? t('group', { topic: scope.topic, count: scope.count })
+        : t('groupNoTopic', { count: scope.count })
+      : t('single');
   return (
     <span
-      className="mr-1.5 font-medium text-foreground/70"
+      className={cn(
+        'mr-1.5 inline-flex items-center rounded px-1.5 py-px align-middle text-[11px] font-medium leading-4 ring-1 ring-inset',
+        group
+          ? 'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900'
+          : 'bg-muted text-foreground/80 ring-border',
+      )}
       title={group ? t('groupHint') : t('singleHint')}
     >
-      {label} ·
+      {label}
     </span>
   );
 }
@@ -325,7 +349,7 @@ export default function ContentPage() {
   const [customTo, setCustomTo] = useState('');
   // The previous visit, read once per brand before this one is recorded.
   const [lastVisit, setLastVisit] = useState<number | null>(null);
-  const [sortOrder, setSortOrder] = useState<string>('score');
+  const [sortOrder, setSortOrder] = useState<string>(DEFAULT_OPPORTUNITY_SORT);
   // The prompt filter (#836) lives in the URL as ?prompt=<id> so a filtered
   // view can be linked to. It is read after mount — useSearchParams would need
   // a Suspense boundary around the page — and loading waits for it, so a
@@ -470,7 +494,7 @@ export default function ContentPage() {
     setSuggestedRange(readUrlChoice('suggested', SUGGESTED_VALUES, 'all'));
     setCustomFrom(params.get('from') ?? '');
     setCustomTo(params.get('to') ?? '');
-    setSortOrder(readUrlChoice('sort', SORT_VALUES, 'score'));
+    setSortOrder(readUrlChoice('sort', OPPORTUNITY_SORTS, DEFAULT_OPPORTUNITY_SORT));
     setUrlRead(true);
   }, []);
 
@@ -1034,27 +1058,31 @@ export default function ContentPage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-sm font-medium">{t('opportunities')}</CardTitle>
-                  <Badge
-                    variant="outline"
-                    className="text-xs border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                  >
-                    {t('available', { count: total })}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div className="relative w-48">
-                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              {/* The search sits on the title's line, right-aligned and larger,
+                  so the filters below keep a line of their own. */}
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex shrink-0 items-center gap-2">
+                    <CardTitle className="text-sm font-medium">{t('opportunities')}</CardTitle>
+                    <Badge
+                      variant="outline"
+                      className="text-xs border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                    >
+                      {t('available', { count: total })}
+                    </Badge>
+                  </div>
+                  <div className="relative w-full max-w-80">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder={tCommon('search')}
+                      placeholder={t('filters.search')}
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      aria-label={tCommon('search')}
-                      className="pl-8 h-8 text-xs"
+                      aria-label={t('filters.search')}
+                      className="h-9 pl-9 text-sm"
                     />
                   </div>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
                   {(topicOptions.length >= 2 || topicFilter !== '') && (
                     <Select
                       items={[
@@ -1190,26 +1218,57 @@ export default function ContentPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Select
-                    value={suggestedRange}
-                    onValueChange={(v) => v && setSuggestedRange(v as SuggestedRange)}
-                  >
-                    <SelectTrigger
-                      className="h-8 w-[130px] text-xs"
-                      aria-label={t('suggestedRange.label')}
+                  {/* When it was suggested and the order, in one box: the order
+                      reads by the Suggested dates, newest first unless picked. */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      aria-label={`${t('suggestedRange.label')}: ${t(`suggestedRange.${suggestedRange}`)}, ${t('sort.label')}: ${t(`sort.${sortOrder as OpportunitySort}`)}`}
+                      className="flex h-8 w-fit items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent py-2 pr-2 pl-2.5 text-xs whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50"
                     >
-                      <SelectValue>
-                        {(value) => t(`suggestedRange.${value as SuggestedRange}`)}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SUGGESTED_VALUES.map((value) => (
-                        <SelectItem key={value} value={value}>
-                          {t(`suggestedRange.${value}`)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                      {t(`suggestedRange.${suggestedRange}`)} ·{' '}
+                      {t(`sort.${sortOrder as OpportunitySort}`)}
+                      <ChevronDown className="pointer-events-none size-4 text-muted-foreground" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-44">
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel>{t('suggestedRange.label')}</DropdownMenuLabel>
+                        <DropdownMenuRadioGroup
+                          value={suggestedRange}
+                          onValueChange={(v) => setSuggestedRange(v as SuggestedRange)}
+                        >
+                          {SUGGESTED_VALUES.map((value) => (
+                            <DropdownMenuRadioItem
+                              key={value}
+                              value={value}
+                              closeOnClick
+                              className="text-xs"
+                            >
+                              {t(`suggestedRange.${value}`)}
+                            </DropdownMenuRadioItem>
+                          ))}
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuGroup>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel>{t('sort.label')}</DropdownMenuLabel>
+                        <DropdownMenuRadioGroup
+                          value={sortOrder}
+                          onValueChange={(v) => setSortOrder(v as string)}
+                        >
+                          {OPPORTUNITY_SORTS.map((value) => (
+                            <DropdownMenuRadioItem
+                              key={value}
+                              value={value}
+                              closeOnClick
+                              className="text-xs"
+                            >
+                              {t(`sort.${value}`)}
+                            </DropdownMenuRadioItem>
+                          ))}
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   {suggestedRange === 'custom' && (
                     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Input
@@ -1248,20 +1307,6 @@ export default function ContentPage() {
                       <SelectItem value="done">{t('status.done')}</SelectItem>
                       <SelectItem value="dismissed">{t('status.dismissed')}</SelectItem>
                       <SelectItem value="archived">{t('status.archived')}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={sortOrder} onValueChange={(v) => v && setSortOrder(v)}>
-                    <SelectTrigger className="h-8 w-[130px] text-xs" aria-label={t('sort.label')}>
-                      <SelectValue>
-                        {(value) => t(`sort.${value as 'score' | 'newest' | 'oldest'}`)}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SORT_VALUES.map((value) => (
-                        <SelectItem key={value} value={value}>
-                          {t(`sort.${value}`)}
-                        </SelectItem>
-                      ))}
                     </SelectContent>
                   </Select>
                 </div>

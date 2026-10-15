@@ -1776,6 +1776,7 @@
       "fromSignals": "from {count, plural, one {# signal} other {# signals}} analyzed"
     },
     "filters": {
+      "search": "Search opportunities",
       "allStatuses": "All Statuses",
       "allImpacts": "All Impacts",
       "allTypes": "All Types",
