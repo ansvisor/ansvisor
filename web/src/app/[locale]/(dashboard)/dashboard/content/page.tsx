@@ -1377,7 +1377,10 @@ export default function ContentPage() {
               </div>
             )}
             <CardContent className="p-0">
-              <Table className="table-fixed">
+              {/* Below this width the table scrolls sideways rather than
+                  squeezing the action titles out of sight; 1024px still fits
+                  it with the sidebar open. */}
+              <Table className="min-w-[720px] table-fixed">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-10 pl-4">
@@ -1392,16 +1395,21 @@ export default function ContentPage() {
                         }}
                       />
                     </TableHead>
-                    <TableHead className="pl-6 w-[40%]">{t('table.action')}</TableHead>
+                    {/* The other columns are sized to fit their badges and buttons;
+                        the action takes what is left, so nothing spills into its
+                        neighbour on narrower screens. */}
+                    <TableHead className="pl-6">{t('table.action')}</TableHead>
                     {/* Hidden on narrower screens, where the action column needs the room. */}
-                    <TableHead className="hidden whitespace-nowrap xl:table-cell">
+                    <TableHead className="hidden w-[112px] whitespace-nowrap xl:table-cell">
                       {t('table.suggested')}
                     </TableHead>
-                    <TableHead className="text-center">{t('table.type')}</TableHead>
-                    <TableHead className="text-center">{t('table.impact')}</TableHead>
-                    <TableHead className="text-center">{t('table.score')}</TableHead>
-                    <TableHead className="text-center">{t('table.status')}</TableHead>
-                    <TableHead className="text-right pr-6">{t('table.actions')}</TableHead>
+                    <TableHead className="w-[96px] text-center">{t('table.type')}</TableHead>
+                    <TableHead className="w-[88px] text-center">{t('table.impact')}</TableHead>
+                    <TableHead className="w-[72px] text-center">{t('table.score')}</TableHead>
+                    <TableHead className="w-[136px] text-center">{t('table.status')}</TableHead>
+                    <TableHead className="w-[176px] text-right pr-6">
+                      {t('table.actions')}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
