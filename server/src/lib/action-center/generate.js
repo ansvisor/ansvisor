@@ -52,6 +52,8 @@ import { isEligible, loadDefinitions } from './definitions/index.js';
 import { resolveBrandSources } from './sources.js';
 import { planTasks } from './tasks/plan.js';
 import { orderByPriority, scoreCandidate } from './candidates.js';
+import { priorityColumns, promptIdsOf, scorePriority } from './priority.js';
+import { loadPromptDemand } from './priority-data.js';
 
 const DAY_MS = 86_400_000;
 
@@ -106,7 +108,16 @@ function startOfUtcDay(now) {
   return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 }
 
-async function openCycle({ brandId, definition, signals, impact, available, payload }) {
+async function openCycle({
+  brandId,
+  definition,
+  signals,
+  impact,
+  available,
+  payload,
+  priority,
+  now,
+}) {
   const { data: inserted, error } = await supabaseAdmin
     .from('actions')
     .insert({
@@ -119,6 +130,7 @@ async function openCycle({ brandId, definition, signals, impact, available, payl
       kpi_keys: [...new Set(signals.flatMap((signal) => signal.kpi_keys ?? []))],
       baseline: buildBaseline(signals),
       dedup_key: definition.id,
+      ...priorityColumns(priority, now),
     })
     .select('id')
     .single();
@@ -159,7 +171,7 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
   const { data: openSignals, error: signalsErr } = await supabaseAdmin
     .from('signals')
     .select(
-      'id, kind, impact, kpi_keys, payload, previous_value, current_value, change_value, action_id',
+      'id, kind, impact, kpi_keys, payload, previous_value, current_value, change_value, action_id, source, detected_at',
     )
     .eq('brand_id', brandId)
     .in('status', ['new', 'acknowledged'])
@@ -171,7 +183,7 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
   // has no bearing on what happens tonight beyond the rest window below.
   const { data: activeRows, error: actionsErr } = await supabaseAdmin
     .from('actions')
-    .select('id, dedup_key, status, created_at')
+    .select('id, dedup_key, status, created_at, kind, category, impact, payload')
     .eq('brand_id', brandId)
     .not('status', 'in', '("completed","dismissed")')
     .limit(1000);
@@ -219,6 +231,24 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
   if (waitingErr) throw new Error(waitingErr.message);
   const waiting = new Map((waitingRows ?? []).map((row) => [row.definition_id, row]));
 
+  // The demand and intent of every prompt the evidence names, read once for
+  // the night's priority scores. Without it the scores are still worked out,
+  // with demand and intent unknown: a slower read is no reason to skip them.
+  let demand = new Map();
+  try {
+    demand = await loadPromptDemand(
+      promptIdsOf([
+        ...(openSignals ?? []).map((signal) => signal.payload),
+        ...(activeRows ?? []).map((row) => row.payload),
+      ]),
+    );
+  } catch (err) {
+    logger.warn({ brandId, err: err.message }, '[actions] prompt demand unavailable');
+  }
+  // Signals linked to an active action tonight, which the rows in hand do
+  // not show yet: they are its evidence when its priority is refreshed.
+  const linkedTonight = new Map();
+
   const ready = [];
   const seen = new Set();
   let refreshed = 0;
@@ -246,6 +276,9 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
       // Those newcomers are not dropped any more, which is this phase: they
       // stay in the queue below and are what the next cycle covers.
       const linked = await linkSignals(current.id, matched);
+      for (const signal of matched) {
+        if (!signal.action_id) linkedTonight.set(signal.id, current.id);
+      }
       if (linked > 0) {
         await supabaseAdmin.from('actions').update({ updated_at: nowIso }).eq('id', current.id);
         await logEvent(current.id, 'signals_linked', { count: linked });
@@ -271,11 +304,17 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
 
     const existing = waiting.get(definition.id);
     const firstSeenAt = existing?.first_seen_at ?? nowIso;
-    const reach = payload.targetCount;
-    const score = scoreCandidate(
-      { impact, signalCount: unclaimed.length, reach, firstSeenAt },
+    // The priority its action would carry (AC-006): the queue is ordered by
+    // the same number the Actions list is.
+    const priority = scorePriority(
+      {
+        action: { kind: definition.id, category: definition.category, impact, payload },
+        signals: unclaimed,
+        prompts: demand,
+      },
       now,
     );
+    const score = scoreCandidate({ priorityScore: priority.score, firstSeenAt }, now);
     const row = {
       brand_id: brandId,
       definition_id: definition.id,
@@ -330,12 +369,10 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
       definition,
       signals: unclaimed,
       impact,
-      // What the score reads. Named rather than derived from `signals` inside
-      // the scorer so the same shape can be scored straight out of the
-      // database, where the signals themselves are just ids.
-      signalCount: unclaimed.length,
-      reach,
       payload,
+      priority,
+      // What the queue's order reads, beside the time waited.
+      priorityScore: priority.score,
       firstSeenAt,
     });
   }
@@ -361,7 +398,7 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
   const opening = ordered.slice(0, room);
 
   for (const candidate of opening) {
-    const actionId = await openCycle({ brandId, available, ...candidate });
+    const actionId = await openCycle({ brandId, available, now, ...candidate });
     const { error } = await supabaseAdmin
       .from('action_candidates')
       .update({
@@ -374,8 +411,33 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
     if (error) throw new Error(error.message);
   }
 
+  // Every active action's priority, worked out again from tonight's evidence:
+  // its open signals, how recent they are, the demand behind them. Actions
+  // opened tonight were scored as they were written. Best effort: a score
+  // that cannot be written is logged, never a reason to fail the night.
+  let rescored = 0;
+  for (const row of activeRows ?? []) {
+    const evidence = (openSignals ?? []).filter(
+      (signal) => signal.action_id === row.id || linkedTonight.get(signal.id) === row.id,
+    );
+    const priority = scorePriority({ action: row, signals: evidence, prompts: demand }, now);
+    const { error } = await supabaseAdmin
+      .from('actions')
+      .update(priorityColumns(priority, now))
+      .eq('id', row.id);
+    if (error) {
+      logger.warn(
+        { brandId, actionId: row.id, err: error.message },
+        '[actions] priority not saved',
+      );
+      continue;
+    }
+    rescored += 1;
+  }
+
   const summary = {
     created: opening.length,
+    rescored,
     refreshed,
     resting,
     ineligible,

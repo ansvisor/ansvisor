@@ -21,6 +21,7 @@ const NIGHTLY_MODULES = [
   'src/lib/signals/record.js',
   'src/lib/pulse/metrics.js',
   'src/lib/action-center/generate.js',
+  'src/lib/action-center/priority-data.js',
   'src/lib/action-center/validate.js',
   'src/lib/action-center/execution/tools.js',
 ];

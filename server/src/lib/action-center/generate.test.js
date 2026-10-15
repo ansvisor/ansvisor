@@ -27,7 +27,14 @@ const NOW = new Date('2026-09-16T04:00:00Z');
  * lets `await supabase.from(x).select(y).eq(...)` resolve without a terminal
  * call.
  */
-function mockDb({ signals = [], activeActions = [], closedActions = [], candidates = [] } = {}) {
+function mockDb({
+  signals = [],
+  activeActions = [],
+  closedActions = [],
+  candidates = [],
+  promptVolumes = [],
+  failActionUpdates = false,
+} = {}) {
   const writes = { inserted: [], updated: [] };
 
   from.mockImplementation((table) => {
@@ -66,12 +73,17 @@ function mockDb({ signals = [], activeActions = [], closedActions = [], candidat
 
     function result() {
       if (state.op === 'insert') return { data: { id: `new-${table}` }, error: null };
-      if (state.op === 'update') return { data: null, error: null };
+      if (state.op === 'update') {
+        const failed =
+          failActionUpdates && table === 'actions' && 'priority_score' in state.payload;
+        return { data: null, error: failed ? { message: 'column does not exist' } : null };
+      }
       if (table === 'signals') return { data: signals, error: null };
       if (table === 'actions') {
         return { data: state.negated ? activeActions : closedActions, error: null };
       }
       if (table === 'action_candidates') return { data: candidates, error: null };
+      if (table === 'prompt_volumes') return { data: promptVolumes, error: null };
       return { data: [], error: null };
     }
 
@@ -121,6 +133,13 @@ describe('generateActionsForBrand', () => {
     });
     // Its own baseline — the "before" half of a future measurement.
     expect(action.rows[0].baseline.signals).toHaveLength(1);
+    // Written with its priority (AC-006), from the drop it rests on.
+    expect(action.rows[0]).toMatchObject({
+      priority_score: expect.any(Number),
+      priority_level: expect.stringMatching(/^(critical|high|medium|low)$/),
+      priority_reason: expect.objectContaining({ change: 'dropped' }),
+      priority_updated_at: NOW.toISOString(),
+    });
     // The plan comes from the specification's library, and ends in validation.
     const keys = writes.inserted
       .find((w) => w.table === 'action_tasks')
@@ -235,6 +254,7 @@ describe('generateActionsForBrand', () => {
 
     expect(summary).toEqual({
       created: 0,
+      rescored: 0,
       refreshed: 0,
       resting: 0,
       ineligible: 0,
@@ -669,5 +689,136 @@ describe('the candidate queue', () => {
     const row = writes.inserted.find((w) => w.table === 'action_candidates').rows[0];
     expect(Number.isFinite(row.priority)).toBe(true);
     expect(row.priority).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * AC-006: every action carries a priority score, and the queue is ordered by
+ * it. Quantity is not priority — the spec's own example is forty-seven
+ * repetitive low-demand signals against one high-demand commercial loss.
+ */
+describe('the priority score', () => {
+  const VOLUMES = [
+    ...Array.from({ length: 47 }, (_, i) => ({
+      prompt_id: `tail-${i}`,
+      est_ai_volume: 5,
+      intent: 'what-is',
+      fetched_at: NOW.toISOString(),
+    })),
+    { prompt_id: 'hot', est_ai_volume: 2000, intent: 'comparison', fetched_at: NOW.toISOString() },
+  ];
+
+  it('promotes one high-demand commercial loss before forty-seven low-demand gaps', async () => {
+    const spent = Array.from({ length: maxNewActionsPerDay - 1 }, (_, i) => ({
+      id: `spent-${i}`,
+      dedup_key: `unrelated-${i}`,
+      status: 'new',
+      created_at: NOW.toISOString(),
+    }));
+    const writes = mockDb({
+      signals: [
+        // Same impact as the loss, and far more of them.
+        ...Array.from({ length: 47 }, (_, i) =>
+          signal({
+            id: `gap-${i}`,
+            kind: 'uncovered_demand',
+            impact: 'high',
+            payload: { entity: 'prompts', targets: [{ id: `tail-${i}`, volume: 5 }] },
+          }),
+        ),
+        signal({
+          id: 'loss',
+          kind: 'lost_citations',
+          impact: 'high',
+          payload: { promptId: 'hot', promptText: 'Best AI rank tracker?' },
+        }),
+      ],
+      activeActions: spent,
+      promptVolumes: VOLUMES,
+    });
+
+    const summary = await generateActionsForBrand(BRAND, {
+      now: NOW,
+      sources: new Set([...ALL_SOURCES, 'volumes']),
+    });
+
+    expect(summary.created).toBe(1);
+    const opened = writes.inserted.find((w) => w.table === 'actions').rows[0];
+    expect(opened.kind).toBe('recover_lost_citations');
+    expect(opened.priority_reason).toMatchObject({
+      change: 'lost',
+      demand: 'high',
+      commercial: true,
+      heldBefore: true,
+    });
+    // The queue holds the gaps, scored below it.
+    const queued = writes.inserted
+      .filter((w) => w.table === 'action_candidates')
+      .flatMap((w) => w.rows);
+    const byDefinition = Object.fromEntries(queued.map((r) => [r.definition_id, r.priority]));
+    expect(byDefinition.recover_lost_citations).toBeGreaterThan(
+      byDefinition.create_content_for_demand,
+    );
+  });
+
+  it('works out every active action again from its evidence', async () => {
+    const writes = mockDb({
+      signals: [
+        signal({
+          id: 's9',
+          action_id: 'a1',
+          kind: 'lost_citations',
+          source: ['ai_results'],
+          detected_at: daysAgo(2),
+          payload: { promptId: 'hot' },
+        }),
+      ],
+      activeActions: [
+        {
+          id: 'a1',
+          dedup_key: 'recover_lost_citations',
+          status: 'in_progress',
+          created_at: daysAgo(5),
+          kind: 'recover_lost_citations',
+          category: 'recover',
+          impact: 'high',
+          payload: {},
+        },
+      ],
+      promptVolumes: VOLUMES,
+    });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    expect(summary.rescored).toBe(1);
+    const patch = writes.updated.find((w) => w.table === 'actions' && 'priority_score' in w.patch);
+    expect(patch.patch).toMatchObject({
+      priority_level: expect.any(String),
+      priority_reason: expect.objectContaining({ change: 'lost', days: 2 }),
+    });
+    // A priority refresh is not an edit: the action's updated_at stays put.
+    expect(patch.patch).not.toHaveProperty('updated_at');
+  });
+
+  it('keeps the night going when a priority cannot be saved', async () => {
+    mockDb({
+      signals: [],
+      activeActions: [
+        {
+          id: 'a1',
+          dedup_key: 'recover_lost_citations',
+          status: 'new',
+          created_at: daysAgo(1),
+          kind: 'recover_lost_citations',
+          category: 'recover',
+          impact: 'high',
+          payload: {},
+        },
+      ],
+      failActionUpdates: true,
+    });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+    expect(summary.rescored).toBe(0);
   });
 });

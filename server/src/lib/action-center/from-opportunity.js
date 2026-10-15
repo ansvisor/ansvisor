@@ -13,6 +13,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { resolveBrandSources } from './sources.js';
 import { planTasks } from './tasks/plan.js';
+import { priorityOnCreate } from './priority-data.js';
 
 export const OPPORTUNITY_ACTION_KIND = 'content_opportunity';
 
@@ -189,6 +190,12 @@ export async function sendToActionCenter(
       kpi_keys: KPI_KEYS,
       baseline: {},
       dedup_key: dedupKey,
+      ...(await priorityOnCreate({
+        kind: OPPORTUNITY_ACTION_KIND,
+        category: 'growth',
+        impact: opportunity.impact,
+        payload,
+      })),
     })
     .select('id')
     .single();
