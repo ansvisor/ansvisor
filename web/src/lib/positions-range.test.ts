@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, test } from 'vitest';
-import { parsePositionsRange, positionsUrlParams } from './positions-range';
+import { panelRangeFromTable, parsePositionsRange, positionsUrlParams } from './positions-range';
 
 describe('positionsUrlParams', () => {
   test('a closed panel clears every param', () => {
@@ -53,5 +53,25 @@ describe('parsePositionsRange', () => {
       to: '',
     });
     expect(parsePositionsRange(new URLSearchParams('positionsRange=1y'), '7d').preset).toBe('7d');
+  });
+});
+
+describe('panelRangeFromTable', () => {
+  // The table's custom Oct 1 – Oct 3, as resolved on an Istanbul and a New York clock.
+  const istanbul = { from: '2026-09-30T21:00:00.000Z', to: '2026-10-03T20:59:59.999Z' };
+  const newYork = { from: '2026-10-01T04:00:00.000Z', to: '2026-10-04T03:59:59.999Z' };
+
+  test("opens the panel on the table's own days, whatever the viewer's zone", () => {
+    const want = { preset: 'custom', from: '2026-10-01', to: '2026-10-03' };
+    expect(panelRangeFromTable('custom', istanbul, 'Europe/Istanbul')).toEqual(want);
+    expect(panelRangeFromTable('custom', newYork, 'America/New_York')).toEqual(want);
+  });
+
+  test('a preset carries no dates', () => {
+    expect(panelRangeFromTable('7d', istanbul, 'Europe/Istanbul')).toEqual({
+      preset: '7d',
+      from: '',
+      to: '',
+    });
   });
 });

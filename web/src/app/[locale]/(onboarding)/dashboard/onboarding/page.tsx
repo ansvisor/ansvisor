@@ -23,7 +23,6 @@ import {
 } from '@/config/prompt-options';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
 import { isCloud, PLANS, SUBSCRIBABLE_PLANS, getPlan, type PlanId } from '@/config/plans';
-import { siteConfig } from '@/config/site';
 import { setPersonProperties, track } from '@/lib/analytics';
 
 const ONBOARDING_STEP_NAMES: Record<number, string> = {
@@ -235,6 +234,10 @@ const PLAN_STEP_COPY: Partial<
   },
 };
 
+// Shown under the plan step's heading while the free trial is on offer; checkout
+// collects a card but charges nothing until the trial ends.
+const TRIAL_ASSURANCES = ['Zero risk', 'No charge today', 'Cancel anytime'];
+
 // Card width per step, matched to each step's content column; unlisted steps are forms.
 const STEP_FRAME_WIDTH: Record<number, 'medium' | 'wide'> = { 3: 'wide', 4: 'wide', 6: 'medium' };
 
@@ -337,6 +340,10 @@ export default function OnboardingPage() {
   // Trial length when the plan step is reached; null once the organization has
   // had a subscription, since checkout then starts the plan without a trial.
   const [trialDays, setTrialDays] = useState<number | null>(14);
+  // Whether the trial check said yes. The trial's promises (no charge today,
+  // the day of the first charge) wait for it, so an organization whose trial
+  // is used is never told it won't be charged.
+  const [trialConfirmed, setTrialConfirmed] = useState(false);
 
   useEffect(() => {
     if (step !== 6) return;
@@ -344,7 +351,9 @@ export default function OnboardingPage() {
     fetch('/api/stripe/trial')
       .then((res) => (res.ok ? res.json() : null))
       .then((body: { trialAvailable: boolean; trialDays: number } | null) => {
-        if (!cancelled && body) setTrialDays(body.trialAvailable ? body.trialDays : null);
+        if (cancelled || !body) return;
+        setTrialDays(body.trialAvailable ? body.trialDays : null);
+        setTrialConfirmed(body.trialAvailable);
       })
       // Keeps the default copy; checkout itself decides whether there is a trial.
       .catch(() => {});
@@ -1687,10 +1696,23 @@ export default function OnboardingPage() {
       <div className="flex flex-col p-6 md:p-10">
         <div className="mx-auto w-full max-w-2xl flex-1">
           <div className="mb-8 text-center">
-            <p className="text-2xl tracking-tight">Welcome to {siteConfig.name}!</p>
+            <p className="text-2xl tracking-tight">One last step</p>
             <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">
               {trialDays ? `Start Your ${trialDays}-Day Free Trial` : 'Choose Your Plan'}
             </h1>
+            {trialDays && trialConfirmed ? (
+              <ul className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                {TRIAL_ASSURANCES.map((label) => (
+                  <li
+                    key={label}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-500/20 dark:text-emerald-300"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    {label}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
 
           {/* Plan cards */}
@@ -1780,9 +1802,11 @@ export default function OnboardingPage() {
 
           <p className="mt-8 text-center text-lg">Secure payments powered by Stripe.</p>
           <p className="mt-1 text-center text-sm">
-            {trialDays
-              ? `Cancel anytime during your ${trialDays}-day free trial.`
-              : 'Your free trial has been used, so your plan starts today. Cancel anytime.'}
+            {!trialDays
+              ? 'Your free trial has been used, so your plan starts today. Cancel anytime.'
+              : trialConfirmed
+                ? `Your card is charged on day ${trialDays + 1}, unless you cancel in Settings before then.`
+                : 'Cancel anytime.'}
           </p>
         </div>
 

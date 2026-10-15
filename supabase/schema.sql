@@ -14331,6 +14331,87 @@ alter table public.prompt_improve_suggestions
   add column if not exists sent_actions jsonb not null default '[]'::jsonb;
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00122_import_prompts.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Bulk import of prompts from a spreadsheet (PROMPT-005), capped at the plan
+-- limit inside the database.
+--
+-- The single-prompt path checks the cap in the app tier and then inserts,
+-- which leaves a window where two writes can both pass the check (00074).
+-- One prompt at a time that window costs at most a location or two; a bulk
+-- import can add hundreds, and the task requires that two imports running at
+-- once still stop at the limit. So this function takes a per-organization
+-- advisory lock, counts the org's tracked locations, and inserts the rows in
+-- the order given until the next one would not fit. A second import waits for
+-- the first to commit and then counts what it added.
+--
+-- The rows arrive already validated and resolved (topic ids, plan-filtered
+-- platforms) by the server action, which runs the same preview the dialog
+-- showed (web/src/lib/prompt-import.ts). This function only stores them and
+-- enforces the cap. -1 means unlimited.
+--
+-- SECURITY INVOKER: `prompts` keeps its admin/manager insert policy through
+-- the prompt set's brand, so RLS still decides whether the caller may write.
+
+create or replace function public.import_prompts(
+  p_prompt_set_id uuid,
+  p_organization_id uuid,
+  p_max_locations integer,
+  p_rows jsonb
+)
+returns table (idx integer, id uuid)
+language plpgsql
+volatile
+security invoker
+set search_path to 'public'
+as $$
+declare
+  v_used bigint;
+  v_row jsonb;
+  v_regions text[];
+  v_cost integer;
+  v_id uuid;
+begin
+  perform pg_advisory_xact_lock(hashtextextended('import_prompts:' || p_organization_id::text, 0));
+
+  select coalesce(sum(u.locations), 0) into v_used
+  from public.org_prompt_location_usage(p_organization_id) u;
+
+  for v_row in select value from jsonb_array_elements(p_rows) loop
+    v_regions := array(select jsonb_array_elements_text(v_row -> 'regions'));
+    -- Same unit as org_prompt_location_usage: one per region, minimum one.
+    v_cost := greatest(coalesce(array_length(v_regions, 1), 0), 1);
+    exit when p_max_locations <> -1 and v_used + v_cost > p_max_locations;
+
+    insert into public.prompts
+      (prompt_set_id, text, category, topic_id, platforms, models, regions, is_active)
+    values (
+      p_prompt_set_id,
+      v_row ->> 'text',
+      nullif(v_row ->> 'category', ''),
+      nullif(v_row ->> 'topic_id', '')::uuid,
+      array(select jsonb_array_elements_text(v_row -> 'platforms')),
+      array(select jsonb_array_elements_text(v_row -> 'models')),
+      v_regions,
+      true
+    )
+    returning prompts.id into v_id;
+
+    v_used := v_used + v_cost;
+    idx := (v_row ->> 'idx')::integer;
+    id := v_id;
+    return next;
+  end loop;
+end;
+$$;
+
+revoke all on function public.import_prompts(uuid, uuid, integer, jsonb) from public;
+grant execute on function public.import_prompts(uuid, uuid, integer, jsonb) to authenticated, service_role;
+
+comment on function public.import_prompts(uuid, uuid, integer, jsonb) is
+  'Bulk-inserts prompts [{idx, text, category, topic_id, platforms, models, regions}] in order under a per-organization advisory lock, stopping before the org would exceed p_max_locations tracked locations (-1 = unlimited). Returns the (idx, id) of each inserted row. PROMPT-005.';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00125_opportunity_usage.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- Monthly content opportunity quota (CONTENT-001).
@@ -14618,6 +14699,43 @@ grant execute on function public.content_opportunity_aggregates(
   timestamptz,
   timestamptz
 ) to authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00128_count_active_prompt_locations.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Only active prompts count toward the plan's prompt-location limit.
+--
+-- The tracking worker only runs active prompts, so a paused prompt costs
+-- nothing; counting it made users pay plan room for prompts that don't run.
+-- Paused prompts now free their locations. The other side of that rule lives
+-- in the app: resuming a paused prompt counts as adding its locations, so it
+-- needs free room like any new prompt (web/src/lib/prompt-locations.ts),
+-- which closes the "pause, add new ones, resume the old ones" way past the
+-- limit.
+--
+-- Same shape as 00070, plus `p.is_active`: one row per brand, a prompt's
+-- locations are `greatest(coalesce(array_length(regions,1),0),1)`, mirrored
+-- by promptLocationCount in web/src/lib/prompt-locations.ts.
+create or replace function public.org_prompt_location_usage(p_organization_id uuid)
+returns table (brand_id uuid, locations bigint)
+language sql
+stable
+set search_path to 'public'
+as $$
+  select b.id, sum(greatest(coalesce(array_length(p.regions, 1), 0), 1))::bigint
+  from public.prompts p
+  join public.prompt_sets ps on ps.id = p.prompt_set_id
+  join public.brands b on b.id = ps.brand_id
+  where b.organization_id = p_organization_id
+    and p.is_active
+  group by b.id;
+$$;
+
+revoke all on function public.org_prompt_location_usage(uuid) from public;
+grant execute on function public.org_prompt_location_usage(uuid) to authenticated, service_role;
+
+comment on function public.org_prompt_location_usage(uuid) is
+  'Active prompt locations per brand for one org (#691, 00128) — the plan-quota unit, one per region entry per active prompt, minimum one; paused prompts don''t count. Security invoker: RLS scopes it to the caller''s org.';
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00134_starter_copilot.sql

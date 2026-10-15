@@ -3082,6 +3082,18 @@ export type Database = {
         }[]
       }
       normalize_page_path: { Args: { p_url: string }; Returns: string }
+      import_prompts: {
+        Args: {
+          p_max_locations: number
+          p_organization_id: string
+          p_prompt_set_id: string
+          p_rows: Json
+        }
+        Returns: {
+          id: string
+          idx: number
+        }[]
+      }
       org_prompt_location_usage: {
         Args: { p_organization_id: string }
         Returns: {

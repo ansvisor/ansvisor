@@ -7,6 +7,7 @@ import {
   getPromptSets,
   savePromptSet,
   addPromptToSet,
+  setPromptActive,
   updatePrompt,
   updatePromptLocations,
   bulkUpdatePromptLocations,
@@ -375,13 +376,27 @@ export default function PromptsPage() {
     async (prompt: Prompt) => {
       updatePromptLocal(prompt.id, { isActive: !prompt.isActive });
       try {
-        await updatePrompt(prompt.id, { isActive: !prompt.isActive });
+        const result = await setPromptActive(prompt.id, !prompt.isActive);
+        if ('error' in result) {
+          updatePromptLocal(prompt.id, { isActive: prompt.isActive });
+          // Resuming needs a free slot on the plan; the message says how many.
+          toast.error(
+            result.code === 'plan_limit' ? 'Not enough room to resume' : 'Failed to update prompt',
+            result.code === 'plan_limit' ? { description: result.error } : undefined,
+          );
+          return;
+        }
+        // Pausing frees room and resuming takes it, so the location pickers
+        // need the new usage figure. A failed refresh keeps the last one
+        // rather than leaving the pickers uncapped.
+        const quota = await getLocationQuota(brandId).catch(() => null);
+        if (quota) setLocationQuota(quota);
       } catch {
         updatePromptLocal(prompt.id, { isActive: prompt.isActive });
         toast.error('Failed to update prompt');
       }
     },
-    [updatePromptLocal],
+    [brandId, updatePromptLocal],
   );
 
   const handleEditPrompt = useCallback(
@@ -993,10 +1008,14 @@ export default function PromptsPage() {
                 onPlatformsChange={(platforms) => handlePlatformsChange(prompt.id, platforms)}
                 onRegionsChange={(regions) => handleRegionsChange(prompt.id, regions)}
                 maxLocations={
+                  // A paused prompt's locations aren't in `used`; its cap is
+                  // what it could take back when resumed.
                   locationQuota && locationQuota.maxPrompts !== -1
                     ? Math.max(
                         prompt.regions.length,
-                        locationQuota.maxPrompts - locationQuota.used + prompt.regions.length,
+                        locationQuota.maxPrompts -
+                          locationQuota.used +
+                          (prompt.isActive ? prompt.regions.length : 0),
                       )
                     : null
                 }
