@@ -20,6 +20,7 @@ import {
 } from '@/lib/action-center/registry';
 import { SIGNAL_ROW_COLUMNS, mapSignalRows, type Signal, type SignalRow } from '@/lib/signals/map';
 import type { KpiTimeframe } from '@/lib/kpis/registry';
+import { parseImproveOutcome, type ImproveOutcome } from '@/lib/improve-outcome';
 
 export interface ActionAssignee {
   id: string;
@@ -193,6 +194,8 @@ export interface ActionDetail {
   signals: Signal[];
   events: ActionEvent[];
   kpis: ActionKpiRef[];
+  /** Improve actions only: positions now next to the baseline (PROMPT-008). */
+  positionOutcome: ImproveOutcome | null;
 }
 
 /** Everything the drawer's tabs need beyond the list row, in one round trip
@@ -200,7 +203,7 @@ export interface ActionDetail {
  *  action's kpi_keys — evidence of which goals this work serves. */
 export async function getActionDetail(brandId: string, actionId: string): Promise<ActionDetail> {
   const supabase = await createClient();
-  const [tasksRes, signalsRes, eventsRes, kpisRes] = await Promise.all([
+  const [tasksRes, signalsRes, eventsRes, kpisRes, outcomeRes] = await Promise.all([
     supabase
       .from('action_tasks')
       .select(
@@ -224,6 +227,12 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
       .select('kpi_key, target, timeframe')
       .eq('brand_id', brandId)
       .eq('is_active', true),
+    supabase
+      .from('actions')
+      .select('position_outcome')
+      .eq('brand_id', brandId)
+      .eq('id', actionId)
+      .maybeSingle(),
   ]);
   if (tasksRes.error) throw new Error(tasksRes.error.message);
   if (signalsRes.error) throw new Error(signalsRes.error.message);
@@ -255,6 +264,7 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
       target: Number(kpi.target),
       timeframe: kpi.timeframe as KpiTimeframe,
     })),
+    positionOutcome: parseImproveOutcome(outcomeRes.data?.position_outcome ?? null),
   };
 }
 

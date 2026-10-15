@@ -31,6 +31,7 @@ import type {
   TaskStatus,
 } from './registry';
 import type { SignalSource } from '@/lib/signals/registry';
+import type { ImproveOutcome } from '@/lib/improve-outcome';
 
 /** A metric an action moved, read before and after it ran. */
 export interface ActionResultMetric {
@@ -101,6 +102,8 @@ export interface ActionHistoryItem {
   affected: AffectedEntity[];
   /** Empty until something measures an action's effect. */
   results: ActionResultMetric[];
+  /** Improve actions only: positions per platform against the baseline (PROMPT-008). */
+  positionOutcome: ImproveOutcome | null;
   tasks: ActionHistoryTask[];
   assignee: { id: string; fullName: string | null; avatarUrl: string | null } | null;
   createdAt: string;
