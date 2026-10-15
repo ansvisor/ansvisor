@@ -171,3 +171,39 @@ describe('parseBreakdownGroups', () => {
     expect(parseBreakdownGroups(null)).toEqual({ groups: [], prompts: [] });
   });
 });
+
+describe('buildBreakdownRows with Same prompts', () => {
+  it('measures every row on the prompts answered in both windows', () => {
+    const rows = buildBreakdownRows('visibility', cur, prev, label, { samePrompts: true });
+
+    // p1 is the only prompt answered in both windows.
+    expect(rows.byPrompt.map((r) => r.id)).toEqual(['p1']);
+    const gemini = rows.byPlatform.find((r) => r.id === 'gemini')!;
+    expect(gemini.cur).toBe(
+      pooled(cur.groups.filter((g) => g.prompt_id === 'p1' && g.platform === 'gemini')),
+    );
+  });
+
+  it('never reads a prompt added this period as a gain from 0', () => {
+    const rows = buildBreakdownRows('visibility', cur, prev, label, { samePrompts: true });
+
+    // p2 and p3 were only answered now: no row includes them.
+    expect(rows.byPrompt.map((r) => r.id)).not.toContain('p3');
+    expect(rows.byTopic.map((r) => r.id)).not.toContain('__uncategorized__');
+    expect(
+      [...rows.byPrompt, ...rows.byPlatform, ...rows.byTopic].map((r) => r.delta),
+    ).not.toContain(pooled(cur.groups.filter((g) => g.prompt_id === 'p3')));
+  });
+
+  it('keeps the rows of earlier prompts unchanged when prompts are added', () => {
+    const more: BreakdownGroupsPayload = {
+      ...cur,
+      groups: [...cur.groups, group('p9', 'gemini', 50, 50, 50)],
+    };
+
+    const before = buildBreakdownRows('visibility', cur, prev, label, { samePrompts: true });
+    const after = buildBreakdownRows('visibility', more, prev, label, { samePrompts: true });
+    expect(after.byPlatform).toEqual(before.byPlatform);
+    expect(after.byPrompt).toEqual(before.byPrompt);
+  });
+});
