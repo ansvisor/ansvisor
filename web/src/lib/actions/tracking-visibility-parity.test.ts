@@ -36,6 +36,35 @@ const summaryPayload = (results: number, mentions: number) => ({
 const SUMMARY_CUR = summaryPayload(1800, 710);
 let SUMMARY_PREV = summaryPayload(1600, 500);
 
+// insights_same_prompt_compare[_daily] (VIS-002): the prompts answered in both
+// windows score lower than the full current window, which the new prompts lift.
+const sameTotals = (answers: number, mentions: number, totalMentions: number) => ({
+  ...visibilityPayload(answers, mentions, 50),
+  by_competitor: [
+    {
+      competitor_id: 'c1',
+      name: 'Peec AI',
+      mention_answers: 60,
+      citation_answers: 10,
+      position_factor: 0.4,
+    },
+  ],
+  total_mentions: totalMentions,
+  total_citations: 50,
+  positive_count: 20,
+  mentioning_answers: mentions,
+});
+const SAME_PAYLOAD = {
+  complete: true,
+  same_prompts: 200,
+  new_prompts: 509,
+  dropped_prompts: 3,
+  cur: sameTotals(800, 220, 300),
+  prev: sameTotals(780, 200, 260),
+};
+let SAME: unknown = null;
+let SAME_ERROR: { message: string } | null = null;
+
 const groups = {
   groups: [
     {
@@ -89,6 +118,10 @@ function rpc(name: string, args: Record<string, unknown>) {
   else if (name.startsWith('visibility_rate_trend')) data = [];
   else if (name.startsWith('competitor_aggregates')) data = competitorAgg;
   else if (name.startsWith('insights_aggregates')) data = isPrev(args) ? SUMMARY_PREV : SUMMARY_CUR;
+  else if (name.startsWith('insights_same_prompt_compare')) {
+    if (SAME_ERROR) return Promise.resolve({ data: null, error: SAME_ERROR });
+    data = SAME;
+  }
   return Promise.resolve({ data, error: null });
 }
 
@@ -114,6 +147,8 @@ const {
   getCompetitorComparison,
   getInsightsSummary,
 } = await import('./tracking');
+const { parseSamePromptComparison, withPromptComparison } =
+  await import('@/lib/insights-same-prompts');
 
 const thirtyDays = {
   dateFrom: '2026-09-15T00:00:00.000Z',
@@ -125,6 +160,7 @@ describe('Visibility parity (VIS-001)', () => {
     calls = [];
     PREV = visibilityPayload(1600, 400, 176);
     SUMMARY_PREV = summaryPayload(1600, 500);
+    SAME = null;
   });
 
   it('shows the same number and change on the card, the panel and the leaderboard', async () => {
@@ -212,5 +248,99 @@ describe('Visibility parity (VIS-001)', () => {
     const card = await getInsightsSummary('b1', thirtyDays);
     expect(card.mentionsChange).toBeNull();
     expect(panel).toMatchObject({ curTotal: 710, prevTotal: null, delta: null, deltaPct: null });
+  });
+});
+
+describe('Same prompts parity (VIS-002)', () => {
+  beforeEach(() => {
+    calls = [];
+    PREV = visibilityPayload(1600, 400, 176);
+    SUMMARY_PREV = summaryPayload(1600, 500);
+    SAME = SAME_PAYLOAD;
+    SAME_ERROR = null;
+  });
+
+  /** What the page gets: the cards, re-measured on the shared prompts. */
+  async function cards(samePrompts: boolean) {
+    const [trend, summary, competitors] = await Promise.all([
+      getVisibilityRateTrend('b1', thirtyDays),
+      getInsightsSummary('b1', thirtyDays),
+      getCompetitorComparison('b1', thirtyDays),
+    ]);
+    return withPromptComparison(
+      { trend, summary, competitors },
+      parseSamePromptComparison(SAME),
+      samePrompts,
+    );
+  }
+
+  it('shows the same change on the card, the panel and the leaderboard', async () => {
+    const card = await cards(true);
+    const panel = await getInsightsBreakdown('b1', 'visibility', thirtyDays);
+    const mentions = await getInsightsBreakdown('b1', 'mentions', thirtyDays);
+    const own = card.competitors.brands.find((e) => e.isOwnBrand)!;
+
+    expect(panel.comparison).toEqual({
+      basis: 'same',
+      samePrompts: 200,
+      newPrompts: 509,
+      droppedPrompts: 3,
+    });
+    expect(panel.delta).not.toBeNull();
+    expect(panel.delta).toBe(card.trend!.summary.change);
+    expect(own.scoreChange).toBe(panel.delta);
+    expect(mentions.deltaPct).toBe(card.summary.mentionsChange);
+    expect(mentions).toMatchObject({ comparedCur: 300, prevTotal: 260, delta: 40 });
+    // The numbers themselves still cover every prompt.
+    expect(panel.curTotal).toBe(card.trend!.summary.rate);
+    expect(mentions.curTotal).toBe(710);
+  });
+
+  it('compares all prompts when the switch is off, and still counts the new ones', async () => {
+    const card = await cards(false);
+    const panel = await getInsightsBreakdown('b1', 'visibility', {
+      ...thirtyDays,
+      samePrompts: false,
+    });
+
+    expect(panel.comparison?.basis).toBe('all');
+    expect(panel.comparison?.newPrompts).toBe(509);
+    expect(panel.delta).toBe(card.trend!.summary.change);
+    expect(panel.comparedCur).toBe(panel.curTotal);
+  });
+
+  it('compares all prompts until the rollups are backfilled', async () => {
+    SAME = { ...SAME_PAYLOAD, complete: false };
+    const card = await cards(true);
+    const panel = await getInsightsBreakdown('b1', 'visibility', thirtyDays);
+
+    expect(card.comparison).toBeNull();
+    expect(panel.comparison).toBeNull();
+    expect(panel.delta).toBe(card.trend!.summary.change);
+  });
+
+  it('compares all prompts in the panel when the shared-prompt read fails', async () => {
+    SAME_ERROR = { message: 'canceling statement due to statement timeout' };
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const card = (await getVisibilityRateTrend('b1', thirtyDays)).summary;
+    const panel = await getInsightsBreakdown('b1', 'visibility', thirtyDays);
+
+    expect(panel.comparison).toBeNull();
+    expect(panel.delta).toBe(card.change);
+    expect(panel.comparedCur).toBe(panel.curTotal);
+    expect(errorLog).toHaveBeenCalled();
+    errorLog.mockRestore();
+  });
+
+  it('reads the shared prompts over the card\u2019s whole days', async () => {
+    await getInsightsBreakdown('b1', 'visibility', thirtyDays);
+
+    const call = calls.find((c) => c.name === 'insights_same_prompt_compare_daily')!;
+    expect(call.args).toMatchObject({
+      p_cur_from: '2026-09-15',
+      p_cur_to: '2026-10-14',
+      p_prev_from: '2026-08-16',
+      p_prev_to: '2026-09-14',
+    });
   });
 });
