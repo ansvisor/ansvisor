@@ -3305,6 +3305,10 @@ export type Database = {
         Args: { p_brand_id: string; p_from: string; p_to: string }
         Returns: Json
       }
+      signals_new_count: {
+        Args: { p_brand_id: string }
+        Returns: number
+      }
       topics_overview_aggregates: {
         Args: { p_brand_id: string }
         Returns: {

@@ -52,7 +52,7 @@ const signal = (over: Partial<Signal> = {}): Signal => ({
   payload: { promptText: 'What is the best AI rank tracker?' },
   kpiKeys: [],
   actionId: 'a1',
-  where: { platforms: ['chatgpt-web', 'gemini-web'], regions: ['US'] },
+  where: { platforms: ['chatgpt-web', 'gemini-web'], regions: ['US'], topics: [] },
   ...over,
 });
 
@@ -65,7 +65,11 @@ describe('SupportingSignals', () => {
         actionId="a1"
         signals={[
           signal(),
-          signal({ id: 's2', status: 'acknowledged', where: { platforms: [], regions: [] } }),
+          signal({
+            id: 's2',
+            status: 'acknowledged',
+            where: { platforms: [], regions: [], topics: [] },
+          }),
           // No longer supports it.
           signal({ id: 's3', status: 'resolved' }),
         ]}
