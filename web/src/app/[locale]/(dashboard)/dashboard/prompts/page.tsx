@@ -94,6 +94,7 @@ import {
   deletePrompt,
   getPromptsPageData,
   importPrompts,
+  setPromptActive,
   updatePrompt,
   type LocationQuota,
 } from '@/lib/actions/prompt';
@@ -536,9 +537,9 @@ function brandLocation(region: string | undefined, state: string | undefined): s
 // ─── Tracked prompt limit (PROMPT-009) ────────────────────────────────────────
 
 const PROMPT_USAGE_TOOLTIP =
-  'Your plan limits tracked prompt locations across every brand in your organization. ' +
-  'Each prompt counts once per location it targets, and paused prompts count too. ' +
-  'Remove prompts or locations to free slots.';
+  'Your plan limits active prompt locations across every brand in your organization. ' +
+  "Each prompt counts once per location it targets; paused prompts don't count, and " +
+  'resuming one needs a free slot. Pause or remove prompts or locations to free slots.';
 
 /**
  * "187 / 200 prompt locations · Growth plan" with a thin progress bar. The
@@ -551,7 +552,7 @@ function PromptUsageMeter({ quota }: { quota: LocationQuota }) {
   if (usage.state === 'unlimited') {
     return (
       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-        <span className="tabular-nums">{quota.used}</span> prompt locations tracked · Unlimited
+        <span className="tabular-nums">{quota.used}</span> active prompt locations · Unlimited
         <InfoTip content={PROMPT_USAGE_TOOLTIP} />
       </span>
     );
@@ -576,12 +577,12 @@ function PromptUsageMeter({ quota }: { quota: LocationQuota }) {
         <span className={cn('font-medium tabular-nums', tone.text)}>
           {quota.used} / {quota.maxPrompts}
         </span>{' '}
-        prompt locations · {quota.planName} plan
+        active prompt locations · {quota.planName} plan
       </span>
       <div
         className="h-1.5 w-24 overflow-hidden rounded-full bg-muted"
         role="progressbar"
-        aria-label="Tracked prompt locations used"
+        aria-label="Active prompt locations used"
         aria-valuemin={0}
         aria-valuemax={quota.maxPrompts}
         aria-valuenow={Math.min(quota.used, quota.maxPrompts)}
@@ -815,10 +816,10 @@ function AddPromptDialog({
                   You&apos;ve reached your prompt limit
                 </p>
                 <p className="text-red-800/80 dark:text-red-300/80">
-                  Your {locationQuota.planName} plan tracks up to {locationQuota.maxPrompts} prompt
-                  locations and {locationQuota.used} are in use. Each prompt counts once per
-                  location it targets, and paused prompts count too. Remove prompts or locations to
-                  free a slot, or{' '}
+                  Your {locationQuota.planName} plan tracks up to {locationQuota.maxPrompts} active
+                  prompt locations and {locationQuota.used} are in use. Each prompt counts once per
+                  location it targets; paused prompts don&apos;t count. Pause or remove prompts or
+                  locations to free a slot, or{' '}
                   {locationQuota.planId === 'starter' ? 'upgrade your plan' : 'contact us'} to track
                   more.
                 </p>
@@ -1033,19 +1034,35 @@ function EditPromptDialog({
     if (!prompt || !text.trim() || (scrapers.length === 0 && models.length === 0) || busy) return;
     setSaving(true);
     setError(null);
+    let activeChanged = false;
     try {
+      // Pausing or resuming goes first and on its own: resuming needs a free
+      // slot on the plan, and a refusal has to reach the dialog as a message.
+      if (isActive !== prompt.isActive) {
+        const result = await setPromptActive(prompt.id, isActive);
+        if ('error' in result) {
+          setError(
+            result.code === 'plan_limit'
+              ? result.error
+              : 'Failed to update prompt. Please try again.',
+          );
+          return;
+        }
+        activeChanged = true;
+      }
       await updatePrompt(prompt.id, {
         text: text.trim(),
         category: category || undefined,
         platforms: scrapers,
         models,
-        isActive,
       });
       onClose();
       toast.success('Prompt updated.');
       onChanged();
     } catch {
       setError('Failed to update prompt. Please try again.');
+      // The pause or resume already went through; show it in the table.
+      if (activeChanged) onChanged();
     } finally {
       setSaving(false);
     }
@@ -2551,7 +2568,17 @@ function AllPromptsTab({
   const toggleActive = useCallback(
     async (prompt: Prompt) => {
       try {
-        await updatePrompt(prompt.id, { isActive: !prompt.isActive });
+        const result = await setPromptActive(prompt.id, !prompt.isActive);
+        if ('error' in result) {
+          // Resuming needs a free slot on the plan; the message says how many.
+          toast.error(
+            result.code === 'plan_limit'
+              ? 'Not enough room to resume'
+              : 'Failed to update the prompt.',
+            { description: result.code === 'plan_limit' ? result.error : prompt.text },
+          );
+          return;
+        }
         toast.success(prompt.isActive ? 'Tracking paused' : 'Tracking resumed', {
           description: prompt.text,
         });
