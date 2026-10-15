@@ -18,6 +18,7 @@ import { createClient } from '@/lib/supabase/server';
 import type { ActionCategory, ActionImpact } from '@/lib/action-center/registry';
 import type { ActionOutcome, ActionStatus, TaskStatus } from '@/lib/action-center/registry';
 import { SIGNAL_SOURCES, type SignalSource } from '@/lib/signals/registry';
+import { parseImproveOutcome } from '@/lib/improve-outcome';
 import {
   HISTORY_STATUSES,
   daysBetween,
@@ -37,6 +38,7 @@ interface HistoryRow {
   status: string;
   outcome: string;
   validation: ValidationSnapshot | null;
+  position_outcome: unknown;
   payload: Record<string, unknown>;
   kpi_keys: string[];
   assignee_id: string | null;
@@ -46,7 +48,7 @@ interface HistoryRow {
 }
 
 const HISTORY_COLUMNS =
-  'id, action_no, category, kind, impact, status, outcome, validation, payload, kpi_keys, assignee_id, created_at, completed_at, updated_at';
+  'id, action_no, category, kind, impact, status, outcome, validation, position_outcome, payload, kpi_keys, assignee_id, created_at, completed_at, updated_at';
 
 /** What the validation sweep stores on an action. */
 interface ValidationSnapshot {
@@ -244,6 +246,7 @@ export async function getActionHistory(
       impact: row.impact as ActionImpact,
       status: row.status as ActionStatus,
       outcome: row.outcome as ActionOutcome,
+      positionOutcome: parseImproveOutcome(row.position_outcome ?? null),
       payload: row.payload ?? {},
       kpiKeys: row.kpi_keys ?? [],
       sources: [...(sourcesByAction.get(row.id) ?? [])],
