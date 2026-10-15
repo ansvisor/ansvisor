@@ -12,6 +12,7 @@ import {
   type PositionAnswer,
   type PositionsSummary,
 } from '@/lib/prompt-positions';
+import { isTimeZone } from '@/lib/time-zone';
 import type { Sentiment } from '@/types';
 
 export interface PromptPositionsData {
@@ -38,11 +39,12 @@ const SENTIMENTS: readonly string[] = ['positive', 'neutral', 'negative'];
  * caller's organisations comes back as null. Engines the org's plan doesn't
  * include are never queried: their rows carry only the upgrade state.
  * Answer text and source lists stay on the server; the panel gets the
- * folded numbers.
+ * folded numbers. Answers are filed under the viewer's days (`timeZone`, an
+ * IANA zone from the browser; UTC when missing or unknown).
  */
 export async function getPromptPositions(
   promptId: string,
-  opts: { from: string; to?: string; region?: string },
+  opts: { from: string; to?: string; region?: string; timeZone?: string },
 ): Promise<PromptPositionsData | null> {
   if (!Number.isFinite(Date.parse(opts.from))) throw new Error('Invalid date range');
   if (opts.to && !Number.isFinite(Date.parse(opts.to))) throw new Error('Invalid date range');
@@ -138,7 +140,12 @@ export async function getPromptPositions(
   });
 
   const window = { from: opts.from, to };
-  const { summary, platforms: rowsByPlatform } = summarizePositions(answers, platforms, window);
+  const { summary, platforms: rowsByPlatform } = summarizePositions(
+    answers,
+    platforms,
+    window,
+    isTimeZone(opts.timeZone) ? opts.timeZone : 'UTC',
+  );
 
   return {
     prompt: {

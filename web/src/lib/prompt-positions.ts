@@ -9,6 +9,7 @@
  */
 import { PLANS, PLAN_ORDER, type Plan } from '@/config/plans';
 import { extractHostname, normalizeDomain } from '@/lib/citations/classify';
+import { dayIn, nextDay, startOfDayIn } from '@/lib/time-zone';
 import type { Sentiment } from '@/types';
 
 /** The engines the panel lists, in the order it lists them. */
@@ -135,7 +136,7 @@ export interface AnswerView {
 }
 
 export interface PlatformDay {
-  /** UTC date, YYYY-MM-DD. */
+  /** Date in the viewer's time zone, YYYY-MM-DD. */
   day: string;
   /** Newest first. */
   answers: AnswerView[];
@@ -164,7 +165,7 @@ export interface PlatformPositions {
 }
 
 export interface PositionsSummary {
-  /** Every UTC date the window covers, oldest first. */
+  /** Every date the window covers in the viewer's time zone, oldest first. */
   days: string[];
   /** Tracking runs that produced an answer for this prompt, across engines. */
   runs: number;
@@ -177,8 +178,6 @@ export interface PositionsSummary {
   citationPosition: PositionStats | null;
 }
 
-const DAY_MS = 86_400_000;
-
 /**
  * Answers from one run of a prompt land within a couple of hours of each
  * other, and runs are a day apart. A gap longer than this between two
@@ -186,23 +185,24 @@ const DAY_MS = 86_400_000;
  */
 export const RUN_GAP_MS = 6 * 60 * 60 * 1000;
 
-export function utcDay(iso: string): string {
-  return new Date(iso).toISOString().slice(0, 10);
-}
-
 /**
- * The UTC dates a window covers, oldest first. A rolling window starts part
- * way through its first date; that date is left out unless an answer landed
- * in the part the window covers, so "last 7 days" reads as 7 days rather
- * than 8 with an empty one in front.
+ * The dates a window covers in `timeZone`, oldest first. A rolling window
+ * starts part way through its first date; that date is left out unless an
+ * answer landed in the part the window covers, so "last 7 days" reads as 7
+ * days rather than 8 with an empty one in front.
  */
-export function windowDays(from: string, to: string, answeredDays: Set<string>): string[] {
-  const start = Date.parse(`${utcDay(from)}T00:00:00Z`);
-  const end = Date.parse(`${utcDay(to)}T00:00:00Z`);
+export function windowDays(
+  from: string,
+  to: string,
+  answeredDays: Set<string>,
+  timeZone = 'UTC',
+): string[] {
+  const last = dayIn(to, timeZone);
   const days: string[] = [];
-  for (let t = start; t <= end; t += DAY_MS) days.push(new Date(t).toISOString().slice(0, 10));
+  for (let day = dayIn(from, timeZone); day <= last; day = nextDay(day)) days.push(day);
+  if (days.length === 0) return days;
 
-  const partialStart = Date.parse(from) > start;
+  const partialStart = Date.parse(from) > Date.parse(startOfDayIn(days[0], timeZone));
   if (partialStart && days.length > 1 && !answeredDays.has(days[0])) days.shift();
   return days;
 }
@@ -248,12 +248,13 @@ function toView(a: PositionAnswer): AnswerView {
 function summarizePlatform(
   platform: { id: PositionPlatformId; label: string; access: PlatformAccess },
   answers: PositionAnswer[],
+  timeZone: string,
 ): PlatformPositions {
   const views = answers.map(toView).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
 
   const byDay = new Map<string, AnswerView[]>();
   for (const v of views) {
-    const day = utcDay(v.at);
+    const day = dayIn(v.at, timeZone);
     byDay.set(day, [...(byDay.get(day) ?? []), v]);
   }
   const days = [...byDay.entries()]
@@ -290,25 +291,31 @@ function summarizePlatform(
  * Fold a window's answers into the panel's summary and per-engine rows.
  * `answers` must already be limited to the engines the plan includes; a
  * locked engine gets its row with empty numbers, which the panel replaces
- * with the upgrade prompt.
+ * with the upgrade prompt. Days are the viewer's (`timeZone`), so they match
+ * the answer times the viewer reads.
  */
 export function summarizePositions(
   answers: PositionAnswer[],
   platforms: { id: PositionPlatformId; label: string; access: PlatformAccess }[],
   window: { from: string; to: string },
+  timeZone = 'UTC',
 ): { summary: PositionsSummary; platforms: PlatformPositions[] } {
   const rows = platforms.map((p) =>
     summarizePlatform(
       p,
       p.access.state === 'included' ? answers.filter((a) => a.platform === p.id) : [],
+      timeZone,
     ),
   );
-  const counted = rows.flatMap((r) => r.days.flatMap((d) => d.answers));
+  // Each answer's day, as its platform row already worked it out.
+  const dayOf = new Map<AnswerView, string>();
+  for (const r of rows) for (const d of r.days) for (const a of d.answers) dayOf.set(a, d.day);
+  const counted = [...dayOf.keys()];
 
-  const tracked = new Set(counted.map((a) => utcDay(a.at)));
-  const mentioned = new Set(counted.filter((a) => a.mentioned).map((a) => utcDay(a.at)));
-  const cited = new Set(counted.filter((a) => a.cited).map((a) => utcDay(a.at)));
-  const days = windowDays(window.from, window.to, tracked);
+  const tracked = new Set(dayOf.values());
+  const mentioned = new Set(counted.filter((a) => a.mentioned).map((a) => dayOf.get(a)!));
+  const cited = new Set(counted.filter((a) => a.cited).map((a) => dayOf.get(a)!));
+  const days = windowDays(window.from, window.to, tracked, timeZone);
   const lastAnswerAt = counted.reduce<string | null>(
     (latest, a) => (latest === null || Date.parse(a.at) > Date.parse(latest) ? a.at : latest),
     null,
