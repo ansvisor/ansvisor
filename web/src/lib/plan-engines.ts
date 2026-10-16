@@ -10,7 +10,7 @@ import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
  * `allowedModels` is **absent** on the plan, every engine / model is allowed
  * (Growth, Enterprise, Self-hosted). If it's an **array** — even an empty
  * one — only the listed ids are allowed (Starter ships
- * `allowedScrapers: ['chatgpt-web', 'perplexity-web']` and
+ * `allowedScrapers: ['chatgpt-web', 'copilot-web']` and
  * `allowedModels: []`).
  *
  * Used by the Stripe success route to align onboarding-created prompts to
@@ -44,7 +44,7 @@ export function getActiveEngineIdsForPlan(planId: PlanId | string | null | undef
  *     so every prompt's platforms array becomes all 8 engine ids. Without
  *     this an upgraded Growth customer keeps tracking only 2 engines (#79).
  *   - **Contraction** (Growth → Starter on downgrade / cancellation):
- *     Starter restricts to `['chatgpt-web', 'perplexity-web']`, so prompts
+ *     Starter restricts to `['chatgpt-web', 'copilot-web']`, so prompts
  *     get trimmed down. Without this a downgraded org would keep paying
  *     scraper cost on engines the plan no longer covers.
  *
