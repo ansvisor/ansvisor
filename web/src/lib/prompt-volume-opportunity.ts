@@ -3,13 +3,14 @@
  * OPPORTUNITY_MIN_VOLUME estimated AI searches a month, and is High rather
  * than Medium from OPPORTUNITY_HIGH_VOLUME.
  *
- * Set for the median-based estimate (00154). The old 5k and 10k suited the
- * sum of five keywords, which ran about 15 times higher: on the largest brand
- * the median prompt went from ~4.7k to ~540. These keep roughly the same share
- * of prompts on the list, about half, with the top third or so High.
+ * Set for the median-based estimate at the 45% AI adoption rate (00154,
+ * 00155). The old 5k and 10k suited the sum of five keywords at 15%: on the
+ * largest brand the median prompt now reads ~1.6k (it was ~4.7k), and p90
+ * ~6.7k (~41k). These keep roughly the same share of prompts on the list,
+ * about half, with the top third or so High.
  */
-export const OPPORTUNITY_MIN_VOLUME = 500;
-export const OPPORTUNITY_HIGH_VOLUME = 1000;
+export const OPPORTUNITY_MIN_VOLUME = 1500;
+export const OPPORTUNITY_HIGH_VOLUME = 3000;
 
 export function opportunityLevel(estAiVolume: number): 'high' | 'medium' | null {
   if (estAiVolume >= OPPORTUNITY_HIGH_VOLUME) return 'high';
