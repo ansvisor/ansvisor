@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link, useRouter } from '@/i18n/navigation';
@@ -9,14 +9,12 @@ import { Button } from '@/components/ui/button';
 import { sendTopicGapToActionCenter, type TopicGapWindow } from '@/lib/actions/topic';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { numberFormat } from '@/lib/number-format';
 import { biggestGap, heatShade, topicHeatmap, type TopicCompetitors } from '@/lib/insights-topics';
 import { TONE_TEXT } from './kpi-format';
 
 /** Rows shown before "Show all". */
 const VISIBLE_ROWS = 6;
-
-/** A gap with one decimal, so the column lines up: "−29.0", "−20.3". */
-const gapText = (gap: number) => `−${Math.abs(gap).toFixed(1)}`;
 
 /**
  * Cell shades, light to dark: soft theme-relative tints, so they read in
@@ -51,6 +49,9 @@ export function TopicHeatmap({
   className?: string;
 }) {
   const t = useTranslations('insights.topicMap');
+  const f = numberFormat(useLocale());
+  /** A gap with one decimal, so the column lines up: "−29.0", "−20.3". */
+  const gapText = (gap: number) => `−${f.number(Math.abs(gap), 1)}`;
   const router = useRouter();
   const [sending, setSending] = useState(false);
   // Expanded for this data only: another brand or range starts folded.
@@ -111,7 +112,7 @@ export function TopicHeatmap({
                 ? t('sendGapTitle', {
                     topic: target.name,
                     competitor: targetCompetitor ?? '',
-                    gap: Math.abs(target.gap!).toFixed(1),
+                    gap: f.number(Math.abs(target.gap!), 1),
                   })
                 : t('noGap')
             }
@@ -167,7 +168,7 @@ export function TopicHeatmap({
                         row.status === 'lowSample' && 'opacity-50',
                       )}
                     >
-                      {value.toFixed(1)}
+                      {f.number(value, 1)}
                     </Link>
                   </td>
                 ))}
@@ -197,7 +198,7 @@ export function TopicHeatmap({
             onClick={() => setExpandedFor(expanded ? null : topics)}
             className="mt-1.5 w-full py-1 text-center text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
-            {expanded ? t('showLess') : t('showAll', { count: rows.length })}
+            {expanded ? t('showLess') : t('showAll', { count: f.number(rows.length) })}
           </button>
         )}
       </CardContent>

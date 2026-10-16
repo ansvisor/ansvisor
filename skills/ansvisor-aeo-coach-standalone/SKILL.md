@@ -98,6 +98,7 @@ mirrors the MCP tool of the same purpose and returns the same data.
 | `GET /prompts` | `brand_id`, `topic_id`, `is_active`, `limit` (default 100, max 500) | `{ prompts: [...] }` |
 | `GET /prompt-performance` | `brand_id`, dates, `topic_id`, `sort_by` (`visibility`/`mentions`/`citations`/`appearances`), `order`, `limit`, `model`, `region` | per-prompt visibility, mentions, citations, competitor score |
 | `GET /prompt-volumes` | `brand_id`, `limit` | `{ volumes: [...] }` — Google volumes, `est_ai_volume`, competition |
+| `GET /prompt-usage` | `brand_id` | `{ plan: { key, name, locationLimit, cta }, brand: { active, paused, total }, account: { activePrompts, brands, locationsUsed }, updatedAt }` — the plan's prompt allowance, as on the Tracked Prompts usage cards. The limit counts prompt **locations** account-wide (one slot per location of each active prompt; paused prompts use none, and resuming one needs free slots like adding one); `locationLimit: null` = unlimited |
 | `GET /topic-suggestions` | `brand_id` | `{ suggestions: [...] }` pending topic ideas |
 | `POST /topic-suggestions/{id}/accept` *(write)* | — | creates one topic |
 | `POST /topic-suggestions/{id}/dismiss` *(write)* | — | hides the suggestion |
@@ -311,6 +312,14 @@ or any "do I have gaps" question:
    rather than inventing topics.
 5. `GET /prompt-volumes` tells you which prompts carry real demand —
    use it to say which gaps matter most.
+6. Before suggesting new prompts, call `GET /prompt-usage?brand_id=…`
+   to see how many slots are left (`locationLimit − locationsUsed`,
+   never below 0). A `null` `plan.locationLimit` means no limit
+   (self-hosted, or an Enterprise account whose limit isn't set yet):
+   skip the check. Otherwise, if none are left (or fewer than you'd
+   suggest), say so: pausing low-value prompts frees their slots, and
+   `plan.cta` names the next step (`upgrade_growth`, `upgrade` or
+   `contact`).
 
 ### 6. Prompt deep-dive
 
