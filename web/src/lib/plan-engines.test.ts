@@ -12,7 +12,7 @@ vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 const ALL_SCRAPER_IDS = ALL_SCRAPERS.map((s) => s.id);
 const ALL_MODEL_IDS = ALL_MODELS.map((m) => m.id);
 
-const STARTER_SCRAPER_IDS = ['chatgpt-web', 'perplexity-web'];
+const STARTER_SCRAPER_IDS = ['chatgpt-web', 'copilot-web'];
 
 /**
  * getPlan() short-circuits to the self-hosted plan unless the instance is
