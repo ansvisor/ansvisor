@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
+import { useLocale } from 'next-intl';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import {
   AreaChart,
@@ -28,6 +29,8 @@ import type {
 } from '@/lib/actions/tracking';
 import { getFaviconUrl } from '@/lib/favicon';
 import { trendAxisTop, type TrendLine, type TrendMarker } from '@/lib/insights-trend';
+import { numberFormat } from '@/lib/number-format';
+import { dayLabel } from './kpi-format';
 
 // ─── Adaptive Y-axis ─────────────────────────────────────────────────────────
 // Visibility scores are theoretically 0–100 but realistic values for most
@@ -302,6 +305,11 @@ export function VisibilityRateTrendChart({
   onHover: (key: string | null) => void;
 }) {
   const { points } = data;
+  const locale = useLocale();
+  const f = numberFormat(locale);
+  // The points' `date` stays the key markers are placed by; what the axis and
+  // tooltip print is the day in the UI's locale (VIS-005).
+  const labelOf = new Map(points.map((p) => [p.date, dayLabel(p.day, locale)]));
   const shown = lines.map((line) => ({
     ...line,
     logoUrl: line.logoUrl ?? (line.domain ? getFaviconUrl(line.domain, 64) : ''),
@@ -336,6 +344,7 @@ export function VisibilityRateTrendChart({
         >
           <XAxis
             dataKey="date"
+            tickFormatter={(date: string) => labelOf.get(date) ?? date}
             tick={{ fontSize: 11 }}
             tickLine={false}
             axisLine={false}
@@ -344,6 +353,7 @@ export function VisibilityRateTrendChart({
           <YAxis
             domain={[0, yTop]}
             ticks={yTicks}
+            tickFormatter={(v: number) => f.number(v)}
             tick={{ fontSize: 11 }}
             tickLine={false}
             axisLine={false}
@@ -358,7 +368,9 @@ export function VisibilityRateTrendChart({
               );
               return (
                 <div className="rounded-lg border bg-background px-3 py-2 shadow-md text-xs">
-                  <p className="font-medium text-foreground mb-1">{label}</p>
+                  <p className="font-medium text-foreground mb-1">
+                    {labelOf.get(String(label)) ?? label}
+                  </p>
                   {ordered.map((entry) => {
                     const entity = shown.find((e) => e.key === entry.dataKey);
                     if (!entity) return null;
@@ -369,7 +381,9 @@ export function VisibilityRateTrendChart({
                           style={{ backgroundColor: entity.color }}
                         />
                         <span className="text-muted-foreground">{entity.name}:</span>
-                        <span className="font-medium text-foreground">{entry.value}</span>
+                        <span className="font-medium text-foreground">
+                          {typeof entry.value === 'number' ? f.number(entry.value) : entry.value}
+                        </span>
                       </div>
                     );
                   })}
