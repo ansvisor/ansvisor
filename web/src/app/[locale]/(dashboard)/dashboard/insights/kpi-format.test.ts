@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  rateSamples,
   arrowChange,
   formatWindowBound,
   lowerIsGood,
@@ -22,10 +23,18 @@ describe('KPI card formatting', () => {
   });
 
   it('colours a rise good and a fall bad on most cards', () => {
-    expect(upIsGood(18, '%')).toEqual({ text: '+18%', tone: 'good' });
+    expect(upIsGood(18, { percent: true })).toEqual({ text: '+18%', tone: 'good' });
     expect(upIsGood(-4)).toEqual({ text: '−4', tone: 'bad' });
-    expect(upIsGood(0, '%')).toEqual({ text: '±0', tone: 'neutral' });
+    expect(upIsGood(0, { percent: true })).toEqual({ text: '±0', tone: 'neutral' });
     expect(upIsGood(null)).toBeNull();
+  });
+
+  it('writes every number in the UI’s locale (VIS-005)', () => {
+    expect(signedChange(-1234.5, 'tr')).toBe('−1.234,5');
+    expect(upIsGood(18.5, { percent: true, locale: 'tr' })?.text).toBe('+%18,5');
+    expect(lowerIsGood(-0.3, 'tr')?.text).toBe('↑0,3');
+    expect(arrowChange(4.1, 'tr')?.text).toBe('↑ 4,1');
+    expect(formatWindowBound('2026-08-16', 'tr')).toBe('16 Ağu 2026');
   });
 
   it('reads a lower Avg. position as an improvement', () => {
@@ -39,6 +48,15 @@ describe('KPI card formatting', () => {
     expect(arrowChange(-1.06)).toEqual({ text: '↓ 1.1', tone: 'bad' });
     expect(arrowChange(0)).toEqual({ text: '±0', tone: 'neutral' });
     expect(arrowChange(null)).toBeNull();
+  });
+
+  it('takes each rate over its own answers (VIS-005)', () => {
+    const samples = rateSamples({ totalResults: 300, mentioningResults: 6, positionedResults: 4 });
+    expect(samples.visibility).toEqual({ count: 300, of: 'all' });
+    expect(samples.citationRate).toEqual({ count: 300, of: 'all' });
+    // Net sentiment and Avg. position can be a low sample in a full period.
+    expect(samples.netSentiment).toEqual({ count: 6, of: 'named' });
+    expect(samples.avgPosition).toEqual({ count: 4, of: 'placed' });
   });
 
   it('labels whole-day windows by their UTC days', () => {

@@ -106,6 +106,16 @@ timestamps (`date_from` / `date_to`).
   Use for "best / worst prompt this week?".
 - **`get_prompt_volumes`** — per-prompt search demand: Google volumes,
   `est_ai_volume` and competition. Use to prioritise.
+- **`get_prompt_usage`** — the plan's prompt allowance, as on the
+  Tracked Prompts usage cards: the brand's `active`, `paused` and
+  `total` prompts, and the account's `activePrompts` across `brands`
+  and `locationsUsed` against `plan.locationLimit` (`null` =
+  unlimited). The limit counts **prompt locations** across every brand
+  of the account: an active prompt uses one slot per location it
+  targets, a paused one uses none, and resuming a paused prompt needs
+  free slots like adding one. Slots left = `locationLimit −
+  locationsUsed` (never below 0). Use for "how many prompts can we
+  still add?".
 - **`list_topic_suggestions`** — pending AI topic suggestions.
   **`accept_topic_suggestion`** / **`dismiss_topic_suggestion`** act on
   one *(writes)*.
@@ -293,6 +303,13 @@ or any "do I have gaps" question:
    rather than inventing topics.
 5. `get_prompt_volumes` tells you which prompts carry real demand —
    use it to say which gaps matter most.
+6. Before suggesting new prompts, call `get_prompt_usage(brand_id)`
+   to see how many slots are left. A `null` `plan.locationLimit` means
+   no limit (self-hosted, or an Enterprise account whose limit isn't
+   set yet): skip the check. Otherwise, if none are left (or fewer than
+   you'd suggest), say so: pausing low-value prompts frees their slots,
+   and `plan.cta` names the next step (`upgrade_growth`, `upgrade` or
+   `contact`).
 
 ### 6. Prompt deep-dive
 
