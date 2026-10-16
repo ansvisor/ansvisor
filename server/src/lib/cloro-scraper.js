@@ -8,6 +8,7 @@
  */
 
 import logger from './logger.js';
+import { stripEntityMarkup } from './entity-markup.js';
 
 const CLORO_API = 'https://api.cloro.dev';
 
@@ -141,6 +142,12 @@ function normalizeSearchQueries(result, scraperId) {
   return [];
 }
 
+/**
+ * Parse a completed Cloro task into the answer we store. The text loses
+ * ChatGPT's entity tags here (entity-markup.js), so the saved answer and every
+ * metric derived from it read the names instead. Only ChatGPT has been seen
+ * to send them, but the cleanup is harmless on the other engines.
+ */
 export function parseScraperResponse(result, scraperId) {
   if (scraperId === 'chatgpt-shopping') {
     // ChatGPT Shopping returns a normal ChatGPT response shape *plus*
@@ -149,7 +156,7 @@ export function parseScraperResponse(result, scraperId) {
     // Model is forced to the shopping-specific id so Insights aggregates
     // (which exclude `platform = 'chatgpt-shopping'`) never mix this row
     // into brand-level visibility numbers.
-    const text = result.markdown || result.text || '';
+    const text = stripEntityMarkup(result.markdown || result.text || '');
     const citations = (result.sources || []).map((src, idx) => ({
       url: src.url || '',
       title: src.label || '',
@@ -171,7 +178,7 @@ export function parseScraperResponse(result, scraperId) {
       throw new Error('Google did not return an AI Overview for this query');
     }
 
-    const text = aio.markdown || aio.text || '';
+    const text = stripEntityMarkup(aio.markdown || aio.text || '');
     const citations = (aio.sources || []).map((src, idx) => ({
       url: src.url || '',
       title: src.label || '',
@@ -184,7 +191,7 @@ export function parseScraperResponse(result, scraperId) {
 
   if (scraperId === 'google-aimode') {
     const aiMode = result.result || result;
-    const text = aiMode.markdown || aiMode.text || '';
+    const text = stripEntityMarkup(aiMode.markdown || aiMode.text || '');
     const citations = (aiMode.sources || []).map((src, idx) => ({
       url: src.url || '',
       title: src.label || '',
@@ -204,7 +211,7 @@ export function parseScraperResponse(result, scraperId) {
     };
   }
 
-  const text = result.markdown || result.text || '';
+  const text = stripEntityMarkup(result.markdown || result.text || '');
   const model = result.model || scraperId;
   const citations = (result.sources || []).map((src, idx) => ({
     url: src.url || '',

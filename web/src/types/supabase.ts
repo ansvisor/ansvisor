@@ -552,6 +552,7 @@ export type Database = {
           gsc_property: string | null
           id: string
           industry: string | null
+          insights_pinned_competitors: string[]
           is_active: boolean
           language: string | null
           logo_url: string | null
@@ -571,6 +572,7 @@ export type Database = {
           gsc_property?: string | null
           id?: string
           industry?: string | null
+          insights_pinned_competitors?: string[]
           is_active?: boolean
           language?: string | null
           logo_url?: string | null
@@ -590,6 +592,7 @@ export type Database = {
           gsc_property?: string | null
           id?: string
           industry?: string | null
+          insights_pinned_competitors?: string[]
           is_active?: boolean
           language?: string | null
           logo_url?: string | null
@@ -3187,6 +3190,25 @@ export type Database = {
         }
         Returns: Json
       }
+      insights_topic_competitors_daily: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_region?: string
+        }
+        Returns: Json
+      }
+      insights_trend_markers: {
+        Args: {
+          p_brand_id: string
+          p_from?: string
+          p_to?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
       normalize_page_path: { Args: { p_url: string }; Returns: string }
       import_prompts: {
         Args: {
@@ -3234,6 +3256,16 @@ export type Database = {
           position_sum: number
           prompt_id: string
           runs: number
+        }[]
+      }
+      prompt_usage_summary: {
+        Args: { p_brand_id: string }
+        Returns: {
+          brand_active: number
+          brand_paused: number
+          account_active: number
+          account_brands: number
+          account_locations: number
         }[]
       }
       prompt_visibility_summaries: {

@@ -170,6 +170,21 @@ describe('cloro-scraper – parseScraperResponse', () => {
     });
   });
 
+  describe('ChatGPT entity markup', () => {
+    const markdown =
+      'Top tools: **<Entity category="software" value="Tesseract" disambig="Adlift AI search optimization platform"/>** and <Entity category="software" value="Ansvisor" />.';
+
+    it('stores the names instead of the entity tags', () => {
+      const parsed = parseScraperResponse({ markdown, sources: [] }, 'chatgpt-web');
+      expect(parsed.text).toBe('Top tools: **Tesseract** and Ansvisor.');
+    });
+
+    it('cleans the shopping answer too', () => {
+      const parsed = parseScraperResponse({ markdown, sources: [] }, 'chatgpt-shopping');
+      expect(parsed.text).toBe('Top tools: **Tesseract** and Ansvisor.');
+    });
+  });
+
   describe('search_queries (observed query fan-out, #332)', () => {
     it('maps Copilot string[] searchQueries to rich items tagged with the source platform', () => {
       const result = {

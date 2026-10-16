@@ -236,8 +236,15 @@ export async function validateAction(action, { now = new Date() } = {}) {
 
   // An action sent from a content opportunity is measured on its own prompts
   // and pages; the brand-wide numbers would bury a single piece of content.
-  // An Improve action (PROMPT-004) likewise, on its one prompt.
-  if (action.kind === 'content_opportunity' || action.kind === 'prompt_improve') {
+  // An Improve action (PROMPT-004) likewise, on its one prompt, and a topic
+  // gap (VIS-010) or opportunity (VIS-011) sent from Insights on the topic's
+  // prompts.
+  if (
+    action.kind === 'content_opportunity' ||
+    action.kind === 'prompt_improve' ||
+    action.kind === 'topic_competitor_gap' ||
+    action.kind === 'topic_opportunity'
+  ) {
     const scope = await basketScope(action);
     const [before, after] = await Promise.all([
       measureBasket(action.brand_id, scope, beforeWindow.from, beforeWindow.to),

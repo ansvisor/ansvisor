@@ -421,6 +421,46 @@ describe('response-parser', () => {
       expect(result.competitorMentions[0].mention_position).toBe(1);
     });
   });
+
+  describe('ChatGPT entity markup', () => {
+    const text = [
+      '1. <Entity category="software" value="Tesseract" disambig="Adlift AI search optimization platform"/> — tracks answers.',
+      '2. <Entity category="software" value="Ansvisor" /> — open source.',
+      '3. Adlift — agency platform.',
+    ].join('\n');
+    const brand = { brandName: 'Ansvisor', domains: ['ansvisor.com'] };
+    const competitors = [
+      { id: 'tesseract', name: 'Tesseract', domain: null },
+      { id: 'adlift', name: 'Adlift', domain: null },
+      { id: 'software', name: 'Software', domain: null },
+    ];
+
+    it('counts only the names the answer reads, not the tag attributes', () => {
+      const result = parseResponse({ text, citations: [] }, brand, 'neutral', competitors);
+      const byId = new Map(result.competitorMentions.map((c) => [c.competitor_id, c]));
+      expect(result.mentionCount).toBe(1);
+      expect(byId.get('tesseract').mention_count).toBe(1);
+      // Named in Tesseract's disambig and once in the answer itself.
+      expect(byId.get('adlift').mention_count).toBe(1);
+      // Only ever the tag's category.
+      expect(byId.get('software').mention_count).toBe(0);
+    });
+
+    it('ranks entities by where the answer names them', () => {
+      const result = computeMentionPosition(text, brand, competitors);
+      expect(result.mentionPosition).toBe(2);
+      expect(result.mentionedEntityCount).toBe(3);
+      expect(result.competitorPositions.get('tesseract')).toBe(1);
+      expect(result.competitorPositions.get('adlift')).toBe(3);
+      expect(result.competitorPositions.has('software')).toBe(false);
+    });
+
+    it('counts a brand named only inside a tag', () => {
+      expect(countBrandMentions('Try <Entity category="software" value="Ansvisor"/>.', brand)).toBe(
+        1,
+      );
+    });
+  });
 });
 
 describe('brandMentionRanges', () => {
