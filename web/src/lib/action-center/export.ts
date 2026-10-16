@@ -640,6 +640,6 @@ export function actionWorkbook(a: ActionExport, label: Labels): Sheet<Blob>[] {
 }
 
 /** `action-AC-52.csv`, as the spec names it. */
-export function actionExportFileName(a: ActionExport, extension: 'csv' | 'xlsx') {
+export function actionExportFileName(a: ActionExport, extension: 'csv' | 'xlsx' | 'md') {
   return `action-${a.ref}.${extension}`;
 }

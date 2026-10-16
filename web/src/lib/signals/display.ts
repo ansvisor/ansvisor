@@ -209,3 +209,12 @@ export function signalAffected(
     }
   }
 }
+
+/**
+ * A signal the engine closed because its subject moved to another kind — a
+ * topic that went from slipping to dropped — reads "Changed", not "Resolved":
+ * nothing was fixed, the finding became a different one.
+ */
+export function isSuperseded(signal: Pick<Signal, 'status' | 'payload'>): boolean {
+  return signal.status === 'resolved' && typeof signal.payload?.supersededBy === 'string';
+}

@@ -50,12 +50,15 @@ import {
   type SignalSource,
   type SignalStatus,
 } from '@/lib/signals/registry';
-import { signalAffected, signalTexts } from '@/lib/signals/display';
+import { isSuperseded, signalAffected, signalTexts } from '@/lib/signals/display';
 import { locationName, platformFamily, platformName } from '@/lib/signals/names';
 import type { SignalWhere } from '@/lib/signals/where';
 import { groupLead, groupStatus, groupWhere, type SignalGroup } from '@/lib/signals/group';
 import { formatRelative } from '@/lib/format-relative';
 import { cn } from '@/lib/utils';
+
+// Kept here for the pages that import it with the table.
+export { isSuperseded };
 
 /** Icons for the original kinds. The library's forty-seven take their
  *  category's — a traffic finding reads as traffic whichever detector wrote it. */
@@ -137,15 +140,6 @@ const STATE_TEXT: Record<string, string> = {
   overtaken: 'text-green-600 dark:text-green-400',
   opportunity: 'text-emerald-600 dark:text-emerald-400',
 };
-
-/**
- * A signal the engine closed because its subject moved to another kind — a
- * topic that went from slipping to dropped — reads "Changed", not "Resolved":
- * nothing was fixed, the finding became a different one.
- */
-export function isSuperseded(signal: Pick<Signal, 'status' | 'payload'>): boolean {
-  return signal.status === 'resolved' && typeof signal.payload?.supersededBy === 'string';
-}
 
 export function SignalStatusBadge({
   status,

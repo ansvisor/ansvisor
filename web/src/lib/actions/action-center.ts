@@ -22,22 +22,26 @@ import { SIGNAL_ROW_COLUMNS, mapSignalRows, type Signal, type SignalRow } from '
 import { OPEN_SIGNAL_STATUSES, type SignalStatus } from '@/lib/signals/registry';
 import { readPromptPlaces } from '@/lib/signals/prompt-places';
 import { affectedOf, affectedSignals, affectedSummary } from '@/lib/action-center/affected';
-import { supabaseAdmin } from '@/lib/supabase/admin';
+import { readPromptDemand } from '@/lib/action-center/prompt-demand';
+import {
+  ACTION_COLUMNS,
+  EVENT_COLUMNS,
+  TASK_COLUMNS,
+  actionItemFromRow,
+  eventFromRow,
+  kpiFromRow,
+  taskFromRow,
+  type ActionRow,
+} from '@/lib/action-center/rows';
 import type { KpiTimeframe } from '@/lib/kpis/registry';
 import { parseImproveOutcome, type ImproveOutcome } from '@/lib/improve-outcome';
 import {
   cleanTaskDetailsEdit,
   isTaskDetailsEdit,
-  parseTaskDetails,
   type ActionTaskDetails,
   type TaskDetailsEdit,
 } from '@/lib/action-center/task-details';
-import {
-  parsePriorityReason,
-  storedPriorityLevel,
-  type PriorityLevel,
-  type PriorityReason,
-} from '@/lib/action-center/priority';
+import type { PriorityLevel, PriorityReason } from '@/lib/action-center/priority';
 
 export interface ActionAssignee {
   id: string;
@@ -71,28 +75,6 @@ export interface ActionItem {
   priorityLevel: PriorityLevel | null;
   priorityReason: PriorityReason | null;
 }
-
-interface ActionRow {
-  id: string;
-  action_no: number;
-  category: string;
-  kind: string;
-  impact: string;
-  status: string;
-  payload: Record<string, unknown>;
-  kpi_keys: string[];
-  assignee_id: string | null;
-  due_date: string | null;
-  created_at: string;
-  updated_at: string;
-  priority_score: number | null;
-  priority_level: string | null;
-  priority_reason: unknown;
-  priority_updated_at: string | null;
-}
-
-const ACTION_COLUMNS =
-  'id, action_no, category, kind, impact, status, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason, priority_updated_at';
 
 export async function getActions(brandId: string): Promise<ActionItem[]> {
   const supabase = await createClient();
@@ -151,31 +133,14 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
     ]),
   );
 
-  return rows.map((row) => ({
-    id: row.id,
-    actionNo: Number(row.action_no),
-    category: row.category as ActionCategory,
-    kind: row.kind,
-    impact: row.impact as ActionImpact,
-    status: row.status as ActionStatus,
-    payload: row.payload ?? {},
-    kpiKeys: row.kpi_keys ?? [],
-    assignee: row.assignee_id ? (profiles.get(row.assignee_id) ?? null) : null,
-    dueDate: row.due_date,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    taskTotal: taskTotals.get(row.id)?.total ?? 0,
-    taskCompleted: taskTotals.get(row.id)?.completed ?? 0,
-    signalCount: signalCounts.get(row.id) ?? 0,
-    priorityScore: row.priority_score === null ? null : Number(row.priority_score),
-    priorityLevel: storedPriorityLevel(
-      row.priority_level,
-      row.priority_score === null ? null : Number(row.priority_score),
-    ),
-    priorityReason: parsePriorityReason(row.priority_reason, {
-      scoredAt: row.priority_updated_at,
+  return rows.map((row) =>
+    actionItemFromRow(row, {
+      assignee: row.assignee_id ? (profiles.get(row.assignee_id) ?? null) : null,
+      taskTotal: taskTotals.get(row.id)?.total ?? 0,
+      taskCompleted: taskTotals.get(row.id)?.completed ?? 0,
+      signalCount: signalCounts.get(row.id) ?? 0,
     }),
-  }));
+  );
 }
 
 export interface ActionTask {
@@ -233,13 +198,7 @@ export interface ActionDetail {
 export async function getActionDetail(brandId: string, actionId: string): Promise<ActionDetail> {
   const supabase = await createClient();
   const [tasksRes, signalsRes, eventsRes, kpisRes, places, outcomeRes] = await Promise.all([
-    supabase
-      .from('action_tasks')
-      .select(
-        'id, position, task_key, title, status, skip_reason, title_params, depends_on, details',
-      )
-      .eq('action_id', actionId)
-      .order('position'),
+    supabase.from('action_tasks').select(TASK_COLUMNS).eq('action_id', actionId).order('position'),
     // Every signal the action has taken as evidence (AC-007), kept after a
     // signal moves on to a later cycle: a closed action still shows its own.
     supabase
@@ -250,7 +209,7 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
       .order('detected_at', { ascending: false }),
     supabase
       .from('action_events')
-      .select('id, event, data, actor_id, created_at')
+      .select(EVENT_COLUMNS)
       .eq('action_id', actionId)
       .order('created_at'),
     supabase
@@ -274,30 +233,10 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
   if (kpisRes.error) throw new Error(kpisRes.error.message);
 
   return {
-    tasks: (tasksRes.data ?? []).map((task) => ({
-      id: task.id,
-      position: task.position,
-      taskKey: task.task_key,
-      title: task.title,
-      status: task.status as TaskStatus,
-      titleParams: (task.title_params ?? {}) as Record<string, string | number>,
-      dependsOn: (task.depends_on ?? []) as string[],
-      skipReason: task.skip_reason,
-      details: parseTaskDetails(task.details),
-    })),
+    tasks: (tasksRes.data ?? []).map(taskFromRow),
     signals: mapSignalRows((signalsRes.data ?? []) as SignalRow[], places),
-    events: (eventsRes.data ?? []).map((event) => ({
-      id: event.id,
-      event: event.event,
-      data: (event.data ?? {}) as Record<string, unknown>,
-      actorId: event.actor_id,
-      createdAt: event.created_at,
-    })),
-    kpis: (kpisRes.data ?? []).map((kpi) => ({
-      kpiKey: kpi.kpi_key,
-      target: Number(kpi.target),
-      timeframe: kpi.timeframe as KpiTimeframe,
-    })),
+    events: (eventsRes.data ?? []).map(eventFromRow),
+    kpis: (kpisRes.data ?? []).map(kpiFromRow),
     positionOutcome: parseImproveOutcome(outcomeRes.data?.position_outcome ?? null),
   };
 }
@@ -539,44 +478,17 @@ export async function deleteTask(brandId: string, actionId: string, taskId: stri
   await touchAction(supabase, brandId, actionId);
 }
 
-/** Prompt ids per request, so the filter stays well inside a URL's length. */
-const DEMAND_CHUNK = 150;
-
 /**
  * The estimated monthly AI searches of these prompts, for the Affected tab's
- * Volume column (AC-003). prompt_volumes is a server-only table, so the
- * prompts are first checked to be the brand's and visible to the caller
- * (RLS), and only theirs are read with the admin client.
+ * Volume column (AC-003); see readPromptDemand.
  */
 export async function getPromptDemand(
   brandId: string,
   promptIds: string[],
 ): Promise<Record<string, number>> {
-  const ids = [...new Set(promptIds)];
-  if (ids.length === 0) return {};
+  if (promptIds.length === 0) return {};
   const supabase = await createClient();
-  const demand: Record<string, number> = {};
-  for (let i = 0; i < ids.length; i += DEMAND_CHUNK) {
-    const chunk = ids.slice(i, i + DEMAND_CHUNK);
-    const { data: visible, error } = await supabase
-      .from('prompts')
-      .select('id, prompt_sets!inner(brand_id)')
-      .eq('prompt_sets.brand_id', brandId)
-      .in('id', chunk);
-    if (error) throw new Error(error.message);
-    const allowed = (visible ?? []).map((row) => row.id as string);
-    if (allowed.length === 0) continue;
-    const { data: rows, error: volumeError } = await supabaseAdmin
-      .from('prompt_volumes')
-      .select('prompt_id, est_ai_volume')
-      .in('prompt_id', allowed);
-    if (volumeError) throw new Error(volumeError.message);
-    for (const row of rows ?? []) {
-      const volume = Number(row.est_ai_volume ?? 0);
-      if (volume > 0) demand[row.prompt_id as string] = volume;
-    }
-  }
-  return demand;
+  return Object.fromEntries(await readPromptDemand(supabase, brandId, promptIds));
 }
 
 /** Action ids per request, and signal rows per page, for the list's export. */

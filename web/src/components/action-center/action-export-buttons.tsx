@@ -9,37 +9,24 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import type { ActionDetail, ActionItem } from '@/lib/actions/action-center';
 import { getOpportunity, getOpportunityBasket } from '@/lib/actions/content';
 import {
-  actionContextTags,
-  actionEventText,
-  actionGoal,
-  actionTexts,
-  taskText,
-} from '@/lib/action-center/display';
-import {
   BYTE_ORDER_MARK,
   actionCsv,
   actionExportFileName,
   actionMarkdown,
   actionWorkbook,
-  buildActionExport,
   type ActionExport,
-  type ExportFact,
-  type ExportAffected,
 } from '@/lib/action-center/export';
-import { opportunityLists } from '@/lib/content/opportunity-lists';
-import { priorityReasonText } from '@/lib/action-center/priority';
-import { isKpiKey } from '@/lib/kpis/registry';
-import { signalAffected, signalTexts, signalTypeLabel } from '@/lib/signals/display';
+import {
+  EXPORT_NAMESPACES,
+  labelActionExport,
+  sentFromOpportunityId,
+  type ExportTranslators,
+  type SentFromOpportunity,
+} from '@/lib/action-center/export-labels';
 import { viewerTimeZone } from '@/lib/time-zone';
-import { isSuperseded } from './signal-table';
-import { affectedCounts, leaderText, type Affected } from '@/lib/action-center/affected';
+import { affectedCounts, type Affected } from '@/lib/action-center/affected';
 import type { ActionStory } from '@/lib/action-center/story';
-import { platformName } from '@/lib/signals/names';
-import { getPlatformName } from '@/lib/traffic-platforms';
-import { formatCompactNumber } from '@/lib/format';
 import { saveBlob } from '@/lib/download';
-
-const IMPROVE_STATES = ['not_mentioned', 'mentioned_late', 'not_cited', 'doing_well', 'no_runs'];
 
 /**
  * Copy all, Export CSV and Export Excel for one action (AC-005): what every
@@ -63,227 +50,62 @@ export function ActionExportButtons({
   /** Why and Goal as the drawer words them, from the action's data (AC-003). */
   story?: ActionStory | null;
 }) {
-  const t = useTranslations('actionCenter.actionsPage');
   const tExport = useTranslations('actionCenter.actionsPage.export');
-  const tImprove = useTranslations('actionCenter.actionsPage.drawer.improve');
-  const tOpportunity = useTranslations('actionCenter.actionsPage.drawer.opportunity');
-  const tContent = useTranslations('content');
-  const tTexts = useTranslations('actionCenter.actionTexts');
-  const tCategories = useTranslations('actionCenter.actionCategories');
-  const tRegistry = useTranslations('actionCenter.registry');
-  const tTasks = useTranslations('actionCenter.actionTasks');
-  const tTaskStatus = useTranslations('actionCenter.taskStatus');
-  const tTaskTypes = useTranslations('actionCenter.taskTypes');
-  const tSignals = useTranslations('actionCenter.signalsPage');
-  const tSignalTexts = useTranslations('actionCenter.signalTexts');
-  const tSignalCategories = useTranslations('actionCenter.signalCategories');
-  const tPriority = useTranslations('actionCenter.actionsPage.priority');
-  const tAffected = useTranslations('actionCenter.actionsPage.drawer.affected');
+  // Every label the export reads, from the same namespaces the API uses.
+  const t: ExportTranslators = {
+    page: useTranslations(EXPORT_NAMESPACES.page),
+    export: tExport,
+    improve: useTranslations(EXPORT_NAMESPACES.improve),
+    opportunity: useTranslations(EXPORT_NAMESPACES.opportunity),
+    content: useTranslations(EXPORT_NAMESPACES.content),
+    texts: useTranslations(EXPORT_NAMESPACES.texts),
+    categories: useTranslations(EXPORT_NAMESPACES.categories),
+    registry: useTranslations(EXPORT_NAMESPACES.registry),
+    tasks: useTranslations(EXPORT_NAMESPACES.tasks),
+    taskStatus: useTranslations(EXPORT_NAMESPACES.taskStatus),
+    taskTypes: useTranslations(EXPORT_NAMESPACES.taskTypes),
+    signals: useTranslations(EXPORT_NAMESPACES.signals),
+    signalTexts: useTranslations(EXPORT_NAMESPACES.signalTexts),
+    signalCategories: useTranslations(EXPORT_NAMESPACES.signalCategories),
+    priority: useTranslations(EXPORT_NAMESPACES.priority),
+    affected: useTranslations(EXPORT_NAMESPACES.affected),
+  };
   const [isBusy, setIsBusy] = useState(false);
   // The Markdown Copy Data shows, and what to say once it is copied.
   const [preview, setPreview] = useState<{ text: string; copied: string } | null>(null);
   const [justCopied, setJustCopied] = useState(false);
   const previewRef = useRef<HTMLTextAreaElement>(null);
 
-  /** What the Overview tab shows of where a person sent the action from. */
-  const sentFrom = async (origin: string): Promise<ExportFact[]> => {
-    const p = action.payload ?? {};
-    if (action.kind === 'prompt_improve') {
-      const platforms = Array.isArray(p.platforms)
-        ? (p.platforms as { label?: unknown; state?: unknown }[]).filter(
-            (x): x is { label: string; state: string } =>
-              typeof x.label === 'string' &&
-              typeof x.state === 'string' &&
-              IMPROVE_STATES.includes(x.state),
-          )
-        : [];
-      const facts: ExportFact[] = [{ label: tImprove('source'), value: tImprove('sourceValue') }];
-      if (typeof p.promptText === 'string') {
-        facts.push({ label: tImprove('prompt'), value: p.promptText });
-      }
-      if (platforms.length) {
-        facts.push({
-          label: tImprove('platforms'),
-          value: platforms.map((x) => `${x.label} · ${tImprove(`states.${x.state}`)}`),
-        });
-      }
-      if (typeof p.panelLink === 'string') {
-        facts.push({ label: tImprove('openPanel'), value: `${origin}${p.panelLink}` });
-      }
-      return facts;
-    }
-    if (action.kind !== 'content_opportunity' || typeof p.opportunityId !== 'string') return [];
-
-    const pageUrls = Array.isArray(p.pages)
-      ? (p.pages as unknown[]).filter((u): u is string => typeof u === 'string')
-      : [];
+  /** A Content action's opportunity and basket, as the Overview tab reads them. */
+  const readSentFrom = async (): Promise<SentFromOpportunity | null> => {
+    const id = sentFromOpportunityId(action);
+    if (!id) return null;
     try {
       const [opportunity, basket] = await Promise.all([
-        getOpportunity(p.opportunityId),
-        getOpportunityBasket(p.opportunityId),
+        getOpportunity(id),
+        getOpportunityBasket(id),
       ]);
-      const { pages, prompts, queries } = opportunityLists(
-        opportunity,
-        basket,
-        p.assetKey ? pageUrls : undefined,
-      );
-      const brief = opportunity.brief;
-      const facts: ExportFact[] = [
-        { label: tOpportunity('title'), value: opportunity.title },
-        { label: tOpportunity('open'), value: `${origin}/dashboard/content/${opportunity.id}` },
-      ];
-      if (opportunity.decision) {
-        facts.push({
-          label: tExport('decision'),
-          value: tContent(`decision.${opportunity.decision}`),
-        });
-      }
-      if (pages.length) {
-        facts.push({ label: tExport('pages'), value: pages.map((page) => page.url) });
-      }
-      if (brief) {
-        facts.push({
-          label: tOpportunity('brief'),
-          value: [
-            `${brief.suggestedTitle} · ${brief.contentType.replace(/-/g, ' ')} · ${tOpportunity('words', { count: brief.targetWordCount })}`,
-            ...brief.outline.map(
-              (section, i) =>
-                `${i + 1}. ${section.heading}${section.keyPoints.length ? `: ${section.keyPoints.join('; ')}` : ''}`,
-            ),
-          ],
-        });
-      }
-      if (prompts.length) {
-        facts.push({
-          label: tOpportunity('prompts', { count: prompts.length }),
-          value: prompts.map((prompt) => prompt.text),
-        });
-      }
-      if (queries.length) {
-        facts.push({
-          label: tOpportunity('queries', { count: queries.length }),
-          value: queries.map((query) => query.query),
-        });
-      }
-      return facts;
+      return { opportunity, basket };
     } catch {
-      return [{ label: tOpportunity('title'), value: tOpportunity('unavailable') }];
+      return 'unavailable';
     }
   };
 
   const build = async (): Promise<ActionExport | null> => {
     if (!detail) return null;
-    const origin = window.location.origin;
-    const texts = actionTexts(action, tTexts);
-    const related: string[] = action.kpiKeys.filter(isKpiKey);
-    return buildActionExport(
-      action,
-      detail,
+    return labelActionExport(
       {
-        title: texts.title,
-        // A scored action always has a level: one read from its score if need be.
-        priority:
-          action.priorityScore !== null && action.priorityLevel !== null
-            ? {
-                label: t('export.priorityValue', {
-                  score: action.priorityScore,
-                  level: tPriority(`levels.${action.priorityLevel}`),
-                }),
-                why: action.priorityReason
-                  ? priorityReasonText(action.priorityReason, tPriority)
-                  : '',
-              }
-            : null,
-        why: story?.why ?? texts.description,
-        goal: story?.goal ?? actionGoal(action.kind, tTexts, action.payload),
-        category: tCategories(action.category),
-        status: t(`status.${action.status}`),
-        tags: actionContextTags(action, t),
-        kpis: detail.kpis
-          .filter((kpi) => related.includes(kpi.kpiKey) && isKpiKey(kpi.kpiKey))
-          .map(
-            (kpi) =>
-              `${tRegistry(`${kpi.kpiKey}.name`)} (${t('drawer.kpiTarget', { target: kpi.target })})`,
-          ),
-        context: await sentFrom(origin),
-        affected: exportAffected(origin),
-        taskTitle: (task) => taskText(task, tTasks),
-        taskStatus: (status) => tTaskStatus(status),
-        signal: (signal) => {
-          const affected = signalAffected(signal, tSignals);
-          return {
-            ...signalTexts(signal, tSignalTexts),
-            type: signalTypeLabel(signal, tSignalCategories, tSignals),
-            entity: affected.detail ?? affected.label,
-            category: tSignalCategories(signal.category),
-            status: isSuperseded(signal)
-              ? tSignals('superseded')
-              : tSignals(`status.${signal.status}`),
-            impact: tSignals(`impact.${signal.impact}`),
-          };
-        },
-        event: (event) => actionEventText(event, t, tTasks),
-        skipped: (reason) => tExport('skipped', { reason }),
-        taskType: (type) => tTaskTypes(type),
-        taskSent: (to) => tExport(to === 'content' ? 'sentToContent' : 'sentToWebhook'),
-        answerSource: tExport('answerSource'),
+        action,
+        detail,
+        affected,
+        volumes,
+        story,
+        sentFrom: await readSentFrom(),
+        origin: window.location.origin,
+        timeZone: viewerTimeZone(),
       },
-      { origin, timeZone: viewerTimeZone() },
+      t,
     );
-  };
-
-  /** The Affected tab's rows, labelled for the exports (AC-003). */
-  const exportAffected = (origin: string): ExportAffected[] => {
-    if (!affected) return [];
-    const row = (over: Partial<ExportAffected>): ExportAffected => ({
-      entity: '',
-      label: '',
-      volume: '',
-      platforms: [],
-      lostPages: [],
-      citedInstead: [],
-      details: '',
-      link: '',
-      ...over,
-    });
-    const leadersShown = affected.prompts.some((p) => p.leaders.length > 0);
-    return [
-      ...affected.prompts.map((prompt) => {
-        const volume = prompt.id ? volumes?.get(prompt.id) : undefined;
-        return row({
-          entity: tExport('affectedPrompt'),
-          label: prompt.text,
-          volume: volume ? `~${formatCompactNumber(volume)}` : '',
-          platforms: prompt.platforms.map(platformName),
-          lostPages: prompt.lostPages,
-          citedInstead: prompt.citedInstead,
-          details: prompt.leaders.map((leader) => leaderText(leader, tAffected)).join('; '),
-          link: prompt.id ? `${origin}/dashboard/prompts/${prompt.id}` : '',
-        });
-      }),
-      ...affected.pages.map((page) =>
-        row({
-          entity: tExport('affectedPage'),
-          label: page.url,
-          platforms: page.platforms.map(getPlatformName),
-          details: [
-            page.sessions !== null && page.before !== null
-              ? `${tAffected('visits')}: ${tAffected('visitsValue', { before: page.before, now: page.sessions })}`
-              : '',
-            page.issues.join(', '),
-          ]
-            .filter(Boolean)
-            .join('; '),
-          link: /^https?:\/\//.test(page.url) ? page.url : '',
-        }),
-      ),
-      ...(leadersShown
-        ? []
-        : affected.competitors.map((name) =>
-            row({ entity: tExport('affectedCompetitor'), label: name }),
-          )),
-      ...affected.topics.map((name) => row({ entity: tExport('affectedTopic'), label: name })),
-    ];
   };
 
   /** Builds the export once, holding the buttons while it runs. */
