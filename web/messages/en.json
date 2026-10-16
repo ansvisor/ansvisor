@@ -1714,8 +1714,6 @@
       "checkedAt": "Checked: {date}"
     },
     "compare": {
-      "label": "Compare",
-      "samePrompts": "Same prompts",
       "hint": "Changes compare only prompts tracked in both periods",
       "newExcluded": "{count, plural, one {# new prompt excluded} other {# new prompts excluded}}",
       "newIncluded": "{count, plural, one {includes # new prompt} other {includes # new prompts}}"
