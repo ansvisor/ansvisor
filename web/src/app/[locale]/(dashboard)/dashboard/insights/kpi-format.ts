@@ -51,6 +51,16 @@ export function lowerIsGood(change: number | null): Change | null {
   };
 }
 
+/** A score change on the leaderboard, as in the v2 mockup: "↑ 4.1", "↓ 1.1", "±0". */
+export function arrowChange(change: number | null): Change | null {
+  if (change === null) return null;
+  if (change === 0) return { text: '±0', tone: 'neutral' };
+  return {
+    text: `${change > 0 ? '↑' : '↓'} ${Math.abs(change).toLocaleString('en-US', { maximumFractionDigits: 1 })}`,
+    tone: change > 0 ? 'good' : 'bad',
+  };
+}
+
 /**
  * A comparison-window bound for the "vs <range>" label. Whole-day windows
  * come as 'YYYY-MM-DD' UTC days and are shown as those days; the 24h and
