@@ -10,6 +10,7 @@ import { webResearch } from '../lib/web-research.js';
 import logger from '../lib/logger.js';
 import { getLanguageName } from '../lib/languages.js';
 import { sendTopicGapToActionCenter } from '../lib/action-center/from-topic-gap.js';
+import { sendTopicOpportunityToActionCenter } from '../lib/action-center/from-topic-opportunity.js';
 
 const router = Router();
 
@@ -459,6 +460,51 @@ router.post('/:id/gap-action', async (req, res) => {
   } catch (error) {
     const status = error.status || 500;
     req.log.error({ err: error }, 'topic gap action error');
+    return res.status(status).json({
+      error: 'Failed to send to the Action Center',
+      details: error.message,
+    });
+  }
+});
+
+const opportunityActionSchema = z.object({
+  // A refresh makes 25 suggestions; guid for seeded ids, as above.
+  suggestionIds: z.array(z.guid()).min(1).max(25),
+});
+
+/**
+ * POST /api/topics/:id/opportunity-action
+ * Body: { suggestionIds }
+ *
+ * "Send action" on an Insights Opportunities topic (VIS-011): a Growth
+ * action to capture the demand of the topic's suggested prompts. Sending the
+ * same topic again returns the action already open.
+ */
+router.post('/:id/opportunity-action', async (req, res) => {
+  try {
+    if (!z.guid().safeParse(req.params.id).success) {
+      return res.status(400).json({ error: 'Invalid topic id' });
+    }
+    const parsed = opportunityActionSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
+    }
+    const { data: topic } = await supabaseAdmin
+      .from('topics')
+      .select('id, name, brand_id')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (!topic) return res.status(404).json({ error: 'Topic not found' });
+    await assertBrandAccess(topic.brand_id, req.user.id);
+
+    const result = await sendTopicOpportunityToActionCenter(topic, {
+      suggestionIds: parsed.data.suggestionIds,
+      userId: req.user.id,
+    });
+    return res.status(result.created ? 201 : 200).json(result);
+  } catch (error) {
+    const status = error.status || 500;
+    req.log.error({ err: error }, 'topic opportunity action error');
     return res.status(status).json({
       error: 'Failed to send to the Action Center',
       details: error.message,
