@@ -85,6 +85,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
+  opensPositionsPanel,
   positionCellKind,
   type PlatformDot,
   type PlatformDotState,
@@ -2406,13 +2407,17 @@ function PositionValue({
 }) {
   const t = useTranslations('prompts.positions');
   const kind = positionCellKind(cell, vis);
-  if (kind === 'notMentioned') {
+  if (kind === 'notMentioned' || kind === 'citedOnly') {
     return (
       <span
         className="text-xs text-muted-foreground"
-        title={t('notMentionedTitle', { count: vis?.runs ?? 0 })}
+        title={
+          kind === 'citedOnly'
+            ? t('citedOnlyTitle', { cited: vis?.citationAnswers ?? 0, count: vis?.runs ?? 0 })
+            : t('notMentionedTitle', { count: vis?.runs ?? 0 })
+        }
       >
-        {t('notMentioned')}
+        {t(kind)}
       </span>
     );
   }
@@ -3511,7 +3516,7 @@ function AllPromptsTab({
                       </div>
                       <div className="w-6">
                         {/* Whenever it has answers: a prompt never named is the one to open. */}
-                        {vis && vis.runs > 0 && (
+                        {opensPositionsPanel(vis) && (
                           <Button
                             type="button"
                             size="icon-xs"

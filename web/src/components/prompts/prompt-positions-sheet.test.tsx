@@ -49,7 +49,7 @@ const answer = (over: Partial<PositionAnswer> & { createdAt: string }): Position
   ...over,
 });
 
-function data(): PromptPositionsData {
+function data(locked = false): PromptPositionsData {
   const { summary, platforms } = summarizePositions(
     [
       answer({
@@ -64,7 +64,18 @@ function data(): PromptPositionsData {
       }),
       answer({ createdAt: '2026-10-09T02:00:00Z' }),
     ],
-    [{ id: 'chatgpt-web', label: 'ChatGPT', access: { state: 'included' } }],
+    [
+      { id: 'chatgpt-web', label: 'ChatGPT', access: { state: 'included' } },
+      ...(locked
+        ? [
+            {
+              id: 'google-aio' as const,
+              label: 'Google AI Overviews',
+              access: { state: 'locked' as const, requiredPlan: 'growth' as const },
+            },
+          ]
+        : []),
+    ],
     WEEK,
   );
   return {
@@ -80,13 +91,13 @@ function data(): PromptPositionsData {
 let container: HTMLDivElement;
 let root: Root;
 
-async function open() {
+async function open(preset: '7d' | '24h' = '7d') {
   await act(async () =>
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <PromptPositionsSheet
           prompt={{ id: 'p1', text: 'Best coffee subscription?' }}
-          range={{ preset: '7d', from: '', to: '' }}
+          range={{ preset, from: '', to: '' }}
           window={WEEK}
           onRangeChange={() => {}}
           region=""
@@ -116,6 +127,22 @@ describe('PromptPositionsSheet', () => {
     expect(text).toContain('2 answers');
     expect(text).toContain('In 1 of 2 answers · 3 mentions');
     expect(text).toContain('In 1 of 2 answers · 2 citations');
+    expect(text).not.toContain('your plan includes');
+  });
+
+  it("says the 24h cards' answer counts cover the period, not the latest run", async () => {
+    await open('24h');
+    const text = document.body.textContent ?? '';
+    expect(text).toContain('2 answers in this period');
+    expect(text).toContain('In 1 of 2 answers in this period · 3 mentions');
+  });
+
+  it('says the counts leave out a platform the plan locks', async () => {
+    getPromptPositions.mockResolvedValue(data(true));
+    await open();
+    expect(document.body.textContent).toContain(
+      'Answer counts cover the platforms your plan includes.',
+    );
   });
 
   it("shows a day's positions in a tooltip when its block is hovered", async () => {

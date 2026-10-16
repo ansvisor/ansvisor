@@ -389,20 +389,35 @@ function Stat({
 
 /**
  * The answers behind a card, as the Prompts table counts them: its Runs,
- * Mentions and Citations columns sum answers, not days or platforms.
+ * Mentions and Citations columns sum answers, not days or platforms. The 24h
+ * cards count platforms, so their lines say they cover the whole period.
+ * Locked platforms' answers are never read here, so where the plan locks one
+ * the counts say they cover the included platforms only.
  */
-function useAnswerDetails(s: PositionsSummary) {
+function useAnswerDetails(data: PromptPositionsData, { latest }: { latest: boolean }) {
   const t = useTranslations('prompts.positions');
+  const s: PositionsSummary = data.summary;
   return {
-    mentioned: t('mentionedIn', {
+    mentioned: t(latest ? 'mentionedInPeriod' : 'mentionedIn', {
       mentioned: s.mentionedAnswers,
       answers: s.answers,
       mentions: s.mentions,
     }),
-    cited: t('citedIn', { cited: s.citedAnswers, answers: s.answers, citations: s.citations }),
-    answers: t('answers', { count: s.answers }),
-    answersInPeriod: t('answersInPeriod', { count: s.answers }),
+    cited: t(latest ? 'citedInPeriod' : 'citedIn', {
+      cited: s.citedAnswers,
+      answers: s.answers,
+      citations: s.citations,
+    }),
+    answers: t(latest ? 'answersInPeriod' : 'answers', { count: s.answers }),
+    includedOnly: data.platforms.some((p) => p.access.state === 'locked')
+      ? t('includedOnly')
+      : null,
   };
+}
+
+/** Says the answer counts leave out the platforms the plan locks. */
+function IncludedOnlyNote({ note }: { note: string | null }) {
+  return note ? <p className="text-xs text-muted-foreground">{note}</p> : null;
 }
 
 function PlatformName({ platform }: { platform: { id: string; label: string } }) {
@@ -561,7 +576,7 @@ function LatestView({
     latestPositions.length > 0
       ? `#${Math.round((latestPositions.reduce((a, b) => a + b, 0) / latestPositions.length) * 10) / 10}`
       : '—';
-  const details = useAnswerDetails(data.summary);
+  const details = useAnswerDetails(data, { latest: true });
 
   return (
     <div className="space-y-4">
@@ -570,7 +585,7 @@ function LatestView({
           label="Platforms answered"
           value={`${answered.length} / ${included.length}`}
           sub="in their latest run"
-          detail={details.answersInPeriod}
+          detail={details.answers}
         />
         <Stat
           label="Mentioned on"
@@ -586,6 +601,7 @@ function LatestView({
         />
         <Stat label="Avg. position" value={avg} sub="when mentioned" />
       </div>
+      <IncludedOnlyNote note={details.includedOnly} />
 
       <Tabs defaultValue={initialTab}>
         <TabsList>
@@ -668,7 +684,7 @@ function PeriodView({
   initialTab: 'platforms' | 'improve';
 }) {
   const s = data.summary;
-  const details = useAnswerDetails(s);
+  const details = useAnswerDetails(data, { latest: false });
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -700,6 +716,7 @@ function PeriodView({
           }
         />
       </div>
+      <IncludedOnlyNote note={details.includedOnly} />
       {s.untrackedDays > 0 && (
         <p className="text-xs text-muted-foreground">
           {plural(s.untrackedDays, 'day')} without a completed run. Untracked days don&apos;t count
