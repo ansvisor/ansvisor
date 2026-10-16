@@ -22,7 +22,7 @@ import {
   type TrackedPromptsKpi,
   type CompetitorComparisonData,
   type ShareOfVoiceData,
-  type InsightsRecommendations,
+  type InsightsOpportunities,
   type TrackingJobStatus,
   type BreakdownFilters,
   type BreakdownMetric,
@@ -37,7 +37,7 @@ import {
   DateRangeFilter,
   type DateRangePreset,
 } from '@/components/filters/date-range-filter';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -46,7 +46,6 @@ import {
   BarChart3,
   CalendarX2,
   Play,
-  TrendingUp,
   Loader2,
   FlaskConical,
   Users,
@@ -54,9 +53,6 @@ import {
   ArrowRight,
   Download,
   FileText,
-  Lightbulb,
-  Sparkles,
-  Tag,
 } from 'lucide-react';
 import {
   Select,
@@ -68,7 +64,6 @@ import {
 import { cn } from '@/lib/utils';
 import { getAIProviderDisplayName, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { usePlanContext } from '@/components/providers/plan-provider';
-import { formatCompactNumber } from '@/lib/format';
 import { toast } from 'sonner';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import type { PromptComparison } from '@/lib/insights-same-prompts';
@@ -82,6 +77,7 @@ import { Leaderboard } from './_leaderboard';
 import { TrendCard } from './_trend-card';
 import { trendLines, type TrendMarkerData } from '@/lib/insights-trend';
 import { TopicHeatmap } from './_topic-heatmap';
+import { Opportunities } from './_opportunities';
 import type { TopicCompetitors } from '@/lib/insights-topics';
 import { WhyChanged } from './_why-changed';
 import type { WhyChanged as WhyChangedData } from '@/lib/insights-drivers';
@@ -560,138 +556,6 @@ function NoDataForPeriod({ datePreset, onReset }: { datePreset: DatePreset; onRe
   );
 }
 
-// ─── Recommendations ──────────────────────────────────────────────────────────
-
-/** Teaser targets. Topic suggestions live on the Topics page (#463) — its
- *  card expands + scrolls itself for this hash; the prompt-suggestions card
- *  lives on the Prompts page's default All Prompts tab and does the same. */
-const TOPIC_OPPORTUNITIES_HREF = '/dashboard/topics#topic-opportunities';
-const PROMPT_OPPORTUNITIES_HREF = '/dashboard/prompts?tab=all&view=suggestions';
-
-function RecommendationCard({
-  title,
-  icon: Icon,
-  href,
-  emptyText,
-  children,
-  isEmpty,
-}: {
-  title: string;
-  icon: React.ElementType;
-  href: string;
-  emptyText: string;
-  children: React.ReactNode;
-  isEmpty: boolean;
-}) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-3">
-          <CardTitle className="flex items-center gap-2 text-sm font-medium">
-            <Icon className="h-4 w-4 text-primary" />
-            {title}
-          </CardTitle>
-          {!isEmpty && (
-            <Link
-              href={href}
-              className="shrink-0 text-xs font-medium text-primary underline-offset-2 hover:underline"
-            >
-              See all
-            </Link>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isEmpty ? (
-          <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
-            <p className="text-xs text-muted-foreground max-w-xs">{emptyText}</p>
-            <Link
-              href={href}
-              className="text-xs font-medium text-primary underline-offset-2 hover:underline"
-            >
-              Generate ideas →
-            </Link>
-          </div>
-        ) : (
-          children
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-/**
- * The "so what, what next?" row (#459) filling the space freed by the removed
- * results tree (#458). Reads only stored data assembled server-side inside
- * getInsightsData — no extra client round trip, no LLM call. Deliberately
- * outside the date-filter contract: no delta badges, own section heading
- * (see #457 for why period-scoped and account-scoped numbers must not mix).
- */
-function RecommendationsSection({ data }: { data: InsightsRecommendations }) {
-  return (
-    <div className="space-y-3">
-      <div>
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <Lightbulb className="h-4 w-4 text-primary" />
-          Recommendations
-        </h2>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Ideas from your stored analyses — independent of the date filters above.
-        </p>
-      </div>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <RecommendationCard
-          title="Topic Opportunities"
-          icon={Tag}
-          href={TOPIC_OPPORTUNITIES_HREF}
-          isEmpty={data.topics.length === 0}
-          emptyText="No topic clusters yet. Analyze your prompt volumes to surface the themes with the most AI search demand."
-        >
-          <ul className="divide-y">
-            {data.topics.map((t) => (
-              <li key={t.keyword} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
-                <p className="flex-1 min-w-0 truncate text-sm">{t.keyword}</p>
-                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                  {t.promptCount} prompt{t.promptCount !== 1 ? 's' : ''}
-                </span>
-                <Badge variant="outline" className="shrink-0 gap-1 text-xs tabular-nums">
-                  <TrendingUp className="h-3 w-3" />~{formatCompactNumber(t.estimatedAiVolume)}/mo
-                </Badge>
-              </li>
-            ))}
-          </ul>
-        </RecommendationCard>
-        <RecommendationCard
-          title="Prompt Opportunities"
-          icon={Sparkles}
-          href={PROMPT_OPPORTUNITIES_HREF}
-          isEmpty={data.prompts.length === 0}
-          emptyText="No prompt suggestions stored yet. Generate AI prompt ideas based on your brand and competitor citations."
-        >
-          <ul className="divide-y">
-            {data.prompts.map((p) => (
-              <li key={p.id} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
-                <p className="flex-1 min-w-0 truncate text-sm">{p.text}</p>
-                {p.topicName && (
-                  <Badge variant="outline" className="hidden sm:inline-flex shrink-0 gap-1 text-xs">
-                    <Tag className="h-3 w-3" />
-                    {p.topicName}
-                  </Badge>
-                )}
-                {p.estVolume != null && p.estVolume > 0 && (
-                  <Badge variant="outline" className="shrink-0 gap-1 text-xs tabular-nums">
-                    <TrendingUp className="h-3 w-3" />~{formatCompactNumber(p.estVolume)}/mo
-                  </Badge>
-                )}
-              </li>
-            ))}
-          </ul>
-        </RecommendationCard>
-      </div>
-    </div>
-  );
-}
-
 // ─── Tracking Progress ────────────────────────────────────────────────────────
 
 import { saveTrackingJob, loadTrackingJob, clearTrackingJob } from '@/lib/tracking-job-store';
@@ -850,7 +714,7 @@ export default function InsightsPage() {
   const [competitorData, setCompetitorData] = useState<CompetitorComparisonData | null>(null);
   const [rateTrend, setRateTrend] = useState<VisibilityRateTrendData | null>(null);
   const [sovData, setSovData] = useState<ShareOfVoiceData | null>(null);
-  const [recommendations, setRecommendations] = useState<InsightsRecommendations | null>(null);
+  const [opportunities, setOpportunities] = useState<InsightsOpportunities | null>(null);
   const [comparison, setComparison] = useState<PromptComparison | null>(null);
   const [coverage, setCoverage] = useState<CoverageKpi | null>(null);
   const [kpiSeries, setKpiSeries] = useState<KpiSeriesDay[] | null>(null);
@@ -944,7 +808,7 @@ export default function InsightsPage() {
         setTrackedPrompts(insights.trackedPrompts);
         setCompetitorData(insights.competitors.brands.length > 1 ? insights.competitors : null);
         setSovData(insights.sov.byPlatform.length > 0 ? insights.sov : null);
-        setRecommendations(insights.recommendations);
+        setOpportunities(insights.opportunities);
         setComparison(insights.comparison);
         setCoverage(insights.coverage);
         setKpiSeries(insights.kpiSeries);
@@ -1497,8 +1361,25 @@ export default function InsightsPage() {
                   />
                 )}
 
-              {/* Recommendations (#459) — stored data, not period-scoped */}
-              {recommendations && <RecommendationsSection data={recommendations} />}
+              {/* Opportunities (VIS-011), under the map: stored suggestions, not period-scoped. */}
+              {opportunities && (
+                <Opportunities
+                  suggestions={opportunities.suggestions}
+                  trackedTopicIds={opportunities.trackedTopicIds}
+                  topics={topicCompetitors}
+                  entities={rateTrend?.entities ?? null}
+                  slotsLeft={
+                    !trackedPrompts || trackedPrompts.quotaLimit < 0
+                      ? null
+                      : Math.max(0, trackedPrompts.quotaLimit - trackedPrompts.quotaUsed)
+                  }
+                  onTracked={(count) =>
+                    setTrackedPrompts(
+                      (current) => current && { ...current, quotaUsed: current.quotaUsed + count },
+                    )
+                  }
+                />
+              )}
             </>
           )}
         </div>
