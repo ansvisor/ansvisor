@@ -145,3 +145,27 @@ export function opportunities(
   );
   return { status: 'ready', items: ranked.map((r) => r.item) };
 }
+
+/**
+ * Content suggestions left this month, less the ones this page has written
+ * since it loaded (CONTENT-001). Null when the plan has no monthly limit or
+ * the quota couldn't be read: the server still enforces it.
+ */
+export function contentLeft(
+  quota: { limit: number; remaining: number } | null | undefined,
+  spent: number,
+): number | null {
+  if (!quota || quota.limit === -1) return null;
+  return quota.remaining - spent;
+}
+
+/** Why an item's second button (Send action / Suggest content) is off; null when it can be used. */
+export type SecondaryBlock = 'needsTopic' | 'trackFirst' | 'contentLimit' | null;
+
+export function secondaryBlock(item: Opportunity, left: number | null): SecondaryBlock {
+  if (item.kind === 'topic') return item.topicId ? null : 'needsTopic';
+  // Content is written from the answers of the topic's tracked prompts
+  // (the server's opportunity generator), so an untracked topic has none.
+  if (!item.topicId || item.standing.kind === 'notTracked') return 'trackFirst';
+  return left !== null && left <= 0 ? 'contentLimit' : null;
+}
