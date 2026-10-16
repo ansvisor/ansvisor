@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { computeAiVisibilityScore } from './visibility-score';
 import {
+  leaderboardCallout,
+  leaderboardLines,
+  mentionShares,
   parsePlatformRows,
   platformChanges,
   platformMovers,
@@ -259,5 +262,90 @@ describe('platformTable', () => {
       ['ChatGPT', false],
     ]);
     expect(table[0].shareOfVoice).toBeNull();
+  });
+});
+
+describe('leaderboardLines', () => {
+  const lines = (count: number, own: number) => {
+    const { items, hidden } = leaderboardLines(count, own);
+    return {
+      lines: items.map((i) => (i.kind === 'brand' ? i.index + 1 : `${i.count} more`)),
+      hidden,
+    };
+  };
+
+  it('shows ranks 1 and 2, then the brands around yours, as in the mockup', () => {
+    expect(lines(20, 5)).toEqual({ lines: [1, 2, '2 more', 5, 6, 7], hidden: 15 });
+  });
+
+  it('skips nothing in between when the brand is near the top', () => {
+    expect(lines(8, 2)).toEqual({ lines: [1, 2, 3, 4], hidden: 4 });
+    expect(lines(8, 0)).toEqual({ lines: [1, 2], hidden: 6 });
+  });
+
+  it('shows the brand directly ahead when last', () => {
+    expect(lines(8, 7)).toEqual({ lines: [1, 2, '4 more', 7, 8], hidden: 4 });
+  });
+
+  it('lists short boards whole, and starts from the top without the brand', () => {
+    expect(lines(5, 4)).toEqual({ lines: [1, 2, 3, 4, 5], hidden: 0 });
+    expect(lines(8, -1)).toEqual({ lines: [1, 2, 3, 4, 5], hidden: 3 });
+  });
+});
+
+describe('mentionShares', () => {
+  it("gives each brand's share of every brand's mentions", () => {
+    expect(
+      mentionShares([{ totalMentions: 377 }, { totalMentions: 189 }, { totalMentions: 252 }]),
+    ).toEqual([46.1, 23.1, 30.8]);
+    expect(mentionShares([{ totalMentions: 0 }, { totalMentions: 0 }])).toEqual([null, null]);
+  });
+});
+
+describe('leaderboardCallout', () => {
+  const brand = (name: string, score: number, isOwnBrand = false) => ({ name, score, isOwnBrand });
+  const board = [
+    brand('Semrush', 36.3),
+    brand('Peec AI', 18.3),
+    brand('Ansvisor', 17.4, true),
+    brand('Otterly', 16.8),
+  ];
+  const rows = [
+    { provider: 'ChatGPT', 'Peec AI': 60, Ansvisor: 30 },
+    { provider: 'Gemini', 'Peec AI': 50, Ansvisor: 45 },
+    { provider: 'Grok', 'Peec AI': 90, Ansvisor: 0 },
+  ];
+
+  it('gives the gap to the brand ahead and where it leads most', () => {
+    expect(leaderboardCallout(board, rows, (p) => p !== 'Grok')).toEqual({
+      rank: 2,
+      gap: 0.9,
+      lever: 'ChatGPT',
+    });
+  });
+
+  it('names no lever where the brand ahead leads nowhere', () => {
+    expect(leaderboardCallout(board, rows, () => false)?.lever).toBeNull();
+  });
+
+  it('reads a tie with the brand ahead as a gap of 0', () => {
+    const level = [brand('Peec AI', 18.3), brand('Ansvisor', 18.3, true)];
+    expect(leaderboardCallout(level, rows, (p) => p !== 'Grok')).toEqual({
+      rank: 1,
+      gap: 0,
+      lever: 'ChatGPT',
+    });
+  });
+
+  it('counts a platform without a row for a brand as 0 there', () => {
+    expect(
+      leaderboardCallout(board, [{ provider: 'Copilot', 'Peec AI': 12 }], () => true)?.lever,
+    ).toBe('Copilot');
+  });
+
+  it('has no callout in first place, even when level with second', () => {
+    expect(
+      leaderboardCallout([brand('Ansvisor', 20, true), brand('Peec AI', 20)], rows, () => true),
+    ).toBeNull();
   });
 });
