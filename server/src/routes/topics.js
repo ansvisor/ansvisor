@@ -9,6 +9,7 @@ import { withRetry } from '../lib/retry.js';
 import { webResearch } from '../lib/web-research.js';
 import logger from '../lib/logger.js';
 import { getLanguageName } from '../lib/languages.js';
+import { sendTopicGapToActionCenter } from '../lib/action-center/from-topic-gap.js';
 
 const router = Router();
 
@@ -411,6 +412,57 @@ router.post('/suggestions/:id/accept', async (req, res) => {
     const status = error.status || 500;
     req.log.error({ err: error }, 'topic-suggestions accept error');
     return res.status(status).json({ error: error.message || 'Failed to accept' });
+  }
+});
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const gapActionSchema = z.object({
+  // guid, not uuid: seeded ids (e.g. the demo's) aren't RFC 4122 versions.
+  competitorId: z.guid(),
+  // The heat map's window and filters, so the gap is measured as it was shown.
+  dayFrom: z.string().regex(DAY).optional(),
+  dayTo: z.string().regex(DAY).optional(),
+  models: z.array(z.string().min(1).max(100)).max(50).optional(),
+  region: z.string().min(1).max(10).optional(),
+});
+
+/**
+ * POST /api/topics/:id/gap-action
+ * Body: { competitorId, dayFrom?, dayTo?, models?, region? }
+ *
+ * "Send biggest gap to Actions" on Insights (VIS-010): a Compete action to
+ * close the topic's gap with the competitor leading it. Sending the same
+ * topic and competitor again returns the action already open.
+ */
+router.post('/:id/gap-action', async (req, res) => {
+  try {
+    if (!z.guid().safeParse(req.params.id).success) {
+      return res.status(400).json({ error: 'Invalid topic id' });
+    }
+    const parsed = gapActionSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
+    }
+    const { data: topic } = await supabaseAdmin
+      .from('topics')
+      .select('id, name, brand_id')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (!topic) return res.status(404).json({ error: 'Topic not found' });
+    await assertBrandAccess(topic.brand_id, req.user.id);
+
+    const result = await sendTopicGapToActionCenter(topic, {
+      ...parsed.data,
+      userId: req.user.id,
+    });
+    return res.status(result.created ? 201 : 200).json(result);
+  } catch (error) {
+    const status = error.status || 500;
+    req.log.error({ err: error }, 'topic gap action error');
+    return res.status(status).json({
+      error: 'Failed to send to the Action Center',
+      details: error.message,
+    });
   }
 });
 
