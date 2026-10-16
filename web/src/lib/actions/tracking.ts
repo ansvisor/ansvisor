@@ -46,6 +46,14 @@ import { getPromptSuggestions } from '@/lib/actions/prompt-suggestions';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import { percentageChange } from '@/lib/metrics';
 import {
+  parsePlatformRows,
+  platformChanges,
+  platformTable,
+  type PlatformChange,
+  type PlatformRow,
+  type PlatformTableRow,
+} from '@/lib/insights-summary';
+import {
   coverage as coverageRate,
   kpiRates,
   parseKpiSeries,
@@ -720,6 +728,14 @@ export interface InsightsData {
    * view (a single day), when the read failed, or before the backfill.
    */
   kpiSeries: KpiSeriesDay[] | null;
+  /**
+   * Each platform's Visibility change for the summary line (VIS-006),
+   * following Same prompts; biggest rise first. Null without a previous
+   * window, before the backfill, or when the read failed.
+   */
+  platformChanges: PlatformChange[] | null;
+  /** The "By AI platform" table (VIS-008); null under the same conditions. */
+  platforms: PlatformTableRow[] | null;
   /** The run ledger, when the 24h window was anchored to it (`anchor24h`). */
   trackingWindow: TrackingWindow | null;
 }
@@ -814,6 +830,8 @@ type WindowedInsights = Pick<
   | 'comparison'
   | 'coverage'
   | 'kpiSeries'
+  | 'platformChanges'
+  | 'platforms'
 >;
 
 type InsightsFilterArgs = {
@@ -855,7 +873,7 @@ async function loadWindowedInsights(
           return fallback;
         });
 
-  const [summary, competitors, sov, filterOptions, trend, same, coverage, kpiSeries] =
+  const [summary, competitors, sov, filterOptions, trend, same, coverage, kpiSeries, platformData] =
     await Promise.all([
       getInsightsSummary(brandId, filterOpts),
       lenient(
@@ -874,6 +892,7 @@ async function loadWindowedInsights(
       lenient(getSamePromptComparison(brandId, filterOpts), null, 'same-prompt comparison'),
       lenient(getCoverageKpi(brandId, filterOpts), null, 'coverage'),
       lenient(getKpiSeries(brandId, filterOpts), null, 'KPI sparklines'),
+      lenient(getPlatformData(brandId, filterOpts), null, 'platforms'),
     ]);
   const windowed = {
     ...(comparisonWindows(filterOpts).prev ? { summary, sov } : withoutChanges(summary, sov)),
@@ -882,6 +901,15 @@ async function loadWindowedInsights(
     trend,
     coverage,
     kpiSeries,
+    platformChanges: platformData?.changes ?? null,
+    platforms: platformData
+      ? platformTable(
+          platformData.rows,
+          platformData.changes ?? [],
+          sov.byPlatform,
+          resolveProvider,
+        )
+      : null,
   };
   return withPromptComparison(windowed, same, filterOpts.samePrompts !== false);
 }
@@ -974,6 +1002,62 @@ async function getKpiSeries(
   });
   if (error) throw new Error(error.message);
   return parseKpiSeries(data);
+}
+
+/**
+ * Each platform in the comparison windows (VIS-006, VIS-008): the rows over
+ * every prompt, for the "By AI platform" table's values, and each platform's
+ * Visibility change for the summary line's movers and the table's Change
+ * column. With Same prompts on (the default) the changes count only the
+ * prompts answered in both windows, like every other change. All time reads
+ * the current window alone and has no changes.
+ */
+async function getPlatformData(
+  brandId: string,
+  opts?: InsightsFilterArgs,
+): Promise<{ rows: PlatformRow[]; changes: PlatformChange[] | null } | null> {
+  const windows = comparisonWindows(opts);
+  const supabase = await dbClient();
+  const base = {
+    p_brand_id: brandId,
+    p_models: modelFilterArray(opts?.model),
+    p_region: opts?.region ?? undefined,
+  };
+
+  // An absent bound is open; without a previous window only the current one is read.
+  const prev = windows.prev && windowBounds(windows.prev);
+  const read = async (samePrompts: boolean) => {
+    const res =
+      windows.cur.kind === 'days'
+        ? await supabase.rpc('insights_platform_compare_daily', {
+            ...base,
+            p_same_prompts: samePrompts,
+            p_cur_from: windows.cur.days.dayFrom,
+            p_cur_to: windows.cur.days.dayTo,
+            p_prev_from: prev?.from,
+            p_prev_to: prev?.to,
+          })
+        : await supabase.rpc('insights_platform_compare', {
+            ...base,
+            p_same_prompts: samePrompts,
+            p_cur_from: windows.cur.from,
+            p_cur_to: windows.cur.to,
+            p_prev_from: prev?.from,
+            p_prev_to: prev?.to,
+            p_topic_id: opts?.topicId ?? undefined,
+          });
+    if (res.error) throw new Error(res.error.message);
+    return parsePlatformRows(res.data);
+  };
+
+  const samePrompts = prev !== null && opts?.samePrompts !== false;
+  const [all, same] = await Promise.all([
+    read(false),
+    samePrompts ? read(true) : Promise.resolve(null),
+  ]);
+  const changeRows = samePrompts ? same : all;
+  if (!all || !changeRows) return null;
+  return { rows: all, changes: prev ? platformChanges(changeRows, resolveProvider) : null };
 }
 
 /**
