@@ -72,6 +72,7 @@ import {
 } from '@/lib/action-center/affected';
 import { actionStory } from '@/lib/action-center/story';
 import { ImproveContext } from './improve-context';
+import { TopicGapContext } from './topic-gap-context';
 import { TaskDetailForm, TaskDetailView, TaskTypeBadge } from './task-detail';
 import { hasTaskSpec, type TaskDetailsEdit } from '@/lib/action-center/task-details';
 import { ImproveOutcomeCard } from './improve-outcome-card';
@@ -403,6 +404,8 @@ export function ActionDrawer({
                   )}
                   <ImproveContext payload={action.payload ?? {}} />
                 </>
+              ) : action.kind === 'topic_competitor_gap' ? (
+                <TopicGapContext payload={action.payload ?? {}} />
               ) : opportunityId ? (
                 <>
                   <Separator />
@@ -460,9 +463,11 @@ export function ActionDrawer({
                 <p className="text-xs text-muted-foreground">
                   {action.kind === 'prompt_improve'
                     ? t('drawer.noSignalsImprove')
-                    : opportunityId
-                      ? t('drawer.noSignalsOpportunity')
-                      : t('drawer.noSignals')}
+                    : action.kind === 'topic_competitor_gap'
+                      ? t('drawer.noSignalsTopicGap')
+                      : opportunityId
+                        ? t('drawer.noSignalsOpportunity')
+                        : t('drawer.noSignals')}
                 </p>
               )}
               {detail.signals.map((signal) => {

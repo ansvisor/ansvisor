@@ -1485,6 +1485,12 @@ export default function InsightsPage() {
                 topicCompetitors.length > 0 && (
                   <TopicHeatmap
                     topics={topicCompetitors}
+                    window={{
+                      dayFrom: loadedFilters?.days?.dayFrom,
+                      dayTo: loadedFilters?.days?.dayTo,
+                      model: loadedFilters?.model,
+                      region: loadedFilters?.region,
+                    }}
                     columns={trendLines(rateTrend.entities, rateTrend.points, rateTrend.pinned).map(
                       (line) => ({ key: line.key, name: line.name }),
                     )}
