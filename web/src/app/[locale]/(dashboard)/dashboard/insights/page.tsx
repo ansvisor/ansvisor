@@ -100,8 +100,9 @@ interface InsightsFilters {
 }
 
 const DEFAULT_FILTERS: InsightsFilters = {
-  // 30 days, as in the v2 mockup (VIS-007); 24h stays one click away.
-  datePreset: '30d',
+  // The last 24 hours: what the latest run found. Longer ranges are one
+  // click away.
+  datePreset: '24h',
   dateFrom: '',
   dateTo: '',
   region: '',
