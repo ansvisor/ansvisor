@@ -3,6 +3,8 @@
  * Mentions and citations are computed locally; sentiment comes from AI.
  */
 
+import { stripEntityMarkup } from './entity-markup.js';
+
 /**
  * Strip markdown link URLs so only display text remains.
  * "[label](https://example.com/path)" → "label"
@@ -12,6 +14,15 @@ function stripUrls(text) {
   let cleaned = text.replace(/\[([^\]]*)\]\([^)]+\)/g, '$1');
   cleaned = cleaned.replace(/https?:\/\/[^\s)>\]]+/g, '');
   return cleaned;
+}
+
+/**
+ * The answer as its reader sees it, for matching names: ChatGPT's entity tags
+ * replaced by the names they stand for (their other attributes would count as
+ * mentions), URLs stripped.
+ */
+function matchableText(text) {
+  return stripUrls(stripEntityMarkup(text));
 }
 
 const WORD_CHAR = /[\p{L}\p{N}_]/u;
@@ -100,7 +111,7 @@ export function countOwnDomainCitations(citations, brandDomains) {
  * Used to short-circuit sentiment analysis when the brand isn't mentioned.
  */
 export function countBrandMentions(text, brand) {
-  const cleanText = stripUrls(text);
+  const cleanText = matchableText(text);
   let count = countOccurrences(cleanText, brand.brandName);
   for (const domain of brand.domains) {
     count += countOccurrences(cleanText, domain);
@@ -153,7 +164,7 @@ function firstOccurrenceIndex(text, term) {
  *   competitors the answer actually mentions.
  */
 export function computeMentionPosition(text, brand, competitors = []) {
-  const cleanText = stripUrls(text);
+  const cleanText = matchableText(text);
 
   const entityFirstIndex = (names) => {
     let best = -1;
@@ -196,7 +207,7 @@ export function computeMentionPosition(text, brand, competitors = []) {
  */
 export function parseResponse(response, brand, sentiment = 'neutral', competitors = []) {
   const { text, citations } = response;
-  const cleanText = stripUrls(text);
+  const cleanText = matchableText(text);
 
   // --- Brand mention count (on URL-stripped text to avoid double-counting) ---
   let mentionCount = countOccurrences(cleanText, brand.brandName);

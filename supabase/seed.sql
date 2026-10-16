@@ -241,11 +241,19 @@ ON CONFLICT (id) DO NOTHING;
 -- prompt's `platforms` and `regions` arrays so we only emit rows that match
 -- how the tracker would actually have run them. UUIDs are deterministic
 -- (md5 of the row's identity), so re-running the seed is a no-op.
+--
+-- Each answer names Acme Coffee among some competitors, in one of four
+-- orders, and stores the position response-parser.js would compute from that
+-- text (the brand's rank among the tracked brands it names), so the Prompts
+-- table's Positions column and panel have something to show. Answers come
+-- four to a run, 20 minutes apart, one run a day: the panel counts a run per
+-- gap of more than 6 hours, as the nightly tracker's answers arrive.
 
 INSERT INTO public.prompt_results (
   id, prompt_id, brand_id, platform, model_used, region, response,
   citations, competitor_mentions, shopping_cards,
-  mention_count, citation_count, visibility_score, sentiment, created_at
+  mention_count, citation_count, visibility_score, sentiment,
+  mention_position, mentioned_entity_count, created_at
 )
 WITH platform_models AS (
   SELECT * FROM (VALUES
@@ -285,7 +293,12 @@ SELECT
   model_used,
   region,
   format(
-    'Acme Coffee is consistently highlighted in independent reviews for fresh roast quality and flexible subscription tiers. (Demo response, %s on %s)',
+    CASE n % 4
+      WHEN 0 THEN 'Acme Coffee leads the list, ahead of Demo Coffee Co and Fixture Roasters, for fresh roast quality and flexible subscription tiers. (Demo response, %s on %s)'
+      WHEN 1 THEN 'Demo Coffee Co is the usual pick, and Acme Coffee comes a close second for fresh roast quality. (Demo response, %s on %s)'
+      WHEN 2 THEN 'Fixture Roasters and Sample Beans rank well, with Acme Coffee close behind on flexible subscription tiers. (Demo response, %s on %s)'
+      ELSE 'Acme Coffee and Sample Beans both get strong reviews for fresh roast quality. (Demo response, %s on %s)'
+    END,
     platform, region
   ) AS response,
   jsonb_build_array(
@@ -330,7 +343,10 @@ SELECT
   (n % 4)                                              AS citation_count,
   round((30 + ((n * 7) % 60))::numeric, 2)             AS visibility_score,
   (ARRAY['positive','neutral','positive','neutral','negative'])[1 + (n % 5)::int] AS sentiment,
-  now() - (n * interval '6 hours')                     AS created_at
+  -- Where the response above names Acme Coffee, of how many tracked brands.
+  (ARRAY[1, 2, 3, 1])[1 + (n % 4)::int]                AS mention_position,
+  (ARRAY[3, 2, 3, 2])[1 + (n % 4)::int]                AS mentioned_entity_count,
+  now() - (((n - 1) / 4) * interval '1 day') - (((n - 1) % 4) * interval '20 minutes') AS created_at
 FROM combos
 ON CONFLICT (id) DO NOTHING;
 
@@ -628,12 +644,14 @@ WHERE prompt_id = '88888888-8888-8888-8888-888888888806' AND platform = 'copilot
 -- sub-query → prompt inversion alone could never produce, since a prompt with
 -- no observed sub-queries has nothing to hang a row on.
 --
--- The results themselves come from the generator above, which spreads
--- created_at at 6h intervals ordered by prompt id — so the last prompts in the
--- set land months back, outside every window the UI offers. Pull 807's rows
--- into the recent past so the zero-coverage row is actually visible.
+-- The results themselves come from the generator above, which spreads runs a
+-- day apart ordered by prompt id — so the last prompts in the set land months
+-- back, outside every window the UI offers. Pull 807's rows into the recent
+-- past, still a run a day (its two engines 20 minutes apart), so the
+-- zero-coverage row is actually visible.
 UPDATE public.prompt_results pr
-SET created_at = now() - (ordered.k * interval '5 hours')
+SET created_at = now() - (((ordered.k - 1) / 2) * interval '1 day')
+                       - (((ordered.k - 1) % 2) * interval '20 minutes')
 FROM (
   SELECT id, row_number() OVER (ORDER BY platform, model_used, region) AS k
   FROM public.prompt_results
