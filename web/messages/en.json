@@ -1847,8 +1847,6 @@
       "pinLimit": "Up to 5 competitors",
       "pinFailed": "Couldn't save the pinned competitors.",
       "promptsAdded": "{count, plural, one {# prompt} other {# prompts}} added · {date}",
-      "actionsSent": "{actions} sent · {date}",
-      "moreActions": "{actions} +{count}",
       "goal": "Goal {value}",
       "goalLegend": "Action Center goal"
     },
