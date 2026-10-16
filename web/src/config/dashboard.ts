@@ -9,7 +9,6 @@ import {
   Quote,
   ShoppingBag,
   Sparkles,
-  Tag,
   Target,
 } from 'lucide-react';
 import type { Feature } from '@/config/plans';
@@ -79,14 +78,11 @@ export const dashboardNav: NavGroup[] = [
         children: [
           { title: 'Tracked Prompts', href: '/dashboard/prompts/tracked' },
           { title: 'Prompt Suggestions', href: '/dashboard/prompts/suggestions' },
+          // Was the Topics page (/dashboard/topics, which redirects here).
+          { title: 'Topics', href: '/dashboard/prompts/topics' },
           { title: 'Query Fan-outs', href: '/dashboard/prompts/fan-outs' },
           { title: 'Prompts Insights', href: '/dashboard/prompts/insights' },
         ],
-      },
-      {
-        title: 'Topics',
-        href: '/dashboard/topics',
-        icon: Tag,
       },
       {
         title: 'Citations',

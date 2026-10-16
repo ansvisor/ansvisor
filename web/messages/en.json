@@ -51,7 +51,6 @@
     "insights": "Visibility",
     "traffic": "AI Traffic Analytics",
     "prompts": "Prompts",
-    "topics": "Topics",
     "content": "Content",
     "audit": "Site Audit",
     "competitors": "Competitors",
@@ -67,6 +66,7 @@
     "feedback": "Send feedback",
     "trackedPrompts": "Tracked Prompts",
     "promptSuggestions": "Prompt Suggestions",
+    "topics": "Topics",
     "queryFanouts": "Query Fan-outs",
     "promptsInsights": "Insights",
     "toggleSubmenu": "Show or hide {label}"
@@ -1945,8 +1945,6 @@
     "failedToAddTopic": "Failed to add topic",
     "noBrandTitle": "No brand selected",
     "noBrandBody": "Select a brand from the top switcher to view topic analytics.",
-    "title": "Topics",
-    "description": "Topic-level analytics across all tracked prompts",
     "exportHint": "No topics yet - add topics or run a tracking job first.",
     "manageTopics": "Manage topics",
     "kpi": {

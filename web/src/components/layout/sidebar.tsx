@@ -405,7 +405,10 @@ export function Sidebar() {
                         {submenuOpen && (
                           <ul id={submenuId} className="mt-0.5 ml-[18px] space-y-0.5 border-l pl-2">
                             {item.children.map((child) => {
-                              const childActive = pathname === child.href;
+                              // A view's own pages count too: a topic's page
+                              // sits under Topics.
+                              const childActive =
+                                pathname === child.href || pathname.startsWith(`${child.href}/`);
                               return (
                                 <li key={child.href}>
                                   <Link

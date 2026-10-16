@@ -22,6 +22,22 @@ describe('getDashboardNavLabel', () => {
     }
   });
 
+  // Topics moved into Prompts as one of its views, under the suggestions;
+  // /dashboard/topics redirects there.
+  it('lists Topics under Prompts, after Prompt Suggestions, and not as its own item', () => {
+    const items = dashboardNav.flatMap((group) => group.items);
+    const prompts = items.find((item) => item.title === 'Prompts')!;
+    expect(prompts.children?.map((c) => c.title)).toEqual([
+      'Tracked Prompts',
+      'Prompt Suggestions',
+      'Topics',
+      'Query Fan-outs',
+      'Prompts Insights',
+    ]);
+    expect(prompts.children?.[2].href).toBe('/dashboard/prompts/topics');
+    expect(items.some((item) => item.href === '/dashboard/topics')).toBe(false);
+  });
+
   it('uses the brands namespace only for Brands', () => {
     expect(getDashboardNavLabel('Brands', translateNav, translateBrands)).toBe('brands.title');
     expect(getDashboardNavLabel('Shopping', translateNav, translateBrands)).toBe('nav.shopping');

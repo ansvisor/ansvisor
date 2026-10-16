@@ -41,7 +41,7 @@ export function TopicOpportunityContext({ payload }: { payload: Record<string, u
             <span>{topicName}</span>
             {topicId && (
               <Link
-                href={`/dashboard/topics/${topicId}`}
+                href={`/dashboard/prompts/topics/${topicId}`}
                 className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
               >
                 {t('openTopic')}
