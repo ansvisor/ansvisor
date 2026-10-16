@@ -1,5 +1,6 @@
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { percentageChange } from '@/lib/metrics';
+import { coverage, kpiRates, rateChange, shareOfVoice } from '@/lib/insights-kpis';
 
 /**
  * Insights "Compare: Same prompts" (VIS-002). Adding prompts used to inflate
@@ -27,6 +28,14 @@ export interface SamePromptTotals {
   total_citations: number;
   positive_count: number;
   mentioning_answers: number;
+  /** 00131: the KPI cards' components on the shared prompts. */
+  negative_count: number;
+  sum_position: number | null;
+  position_count: number;
+  /** Shared prompts where the brand appeared (named or cited). */
+  visible_prompts: number;
+  /** Every competitor's mentions, for share of voice. */
+  competitor_mentions: number;
   by_competitor: SamePromptCompetitor[];
 }
 
@@ -64,6 +73,11 @@ function parseTotals(raw: unknown): SamePromptTotals {
     total_citations: num(t.total_citations),
     positive_count: num(t.positive_count),
     mentioning_answers: num(t.mentioning_answers),
+    negative_count: num(t.negative_count),
+    sum_position: numOrNull(t.sum_position),
+    position_count: num(t.position_count),
+    visible_prompts: num(t.visible_prompts),
+    competitor_mentions: num(t.competitor_mentions),
     by_competitor: ((t.by_competitor as Record<string, unknown>[] | undefined) ?? []).map((c) => ({
       competitor_id: String(c.competitor_id),
       name: (c.name as string | null) ?? null,
@@ -131,6 +145,12 @@ export interface SamePromptChanges {
   citationsChange: number | null;
   /** Positive-sentiment share change in points. */
   sentimentChange: number | null;
+  /** The KPI cards' rate changes (VIS-003), in points (positions for Avg. position). */
+  netSentimentChange: number | null;
+  avgPositionChange: number | null;
+  citationRateChange: number | null;
+  coverageChange: number | null;
+  shareOfVoiceChange: number | null;
 }
 
 /** Every change the Insights page shows, measured on the shared prompts. */
@@ -139,6 +159,18 @@ export function samePromptChanges(same: SamePromptComparison): SamePromptChanges
   const comparable = cur.answers > 0 && prev.answers > 0;
   const visCur = brandScore(cur);
   const visPrev = brandScore(prev);
+  const rates = (t: SamePromptTotals) =>
+    kpiRates({
+      answers: t.answers,
+      citationAnswers: t.citation_answers,
+      mentioning: t.mentioning_answers,
+      positive: t.positive_count,
+      negative: t.negative_count,
+      sumPosition: t.sum_position,
+      positionCount: t.position_count,
+    });
+  const ratesCur = rates(cur);
+  const ratesPrev = rates(prev);
   return {
     visibility: {
       cur: visCur,
@@ -156,6 +188,17 @@ export function samePromptChanges(same: SamePromptComparison): SamePromptChanges
       ? percentageChange(cur.total_citations, prev.total_citations)
       : null,
     sentimentChange: comparable ? sentimentPct(cur) - sentimentPct(prev) : null,
+    netSentimentChange: rateChange(ratesCur.netSentiment, ratesPrev.netSentiment),
+    avgPositionChange: rateChange(ratesCur.avgPosition, ratesPrev.avgPosition),
+    citationRateChange: rateChange(ratesCur.citationRate, ratesPrev.citationRate),
+    coverageChange: rateChange(
+      coverage(cur.visible_prompts, same.samePrompts),
+      coverage(prev.visible_prompts, same.samePrompts),
+    ),
+    shareOfVoiceChange: rateChange(
+      shareOfVoice(cur.total_mentions, cur.competitor_mentions),
+      shareOfVoice(prev.total_mentions, prev.competitor_mentions),
+    ),
   };
 }
 
@@ -166,7 +209,12 @@ export interface ComparedInsights {
     mentionsChange: number | null;
     citationsChange: number | null;
     sentimentChange: number | null;
+    netSentimentChange: number | null;
+    avgPositionChange: number | null;
+    citationRateChange: number | null;
   };
+  sov: { overallSovChange: number | null };
+  coverage: { change: number | null } | null;
   trend: { summary: { change: number | null } } | null;
   competitors: {
     brands: { isOwnBrand: boolean; competitorId?: string; scoreChange: number | null }[];
@@ -177,8 +225,7 @@ export interface ComparedInsights {
  * Re-measure the page's changes on the prompts answered in both periods
  * when Same prompts is on. The numbers themselves still cover every prompt;
  * only the changes move: the Visibility change on the trend card, every
- * leaderboard row's change, and the Mentions, Citations and Sentiment
- * changes. Without a usable comparison the changes stay as they are,
+ * leaderboard row's change, and every KPI card's change. Without a usable comparison the changes stay as they are,
  * measured on all prompts. With Same prompts off, the counts still come
  * back so the page can say how many new prompts the change includes.
  */
@@ -197,7 +244,7 @@ export function withPromptComparison<T extends ComparedInsights>(
   if (!samePrompts) return { ...insights, comparison };
 
   const changes = samePromptChanges(same);
-  const { summary, trend, competitors } = insights;
+  const { summary, trend, competitors, sov, coverage: coverageKpi } = insights;
   return {
     ...insights,
     comparison,
@@ -208,8 +255,13 @@ export function withPromptComparison<T extends ComparedInsights>(
             mentionsChange: changes.mentionsChange,
             citationsChange: changes.citationsChange,
             sentimentChange: changes.sentimentChange,
+            netSentimentChange: changes.netSentimentChange,
+            avgPositionChange: changes.avgPositionChange,
+            citationRateChange: changes.citationRateChange,
           }
         : summary,
+    sov: { ...sov, overallSovChange: changes.shareOfVoiceChange },
+    coverage: coverageKpi && { ...coverageKpi, change: changes.coverageChange },
     trend: trend && { ...trend, summary: { ...trend.summary, change: changes.visibility.change } },
     competitors: {
       ...competitors,
