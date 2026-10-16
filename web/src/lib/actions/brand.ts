@@ -7,6 +7,7 @@ import { isWithinLimit } from '@/config/plans';
 import { slugify } from '@/lib/slug';
 import { API_BASE_URL } from '@/config/api';
 import type { Brand, BrandDomain } from '@/types';
+import { MAX_PINNED_COMPETITORS } from '@/lib/insights-trend';
 
 function mapDomainRow(d: Record<string, unknown>): BrandDomain {
   return {
@@ -337,6 +338,45 @@ export async function setBrandActive(brandId: string, isActive: boolean): Promis
   }
 
   revalidatePath('/dashboard/brands');
+}
+
+/**
+ * Pin competitors on the Insights visibility trend (VIS-007): saved on the
+ * brand, in pin order, so the whole team sees the same lines whatever the
+ * range. At most MAX_PINNED_COMPETITORS; ids that aren't this brand's
+ * competitors are dropped. Returns what was saved.
+ *
+ * RLS gates the write like every brand setting: admins and managers only.
+ */
+export async function setPinnedCompetitors(
+  brandId: string,
+  competitorIds: string[],
+): Promise<string[]> {
+  if (!Array.isArray(competitorIds) || competitorIds.some((id) => typeof id !== 'string')) {
+    throw new Error('Pinned competitors must be a list of competitor ids.');
+  }
+  const supabase = await createClient();
+  const wanted = [...new Set(competitorIds)];
+
+  const { data: owned, error: ownedError } = wanted.length
+    ? await supabase.from('competitors').select('id').eq('brand_id', brandId).in('id', wanted)
+    : { data: [], error: null };
+  if (ownedError) throw new Error(ownedError.message);
+  const ownedIds = new Set((owned ?? []).map((c) => c.id));
+  const pinned = wanted.filter((id) => ownedIds.has(id)).slice(0, MAX_PINNED_COMPETITORS);
+
+  // Return the updated row so RLS silently denying the write surfaces as an
+  // error, as in setBrandActive.
+  const { data, error } = await supabase
+    .from('brands')
+    .update({ insights_pinned_competitors: pinned })
+    .eq('id', brandId)
+    .select('id');
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) {
+    throw new Error('Brand not found or you do not have permission to update it.');
+  }
+  return pinned;
 }
 
 export interface BrandCardSummary {
