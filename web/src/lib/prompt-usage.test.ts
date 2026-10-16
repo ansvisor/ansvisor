@@ -1,5 +1,5 @@
 /**
- * prompt-usage.test.ts  (PROMPT-009)
+ * prompt-usage.test.ts  (PROMPT-009, PROMPT-012)
  *
  * Tests the Tracked Prompts usage counter states.
  */
@@ -14,14 +14,15 @@ describe('getPromptUsage', () => {
     expect(isPromptLimitReached(u)).toBe(false);
   });
 
-  test('below 80% is normal', () => {
+  test('below 90% is normal', () => {
     expect(getPromptUsage(0, 200)).toEqual({ state: 'normal', remaining: 200, percent: 0 });
-    expect(getPromptUsage(159, 200).state).toBe('normal');
+    expect(getPromptUsage(179, 200).state).toBe('normal');
   });
 
-  test('from 80% up to one below the limit is a warning with the slots left', () => {
-    expect(getPromptUsage(160, 200)).toEqual({ state: 'warning', remaining: 40, percent: 80 });
+  test('from 90% up to one below the limit is a warning with the slots left', () => {
+    expect(getPromptUsage(180, 200)).toEqual({ state: 'warning', remaining: 20, percent: 90 });
     expect(getPromptUsage(187, 200)).toEqual({ state: 'warning', remaining: 13, percent: 94 });
+    expect(getPromptUsage(45, 50).state).toBe('warning');
     expect(getPromptUsage(49, 50).state).toBe('warning');
   });
 

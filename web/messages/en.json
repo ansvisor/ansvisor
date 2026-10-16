@@ -776,6 +776,29 @@
             "note": "Before is the 7 days before this action was sent. The latest 7 days are re-read daily while the action is open and for 30 days after it's completed. A position counts as changed when it moves at least 0.5.",
             "noteFinal": "The 7 days before this action was sent, next to the 7 days ending 30 days after it was completed. A position counts as changed when it moves at least 0.5."
           }
+        },
+        "noSignalsTopicGap": "This action was sent from Insights' Topics vs competitors, so it has no detection signals. Its evidence is the topic and scores on the Overview tab.",
+        "topicGap": {
+          "source": "Source",
+          "sourceValue": "Insights › Topics vs competitors",
+          "openTopic": "Open topic",
+          "topic": "Topic",
+          "scores": "Visibility when sent",
+          "you": "You",
+          "gap": "{gap} pts behind"
+        },
+        "noSignalsTopicOpportunity": "This action was sent from Insights' Opportunities, so it has no detection signals. Its evidence is the topic and suggested prompts on the Overview tab.",
+        "topicOpportunity": {
+          "source": "Source",
+          "sourceValue": "Insights › Opportunities",
+          "topic": "Topic",
+          "openTopic": "Open topic",
+          "plan": "Plan",
+          "planNew": "Write new content: none of your prompts tracked this topic when it was sent",
+          "planExpand": "Grow what covers it: your prompts tracked this topic when it was sent",
+          "demand": "Suggested prompts when sent",
+          "demandValue": "{count, plural, one {# prompt} other {# prompts}} · ~{volume}/mo",
+          "volume": "~{volume}/mo"
         }
       }
     },
@@ -1177,6 +1200,18 @@
         "titleGeneric": "Improve a prompt's position",
         "description": "Sent from the Prompts Improve tab: platform-specific changes to get the brand mentioned earlier and cited for one prompt.",
         "goal": "Get the brand mentioned early and cited for this prompt on the platforms it covers."
+      },
+      "topic_competitor_gap": {
+        "title": "Close the {gap}-pt gap with {competitor} in {topic}",
+        "titleGeneric": "Close a topic gap with a competitor",
+        "description": "Sent from Insights: a competitor leads one of your topics on Visibility.",
+        "goal": "Lead the topic, or close most of the gap."
+      },
+      "topic_opportunity": {
+        "title": "Capture ~{demand}/mo of AI demand in {topic}",
+        "titleGeneric": "Capture the AI demand in a topic",
+        "description": "Sent from Insights: prompts suggested for one of your topics, with the monthly AI demand behind them.",
+        "goal": "Get the brand into AI answers for the topic's suggested prompts."
       }
     },
     "actionTasks": {
@@ -1710,7 +1745,14 @@
       "allPrompts": "all prompts",
       "netSentiment": "Net sentiment",
       "netSentimentTip": "Positive minus negative share of the answers that name or cite your brand.",
-      "sentimentSplit": "{positive}% pos · {negative}% neg",
+      "sentimentSplit": "{positive} pos · {negative} neg",
+      "sampleTip": {
+        "all": "{count, plural, one {Based on # answer} other {Based on # answers}} in this period.",
+        "named": "{count, plural, one {Based on # answer that names you} other {Based on # answers that name you}} in this period.",
+        "placed": "{count, plural, one {Based on # answer that places you} other {Based on # answers that place you}} in this period."
+      },
+      "lowSample": "{count, plural, one {Low sample · # answer} other {Low sample · # answers}}",
+      "lowSampleShort": "Low sample",
       "coverage": "Coverage",
       "coverageTip": "Share of answered prompts where you appear at least once.",
       "coverageSub": "{visible} of {active} prompts",
@@ -1727,6 +1769,7 @@
     "summary": {
       "label": "Summary",
       "visibility": "visibility",
+      "lowSample": "{count, plural, one {(low sample · # answer)} other {(low sample · # answers)}}",
       "rank": "#{rank}",
       "ofCount": "of {count}",
       "pts": "{value} pts",
@@ -1756,6 +1799,7 @@
     "leaderboard": {
       "title": "Leaderboard",
       "headToHead": "Head-to-Head",
+      "lowSample": "{count, plural, one {Low sample · # answer} other {Low sample · # answers}}",
       "you": "You",
       "coverageSov": "Coverage {coverage} · SoV {sov}",
       "scoreDetail": "Mentioned in {mentions} answers · cited in {citations} · position factor {factor}",
@@ -1769,6 +1813,7 @@
     },
     "whyChanged": {
       "title": "Why it changed",
+      "rowLowSample": "Low sample",
       "fullBreakdown": "Full breakdown",
       "gains": "Gains",
       "drops": "Drops",
@@ -1788,6 +1833,7 @@
     },
     "trend": {
       "subtitle": "Visibility · {range}",
+      "lowSample": "{count, plural, one {low sample · # answer} other {low sample · # answers}}",
       "range": {
         "24h": "last 24 hours",
         "7d": "last 7 days",
@@ -1807,6 +1853,88 @@
       "moreActions": "{actions} +{count}",
       "goal": "Goal {value}",
       "goalLegend": "Action Center goal"
+    },
+    "topicMap": {
+      "title": "Topics vs competitors",
+      "tableLabel": "Visibility by topic and brand",
+      "topic": "Topic",
+      "you": "You",
+      "gap": "Gap",
+      "lead": "Lead",
+      "lowSample": "Low sample",
+      "openTopic": "Open {topic}",
+      "showAll": "Show all {count}",
+      "showLess": "Show less",
+      "sendGap": "Send biggest gap to Actions",
+      "sendGapTitle": "Open a Compete action for {topic}, where {competitor} leads you by {gap} pts",
+      "noGap": "No topic where a competitor leads you",
+      "sent": "AC-{no} sent to the Action Center",
+      "alreadySent": "Already in the Action Center as AC-{no}",
+      "sendFailed": "Couldn't send to the Action Center.",
+      "openAction": "Open",
+      "gapChanged": "The gap changed since the page loaded. Refresh to see the latest."
+    },
+    "breakdown": {
+      "noData": "No data",
+      "lowSample": "Low sample"
+    },
+    "header": {
+      "lastRun": "Last run {when}",
+      "noRuns": "No runs yet",
+      "nextRun": "next run in {when}",
+      "minutes": "{n}m",
+      "hours": "{n}h",
+      "days": "{n}d"
+    },
+    "opportunities": {
+      "title": "Opportunities",
+      "seeAll": "See all",
+      "listLabel": "What to track next",
+      "topicKind": "Topic",
+      "promptKind": "Prompt",
+      "prompts": "{count, plural, one {# prompt} other {# prompts}}",
+      "volume": "~{volume}/mo",
+      "notTracked": "not tracked",
+      "competitorLeads": "{name} leads",
+      "leaderScore": "leader {score}",
+      "youLead": "you lead",
+      "track": "Track",
+      "trackCount": "Track {count}",
+      "trackHint": "Start tracking this prompt",
+      "trackCountHint": "Start tracking the {count} prompts suggested for {topic}",
+      "planFull": "Your plan's prompt locations are full",
+      "tracked": "Now tracking {count, plural, one {# prompt} other {# prompts}}",
+      "trackedPartly": "Tracked {tracked} of {total}: your plan's prompt locations are full.",
+      "trackFailed": "Couldn't track the suggestions.",
+      "openPrompts": "Open",
+      "empty": "No prompt suggestions yet. Generate ideas to see what to track next.",
+      "unrated": "These suggestions aren't rated for fit yet. New suggestions are rated when they refresh, within a monthly allowance on your plan.",
+      "noneRelevant": "No suggestion fits your brand closely enough right now. Refresh for new ideas.",
+      "allTracked": "You're tracking every suggestion that fits. Refresh suggestions for more ideas.",
+      "alreadyHandled": "These suggestions were already accepted or dismissed.",
+      "openSuggestions": "Open suggestions",
+      "sendAction": "Send action",
+      "sendActionHint": "Open a Growth action for {topic} in the Action Center",
+      "sendNeedsTopic": "This topic isn't saved yet. Refresh suggestions to send it.",
+      "sent": "AC-{no} sent to the Action Center",
+      "alreadySent": "Already in the Action Center as AC-{no}",
+      "sendStale": "These suggestions changed since the page loaded. Refresh to see the latest.",
+      "sendFailed": "Couldn't send to the Action Center.",
+      "openAction": "Open",
+      "suggestContent": "Suggest content",
+      "suggestHint": "Write a content suggestion for this topic, steered by this prompt.",
+      "suggestHintQuota": "Uses one of the month's content suggestions.",
+      "suggestTrackFirst": "Track the topic first: content is written from the answers your tracked prompts get.",
+      "contentLimit": "Monthly content limit reached",
+      "contentLimitResets": "Monthly content limit reached · resets {date}",
+      "writing": "Writing a content suggestion…",
+      "written": "Content suggestion created",
+      "openContent": "Open",
+      "notWritten": "Couldn't write a new suggestion for this topic yet",
+      "notWrittenWhy": "Its tracked prompts are already covered by open suggestions, or have no answers yet. Nothing was used from your content quota.",
+      "writeFailed": "Couldn't write a content suggestion",
+      "stillWriting": "Still writing the content suggestion",
+      "stillWritingWhy": "It will appear in Content when it's done."
     }
   },
   "topics": {
@@ -2218,6 +2346,54 @@
       "platformsAndModels": "Platform & Models",
       "selectPlatformsAndModels": "Select platform & models",
       "selectedCount": "{count} selected"
+    },
+    "usage": {
+      "title": "Tracked Prompts",
+      "subtitle": "Every tracked prompt for this brand · edit or pause any row in place",
+      "subtitleReadOnly": "Read-only overview of every tracked prompt for this brand",
+      "planAndUsage": "Plan & usage",
+      "planPill": "{plan} plan",
+      "planLabel": {
+        "self_hosted": "Self-Hosted",
+        "starter": "Starter",
+        "growth": "Growth",
+        "enterprise": "Enterprise"
+      },
+      "thisBrand": "This brand",
+      "account": "Account",
+      "activePrompts": "Active prompts",
+      "totalPrompts": "Total prompts",
+      "promptLocations": "Prompt locations",
+      "slotsLeft": "Slots left",
+      "paused": "{count} paused",
+      "beingTracked": "being tracked now",
+      "activePlusPaused": "active + paused",
+      "acrossBrands": "across {count, plural, one {# brand} other {# brands}}",
+      "locationPairs": "prompt × location pairs",
+      "overLimit": "over limit",
+      "ofLimit": "of {limit} on {plan}",
+      "onPlan": "on {plan}",
+      "unlimited": "Unlimited",
+      "cta": {
+        "upgrade_growth": "Upgrade to Growth",
+        "upgrade": "Upgrade plan",
+        "contact": "Contact us"
+      },
+      "footer": "Click a card to filter the table (Active · Paused · All).",
+      "updated": "Counts updated {when}",
+      "updatedJustNow": "Counts updated just now",
+      "loadFailed": "Couldn't load the counts",
+      "retry": "Retry",
+      "showPaused": "Show paused prompts",
+      "table": {
+        "active": "Active prompts ({count})",
+        "paused": "Paused prompts ({count})",
+        "all": "All prompts ({count})",
+        "filtered": "Filtered by the card above",
+        "showAll": "Show all {count}",
+        "noneActive": "No active prompts match.",
+        "nonePaused": "No paused prompts match."
+      }
     },
     "fanout": {
       "engines": "Engines",

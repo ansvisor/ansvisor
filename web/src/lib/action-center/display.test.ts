@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { actionGoal, actionTexts, eventTaskText, humanizeKind, taskText } from './display';
+import {
+  actionContextTags,
+  actionGoal,
+  actionTexts,
+  eventTaskText,
+  humanizeKind,
+  taskText,
+} from './display';
 import { ACTION_KINDS } from './registry';
 import type { ActionItem } from '@/lib/actions/action-center';
 import messages from '../../../messages/en.json';
@@ -40,8 +47,33 @@ describe('actionTexts', () => {
     expect(() => actionGoal(kind, t)).not.toThrow();
   });
 
-  it('holds copy for all sixty-two definitions, opportunity and Improve actions', () => {
-    expect(ACTION_KINDS).toHaveLength(64);
+  it('holds copy for all sixty-two definitions and the four person-sent kinds', () => {
+    expect(ACTION_KINDS).toHaveLength(66);
+  });
+
+  it('names a topic opportunity after its topic and demand (VIS-011)', () => {
+    const payload = { topicName: 'GEO tools for agencies', demand: 92_000 };
+    expect(actionTexts(action({ kind: 'topic_opportunity', payload }), t).title).toBe(
+      'Capture ~92k/mo of AI demand in GEO tools for agencies',
+    );
+    const tags = actionContextTags(
+      action({ kind: 'topic_opportunity', payload, signalCount: 0 }),
+      (key: string) => key,
+    );
+    expect(tags).not.toContain('tags.signals');
+  });
+
+  it('names a topic gap after its topic, competitor and gap (VIS-010)', () => {
+    const payload = { topicName: 'AI Rank Tracker', competitorName: 'Peec AI', gap: 26.5 };
+    expect(actionTexts(action({ kind: 'topic_competitor_gap', payload }), t).title).toBe(
+      'Close the 26.5-pt gap with Peec AI in AI Rank Tracker',
+    );
+    // Sent by a person: no "0 signals" chip.
+    const tags = actionContextTags(
+      action({ kind: 'topic_competitor_gap', payload, signalCount: 0 }),
+      (key: string) => key,
+    );
+    expect(tags).not.toContain('tags.signals');
   });
 
   it('names an Improve action after its prompt, with its own why and goal', () => {

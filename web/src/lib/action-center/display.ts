@@ -1,5 +1,6 @@
 import type { ActionItem } from '@/lib/actions/action-center';
 import { isActionKind } from '@/lib/action-center/registry';
+import { formatCompactNumber } from '@/lib/format';
 
 /**
  * Composes what an action row shows from `kind` + `payload`, mirroring the
@@ -78,6 +79,38 @@ export function actionTexts(
       description: typeof p.why === 'string' && p.why ? p.why : t(`${action.kind}.description`),
     };
   }
+  // A topic gap sent from Insights (VIS-010) names the topic, the competitor
+  // and the gap it was sent with.
+  if (
+    action.kind === 'topic_competitor_gap' &&
+    typeof p.topicName === 'string' &&
+    typeof p.competitorName === 'string' &&
+    typeof p.gap === 'number'
+  ) {
+    return {
+      title: t(`${action.kind}.title`, {
+        gap: p.gap.toFixed(1),
+        competitor: p.competitorName,
+        topic: p.topicName,
+      }),
+      description: t(`${action.kind}.description`),
+    };
+  }
+  // An Opportunities topic sent from Insights (VIS-011) names the topic and
+  // the demand it was sent with.
+  if (
+    action.kind === 'topic_opportunity' &&
+    typeof p.topicName === 'string' &&
+    typeof p.demand === 'number'
+  ) {
+    return {
+      title: t(`${action.kind}.title`, {
+        demand: formatCompactNumber(p.demand),
+        topic: p.topicName,
+      }),
+      description: t(`${action.kind}.description`),
+    };
+  }
   const targets = targetLabel(p, t);
   return {
     title: targets ? t(`${action.kind}.title`, { targets }) : t(`${action.kind}.titleGeneric`),
@@ -121,15 +154,23 @@ export function actionGoal(
   return isActionKind(kind) ? t(`${kind}.goal`) : t('unknown.goal');
 }
 
+/** Kinds a person sends rather than a definition raises. */
+const PERSON_SENT_KINDS: string[] = [
+  'content_opportunity',
+  'prompt_improve',
+  'topic_competitor_gap',
+  'topic_opportunity',
+];
+
 /** Compact evidence chips under the title: signal count plus the kind's own
  *  count (pages, prompts, competitors). */
 export function actionContextTags(action: ActionItem, t: Translator): string[] {
-  // Actions a person sent (a content opportunity, an Improve set) have no
-  // detection signals by design; "0 signals" would read as missing evidence.
-  const tags =
-    action.kind === 'content_opportunity' || action.kind === 'prompt_improve'
-      ? []
-      : [t('tags.signals', { count: action.signalCount })];
+  // Actions a person sent (a content opportunity, an Improve set, a topic
+  // gap or opportunity) have no detection signals by design; "0 signals" would read as
+  // missing evidence.
+  const tags = PERSON_SENT_KINDS.includes(action.kind)
+    ? []
+    : [t('tags.signals', { count: action.signalCount })];
   const count = num(action.payload ?? {}, 'targetCount');
   const entity = str(action.payload ?? {}, 'targetEntity');
   if (count > 0 && entity) tags.push(t(`tags.${entity}`, { count }));
