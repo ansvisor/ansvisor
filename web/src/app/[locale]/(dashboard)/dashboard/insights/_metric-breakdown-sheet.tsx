@@ -24,6 +24,9 @@ import {
 } from '@/lib/insights-breakdown';
 import { sortBreakdownRowsForDisplay } from './breakdown-display';
 
+/** The panel's tabs: each kind of slice it lists. */
+export type BreakdownTab = 'prompts' | 'platforms' | 'topics';
+
 const METRIC_TITLE: Record<BreakdownMetric, string> = {
   mentions: 'Mentions',
   visibility: 'Visibility',
@@ -40,9 +43,17 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   /** The window and filters the cards were loaded with, so the panel explains their numbers. */
   filters?: BreakdownFilters;
+  /** The tab to open on, e.g. the one a "Why it changed" row belongs to; Prompts by default. */
+  initialTab?: BreakdownTab;
 }
 
-export function MetricBreakdownSheet({ brandId, metric, onOpenChange, filters }: Props) {
+export function MetricBreakdownSheet({
+  brandId,
+  metric,
+  onOpenChange,
+  filters,
+  initialTab,
+}: Props) {
   const open = Boolean(brandId && metric);
   const [data, setData] = useState<InsightsBreakdown | null>(null);
   const [loading, setLoading] = useState(false);
@@ -109,7 +120,9 @@ export function MetricBreakdownSheet({ brandId, metric, onOpenChange, filters }:
             </div>
           )}
 
-          {!loading && !error && data && metric && <BreakdownBody data={data} metric={metric} />}
+          {!loading && !error && data && metric && (
+            <BreakdownBody data={data} metric={metric} initialTab={initialTab} />
+          )}
         </div>
       </SheetContent>
     </Sheet>
@@ -129,8 +142,16 @@ function BreakdownSkeleton() {
   );
 }
 
-function BreakdownBody({ data, metric }: { data: InsightsBreakdown; metric: BreakdownMetric }) {
-  const [tab, setTab] = useState<'prompts' | 'platforms' | 'topics'>('prompts');
+function BreakdownBody({
+  data,
+  metric,
+  initialTab,
+}: {
+  data: InsightsBreakdown;
+  metric: BreakdownMetric;
+  initialTab?: BreakdownTab;
+}) {
+  const [tab, setTab] = useState<BreakdownTab>(initialTab ?? 'prompts');
   const samePrompts = data.comparison?.basis === 'same';
   const newCount = data.comparison?.newPrompts ?? 0;
 

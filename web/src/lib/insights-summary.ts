@@ -1,5 +1,5 @@
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
-import { coverage } from '@/lib/insights-kpis';
+import { coverage, shareOfVoice } from '@/lib/insights-kpis';
 
 /**
  * The Insights summary line (VIS-006): the brand's rank and the gap to its
@@ -158,6 +158,90 @@ export function rankSummary(
     count: brands.length,
     neighbour: { name: other.name, gap, side: gap === 0 ? 'tied' : i > 0 ? 'behind' : 'ahead' },
   };
+}
+
+// ─── Leaderboard (VIS-004) ──────────────────────────────────────────────────
+
+/** Up to this many brands, the leaderboard lists them all. */
+const LEADERBOARD_SHOW_ALL_UP_TO = 5;
+
+/** A leaderboard line: a brand (its index in rank order), or "n more" skipped brands. */
+export type LeaderboardItem = { kind: 'brand'; index: number } | { kind: 'more'; count: number };
+
+/**
+ * The leaderboard's lines as in the v2 mockup: ranks 1 and 2, then the brand
+ * directly ahead of yours, yours and the one directly behind, with "n more"
+ * where brands are skipped in between. `hidden` counts every brand left out,
+ * for "Show all"; short lists, or one without the brand, start from the top.
+ */
+export function leaderboardLines(
+  count: number,
+  ownIndex: number,
+): { items: LeaderboardItem[]; hidden: number } {
+  const shown =
+    count <= LEADERBOARD_SHOW_ALL_UP_TO
+      ? [...Array(count).keys()]
+      : ownIndex < 0
+        ? [...Array(LEADERBOARD_SHOW_ALL_UP_TO).keys()]
+        : [...new Set([0, 1, ownIndex - 1, ownIndex, ownIndex + 1])]
+            .filter((i) => i >= 0 && i < count)
+            .sort((a, b) => a - b);
+
+  const items: LeaderboardItem[] = [];
+  shown.forEach((index, n) => {
+    const skipped = n > 0 ? index - shown[n - 1] - 1 : 0;
+    if (skipped > 0) items.push({ kind: 'more', count: skipped });
+    items.push({ kind: 'brand', index });
+  });
+  return { items, hidden: count - shown.length };
+}
+
+/**
+ * Each brand's share of voice: its mentions out of every tracked brand's,
+ * like the Share of Voice card. Null when nobody was mentioned.
+ */
+export function mentionShares(brands: { totalMentions: number }[]): (number | null)[] {
+  const all = brands.reduce((sum, b) => sum + b.totalMentions, 0);
+  return brands.map((b) => shareOfVoice(b.totalMentions, all - b.totalMentions));
+}
+
+export interface LeaderboardCallout {
+  /** The rank of the brand directly ahead. */
+  rank: number;
+  /** Points behind it, as the summary line says; 0 when level. */
+  gap: number;
+  /** The platform where it leads the brand most, if it leads anywhere. */
+  lever: string | null;
+}
+
+/**
+ * The note under the brand's row: the gap to the brand directly ahead and
+ * the platform to work on, the one where that brand appears in the largest
+ * share of prompts more than yours. Only platforms `eligible` says have
+ * enough answers count. Null when the brand leads the board.
+ */
+export function leaderboardCallout(
+  brands: { name: string; score: number | null; isOwnBrand: boolean }[],
+  providerRows: { provider: string; [brand: string]: string | number }[],
+  eligible: (platform: string) => boolean,
+): LeaderboardCallout | null {
+  // First place has nobody ahead (rankSummary would name the runner-up).
+  const rank = rankSummary(brands);
+  if (!rank || rank.rank === 1) return null;
+  const own = brands[rank.rank - 1].name;
+  const ahead = rank.neighbour.name;
+
+  let lever: string | null = null;
+  let lead = 0;
+  for (const row of providerRows) {
+    if (!eligible(row.provider)) continue;
+    const by = Number(row[ahead] ?? 0) - Number(row[own] ?? 0);
+    if (by > lead) {
+      lead = by;
+      lever = row.provider;
+    }
+  }
+  return { rank: rank.rank - 1, gap: rank.neighbour.gap, lever };
 }
 
 // ─── By AI platform table (VIS-008) ─────────────────────────────────────────
