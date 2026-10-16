@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { TopicCompetitors } from './insights-topics';
 import {
+  contentLeft,
   gapWeight,
   opportunities,
   RELEVANCE_THRESHOLD,
+  secondaryBlock,
   topicStandings,
+  type Opportunity,
   type OpportunityStanding,
   type OpportunitySuggestion,
 } from './insights-opportunities';
@@ -186,5 +189,42 @@ describe('gapWeight', () => {
     expect(gapWeight({ kind: 'competitor', name: null, score: 44, gap: 25 })).toBe(1.25);
     expect(gapWeight({ kind: 'you' })).toBe(0.5);
     expect(gapWeight({ kind: 'notTracked' })).toBe(1);
+  });
+});
+
+describe('contentLeft', () => {
+  it('takes what this page wrote off the month’s remaining suggestions', () => {
+    expect(contentLeft({ limit: 10, remaining: 3 }, 1)).toBe(2);
+  });
+
+  it('is null without a monthly limit or a quota read', () => {
+    expect(contentLeft({ limit: -1, remaining: 0 }, 4)).toBeNull();
+    expect(contentLeft(null, 0)).toBeNull();
+  });
+});
+
+describe('secondaryBlock', () => {
+  const item = (over: Partial<Opportunity>): Opportunity => ({
+    kind: 'prompt',
+    key: 'k',
+    title: 'prompt',
+    topicId: 't1',
+    suggestionIds: ['s1'],
+    volume: 1000,
+    standing: { kind: 'unknown' },
+    ...over,
+  });
+
+  it('sends a topic once it is saved', () => {
+    expect(secondaryBlock(item({ kind: 'topic' }), 0)).toBeNull();
+    expect(secondaryBlock(item({ kind: 'topic', topicId: null }), null)).toBe('needsTopic');
+  });
+
+  it('writes content only for a topic you track, within the month’s quota', () => {
+    expect(secondaryBlock(item({}), 2)).toBeNull();
+    expect(secondaryBlock(item({}), null)).toBeNull();
+    expect(secondaryBlock(item({ standing: { kind: 'notTracked' } }), 2)).toBe('trackFirst');
+    expect(secondaryBlock(item({ topicId: null }), 2)).toBe('trackFirst');
+    expect(secondaryBlock(item({}), 0)).toBe('contentLimit');
   });
 });

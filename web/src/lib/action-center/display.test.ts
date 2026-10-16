@@ -47,8 +47,20 @@ describe('actionTexts', () => {
     expect(() => actionGoal(kind, t)).not.toThrow();
   });
 
-  it('holds copy for all sixty-two definitions, opportunity, Improve and topic gap actions', () => {
-    expect(ACTION_KINDS).toHaveLength(65);
+  it('holds copy for all sixty-two definitions and the four person-sent kinds', () => {
+    expect(ACTION_KINDS).toHaveLength(66);
+  });
+
+  it('names a topic opportunity after its topic and demand (VIS-011)', () => {
+    const payload = { topicName: 'GEO tools for agencies', demand: 92_000 };
+    expect(actionTexts(action({ kind: 'topic_opportunity', payload }), t).title).toBe(
+      'Capture ~92k/mo of AI demand in GEO tools for agencies',
+    );
+    const tags = actionContextTags(
+      action({ kind: 'topic_opportunity', payload, signalCount: 0 }),
+      (key: string) => key,
+    );
+    expect(tags).not.toContain('tags.signals');
   });
 
   it('names a topic gap after its topic, competitor and gap (VIS-010)', () => {
