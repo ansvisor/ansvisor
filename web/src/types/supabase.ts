@@ -603,6 +603,7 @@ export type Database = {
           gsc_property: string | null
           id: string
           industry: string | null
+          insights_pinned_competitors: string[]
           is_active: boolean
           language: string | null
           logo_url: string | null
@@ -622,6 +623,7 @@ export type Database = {
           gsc_property?: string | null
           id?: string
           industry?: string | null
+          insights_pinned_competitors?: string[]
           is_active?: boolean
           language?: string | null
           logo_url?: string | null
@@ -641,6 +643,7 @@ export type Database = {
           gsc_property?: string | null
           id?: string
           industry?: string | null
+          insights_pinned_competitors?: string[]
           is_active?: boolean
           language?: string | null
           logo_url?: string | null
@@ -3141,6 +3144,33 @@ export type Database = {
         }
         Returns: Json
       }
+      insights_change_drivers: {
+        Args: {
+          p_brand_id: string
+          p_cur_from: string
+          p_cur_to: string
+          p_models?: string[]
+          p_prev_from: string
+          p_prev_to: string
+          p_region?: string
+          p_same_prompts?: boolean
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      insights_change_drivers_daily: {
+        Args: {
+          p_brand_id: string
+          p_cur_from: string
+          p_cur_to: string
+          p_models?: string[]
+          p_prev_from: string
+          p_prev_to: string
+          p_region?: string
+          p_same_prompts?: boolean
+        }
+        Returns: Json
+      }
       insights_filter_options: {
         Args: { p_brand_id: string }
         Returns: {
@@ -3208,6 +3238,15 @@ export type Database = {
           p_prev_from: string
           p_prev_to: string
           p_region?: string
+        }
+        Returns: Json
+      }
+      insights_trend_markers: {
+        Args: {
+          p_brand_id: string
+          p_from?: string
+          p_to?: string
+          p_topic_id?: string
         }
         Returns: Json
       }
