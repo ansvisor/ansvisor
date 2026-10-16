@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
+import { API_BASE_URL } from '@/config/api';
 import type { Topic } from '@/types';
 
 function mapTopicRow(row: Record<string, unknown>): Topic {
@@ -405,4 +406,62 @@ export async function deleteTopic(topicId: string): Promise<void> {
   // Delete the topic
   const { error } = await supabase.from('topics').delete().eq('id', topicId);
   if (error) throw new Error(error.message);
+}
+
+/** The window and filters a heat map's gap was shown for (VIS-010). */
+export interface TopicGapWindow {
+  dayFrom?: string;
+  dayTo?: string;
+  /** The page's AI Model filter: model slugs, comma-separated. */
+  model?: string;
+  region?: string;
+}
+
+/**
+ * "Send biggest gap to Actions" (VIS-010): a Compete action to close the
+ * topic's gap with the competitor leading it. The server measures the gap
+ * again over the same window; the same topic and competitor sent again
+ * return the open action.
+ */
+export async function sendTopicGapToActionCenter(
+  topicId: string,
+  competitorId: string,
+  window: TopicGapWindow,
+): Promise<
+  | { actionId: string; actionNo: number; created: boolean }
+  // 'stale': the server measured no gap over that window any more (409).
+  | { error: string; code?: 'stale' }
+> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'Not authenticated' };
+
+  const models = window.model
+    ?.split(',')
+    .map((m) => m.trim())
+    .filter(Boolean);
+  const res = await fetch(`${API_BASE_URL}/api/topics/${topicId}/gap-action`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      competitorId,
+      dayFrom: window.dayFrom,
+      dayTo: window.dayTo,
+      models: models?.length ? models : undefined,
+      region: window.region || undefined,
+    }),
+  });
+
+  // Returned, not thrown: a thrown error's message is masked in production.
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const error = body.details || body.error || `Server error: ${res.status}`;
+    return res.status === 409 ? { error, code: 'stale' } : { error };
+  }
+  return res.json();
 }
