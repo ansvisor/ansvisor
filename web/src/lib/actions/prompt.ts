@@ -561,9 +561,10 @@ export async function bulkUpdatePromptLocations(
 }
 
 /**
- * Org-wide tracked-location usage against the plan cap, for the prompts page
- * to bound its location pickers before a save can fail, and for the Tracked
- * Prompts usage counter. `maxPrompts` has Enterprise plan_overrides merged.
+ * Org-wide tracked-location usage against the plan cap, for the brand prompts
+ * page to bound its location pickers before a save can fail. `maxPrompts` has
+ * Enterprise plan_overrides merged. (The Tracked Prompts page reads the same
+ * numbers from its usage cards, GET /api/prompts/usage.)
  */
 export interface LocationQuota {
   /** Tracked-location cap; -1 = unlimited. */
@@ -1019,8 +1020,6 @@ export interface PromptsPageData {
   quota: VolumeQuota | null;
   /** True when the volumes upstream failed/timed out — the table still renders. */
   volumesDegraded: boolean;
-  /** Org-wide tracked-location usage for the counter; null when it failed to load. */
-  locationQuota: LocationQuota | null;
 }
 
 /**
@@ -1049,7 +1048,9 @@ export async function getPromptsPageData(
     from: opts?.from ?? new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString(),
     to: opts?.to,
   };
-  const [promptSets, visibility, positionRows, volumesResult, locationQuota] = await Promise.all([
+  // The plan-limit numbers aren't here: the usage cards read them from
+  // GET /api/prompts/usage, which reads counters instead of counting prompts.
+  const [promptSets, visibility, positionRows, volumesResult] = await Promise.all([
     getPromptSets(brandId),
     getPromptVisibilitySummaries(brandId, {
       days,
@@ -1071,12 +1072,6 @@ export async function getPromptsPageData(
         return { volumes: [] as PromptVolume[], quota: null, degraded: true };
       },
     ),
-    // The counter is informational — the limit is enforced on save either
-    // way — so a failure here hides it instead of failing the page.
-    getLocationQuota(brandId).catch((err) => {
-      console.error('[prompts] location quota fetch failed, hiding the counter:', err);
-      return null;
-    }),
   ]);
 
   const positions: Record<string, PromptPositionCell> = {};
@@ -1102,7 +1097,6 @@ export async function getPromptsPageData(
     volumes: volumesResult.volumes,
     quota: volumesResult.quota,
     volumesDegraded: volumesResult.degraded,
-    locationQuota,
   };
 }
 

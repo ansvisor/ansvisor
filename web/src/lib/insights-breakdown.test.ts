@@ -124,15 +124,15 @@ describe('buildBreakdownRows', () => {
 });
 
 describe('pickDriver', () => {
-  const row = (id: string, delta: number | null): BreakdownRow => ({
+  const row = (id: string, delta: number | null, runs = { prev: 5, cur: 5 }): BreakdownRow => ({
     id,
     label: id,
     cur: 0,
     prev: delta === null ? null : 0,
     delta,
     deltaPct: null,
-    curRuns: 0,
-    prevRuns: 0,
+    curRuns: runs.cur,
+    prevRuns: runs.prev,
   });
 
   it('picks the biggest drop when the total fell, and the biggest gain when it rose', () => {
@@ -146,6 +146,13 @@ describe('pickDriver', () => {
     expect(pickDriver([row('a', -1)], 2)).toBeNull();
     expect(pickDriver([row('a', 5)], 0)).toBeNull();
     expect(pickDriver([row('a', null)], null)).toBeNull();
+  });
+
+  it('credits no row answered in only one window (VIS-005)', () => {
+    // A prompt added this period "rising" from no answers isn't a gain.
+    const rows = [row('new', 80, { prev: 0, cur: 4 }), row('gone', -60, { prev: 3, cur: 0 })];
+    expect(pickDriver([...rows, row('kept', 2)], 1)?.id).toBe('kept');
+    expect(pickDriver(rows, -1)).toBeNull();
   });
 });
 
