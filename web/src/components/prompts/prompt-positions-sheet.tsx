@@ -19,6 +19,7 @@ import {
   ExternalLink,
   MessageSquareText,
   RefreshCw,
+  TrendingUp,
 } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import {
@@ -53,6 +54,7 @@ import type {
   PositionStats,
 } from '@/lib/prompt-positions';
 import type { Sentiment } from '@/types';
+import { actionCenterLink } from '@/lib/prompt-improve';
 
 export type { PositionsRange } from '@/lib/positions-range';
 
@@ -209,6 +211,26 @@ export function PromptPositionsSheet({
                 <Badge variant="outline" className="text-[11px] text-muted-foreground">
                   {data.prompt.topicName}
                 </Badge>
+              )}
+              {data.improving && (
+                // An Improve action sent for this prompt is still being
+                // tracked (PROMPT-008): the delta is the mean position over
+                // its platforms, 7 days before it was sent → the last 7 days.
+                <Link
+                  href={actionCenterLink(data.improving.actionId)}
+                  title="Open the action and its Outcome"
+                  className="inline-flex h-5 items-center gap-1 rounded-4xl border border-primary/30 bg-primary/5 px-2 text-[11px] font-medium text-primary transition-colors hover:bg-primary/10"
+                >
+                  <TrendingUp className="h-3 w-3" />
+                  Improving · AC-{data.improving.actionNo}
+                  {data.improving.avgBefore !== null && data.improving.avgAfter !== null && (
+                    <span className="tabular-nums">
+                      {' '}
+                      · #{data.improving.avgBefore.toFixed(1)} → #
+                      {data.improving.avgAfter.toFixed(1)}
+                    </span>
+                  )}
+                </Link>
               )}
             </div>
           )}

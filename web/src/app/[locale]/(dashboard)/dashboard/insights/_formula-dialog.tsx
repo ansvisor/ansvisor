@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Sigma } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { VISIBILITY_SCORE_WEIGHTS } from '@/lib/visibility-score';
+import { POSITION_SUPPORT_ANSWERS, VISIBILITY_SCORE_WEIGHTS } from '@/lib/visibility-score';
 
 const PCT = {
   mention: Math.round(VISIBILITY_SCORE_WEIGHTS.mention * 100),
@@ -61,7 +61,10 @@ export function FormulaDialog() {
               <Formula>
                 Visibility = 100 × ({VISIBILITY_SCORE_WEIGHTS.mention} × mention rate +{' '}
                 {VISIBILITY_SCORE_WEIGHTS.citation} × citation rate +{' '}
-                {VISIBILITY_SCORE_WEIGHTS.position} × position factor)
+                {VISIBILITY_SCORE_WEIGHTS.position} × position factor × confidence)
+                <br />
+                confidence = answers mentioning you ÷ (answers mentioning you +{' '}
+                {POSITION_SUPPORT_ANSWERS})
               </Formula>
               <ul className="list-disc pl-5 space-y-1">
                 <li>
@@ -79,9 +82,9 @@ export function FormulaDialog() {
                     Position factor ({PCT.position}%)
                   </span>{' '}
                   — how early you&apos;re named in the answers that mention you: named first = 1,
-                  second = 0.5, third = 0.33, and so on, averaged. This term is weighted by how many
-                  answers actually mention the brand, so a perfect position in a handful of answers
-                  can&apos;t outrank brands that consistently show up.
+                  second = 0.5, third = 0.33, and so on, averaged. The confidence factor weights it
+                  by how many answers actually mention the brand, so a perfect position in a handful
+                  of answers can&apos;t outrank brands that consistently show up.
                 </li>
               </ul>
               <p>
@@ -110,14 +113,28 @@ export function FormulaDialog() {
               </p>
             </Section>
 
-            <Section title="Positive sentiment">
+            <Section title="Net sentiment">
               <p>
-                Share of brand-mentioning answers that describe you in a positive context. Sentiment
-                is shown alongside Visibility but is not part of the score.
+                Of the answers that name or cite you, the share that is positive minus the share
+                that is negative, in points. Sentiment is shown alongside Visibility but is not part
+                of the score.
               </p>
               <Formula>
-                Positive sentiment = positive answers ÷ answers mentioning you × 100
+                Net sentiment = positive answers % − negative answers % (of answers mentioning you)
               </Formula>
+            </Section>
+
+            <Section title="Avg. position">
+              <p>
+                Where you&apos;re named in the answers that mention you, averaged. Lower is better:
+                #1 means you&apos;re usually named first.
+              </p>
+              <Formula>Avg. position = sum of your positions ÷ answers that name you</Formula>
+            </Section>
+
+            <Section title="Citation rate">
+              <p>The share of AI answers that link to your website as a source.</p>
+              <Formula>Citation rate = answers citing your domain ÷ all answers × 100</Formula>
             </Section>
 
             <Section title="Share of Voice">
@@ -130,9 +147,19 @@ export function FormulaDialog() {
 
             <Section title="Coverage">
               <p>
-                The &quot;appeared in X/Y prompts&quot; line under the Visibility card: the number
-                of tracked prompts where you showed up at least once in the selected period, against
-                all prompts that produced results.
+                The share of tracked prompts where you showed up (named or cited) at least once in
+                the selected period, against all prompts that produced results.
+              </p>
+              <Formula>Coverage = prompts you appeared in ÷ prompts answered × 100</Formula>
+            </Section>
+
+            <Section title="Changes and “Same prompts”">
+              <p>
+                Each card&apos;s change compares the selected period with the period of the same
+                length just before it. With &quot;Compare: Same prompts&quot; on, it compares only
+                the prompts answered in both periods, so adding prompts doesn&apos;t inflate it; the
+                numbers themselves still cover every prompt. With &quot;All time&quot; there is no
+                earlier period, so no change is shown.
               </p>
             </Section>
           </div>

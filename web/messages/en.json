@@ -717,7 +717,8 @@
           "task_status": "Task updated",
           "task_ran": "{task} — carried out automatically ({tool})",
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
-          "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor"
+          "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
+          "position_outcome_recorded": "{measurable, plural, =0 {30-day result: not enough data to compare positions} other {30-day result: position improved on {improved} of # platforms}}"
         },
         "taskText": "Task text",
         "renameTask": "Rename task",
@@ -756,6 +757,29 @@
             "not_cited": "Mentioned early · not cited",
             "doing_well": "Doing well",
             "no_runs": "No runs"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "summary": "{measurable, plural, =0 {Not enough data to compare yet} other {Position improved on {improved} of # platforms}}",
+            "updated": "Updated {date}",
+            "final": "Final result · {date}",
+            "platform": "Platform",
+            "before": "Before",
+            "after": "Last 7 days",
+            "afterFinal": "Day 30",
+            "reads": {
+              "not_mentioned": "Not mentioned",
+              "mentioned": "Mentioned",
+              "no_runs": "No runs"
+            },
+            "verdicts": {
+              "improved": "Improved",
+              "declined": "Declined",
+              "unchanged": "No meaningful change",
+              "not_enough_data": "Not enough data"
+            },
+            "note": "Before is the 7 days before this action was sent. The latest 7 days are re-read daily while the action is open and for 30 days after it's completed. A position counts as changed when it moves at least 0.5.",
+            "noteFinal": "The 7 days before this action was sent, next to the 7 days ending 30 days after it was completed. A position counts as changed when it moves at least 0.5."
           }
         }
       }
@@ -1434,6 +1458,7 @@
         "title": "No brand selected",
         "description": "Select a brand to view its action history."
       },
+      "positionResult": "{measurable, plural, =0 {Positions: not enough data} other {Position improved on {improved} of # platforms}}",
       "outcomeHint": {
         "pending_measurement": "no result recorded",
         "improved": "vs before",
@@ -1658,6 +1683,52 @@
       "brandCitations": "Brand Citations",
       "totalCitations": "Total Citations",
       "checkedAt": "Checked: {date}"
+    },
+    "compare": {
+      "label": "Compare",
+      "samePrompts": "Same prompts",
+      "hint": "Changes compare only prompts tracked in both periods",
+      "newExcluded": "{count, plural, one {# new prompt excluded} other {# new prompts excluded}}",
+      "newIncluded": "{count, plural, one {includes # new prompt} other {includes # new prompts}}"
+    },
+    "kpi": {
+      "sectionLabel": "Key metrics",
+      "noData": "No data",
+      "viewBreakdown": "{metric}: view breakdown",
+      "openPrompts": "Tracked prompts: open Prompts",
+      "openCitations": "Citations: open Citations",
+      "visibility": "Visibility",
+      "visibilityTip": "AI Visibility Score (0–100) from how often answers name you, cite your site and how early you're named. See Formulas.",
+      "rankOf": "#{rank} of {count} brands",
+      "appearedIn": "appeared in {visible} of {active} prompts",
+      "trackedPrompts": "Tracked prompts",
+      "trackedPromptsTip": "Prompts answered in this period. The bar is your plan's prompt locations, shared by all brands and counting only active prompts (paused ones don't count): {used} of {limit} used.",
+      "trackedPromptsTipUnlimited": "Prompts answered in this period. Your plan has no prompt location limit.",
+      "slotsLeft": "{count, plural, one {# slot left} other {# slots left}} · all brands",
+      "overLimit": "{count, plural, one {# location over your plan} other {# locations over your plan}} · all brands",
+      "unlimited": "{count, plural, one {# active location} other {# active locations}} · Unlimited",
+      "quotaLabel": "{used} of {limit} active prompt locations used",
+      "mentions": "Mentions",
+      "mentionsTip": "Times answers named your brand. With Same prompts, the change counts only prompts tracked in both periods.",
+      "citations": "Citations",
+      "citationsTip": "Times answers cited your pages. With Same prompts, the change counts only prompts tracked in both periods.",
+      "samePrompts": "{count, plural, one {same # prompt} other {same # prompts}}",
+      "allPrompts": "all prompts",
+      "netSentiment": "Net sentiment",
+      "netSentimentTip": "Positive minus negative share of the answers that name or cite your brand.",
+      "sentimentSplit": "{positive}% pos · {negative}% neg",
+      "coverage": "Coverage",
+      "coverageTip": "Share of answered prompts where you appear at least once.",
+      "coverageSub": "{visible} of {active} prompts",
+      "shareOfVoice": "Share of voice",
+      "shareOfVoiceTip": "Your mentions divided by mentions of all tracked brands.",
+      "shareOfVoiceSub": "of brand mentions",
+      "avgPosition": "Avg. position",
+      "avgPositionTip": "Average position when you're named. Lower is better.",
+      "avgPositionSub": "when mentioned",
+      "citationRate": "Citation rate",
+      "citationRateTip": "Share of answers that cite your domain.",
+      "citationRateSub": "of answers cite you"
     }
   },
   "topics": {
@@ -1781,6 +1852,7 @@
       "fromSignals": "from {count, plural, one {# signal} other {# signals}} analyzed"
     },
     "filters": {
+      "search": "Search opportunities",
       "allStatuses": "All Statuses",
       "allImpacts": "All Impacts",
       "allTypes": "All Types",
@@ -2068,6 +2140,13 @@
       "platformsAndModels": "Platform & Models",
       "selectPlatformsAndModels": "Select platform & models",
       "selectedCount": "{count} selected"
+    },
+    "bulkDelete": {
+      "progress": "Deleting {done} of {total} prompts…",
+      "failed": "{count, plural, one {Failed to delete the prompt.} other {Failed to delete the prompts.}}",
+      "stopped": "{deleted} of {total} prompts deleted",
+      "stoppedDescription": "Deleting stopped at an error. {kept, plural, one {The other prompt is} other {The other # prompts are}} back in the list, so you can try again.",
+      "notDeleted": "{kept} of {total} {total, plural, one {prompt} other {prompts}} couldn't be deleted."
     }
   },
   "competitors": {
