@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -17,6 +17,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { numberFormat } from '@/lib/number-format';
+import { LOW_SAMPLE_ANSWERS } from '@/lib/insights-summary';
+import { dayLabel } from './kpi-format';
 import { useUserRole } from '@/hooks/use-user-role';
 import { setPinnedCompetitors } from '@/lib/actions/brand';
 import type { VisibilityRateTrendData } from '@/lib/actions/tracking';
@@ -32,14 +35,6 @@ const VisibilityRateTrendChart = dynamic(
   () => import('./_charts').then((m) => m.VisibilityRateTrendChart),
   { ssr: false, loading: () => <Skeleton className="h-[320px] w-full" /> },
 );
-
-/** A 'YYYY-MM-DD' UTC day as "Sep 29". */
-const dayLabel = (day: string) =>
-  new Date(`${day}T00:00:00Z`).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
 
 /** Action numbers as the Action Center writes them: "AC-61", "AC-3, AC-4", "AC-3, AC-4, AC-5 +2". */
 const actionIds = (nos: number[]) =>
@@ -59,6 +54,7 @@ export function TrendCard({
   data,
   markers,
   rangeLabel,
+  answers,
   onPinnedChange,
   className,
 }: {
@@ -68,10 +64,14 @@ export function TrendCard({
   markers: TrendMarkerData | null;
   /** "last 30 days", "all time", … */
   rangeLabel: string;
+  /** The period's answers: under 20 the headline is a low sample (VIS-005). */
+  answers?: number;
   onPinnedChange: (pinned: string[]) => void;
   className?: string;
 }) {
   const t = useTranslations('insights.trend');
+  const locale = useLocale();
+  const f = numberFormat(locale);
   const { canManage } = useUserRole();
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -110,13 +110,16 @@ export function TrendCard({
 
   const describe = (m: TrendMarker) =>
     m.kind === 'prompts'
-      ? t('promptsAdded', { count: m.count, date: dayLabel(m.day) })
+      ? t('promptsAdded', { count: m.count, date: dayLabel(m.day, locale) })
       : t('actionsSent', {
           actions:
             m.actionNos.length > 3
-              ? t('moreActions', { actions: actionIds(m.actionNos), count: m.actionNos.length - 3 })
+              ? t('moreActions', {
+                  actions: actionIds(m.actionNos),
+                  count: f.number(m.actionNos.length - 3),
+                })
               : actionIds(m.actionNos),
-          date: dayLabel(m.day),
+          date: dayLabel(m.day, locale),
         });
   // Every marker is listed below the chart; only those with a point are drawn on it.
   const placed = markers
@@ -128,7 +131,7 @@ export function TrendCard({
     : [];
   const goal =
     markers?.goal != null
-      ? { value: markers.goal, label: t('goal', { value: markers.goal }) }
+      ? { value: markers.goal, label: t('goal', { value: f.number(markers.goal) }) }
       : null;
 
   return (
@@ -136,9 +139,12 @@ export function TrendCard({
       <CardHeader className="pb-2">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="text-3xl font-bold tabular-nums">{data.summary.rate}</div>
+            <div className="text-3xl font-bold tabular-nums">{f.number(data.summary.rate)}</div>
             <div className="text-xs text-muted-foreground">
               {t('subtitle', { range: rangeLabel })}
+              {answers !== undefined && answers < LOW_SAMPLE_ANSWERS && (
+                <> · {t('lowSample', { count: answers })}</>
+              )}
             </div>
           </div>
           <ul className="flex flex-wrap items-center gap-1.5">
