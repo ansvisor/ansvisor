@@ -1931,6 +1931,61 @@
       "lowSample": "Low sample · {count, plural, one {# run} other {# runs}}",
       "noRuns": "No runs this period",
       "biggestDrop": "biggest drop"
+    },
+    "leaderboard": {
+      "title": "Leaderboard",
+      "headToHead": "Head-to-Head",
+      "you": "You",
+      "coverageSov": "Coverage {coverage} · SoV {sov}",
+      "scoreDetail": "Mentioned in {mentions} answers · cited in {citations} · position factor {factor}",
+      "more": "{count} more",
+      "moreLabel": "Show {count, plural, one {# more brand} other {# more brands}}",
+      "showAll": "Show all {count}",
+      "showLess": "Show less",
+      "gapTo": "{gap} pts to #{rank}",
+      "tiedWith": "Level with #{rank}",
+      "lever": "lever: {platform}"
+    },
+    "whyChanged": {
+      "title": "Why it changed",
+      "fullBreakdown": "Full breakdown",
+      "gains": "Gains",
+      "drops": "Drops",
+      "kind": {
+        "platform": "Platform",
+        "topic": "Topic",
+        "prompt": "Prompt"
+      },
+      "uncategorized": "Uncategorized",
+      "deletedPrompt": "Deleted prompt",
+      "range": "{prev} → {cur}",
+      "open": "Open {name} in the breakdown",
+      "lowSample": "Too few answers compared to explain the change: {cur} this period, {prev} before.",
+      "steady": "Nothing moved the score by 0.1 pts or more.",
+      "newExcluded": "{count, plural, one {# new prompt} other {# new prompts}}{hasDate, select, yes { · {date}} other {}} · own baseline, not counted",
+      "newIncluded": "{count, plural, one {# new prompt} other {# new prompts}}{hasDate, select, yes { · {date}} other {}} · counted in the change"
+    },
+    "trend": {
+      "subtitle": "Visibility · {range}",
+      "range": {
+        "24h": "last 24 hours",
+        "7d": "last 7 days",
+        "30d": "last 30 days",
+        "90d": "last 90 days",
+        "all": "all time",
+        "custom": "{from} – {to}"
+      },
+      "noData": "No visibility data for this period yet",
+      "pin": "Pin",
+      "pinTitle": "Pin up to 5 competitors",
+      "pinMenu": "Competitors on the chart",
+      "pinLimit": "Up to 5 competitors",
+      "pinFailed": "Couldn't save the pinned competitors.",
+      "promptsAdded": "{count, plural, one {# prompt} other {# prompts}} added · {date}",
+      "actionsSent": "{actions} sent · {date}",
+      "moreActions": "{actions} +{count}",
+      "goal": "Goal {value}",
+      "goalLegend": "Action Center goal"
     }
   },
   "topics": {
