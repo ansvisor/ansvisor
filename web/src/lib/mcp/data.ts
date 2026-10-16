@@ -2028,7 +2028,8 @@ const PROMPT_VOLUMES_MAX_LIMIT = 500;
 /**
  * Return per-prompt search-volume + competition rows for a brand, scoped
  * `brand → prompt_sets → prompts → prompt_volumes`. Surfaces the demand
- * (`total_google_volume` / `est_ai_volume`) and competition meter
+ * (`total_google_volume`, the median of the keywords' volumes, and
+ * `est_ai_volume`) and competition meter
  * (`competition_index` / `competition`, see #44) so callers can answer
  * "which prompts have the most demand / the least competition?".
  *

@@ -115,7 +115,7 @@ export default function SimilarTopicsPage() {
             <div className="text-2xl font-semibold tabular-nums">
               {formatCompactNumber(totals.googleVolume)}
             </div>
-            <p className="text-xs text-muted-foreground">monthly searches</p>
+            <p className="text-xs text-muted-foreground">monthly searches, across prompts</p>
           </CardContent>
         </Card>
         <Card>
@@ -126,7 +126,7 @@ export default function SimilarTopicsPage() {
             <div className="text-2xl font-semibold tabular-nums">
               {formatCompactNumber(totals.aiVolume)}
             </div>
-            <p className="text-xs text-muted-foreground">monthly AI queries</p>
+            <p className="text-xs text-muted-foreground">monthly AI queries, across prompts</p>
           </CardContent>
         </Card>
       </div>
