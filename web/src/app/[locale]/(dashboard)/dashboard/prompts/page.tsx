@@ -84,10 +84,11 @@ import {
   Lightbulb,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type {
-  PlatformDot,
-  PlatformDotState,
-  PromptPositionCell,
+import {
+  positionCellKind,
+  type PlatformDot,
+  type PlatformDotState,
+  type PromptPositionCell,
 } from '@/lib/prompt-position-summary';
 import { mentionRateLabel } from '@/lib/prompt-improve';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -2392,9 +2393,29 @@ export default function PromptsPage() {
 
 /**
  * Average position with its trend against the previous period; hovering it
- * lists each platform, which is what the "Late or missing" filter reads.
+ * lists each platform, which is what the "Late or missing" filter reads. A
+ * prompt that was tracked but never named reads "Not mentioned", not the "—"
+ * of a prompt with no answers.
  */
-function PositionValue({ cell }: { cell: PromptPositionCell | undefined }) {
+function PositionValue({
+  cell,
+  vis,
+}: {
+  cell: PromptPositionCell | undefined;
+  vis: PromptVisibilitySummary | undefined;
+}) {
+  const t = useTranslations('prompts.positions');
+  const kind = positionCellKind(cell, vis);
+  if (kind === 'notMentioned') {
+    return (
+      <span
+        className="text-xs text-muted-foreground"
+        title={t('notMentionedTitle', { count: vis?.runs ?? 0 })}
+      >
+        {t('notMentioned')}
+      </span>
+    );
+  }
   if (!cell || cell.avg === null) {
     return <span className="text-xs text-muted-foreground">—</span>;
   }
@@ -3486,10 +3507,11 @@ function AllPromptsTab({
                     {/* Fixed widths so the value, dots and See line up on every row. */}
                     <div className="inline-flex items-center gap-2">
                       <div className="w-[5.5rem] whitespace-nowrap">
-                        <PositionValue cell={positions[p.id]} />
+                        <PositionValue cell={positions[p.id]} vis={vis} />
                       </div>
                       <div className="w-6">
-                        {vis && (vis.mentionAnswers > 0 || vis.citationAnswers > 0) && (
+                        {/* Whenever it has answers: a prompt never named is the one to open. */}
+                        {vis && vis.runs > 0 && (
                           <Button
                             type="button"
                             size="icon-xs"

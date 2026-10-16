@@ -8,6 +8,7 @@
 import { describe, expect, test } from 'vitest';
 import {
   buildPositionCell,
+  positionCellKind,
   previousWindow,
   type PlatformPositionRow,
 } from './prompt-position-summary';
@@ -157,5 +158,22 @@ describe('previousWindow', () => {
       from: '2026-09-29T00:00:00.000Z',
       to: '2026-10-06T00:00:00.000Z',
     });
+  });
+});
+
+describe('positionCellKind', () => {
+  test('shows the average once there is one', () => {
+    expect(positionCellKind({ avg: 2.5 }, { runs: 4, mentionAnswers: 3 })).toBe('average');
+  });
+
+  test('says "Not mentioned" for a prompt tracked in the window but never named', () => {
+    expect(positionCellKind({ avg: null }, { runs: 3, mentionAnswers: 0 })).toBe('notMentioned');
+    expect(positionCellKind(undefined, { runs: 1, mentionAnswers: 0 })).toBe('notMentioned');
+  });
+
+  test('keeps "—" without answers, or with mentions whose positions are not stored', () => {
+    expect(positionCellKind(undefined, undefined)).toBe('none');
+    expect(positionCellKind({ avg: null }, { runs: 0, mentionAnswers: 0 })).toBe('none');
+    expect(positionCellKind({ avg: null }, { runs: 4, mentionAnswers: 2 })).toBe('none');
   });
 });

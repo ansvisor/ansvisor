@@ -2186,7 +2186,9 @@
       "answers": "{count, plural, one {# answer} other {# answers}}",
       "answersInPeriod": "{count, plural, one {# answer} other {# answers}} in this period",
       "mentionedIn": "In {mentioned} of {answers, plural, one {# answer} other {# answers}} · {mentions, plural, one {# mention} other {# mentions}}",
-      "citedIn": "In {cited} of {answers, plural, one {# answer} other {# answers}} · {citations, plural, one {# citation} other {# citations}}"
+      "citedIn": "In {cited} of {answers, plural, one {# answer} other {# answers}} · {citations, plural, one {# citation} other {# citations}}",
+      "notMentioned": "Not mentioned",
+      "notMentionedTitle": "Not mentioned in any of {count, plural, one {# answer} other {# answers}} in this period"
     },
     "title": "Prompt Volumes",
     "description": "Discover query volumes and trends across AI platforms.",

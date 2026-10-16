@@ -110,6 +110,20 @@ export function buildPositionCell(
   };
 }
 
+/**
+ * What the Prompts table's Positions cell shows: the average, "Not mentioned"
+ * for a prompt that was tracked in the window but never named, or "—" for one
+ * with no answers (or answers whose positions aren't stored).
+ */
+export function positionCellKind(
+  cell: Pick<PromptPositionCell, 'avg'> | undefined,
+  answers: { runs: number; mentionAnswers: number } | undefined,
+): 'average' | 'notMentioned' | 'none' {
+  if (cell && cell.avg !== null) return 'average';
+  if (answers && answers.runs > 0 && answers.mentionAnswers === 0) return 'notMentioned';
+  return 'none';
+}
+
 /** The previous period of the same length, ending where this one starts. */
 export function previousWindow(window: { from: string; to?: string }, now = Date.now()) {
   const from = Date.parse(window.from);
