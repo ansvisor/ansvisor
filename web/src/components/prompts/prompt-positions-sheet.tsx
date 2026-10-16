@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   AlertTriangle,
   CalendarDays,
@@ -52,6 +53,7 @@ import type {
   PlatformDay,
   PlatformPositions,
   PositionStats,
+  PositionsSummary,
 } from '@/lib/prompt-positions';
 import type { Sentiment } from '@/types';
 import { actionCenterLink } from '@/lib/prompt-improve';
@@ -357,14 +359,44 @@ function LoadError({ message, onRetry }: { message: string; onRetry: () => void 
 
 // ─── Shared pieces ────────────────────────────────────────────────────────────
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Stat({
+  label,
+  value,
+  sub,
+  detail,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  /** The answer-level count beside the card's days or platforms (the table's numbers). */
+  detail?: string;
+}) {
   return (
     <div className="rounded-lg border p-3">
       <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
       <p className="mt-1 text-lg font-semibold leading-tight tabular-nums">{value}</p>
       {sub && <p className="mt-0.5 text-[11px] text-muted-foreground">{sub}</p>}
+      {detail && <p className="mt-0.5 text-[11px] text-muted-foreground">{detail}</p>}
     </div>
   );
+}
+
+/**
+ * The answers behind a card, as the Prompts table counts them: its Runs,
+ * Mentions and Citations columns sum answers, not days or platforms.
+ */
+function useAnswerDetails(s: PositionsSummary) {
+  const t = useTranslations('prompts.positions');
+  return {
+    mentioned: t('mentionedIn', {
+      mentioned: s.mentionedAnswers,
+      answers: s.answers,
+      mentions: s.mentions,
+    }),
+    cited: t('citedIn', { cited: s.citedAnswers, answers: s.answers, citations: s.citations }),
+    answers: t('answers', { count: s.answers }),
+    answersInPeriod: t('answersInPeriod', { count: s.answers }),
+  };
 }
 
 function PlatformName({ platform }: { platform: { id: string; label: string } }) {
@@ -523,6 +555,7 @@ function LatestView({
     latestPositions.length > 0
       ? `#${Math.round((latestPositions.reduce((a, b) => a + b, 0) / latestPositions.length) * 10) / 10}`
       : '—';
+  const details = useAnswerDetails(data.summary);
 
   return (
     <div className="space-y-4">
@@ -531,9 +564,20 @@ function LatestView({
           label="Platforms answered"
           value={`${answered.length} / ${included.length}`}
           sub="in their latest run"
+          detail={details.answersInPeriod}
         />
-        <Stat label="Mentioned on" value={`${mentioned} / ${answered.length}`} sub="platforms" />
-        <Stat label="Cited on" value={`${cited} / ${answered.length}`} sub="platforms" />
+        <Stat
+          label="Mentioned on"
+          value={`${mentioned} / ${answered.length}`}
+          sub="platforms"
+          detail={details.mentioned}
+        />
+        <Stat
+          label="Cited on"
+          value={`${cited} / ${answered.length}`}
+          sub="platforms"
+          detail={details.cited}
+        />
         <Stat label="Avg. position" value={avg} sub="when mentioned" />
       </div>
 
@@ -618,6 +662,7 @@ function PeriodView({
   initialTab: 'platforms' | 'improve';
 }) {
   const s = data.summary;
+  const details = useAnswerDetails(s);
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -625,16 +670,19 @@ function PeriodView({
           label="Runs"
           value={String(s.runs)}
           sub={`${s.trackedDays} of ${plural(s.days.length, 'day')} tracked`}
+          detail={details.answers}
         />
         <Stat
           label="Mentioned"
           value={`${s.mentionedDays} / ${plural(s.trackedDays, 'day')}`}
           sub={`${s.trackedDays - s.mentionedDays} not mentioned`}
+          detail={details.mentioned}
         />
         <Stat
           label="Cited"
           value={`${s.citedDays} / ${plural(s.trackedDays, 'day')}`}
           sub={`${s.trackedDays - s.citedDays} not cited`}
+          detail={details.cited}
         />
         <Stat
           label="Avg. position"

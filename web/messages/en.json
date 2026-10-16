@@ -2182,6 +2182,12 @@
     "exportError": "Failed to export CSV"
   },
   "prompts": {
+    "positions": {
+      "answers": "{count, plural, one {# answer} other {# answers}}",
+      "answersInPeriod": "{count, plural, one {# answer} other {# answers}} in this period",
+      "mentionedIn": "In {mentioned} of {answers, plural, one {# answer} other {# answers}} · {mentions, plural, one {# mention} other {# mentions}}",
+      "citedIn": "In {cited} of {answers, plural, one {# answer} other {# answers}} · {citations, plural, one {# citation} other {# citations}}"
+    },
     "title": "Prompt Volumes",
     "description": "Discover query volumes and trends across AI platforms.",
     "totalVolume": "Total Volume",
