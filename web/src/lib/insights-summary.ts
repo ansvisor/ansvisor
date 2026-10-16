@@ -270,10 +270,25 @@ export interface PlatformTableRow {
  * window read "No runs this period", never 0%. Sorted by Visibility, then the
  * low-sample ones, then the ones without runs.
  */
+/** A platform's share of voice; null when no brand at all was named there (0 of 0 isn't 0%). */
+function shareOf(
+  p: { sov: number; brandMentions?: number; competitorMentions?: number } | undefined,
+): number | null {
+  if (!p) return null;
+  const named = (p.brandMentions ?? 0) + (p.competitorMentions ?? 0);
+  return p.brandMentions === undefined || named > 0 ? p.sov : null;
+}
+
 export function platformTable(
   rows: PlatformRow[],
   changes: PlatformChange[],
-  shareOfVoice: { provider: string; sov: number }[],
+  /** With the mention counts behind each share, when known: no mentions at all is no share (VIS-005). */
+  shareOfVoice: {
+    provider: string;
+    sov: number;
+    brandMentions?: number;
+    competitorMentions?: number;
+  }[],
   platformOf: (modelUsed: string | null, platform: string | null) => string,
 ): PlatformTableRow[] {
   const cur = new Map<
@@ -319,7 +334,7 @@ export function platformTable(
       visibility: ok ? score(s) : null,
       change: ok ? (changes.find((c) => c.name === name)?.change ?? null) : null,
       coverage: ok ? coverage(s.visible.size, s.active.size) : null,
-      shareOfVoice: ok ? (shareOfVoice.find((p) => p.provider === name)?.sov ?? null) : null,
+      shareOfVoice: ok ? shareOf(shareOfVoice.find((p) => p.provider === name)) : null,
       avgPosition: ok && s.positions > 0 ? round1(s.sumPosition / s.positions) : null,
       worst: false,
     };

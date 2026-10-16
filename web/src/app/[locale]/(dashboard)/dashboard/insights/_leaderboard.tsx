@@ -1,14 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { ArrowRight, ArrowUp } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { CompetitorComparisonEntry, ProviderComparisonRow } from '@/lib/actions/tracking';
 import { coverage } from '@/lib/insights-kpis';
+import { numberFormat } from '@/lib/number-format';
 import {
+  LOW_SAMPLE_ANSWERS,
   leaderboardCallout,
   leaderboardLines,
   mentionShares,
@@ -27,6 +29,7 @@ export function Leaderboard({
   brands,
   providerRows,
   platforms,
+  answers,
   className,
 }: {
   /** Brands in rank order, yours included. */
@@ -34,9 +37,17 @@ export function Leaderboard({
   providerRows: ProviderComparisonRow[];
   /** The By AI platform rows: only a platform with enough answers can be the lever. */
   platforms: PlatformTableRow[] | null;
+  /**
+   * Your answers in the period, every score's denominator: under 20 the
+   * board is a low sample (VIS-005), and no change is read into it.
+   */
+  answers?: number;
   className?: string;
 }) {
   const t = useTranslations('insights.leaderboard');
+  const locale = useLocale();
+  const f = numberFormat(locale);
+  const lowSample = answers !== undefined && answers < LOW_SAMPLE_ANSWERS;
   // Expanded for this board only: another brand or range starts collapsed.
   const [expandedFor, setExpandedFor] = useState<CompetitorComparisonEntry[] | null>(null);
   const expanded = expandedFor === brands;
@@ -52,7 +63,7 @@ export function Leaderboard({
   const callout = leaderboardCallout(brands, providerRows, (name) =>
     (platforms ?? []).some((p) => p.name === name && p.status === 'ok'),
   );
-  const percent = (value: number | null) => (value === null ? '—' : `${value}%`);
+  const percent = (value: number | null) => (value === null ? '—' : f.percent(value));
 
   return (
     <Card className={className}>
@@ -67,6 +78,9 @@ export function Leaderboard({
             <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
+        {lowSample && (
+          <p className="text-xs text-muted-foreground">{t('lowSample', { count: answers! })}</p>
+        )}
       </CardHeader>
       <CardContent>
         <ul className="flex flex-col gap-1.5">
@@ -80,14 +94,14 @@ export function Leaderboard({
                     aria-label={t('moreLabel', { count: line.count })}
                     className="w-full py-0.5 text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
                   >
-                    {t('more', { count: line.count })}
+                    {t('more', { count: f.number(line.count) })}
                   </button>
                 </li>
               );
             }
 
             const entry = brands[line.index];
-            const change = arrowChange(entry.scoreChange);
+            const change = lowSample ? null : arrowChange(entry.scoreChange, locale);
             return (
               <li key={`${line.index}-${entry.competitorId ?? entry.name}`}>
                 <div
@@ -97,7 +111,7 @@ export function Leaderboard({
                   )}
                 >
                   <span className="w-5 shrink-0 text-center text-xs font-semibold tabular-nums text-muted-foreground">
-                    {line.index + 1}
+                    {f.number(line.index + 1)}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5">
@@ -128,13 +142,13 @@ export function Leaderboard({
                     <span
                       className="block text-sm font-semibold tabular-nums"
                       title={t('scoreDetail', {
-                        mentions: entry.mentionAnswers,
-                        citations: entry.citationAnswers,
+                        mentions: f.number(entry.mentionAnswers),
+                        citations: f.number(entry.citationAnswers),
                         factor:
-                          entry.positionFactor === null ? '—' : entry.positionFactor.toFixed(2),
+                          entry.positionFactor === null ? '—' : f.number(entry.positionFactor, 2),
                       })}
                     >
-                      {entry.score ?? '—'}
+                      {entry.score === null ? '—' : f.number(entry.score)}
                     </span>
                     {change && (
                       <span
@@ -153,8 +167,8 @@ export function Leaderboard({
                     <ArrowUp className="h-3 w-3 shrink-0" aria-hidden />
                     <span>
                       {callout.gap === 0
-                        ? t('tiedWith', { rank: callout.rank })
-                        : t('gapTo', { gap: callout.gap, rank: callout.rank })}
+                        ? t('tiedWith', { rank: f.number(callout.rank) })
+                        : t('gapTo', { gap: f.number(callout.gap), rank: f.number(callout.rank) })}
                       {callout.lever && ` · ${t('lever', { platform: callout.lever })}`}
                     </span>
                   </p>
@@ -169,7 +183,7 @@ export function Leaderboard({
             onClick={() => setExpandedFor(expanded ? null : brands)}
             className="mt-1.5 w-full py-1 text-center text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
-            {expanded ? t('showLess') : t('showAll', { count: brands.length })}
+            {expanded ? t('showLess') : t('showAll', { count: f.number(brands.length) })}
           </button>
         )}
       </CardContent>

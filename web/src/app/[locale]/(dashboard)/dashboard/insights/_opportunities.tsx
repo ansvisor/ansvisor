@@ -1,13 +1,13 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { ArrowRight, Loader2, MessageCircle, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link, useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatCompactNumber } from '@/lib/format';
+import { numberFormat } from '@/lib/number-format';
 import { trackSuggestions } from '@/lib/actions/prompt-suggestions';
 import { sendTopicOpportunityToActionCenter } from '@/lib/actions/topic';
 import { generateOpportunitiesOnDemand, getGenerationJobStatus } from '@/lib/actions/content';
@@ -63,6 +63,7 @@ export function Opportunities({
 }) {
   const t = useTranslations('insights.opportunities');
   const format = useFormatter();
+  const f = numberFormat(useLocale());
   const router = useRouter();
   const [trackedIds, setTrackedIds] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
@@ -242,14 +243,14 @@ export function Opportunities({
   };
 
   const meta = (item: Opportunity): string => {
-    const volume = t('volume', { volume: formatCompactNumber(item.volume) });
-    if (item.kind === 'prompt') return [volume, t('notTracked')].join(' · ');
+    const volume = item.volume === null ? null : t('volume', { volume: f.compact(item.volume) });
+    if (item.kind === 'prompt') return [volume, t('notTracked')].filter(Boolean).join(' · ');
     const s = item.standing;
     const standing =
       s.kind === 'competitor'
         ? s.name
           ? t('competitorLeads', { name: s.name })
-          : t('leaderScore', { score: s.score.toFixed(1) })
+          : t('leaderScore', { score: f.number(s.score, 1) })
         : s.kind === 'you'
           ? t('youLead')
           : s.kind === 'notTracked'
