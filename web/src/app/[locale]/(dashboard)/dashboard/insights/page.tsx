@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, useId } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useSearchParams } from 'next/navigation';
-import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -53,13 +52,13 @@ import {
   exportPromptResults,
   type InsightsSummary,
   type TrackedPromptsKpi,
-  type VisibilityRateKpi,
   type CompetitorComparisonData,
   type ShareOfVoiceData,
   type InsightsRecommendations,
   type TrackingJobStatus,
   type BreakdownFilters,
   type BreakdownMetric,
+  type CoverageKpi,
 } from '@/lib/actions/tracking';
 import { getTopics } from '@/lib/actions/topic';
 import { MODEL_PROVIDER_LABELS, PLATFORM_LABELS } from '@/config/platform-labels';
@@ -78,24 +77,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   BarChart3,
   CalendarX2,
-  Eye,
-  HelpCircle,
   Play,
   TrendingUp,
   TrendingDown,
-  Quote,
-  Zap,
-  AlertCircle,
   Loader2,
   FlaskConical,
   PieChart,
   Users,
   StopCircle,
   ArrowRight,
-  ArrowUpRight,
   Download,
   FileText,
-  Layers,
   Lightbulb,
   Sparkles,
   Tag,
@@ -113,6 +105,9 @@ import { usePlanContext } from '@/components/providers/plan-provider';
 import { formatCompactNumber } from '@/lib/format';
 import { toast } from 'sonner';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
+import type { PromptComparison } from '@/lib/insights-same-prompts';
+import type { KpiSeriesDay } from '@/lib/insights-kpis';
+import { KpiRows } from './_kpi-cards';
 
 // ─── Filter Types ─────────────────────────────────────────────────────────────
 
@@ -127,6 +122,8 @@ interface InsightsFilters {
   region: string;
   model: string;
   topic: string;
+  /** "Compare: Same prompts" (VIS-002): changes compare only prompts answered in both periods. */
+  samePrompts: boolean;
 }
 
 const DEFAULT_FILTERS: InsightsFilters = {
@@ -136,12 +133,14 @@ const DEFAULT_FILTERS: InsightsFilters = {
   region: '',
   model: '',
   topic: '',
+  samePrompts: true,
 };
 
 /**
  * The filters as kept in the URL (#917): ?range=, plus ?from=/&to= for a
- * custom range, and ?region=, ?model=, ?topic=. Defaults are left out, and an
- * unknown range falls back to the default.
+ * custom range, ?region=, ?model=, ?topic=, and ?compare=all when "Same
+ * prompts" is off. Defaults are left out, and an unknown range falls back to
+ * the default.
  */
 function filtersFromUrl(): InsightsFilters {
   const datePreset = readUrlChoice<DatePreset>(
@@ -156,6 +155,7 @@ function filtersFromUrl(): InsightsFilters {
     region: readUrlParam('region'),
     model: readUrlParam('model'),
     topic: readUrlParam('topic'),
+    samePrompts: readUrlParam('compare') !== 'all',
   };
 }
 
@@ -169,6 +169,7 @@ function writeFiltersToUrl(f: InsightsFilters) {
       region: f.region,
       model: f.model,
       topic: f.topic,
+      compare: f.samePrompts ? null : 'all',
     },
     { range: DEFAULT_FILTERS.datePreset },
   );
@@ -243,56 +244,6 @@ function formatWindowBound(value: string): string {
   });
 }
 
-// ─── Info Tooltip ─────────────────────────────────────────────────────────────
-
-function InfoTip({ content }: { content: string }) {
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
-  const ref = useRef<HTMLSpanElement>(null);
-  const tooltipId = useId();
-
-  function show() {
-    const r = ref.current?.getBoundingClientRect();
-    if (r) setPos({ x: r.left + r.width / 2, y: r.bottom + 6 });
-  }
-
-  function hide() {
-    setPos(null);
-  }
-
-  return (
-    <>
-      <span
-        ref={ref}
-        tabIndex={0}
-        aria-label="More information"
-        aria-describedby={pos ? tooltipId : undefined}
-        onMouseEnter={show}
-        onMouseLeave={hide}
-        onFocus={show}
-        onBlur={hide}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') hide();
-        }}
-        className="inline-flex items-center cursor-help rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <HelpCircle className="h-3 w-3 text-muted-foreground/60 hover:text-muted-foreground transition-colors" />
-      </span>
-      {pos &&
-        createPortal(
-          <div
-            id={tooltipId}
-            role="tooltip"
-            style={{ left: pos.x, top: pos.y, transform: 'translateX(-50%)' }}
-            className="pointer-events-none fixed z-[9999] w-56 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md"
-          >
-            {content}
-          </div>,
-          document.body,
-        )}
-    </>
-  );
-}
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 // ─── Delta Badge ──────────────────────────────────────────────────────────────
@@ -313,111 +264,6 @@ function DeltaBadge({ delta, suffix = '%' }: { delta: number | null; suffix?: st
       {delta}
       {suffix}
     </span>
-  );
-}
-
-function CountDeltaBadge({
-  current,
-  previous,
-  delta,
-}: {
-  current: number;
-  previous: number | null;
-  delta: number | null;
-}) {
-  if (previous === 0 && current > 0) {
-    return (
-      <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-        +{current.toLocaleString()} new
-      </span>
-    );
-  }
-  return <DeltaBadge delta={delta} />;
-}
-
-// ─── KPI Card ─────────────────────────────────────────────────────────────────
-
-function KpiCard({
-  title,
-  tooltip,
-  icon: Icon,
-  value,
-  sub,
-  subVariant = 'muted',
-  onClick,
-}: {
-  title: string;
-  tooltip: string;
-  icon: React.ElementType;
-  value: React.ReactNode;
-  sub: React.ReactNode;
-  subVariant?: 'muted' | 'positive';
-  onClick?: () => void;
-}) {
-  const clickable = typeof onClick === 'function';
-  return (
-    <Card
-      onClick={clickable ? onClick : undefined}
-      role={clickable ? 'button' : undefined}
-      tabIndex={clickable ? 0 : undefined}
-      aria-label={clickable ? `${title} — view breakdown` : undefined}
-      title={clickable ? 'Click to see breakdown' : undefined}
-      onKeyDown={
-        clickable
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onClick?.();
-              }
-            }
-          : undefined
-      }
-      className={cn(
-        'group relative',
-        clickable &&
-          'cursor-pointer transition-all duration-150 hover:border-foreground/30 hover:shadow-md hover:-translate-y-0.5 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-      )}
-    >
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
-        <CardTitle className="flex items-center gap-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          {title}
-          <InfoTip content={tooltip} />
-        </CardTitle>
-        <div className="relative flex h-4 w-4 items-center justify-center">
-          <Icon
-            className={cn(
-              'h-3.5 w-3.5 text-muted-foreground transition-opacity',
-              clickable && 'group-hover:opacity-0',
-            )}
-          />
-          {clickable && (
-            <ArrowUpRight
-              className="absolute h-4 w-4 text-foreground opacity-0 transition-opacity group-hover:opacity-100"
-              aria-hidden
-            />
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-3xl font-bold">{value}</div>
-        <p
-          className={cn(
-            'text-xs mt-1 flex items-center gap-0.5',
-            subVariant === 'positive'
-              ? 'text-green-600 dark:text-green-400'
-              : 'text-muted-foreground',
-          )}
-        >
-          {sub}
-        </p>
-        {clickable && (
-          <p className="mt-2 flex items-center gap-1 text-[10px] font-medium text-muted-foreground/70 opacity-0 transition-opacity group-hover:opacity-100">
-            View breakdown
-            <ArrowUpRight className="h-2.5 w-2.5" />
-          </p>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 
@@ -542,6 +388,7 @@ function FilterBar({
   availableTopics: Topic[];
 }) {
   const t = useTranslations('common');
+  const tInsights = useTranslations('insights');
   const set = (patch: Partial<InsightsFilters>) => onChange({ ...filters, ...patch });
 
   return (
@@ -651,6 +498,35 @@ function FilterBar({
             })}
           </SelectContent>
         </Select>
+      </div>
+      {/* Compare: Same prompts (VIS-002) */}
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+          {tInsights('compare.label')}
+        </label>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={filters.samePrompts}
+          title={tInsights('compare.hint')}
+          onClick={() => set({ samePrompts: !filters.samePrompts })}
+          className="inline-flex h-8 items-center gap-2 rounded-md border bg-background px-2.5 text-xs transition-colors hover:bg-muted/50"
+        >
+          <span
+            className={cn(
+              'relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors',
+              filters.samePrompts ? 'bg-primary' : 'bg-muted-foreground/30',
+            )}
+          >
+            <span
+              className={cn(
+                'block h-3 w-3 rounded-full bg-background shadow transition-transform',
+                filters.samePrompts ? 'translate-x-3.5' : 'translate-x-0.5',
+              )}
+            />
+          </span>
+          {tInsights('compare.samePrompts')}
+        </button>
       </div>
     </div>
   );
@@ -1019,7 +895,6 @@ export default function InsightsPage() {
   const brand = useBrandStore((s) => s.getActiveBrand());
   const [summary, setSummary] = useState<InsightsSummary | null>(null);
   const [trackedPrompts, setTrackedPrompts] = useState<TrackedPromptsKpi | null>(null);
-  const [visibilityRate, setVisibilityRate] = useState<VisibilityRateKpi | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
@@ -1034,6 +909,9 @@ export default function InsightsPage() {
   const [rateTrend, setRateTrend] = useState<VisibilityRateTrendData | null>(null);
   const [sovData, setSovData] = useState<ShareOfVoiceData | null>(null);
   const [recommendations, setRecommendations] = useState<InsightsRecommendations | null>(null);
+  const [comparison, setComparison] = useState<PromptComparison | null>(null);
+  const [coverage, setCoverage] = useState<CoverageKpi | null>(null);
+  const [kpiSeries, setKpiSeries] = useState<KpiSeriesDay[] | null>(null);
   const [breakdownMetric, setBreakdownMetric] = useState<BreakdownMetric | null>(null);
   // The window and filters the cards were last loaded with (the 24h view
   // anchored to its tracking run): the breakdown panel explains those exact
@@ -1083,6 +961,7 @@ export default function InsightsPage() {
           // rollups (00066). Absent for 24h, whose anchored window above is
           // timestamp-shaped and stays on the raw path.
           days,
+          samePrompts: f.samePrompts,
         };
 
         const hasFilters = Boolean(f.datePreset !== 'all' || f.model || f.region || f.topic);
@@ -1115,10 +994,12 @@ export default function InsightsPage() {
         setRateTrend(trend && trend.points.length > 0 ? trend : null);
         setSummary(insights.summary);
         setTrackedPrompts(insights.trackedPrompts);
-        setVisibilityRate(insights.visibilityRate);
         setCompetitorData(insights.competitors.brands.length > 1 ? insights.competitors : null);
         setSovData(insights.sov.byPlatform.length > 0 ? insights.sov : null);
         setRecommendations(insights.recommendations);
+        setComparison(insights.comparison);
+        setCoverage(insights.coverage);
+        setKpiSeries(insights.kpiSeries);
         setHasAnyData(insights.hasAnyData);
 
         // Group raw model slugs by their resolved display name so different
@@ -1432,16 +1313,6 @@ export default function InsightsPage() {
   // content stays visible under the overlay instead of flashing a skeleton.
   const isRefetching = isLoading && summary !== null;
 
-  // Visibility Rate now IS the AI Visibility Score (0-100): 0.6×mention
-  // rate + 0.25×citation rate + 0.15×position factor over the filtered
-  // answers. Sourced from the trend action so this card, the trend card
-  // header and the leaderboard all read the exact same number. Coverage
-  // (appeared in X of Y prompts) survives as the sub-line.
-  const headlineScore = rateTrend?.summary.rate ?? 0;
-  const coveragePct =
-    visibilityRate && trackedPrompts && trackedPrompts.activeInPeriod > 0
-      ? Math.round((visibilityRate.visiblePrompts / trackedPrompts.activeInPeriod) * 1000) / 10
-      : 0;
   const trulyEmpty = noResults && !hasAnyData;
 
   // The localStorage-tracked job banner (with progress + Stop) wins when this
@@ -1575,108 +1446,19 @@ export default function InsightsPage() {
             <NoDataForPeriod datePreset={filters.datePreset} onReset={handleResetFilters} />
           ) : (
             <>
-              {/* KPI Cards — Visibility Rate leads the row: the raw all-results
-              score average reads near zero for most brands (absent answers
-              each contribute 0) and buried the number users act on. The old
-              average survives in the breakdown sheet; Share of Voice has its
-              own chart section below. */}
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
-                <KpiCard
-                  title="Visibility"
-                  tooltip="AI Visibility Score (0-100): how often AI answers mention you (60%), cite your site (25%) and how early you're named (15%), under the current filters."
-                  icon={Eye}
-                  value={headlineScore}
-                  sub={
-                    visibilityRate && trackedPrompts ? (
-                      <span className="tabular-nums">
-                        appeared in {visibilityRate.visiblePrompts}/{trackedPrompts.activeInPeriod}{' '}
-                        prompts ({coveragePct}%)
-                      </span>
-                    ) : null
-                  }
-                  onClick={() => setBreakdownMetric('visibility')}
-                />
-                <KpiCard
-                  title="Tracked Prompts"
-                  tooltip="Distinct prompts that produced tracked results in the selected period and filters. The quota below is current usage across your organization, counting one per location each active prompt targets (paused prompts don't count) — it does not change with the date range."
-                  icon={Layers}
-                  value={trackedPrompts?.activeInPeriod ?? 0}
-                  sub={
-                    trackedPrompts && trackedPrompts.quotaLimit !== -1 ? (
-                      <>
-                        <span className="tabular-nums">
-                          {trackedPrompts.quotaUsed} / {trackedPrompts.quotaLimit} active locations
-                        </span>
-                        {trackedPrompts.quotaUsed >= trackedPrompts.quotaLimit * 0.9 && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              router.push('/dashboard/settings');
-                            }}
-                            className="ml-1 underline underline-offset-2 hover:text-foreground"
-                          >
-                            Upgrade
-                          </button>
-                        )}
-                      </>
-                    ) : (
-                      `${trackedPrompts?.quotaUsed ?? 0} active prompt locations`
-                    )
-                  }
-                  onClick={() => router.push('/dashboard/prompts')}
-                />
-                <KpiCard
-                  title={t('mentions')}
-                  tooltip="How many times your brand was referenced by name in AI-generated responses."
-                  icon={Zap}
-                  value={summary!.totalMentions.toLocaleString()}
-                  sub={
-                    <CountDeltaBadge
-                      current={summary!.totalMentions}
-                      previous={summary!.prevMentions}
-                      delta={summary!.mentionsChange}
-                    />
-                  }
-                  subVariant={
-                    summary!.mentionsChange !== null && summary!.mentionsChange > 0
-                      ? 'positive'
-                      : 'muted'
-                  }
-                  onClick={() => setBreakdownMetric('mentions')}
-                />
-                <KpiCard
-                  title={t('citations')}
-                  tooltip="Times your brand's domain was cited as a source with a direct link in AI responses."
-                  icon={Quote}
-                  value={summary!.totalCitations.toLocaleString()}
-                  sub={
-                    <CountDeltaBadge
-                      current={summary!.totalCitations}
-                      previous={summary!.prevCitations}
-                      delta={summary!.citationsChange}
-                    />
-                  }
-                  subVariant={
-                    summary!.citationsChange !== null && summary!.citationsChange > 0
-                      ? 'positive'
-                      : 'muted'
-                  }
-                  onClick={() => router.push('/dashboard/citations')}
-                />
-                <KpiCard
-                  title={t('positiveSentiment')}
-                  tooltip="Percentage of answers that mention your brand and describe it in a positive context."
-                  icon={AlertCircle}
-                  value={`${summary!.positiveSentimentPct}%`}
-                  sub={<DeltaBadge delta={summary!.sentimentChange} suffix=" pts" />}
-                  subVariant={
-                    summary!.sentimentChange !== null && summary!.sentimentChange > 0
-                      ? 'positive'
-                      : 'muted'
-                  }
-                />
-              </div>
+              {/* KPI cards (VIS-003): today's five, then the new rates. */}
+              <KpiRows
+                summary={summary!}
+                trend={rateTrend}
+                trackedPrompts={trackedPrompts}
+                coverage={coverage}
+                sov={sovData}
+                competitors={competitorData}
+                comparison={comparison}
+                series={kpiSeries}
+                onBreakdown={setBreakdownMetric}
+                onNavigate={(path) => router.push(path)}
+              />
 
               {/* Competitor Comparison */}
               {competitorData ? (
@@ -1711,6 +1493,18 @@ export default function InsightsPage() {
                               <span className="text-muted-foreground">
                                 vs {formatWindowBound(rateTrend.summary.prevFrom)} –{' '}
                                 {formatWindowBound(rateTrend.summary.prevTo)}
+                              </span>
+                            )}
+                            {/* Shown even without a change: when every prompt is new,
+                                this is why there is nothing to compare. */}
+                            {comparison && comparison.newPrompts > 0 && (
+                              <span className="text-muted-foreground" title={t('compare.hint')}>
+                                {rateTrend.summary.change !== null &&
+                                  rateTrend.summary.prevFrom &&
+                                  '· '}
+                                {comparison.basis === 'same'
+                                  ? t('compare.newExcluded', { count: comparison.newPrompts })
+                                  : t('compare.newIncluded', { count: comparison.newPrompts })}
                               </span>
                             )}
                           </div>

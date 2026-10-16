@@ -9,9 +9,17 @@ import {
   deltaDayWindows,
   visibilityChange,
   windowBounds,
+  type ComparisonWindows,
   type DayWindow,
   type MetricWindow,
 } from '@/lib/insights-windows';
+import {
+  parseSamePromptComparison,
+  samePromptChanges,
+  withPromptComparison,
+  type PromptComparison,
+  type SamePromptComparison,
+} from '@/lib/insights-same-prompts';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import type {
   PromptResult,
@@ -37,6 +45,14 @@ import { getPromptVolumes } from '@/lib/actions/volumes';
 import { getPromptSuggestions } from '@/lib/actions/prompt-suggestions';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import { percentageChange } from '@/lib/metrics';
+import {
+  coverage as coverageRate,
+  kpiRates,
+  parseKpiSeries,
+  rateChange,
+  type KpiRates,
+  type KpiSeriesDay,
+} from '@/lib/insights-kpis';
 import {
   breakdownDelta,
   buildBreakdownRows,
@@ -186,6 +202,19 @@ export interface InsightsSummary {
   /** Raw previous-period count, used to distinguish a zero base from unavailable comparison data. */
   prevCitations: number | null;
   sentimentChange: number | null;
+  /**
+   * The v2 KPI cards (VIS-003, 00131). Null without the answers they need,
+   * and Net sentiment / Avg. position also while the rollups behind the
+   * window are not backfilled. Changes are in points (positions for Avg.
+   * position, where lower is better).
+   */
+  citationRate: number | null;
+  citationRateChange: number | null;
+  negativeSentimentPct: number | null;
+  netSentiment: number | null;
+  netSentimentChange: number | null;
+  avgPosition: number | null;
+  avgPositionChange: number | null;
 }
 
 /**
@@ -210,6 +239,12 @@ export type { DayWindow } from '@/lib/insights-windows';
 // ── RPC return shapes (mirror supabase/migrations/00031_insights_sentiment_denominator.sql) ─
 
 interface InsightsAggregates {
+  /** 00131: the KPI cards' components; kpi_complete is false before the backfill. */
+  citation_answers?: number;
+  negative_count?: number;
+  sum_position?: number | null;
+  position_count?: number;
+  kpi_complete?: boolean;
   total_results: number;
   sum_visibility: number;
   total_mentions: number;
@@ -667,12 +702,24 @@ export interface InsightsData {
   competitors: CompetitorComparisonData;
   sov: ShareOfVoiceData;
   trackedPrompts: TrackedPromptsKpi;
-  visibilityRate: VisibilityRateKpi;
   filterOptions: InsightsFilterOptions;
   recommendations: InsightsRecommendations;
   hasAnyData: boolean;
   /** The visibility-rate chart for the same window; null when its read failed. */
   trend: VisibilityRateTrendData | null;
+  /**
+   * Which prompts the changes on the page compare (VIS-002), with how many
+   * were added or dropped between the periods. Null without a previous
+   * window (All time) or before the rollups behind it are backfilled.
+   */
+  comparison: PromptComparison | null;
+  /** Coverage card (VIS-003); null when its read failed. */
+  coverage: CoverageKpi | null;
+  /**
+   * The KPI cards' sparklines, one point per day (VIS-003). Null for the 24h
+   * view (a single day), when the read failed, or before the backfill.
+   */
+  kpiSeries: KpiSeriesDay[] | null;
   /** The run ledger, when the 24h window was anchored to it (`anchor24h`). */
   trackingWindow: TrackingWindow | null;
 }
@@ -759,7 +806,14 @@ export async function getTrackingWindow(brandId: string): Promise<TrackingWindow
 /** The part of the Insights page that depends only on the brand and the window. */
 type WindowedInsights = Pick<
   InsightsData,
-  'summary' | 'competitors' | 'sov' | 'visibilityRate' | 'filterOptions' | 'trend'
+  | 'summary'
+  | 'competitors'
+  | 'sov'
+  | 'filterOptions'
+  | 'trend'
+  | 'comparison'
+  | 'coverage'
+  | 'kpiSeries'
 >;
 
 type InsightsFilterArgs = {
@@ -769,6 +823,8 @@ type InsightsFilterArgs = {
   dateFrom?: string;
   dateTo?: string;
   days?: DayWindow;
+  /** "Compare: Same prompts" (VIS-002); on unless explicitly false. */
+  samePrompts?: boolean;
 };
 
 const EMPTY_COMPETITORS: CompetitorComparisonData = { brands: [], providerRows: [] };
@@ -799,24 +855,173 @@ async function loadWindowedInsights(
           return fallback;
         });
 
-  const [summary, competitors, sov, visibilityRate, filterOptions, trend] = await Promise.all([
-    getInsightsSummary(brandId, filterOpts),
-    lenient(
-      getCompetitorComparison(brandId, filterOpts),
-      EMPTY_COMPETITORS,
-      'competitor comparison',
-    ),
-    lenient(getShareOfVoiceData(brandId, filterOpts), EMPTY_SOV, 'share of voice'),
-    getVisibilityRateKpi(brandId, filterOpts),
-    getInsightsFilterOptions(brandId),
-    // The chart follows the same window as every other number on the page.
-    lenient<VisibilityRateTrendData | null>(
-      getVisibilityRateTrend(brandId, filterOpts),
-      null,
-      'visibility trend',
-    ),
+  const [summary, competitors, sov, filterOptions, trend, same, coverage, kpiSeries] =
+    await Promise.all([
+      getInsightsSummary(brandId, filterOpts),
+      lenient(
+        getCompetitorComparison(brandId, filterOpts),
+        EMPTY_COMPETITORS,
+        'competitor comparison',
+      ),
+      lenient(getShareOfVoiceData(brandId, filterOpts), EMPTY_SOV, 'share of voice'),
+      getInsightsFilterOptions(brandId),
+      // The chart follows the same window as every other number on the page.
+      lenient<VisibilityRateTrendData | null>(
+        getVisibilityRateTrend(brandId, filterOpts),
+        null,
+        'visibility trend',
+      ),
+      lenient(getSamePromptComparison(brandId, filterOpts), null, 'same-prompt comparison'),
+      lenient(getCoverageKpi(brandId, filterOpts), null, 'coverage'),
+      lenient(getKpiSeries(brandId, filterOpts), null, 'KPI sparklines'),
+    ]);
+  const windowed = {
+    ...(comparisonWindows(filterOpts).prev ? { summary, sov } : withoutChanges(summary, sov)),
+    competitors,
+    filterOptions,
+    trend,
+    coverage,
+    kpiSeries,
+  };
+  return withPromptComparison(windowed, same, filterOpts.samePrompts !== false);
+}
+
+/** Coverage card (VIS-003): the answered prompts where the brand appeared. */
+export interface CoverageKpi {
+  visiblePrompts: number;
+  activePrompts: number;
+  /** %, one decimal; null without answered prompts. */
+  value: number | null;
+  /** Change in points vs the previous window; null without one. */
+  change: number | null;
+}
+
+/**
+ * Coverage over the card's windows: distinct prompts the brand appeared in
+ * (visible_prompt_stats) over distinct prompts answered (tracked_prompt_count),
+ * the same counts the Visibility card's "appeared in x/y" line shows.
+ */
+async function getCoverageKpi(brandId: string, opts?: InsightsFilterArgs): Promise<CoverageKpi> {
+  const supabase = await dbClient();
+  const windows = comparisonWindows(opts);
+  const base = {
+    p_brand_id: brandId,
+    p_platform: undefined as string | undefined,
+    p_models: modelFilterArray(opts?.model),
+    p_region: opts?.region ?? undefined,
+  };
+
+  const countsFor = async (win: MetricWindow) => {
+    let visible;
+    let active;
+    if (win.kind === 'days') {
+      const days = { ...base, p_day_from: win.days.dayFrom, p_day_to: win.days.dayTo };
+      [visible, active] = await Promise.all([
+        supabase.rpc('visible_prompt_stats_daily', days),
+        supabase.rpc('tracked_prompt_count_daily', days),
+      ]);
+    } else {
+      const range = {
+        ...base,
+        p_date_from: win.from,
+        p_date_to: win.to,
+        p_topic_id: opts?.topicId ?? undefined,
+      };
+      [visible, active] = await Promise.all([
+        supabase.rpc('visible_prompt_stats', range),
+        supabase.rpc('tracked_prompt_count', range),
+      ]);
+    }
+    if (visible.error) throw new Error(visible.error.message);
+    if (active.error) throw new Error(active.error.message);
+    return {
+      visible: Number((visible.data as { visible_prompts?: number } | null)?.visible_prompts ?? 0),
+      active: Number(active.data ?? 0),
+    };
+  };
+
+  const [cur, prev] = await Promise.all([
+    countsFor(windows.cur),
+    windows.prev ? countsFor(windows.prev) : Promise.resolve(null),
   ]);
-  return { summary, competitors, sov, visibilityRate, filterOptions, trend };
+  const value = coverageRate(cur.visible, cur.active);
+  return {
+    visiblePrompts: cur.visible,
+    activePrompts: cur.active,
+    value,
+    change: prev ? rateChange(value, coverageRate(prev.visible, prev.active)) : null,
+  };
+}
+
+/**
+ * The KPI cards' sparklines: one point per day of the window, from the
+ * prompt-grain rollups (00131), topic filter included. Whole days only — the
+ * 24h view is a single day, nothing to plot.
+ */
+async function getKpiSeries(
+  brandId: string,
+  opts?: InsightsFilterArgs,
+): Promise<KpiSeriesDay[] | null> {
+  if (!opts?.days) return null;
+  const supabase = await dbClient();
+  const { data, error } = await supabase.rpc('insights_kpi_series', {
+    p_brand_id: brandId,
+    p_day_from: opts.days.dayFrom,
+    p_day_to: opts.days.dayTo,
+    p_models: modelFilterArray(opts.model),
+    p_region: opts.region ?? undefined,
+    p_topic_id: opts.topicId ?? undefined,
+  });
+  if (error) throw new Error(error.message);
+  return parseKpiSeries(data);
+}
+
+/**
+ * The comparison windows' totals over the prompts answered in both
+ * (VIS-002): the daily rollups for whole days, the raw rows for the 24h and
+ * topic views. Null without a previous window, or while the rollups behind it
+ * are not yet backfilled (00130) — the page then compares all prompts, as it
+ * always did. A failed read throws, so strict mode keeps it out of the cache.
+ */
+async function getSamePromptComparison(
+  brandId: string,
+  opts?: InsightsFilterArgs,
+  windows: ComparisonWindows = comparisonWindows(opts),
+): Promise<SamePromptComparison | null> {
+  if (!windows.prev) return null;
+  const supabase = await dbClient();
+  const base = {
+    p_brand_id: brandId,
+    p_models: modelFilterArray(opts?.model),
+    p_region: opts?.region ?? undefined,
+  };
+
+  let res;
+  if (windows.cur.kind === 'days') {
+    // Explicit bounds for both windows: the same days the card compares.
+    const { cur, prev } = deltaDayWindows(windows.cur.days);
+    res = await supabase.rpc('insights_same_prompt_compare_daily', {
+      ...base,
+      p_cur_from: cur.dayFrom,
+      p_cur_to: cur.dayTo,
+      p_prev_from: prev.dayFrom,
+      p_prev_to: prev.dayTo,
+    });
+  } else {
+    const cur = windowBounds(windows.cur);
+    const prev = windowBounds(windows.prev);
+    res = await supabase.rpc('insights_same_prompt_compare', {
+      ...base,
+      p_cur_from: cur.from,
+      p_cur_to: cur.to,
+      p_prev_from: prev.from,
+      p_prev_to: prev.to,
+      p_topic_id: opts?.topicId ?? undefined,
+    });
+  }
+  const { data, error } = res;
+  if (error) throw new Error(error.message);
+  return parseSamePromptComparison(data);
 }
 
 /**
@@ -858,6 +1063,7 @@ async function cachedAnchoredInsights(
       filterOpts.model ?? '',
       filterOpts.region ?? '',
       filterOpts.topicId ?? '',
+      filterOpts.samePrompts === false ? 'all-prompts' : 'same-prompts',
     ],
     { revalidate: 2 * 24 * 60 * 60, tags: [`insights:${brandId}`] },
   );
@@ -873,6 +1079,8 @@ export async function getInsightsData(
     dateFrom?: string;
     dateTo?: string;
     days?: DayWindow;
+    /** "Compare: Same prompts" (VIS-002); on unless explicitly false. */
+    samePrompts?: boolean;
     /** When the current view is filtered, check unfiltered data existence too. */
     checkUnfiltered?: boolean;
     /**
@@ -893,6 +1101,7 @@ export async function getInsightsData(
     dateFrom: anchored?.dateFrom ?? opts.dateFrom,
     dateTo: anchored?.dateTo ?? opts.dateTo,
     days: opts.days,
+    samePrompts: opts.samePrompts,
   };
 
   // An anchored window is served from the cache; a failure there (including a
@@ -1379,6 +1588,13 @@ export async function getInsightsSummary(
       prevMentions: null,
       prevCitations: null,
       sentimentChange: null,
+      citationRate: null,
+      citationRateChange: null,
+      negativeSentimentPct: null,
+      netSentiment: null,
+      netSentimentChange: null,
+      avgPosition: null,
+      avgPositionChange: null,
     };
   }
 
@@ -1414,6 +1630,10 @@ export async function getInsightsSummary(
   let prevMentions: number | null = null;
   let prevCitations: number | null = null;
   let sentimentChange: number | null = null;
+  let citationRateChange: number | null = null;
+  let netSentimentChange: number | null = null;
+  let avgPositionChange: number | null = null;
+  const curRates = aggregateRates(cur);
 
   {
     let currentFrom: Date;
@@ -1489,6 +1709,12 @@ export async function getInsightsSummary(
       mentionsChange = percentageChange(curMentions, prevMentions);
       citationsChange = percentageChange(curCitations, prevCitations);
       sentimentChange = curSentimentPct - prevSentimentPct;
+
+      const deltaCur = aggregateRates(curWin);
+      const deltaPrev = aggregateRates(prevWin);
+      citationRateChange = rateChange(deltaCur.citationRate, deltaPrev.citationRate);
+      netSentimentChange = rateChange(deltaCur.netSentiment, deltaPrev.netSentiment);
+      avgPositionChange = rateChange(deltaCur.avgPosition, deltaPrev.avgPosition);
     }
   }
 
@@ -1506,6 +1732,64 @@ export async function getInsightsSummary(
     prevMentions,
     prevCitations,
     sentimentChange,
+    citationRate: curRates.citationRate,
+    citationRateChange,
+    negativeSentimentPct: curRates.negativePct,
+    netSentiment: curRates.netSentiment,
+    netSentimentChange,
+    avgPosition: curRates.avgPosition,
+    avgPositionChange,
+  };
+}
+
+/**
+ * The KPI cards' rates from one insights_aggregates window (00131). Before
+ * the rollups behind it are backfilled, negatives and positions are missing:
+ * Net sentiment and Avg. position read null rather than a partial value. A
+ * payload without the 00131 fields at all (migration not run) reads the same
+ * way, and so does Citation rate, instead of counting what's missing as 0.
+ */
+function aggregateRates(a: InsightsAggregates): KpiRates {
+  const rates = kpiRates({
+    answers: Number(a.total_results ?? 0),
+    citationAnswers: Number(a.citation_answers ?? 0),
+    mentioning: Number(a.mentioning_results ?? 0),
+    positive: Number(a.positive_count ?? 0),
+    negative: Number(a.negative_count ?? 0),
+    sumPosition:
+      a.sum_position === null || a.sum_position === undefined ? null : Number(a.sum_position),
+    positionCount: Number(a.position_count ?? 0),
+  });
+  return {
+    ...rates,
+    citationRate: a.citation_answers === undefined ? null : rates.citationRate,
+    ...(a.kpi_complete === true
+      ? {}
+      : { negativePct: null, netSentiment: null, avgPosition: null }),
+  };
+}
+
+/**
+ * All time has no earlier period of the same length (VIS-001), so the cards
+ * show no change. getInsightsSummary and getShareOfVoiceData keep comparing
+ * the trailing 7 days there for their other callers (the topic page).
+ */
+function withoutChanges(
+  summary: InsightsSummary,
+  sov: ShareOfVoiceData,
+): { summary: InsightsSummary; sov: ShareOfVoiceData } {
+  return {
+    summary: {
+      ...summary,
+      visibilityChange: null,
+      mentionsChange: null,
+      citationsChange: null,
+      sentimentChange: null,
+      citationRateChange: null,
+      netSentimentChange: null,
+      avgPositionChange: null,
+    },
+    sov: { ...sov, overallSovChange: null },
   };
 }
 
@@ -2481,7 +2765,12 @@ export interface VisibilityRateTrendSummary {
   rate: number;
   /** Rate over the equal-length window immediately before; null without data. */
   prevRate: number | null;
-  /** rate − prevRate in points, one decimal; null when prevRate is null. */
+  /**
+   * rate − prevRate in points, one decimal; null when prevRate is null. With
+   * Same prompts on (VIS-002) the Insights page replaces it with the change
+   * on the prompts answered in both windows, so it no longer equals
+   * rate − prevRate there.
+   */
   change: number | null;
   /**
    * Inclusive bounds of the previous window, for the "vs <range>" label:
@@ -2913,35 +3202,61 @@ export async function getInsightsBreakdown(
     return agg && agg.total_results > 0 ? agg.total_mentions : null;
   };
 
-  const [curGroupsRes, prevGroupsRes, curScore, prevScore] = await Promise.all([
+  const [curGroupsRes, prevGroupsRes, curScore, prevScore, same] = await Promise.all([
     groupsFor(windows.cur),
     windows.prev ? groupsFor(windows.prev) : Promise.resolve(null),
     totalFor(windows.cur),
     windows.prev ? totalFor(windows.prev) : Promise.resolve(null),
+    // Without it the panel compares all prompts, as the cards then do.
+    getSamePromptComparison(brandId, opts, windows).catch((err) => {
+      console.error('[insights] same-prompt comparison failed', err);
+      return null;
+    }),
   ]);
   if (curGroupsRes.error) throw new Error(curGroupsRes.error.message);
   if (prevGroupsRes?.error) throw new Error(prevGroupsRes.error.message);
+
+  // "Same prompts" (VIS-002): the change and every row compare only the
+  // prompts answered in both windows, exactly as the cards do.
+  const useSame = opts?.samePrompts !== false && same !== null;
+  const comparison: PromptComparison | null = same && {
+    basis: useSame ? 'same' : 'all',
+    samePrompts: same.samePrompts,
+    newPrompts: same.newPrompts,
+    droppedPrompts: same.droppedPrompts,
+  };
 
   const { byPrompt, byPlatform, byTopic } = buildBreakdownRows(
     metric,
     parseBreakdownGroups(curGroupsRes.data),
     prevGroupsRes ? parseBreakdownGroups(prevGroupsRes.data) : null,
     formatPlatformLabel,
+    { samePrompts: useSame },
   );
 
   // Totals and their change, worked out the way each card does.
   let curTotal: number;
+  let comparedCur: number;
   let prevTotal: number | null;
   let totalDelta: number | null;
   let totalDeltaPct: number | null;
+  const changes = useSame && same ? samePromptChanges(same) : null;
   if (metric === 'visibility') {
     const v = visibilityChange(curScore, prevScore);
     curTotal = v.value;
-    prevTotal = v.prev;
-    totalDelta = v.change;
+    comparedCur = changes ? (changes.visibility.cur ?? 0) : v.value;
+    prevTotal = changes ? changes.visibility.prev : v.prev;
+    totalDelta = changes ? changes.visibility.change : v.change;
     totalDeltaPct = null;
+  } else if (changes) {
+    curTotal = curScore ?? 0;
+    comparedCur = changes.mentions.cur;
+    prevTotal = changes.mentions.prev;
+    totalDeltaPct = changes.mentionsChange;
+    totalDelta = totalDeltaPct === null ? null : comparedCur - prevTotal;
   } else {
     curTotal = curScore ?? 0;
+    comparedCur = curTotal;
     prevTotal = prevScore;
     ({ delta: totalDelta, deltaPct: totalDeltaPct } =
       curScore === null
@@ -2958,6 +3273,12 @@ export async function getInsightsBreakdown(
   let rootCause: string;
   if (!windows.prev) {
     rootCause = `${metricLabel} over all time; there is no earlier period of the same length to compare.`;
+  } else if (useSame && same?.samePrompts === 0) {
+    rootCause = `No prompt was answered in both ${windowDays}-day windows, so there is no like-for-like change yet.`;
+  } else if (totalDelta === null && useSame) {
+    // Shared prompts were answered in both windows, so the change is missing
+    // only because the previous count was 0 (no percentage from 0).
+    rootCause = `No ${metricLabel.toLowerCase()} on the shared prompts in the previous ${windowDays}-day window, so there is no percentage change.`;
   } else if (totalDelta === null) {
     rootCause = `No answers in one of the two ${windowDays}-day windows, so there is no change to explain yet.`;
   } else if (totalDelta === 0) {
@@ -2978,7 +3299,9 @@ export async function getInsightsBreakdown(
   return {
     metric,
     curTotal,
+    comparedCur,
     prevTotal,
+    comparison,
     delta: totalDelta,
     deltaPct: totalDeltaPct,
     windowDays,
