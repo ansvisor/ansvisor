@@ -17,6 +17,11 @@ const totals = (over: Partial<SamePromptTotals> = {}): SamePromptTotals => ({
   total_citations: 60,
   positive_count: 30,
   mentioning_answers: 110,
+  negative_count: 10,
+  sum_position: 200,
+  position_count: 100,
+  visible_prompts: 150,
+  competitor_mentions: 450,
   by_competitor: [],
   ...over,
 });
@@ -91,6 +96,37 @@ describe('samePromptChanges', () => {
     expect(changes.competitorChange('new')).toBeNull();
   });
 
+  it('measures the KPI card rates on the shared prompts', () => {
+    const changes = samePromptChanges(
+      same({
+        samePrompts: 200,
+        cur: totals({
+          visible_prompts: 160,
+          positive_count: 44,
+          negative_count: 11,
+          mentioning_answers: 110,
+          sum_position: 180,
+          position_count: 100,
+          citation_answers: 60,
+          total_mentions: 150,
+          competitor_mentions: 350,
+        }),
+        prev: totals({ visible_prompts: 150 }),
+      }),
+    );
+
+    // Coverage of the shared prompts: 160/200 = 80% vs 150/200 = 75%.
+    expect(changes.coverageChange).toBe(5);
+    // Net sentiment: (40% − 10%) vs (27% − 9%).
+    expect(changes.netSentimentChange).toBe(12);
+    // Avg. position: 1.8 vs 2.0, an improvement.
+    expect(changes.avgPositionChange).toBe(-0.2);
+    // Citation rate: 15% vs 10%.
+    expect(changes.citationRateChange).toBe(5);
+    // Share of voice: 150/500 = 30% vs 150/600 = 25%.
+    expect(changes.shareOfVoiceChange).toBe(5);
+  });
+
   it('has no percentage changes without answers in both windows', () => {
     const changes = samePromptChanges(
       same({ samePrompts: 0, cur: totals({ answers: 0 }), prev: totals({ answers: 0 }) }),
@@ -104,7 +140,17 @@ describe('samePromptChanges', () => {
 
 describe('withPromptComparison', () => {
   const insights = () => ({
-    summary: { totalResults: 709, mentionsChange: 203, citationsChange: 223, sentimentChange: 4 },
+    summary: {
+      totalResults: 709,
+      mentionsChange: 203,
+      citationsChange: 223,
+      sentimentChange: 4,
+      netSentimentChange: 9,
+      avgPositionChange: -0.5,
+      citationRateChange: 3,
+    },
+    sov: { overallSov: 4.6, overallSovChange: 2.2 },
+    coverage: { visiblePrompts: 456, activePrompts: 709, value: 64.3, change: 8 },
     trend: { summary: { change: 7.9 } },
     competitors: {
       brands: [
@@ -131,6 +177,12 @@ describe('withPromptComparison', () => {
     // The leaderboard's own row moves with the card.
     expect(out.competitors.brands[0].scoreChange).toBe(changes.visibility.change);
     expect(out.competitors.brands[1].scoreChange).toBe(changes.competitorChange('c1'));
+    // Every KPI card's change moves too; the values stay.
+    expect(out.summary.netSentimentChange).toBe(changes.netSentimentChange);
+    expect(out.summary.avgPositionChange).toBe(changes.avgPositionChange);
+    expect(out.summary.citationRateChange).toBe(changes.citationRateChange);
+    expect(out.sov).toEqual({ overallSov: 4.6, overallSovChange: changes.shareOfVoiceChange });
+    expect(out.coverage).toMatchObject({ value: 64.3, change: changes.coverageChange });
     expect(out.untouched).toBe('kept');
   });
 
