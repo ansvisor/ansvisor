@@ -2343,7 +2343,11 @@
       "notMentioned": "Not mentioned",
       "notMentionedTitle": "Not mentioned in any of {count, plural, one {# answer} other {# answers}} in this period",
       "citedOnly": "Cited only",
-      "citedOnlyTitle": "Cited in {cited} of {count, plural, one {# answer} other {# answers}} in this period, named in none"
+      "citedOnlyTitle": "Cited in {cited} of {count, plural, one {# answer} other {# answers}} in this period, named in none",
+      "noRuns": "No runs in this period",
+      "mentionedEarlier": "(mentioned earlier)",
+      "citedEarlier": "(cited earlier)",
+      "lastRun": "Last run: {time}"
     },
     "title": "Prompt Volumes",
     "description": "Discover query volumes and trends across AI platforms.",

@@ -627,46 +627,47 @@ function LatestView({
   );
 }
 
+/**
+ * One line per platform: its name, and on the right what its latest answer
+ * said, mention then citation. The run's time is in the status's tooltip,
+ * which opens on hover or keyboard focus.
+ */
 function LatestRow({ platform: p }: { platform: PlatformPositions }) {
+  const t = useTranslations('prompts.positions');
+  const latest = p.latest;
+  const runAt = latest ? t('lastRun', { time: formatDateTime(latest.at) }) : null;
   return (
-    <div className="px-3 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <PlatformName platform={p} />
-        {p.latest && (
-          <span className="text-xs text-muted-foreground">
-            Run at {formatDateTime(p.latest.at)}
-          </span>
-        )}
-      </div>
-      {!p.latest ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          No completed tracking runs in this period
-        </p>
+    <div
+      data-platform={p.id}
+      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-3"
+    >
+      <PlatformName platform={p} />
+      {!latest ? (
+        <span className="ml-auto text-xs text-muted-foreground">{t('noRuns')}</span>
       ) : (
-        <dl className="mt-2 grid gap-3 text-xs sm:grid-cols-2">
-          <div>
-            <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Mention
-            </dt>
-            <dd className="mt-1 space-y-1">
-              <MentionStatus answer={p.latest} />
-              {p.mentionedEarlier && (
-                <p className="text-muted-foreground">Detected earlier in this period</p>
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Citation
-            </dt>
-            <dd className="mt-1 space-y-1">
-              <CitationStatus answer={p.latest} />
-              {p.citedEarlier && (
-                <p className="text-muted-foreground">Detected earlier in this period</p>
-              )}
-            </dd>
-          </div>
-        </dl>
+        <Tooltip>
+          <TooltipTrigger
+            delay={0}
+            render={
+              <span
+                tabIndex={0}
+                className="ml-auto flex flex-wrap items-center justify-end gap-x-1.5 gap-y-0.5 rounded-sm text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              />
+            }
+          >
+            <MentionStatus answer={latest} />
+            {p.mentionedEarlier && (
+              <span className="text-muted-foreground">{t('mentionedEarlier')}</span>
+            )}
+            <span aria-hidden className="text-muted-foreground">
+              ·
+            </span>
+            <CitationStatus answer={latest} />
+            {p.citedEarlier && <span className="text-muted-foreground">{t('citedEarlier')}</span>}
+            <span className="sr-only">{runAt}</span>
+          </TooltipTrigger>
+          <TooltipContent>{runAt}</TooltipContent>
+        </Tooltip>
       )}
     </div>
   );

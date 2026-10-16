@@ -49,7 +49,7 @@ const answer = (over: Partial<PositionAnswer> & { createdAt: string }): Position
   ...over,
 });
 
-function data(locked = false): PromptPositionsData {
+function data({ locked = false, unanswered = false } = {}): PromptPositionsData {
   const { summary, platforms } = summarizePositions(
     [
       answer({
@@ -66,6 +66,15 @@ function data(locked = false): PromptPositionsData {
     ],
     [
       { id: 'chatgpt-web', label: 'ChatGPT', access: { state: 'included' } },
+      ...(unanswered
+        ? [
+            {
+              id: 'copilot-web' as const,
+              label: 'Microsoft Copilot',
+              access: { state: 'included' as const },
+            },
+          ]
+        : []),
       ...(locked
         ? [
             {
@@ -137,8 +146,26 @@ describe('PromptPositionsSheet', () => {
     expect(text).toContain('In 1 of 2 answers in this period · 3 mentions');
   });
 
+  it('gives each platform one line in 24h, its latest answer on the right', async () => {
+    getPromptPositions.mockResolvedValue(data({ unanswered: true }));
+    await open('24h');
+    const rows = [...document.querySelectorAll<HTMLElement>('[data-platform]')];
+    expect(rows.map((r) => r.dataset.platform)).toEqual(['chatgpt-web', 'copilot-web']);
+
+    // The latest answer (Oct 9) named and cited nothing; the one before did.
+    const [chatgpt, copilot] = rows.map((r) => r.textContent ?? '');
+    for (const part of ['Not mentioned', '(mentioned earlier)', 'Not cited', '(cited earlier)']) {
+      expect(chatgpt).toContain(part);
+    }
+    // The run's time, on the viewer's clock, for screen readers and the tooltip.
+    expect(chatgpt).toMatch(/Last run: Oct \d+, 2026/);
+    expect(copilot).toBe('Microsoft CopilotNo runs in this period');
+    // No Mention / Citation blocks under the name any more.
+    expect(document.querySelector('[role="dialog"] dl')).toBeNull();
+  });
+
   it('says the counts leave out a platform the plan locks', async () => {
-    getPromptPositions.mockResolvedValue(data(true));
+    getPromptPositions.mockResolvedValue(data({ locked: true }));
     await open();
     expect(document.body.textContent).toContain(
       'Answer counts cover the platforms your plan includes.',
