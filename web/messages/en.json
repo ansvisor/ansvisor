@@ -1827,7 +1827,6 @@
     "positiveSentiment": "Positive Sentiment",
     "neutral": "Neutral",
     "negative": "Negative",
-    "sovByPlatform": "Share of Voice by Platform",
     "resultDetail": {
       "notFoundTitle": "Result not found",
       "notFoundDescription": "This result may have been deleted or does not exist.",
@@ -1883,6 +1882,35 @@
       "citationRate": "Citation rate",
       "citationRateTip": "Share of answers that cite your domain.",
       "citationRateSub": "of answers cite you"
+    },
+    "summary": {
+      "label": "Summary",
+      "visibility": "visibility",
+      "rank": "#{rank}",
+      "ofCount": "of {count}",
+      "pts": "{value} pts",
+      "behind": "behind {name}",
+      "ahead": "ahead of {name}",
+      "tied": "tied with {name}",
+      "upMost": "Up most:",
+      "downMost": "Down most:",
+      "vs": "vs {from} – {to}",
+      "copy": "Copy summary",
+      "copied": "Summary copied",
+      "copyFailed": "Couldn't copy the summary. Select the text and copy it instead."
+    },
+    "platforms": {
+      "title": "By AI platform",
+      "tableLabel": "Visibility by AI platform",
+      "platform": "Platform",
+      "visibility": "Visibility",
+      "change": "Change",
+      "coverage": "Coverage",
+      "shareOfVoice": "Share of voice",
+      "avgPosition": "Avg. pos",
+      "lowSample": "Low sample · {count, plural, one {# run} other {# runs}}",
+      "noRuns": "No runs this period",
+      "biggestDrop": "biggest drop"
     }
   },
   "topics": {

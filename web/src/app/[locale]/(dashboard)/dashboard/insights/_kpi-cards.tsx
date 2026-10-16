@@ -34,9 +34,9 @@ import {
   lowerIsGood,
   signedChange,
   signedValue,
+  TONE_TEXT,
   upIsGood,
   type Change,
-  type Tone,
 } from './kpi-format';
 
 // ─── Info tooltip ─────────────────────────────────────────────────────────────
@@ -90,12 +90,6 @@ export function InfoTip({ content }: { content: string }) {
 }
 
 // ─── Card parts ───────────────────────────────────────────────────────────────
-
-const TONE_TEXT: Record<Tone, string> = {
-  good: 'text-emerald-600 dark:text-emerald-400',
-  bad: 'text-red-600 dark:text-red-400',
-  neutral: 'text-muted-foreground',
-};
 
 /**
  * A daily sparkline. Days without a value are skipped; fewer than two
