@@ -22,21 +22,6 @@ const CompetitorLeaderboard = dynamic(
   },
 );
 
-const ShareOfVoicePlatformChart = dynamic(
-  () => import('./_charts').then((m) => m.ShareOfVoicePlatformChart),
-  {
-    ssr: false,
-    loading: () => <Skeleton className="h-64 w-full" />,
-  },
-);
-
-const ShareOfVoiceTrendChart = dynamic(
-  () => import('./_charts').then((m) => m.ShareOfVoiceTrendChart),
-  {
-    ssr: false,
-    loading: () => <Skeleton className="h-64 w-full" />,
-  },
-);
 import { MetricBreakdownSheet } from './_metric-breakdown-sheet';
 import { FormulaDialog } from './_formula-dialog';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -82,7 +67,6 @@ import {
   TrendingDown,
   Loader2,
   FlaskConical,
-  PieChart,
   Users,
   StopCircle,
   ArrowRight,
@@ -107,7 +91,10 @@ import { toast } from 'sonner';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import type { PromptComparison } from '@/lib/insights-same-prompts';
 import type { KpiSeriesDay } from '@/lib/insights-kpis';
+import type { PlatformChange, PlatformTableRow } from '@/lib/insights-summary';
 import { KpiRows } from './_kpi-cards';
+import { SummaryLine } from './_summary-line';
+import { PlatformTable } from './_platform-table';
 
 // ─── Filter Types ─────────────────────────────────────────────────────────────
 
@@ -229,43 +216,7 @@ function getDateRange(
   return { dateFrom: `${dayFrom}T00:00:00.000Z`, dateTo: undefined, days: { dayFrom, dayTo } };
 }
 
-/**
- * A comparison-window bound for the "vs <range>" label. Whole-day windows
- * come as 'YYYY-MM-DD' UTC days and are shown as those days; the 24h and
- * topic views come as timestamps and are shown in local time.
- */
-function formatWindowBound(value: string): string {
-  const dayOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
-  return new Date(dayOnly ? `${value}T00:00:00Z` : value).toLocaleDateString('en-US', {
-    month: 'short',
-    day: '2-digit',
-    year: 'numeric',
-    ...(dayOnly ? { timeZone: 'UTC' } : {}),
-  });
-}
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-// ─── Delta Badge ──────────────────────────────────────────────────────────────
-
-function DeltaBadge({ delta, suffix = '%' }: { delta: number | null; suffix?: string }) {
-  if (delta === null) return null;
-  if (delta === 0) return <span className="text-xs text-muted-foreground">— 0{suffix}</span>;
-  const pos = delta > 0;
-  return (
-    <span
-      className={cn(
-        'flex items-center gap-0.5 text-xs font-medium',
-        pos ? 'text-green-600 dark:text-green-400' : 'text-red-500',
-      )}
-    >
-      {pos ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-      {pos ? '+' : ''}
-      {delta}
-      {suffix}
-    </span>
-  );
-}
 
 // ─── Run Single Prompt Dialog ─────────────────────────────────────────────────
 
@@ -912,6 +863,8 @@ export default function InsightsPage() {
   const [comparison, setComparison] = useState<PromptComparison | null>(null);
   const [coverage, setCoverage] = useState<CoverageKpi | null>(null);
   const [kpiSeries, setKpiSeries] = useState<KpiSeriesDay[] | null>(null);
+  const [platformChanges, setPlatformChanges] = useState<PlatformChange[] | null>(null);
+  const [platforms, setPlatforms] = useState<PlatformTableRow[] | null>(null);
   const [breakdownMetric, setBreakdownMetric] = useState<BreakdownMetric | null>(null);
   // The window and filters the cards were last loaded with (the 24h view
   // anchored to its tracking run): the breakdown panel explains those exact
@@ -1000,6 +953,8 @@ export default function InsightsPage() {
         setComparison(insights.comparison);
         setCoverage(insights.coverage);
         setKpiSeries(insights.kpiSeries);
+        setPlatformChanges(insights.platformChanges);
+        setPlatforms(insights.platforms);
         setHasAnyData(insights.hasAnyData);
 
         // Group raw model slugs by their resolved display name so different
@@ -1446,6 +1401,14 @@ export default function InsightsPage() {
             <NoDataForPeriod datePreset={filters.datePreset} onReset={handleResetFilters} />
           ) : (
             <>
+              {/* Summary line (VIS-006): the page's story in one line. */}
+              <SummaryLine
+                trend={rateTrend}
+                competitors={competitorData}
+                comparison={comparison}
+                platformChanges={platformChanges}
+              />
+
               {/* KPI cards (VIS-003): today's five, then the new rates. */}
               <KpiRows
                 summary={summary!}
@@ -1487,24 +1450,6 @@ export default function InsightsPage() {
                                 )}
                                 {rateTrend.summary.change >= 0 ? '+' : ''}
                                 {rateTrend.summary.change} pts
-                              </span>
-                            )}
-                            {rateTrend.summary.change !== null && rateTrend.summary.prevFrom && (
-                              <span className="text-muted-foreground">
-                                vs {formatWindowBound(rateTrend.summary.prevFrom)} –{' '}
-                                {formatWindowBound(rateTrend.summary.prevTo)}
-                              </span>
-                            )}
-                            {/* Shown even without a change: when every prompt is new,
-                                this is why there is nothing to compare. */}
-                            {comparison && comparison.newPrompts > 0 && (
-                              <span className="text-muted-foreground" title={t('compare.hint')}>
-                                {rateTrend.summary.change !== null &&
-                                  rateTrend.summary.prevFrom &&
-                                  '· '}
-                                {comparison.basis === 'same'
-                                  ? t('compare.newExcluded', { count: comparison.newPrompts })
-                                  : t('compare.newIncluded', { count: comparison.newPrompts })}
                               </span>
                             )}
                           </div>
@@ -1549,40 +1494,8 @@ export default function InsightsPage() {
                 <NoCompetitorsTeaser />
               )}
 
-              {/* Share of Voice */}
-              {sovData && (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                        <PieChart className="h-4 w-4" />
-                        {t('sovByPlatform')}
-                      </CardTitle>
-                      {sovData.overallSovChange !== null && sovData.overallSovChange !== 0 && (
-                        <DeltaBadge delta={sovData.overallSovChange} suffix=" pts" />
-                      )}
-                    </CardHeader>
-                    <CardContent>
-                      <ShareOfVoicePlatformChart
-                        data={sovData.byPlatform}
-                        overallSov={sovData.overallSov}
-                      />
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                        <TrendingUp className="h-4 w-4" />
-                        Share of Voice Trend
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ShareOfVoiceTrendChart data={sovData.trend} />
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
+              {/* By AI platform (VIS-008): replaces the Share of Voice charts. */}
+              {platforms && platforms.length > 0 && <PlatformTable rows={platforms} />}
 
               {/* Recommendations (#459) — stored data, not period-scoped */}
               {recommendations && <RecommendationsSection data={recommendations} />}
