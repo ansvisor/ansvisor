@@ -786,6 +786,19 @@
           "scores": "Visibility when sent",
           "you": "You",
           "gap": "{gap} pts behind"
+        },
+        "noSignalsTopicOpportunity": "This action was sent from Insights' Opportunities, so it has no detection signals. Its evidence is the topic and suggested prompts on the Overview tab.",
+        "topicOpportunity": {
+          "source": "Source",
+          "sourceValue": "Insights › Opportunities",
+          "topic": "Topic",
+          "openTopic": "Open topic",
+          "plan": "Plan",
+          "planNew": "Write new content: none of your prompts tracked this topic when it was sent",
+          "planExpand": "Grow what covers it: your prompts tracked this topic when it was sent",
+          "demand": "Suggested prompts when sent",
+          "demandValue": "{count, plural, one {# prompt} other {# prompts}} · ~{volume}/mo",
+          "volume": "~{volume}/mo"
         }
       }
     },
@@ -1193,6 +1206,12 @@
         "titleGeneric": "Close a topic gap with a competitor",
         "description": "Sent from Insights: a competitor leads one of your topics on Visibility.",
         "goal": "Lead the topic, or close most of the gap."
+      },
+      "topic_opportunity": {
+        "title": "Capture ~{demand}/mo of AI demand in {topic}",
+        "titleGeneric": "Capture the AI demand in a topic",
+        "description": "Sent from Insights: prompts suggested for one of your topics, with the monthly AI demand behind them.",
+        "goal": "Get the brand into AI answers for the topic's suggested prompts."
       }
     },
     "actionTasks": {
@@ -1870,7 +1889,29 @@
       "noneRelevant": "No suggestion fits your brand closely enough right now. Refresh for new ideas.",
       "allTracked": "You're tracking every suggestion that fits. Refresh suggestions for more ideas.",
       "alreadyHandled": "These suggestions were already accepted or dismissed.",
-      "openSuggestions": "Open suggestions"
+      "openSuggestions": "Open suggestions",
+      "sendAction": "Send action",
+      "sendActionHint": "Open a Growth action for {topic} in the Action Center",
+      "sendNeedsTopic": "This topic isn't saved yet. Refresh suggestions to send it.",
+      "sent": "AC-{no} sent to the Action Center",
+      "alreadySent": "Already in the Action Center as AC-{no}",
+      "sendStale": "These suggestions changed since the page loaded. Refresh to see the latest.",
+      "sendFailed": "Couldn't send to the Action Center.",
+      "openAction": "Open",
+      "suggestContent": "Suggest content",
+      "suggestHint": "Write a content suggestion for this topic, steered by this prompt.",
+      "suggestHintQuota": "Uses one of the month's content suggestions.",
+      "suggestTrackFirst": "Track the topic first: content is written from the answers your tracked prompts get.",
+      "contentLimit": "Monthly content limit reached",
+      "contentLimitResets": "Monthly content limit reached · resets {date}",
+      "writing": "Writing a content suggestion…",
+      "written": "Content suggestion created",
+      "openContent": "Open",
+      "notWritten": "Couldn't write a new suggestion for this topic yet",
+      "notWrittenWhy": "Its tracked prompts are already covered by open suggestions, or have no answers yet. Nothing was used from your content quota.",
+      "writeFailed": "Couldn't write a content suggestion",
+      "stillWriting": "Still writing the content suggestion",
+      "stillWritingWhy": "It will appear in Content when it's done."
     }
   },
   "topics": {
