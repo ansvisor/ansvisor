@@ -76,7 +76,9 @@ export function basketValues(raw, { pageCount }) {
 /**
  * The prompts and pages an action covers. Actions sent before the payload
  * carried prompt ids take them from the opportunity's clusters as they are
- * now, or, without clusters, from the one prompt it was written for.
+ * now, or, without clusters, from the one prompt it was written for. A topic
+ * sent before any of its prompts was tracked (VIS-011) takes the prompts it
+ * has now: the ones tracked from its suggestions.
  */
 export async function basketScope(action) {
   const payload = action.payload || {};
@@ -97,6 +99,15 @@ export async function basketScope(action) {
       promptIds = (members || []).map((m) => m.prompt_id);
     }
     if (!promptIds.length && opp?.prompt_id) promptIds = [opp.prompt_id];
+  }
+  if (!promptIds.length && payload.topicId) {
+    const { data: prompts, error } = await supabaseAdmin
+      .from('prompts')
+      .select('id, prompt_sets!inner(brand_id)')
+      .eq('topic_id', payload.topicId)
+      .eq('prompt_sets.brand_id', action.brand_id);
+    if (error) throw new Error(error.message);
+    promptIds = (prompts || []).map((p) => p.id);
   }
   return { promptIds, pages: Array.isArray(payload.pages) ? payload.pages : [] };
 }

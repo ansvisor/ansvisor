@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { ArrowRight, Loader2, MessageCircle, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link, useRouter } from '@/i18n/navigation';
@@ -9,8 +9,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCompactNumber } from '@/lib/format';
 import { trackSuggestions } from '@/lib/actions/prompt-suggestions';
+import { sendTopicOpportunityToActionCenter } from '@/lib/actions/topic';
+import { generateOpportunitiesOnDemand, getGenerationJobStatus } from '@/lib/actions/content';
+import { waitForContentJob } from '@/lib/content-job';
+import type { ContentUsage } from '@/lib/content-usage';
 import {
+  contentLeft,
   opportunities,
+  secondaryBlock,
   topicStandings,
   type Opportunity,
   type OpportunitySuggestion,
@@ -27,16 +33,21 @@ const SUGGESTIONS_HREF = '/dashboard/prompts/suggestions';
  * stored prompt suggestions. A topic item tracks all its suggested prompts
  * (Track 23), a prompt item the one. Both stay within the plan's prompt
  * locations: the server checks every prompt and stops when they're full.
+ * Beside Track, a topic item sends a Growth action to the Action Center, and
+ * a prompt item has content written for its topic (the Content quota).
  */
 export function Opportunities({
+  brandId,
   suggestions,
   trackedTopicIds,
   topics,
   entities,
   slotsLeft,
+  contentUsage,
   onTracked,
   className,
 }: {
+  brandId: string;
   suggestions: OpportunitySuggestion[];
   trackedTopicIds: string[] | null;
   /** The heat map's data, for who leads each topic; null where it isn't loaded. */
@@ -45,13 +56,19 @@ export function Opportunities({
   entities: { key: string; name: string; isOwnBrand: boolean }[] | null;
   /** Prompt locations left on the plan; null when unlimited. */
   slotsLeft: number | null;
+  /** The month's content quota (CONTENT-001); null when it couldn't be read. */
+  contentUsage: ContentUsage | null;
   onTracked: (count: number) => void;
   className?: string;
 }) {
   const t = useTranslations('insights.opportunities');
+  const format = useFormatter();
   const router = useRouter();
   const [trackedIds, setTrackedIds] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
+  // Send action and Suggest content run on their own: writing content takes a while.
+  const [working, setWorking] = useState<ReadonlySet<string>>(new Set());
+  const [contentSpent, setContentSpent] = useState(0);
 
   const result = useMemo(() => {
     const names = Object.fromEntries(
@@ -63,6 +80,121 @@ export function Opportunities({
     );
   }, [suggestions, trackedIds, topics, entities, trackedTopicIds]);
   const planFull = slotsLeft !== null && slotsLeft <= 0;
+  const left = contentLeft(contentUsage?.opportunities, contentSpent);
+  const contentFullHint = contentUsage?.periodEnd
+    ? t('contentLimitResets', {
+        date: format.dateTime(new Date(contentUsage.periodEnd), {
+          month: 'short',
+          day: 'numeric',
+          timeZone: 'UTC',
+        }),
+      })
+    : t('contentLimit');
+
+  const run = async (key: string, work: () => Promise<void>) => {
+    setWorking((prev) => new Set(prev).add(key));
+    try {
+      await work();
+    } finally {
+      setWorking((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  };
+
+  const sendAction = (item: Opportunity) =>
+    run(item.key, async () => {
+      if (!item.topicId) return;
+      try {
+        const result = await sendTopicOpportunityToActionCenter(item.topicId, item.suggestionIds);
+        if ('error' in result) {
+          // The suggestions can be older than the server's: refreshed or handled since.
+          if (result.code === 'stale') toast.error(t('sendStale'));
+          else toast.error(t('sendFailed'), { description: result.error });
+          return;
+        }
+        toast.success(
+          result.created
+            ? t('sent', { no: result.actionNo })
+            : t('alreadySent', { no: result.actionNo }),
+          {
+            action: {
+              label: t('openAction'),
+              onClick: () =>
+                router.push(`/dashboard/action-center/actions?action=${result.actionId}`),
+            },
+          },
+        );
+      } catch {
+        toast.error(t('sendFailed'));
+      }
+    });
+
+  const suggestContent = (item: Opportunity) =>
+    run(item.key, async () => {
+      const description = item.title;
+      const toastId = toast.loading(t('writing'), { description });
+      const open = (label: string, id: string) => ({
+        label,
+        onClick: () => router.push(`/dashboard/content?opportunity=${id}`),
+      });
+      try {
+        // "+ New" for the prompt's topic, steered by the prompt (CONTENT-003).
+        const started = await generateOpportunitiesOnDemand({
+          brandId,
+          count: 1,
+          topicId: item.topicId,
+          idea: item.title,
+          idempotencyKey: crypto.randomUUID(),
+        });
+        if (!started.ok) {
+          toast.error(started.quotaExhausted ? t('contentLimit') : started.error, {
+            id: toastId,
+            description,
+          });
+          return;
+        }
+        const outcome = await waitForContentJob(started.jobId, {
+          getStatus: getGenerationJobStatus,
+        });
+        if (outcome.kind === 'completed') {
+          const createdId = outcome.result.opportunityIds?.[0];
+          if (createdId) {
+            setContentSpent((n) => n + 1);
+            toast.success(t('written'), {
+              id: toastId,
+              description,
+              duration: 10_000,
+              action: open(t('openContent'), createdId),
+            });
+          } else if (outcome.result.limited) {
+            toast.error(t('contentLimit'), { id: toastId, description });
+          } else {
+            toast.info(t('notWritten'), { id: toastId, description: t('notWrittenWhy') });
+          }
+        } else if (outcome.kind === 'failed') {
+          toast.error(t('writeFailed'), { id: toastId, description });
+        } else {
+          toast.info(t('stillWriting'), { id: toastId, description: t('stillWritingWhy') });
+        }
+      } catch {
+        // Nothing may be left spinning, whatever went wrong on the way.
+        toast.error(t('writeFailed'), { id: toastId, description });
+      }
+    });
+
+  /** Why an item's second button is off, as its hint, or null when it can be used. */
+  const secondaryBlocked = (item: Opportunity): string | null => {
+    const block = secondaryBlock(item, left);
+    if (block === 'needsTopic') return t('sendNeedsTopic');
+    if (block === 'trackFirst') return t('suggestTrackFirst');
+    return block === 'contentLimit' ? contentFullHint : null;
+  };
+  // Only a plan with a monthly limit has a quota to mention.
+  const suggestHint =
+    left === null ? t('suggestHint') : `${t('suggestHint')} ${t('suggestHintQuota')}`;
 
   const track = async (item: Opportunity) => {
     setBusy(item.key);
@@ -81,6 +213,15 @@ export function Opportunities({
       const open = { label: t('openPrompts'), onClick: () => router.push('/dashboard/prompts') };
       if (!error && done.length === 0) {
         toast.info(t('alreadyHandled'));
+      } else if (!error && item.kind === 'topic' && item.topicId) {
+        // Tracking takes the topic off the card; Send action stays one click away.
+        toast.success(t('tracked', { count: done.length }), {
+          duration: 10_000,
+          action: {
+            label: t('sendAction'),
+            onClick: () => sendAction({ ...item, suggestionIds: done }),
+          },
+        });
       } else if (!error) {
         toast.success(t('tracked', { count: done.length }), { action: open });
       } else if (code === 'plan_limit' && done.length > 0) {
@@ -141,6 +282,7 @@ export function Opportunities({
               const isTopic = item.kind === 'topic';
               const Icon = isTopic ? Tag : MessageCircle;
               const count = item.suggestionIds.length;
+              const blocked = secondaryBlocked(item);
               return (
                 <li
                   key={item.key}
@@ -158,29 +300,49 @@ export function Opportunities({
                       {meta(item)}
                     </span>
                   </span>
-                  {/* The hint sits on a wrapper: a disabled button shows no tooltip. */}
-                  <span
-                    className="shrink-0"
-                    title={
-                      planFull
-                        ? t('planFull')
-                        : isTopic
-                          ? t('trackCountHint', { count, topic: item.title })
-                          : t('trackHint')
-                    }
-                  >
-                    <Button
-                      size="sm"
-                      className="h-7 gap-1.5 px-2.5 text-xs"
-                      disabled={planFull || busy !== null}
-                      onClick={() => track(item)}
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {/* The hints sit on wrappers: a disabled button shows no tooltip. */}
+                    <span
+                      title={
+                        planFull
+                          ? t('planFull')
+                          : isTopic
+                            ? t('trackCountHint', { count, topic: item.title })
+                            : t('trackHint')
+                      }
                     >
-                      {/* Track N adds one prompt at a time, so a big topic takes a moment. */}
-                      {busy === item.key && (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                      )}
-                      {isTopic ? t('trackCount', { count }) : t('track')}
-                    </Button>
+                      <Button
+                        size="sm"
+                        className="h-7 gap-1.5 px-2.5 text-xs"
+                        disabled={planFull || busy !== null}
+                        onClick={() => track(item)}
+                      >
+                        {/* Track N adds one prompt at a time, so a big topic takes a moment. */}
+                        {busy === item.key && (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                        )}
+                        {isTopic ? t('trackCount', { count }) : t('track')}
+                      </Button>
+                    </span>
+                    <span
+                      title={
+                        blocked ??
+                        (isTopic ? t('sendActionHint', { topic: item.title }) : suggestHint)
+                      }
+                    >
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 gap-1.5 px-2.5 text-xs"
+                        disabled={blocked !== null || working.has(item.key)}
+                        onClick={() => (isTopic ? sendAction(item) : suggestContent(item))}
+                      >
+                        {working.has(item.key) && (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                        )}
+                        {isTopic ? t('sendAction') : t('suggestContent')}
+                      </Button>
+                    </span>
                   </span>
                 </li>
               );
