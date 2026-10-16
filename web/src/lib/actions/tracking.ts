@@ -46,6 +46,7 @@ import { getPromptSuggestions } from '@/lib/actions/prompt-suggestions';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import { percentageChange } from '@/lib/metrics';
 import { parseChangeDrivers, whyChanged, type WhyChanged } from '@/lib/insights-drivers';
+import { parseTrendMarkers, type TrendMarkerData } from '@/lib/insights-trend';
 import {
   parsePlatformRows,
   platformChanges,
@@ -742,6 +743,12 @@ export interface InsightsData {
    * period. Null for All time, before the backfill, or when the read failed.
    */
   whyChanged: WhyChanged | null;
+  /**
+   * The trend's markers and goal (VIS-007): prompts added and actions sent per
+   * day, and the AI visibility KPI's target. Null on the 24h view, whose
+   * chart has no days to mark, or when the read failed.
+   */
+  trendMarkers: TrendMarkerData | null;
   /** The run ledger, when the 24h window was anchored to it (`anchor24h`). */
   trackingWindow: TrackingWindow | null;
 }
@@ -839,6 +846,7 @@ type WindowedInsights = Pick<
   | 'platformChanges'
   | 'platforms'
   | 'whyChanged'
+  | 'trendMarkers'
 >;
 
 type InsightsFilterArgs = {
@@ -891,6 +899,7 @@ async function loadWindowedInsights(
     kpiSeries,
     platformData,
     drivers,
+    trendMarkers,
   ] = await Promise.all([
     getInsightsSummary(brandId, filterOpts),
     lenient(
@@ -911,6 +920,7 @@ async function loadWindowedInsights(
     lenient(getKpiSeries(brandId, filterOpts), null, 'KPI sparklines'),
     lenient(getPlatformData(brandId, filterOpts), null, 'platforms'),
     lenient(getChangeDrivers(brandId, filterOpts), null, 'why it changed'),
+    lenient(getTrendMarkers(brandId, filterOpts), null, 'trend markers'),
   ]);
   const windowed = {
     ...(comparisonWindows(filterOpts).prev ? { summary, sov } : withoutChanges(summary, sov)),
@@ -931,6 +941,7 @@ async function loadWindowedInsights(
     whyChanged:
       drivers &&
       whyChanged(drivers, resolveProvider, { samePrompts: filterOpts.samePrompts !== false }),
+    trendMarkers,
   };
   return withPromptComparison(windowed, same, filterOpts.samePrompts !== false);
 }
@@ -1023,6 +1034,42 @@ async function getKpiSeries(
   });
   if (error) throw new Error(error.message);
   return parseKpiSeries(data);
+}
+
+/**
+ * The trend's markers and goal (VIS-007): per UTC day in the charted range,
+ * the prompts added and the actions people sent, and the target of the
+ * brand's active AI visibility KPI. Null on the 24h view, charted by run
+ * rather than by day.
+ */
+async function getTrendMarkers(
+  brandId: string,
+  opts?: InsightsFilterArgs,
+): Promise<TrendMarkerData | null> {
+  if (!opts?.days) return null;
+  const supabase = await dbClient();
+  const { dayFrom, dayTo } = opts.days;
+  const [markers, kpi] = await Promise.all([
+    supabase.rpc('insights_trend_markers', {
+      p_brand_id: brandId,
+      p_from: dayFrom ? `${dayFrom}T00:00:00Z` : undefined,
+      p_to: dayTo ? `${dayTo}T23:59:59.999Z` : undefined,
+      p_topic_id: opts.topicId ?? undefined,
+    }),
+    supabase
+      .from('kpi_definitions')
+      .select('target')
+      .eq('brand_id', brandId)
+      .eq('kpi_key', 'ai_visibility')
+      .eq('is_active', true)
+      .maybeSingle(),
+  ]);
+  if (markers.error) throw new Error(markers.error.message);
+  return {
+    ...parseTrendMarkers(markers.data),
+    // A missing or unreadable KPI only means no goal line.
+    goal: kpi.data ? Number(kpi.data.target) : null,
+  };
 }
 
 /**
@@ -2906,6 +2953,8 @@ export interface VisibilityRateTrendEntity {
 export interface VisibilityRateTrendPoint {
   /** Short label for the X axis, e.g. "Jul 28". */
   date: string;
+  /** The UTC day it covers, 'YYYY-MM-DD' (VIS-007: markers are placed by day). */
+  day: string;
   /** Per-entity rate for the day, keyed by entity key. 0 = tracked but not visible. */
   values: Record<string, number>;
 }
@@ -2935,6 +2984,8 @@ export interface VisibilityRateTrendData {
   entities: VisibilityRateTrendEntity[];
   points: VisibilityRateTrendPoint[];
   summary: VisibilityRateTrendSummary;
+  /** Competitors pinned on the chart (VIS-007), in pin order; ids of deleted ones dropped. */
+  pinned: string[];
 }
 
 interface VisibilityRateTrendRow {
@@ -3023,6 +3074,7 @@ export async function getVisibilityRateTrend(
     { data: brand },
     { data: brandDomains },
     { data: competitors },
+    { data: pins },
     rpcRes,
     visCurRes,
     visPrevRes,
@@ -3030,6 +3082,9 @@ export async function getVisibilityRateTrend(
     supabase.from('brands').select('name, logo_url').eq('id', brandId).single(),
     supabase.from('brand_domains').select('domain, is_primary').eq('brand_id', brandId),
     supabase.from('competitors').select('id, name, domain').eq('brand_id', brandId),
+    // Read on its own: without the pins (00136) the chart falls back to the
+    // strongest competitors, and the brand's name and logo still load.
+    supabase.from('brands').select('insights_pinned_competitors').eq('id', brandId).single(),
     // The chart plots a rolling window per day, so the earliest displayed
     // days need trailing data from before the display range (all-time needs
     // no warm-up — the window expands from the first row).
@@ -3157,6 +3212,7 @@ export async function getVisibilityRateTrend(
         month: 'short',
         day: 'numeric',
       }),
+      day: row.day,
       values,
     });
   }
@@ -3179,7 +3235,10 @@ export async function getVisibilityRateTrend(
     prevTo: prevWin ? windowBounds(prevWin).to : '',
   };
 
-  return { entities, points, summary };
+  const competitorIds = new Set((competitors ?? []).map((c) => c.id));
+  const pinned = (pins?.insights_pinned_competitors ?? []).filter((id) => competitorIds.has(id));
+
+  return { entities, points, summary, pinned };
 }
 
 // ─── Head-to-Head Competitor Comparison ─────────────────────────────────────

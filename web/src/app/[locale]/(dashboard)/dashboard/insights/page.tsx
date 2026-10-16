@@ -4,16 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
-const VisibilityRateTrendChart = dynamic(
-  () => import('./_charts').then((m) => m.VisibilityRateTrendChart),
-  {
-    ssr: false,
-    loading: () => <Skeleton className="h-64 w-full" />,
-  },
-);
-
 import { MetricBreakdownSheet, type BreakdownTab } from './_metric-breakdown-sheet';
 import { FormulaDialog } from './_formula-dialog';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -56,7 +47,6 @@ import {
   CalendarX2,
   Play,
   TrendingUp,
-  TrendingDown,
   Loader2,
   FlaskConical,
   Users,
@@ -84,10 +74,13 @@ import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import type { PromptComparison } from '@/lib/insights-same-prompts';
 import type { KpiSeriesDay } from '@/lib/insights-kpis';
 import type { PlatformChange, PlatformTableRow } from '@/lib/insights-summary';
+import { formatWindowBound } from './kpi-format';
 import { KpiRows } from './_kpi-cards';
 import { SummaryLine } from './_summary-line';
 import { PlatformTable } from './_platform-table';
 import { Leaderboard } from './_leaderboard';
+import { TrendCard } from './_trend-card';
+import type { TrendMarkerData } from '@/lib/insights-trend';
 import { WhyChanged } from './_why-changed';
 import type { WhyChanged as WhyChangedData } from '@/lib/insights-drivers';
 
@@ -109,7 +102,8 @@ interface InsightsFilters {
 }
 
 const DEFAULT_FILTERS: InsightsFilters = {
-  datePreset: '24h',
+  // 30 days, as in the v2 mockup (VIS-007); 24h stays one click away.
+  datePreset: '30d',
   dateFrom: '',
   dateTo: '',
   region: '',
@@ -861,6 +855,7 @@ export default function InsightsPage() {
   const [platformChanges, setPlatformChanges] = useState<PlatformChange[] | null>(null);
   const [platforms, setPlatforms] = useState<PlatformTableRow[] | null>(null);
   const [whyChanged, setWhyChanged] = useState<WhyChangedData | null>(null);
+  const [trendMarkers, setTrendMarkers] = useState<TrendMarkerData | null>(null);
   const [breakdownMetric, setBreakdownMetric] = useState<BreakdownMetric | null>(null);
   const [breakdownTab, setBreakdownTab] = useState<BreakdownTab | undefined>(undefined);
   // The window and filters the cards were last loaded with (the 24h view
@@ -953,6 +948,7 @@ export default function InsightsPage() {
         setPlatformChanges(insights.platformChanges);
         setPlatforms(insights.platforms);
         setWhyChanged(insights.whyChanged);
+        setTrendMarkers(insights.trendMarkers);
         setHasAnyData(insights.hasAnyData);
 
         // Group raw model slugs by their resolved display name so different
@@ -1305,6 +1301,15 @@ export default function InsightsPage() {
     ? formatRelative(summary.lastCheckedAt, tCommon)
     : 'Never';
 
+  // The trend's subtitle (VIS-007): "Visibility · last 30 days".
+  const trendRangeLabel =
+    filters.datePreset === 'custom'
+      ? t('trend.range.custom', {
+          from: formatWindowBound(filters.dateFrom),
+          to: formatWindowBound(filters.dateTo),
+        })
+      : t(`trend.range.${filters.datePreset}`);
+
   const handleResetFilters = () => {
     const resetFilters = { ...DEFAULT_FILTERS };
     setFilters(resetFilters);
@@ -1427,51 +1432,16 @@ export default function InsightsPage() {
               {/* Competitor Comparison */}
               {competitorData ? (
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-                  <Card className="lg:col-span-3">
-                    <CardHeader className="pb-2">
-                      {rateTrend ? (
-                        <div>
-                          <div className="text-3xl font-bold tabular-nums">
-                            {rateTrend.summary.rate}
-                          </div>
-                          <div className="mt-1 flex items-center gap-2 text-xs">
-                            {rateTrend.summary.change !== null && (
-                              <span
-                                className={cn(
-                                  'flex items-center gap-0.5 font-medium',
-                                  rateTrend.summary.change >= 0
-                                    ? 'text-emerald-600 dark:text-emerald-400'
-                                    : 'text-red-600 dark:text-red-400',
-                                )}
-                              >
-                                {rateTrend.summary.change >= 0 ? (
-                                  <TrendingUp className="h-3 w-3" />
-                                ) : (
-                                  <TrendingDown className="h-3 w-3" />
-                                )}
-                                {rateTrend.summary.change >= 0 ? '+' : ''}
-                                {rateTrend.summary.change} pts
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                          <Users className="h-4 w-4" />
-                          AI Visibility — Brand vs Competitors
-                        </CardTitle>
-                      )}
-                    </CardHeader>
-                    <CardContent>
-                      {rateTrend ? (
-                        <VisibilityRateTrendChart data={rateTrend} />
-                      ) : (
-                        <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
-                          No visibility data for this period yet
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                  <TrendCard
+                    className="lg:col-span-3"
+                    brandId={brand.id}
+                    data={rateTrend}
+                    markers={trendMarkers}
+                    rangeLabel={trendRangeLabel}
+                    onPinnedChange={(pinned) =>
+                      setRateTrend((current) => current && { ...current, pinned })
+                    }
+                  />
 
                   <Leaderboard
                     className="lg:col-span-2"
