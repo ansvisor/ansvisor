@@ -16,6 +16,7 @@ export const PLANS = {
       maxVolumeAnalyses: -1,
       maxBriefGenerations: -1,
       improveMonthlyBudgetUsd: -1,
+      relevanceMonthlyBudgetUsd: -1,
       maxOpportunitiesPerMonth: -1,
       maxOpportunitiesPerRequest: 5,
       maxSiteAudits: -1,
@@ -50,6 +51,8 @@ export const PLANS = {
       maxVolumeAnalyses: 4,
       maxBriefGenerations: 10,
       improveMonthlyBudgetUsd: 0,
+      // 0.1% of the $49 price, spent rating suggestions' relevance (VIS-011).
+      relevanceMonthlyBudgetUsd: 0.049,
       maxOpportunitiesPerMonth: 10,
       maxOpportunitiesPerRequest: 3,
       maxSiteAudits: 100,
@@ -85,6 +88,8 @@ export const PLANS = {
       maxBriefGenerations: 50,
       // 1% of the $249 price, spent on Improve model calls (PROMPT-003).
       improveMonthlyBudgetUsd: 2.49,
+      // 0.1% of the $249 price, spent rating suggestions' relevance (VIS-011).
+      relevanceMonthlyBudgetUsd: 0.249,
       maxOpportunitiesPerMonth: 50,
       maxOpportunitiesPerRequest: 5,
       maxSiteAudits: 500,
@@ -125,6 +130,9 @@ export const PLANS = {
       // 1% of the $499 floor. plan_overrides.contractMonthlyUsd raises it to 1%
       // of the contract; an explicit plan_overrides.improveMonthlyBudgetUsd wins.
       improveMonthlyBudgetUsd: 4.99,
+      // 0.1% of the $499 floor, raised to 0.1% of contractMonthlyUsd; an
+      // explicit plan_overrides.relevanceMonthlyBudgetUsd wins.
+      relevanceMonthlyBudgetUsd: 0.499,
       maxOpportunitiesPerMonth: -1,
       maxOpportunitiesPerRequest: 5,
       maxSiteAudits: -1,
