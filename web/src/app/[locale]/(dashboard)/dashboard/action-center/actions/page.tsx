@@ -1,13 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
 import {
   AlertCircle,
   ArrowUpDown,
   CircleDot,
   Download,
   ListChecks,
+  Loader2,
   Search,
   Shield,
   Sparkles,
@@ -16,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
-import { getActions, type ActionItem } from '@/lib/actions/action-center';
+import { getActions, getActionsAffected, type ActionItem } from '@/lib/actions/action-center';
 import { listMembers, type TeamMember } from '@/lib/actions/team';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import {
@@ -51,21 +53,8 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { toCsv } from '@/lib/csv';
-
-const ACTION_EXPORT_HEADERS = [
-  'number',
-  'priority_score',
-  'priority_level',
-  'title',
-  'category',
-  'status',
-  'assignee',
-  'due_date',
-  'tasks_done_total',
-  'signal_count',
-  'created',
-];
+import { BYTE_ORDER_MARK, actionListCsv } from '@/lib/action-center/export';
+import { saveBlob } from '@/lib/download';
 
 const isOpen = (action: ActionItem) => OPEN_ACTION_STATUSES.includes(action.status);
 
@@ -128,6 +117,16 @@ function ActionsContent({ brand }: { brand: Brand }) {
   const [assignee, setAssignee] = useState<string>('all');
   const [sort, setSort] = useState<ActionSort>('priority');
   const [search, setSearch] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
+  // False once this brand's view is gone, so an export still reading doesn't
+  // download the previous brand's file after a switch.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const [focus, setFocus] = useState<CardFocus | null>(null);
 
   // Filters, sort and search live in the URL (#896) so a refresh keeps them
@@ -248,36 +247,49 @@ function ActionsContent({ brand }: { brand: Brand }) {
     });
   }, [actions, topIds, focus, category, priority, status, assignee, search, sort, tTexts, t]);
 
-  const handleExportCsv = useCallback(() => {
+  const handleExportCsv = useCallback(async () => {
     if (visible.length === 0) return;
 
-    const rows = visible.map((action) => ({
-      number: action.actionNo,
-      priority_score: action.priorityScore ?? '',
-      priority_level: action.priorityLevel ? t(`priority.levels.${action.priorityLevel}`) : '',
-      title: actionTexts(action, tTexts).title,
-      category: tCategories(action.category),
-      status: t(`status.${action.status}`),
-      assignee: action.assignee?.fullName ?? '',
-      due_date: action.dueDate ?? '',
-      tasks_done_total: `${action.taskCompleted} / ${action.taskTotal}`,
-      signal_count: action.signalCount,
-      created: action.createdAt,
-    }));
+    setIsExporting(true);
+    let affected: Awaited<ReturnType<typeof getActionsAffected>>;
+    try {
+      // What each action's Affected tab lists (AC-005), read for the export only.
+      affected = await getActionsAffected(
+        brand.id,
+        visible.map((action) => action.id),
+      );
+    } catch {
+      if (mounted.current) toast.error(t('export.exportFailed'));
+      return;
+    } finally {
+      setIsExporting(false);
+    }
+    if (!mounted.current) return;
 
-    const csv = toCsv(rows, ACTION_EXPORT_HEADERS);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const csv = actionListCsv(
+      visible.map((action) => ({
+        number: action.actionNo,
+        priorityScore: action.priorityScore,
+        priorityLevel: action.priorityLevel ? t(`priority.levels.${action.priorityLevel}`) : '',
+        title: actionTexts(action, tTexts).title,
+        category: tCategories(action.category),
+        status: t(`status.${action.status}`),
+        assignee: action.assignee?.fullName ?? '',
+        dueDate: action.dueDate ?? '',
+        tasksDone: action.taskCompleted,
+        tasksTotal: action.taskTotal,
+        signalCount: action.signalCount,
+        affected: affected[action.id],
+        created: action.createdAt,
+      })),
+    );
     const date = new Date().toISOString().slice(0, 10);
     const slug = brand.slug ?? 'brand';
-
-    link.href = url;
-    link.download = `ansvisor_${slug}_actions_${date}.csv`;
-    link.click();
-
-    URL.revokeObjectURL(url);
-  }, [brand.slug, visible, tTexts, tCategories, t]);
+    saveBlob(
+      new Blob([BYTE_ORDER_MARK, csv], { type: 'text/csv;charset=utf-8;' }),
+      `ansvisor_${slug}_actions_${date}.csv`,
+    );
+  }, [brand.id, brand.slug, visible, tTexts, tCategories, t]);
 
   const categoryCounts = useMemo(() => {
     const counts = new Map<ActionCategory, number>();
@@ -494,9 +506,13 @@ function ActionsContent({ brand }: { brand: Brand }) {
           size="sm"
           className="ml-auto gap-2 text-xs"
           onClick={handleExportCsv}
-          disabled={visible.length === 0}
+          disabled={visible.length === 0 || isExporting}
         >
-          <Download className="h-3.5 w-3.5" />
+          {isExporting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Download className="h-3.5 w-3.5" />
+          )}
           {common('exportCsv')}
         </Button>
       </div>

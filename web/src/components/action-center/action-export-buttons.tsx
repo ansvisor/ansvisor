@@ -16,6 +16,7 @@ import {
   taskText,
 } from '@/lib/action-center/display';
 import {
+  BYTE_ORDER_MARK,
   actionCsv,
   actionExportFileName,
   actionMarkdown,
@@ -31,27 +32,14 @@ import { isKpiKey } from '@/lib/kpis/registry';
 import { signalAffected, signalTexts, signalTypeLabel } from '@/lib/signals/display';
 import { viewerTimeZone } from '@/lib/time-zone';
 import { isSuperseded } from './signal-table';
-import { leaderText, type Affected } from '@/lib/action-center/affected';
+import { affectedCounts, leaderText, type Affected } from '@/lib/action-center/affected';
 import type { ActionStory } from '@/lib/action-center/story';
 import { platformName } from '@/lib/signals/names';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import { formatCompactNumber } from '@/lib/format';
-
-// Written out so Excel reads the CSV as UTF-8 and keeps Turkish characters.
-const BYTE_ORDER_MARK = String.fromCharCode(0xfeff);
+import { saveBlob } from '@/lib/download';
 
 const IMPROVE_STATES = ['not_mentioned', 'mentioned_late', 'not_cited', 'doing_well', 'no_runs'];
-
-/** Saves a file the browser built, as the actions list's export does. */
-function save(blob: Blob, fileName: string) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  link.click();
-  // Revoked once the download has started; at once, some browsers drop it.
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 /**
  * Copy all, Export CSV and Export Excel for one action (AC-005): what every
@@ -311,13 +299,21 @@ export function ActionExportButtons({
     }
   };
 
-  /** Copy Data: the whole action, every tab, shown to copy in one click. */
+  /**
+   * Copy Data: the whole action, every tab, shown to copy in one click. Once
+   * copied it says what went: "7 prompts, 6 tasks, 87 signals", or the pages
+   * for an action about pages.
+   */
   const showData = (data: ActionExport) => {
+    const counts = affected ? affectedCounts(affected) : { prompts: 0, pages: 0 };
+    const entity = counts.prompts ? 'prompts' : counts.pages ? 'pages' : 'none';
     setJustCopied(false);
     setPreview({
       text: actionMarkdown(data, tExport),
       copied: tExport('copied', {
         ref: data.ref,
+        entity,
+        affected: entity === 'pages' ? counts.pages : counts.prompts,
         tasks: data.tasks.length,
         signals: data.signals.length,
       }),
@@ -353,7 +349,7 @@ export function ActionExportButtons({
   };
 
   const downloadCsv = (data: ActionExport) =>
-    save(
+    saveBlob(
       new Blob([BYTE_ORDER_MARK, actionCsv(data)], { type: 'text/csv;charset=utf-8;' }),
       actionExportFileName(data, 'csv'),
     );

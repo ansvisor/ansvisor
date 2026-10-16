@@ -21,6 +21,7 @@ import {
 import { SIGNAL_ROW_COLUMNS, mapSignalRows, type Signal, type SignalRow } from '@/lib/signals/map';
 import { OPEN_SIGNAL_STATUSES, type SignalStatus } from '@/lib/signals/registry';
 import { readPromptPlaces } from '@/lib/signals/prompt-places';
+import { affectedOf, affectedSignals, affectedSummary } from '@/lib/action-center/affected';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { KpiTimeframe } from '@/lib/kpis/registry';
 import { parseImproveOutcome, type ImproveOutcome } from '@/lib/improve-outcome';
@@ -576,4 +577,78 @@ export async function getPromptDemand(
     }
   }
   return demand;
+}
+
+/** Action ids per request, and signal rows per page, for the list's export. */
+const AFFECTED_ID_CHUNK = 100;
+const AFFECTED_PAGE_SIZE = 1000;
+
+/**
+ * Each action's affected items, for the actions list's Export CSV (AC-005):
+ * the count and names the drawer's Affected tab shows, from the signals the
+ * action rests on — or, for one a person sent, from what it was sent about.
+ * Read page by page, so a brand with many signals is read whole.
+ */
+export async function getActionsAffected(
+  brandId: string,
+  actionIds: string[],
+): Promise<Record<string, { count: number; items: string[] }>> {
+  const ids = [...new Set(actionIds)];
+  if (ids.length === 0) return {};
+  const supabase = await createClient();
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += AFFECTED_ID_CHUNK) {
+    chunks.push(ids.slice(i, i + AFFECTED_ID_CHUNK));
+  }
+
+  const readSignals = async (chunk: string[]) => {
+    const rows: (SignalRow & { action_signals: { action_id: string }[] })[] = [];
+    for (let from = 0; ; from += AFFECTED_PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from('signals')
+        .select(`${SIGNAL_ROW_COLUMNS}, action_signals!inner(action_id)`)
+        .eq('brand_id', brandId)
+        .in('action_signals.action_id', chunk)
+        // The drawer's order, made stable so pages don't shuffle.
+        .order('detected_at', { ascending: false })
+        .order('id')
+        .range(from, from + AFFECTED_PAGE_SIZE - 1);
+      if (error) throw new Error(error.message);
+      const batch = (data ?? []) as unknown as typeof rows;
+      rows.push(...batch);
+      if (batch.length < AFFECTED_PAGE_SIZE) return rows;
+    }
+  };
+  const readPayloads = async (chunk: string[]) => {
+    const { data, error } = await supabase
+      .from('actions')
+      .select('id, payload')
+      .eq('brand_id', brandId)
+      .in('id', chunk);
+    if (error) throw new Error(error.message);
+    return (data ?? []) as { id: string; payload: Record<string, unknown> | null }[];
+  };
+
+  const [signalChunks, payloadChunks, places] = await Promise.all([
+    Promise.all(chunks.map(readSignals)),
+    Promise.all(chunks.map(readPayloads)),
+    readPromptPlaces(supabase, brandId),
+  ]);
+
+  const rowsByAction = new Map<string, SignalRow[]>();
+  for (const row of signalChunks.flat()) {
+    for (const link of row.action_signals ?? []) {
+      const list = rowsByAction.get(link.action_id) ?? [];
+      list.push(row);
+      rowsByAction.set(link.action_id, list);
+    }
+  }
+  const summaries: Record<string, { count: number; items: string[] }> = {};
+  for (const action of payloadChunks.flat()) {
+    const signals = mapSignalRows(rowsByAction.get(action.id) ?? [], places);
+    summaries[action.id] = affectedSummary(
+      affectedOf(affectedSignals(signals, action.id), action.payload ?? {}),
+    );
+  }
+  return summaries;
 }

@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { ActionDetail, ActionItem } from '@/lib/actions/action-center';
+import type { Affected } from '@/lib/action-center/affected';
 
 const { toast, written } = vi.hoisted(() => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -212,6 +213,67 @@ describe('ActionExportButtons', () => {
     await act(async () => copyButton().click());
     expect(execCommand).toHaveBeenCalledWith('copy');
     expect(toast.success).toHaveBeenCalledWith('Action AC-52 copied: 1 task, 1 signal');
+  });
+
+  const affected = (over: Partial<Affected>): Affected => ({
+    prompts: [],
+    pages: [],
+    promptTotal: 0,
+    pageTotal: 0,
+    platforms: [],
+    lostPages: [],
+    competitors: [],
+    topics: [],
+    ...over,
+  });
+  const prompt = (text: string) => ({
+    id: null,
+    text,
+    platforms: [],
+    lostPages: [],
+    citedInstead: [],
+    leaders: [],
+    topics: [],
+  });
+
+  it('says how many prompts it copied, counting a group past the ones it names (AC-005)', async () => {
+    render(
+      <ActionExportButtons
+        action={action}
+        detail={detail}
+        affected={affected({
+          prompts: [prompt('Best coffee subscription?'), prompt('Coffee delivery')],
+          promptTotal: 7,
+        })}
+      />,
+    );
+    await act(async () => button('Copy Data').click());
+    await act(async () => copyButton().click());
+    expect(toast.success).toHaveBeenCalledWith('Action AC-52 copied: 7 prompts, 1 task, 1 signal');
+  });
+
+  it('counts the pages of an action about pages', async () => {
+    render(
+      <ActionExportButtons
+        action={action}
+        detail={detail}
+        affected={affected({
+          pages: [
+            {
+              url: 'https://acme.example/pricing',
+              sessions: 32,
+              before: 40,
+              platforms: [],
+              issues: [],
+            },
+          ],
+          pageTotal: 1,
+        })}
+      />,
+    );
+    await act(async () => button('Copy Data').click());
+    await act(async () => copyButton().click());
+    expect(toast.success).toHaveBeenCalledWith('Action AC-52 copied: 1 page, 1 task, 1 signal');
   });
 
   it('says so when neither way can copy', async () => {

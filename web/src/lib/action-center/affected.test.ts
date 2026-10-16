@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { Signal } from '@/lib/signals/map';
-import { affectedChips, affectedCounts, affectedOf, affectedTotal, leaderText } from './affected';
+import {
+  affectedChips,
+  affectedCounts,
+  affectedOf,
+  affectedSummary,
+  affectedTotal,
+  leaderText,
+  type Affected,
+} from './affected';
 
 const signal = (over: Partial<Signal> = {}): Signal =>
   ({
@@ -324,5 +332,57 @@ describe('affectedChips', () => {
     const resolved = { ...lost, status: 'resolved' } as Signal;
     const chips = affectedChips([resolved], affectedOf([resolved]), 'a1');
     expect(chips[0]).toEqual({ entity: 'signals', count: 1, tab: 'signals' });
+  });
+});
+
+describe('affectedSummary', () => {
+  const affected = (over: Partial<Affected>): Affected => ({
+    prompts: [],
+    pages: [],
+    promptTotal: 0,
+    pageTotal: 0,
+    platforms: [],
+    lostPages: [],
+    competitors: [],
+    topics: [],
+    ...over,
+  });
+  const prompt = (text: string) => ({
+    id: null,
+    text,
+    platforms: [],
+    lostPages: [],
+    citedInstead: [],
+    leaders: [],
+    topics: [],
+  });
+
+  it("names the tab's rows, and counts a group past the 50 it names", () => {
+    expect(
+      affectedSummary(
+        affected({
+          prompts: [prompt('Best coffee subscription?')],
+          promptTotal: 62,
+          pages: [
+            {
+              url: 'https://acme.example/pricing',
+              sessions: null,
+              before: null,
+              platforms: [],
+              issues: [],
+            },
+          ],
+          pageTotal: 1,
+          competitors: ['Trade Coffee'],
+        }),
+      ),
+    ).toEqual({ count: 63, items: ['Best coffee subscription?', 'https://acme.example/pricing'] });
+  });
+
+  it('names the competitors and topics when there are no rows, as the tab lists them', () => {
+    expect(
+      affectedSummary(affected({ competitors: ['Trade Coffee'], topics: ['Subscriptions'] })),
+    ).toEqual({ count: 2, items: ['Trade Coffee', 'Subscriptions'] });
+    expect(affectedSummary(affected({}))).toEqual({ count: 0, items: [] });
   });
 });

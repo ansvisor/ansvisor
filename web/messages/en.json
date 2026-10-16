@@ -914,7 +914,7 @@
         "copyAll": "Copy Data",
         "csv": "Export CSV",
         "excel": "Export Excel",
-        "copied": "Action {ref} copied: {tasks, plural, one {# task} other {# tasks}}, {signals, plural, one {# signal} other {# signals}}",
+        "copied": "Action {ref} copied: {entity, select, prompts {{affected, plural, one {# prompt} other {# prompts}}, } pages {{affected, plural, one {# page} other {# pages}}, } other {}}{tasks, plural, one {# task} other {# tasks}}, {signals, plural, one {# signal} other {# signals}}",
         "exportFailed": "Couldn't create the export.",
         "preview": {
           "copy": "Copy all",

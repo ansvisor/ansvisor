@@ -4,7 +4,9 @@ import type { ActionDetail, ActionItem } from '@/lib/actions/action-center';
 import type { Signal } from '@/lib/signals/map';
 import {
   ACTION_CSV_HEADERS,
+  ACTION_LIST_CSV_HEADERS,
   actionCsv,
+  actionListCsv,
   actionExportFileName,
   actionMarkdown,
   actionWorkbook,
@@ -250,6 +252,47 @@ describe('actionCsv', () => {
     expect(rows[2]).toContain(`"'=HYPERLINK(""x"")"`);
     expect(rows[3]).toContain('Citation · Lost,Which tools track AI search?');
     expect(rows[3]).toContain('ChatGPT; Gemini,United States,2026-10-09');
+  });
+});
+
+describe('actionListCsv', () => {
+  const listRow = {
+    number: 52,
+    priorityScore: 84,
+    priorityLevel: 'High',
+    title: 'Recover lost citations on 3 prompts',
+    category: 'Recover',
+    status: 'New',
+    assignee: '',
+    dueDate: '',
+    tasksDone: 1,
+    tasksTotal: 6,
+    signalCount: 3,
+    created: '2026-10-15T00:00:00Z',
+  };
+
+  it("adds each action's affected count and names to the list's columns (AC-005)", () => {
+    const [header, row] = actionListCsv([
+      {
+        ...listRow,
+        affected: { count: 7, items: ['Best coffee subscription?', 'Coffee, delivered'] },
+      },
+    ]).split('\n');
+    expect(header).toBe(ACTION_LIST_CSV_HEADERS.join(','));
+    expect(header).toContain('priority_score,priority_level,');
+    expect(header).toContain(',signal_count,affected_count,affected_items,created');
+    expect(row).toBe(
+      '52,84,High,Recover lost citations on 3 prompts,Recover,New,,,1 / 6,3,7,"Best coffee subscription?; Coffee, delivered",2026-10-15T00:00:00Z',
+    );
+  });
+
+  it('writes none for an action whose affected items were not read, and no score before one', () => {
+    const [, row] = actionListCsv([{ ...listRow, priorityScore: null, priorityLevel: '' }]).split(
+      '\n',
+    );
+    expect(row).toBe(
+      '52,,,Recover lost citations on 3 prompts,Recover,New,,,1 / 6,3,0,,2026-10-15T00:00:00Z',
+    );
   });
 });
 

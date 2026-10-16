@@ -355,6 +355,19 @@ export function affectedTotal(affected: Affected): number {
   return rows > 0 ? rows : affected.competitors.length + affected.topics.length;
 }
 
+/**
+ * The actions list's export of an action's affected items (AC-005): the
+ * Affected tab's count and the names it lists. A group cut at its first 50
+ * prompts names those and counts them all, as the tab does.
+ */
+export function affectedSummary(affected: Affected): { count: number; items: string[] } {
+  const rows = [...affected.prompts.map((p) => p.text), ...affected.pages.map((p) => p.url)];
+  return {
+    count: affectedTotal(affected),
+    items: rows.length > 0 ? rows : [...affected.competitors, ...affected.topics],
+  };
+}
+
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
 /** "#1", or "—" when not named. */

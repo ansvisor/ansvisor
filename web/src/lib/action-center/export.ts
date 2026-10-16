@@ -408,6 +408,70 @@ export function actionCsv(a: ActionExport): string {
   return toCsv(rows, ACTION_CSV_HEADERS);
 }
 
+/** Written first so Excel reads a CSV as UTF-8 and keeps Turkish characters. */
+export const BYTE_ORDER_MARK = String.fromCharCode(0xfeff);
+
+/**
+ * The actions list's Export CSV: a row per action. Besides its priority, it
+ * says what each action's Affected tab counts and names (AC-005).
+ */
+export const ACTION_LIST_CSV_HEADERS = [
+  'number',
+  'priority_score',
+  'priority_level',
+  'title',
+  'category',
+  'status',
+  'assignee',
+  'due_date',
+  'tasks_done_total',
+  'signal_count',
+  'affected_count',
+  'affected_items',
+  'created',
+];
+
+/** One action of the list, labelled in the reader's language. */
+export interface ActionListRow {
+  number: number;
+  priorityScore: number | null;
+  /** "High"; empty before the action is scored. */
+  priorityLevel: string;
+  title: string;
+  category: string;
+  status: string;
+  assignee: string;
+  dueDate: string;
+  tasksDone: number;
+  tasksTotal: number;
+  signalCount: number;
+  /** What its Affected tab counts and names; missing reads as none. */
+  affected?: { count: number; items: string[] };
+  created: string;
+}
+
+/** The actions list's Export CSV, without the byte order mark the download adds. */
+export function actionListCsv(rows: ActionListRow[]): string {
+  return toCsv(
+    rows.map((row) => ({
+      number: row.number,
+      priority_score: row.priorityScore ?? '',
+      priority_level: row.priorityLevel,
+      title: row.title,
+      category: row.category,
+      status: row.status,
+      assignee: row.assignee,
+      due_date: row.dueDate,
+      tasks_done_total: `${row.tasksDone} / ${row.tasksTotal}`,
+      signal_count: row.signalCount,
+      affected_count: row.affected?.count ?? 0,
+      affected_items: (row.affected?.items ?? []).join('; '),
+      created: row.created,
+    })),
+    ACTION_LIST_CSV_HEADERS,
+  );
+}
+
 const bold = (value: string) => ({ value, fontWeight: 'bold' as const });
 
 /** "Export Excel": a sheet each for the action, its tasks, its signals and its history. */
