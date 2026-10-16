@@ -1373,13 +1373,13 @@
         "dismissed": "Dismissed"
       },
       "affected": {
-        "prompt": "{count} prompts",
-        "url": "{count} pages",
-        "citation": "{count} signals",
-        "keyword": "{count} keywords",
-        "topic": "{count} topics",
+        "prompt": "{count, plural, one {# prompt} other {# prompts}}",
+        "url": "{count, plural, one {# page} other {# pages}}",
+        "citation": "{count, plural, one {# signal} other {# signals}}",
+        "keyword": "{count, plural, one {# keyword} other {# keywords}}",
+        "topic": "{count, plural, one {# topic} other {# topics}}",
         "competitor": "Competitor",
-        "platform": "{count} platforms"
+        "platform": "{count, plural, one {# platform} other {# platforms}}"
       },
       "range": {
         "7d": "7d",
@@ -1430,7 +1430,7 @@
         "netChange": "net change",
         "ofAffected": "of affected",
         "fromStart": "from start",
-        "days": "{n} days",
+        "days": "{n, plural, one {# day} other {# days}}",
         "affected": "Affected",
         "noAffected": "Nothing recorded.",
         "tasks": "Tasks ({completed}/{total})",
