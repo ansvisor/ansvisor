@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * AC-007 reads. The list counts the signals that support an action now (open
  * ones it holds); the drawer lists every signal the action took as evidence,
  * through action_signals, so a closed action keeps the ones that moved on.
+ * The other way, a signal's drawer lists every action that took it.
  */
 
 type Call = [string, ...unknown[]];
@@ -31,6 +32,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 const { getActionDetail, getActions } = await import('./action-center');
+const { getSignalActions } = await import('./signals');
 
 const signalsQuery = () => queries.find((q) => q.table === 'signals')!;
 
@@ -80,5 +82,43 @@ describe('getActionDetail', () => {
     expect(calls).toContainEqual(['eq', 'action_signals.action_id', 'a1']);
     // Not by the signal's current action, which moves to a later cycle.
     expect(calls).not.toContainEqual(['eq', 'action_id', 'a1']);
+  });
+});
+
+describe('getSignalActions', () => {
+  it('lists every action that took the signal, through action_signals, the latest first', async () => {
+    rows.action_signals = [
+      {
+        actions: {
+          id: 'a2',
+          action_no: 12,
+          kind: 'recover_lost_citations',
+          status: 'new',
+          payload: null,
+        },
+      },
+      {
+        actions: {
+          id: 'a1',
+          action_no: 9,
+          kind: 'recover_lost_citations',
+          status: 'completed',
+          payload: {},
+        },
+      },
+    ];
+    const actions = await getSignalActions('b1', 's1');
+
+    expect(actions).toEqual([
+      { id: 'a2', actionNo: 12, kind: 'recover_lost_citations', status: 'new', payload: {} },
+      { id: 'a1', actionNo: 9, kind: 'recover_lost_citations', status: 'completed', payload: {} },
+    ]);
+    const calls = queries.find((q) => q.table === 'action_signals')!.calls;
+    expect(calls[0][1]).toContain('actions!inner(');
+    expect(calls).toContainEqual(['eq', 'signal_id', 's1']);
+    expect(calls).toContainEqual(['eq', 'actions.brand_id', 'b1']);
+    expect(calls).toContainEqual(['order', 'linked_at', { ascending: false }]);
+    // Not the actions by the signal's action_id, which names only the current one.
+    expect(queries.map((q) => q.table)).toEqual(['action_signals']);
   });
 });

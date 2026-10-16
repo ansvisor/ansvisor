@@ -171,26 +171,79 @@ describe('SignalWhereBlock', () => {
 });
 
 describe('SignalEvidenceBlock', () => {
-  it('links the answers and the action the signal is used by', async () => {
+  it('links the answers and every action the signal is used by, with its status', async () => {
+    // The latest link first: the current action, then the closed one before it.
     getSignalActions.mockResolvedValue([
-      { id: 'a1', actionNo: 52, kind: 'unknown_kind_for_test', status: 'new', payload: {} },
+      { id: 'a2', actionNo: 61, kind: 'unknown_kind_for_test', status: 'new', payload: {} },
+      { id: 'a1', actionNo: 52, kind: 'unknown_kind_for_test', status: 'completed', payload: {} },
     ]);
     await act(async () => {
       render(
         <SignalEvidenceBlock
           brandId="b1"
-          signal={signal({ payload: { promptId: 'p1', promptText: 'x' }, actionId: 'a1' })}
+          signal={signal({ payload: { promptId: 'p1', promptText: 'x' }, actionId: 'a2' })}
         />,
       );
     });
-    expect(getSignalActions).toHaveBeenCalledWith('b1', ['a1']);
+    // By the signal, so its earlier actions come too, not by its action_id.
+    expect(getSignalActions).toHaveBeenCalledWith('b1', 's1');
     const links = [...container.querySelectorAll('a')].map(
       (a) => `${a.textContent} → ${a.getAttribute('href')}`,
     );
     expect(links).toEqual([
       'View AI answers → /dashboard/prompts/p1',
-      'AC-52 · Unknown kind for test → /dashboard/action-center/actions?action=a1',
+      'AC-61 · Unknown kind for testNew → /dashboard/action-center/actions?action=a2',
+      'AC-52 · Unknown kind for testCompleted → /dashboard/action-center/actions?action=a1',
     ]);
+  });
+
+  it("puts the signal's current action first when its link is older", async () => {
+    getSignalActions.mockResolvedValue([
+      { id: 'a2', actionNo: 61, kind: 'unknown_kind_for_test', status: 'completed', payload: {} },
+      { id: 'a1', actionNo: 52, kind: 'unknown_kind_for_test', status: 'in_progress', payload: {} },
+    ]);
+    await act(async () => {
+      render(<SignalEvidenceBlock brandId="b1" signal={signal({ actionId: 'a1' })} />);
+    });
+    const labels = [...container.querySelectorAll('li a')].map((a) => a.textContent);
+    expect(labels).toEqual([
+      'AC-52 · Unknown kind for testIn Progress',
+      'AC-61 · Unknown kind for testCompleted',
+    ]);
+  });
+
+  it('loads again when the signal moves to another action, without the old list', async () => {
+    getSignalActions.mockResolvedValueOnce([
+      { id: 'a1', actionNo: 52, kind: 'unknown_kind_for_test', status: 'new', payload: {} },
+    ]);
+    await act(async () => {
+      render(<SignalEvidenceBlock brandId="b1" signal={signal({ actionId: 'a1' })} />);
+    });
+    expect(container.textContent).toContain('AC-52');
+
+    let resolve: (rows: unknown[]) => void = () => {};
+    getSignalActions.mockReturnValueOnce(new Promise((r) => (resolve = r)));
+    render(<SignalEvidenceBlock brandId="b1" signal={signal({ actionId: 'a2' })} />);
+    expect(getSignalActions).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain('Loading…');
+    expect(container.textContent).not.toContain('AC-52');
+
+    await act(async () => {
+      resolve([
+        { id: 'a2', actionNo: 61, kind: 'unknown_kind_for_test', status: 'new', payload: {} },
+        { id: 'a1', actionNo: 52, kind: 'unknown_kind_for_test', status: 'completed', payload: {} },
+      ]);
+    });
+    expect(container.textContent).toContain('AC-61');
+    expect(container.textContent).toContain('AC-52');
+  });
+
+  it('says when the actions could not be loaded', async () => {
+    getSignalActions.mockRejectedValue(new Error('timeout'));
+    await act(async () => {
+      render(<SignalEvidenceBlock brandId="b1" signal={signal({ actionId: 'a1' })} />);
+    });
+    expect(container.textContent).toContain('Couldn’t load the actions.');
   });
 
   it('says when no action uses the signal, without asking', () => {

@@ -3,25 +3,37 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
 
 /**
  * list_signals returns each signal's raw row plus the detail the dashboard's
- * drawer shows (AC-001): where, change, evidence and used_by_actions. These
- * pin that a kind this build doesn't know still comes back as it always did,
- * and that a failed actions read costs used_by_actions, not the signals.
+ * drawer shows (AC-001): where, change, evidence and used_by_actions, every
+ * action a signal was linked to (AC-007). These pin that a kind this build
+ * doesn't know still comes back as it always did, and that a failed actions
+ * read costs used_by_actions, not the signals.
  */
 
 let rows: Record<string, unknown[]> = {};
 let errors: Record<string, { message: string } | null> = {};
+let linkReads: string[][] = [];
 
 function builder(table: string) {
+  let ids: string[] | null = null;
   const chain = {
     select: () => chain,
     eq: () => chain,
     order: () => chain,
     limit: () => chain,
-    in: () => chain,
+    in: (_column: string, values: string[]) => {
+      ids = values;
+      if (table === 'action_signals') linkReads.push(values);
+      return chain;
+    },
     range: () => chain,
     maybeSingle: async () => ({ data: table === 'brands' ? { id: 'b1' } : null, error: null }),
-    then: (resolve: (v: { data: unknown[]; error: { message: string } | null }) => void) =>
-      resolve({ data: rows[table] ?? [], error: errors[table] ?? null }),
+    then: (resolve: (v: { data: unknown[]; error: { message: string } | null }) => void) => {
+      const data = (rows[table] ?? []).filter(
+        (row) =>
+          table !== 'action_signals' || ids!.includes((row as { signal_id: string }).signal_id),
+      );
+      resolve({ data, error: errors[table] ?? null });
+    },
   };
   return chain;
 }
@@ -60,6 +72,7 @@ const row = (over: Record<string, unknown>) => ({
 
 beforeEach(() => {
   errors = {};
+  linkReads = [];
   rows = {
     signals: [row({}), row({ id: 's2', kind: 'retired_kind', action_id: null, payload: {} })],
     prompts: [
@@ -72,7 +85,17 @@ beforeEach(() => {
         topics: { name: 'Coffee' },
       },
     ],
-    actions: [{ id: 'a1', action_no: 52, kind: 'recover_lost_citations', status: 'new' }],
+    // The latest link first: the current action, then a closed one before it.
+    action_signals: [
+      {
+        signal_id: 's1',
+        actions: { id: 'a1', action_no: 52, kind: 'recover_lost_citations', status: 'new' },
+      },
+      {
+        signal_id: 's1',
+        actions: { id: 'a0', action_no: 31, kind: 'recover_lost_citations', status: 'completed' },
+      },
+    ],
   };
 });
 
@@ -92,15 +115,42 @@ describe('listSignalsFor', () => {
       },
       change: null,
       evidence: { links: [{ kind: 'prompt_answers', path: '/dashboard/prompts/p1' }] },
-      used_by_actions: [{ id: 'a1', action_no: 52, kind: 'recover_lost_citations', status: 'new' }],
+      used_by_actions: [
+        { id: 'a1', action_no: 52, kind: 'recover_lost_citations', status: 'new' },
+        { id: 'a0', action_no: 31, kind: 'recover_lost_citations', status: 'completed' },
+      ],
     });
     // A kind this build has no copy for keeps its raw row.
     expect(unknown).toMatchObject({ id: 's2', kind: 'retired_kind', used_by_actions: [] });
     expect(unknown).not.toHaveProperty('where');
+    // Only signals with an action are looked up: s2 has none.
+    expect(linkReads).toEqual([['s1']]);
+  });
+
+  it("puts the signal's current action first when its link is older", async () => {
+    rows.signals = [row({ action_id: 'a0' })];
+    const [known] = (await listSignalsFor(auth, { brandId: 'b1' }))!;
+    expect((known.used_by_actions as { id: string }[]).map((a) => a.id)).toEqual(['a0', 'a1']);
+  });
+
+  it('reads the links of a full page in chunks of 100 signals', async () => {
+    rows.signals = Array.from({ length: 150 }, (_, i) => row({ id: `s${i + 1}` }));
+    rows.action_signals.push({
+      signal_id: 's150',
+      actions: { id: 'a9', action_no: 77, kind: 'recover_lost_citations', status: 'new' },
+    });
+    const signals = (await listSignalsFor(auth, { brandId: 'b1', limit: 150 }))!;
+
+    expect(linkReads.map((ids) => ids.length)).toEqual([100, 50]);
+    expect(signals[0].used_by_actions).toHaveLength(2);
+    expect(signals[149].used_by_actions).toEqual([
+      { id: 'a9', action_no: 77, kind: 'recover_lost_citations', status: 'new' },
+    ]);
+    expect(signals[1].used_by_actions).toEqual([]);
   });
 
   it('still returns the signals when the actions read fails', async () => {
-    errors.actions = { message: 'timeout' };
+    errors.action_signals = { message: 'timeout' };
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const [known] = (await listSignalsFor(auth, { brandId: 'b1' }))!;
     expect(known).toMatchObject({ id: 's1', used_by_actions: [] });

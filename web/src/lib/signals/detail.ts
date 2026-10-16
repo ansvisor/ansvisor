@@ -680,6 +680,22 @@ export interface SignalActionRef {
 }
 
 /**
+ * A signal's actions as "Used by actions" lists them: its current action
+ * (`signals.action_id`) first, then the others by their latest link. The
+ * link date alone can put an older action first: a signal that rejoins a
+ * reopened action keeps that link's first date.
+ */
+export function currentActionFirst<T extends { id: string }>(
+  actions: T[],
+  currentId: string | null,
+): T[] {
+  return [
+    ...actions.filter((action) => action.id === currentId),
+    ...actions.filter((action) => action.id !== currentId),
+  ];
+}
+
+/**
  * A signal's detail in the shape the MCP tools return (AC-001: "the signal
  * API/MCP returns the same structured fields"): snake_case keys, a null for
  * every field no detector records yet, and every figure with its unit.

@@ -9,6 +9,7 @@ import { getSignalActions, type Signal, type SignalAction } from '@/lib/actions/
 import { actionTexts } from '@/lib/action-center/display';
 import { locationName, platformFamily, platformName } from '@/lib/signals/names';
 import {
+  currentActionFirst,
   METRIC_UNITS,
   signalChange,
   signalLinks,
@@ -17,6 +18,7 @@ import {
   type WhereValue,
 } from '@/lib/signals/detail';
 import { cn } from '@/lib/utils';
+import { ActionStatusBadge } from './action-table';
 
 /**
  * The signal drawer's three blocks (AC-001): Where, What changed, and
@@ -279,34 +281,40 @@ function FigureBox({ label, value }: { label: string; value: string }) {
 export function SignalEvidenceBlock({ signal, brandId }: { signal: Signal; brandId: string }) {
   const t = useTranslations('actionCenter.signalsPage.drawer');
   const tActions = useTranslations('actionCenter.actionTexts');
-  // Loaded per action id; until the answer for this id arrives it is loading.
+  // Loaded per signal and current action; until the answer for them arrives
+  // it is loading. A signal is linked to an action only by becoming its
+  // current one, and deleting an action drops both, so a signal without one
+  // is used by none and isn't asked about.
   const [loaded, setLoaded] = useState<{
-    id: string;
+    key: string;
     actions: SignalAction[] | null;
   } | null>(null);
-  const actionId = signal.actionId;
+  const signalId = signal.id;
+  const key = signal.actionId ? `${signalId}|${signal.actionId}` : null;
 
   useEffect(() => {
-    if (!actionId) return;
+    if (!key) return;
     let cancelled = false;
-    getSignalActions(brandId, [actionId])
+    getSignalActions(brandId, signalId)
       .then((rows) => {
-        if (!cancelled) setLoaded({ id: actionId, actions: rows });
+        if (!cancelled) setLoaded({ key, actions: rows });
       })
       .catch(() => {
-        if (!cancelled) setLoaded({ id: actionId, actions: null });
+        if (!cancelled) setLoaded({ key, actions: null });
       });
     return () => {
       cancelled = true;
     };
-  }, [brandId, actionId]);
+  }, [brandId, signalId, key]);
 
-  const current = actionId && loaded?.id === actionId ? loaded : null;
-  const actions: SignalAction[] | 'loading' | 'failed' = !actionId
+  const current = key && loaded?.key === key ? loaded : null;
+  const actions: SignalAction[] | 'loading' | 'failed' = !key
     ? []
     : !current
       ? 'loading'
-      : (current.actions ?? 'failed');
+      : current.actions
+        ? currentActionFirst(current.actions, signal.actionId)
+        : 'failed';
 
   const stamp = (iso: string) =>
     new Date(iso).toLocaleDateString('en-US', {
@@ -356,13 +364,16 @@ export function SignalEvidenceBlock({ signal, brandId }: { signal: Signal; brand
                 <li key={action.id}>
                   <Link
                     href={`/dashboard/action-center/actions?action=${action.id}`}
-                    className="inline-flex items-start gap-1 rounded-md border px-2.5 py-1 font-medium hover:bg-muted"
+                    className="flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 hover:bg-muted"
                   >
-                    {t('actionLabel', {
-                      no: action.actionNo,
-                      title: actionTexts(action, tActions).title,
-                    })}
-                    <ArrowUpRight className="h-3 w-3" />
+                    <span className="inline-flex min-w-0 items-start gap-1 font-medium">
+                      {t('actionLabel', {
+                        no: action.actionNo,
+                        title: actionTexts(action, tActions).title,
+                      })}
+                      <ArrowUpRight className="mt-px h-3 w-3 shrink-0" />
+                    </span>
+                    <ActionStatusBadge status={action.status} />
                   </Link>
                 </li>
               ))}

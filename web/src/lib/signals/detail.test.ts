@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Signal } from './map';
 import { NO_WHERE } from './where';
-import { signalChange, signalDetailForApi, signalLinks, signalWhereFields } from './detail';
+import {
+  currentActionFirst,
+  signalChange,
+  signalDetailForApi,
+  signalLinks,
+  signalWhereFields,
+} from './detail';
 
 const signal = (over: Partial<Signal>): Signal => ({
   id: 's1',
@@ -239,6 +245,21 @@ describe('signalLinks', () => {
         }),
       ),
     ).toEqual([{ kind: 'prompts', href: '/dashboard/prompts' }]);
+  });
+});
+
+describe('currentActionFirst', () => {
+  const byLink = [{ id: 'b' }, { id: 'a' }, { id: 'c' }];
+
+  it("puts the signal's current action first and keeps the others by latest link", () => {
+    // A signal that rejoined a reopened action keeps that link's first date.
+    expect(currentActionFirst(byLink, 'a').map((a) => a.id)).toEqual(['a', 'b', 'c']);
+    expect(currentActionFirst(byLink, 'b').map((a) => a.id)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('leaves the order when the current action is not among them', () => {
+    expect(currentActionFirst(byLink, null).map((a) => a.id)).toEqual(['b', 'a', 'c']);
+    expect(currentActionFirst(byLink, 'z').map((a) => a.id)).toEqual(['b', 'a', 'c']);
   });
 });
 

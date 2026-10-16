@@ -22,6 +22,7 @@ import {
 } from '@/lib/signals/registry';
 import { SIGNAL_ROW_COLUMNS, mapSignalRows, type Signal, type SignalRow } from '@/lib/signals/map';
 import { readPromptPlaces } from '@/lib/signals/prompt-places';
+import type { ActionStatus } from '@/lib/action-center/registry';
 
 export type { Signal } from '@/lib/signals/map';
 
@@ -75,32 +76,31 @@ export interface SignalAction {
   id: string;
   actionNo: number;
   kind: string;
-  status: string;
+  status: ActionStatus;
   payload: Record<string, unknown>;
 }
 
 /**
- * The actions behind a signal's `action_id` (spec §10: signal → action
- * traceability). Read when a drawer opens rather than with the list, so the
- * list stays one query of signals.
+ * Every action a signal has been used by (spec §10: signal → action
+ * traceability), through action_signals (AC-007): not only its current
+ * `action_id` but the earlier ones it supported, closed ones included, the
+ * latest link first. Read when a drawer opens rather than with the list, so
+ * the list stays one query of signals.
  */
-export async function getSignalActions(
-  brandId: string,
-  actionIds: string[],
-): Promise<SignalAction[]> {
-  if (actionIds.length === 0) return [];
+export async function getSignalActions(brandId: string, signalId: string): Promise<SignalAction[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from('actions')
-    .select('id, action_no, kind, status, payload')
-    .eq('brand_id', brandId)
-    .in('id', actionIds);
+    .from('action_signals')
+    .select('actions!inner(id, action_no, kind, status, payload)')
+    .eq('signal_id', signalId)
+    .eq('actions.brand_id', brandId)
+    .order('linked_at', { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => ({
+  return (data ?? []).map(({ actions: row }) => ({
     id: row.id,
     actionNo: Number(row.action_no),
     kind: row.kind,
-    status: row.status,
+    status: row.status as ActionStatus,
     payload: (row.payload ?? {}) as Record<string, unknown>,
   }));
 }

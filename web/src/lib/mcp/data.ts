@@ -14,7 +14,7 @@ import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { API_BASE_URL } from '@/config/api';
 import { mapSignalRows, type SignalRow } from '@/lib/signals/map';
 import { readPromptPlaces } from '@/lib/signals/prompt-places';
-import { signalDetailForApi, type SignalActionRef } from '@/lib/signals/detail';
+import { currentActionFirst, signalDetailForApi, type SignalActionRef } from '@/lib/signals/detail';
 
 /**
  * Pure data-fetch functions shared by the MCP route and the parallel REST
@@ -2728,6 +2728,60 @@ export interface ListSignalsParams {
   limit?: number;
 }
 
+/** Signal ids per action_signals read: 100 UUIDs keep the request line well under 8KB. */
+const SIGNAL_LINK_CHUNK = 100;
+
+type LinkedAction = { id: string; action_no: number; kind: string; status: string };
+
+/**
+ * The actions each signal has been used by, through action_signals (AC-007):
+ * its current action and the earlier ones, closed ones included, the latest
+ * link first. They only add used_by_actions, so a failed read is logged and
+ * leaves every signal's list empty rather than taking the signals down.
+ */
+async function signalActionRefs(
+  brandId: string,
+  signalIds: string[],
+): Promise<Map<string, SignalActionRef[]>> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < signalIds.length; i += SIGNAL_LINK_CHUNK) {
+    chunks.push(signalIds.slice(i, i + SIGNAL_LINK_CHUNK));
+  }
+  const results = await Promise.all(
+    chunks.map((ids) =>
+      supabaseAdmin
+        .from('action_signals')
+        .select('signal_id, actions!inner(id, action_no, kind, status)')
+        .in('signal_id', ids)
+        .eq('actions.brand_id', brandId)
+        .order('linked_at', { ascending: false }),
+    ),
+  );
+  const bySignal = new Map<string, SignalActionRef[]>();
+  for (const { data, error } of results) {
+    if (error) {
+      console.error('[mcp] signal actions read failed:', error.message);
+      return new Map();
+    }
+    // The untyped admin client models the action_signals→actions FK as an
+    // array; it is a single action, so peel it off.
+    const links =
+      (data as unknown as Array<{
+        signal_id: string;
+        actions: LinkedAction[] | LinkedAction | null;
+      }> | null) ?? [];
+    for (const link of links) {
+      const a = Array.isArray(link.actions) ? (link.actions[0] ?? null) : link.actions;
+      if (!a) continue;
+      bySignal.set(link.signal_id, [
+        ...(bySignal.get(link.signal_id) ?? []),
+        { id: a.id, action_no: Number(a.action_no), kind: a.kind, status: a.status },
+      ]);
+    }
+  }
+  return bySignal;
+}
+
 export async function listSignalsFor(
   auth: McpAuthContext,
   params: ListSignalsParams,
@@ -2750,32 +2804,19 @@ export async function listSignalsFor(
 
   // Each signal also says where it happened, what changed with units and
   // period, what it rests on, and which actions use it (AC-001), the same
-  // way the dashboard's signal drawer does.
-  const actionIds = [...new Set(rows.map((row) => row.action_id).filter(Boolean))] as string[];
-  const [prompts, actionsRes] = await Promise.all([
+  // way the dashboard's signal drawer does. A signal is linked to an action
+  // only by becoming its current one, so those without one have no links.
+  const [prompts, actions] = await Promise.all([
     readPromptPlaces(supabaseAdmin, params.brandId),
-    actionIds.length
-      ? supabaseAdmin
-          .from('actions')
-          .select('id, action_no, kind, status')
-          .eq('brand_id', params.brandId)
-          .in('id', actionIds)
-      : Promise.resolve({ data: [], error: null }),
+    signalActionRefs(
+      params.brandId,
+      rows.filter((row) => row.action_id).map((row) => row.id),
+    ),
   ]);
-  // The actions only add used_by_actions; a failed read leaves it empty
-  // rather than taking the signals down with it.
-  if (actionsRes.error)
-    console.error('[mcp] signal actions read failed:', actionsRes.error.message);
-  const actions = new Map<string, SignalActionRef>(
-    (actionsRes.error ? [] : (actionsRes.data ?? [])).map((a) => [
-      a.id,
-      { id: a.id, action_no: Number(a.action_no), kind: a.kind, status: a.status },
-    ]),
-  );
   const known = new Map(mapSignalRows(rows, prompts).map((signal) => [signal.id, signal]));
 
   return rows.map((row) => {
-    const used = row.action_id && actions.has(row.action_id) ? [actions.get(row.action_id)!] : [];
+    const used = currentActionFirst(actions.get(row.id) ?? [], row.action_id);
     const signal = known.get(row.id);
     // A kind this build has no detail for still comes back, as it always did.
     return signal
