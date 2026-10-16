@@ -42,6 +42,8 @@ import { getTopicById } from '@/lib/actions/topic';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
 import { getOrgLocationUsage } from '@/lib/prompt-locations';
 import { getPromptSuggestions } from '@/lib/actions/prompt-suggestions';
+import { nextScheduledRun } from '@/lib/tracking-schedule';
+import { numberFormat, type NumberFormat } from '@/lib/number-format';
 import { getContentUsage } from '@/lib/actions/content';
 import type { ContentUsage } from '@/lib/content-usage';
 import { percentageChange } from '@/lib/metrics';
@@ -227,6 +229,12 @@ export interface InsightsSummary {
   netSentimentChange: number | null;
   avgPosition: number | null;
   avgPositionChange: number | null;
+  /**
+   * The answers Net sentiment and Avg. position are taken over (VIS-005):
+   * those that name the brand, and those that place it.
+   */
+  mentioningResults: number;
+  positionedResults: number;
 }
 
 /**
@@ -774,6 +782,10 @@ export interface TrackingWindow {
   anchored: { dateFrom: string; dateTo: string } | null;
   /** A full run currently in flight (cron or manual), for the progress banner. */
   activeRun: { startedAt: string; source: string } | null;
+  /** The brand's last completed full run, scheduled or Run All (VIS-012); null before its first. */
+  lastRunAt: string | null;
+  /** When the next scheduled run is due, from the last ones (VIS-012); null when not known. */
+  nextRunAt: string | null;
 }
 
 /**
@@ -792,7 +804,7 @@ export interface TrackingWindow {
 export async function getTrackingWindow(brandId: string): Promise<TrackingWindow> {
   const supabase = await dbClient();
 
-  const [completedResp, activeResp] = await Promise.all([
+  const [completedResp, activeResp, scheduledResp] = await Promise.all([
     supabase
       .from('tracking_runs')
       .select('completed_at')
@@ -810,6 +822,14 @@ export async function getTrackingWindow(brandId: string): Promise<TrackingWindow
       .gte('started_at', new Date(Date.now() - 2 * 3600_000).toISOString())
       .order('started_at', { ascending: false })
       .limit(1),
+    // The daily runs, for when the next one is due (the header's "next run in 13h").
+    supabase
+      .from('tracking_runs')
+      .select('started_at')
+      .eq('brand_id', brandId)
+      .eq('source', 'cron')
+      .order('started_at', { ascending: false })
+      .limit(2),
   ]);
 
   const completed = completedResp.data ?? [];
@@ -829,6 +849,8 @@ export async function getTrackingWindow(brandId: string): Promise<TrackingWindow
     activeRun: active
       ? { startedAt: active.started_at as string, source: (active.source as string) ?? 'manual' }
       : null,
+    lastRunAt: latest ?? null,
+    nextRunAt: nextScheduledRun((scheduledResp.data ?? []).map((r) => r.started_at as string)),
   };
 }
 
@@ -1829,6 +1851,8 @@ export async function getInsightsSummary(
       netSentimentChange: null,
       avgPosition: null,
       avgPositionChange: null,
+      mentioningResults: 0,
+      positionedResults: 0,
     };
   }
 
@@ -1973,6 +1997,8 @@ export async function getInsightsSummary(
     netSentimentChange,
     avgPosition: curRates.avgPosition,
     avgPositionChange,
+    mentioningResults: Number(cur.mentioning_results ?? 0),
+    positionedResults: Number(cur.position_count ?? 0),
   };
 }
 
@@ -3398,7 +3424,10 @@ export async function getInsightsBreakdown(
   brandId: string,
   metric: BreakdownMetric,
   opts?: BreakdownFilters,
+  /** The UI's locale, for the numbers in the root-cause sentence (VIS-005). */
+  locale = 'en',
 ): Promise<InsightsBreakdown> {
+  const f = numberFormat(locale);
   const supabase = await dbClient();
   const windows = comparisonWindows(opts);
   const p_models = modelFilterArray(opts?.model);
@@ -3531,13 +3560,13 @@ export async function getInsightsBreakdown(
     rootCause = `${metricLabel} held steady vs the previous ${windowDays}-day window.`;
   } else if (!topPrompt) {
     const dir = totalDelta > 0 ? 'rose' : 'fell';
-    const magnitude = formatTotalMagnitude(totalDelta, totalDeltaPct, metric);
+    const magnitude = formatTotalMagnitude(totalDelta, totalDeltaPct, metric, f);
     rootCause = `${metricLabel} ${dir} ${magnitude} vs the previous ${windowDays}d — the change is spread evenly across prompts, no single driver.`;
   } else {
     const headline = totalDelta < 0 ? 'Biggest drop' : 'Biggest gain';
-    const promptClause = `"${truncate(topPrompt.label, 60)}" ${formatContribution(topPrompt, metric)}`;
+    const promptClause = `"${truncate(topPrompt.label, 60)}" ${formatContribution(topPrompt, metric, f)}`;
     const platformClause = topPlatform
-      ? ` Top platform ${totalDelta < 0 ? 'drop' : 'gain'}: ${topPlatform.label} ${formatContribution(topPlatform, metric)}.`
+      ? ` Top platform ${totalDelta < 0 ? 'drop' : 'gain'}: ${topPlatform.label} ${formatContribution(topPlatform, metric, f)}.`
       : '';
     rootCause = `${headline}: ${promptClause}.${platformClause}`;
   }
@@ -3567,37 +3596,37 @@ function truncate(s: string, max: number): string {
  *   - mentions:  "lost 84 mentions (−38%)"   or  "gained 12 mentions"
  *   - visibility: "dropped 2.1 pts"           or  "rose 2.1 pts"
  */
-function formatContribution(row: BreakdownRow, metric: BreakdownMetric): string {
+function formatContribution(row: BreakdownRow, metric: BreakdownMetric, f: NumberFormat): string {
   const delta = row.delta ?? 0;
   const isLoss = delta < 0;
   const abs = Math.abs(delta);
 
   if (metric === 'visibility') {
     const verb = isLoss ? 'dropped' : 'rose';
-    const value = Math.round(abs * 10) / 10;
-    return `${verb} ${value} pts`;
+    return `${verb} ${f.number(Math.round(abs * 10) / 10)} pts`;
   }
 
   const verb = isLoss ? 'lost' : 'gained';
-  const core = `${verb} ${abs.toLocaleString('en-US')} mentions`;
+  const core = `${verb} ${f.number(abs)} mentions`;
   if (row.deltaPct === null) return core;
   const sign = row.deltaPct < 0 ? '−' : '+';
-  return `${core} (${sign}${Math.abs(row.deltaPct)}%)`;
+  return `${core} (${sign}${f.percent(Math.abs(row.deltaPct))})`;
 }
 
 function formatTotalMagnitude(
   delta: number,
   deltaPct: number | null,
   metric: BreakdownMetric,
+  f: NumberFormat,
 ): string {
   const abs = Math.abs(delta);
   if (metric === 'visibility') {
-    return `${Math.round(abs * 10) / 10} pts`;
+    return `${f.number(Math.round(abs * 10) / 10)} pts`;
   }
-  const core = `${abs.toLocaleString('en-US')} mentions`;
+  const core = `${f.number(abs)} mentions`;
   if (deltaPct === null) return core;
   const sign = deltaPct < 0 ? '−' : '+';
-  return `${core} (${sign}${Math.abs(deltaPct)}%)`;
+  return `${core} (${sign}${f.percent(Math.abs(deltaPct))})`;
 }
 
 // ─── Topic detail bundle (#312) ───────────────────────────────────────────
