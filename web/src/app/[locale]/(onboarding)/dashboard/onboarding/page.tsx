@@ -224,7 +224,7 @@ const PLAN_STEP_COPY: Partial<
   starter: {
     tagline: 'Essential AI visibility tracking.',
     platformFeatures: 'Core Platform Features',
-    engines: 'ChatGPT & Perplexity',
+    engines: 'ChatGPT & Microsoft Copilot',
   },
   growth: {
     tagline: 'Advanced AI insights to accelerate growth.',
