@@ -1134,6 +1134,7 @@
           "due_date_set": "Due date updated",
           "task_status": "Task updated",
           "task_edited": "Task edited",
+          "tasks_generated": "{count, plural, one {# task} other {# tasks}} written from the action's evidence",
           "task_ran": "{task} — carried out automatically ({tool})",
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
           "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
@@ -1148,6 +1149,27 @@
         "skipReasonPlaceholder": "e.g. handled elsewhere, no longer relevant",
         "skipConfirm": "Skip task",
         "skipCancel": "Cancel",
+        "regenerate": {
+          "button": "Regenerate tasks",
+          "confirm": "Write this action's tasks again from its evidence? Done, under-way and hand-added tasks stay.",
+          "confirmButton": "Regenerate",
+          "cancel": "Cancel",
+          "busy": "Writing tasks…",
+          "done": "{count, plural, one {# task written} other {# tasks written}}",
+          "timeout": "Writing the tasks took too long. Please try again.",
+          "unreachable": "Couldn't reach the server. Please try again.",
+          "unauthenticated": "Your session has ended. Please sign in again.",
+          "errors": {
+            "disabled": "Writing tasks isn't turned on for this workspace.",
+            "not_found": "This action no longer exists.",
+            "sent": "This action keeps the tasks it was sent with.",
+            "closed": "This action is closed.",
+            "busy": "This action's tasks are already being written. Try again in a minute.",
+            "no_targets": "This action names no page, prompt or domain to write tasks about.",
+            "no_valid_tasks": "None of the written tasks passed the quality check. Please try again.",
+            "budget": "Writing tasks uses this month's AI budget, which is used up or not part of your plan."
+          }
+        },
         "task": {
           "showDetails": "Show details",
           "hideDetails": "Hide details",

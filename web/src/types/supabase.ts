@@ -177,6 +177,8 @@ export type Database = {
           priority_score: number | null
           priority_updated_at: string | null
           status: string
+          tasks_generated_at: string | null
+          tasks_writing_since: string | null
           updated_at: string
           validated_at: string | null
           validation: Json | null
@@ -203,6 +205,8 @@ export type Database = {
           priority_score?: number | null
           priority_updated_at?: string | null
           status?: string
+          tasks_generated_at?: string | null
+          tasks_writing_since?: string | null
           updated_at?: string
           validated_at?: string | null
           validation?: Json | null
@@ -229,6 +233,8 @@ export type Database = {
           priority_score?: number | null
           priority_updated_at?: string | null
           status?: string
+          tasks_generated_at?: string | null
+          tasks_writing_since?: string | null
           updated_at?: string
           validated_at?: string | null
           validation?: Json | null
