@@ -3097,6 +3097,17 @@ export type Database = {
           regions: string[]
         }[]
       }
+      insights_kpi_series: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_region?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
       insights_same_prompt_compare: {
         Args: {
           p_brand_id: string
