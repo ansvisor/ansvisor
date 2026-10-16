@@ -1,8 +1,9 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { numberFormat } from '@/lib/number-format';
 import type { PlatformTableRow } from '@/lib/insights-summary';
 import { TONE_TEXT, upIsGood } from './kpi-format';
 
@@ -20,6 +21,8 @@ export function PlatformTable({
   className?: string;
 }) {
   const t = useTranslations('insights.platforms');
+  const locale = useLocale();
+  const f = numberFormat(locale);
   // Share-of-voice bars are scaled to the largest share in the table.
   const maxSov = Math.max(0, ...rows.map((r) => r.shareOfVoice ?? 0));
 
@@ -42,7 +45,7 @@ export function PlatformTable({
           </thead>
           <tbody>
             {rows.map((row) => {
-              const change = upIsGood(row.change);
+              const change = upIsGood(row.change, { locale });
               return (
                 <tr
                   key={row.name}
@@ -58,7 +61,7 @@ export function PlatformTable({
                   {row.status === 'ok' ? (
                     <>
                       <td className="px-2 py-2.5 text-right font-semibold tabular-nums">
-                        {row.visibility}
+                        {row.visibility === null ? '—' : f.number(row.visibility)}
                       </td>
                       <td
                         className={cn(
@@ -69,7 +72,7 @@ export function PlatformTable({
                         {change?.text ?? '—'}
                       </td>
                       <td className="px-2 py-2.5 text-right tabular-nums">
-                        {row.coverage === null ? '—' : `${row.coverage}%`}
+                        {row.coverage === null ? '—' : f.percent(row.coverage)}
                       </td>
                       <td className="px-2 py-2.5">
                         {row.shareOfVoice === null ? (
@@ -85,13 +88,13 @@ export function PlatformTable({
                               />
                             </span>
                             <span className="min-w-10 text-right tabular-nums">
-                              {row.shareOfVoice}%
+                              {f.percent(row.shareOfVoice)}
                             </span>
                           </span>
                         )}
                       </td>
                       <td className="py-2.5 pl-2 text-right tabular-nums">
-                        {row.avgPosition === null ? '—' : `#${row.avgPosition}`}
+                        {row.avgPosition === null ? '—' : `#${f.number(row.avgPosition)}`}
                       </td>
                     </>
                   ) : (
