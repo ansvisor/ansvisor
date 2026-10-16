@@ -10,6 +10,12 @@ import { generationCostUsd } from './improve-cost.js';
 export const RELEVANCE_SCALE = 10;
 
 /**
+ * Below this a suggestion is never offered as an opportunity (Visibility spec
+ * v2, fixed). Mirrors web/src/lib/insights-opportunities.ts.
+ */
+export const RELEVANCE_THRESHOLD = 0.6;
+
+/**
  * Share of the plan price that rating relevance may add to suggestion
  * refreshes each month (plan.limits.relevanceMonthlyBudgetUsd).
  */
