@@ -1,6 +1,12 @@
 import type { CompetitorComparisonData, VisibilityRateTrendData } from '@/lib/actions/tracking';
 import type { PromptComparison } from '@/lib/insights-same-prompts';
-import { platformMovers, rankSummary, type PlatformChange } from '@/lib/insights-summary';
+import {
+  LOW_SAMPLE_ANSWERS,
+  platformMovers,
+  rankSummary,
+  type PlatformChange,
+} from '@/lib/insights-summary';
+import { numberFormat } from '@/lib/number-format';
 import { formatWindowBound, upIsGood, type Tone } from './kpi-format';
 
 /**
@@ -28,21 +34,30 @@ export interface SummaryInput {
   competitors: CompetitorComparisonData | null;
   comparison: PromptComparison | null;
   platformChanges: PlatformChange[] | null;
+  /** The period's answers: under 20, the score is a low sample (VIS-005). */
+  answers?: number;
+  /** The UI's locale, for every number (VIS-005); English when left out. */
+  locale?: string;
 }
 
 /** The line's facts, left to right; a fact without its data is left out. */
 export function summaryFacts(input: SummaryInput, t: Translate): SummaryFact[] {
   const facts: SummaryFact[] = [];
+  const locale = input.locale ?? 'en';
+  const f = numberFormat(locale);
+  const lowSample = input.answers !== undefined && input.answers < LOW_SAMPLE_ANSWERS;
 
-  // No score without the trend: a missing read must not read as 0.
+  // No score without the trend: a missing read must not read as 0. Under 20
+  // answers the score says so, and no change is read into so few.
   if (input.trend) {
-    const change = upIsGood(input.trend.summary.change);
+    const change = lowSample ? null : upIsGood(input.trend.summary.change, { locale });
     facts.push({
       key: 'visibility',
       parts: [
-        { text: String(input.trend.summary.rate), bold: true },
+        { text: f.number(input.trend.summary.rate), bold: true },
         { text: t('visibility') },
         ...(change ? [{ text: change.text, tone: change.tone }] : []),
+        ...(lowSample ? [{ text: t('lowSample', { count: input.answers! }) }] : []),
       ],
     });
   }
@@ -53,12 +68,12 @@ export function summaryFacts(input: SummaryInput, t: Translate): SummaryFact[] {
     facts.push({
       key: 'rank',
       parts: [
-        { text: t('rank', { rank: rank.rank }), bold: true },
-        { text: `${t('ofCount', { count: rank.count })} ·` },
+        { text: t('rank', { rank: f.number(rank.rank) }), bold: true },
+        { text: `${t('ofCount', { count: f.number(rank.count) })} ·` },
         ...(neighbour.side === 'tied'
           ? [{ text: t('tied', { name: neighbour.name }) }]
           : [
-              { text: t('pts', { value: neighbour.gap }), bold: true },
+              { text: t('pts', { value: f.number(neighbour.gap) }), bold: true },
               {
                 text:
                   neighbour.side === 'behind'
@@ -76,7 +91,7 @@ export function summaryFacts(input: SummaryInput, t: Translate): SummaryFact[] {
     ['down', t('downMost'), down],
   ] as const) {
     if (!mover) continue;
-    const moved = upIsGood(mover.change)!;
+    const moved = upIsGood(mover.change, { locale })!;
     facts.push({
       key,
       parts: [
@@ -100,8 +115,8 @@ export function summaryContext(
   const parts = [
     trend && trend.summary.change !== null && trend.summary.prevFrom
       ? t('vs', {
-          from: formatWindowBound(trend.summary.prevFrom),
-          to: formatWindowBound(trend.summary.prevTo),
+          from: formatWindowBound(trend.summary.prevFrom, input.locale),
+          to: formatWindowBound(trend.summary.prevTo, input.locale),
         })
       : null,
     comparison && comparison.newPrompts > 0

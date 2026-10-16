@@ -3258,6 +3258,16 @@ export type Database = {
           runs: number
         }[]
       }
+      prompt_usage_summary: {
+        Args: { p_brand_id: string }
+        Returns: {
+          brand_active: number
+          brand_paused: number
+          account_active: number
+          account_brands: number
+          account_locations: number
+        }[]
+      }
       prompt_visibility_summaries: {
         Args: {
           p_brand_id: string
