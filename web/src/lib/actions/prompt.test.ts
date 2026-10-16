@@ -18,6 +18,10 @@ let writes: unknown[] = [];
 let promptSetRows: Record<string, unknown>[] = [];
 let positionData: Record<string, unknown>[] = [];
 let positionsError: string | null = null;
+/** The window before, for the trend; the current window's rows when null. */
+let previousPositionData: Record<string, unknown>[] | null = null;
+/** The slices the position summaries were asked for, as PostgREST pages. */
+let positionPages: [number, number][] = [];
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/actions/volumes', () => ({ getPromptVolumes: vi.fn() }));
@@ -29,15 +33,35 @@ vi.mock('@/lib/guards/plan-guard', () => ({
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
-    rpc: async (fn: string) => {
-      if (fn === 'prompt_position_summaries') {
-        return positionsError
-          ? { data: null, error: { message: positionsError } }
-          : { data: positionData, error: null };
-      }
-      return usageFails
-        ? { data: null, error: { message: 'rpc failed' } }
-        : { data: [{ brand_id: 'b1', locations: usedLocations }], error: null };
+    // Served as PostgREST would: a ranged request gets its slice, and never
+    // more than 1000 rows.
+    rpc: (fn: string, args?: { p_date_to?: string }) => {
+      let slice: [number, number] = [0, 999];
+      const result = () => {
+        if (fn === 'prompt_position_summaries') {
+          // Only the window before the current one has an end.
+          const rows = (args?.p_date_to && previousPositionData) || positionData;
+          return positionsError
+            ? { data: null, error: { message: positionsError } }
+            : {
+                data: rows.slice(slice[0], Math.min(slice[1], slice[0] + 999) + 1),
+                error: null,
+              };
+        }
+        return usageFails
+          ? { data: null, error: { message: 'rpc failed' } }
+          : { data: [{ brand_id: 'b1', locations: usedLocations }], error: null };
+      };
+      const chain = {
+        order: () => chain,
+        range: (from: number, to: number) => {
+          slice = [from, to];
+          if (fn === 'prompt_position_summaries') positionPages.push([from, to]);
+          return chain;
+        },
+        then: (resolve: (value: unknown) => unknown) => resolve(result()),
+      };
+      return chain;
     },
     from: (table: string) => ({
       select: () => ({
@@ -224,6 +248,8 @@ describe('getPromptsPageData', () => {
       },
     ];
     positionsError = null;
+    previousPositionData = null;
+    positionPages = [];
     vi.mocked(getPromptVolumes).mockResolvedValue({ volumes: [], quota: {} as VolumeQuota });
     vi.mocked(getPromptVisibilitySummaries).mockResolvedValue({});
     // The location quota fails here (no brand row), which the page also absorbs.
@@ -239,6 +265,58 @@ describe('getPromptsPageData', () => {
 
     expect(page.positions.p1.avg).toBe(2);
     expect(page.positions.p1.dots.map((d) => d.id)).toEqual(['chatgpt-web']);
+  });
+
+  /** 1000 rows of other prompts, which come before p1's in the RPC's order. */
+  const others = () =>
+    Array.from({ length: 1000 }, (_, i) => ({
+      prompt_id: `other-${String(i).padStart(4, '0')}`,
+      platform: 'chatgpt-web',
+      runs: 1,
+      mention_answers: 0,
+      position_sum: 0,
+      position_count: 0,
+      entity_sum: 0,
+      entity_count: 0,
+    }));
+
+  it("reads a prompt's positions past PostgREST's 1000-row cap", async () => {
+    // A busy brand's 30 days: p1's row only comes on the second page. Read in
+    // one request, p1 read —.
+    positionData = [...others(), positionData[0]];
+
+    const page = await getPromptsPageData('b1');
+
+    expect(page.positions.p1.avg).toBe(2);
+    // Both windows, the current one and the one before it for the trend.
+    expect([...positionPages].sort((a, b) => a[0] - b[0])).toEqual([
+      [0, 999],
+      [0, 999],
+      [1000, 1999],
+      [1000, 1999],
+    ]);
+  });
+
+  it("reads the trend's previous window past the cap too", async () => {
+    // Before: #3 on average (12 / 4); now #2, so the cell shows ↑1.
+    previousPositionData = [...others(), { ...positionData[0], position_sum: 12 }];
+
+    const page = await getPromptsPageData('b1');
+
+    expect(page.positions.p1).toMatchObject({ avg: 2, delta: 1 });
+  });
+
+  it('counts a row that two pages both return once', async () => {
+    // A row written between two page reads shifts the second page by one, so
+    // the last row of the first page comes back again. p1 is #2 on ChatGPT
+    // and #4 on Copilot: #3 overall, and #2.7 if ChatGPT counted twice.
+    const chatgpt = positionData[0];
+    const copilot = { ...chatgpt, platform: 'copilot-web', position_sum: 16 };
+    positionData = [...others().slice(1), chatgpt, chatgpt, copilot];
+
+    const page = await getPromptsPageData('b1');
+
+    expect(page.positions.p1.avg).toBe(3);
   });
 
   it('shows — in the Positions column when the position query fails, instead of failing the page', async () => {

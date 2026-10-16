@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
 import { revalidatePath } from 'next/cache';
 import type { PromptSet, Prompt, AIPlatform, PromptVolume } from '@/types';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
@@ -1153,16 +1154,31 @@ async function positionSums(
   region?: string,
 ): Promise<Map<string, PlatformPositionRow[]>> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc('prompt_position_summaries', {
-    p_brand_id: brandId,
-    p_date_from: window.from,
-    p_date_to: window.to ?? undefined,
-    p_region: region ?? undefined,
-  });
-  if (error) throw new Error(error.message);
+  // One row per prompt and platform: a busy brand's 30 or 90 days run past
+  // PostgREST's 1000-row cap, which dropped the rest and left most prompts
+  // reading —, so every page is read.
+  const data = await readAllRpcRows((from, to) =>
+    supabase
+      .rpc('prompt_position_summaries', {
+        p_brand_id: brandId,
+        p_date_from: window.from,
+        p_date_to: window.to ?? undefined,
+        p_region: region ?? undefined,
+      })
+      .order('prompt_id')
+      .order('platform')
+      .range(from, to),
+  );
 
   const byPrompt = new Map<string, PlatformPositionRow[]>();
-  for (const row of data ?? []) {
+  // Each page is its own query: a prompt's first answer on a platform landing
+  // between two of them shifts the rest by a row, which can then come back
+  // twice. It is counted once.
+  const seen = new Set<string>();
+  for (const row of data) {
+    const key = `${row.prompt_id}|${row.platform}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     const list = byPrompt.get(row.prompt_id) ?? [];
     list.push({
       platform: row.platform,
