@@ -12,8 +12,10 @@ const MAX_PAGES = 100;
  * family. `page` asks for one slice in a fixed order (each caller orders by
  * its RPC's key), and slices are read until one comes back short. A result
  * under 1000 rows still takes a single request. Each slice is its own query,
- * so rows written in between can shift a later slice by a row: callers that
- * sum rows drop repeats by key.
+ * so rows written in between can shift a later slice by a row: a caller
+ * should key rows by id rather than sum them as they come. Every page re-runs
+ * the RPC, so an expensive aggregate is better returned as one jsonb value
+ * (as prompt_position_summaries_json, 00153, does).
  */
 export async function readAllRpcRows<T>(
   page: (

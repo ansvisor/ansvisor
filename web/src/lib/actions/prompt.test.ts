@@ -20,8 +20,12 @@ let positionData: Record<string, unknown>[] = [];
 let positionsError: string | null = null;
 /** The window before, for the trend; the current window's rows when null. */
 let previousPositionData: Record<string, unknown>[] | null = null;
-/** The slices the position summaries were asked for, as PostgREST pages. */
-let positionPages: [number, number][] = [];
+/** Null as the RPC returns it for a caller outside the brand's organization. */
+let positionsNull = false;
+/** The web deployed before 00153: PostgREST can't find the jsonb RPC. */
+let jsonRpcMissing = false;
+/** The position RPC calls, and whether any asked for a slice. */
+let positionCalls: { fn: string; ranged: boolean }[] = [];
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/actions/volumes', () => ({ getPromptVolumes: vi.fn() }));
@@ -33,20 +37,26 @@ vi.mock('@/lib/guards/plan-guard', () => ({
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
-    // Served as PostgREST would: a ranged request gets its slice, and never
-    // more than 1000 rows.
+    // The position sums come as one jsonb value (00153), which PostgREST's
+    // 1000-row cap doesn't cut; the old row-returning RPC would have been cut.
     rpc: (fn: string, args?: { p_date_to?: string }) => {
-      let slice: [number, number] = [0, 999];
+      const call = { fn, ranged: false };
+      if (fn.startsWith('prompt_position_summaries')) positionCalls.push(call);
       const result = () => {
-        if (fn === 'prompt_position_summaries') {
+        if (fn === 'prompt_position_summaries_json' && jsonRpcMissing) {
+          return {
+            data: null,
+            error: { code: 'PGRST202', message: 'Could not find the function' },
+          };
+        }
+        if (fn === 'prompt_position_summaries_json') {
           // Only the window before the current one has an end.
           const rows = (args?.p_date_to && previousPositionData) || positionData;
-          return positionsError
-            ? { data: null, error: { message: positionsError } }
-            : {
-                data: rows.slice(slice[0], Math.min(slice[1], slice[0] + 999) + 1),
-                error: null,
-              };
+          if (positionsError) return { data: null, error: { message: positionsError } };
+          return { data: positionsNull ? null : rows, error: null };
+        }
+        if (fn === 'prompt_position_summaries') {
+          return { data: positionData.slice(0, 1000), error: null };
         }
         return usageFails
           ? { data: null, error: { message: 'rpc failed' } }
@@ -54,9 +64,8 @@ vi.mock('@/lib/supabase/server', () => ({
       };
       const chain = {
         order: () => chain,
-        range: (from: number, to: number) => {
-          slice = [from, to];
-          if (fn === 'prompt_position_summaries') positionPages.push([from, to]);
+        range: () => {
+          call.ranged = true;
           return chain;
         },
         then: (resolve: (value: unknown) => unknown) => resolve(result()),
@@ -249,7 +258,9 @@ describe('getPromptsPageData', () => {
     ];
     positionsError = null;
     previousPositionData = null;
-    positionPages = [];
+    positionsNull = false;
+    jsonRpcMissing = false;
+    positionCalls = [];
     vi.mocked(getPromptVolumes).mockResolvedValue({ volumes: [], quota: {} as VolumeQuota });
     vi.mocked(getPromptVisibilitySummaries).mockResolvedValue({});
     // The location quota fails here (no brand row), which the page also absorbs.
@@ -280,20 +291,19 @@ describe('getPromptsPageData', () => {
       entity_count: 0,
     }));
 
-  it("reads a prompt's positions past PostgREST's 1000-row cap", async () => {
-    // A busy brand's 30 days: p1's row only comes on the second page. Read in
-    // one request, p1 read —.
+  it("reads every prompt's positions in one call, past PostgREST's 1000-row cap", async () => {
+    // A busy brand's 30 days: p1's row comes after 1000 others. Read as rows,
+    // the cap dropped it and p1 read —.
     positionData = [...others(), positionData[0]];
 
     const page = await getPromptsPageData('b1');
 
     expect(page.positions.p1.avg).toBe(2);
-    // Both windows, the current one and the one before it for the trend.
-    expect([...positionPages].sort((a, b) => a[0] - b[0])).toEqual([
-      [0, 999],
-      [0, 999],
-      [1000, 1999],
-      [1000, 1999],
+    // One call per window, the current one and the one before it for the
+    // trend, neither paged: paging re-ran the whole aggregate for every page.
+    expect(positionCalls).toEqual([
+      { fn: 'prompt_position_summaries_json', ranged: false },
+      { fn: 'prompt_position_summaries_json', ranged: false },
     ]);
   });
 
@@ -306,17 +316,26 @@ describe('getPromptsPageData', () => {
     expect(page.positions.p1).toMatchObject({ avg: 2, delta: 1 });
   });
 
-  it('counts a row that two pages both return once', async () => {
-    // A row written between two page reads shifts the second page by one, so
-    // the last row of the first page comes back again. p1 is #2 on ChatGPT
-    // and #4 on Copilot: #3 overall, and #2.7 if ChatGPT counted twice.
-    const chatgpt = positionData[0];
-    const copilot = { ...chatgpt, platform: 'copilot-web', position_sum: 16 };
-    positionData = [...others().slice(1), chatgpt, chatgpt, copilot];
+  it('falls back to the row RPC when the web deploys before 00153', async () => {
+    jsonRpcMissing = true;
 
     const page = await getPromptsPageData('b1');
 
-    expect(page.positions.p1.avg).toBe(3);
+    expect(page.positions.p1.avg).toBe(2);
+    expect(positionCalls.map((c) => c.fn)).toEqual([
+      'prompt_position_summaries_json',
+      'prompt_position_summaries_json',
+      'prompt_position_summaries',
+      'prompt_position_summaries',
+    ]);
+  });
+
+  it("shows — when the caller is outside the brand's organization (null sums)", async () => {
+    positionsNull = true;
+
+    const page = await getPromptsPageData('b1');
+
+    expect(page.positions.p1).toMatchObject({ avg: null, delta: null });
   });
 
   it('shows — in the Positions column when the position query fails, instead of failing the page', async () => {
