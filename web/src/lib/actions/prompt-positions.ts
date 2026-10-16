@@ -141,10 +141,12 @@ export async function getPromptPositions(
       createdAt: row.created_at as string,
       region: (row.region as string | null) ?? null,
       mentioned,
+      mentions: Number(row.mention_count ?? 0),
       mentionPosition: (row.mention_position as number | null) ?? null,
       mentionTotal: (row.mentioned_entity_count as number | null) ?? null,
       sentiment: sentiment && SENTIMENTS.includes(sentiment) ? (sentiment as Sentiment) : null,
       cited,
+      citations: Number(row.citation_count ?? 0),
       citation: cited
         ? brandCitationPosition(sourcesById.get(row.id as string), brandDomains)
         : null,
