@@ -199,6 +199,18 @@ describe('exportActionFor', () => {
     expect(md).not.toContain('~5.5k');
   });
 
+  it('dates the goal by its due date on a server east of UTC', async () => {
+    const zone = process.env.TZ;
+    process.env.TZ = 'Europe/Istanbul';
+    try {
+      rows.actions = [actionRow({ due_date: '2026-11-09' })];
+      const md = (await exportActionFor(auth, 'a1', 'markdown'))!.body;
+      expect(md).toMatch(/^Goal: .* by Nov 9\.$/m);
+    } finally {
+      process.env.TZ = zone;
+    }
+  });
+
   it('writes the CSV with a row per affected item, task and signal', async () => {
     const exported = await exportActionFor(auth, 'a1', 'csv');
     expect(exported?.fileName).toBe('action-AC-52.csv');

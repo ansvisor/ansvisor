@@ -180,7 +180,9 @@ function listOf(items: string[], t: Translator, format: StoryFormat): string {
 /** A calendar date ("2026-11-09") as that day where the reader is. */
 function calendarDay(value: string): Date {
   const [year, month, day] = value.slice(0, 10).split('-').map(Number);
-  return new Date(year, month - 1, day);
+  // Noon, not midnight: the same day wherever it is written out — the
+  // reader's zone in the drawer, UTC in the API's export (AC-005).
+  return new Date(year, month - 1, day, 12);
 }
 
 export interface ActionStory {
