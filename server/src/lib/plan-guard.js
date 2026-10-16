@@ -13,6 +13,7 @@ import {
   medianCost,
   typicalCostUsd,
 } from './improve-cost.js';
+import { RELEVANCE_BUDGET_SHARE } from './suggestion-relevance.js';
 
 export class PlanLimitError extends Error {
   constructor(message, statusCode = 403) {
@@ -29,7 +30,9 @@ export class PlanLimitError extends Error {
  * `contractMonthlyUsd` is the contract's monthly value, entered when the deal
  * is signed. It sets the Improve budget to the same 1% share of the contract
  * the other plans get of their price (never below the plan default), unless
- * `improveMonthlyBudgetUsd` is set explicitly, which wins.
+ * `improveMonthlyBudgetUsd` is set explicitly, which wins. The relevance
+ * budget (VIS-011) follows the same rule at 0.1%, rounded down so it never
+ * passes the share.
  */
 export function applyPlanOverrides(plan, org) {
   if (
@@ -45,6 +48,12 @@ export function applyPlanOverrides(plan, org) {
       limits.improveMonthlyBudgetUsd = Math.max(
         plan.limits.improveMonthlyBudgetUsd ?? 0,
         Math.round(usd * IMPROVE_BUDGET_SHARE * 100) / 100,
+      );
+    }
+    if (overrides.relevanceMonthlyBudgetUsd === undefined && Number.isFinite(usd) && usd > 0) {
+      limits.relevanceMonthlyBudgetUsd = Math.max(
+        plan.limits.relevanceMonthlyBudgetUsd ?? 0,
+        Math.floor(usd * RELEVANCE_BUDGET_SHARE * 1e6) / 1e6,
       );
     }
     return { ...plan, limits };
@@ -334,6 +343,50 @@ export async function enforceImproveQuota(orgId, modelId) {
     );
   }
   return quota;
+}
+
+/**
+ * Suggestion-relevance allowance (VIS-011): a monthly USD budget per
+ * organization, 0.1% of the plan price (plan.limits.relevanceMonthlyBudgetUsd),
+ * separate from Improve's. Reserves a refresh's worst case (`costUsd`)
+ * before it rates, atomically per organization
+ * (reserve_suggestion_relevance), so concurrent refreshes can't overshoot.
+ * Returns { unlimited, id }: id is the usage row to settle once the model
+ * answers (settleRelevanceUsage), or null when what's left can't cover it.
+ */
+export async function reserveRelevanceAllowance(orgId, { brandId, modelId, costUsd }) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const budget = plan.limits.relevanceMonthlyBudgetUsd ?? -1;
+  if (budget === -1) return { unlimited: true, id: null };
+
+  const { data, error } = await supabaseAdmin.rpc('reserve_suggestion_relevance', {
+    p_organization_id: orgId,
+    p_brand_id: brandId,
+    p_model: modelId,
+    p_since: (await quotaPeriodStart(orgId)).toISOString(),
+    p_budget: budget,
+    p_cost: costUsd,
+  });
+  if (error) throw new Error(error.message);
+  return { unlimited: false, id: data ?? null };
+}
+
+/**
+ * Lowers a reservation to what the refresh's attempts cost, with the call's
+ * own tokens to check the estimate against. A failed update leaves the
+ * worst case charged: the budget errs high, never low.
+ */
+export async function settleRelevanceUsage(id, { attempts, costUsd, usage }) {
+  const { error } = await supabaseAdmin
+    .from('suggestion_relevance_usage')
+    .update({
+      attempts,
+      cost_usd: costUsd,
+      input_tokens: usage?.inputTokens ?? null,
+      output_tokens: usage?.outputTokens ?? null,
+    })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
 async function countOpportunityUsage(orgId, since) {
