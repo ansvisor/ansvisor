@@ -1946,7 +1946,7 @@
     "noBrandTitle": "No brand selected",
     "noBrandBody": "Select a brand from the top switcher to view topic analytics.",
     "title": "Topics",
-    "description": "Topic-level analytics across all tracked prompts (last 30 days)",
+    "description": "Topic-level analytics across all tracked prompts",
     "exportHint": "No topics yet - add topics or run a tracking job first.",
     "manageTopics": "Manage topics",
     "kpi": {
@@ -1955,7 +1955,7 @@
       "allCategorised": "All prompts categorised",
       "bestPerformer": "Best performer",
       "biggestGap": "Biggest gap",
-      "topMover": "Top mover (7d)",
+      "topMover": "Top mover",
       "noDataYet": "No data yet",
       "notEnoughData": "Not enough data"
     },
@@ -1968,7 +1968,7 @@
     "columns": {
       "topic": "Topic",
       "prompts": "Prompts",
-      "visibility": "Visibility (30d)",
+      "visibility": "Visibility",
       "sov": "SoV",
       "mentions": "Mentions",
       "citations": "Citations",

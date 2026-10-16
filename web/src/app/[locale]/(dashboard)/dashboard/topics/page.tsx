@@ -1,11 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUserRole } from '@/hooks/use-user-role';
 import { getTopicsOverview, type TopicOverviewRow } from '@/lib/actions/topic';
+import { customUtcWindow } from '@/lib/topic-trend';
+import { DateRangeFilter } from '@/components/filters/date-range-filter';
+import {
+  DEFAULT_PROMPT_RANGE_PRESET,
+  PROMPT_RANGE_PRESETS,
+  resolvePromptRange,
+  type PromptRangePreset,
+} from '@/config/prompt-options';
 import { TopicSuggestionsCard } from './_suggestions-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { createTopic } from '@/lib/actions/topic';
@@ -224,6 +232,21 @@ export default function TopicsPage() {
   // Default matches the previous hard-coded order (#597): visibility descending.
   const [sortKey, setSortKey] = useState<TopicSortKey>('visibility');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  // The window the table covers, as on the Prompts page; opens on 24 hours.
+  const [rangePreset, setRangePreset] = useState<PromptRangePreset>(DEFAULT_PROMPT_RANGE_PRESET);
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  // A custom range is a window only once a bound is entered.
+  const range = useMemo(
+    () =>
+      rangePreset === 'custom' && !customFrom && !customTo
+        ? null
+        : resolvePromptRange(rangePreset, { from: customFrom, to: customTo }),
+    [rangePreset, customFrom, customTo],
+  );
+  // Only the latest request may fill the table: a slow 90-day read must not
+  // land after the 24-hour one picked since.
+  const requestRef = useRef(0);
 
   const handleSort = useCallback(
     (key: TopicSortKey) => {
@@ -239,20 +262,28 @@ export default function TopicsPage() {
       setLoading(false);
       return;
     }
+    if (!range) return;
+    const request = ++requestRef.current;
     setLoading(true);
     setError(null);
     try {
-      const data = await getTopicsOverview(activeBrandId);
+      const window =
+        rangePreset === 'custom'
+          ? customUtcWindow(customFrom, customTo, range)
+          : { from: range.from, to: range.to };
+      const data = await getTopicsOverview(activeBrandId, window);
+      if (request !== requestRef.current) return;
       setTopics(data.topics);
       setUnassignedPromptCount(data.unassignedPromptCount);
     } catch (err) {
+      if (request !== requestRef.current) return;
       console.error('Failed to load topics overview', err);
       setError(err instanceof Error ? err.message : t('loadError'));
       toast.error(t('loadError'));
     } finally {
-      setLoading(false);
+      if (request === requestRef.current) setLoading(false);
     }
-  }, [activeBrandId, t]);
+  }, [activeBrandId, range, rangePreset, customFrom, customTo, t]);
 
   useEffect(() => {
     loadData();
@@ -332,11 +363,11 @@ export default function TopicsPage() {
     const slug = activeBrand?.slug ?? 'brand';
 
     link.href = url;
-    link.download = `ansvisor_${slug}_topics_${date}.csv`;
+    link.download = `ansvisor_${slug}_topics_${rangePreset}_${date}.csv`;
     link.click();
 
     URL.revokeObjectURL(url);
-  }, [activeBrand?.slug, canExport, topics]);
+  }, [activeBrand?.slug, canExport, rangePreset, topics]);
 
   if (!activeBrandId) {
     return (
@@ -456,6 +487,16 @@ export default function TopicsPage() {
           )}
         </div>
       </div>
+
+      <DateRangeFilter
+        value={rangePreset}
+        presets={PROMPT_RANGE_PRESETS}
+        onChange={setRangePreset}
+        from={customFrom}
+        to={customTo}
+        onFromChange={setCustomFrom}
+        onToChange={setCustomTo}
+      />
 
       {/* KPIs */}
       {loading ? (
@@ -670,10 +711,13 @@ export default function TopicsPage() {
                       {topic.totalCitations.toLocaleString()}
                     </TableCell>
                     <TableCell>
-                      {topic.trendSparkline.length > 0 &&
-                      topic.trendSparkline.some((v) => v > 0) ? (
+                      {/* Under two days there is no line, only the change. */}
+                      {topic.trendSparkline.some((v) => v > 0) ||
+                      topic.visibilityChange !== null ? (
                         <div className="flex items-center gap-2">
-                          <Sparkline points={topic.trendSparkline} />
+                          {topic.trendSparkline.some((v) => v > 0) && (
+                            <Sparkline points={topic.trendSparkline} />
+                          )}
                           {topic.visibilityChange !== null && topic.visibilityChange !== 0 && (
                             <span
                               className={cn(
