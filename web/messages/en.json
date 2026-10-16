@@ -1860,15 +1860,7 @@
       "lowSample": "Low sample",
       "openTopic": "Open {topic}",
       "showAll": "Show all {count}",
-      "showLess": "Show less",
-      "sendGap": "Send biggest gap to Actions",
-      "sendGapTitle": "Open a Compete action for {topic}, where {competitor} leads you by {gap} pts",
-      "noGap": "No topic where a competitor leads you",
-      "sent": "AC-{no} sent to the Action Center",
-      "alreadySent": "Already in the Action Center as AC-{no}",
-      "sendFailed": "Couldn't send to the Action Center.",
-      "openAction": "Open",
-      "gapChanged": "The gap changed since the page loaded. Refresh to see the latest."
+      "showLess": "Show less"
     },
     "breakdown": {
       "noData": "No data",
