@@ -36,6 +36,12 @@ import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  createTooltipHandle,
+} from '@/components/ui/tooltip';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { PositionLabel } from '@/components/position-label';
 import { cn } from '@/lib/utils';
@@ -814,6 +820,11 @@ function dayTooltip(day: string, entry: PlatformDay | undefined): string {
 
 function Heatmap({ platform, days }: { platform: PlatformPositions; days: string[] }) {
   const byDay = useMemo(() => new Map(platform.days.map((d) => [d.day, d])), [platform.days]);
+  // One tooltip for the row, showing whichever block is hovered: up to 90
+  // blocks a row would otherwise mean as many tooltips. It opens at once and
+  // follows the pointer from block to block. The blocks stay out of the tab
+  // order (a row of 90 stops); the platform's day list says the same.
+  const tooltip = useMemo(() => createTooltipHandle<string>(), []);
   return (
     <div
       role="img"
@@ -823,13 +834,26 @@ function Heatmap({ platform, days }: { platform: PlatformPositions; days: string
       {days.map((day) => {
         const entry = byDay.get(day);
         return (
-          <span
+          <TooltipTrigger
             key={day}
-            title={dayTooltip(day, entry)}
-            className={cn('h-3 w-3 rounded-[3px]', CELL_CLASS[cellTone(entry)])}
+            handle={tooltip}
+            payload={dayTooltip(day, entry)}
+            delay={0}
+            closeDelay={0}
+            render={
+              <span
+                data-day={day}
+                className={cn('h-3 w-3 rounded-[3px]', CELL_CLASS[cellTone(entry)])}
+              />
+            }
           />
         );
       })}
+      <Tooltip handle={tooltip}>
+        {({ payload }) => (
+          <TooltipContent className="whitespace-pre-line">{payload}</TooltipContent>
+        )}
+      </Tooltip>
     </div>
   );
 }

@@ -1,0 +1,137 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { NextIntlClientProvider } from 'next-intl';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import messages from '../../../messages/en.json';
+import { summarizePositions, type PositionAnswer } from '@/lib/prompt-positions';
+import type { PromptPositionsData } from '@/lib/actions/prompt-positions';
+
+/**
+ * The positions panel over a week: its cards carry the table's answer,
+ * mention and citation counts beside the days, and a day block shows its
+ * positions in a tooltip when hovered.
+ */
+
+const { getPromptPositions } = vi.hoisted(() => ({ getPromptPositions: vi.fn() }));
+vi.mock('@/lib/actions/prompt-positions', () => ({ getPromptPositions }));
+vi.mock('./prompt-improve-tab', () => ({
+  ImproveTab: () => null,
+  useImprove: () => ({ count: null, dirty: false }),
+}));
+vi.mock('@/components/filters/date-range-filter', () => ({ DateRangeFilter: () => null }));
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children }: { href: string; children: React.ReactNode }) => (
+    <a href={href}>{children}</a>
+  ),
+}));
+
+const { PromptPositionsSheet } = await import('./prompt-positions-sheet');
+
+(
+  globalThis as typeof globalThis & {
+    IS_REACT_ACT_ENVIRONMENT: boolean;
+  }
+).IS_REACT_ACT_ENVIRONMENT = true;
+
+const WEEK = { from: '2026-10-04T00:00:00.000Z', to: '2026-10-10T23:59:59.999Z' };
+
+const answer = (over: Partial<PositionAnswer> & { createdAt: string }): PositionAnswer => ({
+  platform: 'chatgpt-web',
+  region: 'US',
+  mentioned: false,
+  mentions: 0,
+  mentionPosition: null,
+  mentionTotal: null,
+  sentiment: null,
+  cited: false,
+  citations: 0,
+  citation: null,
+  ...over,
+});
+
+function data(): PromptPositionsData {
+  const { summary, platforms } = summarizePositions(
+    [
+      answer({
+        createdAt: '2026-10-08T02:00:00Z',
+        mentioned: true,
+        mentions: 3,
+        mentionPosition: 2,
+        mentionTotal: 3,
+        cited: true,
+        citations: 2,
+        citation: { rank: 1, total: 4 },
+      }),
+      answer({ createdAt: '2026-10-09T02:00:00Z' }),
+    ],
+    [{ id: 'chatgpt-web', label: 'ChatGPT', access: { state: 'included' } }],
+    WEEK,
+  );
+  return {
+    prompt: { id: 'p1', text: 'Best coffee subscription?', topicName: null, isActive: true },
+    planId: 'enterprise',
+    window: WEEK,
+    summary,
+    platforms,
+    improving: null,
+  };
+}
+
+let container: HTMLDivElement;
+let root: Root;
+
+async function open() {
+  await act(async () =>
+    root.render(
+      <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+        <PromptPositionsSheet
+          prompt={{ id: 'p1', text: 'Best coffee subscription?' }}
+          range={{ preset: '7d', from: '', to: '' }}
+          window={WEEK}
+          onRangeChange={() => {}}
+          region=""
+          onClose={() => {}}
+        />
+      </NextIntlClientProvider>,
+    ),
+  );
+}
+
+beforeEach(() => {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  getPromptPositions.mockResolvedValue(data());
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+});
+
+describe('PromptPositionsSheet', () => {
+  it("puts the table's answer, mention and citation counts beside the days", async () => {
+    await open();
+    const text = document.body.textContent ?? '';
+    expect(text).toContain('2 answers');
+    expect(text).toContain('In 1 of 2 answers · 3 mentions');
+    expect(text).toContain('In 1 of 2 answers · 2 citations');
+  });
+
+  it("shows a day's positions in a tooltip when its block is hovered", async () => {
+    await open();
+    const block = document.querySelector<HTMLElement>('[data-day="2026-10-08"]')!;
+    // The browser's own tooltip is gone: it lagged and couldn't be styled.
+    expect(block.hasAttribute('title')).toBe(false);
+
+    await act(async () => {
+      block.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+      block.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    const tooltip = document.querySelector('[data-slot="tooltip-content"]');
+    expect(tooltip?.textContent).toContain('Oct 8, 2026 · 1 run');
+    expect(tooltip?.textContent).toContain('Mentioned · Mid · #2 of 3');
+    expect(tooltip?.textContent).toContain('Cited · Early · #1 of 4');
+  });
+});
