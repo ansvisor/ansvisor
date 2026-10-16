@@ -7,6 +7,13 @@
 /** Whether a change is good news, bad news, or neither (counts like tracked prompts). */
 export type Tone = 'good' | 'bad' | 'neutral';
 
+/** Text colour for each tone, in both themes. */
+export const TONE_TEXT: Record<Tone, string> = {
+  good: 'text-emerald-600 dark:text-emerald-400',
+  bad: 'text-red-600 dark:text-red-400',
+  neutral: 'text-muted-foreground',
+};
+
 export interface Change {
   text: string;
   tone: Tone;
@@ -42,4 +49,19 @@ export function lowerIsGood(change: number | null): Change | null {
     text: `${change < 0 ? '↑' : '↓'}${Math.abs(change)}`,
     tone: change < 0 ? 'good' : 'bad',
   };
+}
+
+/**
+ * A comparison-window bound for the "vs <range>" label. Whole-day windows
+ * come as 'YYYY-MM-DD' UTC days and are shown as those days; the 24h and
+ * topic views come as timestamps and are shown in local time.
+ */
+export function formatWindowBound(value: string): string {
+  const dayOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  return new Date(dayOnly ? `${value}T00:00:00Z` : value).toLocaleDateString('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+    ...(dayOnly ? { timeZone: 'UTC' } : {}),
+  });
 }
