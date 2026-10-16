@@ -60,6 +60,7 @@ import { ImpactDots, isSuperseded, SignalStatusBadge } from './signal-table';
 import { ActionIcon } from './action-table';
 import { OpportunityContext } from './opportunity-context';
 import { ImproveContext } from './improve-context';
+import { TopicGapContext } from './topic-gap-context';
 import { ImproveOutcomeCard } from './improve-outcome-card';
 import { improvePlatformLabels } from '@/lib/improve-outcome';
 import { cn } from '@/lib/utils';
@@ -263,6 +264,8 @@ export function ActionDrawer({
                   )}
                   <ImproveContext payload={action.payload ?? {}} />
                 </>
+              ) : action.kind === 'topic_competitor_gap' ? (
+                <TopicGapContext payload={action.payload ?? {}} />
               ) : opportunityId ? (
                 <OpportunityContext
                   opportunityId={opportunityId}
@@ -340,9 +343,11 @@ export function ActionDrawer({
                 <p className="text-xs text-muted-foreground">
                   {action.kind === 'prompt_improve'
                     ? t('drawer.noSignalsImprove')
-                    : opportunityId
-                      ? t('drawer.noSignalsOpportunity')
-                      : t('drawer.noSignals')}
+                    : action.kind === 'topic_competitor_gap'
+                      ? t('drawer.noSignalsTopicGap')
+                      : opportunityId
+                        ? t('drawer.noSignalsOpportunity')
+                        : t('drawer.noSignals')}
                 </p>
               )}
               {detail.signals.map((signal) => {
