@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { lowerIsGood, signedChange, signedValue, upIsGood } from './kpi-format';
+import { formatWindowBound, lowerIsGood, signedChange, signedValue, upIsGood } from './kpi-format';
 
 describe('KPI card formatting', () => {
   it('writes changes with a sign, and no change as ±0', () => {
@@ -25,5 +25,10 @@ describe('KPI card formatting', () => {
     expect(lowerIsGood(-0.3)).toEqual({ text: '↑0.3', tone: 'good' });
     expect(lowerIsGood(0.5)).toEqual({ text: '↓0.5', tone: 'bad' });
     expect(lowerIsGood(0)).toEqual({ text: '±0', tone: 'neutral' });
+  });
+
+  it('labels whole-day windows by their UTC days', () => {
+    // A day-only bound is the UTC day itself, whatever the viewer's zone.
+    expect(formatWindowBound('2026-08-16')).toBe('Aug 16, 2026');
   });
 });
