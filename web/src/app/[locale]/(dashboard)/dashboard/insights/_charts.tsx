@@ -19,15 +19,12 @@ import {
   Line,
 } from 'recharts';
 import type {
-  CompetitorComparisonEntry,
   ProviderComparisonRow,
   VisibilityTrendPoint,
   VisibilityRateTrendData,
   SoVByPlatform,
 } from '@/lib/actions/tracking';
 import { getFaviconUrl } from '@/lib/favicon';
-import { formatCompactNumber } from '@/lib/format';
-import { Link } from '@/i18n/navigation';
 
 // ─── Adaptive Y-axis ─────────────────────────────────────────────────────────
 // Visibility scores are theoretically 0–100 but realistic values for most
@@ -407,120 +404,6 @@ export function VisibilityRateTrendChart({ data }: { data: VisibilityRateTrendDa
           </li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-const MAX_VISIBLE = 5;
-
-function LeaderboardEntry({ entry, rank }: { entry: CompetitorComparisonEntry; rank: number }) {
-  return (
-    <div
-      className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${
-        entry.isOwnBrand ? 'border-primary/30 bg-primary/5' : ''
-      }`}
-    >
-      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold">
-        {rank}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          {entry.competitorId ? (
-            <Link
-              href={`/dashboard/competitors?competitor=${entry.competitorId}`}
-              className="text-sm font-medium truncate hover:underline"
-            >
-              {entry.name}
-            </Link>
-          ) : (
-            <span className="text-sm font-medium truncate">{entry.name}</span>
-          )}
-          {entry.isOwnBrand && <span className="text-[10px] font-medium text-primary">YOU</span>}
-        </div>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-          <span>{formatCompactNumber(entry.totalMentions)} mentions</span>
-          <span>{formatCompactNumber(entry.totalCitations)} citations</span>
-        </div>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-          <span className="tabular-nums">
-            appeared in {entry.visiblePrompts}/{entry.promptCount} prompts
-          </span>
-        </div>
-      </div>
-      <div className="flex flex-col items-end gap-0.5 shrink-0">
-        <span
-          className="text-sm font-semibold tabular-nums"
-          title={`Mentioned in ${entry.mentionAnswers} answers · cited in ${entry.citationAnswers} · position factor ${
-            entry.positionFactor === null ? '—' : entry.positionFactor.toFixed(2)
-          }`}
-        >
-          {entry.score ?? '—'}
-        </span>
-        {entry.scoreChange !== null && entry.scoreChange !== 0 && (
-          <span
-            className={`text-[10px] font-medium tabular-nums ${
-              entry.scoreChange > 0 ? 'text-green-500' : 'text-red-500'
-            }`}
-          >
-            {entry.scoreChange > 0 ? '↑' : '↓'} {Math.abs(entry.scoreChange).toFixed(1)} pts
-          </span>
-        )}
-        {entry.scoreChange === 0 && (
-          <span className="text-[10px] font-medium tabular-nums text-muted-foreground">— 0</span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export function CompetitorLeaderboard({ data }: { data: CompetitorComparisonEntry[] }) {
-  const [expanded, setExpanded] = useState(false);
-
-  const needsTruncation = data.length > MAX_VISIBLE;
-
-  const visibleEntries: { entry: CompetitorComparisonEntry; rank: number }[] = (() => {
-    if (!needsTruncation || expanded) {
-      return data.map((entry, i) => ({ entry, rank: i + 1 }));
-    }
-
-    const ownBrandIdx = data.findIndex((e) => e.isOwnBrand);
-    const ownBrandInTop = ownBrandIdx >= 0 && ownBrandIdx < MAX_VISIBLE - 1;
-
-    if (ownBrandInTop || ownBrandIdx < 0) {
-      return data.slice(0, MAX_VISIBLE).map((entry, i) => ({ entry, rank: i + 1 }));
-    }
-
-    // Show top 4 + own brand at its actual rank
-    const top = data.slice(0, MAX_VISIBLE - 1).map((entry, i) => ({ entry, rank: i + 1 }));
-    top.push({ entry: data[ownBrandIdx], rank: ownBrandIdx + 1 });
-    return top;
-  })();
-
-  return (
-    <div className="space-y-2">
-      {visibleEntries.map(({ entry, rank }, idx) => (
-        <LeaderboardEntry
-          key={`lb-${idx}-${rank}-${entry.isOwnBrand ? 'own' : entry.name}`}
-          entry={entry}
-          rank={rank}
-        />
-      ))}
-      {needsTruncation && !expanded && (
-        <button
-          onClick={() => setExpanded(true)}
-          className="w-full text-center text-xs font-medium text-muted-foreground hover:text-foreground py-2 transition-colors"
-        >
-          Show all ({data.length})
-        </button>
-      )}
-      {expanded && (
-        <button
-          onClick={() => setExpanded(false)}
-          className="w-full text-center text-xs font-medium text-muted-foreground hover:text-foreground py-2 transition-colors"
-        >
-          Show less
-        </button>
-      )}
     </div>
   );
 }

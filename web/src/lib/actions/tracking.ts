@@ -45,6 +45,7 @@ import { getPromptVolumes } from '@/lib/actions/volumes';
 import { getPromptSuggestions } from '@/lib/actions/prompt-suggestions';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import { percentageChange } from '@/lib/metrics';
+import { parseChangeDrivers, whyChanged, type WhyChanged } from '@/lib/insights-drivers';
 import {
   parsePlatformRows,
   platformChanges,
@@ -736,6 +737,11 @@ export interface InsightsData {
   platformChanges: PlatformChange[] | null;
   /** The "By AI platform" table (VIS-008); null under the same conditions. */
   platforms: PlatformTableRow[] | null;
+  /**
+   * "Why it changed" (VIS-009): what moved the change and the prompts new this
+   * period. Null for All time, before the backfill, or when the read failed.
+   */
+  whyChanged: WhyChanged | null;
   /** The run ledger, when the 24h window was anchored to it (`anchor24h`). */
   trackingWindow: TrackingWindow | null;
 }
@@ -832,6 +838,7 @@ type WindowedInsights = Pick<
   | 'kpiSeries'
   | 'platformChanges'
   | 'platforms'
+  | 'whyChanged'
 >;
 
 type InsightsFilterArgs = {
@@ -873,27 +880,38 @@ async function loadWindowedInsights(
           return fallback;
         });
 
-  const [summary, competitors, sov, filterOptions, trend, same, coverage, kpiSeries, platformData] =
-    await Promise.all([
-      getInsightsSummary(brandId, filterOpts),
-      lenient(
-        getCompetitorComparison(brandId, filterOpts),
-        EMPTY_COMPETITORS,
-        'competitor comparison',
-      ),
-      lenient(getShareOfVoiceData(brandId, filterOpts), EMPTY_SOV, 'share of voice'),
-      getInsightsFilterOptions(brandId),
-      // The chart follows the same window as every other number on the page.
-      lenient<VisibilityRateTrendData | null>(
-        getVisibilityRateTrend(brandId, filterOpts),
-        null,
-        'visibility trend',
-      ),
-      lenient(getSamePromptComparison(brandId, filterOpts), null, 'same-prompt comparison'),
-      lenient(getCoverageKpi(brandId, filterOpts), null, 'coverage'),
-      lenient(getKpiSeries(brandId, filterOpts), null, 'KPI sparklines'),
-      lenient(getPlatformData(brandId, filterOpts), null, 'platforms'),
-    ]);
+  const [
+    summary,
+    competitors,
+    sov,
+    filterOptions,
+    trend,
+    same,
+    coverage,
+    kpiSeries,
+    platformData,
+    drivers,
+  ] = await Promise.all([
+    getInsightsSummary(brandId, filterOpts),
+    lenient(
+      getCompetitorComparison(brandId, filterOpts),
+      EMPTY_COMPETITORS,
+      'competitor comparison',
+    ),
+    lenient(getShareOfVoiceData(brandId, filterOpts), EMPTY_SOV, 'share of voice'),
+    getInsightsFilterOptions(brandId),
+    // The chart follows the same window as every other number on the page.
+    lenient<VisibilityRateTrendData | null>(
+      getVisibilityRateTrend(brandId, filterOpts),
+      null,
+      'visibility trend',
+    ),
+    lenient(getSamePromptComparison(brandId, filterOpts), null, 'same-prompt comparison'),
+    lenient(getCoverageKpi(brandId, filterOpts), null, 'coverage'),
+    lenient(getKpiSeries(brandId, filterOpts), null, 'KPI sparklines'),
+    lenient(getPlatformData(brandId, filterOpts), null, 'platforms'),
+    lenient(getChangeDrivers(brandId, filterOpts), null, 'why it changed'),
+  ]);
   const windowed = {
     ...(comparisonWindows(filterOpts).prev ? { summary, sov } : withoutChanges(summary, sov)),
     competitors,
@@ -910,6 +928,9 @@ async function loadWindowedInsights(
           resolveProvider,
         )
       : null,
+    whyChanged:
+      drivers &&
+      whyChanged(drivers, resolveProvider, { samePrompts: filterOpts.samePrompts !== false }),
   };
   return withPromptComparison(windowed, same, filterOpts.samePrompts !== false);
 }
@@ -1002,6 +1023,51 @@ async function getKpiSeries(
   });
   if (error) throw new Error(error.message);
   return parseKpiSeries(data);
+}
+
+/**
+ * The inputs of "Why it changed" (VIS-009): each prompt's and engine's
+ * Visibility components in both comparison windows, over the same prompts as
+ * the card's change, and the prompts new this period. Null for All time.
+ */
+async function getChangeDrivers(
+  brandId: string,
+  opts?: InsightsFilterArgs,
+): Promise<ReturnType<typeof parseChangeDrivers>> {
+  const windows = comparisonWindows(opts);
+  if (!windows.prev) return null;
+  const supabase = await dbClient();
+  const base = {
+    p_brand_id: brandId,
+    p_models: modelFilterArray(opts?.model),
+    p_region: opts?.region ?? undefined,
+    p_same_prompts: opts?.samePrompts !== false,
+  };
+
+  let res;
+  if (windows.cur.kind === 'days') {
+    const { cur, prev } = deltaDayWindows(windows.cur.days);
+    res = await supabase.rpc('insights_change_drivers_daily', {
+      ...base,
+      p_cur_from: cur.dayFrom,
+      p_cur_to: cur.dayTo,
+      p_prev_from: prev.dayFrom,
+      p_prev_to: prev.dayTo,
+    });
+  } else {
+    const cur = windowBounds(windows.cur);
+    const prev = windowBounds(windows.prev);
+    res = await supabase.rpc('insights_change_drivers', {
+      ...base,
+      p_cur_from: cur.from,
+      p_cur_to: cur.to,
+      p_prev_from: prev.from,
+      p_prev_to: prev.to,
+      p_topic_id: opts?.topicId ?? undefined,
+    });
+  }
+  if (res.error) throw new Error(res.error.message);
+  return parseChangeDrivers(res.data);
 }
 
 /**

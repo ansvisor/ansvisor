@@ -14,15 +14,7 @@ const VisibilityRateTrendChart = dynamic(
   },
 );
 
-const CompetitorLeaderboard = dynamic(
-  () => import('./_charts').then((m) => m.CompetitorLeaderboard),
-  {
-    ssr: false,
-    loading: () => <Skeleton className="h-64 w-full" />,
-  },
-);
-
-import { MetricBreakdownSheet } from './_metric-breakdown-sheet';
+import { MetricBreakdownSheet, type BreakdownTab } from './_metric-breakdown-sheet';
 import { FormulaDialog } from './_formula-dialog';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
@@ -95,6 +87,9 @@ import type { PlatformChange, PlatformTableRow } from '@/lib/insights-summary';
 import { KpiRows } from './_kpi-cards';
 import { SummaryLine } from './_summary-line';
 import { PlatformTable } from './_platform-table';
+import { Leaderboard } from './_leaderboard';
+import { WhyChanged } from './_why-changed';
+import type { WhyChanged as WhyChangedData } from '@/lib/insights-drivers';
 
 // ─── Filter Types ─────────────────────────────────────────────────────────────
 
@@ -865,7 +860,9 @@ export default function InsightsPage() {
   const [kpiSeries, setKpiSeries] = useState<KpiSeriesDay[] | null>(null);
   const [platformChanges, setPlatformChanges] = useState<PlatformChange[] | null>(null);
   const [platforms, setPlatforms] = useState<PlatformTableRow[] | null>(null);
+  const [whyChanged, setWhyChanged] = useState<WhyChangedData | null>(null);
   const [breakdownMetric, setBreakdownMetric] = useState<BreakdownMetric | null>(null);
+  const [breakdownTab, setBreakdownTab] = useState<BreakdownTab | undefined>(undefined);
   // The window and filters the cards were last loaded with (the 24h view
   // anchored to its tracking run): the breakdown panel explains those exact
   // numbers rather than recomputing "now" on every render (VIS-001).
@@ -955,6 +952,7 @@ export default function InsightsPage() {
         setKpiSeries(insights.kpiSeries);
         setPlatformChanges(insights.platformChanges);
         setPlatforms(insights.platforms);
+        setWhyChanged(insights.whyChanged);
         setHasAnyData(insights.hasAnyData);
 
         // Group raw model slugs by their resolved display name so different
@@ -1419,7 +1417,10 @@ export default function InsightsPage() {
                 competitors={competitorData}
                 comparison={comparison}
                 series={kpiSeries}
-                onBreakdown={setBreakdownMetric}
+                onBreakdown={(metric) => {
+                  setBreakdownTab(undefined);
+                  setBreakdownMetric(metric);
+                }}
                 onNavigate={(path) => router.push(path)}
               />
 
@@ -1472,30 +1473,35 @@ export default function InsightsPage() {
                     </CardContent>
                   </Card>
 
-                  <Card className="lg:col-span-2">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <CardTitle className="text-sm font-medium">Leaderboard</CardTitle>
-                        <Link
-                          href="/dashboard/competitors"
-                          className="flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                          Head-to-Head Comparison
-                          <ArrowRight className="h-3 w-3" />
-                        </Link>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <CompetitorLeaderboard data={competitorData.brands} />
-                    </CardContent>
-                  </Card>
+                  <Leaderboard
+                    className="lg:col-span-2"
+                    brands={competitorData.brands}
+                    providerRows={competitorData.providerRows}
+                    platforms={platforms}
+                  />
                 </div>
               ) : (
                 <NoCompetitorsTeaser />
               )}
 
-              {/* By AI platform (VIS-008): replaces the Share of Voice charts. */}
-              {platforms && platforms.length > 0 && <PlatformTable rows={platforms} />}
+              {/* By AI platform (VIS-008) and Why it changed (VIS-009), side by side as in the mockup. */}
+              {((platforms && platforms.length > 0) || whyChanged) && (
+                <div className="flex flex-wrap gap-4">
+                  {platforms && platforms.length > 0 && (
+                    <PlatformTable className="min-w-0 flex-[1_1_520px]" rows={platforms} />
+                  )}
+                  {whyChanged && (
+                    <WhyChanged
+                      className="min-w-0 flex-[1_1_420px]"
+                      data={whyChanged}
+                      onOpenBreakdown={(tab) => {
+                        setBreakdownTab(tab);
+                        setBreakdownMetric('visibility');
+                      }}
+                    />
+                  )}
+                </div>
+              )}
 
               {/* Recommendations (#459) — stored data, not period-scoped */}
               {recommendations && <RecommendationsSection data={recommendations} />}
@@ -1520,6 +1526,7 @@ export default function InsightsPage() {
           if (!open) setBreakdownMetric(null);
         }}
         filters={loadedFilters}
+        initialTab={breakdownTab}
       />
     </div>
   );
