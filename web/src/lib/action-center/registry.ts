@@ -106,7 +106,9 @@ export type ActionKind =
   // Sent by a person from the Prompts Positions panel's Improve tab (PROMPT-004).
   | 'prompt_improve'
   // Sent by a person from Insights' Topics vs competitors (VIS-010).
-  | 'topic_competitor_gap';
+  | 'topic_competitor_gap'
+  // Sent by a person from an Insights Opportunities topic (VIS-011).
+  | 'topic_opportunity';
 
 export type TaskStatus =
   | 'todo'
@@ -223,6 +225,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'content_opportunity',
   'prompt_improve',
   'topic_competitor_gap',
+  'topic_opportunity',
 ];
 
 /**
