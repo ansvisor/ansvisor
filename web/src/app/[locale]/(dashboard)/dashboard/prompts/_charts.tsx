@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
-import { formatCompactNumber } from '@/lib/format';
+import { formatCompactNumber, formatNumber } from '@/lib/format';
 
 // ─── Auto-sizing wrapper ─────────────────────────────────────────────────────
 
@@ -129,9 +129,7 @@ export function PlatformVolumeChart({ totalVolume }: { totalVolume: number }) {
                   <p className="font-medium text-foreground mb-0.5">{row.name}</p>
                   <p className="text-muted-foreground">
                     Est. queries:{' '}
-                    <span className="font-medium text-foreground">
-                      {row.volume.toLocaleString()}
-                    </span>
+                    <span className="font-medium text-foreground">{formatNumber(row.volume)}</span>
                   </p>
                   <p className="text-muted-foreground">
                     Share:{' '}
