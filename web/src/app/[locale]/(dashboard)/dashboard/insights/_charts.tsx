@@ -24,7 +24,6 @@ import type {
   VisibilityTrendPoint,
   VisibilityRateTrendData,
   SoVByPlatform,
-  SoVTrendPoint,
 } from '@/lib/actions/tracking';
 import { getFaviconUrl } from '@/lib/favicon';
 import { formatCompactNumber } from '@/lib/format';
@@ -633,109 +632,5 @@ export function ShareOfVoicePlatformChart({
         ))}
       </ul>
     </div>
-  );
-}
-
-function SoVTrendTooltip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean;
-  payload?: { name: string; value: number; color: string }[];
-  label?: string;
-}) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="rounded-lg border bg-background px-3 py-2 shadow-md text-xs">
-      <p className="font-medium text-foreground mb-1">{label}</p>
-      {payload.map((entry) => (
-        <div key={entry.name} className="flex items-center gap-2">
-          <span
-            className="inline-block h-2 w-2 rounded-full shrink-0"
-            style={{ backgroundColor: entry.color }}
-          />
-          <span className="text-muted-foreground">{entry.name}:</span>
-          <span className="font-medium text-foreground">{entry.value}%</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export function ShareOfVoiceTrendChart({ data }: { data: SoVTrendPoint[] }) {
-  if (data.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
-        No trend data available yet
-      </div>
-    );
-  }
-
-  const hasCompetitors = data.some((d) => d.competitorSov > 0);
-
-  return (
-    <ChartContainer height={280}>
-      {(width) => (
-        <AreaChart
-          width={width}
-          height={280}
-          data={data}
-          margin={{ top: 4, right: 4, left: -24, bottom: 0 }}
-        >
-          <defs>
-            <linearGradient id="gradSovBrand" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
-              <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-            </linearGradient>
-            <linearGradient id="gradSovComp" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.15} />
-              <stop offset="95%" stopColor="#94a3b8" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
-          <XAxis
-            dataKey="date"
-            tick={{ fontSize: 11 }}
-            tickLine={false}
-            axisLine={false}
-            className="fill-muted-foreground"
-          />
-          <YAxis
-            tick={{ fontSize: 11 }}
-            tickLine={false}
-            axisLine={false}
-            className="fill-muted-foreground"
-            domain={[0, 100]}
-            tickFormatter={(v: number) => `${v}%`}
-          />
-          <Tooltip content={<SoVTrendTooltip />} />
-          <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-          <Area
-            type="monotone"
-            dataKey="brandSov"
-            name="Your Brand"
-            stroke="#6366f1"
-            strokeWidth={2}
-            fill="url(#gradSovBrand)"
-            dot={false}
-            activeDot={{ r: 4 }}
-          />
-          {hasCompetitors && (
-            <Area
-              type="monotone"
-              dataKey="competitorSov"
-              name="Competitors"
-              stroke="#94a3b8"
-              strokeWidth={2}
-              fill="url(#gradSovComp)"
-              dot={false}
-              activeDot={{ r: 4 }}
-              strokeDasharray="4 4"
-            />
-          )}
-        </AreaChart>
-      )}
-    </ChartContainer>
   );
 }
