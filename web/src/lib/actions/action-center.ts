@@ -192,21 +192,47 @@ export interface ActionDetail {
   positionOutcome: ImproveOutcome | null;
 }
 
-/** Everything the drawer's tabs need beyond the list row, in one round trip
- *  per source. `kpis` are the brand's configured definitions among the
- *  action's kpi_keys — evidence of which goals this work serves. */
-export async function getActionDetail(brandId: string, actionId: string): Promise<ActionDetail> {
-  const supabase = await createClient();
-  const [tasksRes, signalsRes, eventsRes, kpisRes, places, outcomeRes] = await Promise.all([
-    supabase.from('action_tasks').select(TASK_COLUMNS).eq('action_id', actionId).order('position'),
-    // Every signal the action has taken as evidence (AC-007), kept after a
-    // signal moves on to a later cycle: a closed action still shows its own.
+/**
+ * Every signal the action has taken as evidence (AC-007), kept after a signal
+ * moves on to a later cycle: a closed action still shows its own. With where
+ * each prompt is tracked and its topic, as the Signals page reads them: the
+ * Affected tab's platforms and topics (AC-003).
+ */
+async function readActionSignals(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  actionId: string,
+): Promise<Signal[]> {
+  const [signalsRes, places] = await Promise.all([
     supabase
       .from('signals')
       .select(`${SIGNAL_ROW_COLUMNS}, action_signals!inner(action_id)`)
       .eq('brand_id', brandId)
       .eq('action_signals.action_id', actionId)
       .order('detected_at', { ascending: false }),
+    readPromptPlaces(supabase, brandId),
+  ]);
+  if (signalsRes.error) throw new Error(signalsRes.error.message);
+  return mapSignalRows((signalsRes.data ?? []) as SignalRow[], places);
+}
+
+/**
+ * An action's evidence alone, for a drawer that already has the rest: the
+ * History drawer's goal and what happened (AC-003).
+ */
+export async function getActionSignals(brandId: string, actionId: string): Promise<Signal[]> {
+  const supabase = await createClient();
+  return readActionSignals(supabase, brandId, actionId);
+}
+
+/** Everything the drawer's tabs need beyond the list row, in one round trip
+ *  per source. `kpis` are the brand's configured definitions among the
+ *  action's kpi_keys — evidence of which goals this work serves. */
+export async function getActionDetail(brandId: string, actionId: string): Promise<ActionDetail> {
+  const supabase = await createClient();
+  const [tasksRes, signals, eventsRes, kpisRes, outcomeRes] = await Promise.all([
+    supabase.from('action_tasks').select(TASK_COLUMNS).eq('action_id', actionId).order('position'),
+    readActionSignals(supabase, brandId, actionId),
     supabase
       .from('action_events')
       .select(EVENT_COLUMNS)
@@ -217,9 +243,6 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
       .select('kpi_key, target, timeframe')
       .eq('brand_id', brandId)
       .eq('is_active', true),
-    // Where each prompt is tracked and its topic, as the Signals page reads
-    // them: the Affected tab's platforms and topics (AC-003).
-    readPromptPlaces(supabase, brandId),
     supabase
       .from('actions')
       .select('position_outcome')
@@ -228,13 +251,12 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
       .maybeSingle(),
   ]);
   if (tasksRes.error) throw new Error(tasksRes.error.message);
-  if (signalsRes.error) throw new Error(signalsRes.error.message);
   if (eventsRes.error) throw new Error(eventsRes.error.message);
   if (kpisRes.error) throw new Error(kpisRes.error.message);
 
   return {
     tasks: (tasksRes.data ?? []).map(taskFromRow),
-    signals: mapSignalRows((signalsRes.data ?? []) as SignalRow[], places),
+    signals,
     events: (eventsRes.data ?? []).map(eventFromRow),
     kpis: (kpisRes.data ?? []).map(kpiFromRow),
     positionOutcome: parseImproveOutcome(outcomeRes.data?.position_outcome ?? null),

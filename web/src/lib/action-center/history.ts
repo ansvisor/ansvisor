@@ -106,6 +106,8 @@ export interface ActionHistoryItem {
   positionOutcome: ImproveOutcome | null;
   tasks: ActionHistoryTask[];
   assignee: { id: string; fullName: string | null; avatarUrl: string | null } | null;
+  /** `YYYY-MM-DD`; the Goal's date when set (AC-003). */
+  dueDate: string | null;
   createdAt: string;
   completedAt: string | null;
   /** Calendar days from creation to close. Real — both stamps are recorded. */

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +19,10 @@ import { UNCOUNTED_TASK_STATUSES } from '@/lib/action-center/registry';
 import { ActionIcon, PriorityBadge } from './action-table';
 import { HistoryStatusBadge } from './history-table';
 import { ImproveOutcomeCard } from './improve-outcome-card';
+import { useActionStory } from './use-action-story';
+import { Skeleton } from '@/components/ui/skeleton';
+import { getActionSignals } from '@/lib/actions/action-center';
+import type { Signal } from '@/lib/signals/map';
 import { improvePlatformLabels } from '@/lib/improve-outcome';
 import { cn } from '@/lib/utils';
 
@@ -71,9 +76,11 @@ function ResultMetricCard({
  * for and the rest is the evidence behind it.
  */
 export function HistoryDrawer({
+  brandId,
   item,
   onOpenChange,
 }: {
+  brandId: string;
   item: ActionHistoryItem | null;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -86,6 +93,39 @@ export function HistoryDrawer({
   const tRegistry = useTranslations('actionCenter.registry');
   const tAffected = useTranslations('actionCenter.historyPage.affected');
   const router = useRouter();
+
+  // The signals the action took as evidence, read once it opens as the Actions
+  // drawer reads them, so its goal and what happened are told from its own
+  // data (AC-003). A failed read leaves the general sentences.
+  const itemId = item?.id ?? null;
+  const [read, setRead] = useState<{ id: string; signals: Signal[] } | null>(null);
+  useEffect(() => {
+    if (!itemId) return;
+    let cancelled = false;
+    getActionSignals(brandId, itemId).then(
+      (signals) => {
+        if (!cancelled) setRead({ id: itemId, signals });
+      },
+      () => {
+        if (!cancelled) setRead({ id: itemId, signals: [] });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, itemId]);
+  const storyAction = useMemo(
+    () =>
+      item
+        ? { id: item.id, payload: item.payload, createdAt: item.createdAt, dueDate: item.dueDate }
+        : null,
+    [item],
+  );
+  const { story, ready } = useActionStory(
+    brandId,
+    storyAction,
+    read && read.id === itemId ? read.signals : null,
+  );
 
   if (!item) return null;
 
@@ -139,16 +179,24 @@ export function HistoryDrawer({
         </SheetHeader>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-4 text-sm">
-          <section>
+          <section aria-busy={!ready}>
             <p className="text-xs font-medium text-muted-foreground">{t('drawer.goal')}</p>
-            <p className="mt-1">{actionGoal(item.kind, tTexts, item.payload)}</p>
+            {ready ? (
+              <p className="mt-1">{story?.goal ?? actionGoal(item.kind, tTexts, item.payload)}</p>
+            ) : (
+              <Skeleton className="mt-1.5 h-4 w-3/4" />
+            )}
           </section>
 
           <Separator />
 
-          <section>
+          <section aria-busy={!ready}>
             <p className="text-xs font-medium text-muted-foreground">{t('drawer.whatHappened')}</p>
-            <p className="mt-1">{texts.description}</p>
+            {ready ? (
+              <p className="mt-1">{story?.why ?? texts.description}</p>
+            ) : (
+              <Skeleton className="mt-1.5 h-4 w-full" />
+            )}
             {item.triggerSignals.length > 0 && (
               <p className="mt-1.5 text-xs text-muted-foreground">
                 {t('drawer.triggeredBy', { count: item.triggerSignals.length })}

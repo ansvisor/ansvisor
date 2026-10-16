@@ -388,7 +388,11 @@ export default function ActionCenterHistoryPage() {
         </>
       )}
 
-      <HistoryDrawer item={selected} onOpenChange={(open) => !open && setSelected(null)} />
+      <HistoryDrawer
+        brandId={brandId}
+        item={selected}
+        onOpenChange={(open) => !open && setSelected(null)}
+      />
     </div>
   );
 }

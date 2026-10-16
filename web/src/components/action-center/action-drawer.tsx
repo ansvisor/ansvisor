@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useCallback, useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { toast } from 'sonner';
 import { ChevronRight, Plus, Trash2 } from 'lucide-react';
@@ -30,7 +30,6 @@ import {
   assignAction,
   deleteTask,
   getActionDetail,
-  getPromptDemand,
   setActionDueDate,
   updateActionStatus,
   updateTaskDetails,
@@ -64,13 +63,8 @@ import { OpportunityContext } from './opportunity-context';
 import { ActionExportButtons } from './action-export-buttons';
 import { SupportingSignals } from './supporting-signals';
 import { AffectedTab } from './affected-tab';
-import {
-  affectedChips,
-  affectedOf,
-  affectedSignals,
-  affectedTotal,
-} from '@/lib/action-center/affected';
-import { actionStory } from '@/lib/action-center/story';
+import { affectedChips, affectedTotal } from '@/lib/action-center/affected';
+import { useActionStory } from './use-action-story';
 import { ImproveContext } from './improve-context';
 import { TaskDetailForm, TaskDetailView, TaskTypeBadge, type TaskSendOptions } from './task-detail';
 import { hasActiveWebhook, sendActionTask } from '@/lib/actions/action-task-send';
@@ -113,8 +107,6 @@ export function ActionDrawer({
   const tTasks = useTranslations('actionCenter.actionTasks');
   const tTaskStatus = useTranslations('actionCenter.taskStatus');
   const tPriority = useTranslations('actionCenter.actionsPage.priority');
-  const tStory = useTranslations('actionCenter.actionsPage.drawer.story');
-  const format = useFormatter();
 
   const router = useRouter();
   const [tab, setTab] = useState<DrawerTab>('overview');
@@ -162,70 +154,12 @@ export function ActionDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [action?.id]);
 
-  // The signals the action rests on, and what they affect, item by item (AC-003).
-  const evidence = useMemo(
-    () => (action && detail ? affectedSignals(detail.signals, action.id) : null),
-    [action, detail],
-  );
-  const affected = useMemo(
-    () => (action && evidence ? affectedOf(evidence, action.payload ?? {}) : null),
-    [action, evidence],
-  );
-
-  // Each affected prompt's demand. Best effort: without it the column is left
-  // out. Kept with the prompts it was read for, so a read still under way is
-  // told apart from one that failed.
-  const promptIdsKey = (affected?.prompts ?? [])
-    .map((row) => row.id)
-    .filter(Boolean)
-    .join(',');
-  const demandKey = `${brandId}:${promptIdsKey}`;
-  const [demand, setDemand] = useState<{
-    key: string;
-    volumes: Map<string, number> | null;
-  } | null>(null);
-  useEffect(() => {
-    if (!promptIdsKey) return;
-    let cancelled = false;
-    const key = `${brandId}:${promptIdsKey}`;
-    getPromptDemand(brandId, promptIdsKey.split(',')).then(
-      (read) => {
-        if (!cancelled) setDemand({ key, volumes: new Map(Object.entries(read)) });
-      },
-      () => {
-        if (!cancelled) setDemand({ key, volumes: null });
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [brandId, promptIdsKey]);
-  const demandRead = !promptIdsKey || demand?.key === demandKey;
-  const volumes = promptIdsKey && demand?.key === demandKey ? demand.volumes : null;
-  // The detail and its demand are both in: the Why names the prompts' demand,
-  // so it waits for it rather than reading one way and then another.
-  const ready = detail !== null && demandRead;
-
-  // Why and Goal in the action's own terms (AC-003); null for an action a
-  // person sent, which carries its own.
-  const story = useMemo(
-    () =>
-      action && evidence
-        ? actionStory(
-            {
-              signals: evidence,
-              volumes,
-              createdAt: action.createdAt,
-              dueDate: action.dueDate,
-            },
-            tStory,
-            {
-              day: (date) => format.dateTime(date, { month: 'short', day: 'numeric' }),
-              list: (items) => format.list(items, { type: 'conjunction' }),
-            },
-          )
-        : null,
-    [action, evidence, volumes, tStory, format],
+  // The signals the action rests on, what they affect, their prompts' demand
+  // and the Why and Goal they tell (AC-003), as the History drawer reads them.
+  const { affected, volumes, story, ready } = useActionStory(
+    brandId,
+    action,
+    detail?.signals ?? null,
   );
 
   if (!action) return null;
