@@ -110,18 +110,37 @@ export function buildPositionCell(
   };
 }
 
+/** What the Prompts table reads of a prompt's answers in the window. */
+interface AnswerCounts {
+  runs: number;
+  mentionAnswers: number;
+  citationAnswers: number;
+}
+
 /**
- * What the Prompts table's Positions cell shows: the average, "Not mentioned"
- * for a prompt that was tracked in the window but never named, or "—" for one
- * with no answers (or answers whose positions aren't stored).
+ * What the Prompts table's Positions cell shows: the average; for a prompt
+ * tracked in the window but never named, "Cited only" when its pages were
+ * cited and "Not mentioned" when not, as the panel's legend reads; or "—"
+ * for one with no answers (or answers whose positions aren't stored).
  */
 export function positionCellKind(
   cell: Pick<PromptPositionCell, 'avg'> | undefined,
-  answers: { runs: number; mentionAnswers: number } | undefined,
-): 'average' | 'notMentioned' | 'none' {
+  answers: AnswerCounts | undefined,
+): 'average' | 'citedOnly' | 'notMentioned' | 'none' {
   if (cell && cell.avg !== null) return 'average';
-  if (answers && answers.runs > 0 && answers.mentionAnswers === 0) return 'notMentioned';
+  if (answers && answers.runs > 0 && answers.mentionAnswers === 0) {
+    return answers.citationAnswers > 0 ? 'citedOnly' : 'notMentioned';
+  }
   return 'none';
+}
+
+/**
+ * Whether the row offers its positions panel: whenever the prompt has answers
+ * in the window, so one never named can still be opened (to its "Not
+ * mentioned" platforms and Improve).
+ */
+export function opensPositionsPanel(answers: AnswerCounts | undefined): boolean {
+  return !!answers && answers.runs > 0;
 }
 
 /** The previous period of the same length, ending where this one starts. */

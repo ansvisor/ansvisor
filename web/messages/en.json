@@ -2191,7 +2191,9 @@
       "citedInPeriod": "In {cited} of {answers, plural, one {# answer} other {# answers}} in this period · {citations, plural, one {# citation} other {# citations}}",
       "includedOnly": "Answer counts cover the platforms your plan includes.",
       "notMentioned": "Not mentioned",
-      "notMentionedTitle": "Not mentioned in any of {count, plural, one {# answer} other {# answers}} in this period"
+      "notMentionedTitle": "Not mentioned in any of {count, plural, one {# answer} other {# answers}} in this period",
+      "citedOnly": "Cited only",
+      "citedOnlyTitle": "Cited in {cited} of {count, plural, one {# answer} other {# answers}} in this period, named in none"
     },
     "title": "Prompt Volumes",
     "description": "Discover query volumes and trends across AI platforms.",
