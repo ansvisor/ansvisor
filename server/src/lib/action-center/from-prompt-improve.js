@@ -7,11 +7,13 @@
  * Unlike it, the tasks are not library tasks: each is one suggestion exactly
  * as the user edited it, with the platform and the evidence behind it in
  * `details`. The action is measured on its own prompt (validate.js), and the
- * positions at send time are kept as its baseline for PROMPT-008.
+ * prompt's last 7 days at send time are kept as its baseline for the Outcome
+ * card (improve-outcome.js, PROMPT-008).
  */
 
 import supabaseAdmin from '../../config/supabase.js';
 import { IMPROVE_PLATFORM_LABELS } from '../prompt-improve.js';
+import { compareOutcome, outcomeWindow, readPlatformStates } from './improve-outcome.js';
 
 export const IMPROVE_ACTION_KIND = 'prompt_improve';
 
@@ -94,20 +96,12 @@ export function improveGoal(promptText, platforms) {
   )}.`;
 }
 
-/** The positions at send time, per platform the action covers (PROMPT-008). */
-export function improveBaseline(platforms, capturedAt) {
-  return {
-    capturedAt,
-    platforms: platforms.map((p) => ({
-      platform: p.id,
-      state: p.state,
-      runs: p.runs ?? null,
-      mentionedRuns: p.mentionedRuns ?? null,
-      citedRuns: p.citedRuns ?? null,
-      mentionPosition: p.mentionPosition ?? null,
-      citationRank: p.citationRank ?? null,
-    })),
-  };
+/**
+ * The prompt's last 7 days at send time, per platform the action covers
+ * (PROMPT-008). Written once, at creation; nothing updates it.
+ */
+export function improveBaseline(snapshots, capturedAt, window) {
+  return { capturedAt, window, platforms: snapshots };
 }
 
 /** One task row per selected suggestion, in the order they were shown. */
@@ -172,8 +166,17 @@ export async function sendImproveToActionCenter({
     .limit(1)
     .maybeSingle();
 
-  const now = new Date().toISOString();
+  const sentAt = new Date();
+  const now = sentAt.toISOString();
   const pages = improvePages(suggestions);
+  const window = outcomeWindow(sentAt);
+  const snapshots = await readPlatformStates({
+    promptId: prompt.id,
+    brandId,
+    region: set.region || null,
+    platforms: platforms.map((p) => p.id),
+    window,
+  });
   const payload = {
     source: IMPROVE_ACTION_KIND,
     title: `Improve position: "${prompt.text}"`,
@@ -203,7 +206,14 @@ export async function sendImproveToActionCenter({
       impact: improveImpact(platforms, volumeRow?.est_ai_volume),
       payload,
       kpi_keys: improveKpiKeys(pages),
-      baseline: improveBaseline(platforms, now),
+      baseline: improveBaseline(snapshots, now, window),
+      // The first read is the baseline itself; the daily sweep moves it on.
+      position_outcome: {
+        measuredAt: now,
+        window,
+        final: false,
+        ...compareOutcome(snapshots, snapshots),
+      },
       dedup_key: dedupKey,
     })
     .select('id, action_no')
