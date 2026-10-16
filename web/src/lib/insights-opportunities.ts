@@ -40,8 +40,11 @@ export interface Opportunity {
   topicId: string | null;
   /** What Track adds, highest volume first. */
   suggestionIds: string[];
-  /** Monthly AI search volume: the prompt's, or the sum of the topic's. */
-  volume: number;
+  /**
+   * Monthly AI search volume: the prompt's, or the sum of the topic's; null
+   * when none of them has an estimate (shown as nothing, never "~0/mo").
+   */
+  volume: number | null;
   standing: OpportunityStanding;
 }
 
@@ -125,7 +128,9 @@ export function opportunities(
     const topicId = sorted[0].topicId;
     const isTopic = sorted.length > 1;
     const standing = standingOf(topicId);
-    const volume = sorted.reduce((sum, s) => sum + (s.estVolume ?? 0), 0);
+    const estimated = sorted.filter((s) => s.estVolume !== null);
+    const volume =
+      estimated.length > 0 ? estimated.reduce((sum, s) => sum + s.estVolume!, 0) : null;
     const relevance = sorted.reduce((sum, s) => sum + s.relevance!, 0) / sorted.length;
     const item: Opportunity = {
       kind: isTopic ? 'topic' : 'prompt',
@@ -136,7 +141,7 @@ export function opportunities(
       volume,
       standing,
     };
-    return { item, relevance, rank: relevance * volume * gapWeight(standing) };
+    return { item, relevance, rank: relevance * (volume ?? 0) * gapWeight(standing) };
   });
 
   ranked.sort(
