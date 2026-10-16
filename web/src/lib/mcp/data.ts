@@ -12,6 +12,12 @@ import { classifyArticleType } from '@/lib/citations/article-type';
 import { expandDateToEndOfDay } from '@/lib/dates';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { API_BASE_URL } from '@/config/api';
+import { ORG_PLAN_COLUMNS, planFromOrgRow } from '@/lib/guards/plan-guard';
+import {
+  fetchPromptUsageRow,
+  toPromptUsageSummary,
+  type PromptUsageSummary,
+} from '@/lib/prompt-usage-summary';
 
 /**
  * Pure data-fetch functions shared by the MCP route and the parallel REST
@@ -864,6 +870,31 @@ export async function getSiteAuditQuotaFor(auth: McpAuthContext): Promise<SiteAu
 
   const body = (await res.json()) as { quota: SiteAuditQuota };
   return body.quota;
+}
+
+/**
+ * The Tracked Prompts usage cards for a brand (PROMPT-012), so the Agent Chat
+ * can answer "how many prompt slots do we have left?" with the page's own
+ * numbers: prompt_usage_counters for the counts, the organization's effective
+ * plan (Enterprise overrides merged) for the limit.
+ */
+export async function getPromptUsageFor(
+  auth: McpAuthContext,
+  brandId: string,
+): Promise<PromptUsageSummary | null> {
+  if (!auth.organizationId || !(await brandInOrg(auth, brandId))) return null;
+
+  const [{ data: org, error: orgError }, row] = await Promise.all([
+    supabaseAdmin
+      .from('organizations')
+      .select(ORG_PLAN_COLUMNS)
+      .eq('id', auth.organizationId)
+      .maybeSingle(),
+    fetchPromptUsageRow(supabaseAdmin, brandId),
+  ]);
+  if (orgError) throw new Error(orgError.message);
+  if (!row) return null;
+  return toPromptUsageSummary(row, planFromOrgRow(org));
 }
 
 /**

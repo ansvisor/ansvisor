@@ -1859,7 +1859,14 @@
       "allPrompts": "all prompts",
       "netSentiment": "Net sentiment",
       "netSentimentTip": "Positive minus negative share of the answers that name or cite your brand.",
-      "sentimentSplit": "{positive}% pos · {negative}% neg",
+      "sentimentSplit": "{positive} pos · {negative} neg",
+      "sampleTip": {
+        "all": "{count, plural, one {Based on # answer} other {Based on # answers}} in this period.",
+        "named": "{count, plural, one {Based on # answer that names you} other {Based on # answers that name you}} in this period.",
+        "placed": "{count, plural, one {Based on # answer that places you} other {Based on # answers that place you}} in this period."
+      },
+      "lowSample": "{count, plural, one {Low sample · # answer} other {Low sample · # answers}}",
+      "lowSampleShort": "Low sample",
       "coverage": "Coverage",
       "coverageTip": "Share of answered prompts where you appear at least once.",
       "coverageSub": "{visible} of {active} prompts",
@@ -1876,6 +1883,7 @@
     "summary": {
       "label": "Summary",
       "visibility": "visibility",
+      "lowSample": "{count, plural, one {(low sample · # answer)} other {(low sample · # answers)}}",
       "rank": "#{rank}",
       "ofCount": "of {count}",
       "pts": "{value} pts",
@@ -1905,6 +1913,7 @@
     "leaderboard": {
       "title": "Leaderboard",
       "headToHead": "Head-to-Head",
+      "lowSample": "{count, plural, one {Low sample · # answer} other {Low sample · # answers}}",
       "you": "You",
       "coverageSov": "Coverage {coverage} · SoV {sov}",
       "scoreDetail": "Mentioned in {mentions} answers · cited in {citations} · position factor {factor}",
@@ -1918,6 +1927,7 @@
     },
     "whyChanged": {
       "title": "Why it changed",
+      "rowLowSample": "Low sample",
       "fullBreakdown": "Full breakdown",
       "gains": "Gains",
       "drops": "Drops",
@@ -1937,6 +1947,7 @@
     },
     "trend": {
       "subtitle": "Visibility · {range}",
+      "lowSample": "{count, plural, one {low sample · # answer} other {low sample · # answers}}",
       "range": {
         "24h": "last 24 hours",
         "7d": "last 7 days",
@@ -1976,6 +1987,18 @@
       "sendFailed": "Couldn't send to the Action Center.",
       "openAction": "Open",
       "gapChanged": "The gap changed since the page loaded. Refresh to see the latest."
+    },
+    "breakdown": {
+      "noData": "No data",
+      "lowSample": "Low sample"
+    },
+    "header": {
+      "lastRun": "Last run {when}",
+      "noRuns": "No runs yet",
+      "nextRun": "next run in {when}",
+      "minutes": "{n}m",
+      "hours": "{n}h",
+      "days": "{n}d"
     },
     "opportunities": {
       "title": "Opportunities",
@@ -2437,6 +2460,54 @@
       "platformsAndModels": "Platform & Models",
       "selectPlatformsAndModels": "Select platform & models",
       "selectedCount": "{count} selected"
+    },
+    "usage": {
+      "title": "Tracked Prompts",
+      "subtitle": "Every tracked prompt for this brand · edit or pause any row in place",
+      "subtitleReadOnly": "Read-only overview of every tracked prompt for this brand",
+      "planAndUsage": "Plan & usage",
+      "planPill": "{plan} plan",
+      "planLabel": {
+        "self_hosted": "Self-Hosted",
+        "starter": "Starter",
+        "growth": "Growth",
+        "enterprise": "Enterprise"
+      },
+      "thisBrand": "This brand",
+      "account": "Account",
+      "activePrompts": "Active prompts",
+      "totalPrompts": "Total prompts",
+      "promptLocations": "Prompt locations",
+      "slotsLeft": "Slots left",
+      "paused": "{count} paused",
+      "beingTracked": "being tracked now",
+      "activePlusPaused": "active + paused",
+      "acrossBrands": "across {count, plural, one {# brand} other {# brands}}",
+      "locationPairs": "prompt × location pairs",
+      "overLimit": "over limit",
+      "ofLimit": "of {limit} on {plan}",
+      "onPlan": "on {plan}",
+      "unlimited": "Unlimited",
+      "cta": {
+        "upgrade_growth": "Upgrade to Growth",
+        "upgrade": "Upgrade plan",
+        "contact": "Contact us"
+      },
+      "footer": "Click a card to filter the table (Active · Paused · All).",
+      "updated": "Counts updated {when}",
+      "updatedJustNow": "Counts updated just now",
+      "loadFailed": "Couldn't load the counts",
+      "retry": "Retry",
+      "showPaused": "Show paused prompts",
+      "table": {
+        "active": "Active prompts ({count})",
+        "paused": "Paused prompts ({count})",
+        "all": "All prompts ({count})",
+        "filtered": "Filtered by the card above",
+        "showAll": "Show all {count}",
+        "noneActive": "No active prompts match.",
+        "nonePaused": "No paused prompts match."
+      }
     },
     "bulkDelete": {
       "progress": "Deleting {done} of {total} prompts…",
