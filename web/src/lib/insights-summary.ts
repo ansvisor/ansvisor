@@ -1,4 +1,5 @@
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
+import { coverage } from '@/lib/insights-kpis';
 
 /**
  * The Insights summary line (VIS-006): the brand's rank and the gap to its
@@ -8,7 +9,7 @@ import { computeAiVisibilityScore } from '@/lib/visibility-score';
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
-/** One row of insights_platform_compare[_daily] (00132). */
+/** One row of insights_platform_compare[_daily] (00132, 00133). */
 export interface PlatformRow {
   model_used: string | null;
   platform: string | null;
@@ -18,6 +19,14 @@ export interface PlatformRow {
   citation_answers: number;
   sum_inv_position: number | null;
   position_count: number;
+  /** 00133: for the platform table's Avg. position. */
+  sum_position: number | null;
+  /**
+   * 00133, current window only: the prompts answered on this engine and the
+   * ones where the brand appeared, for the platform table's Coverage.
+   */
+  visible_prompt_ids: string[];
+  active_prompt_ids: string[];
 }
 
 /** A platform's Visibility in both windows. */
@@ -29,6 +38,7 @@ export interface PlatformChange {
 }
 
 const num = (v: unknown): number => Number(v ?? 0);
+const ids = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
 
 /**
  * The RPC payload, or null when it can't be used: missing, or read from
@@ -50,6 +60,10 @@ export function parsePlatformRows(raw: unknown): PlatformRow[] | null {
         ? null
         : num(p.sum_inv_position),
     position_count: num(p.position_count),
+    sum_position:
+      p.sum_position === null || p.sum_position === undefined ? null : num(p.sum_position),
+    visible_prompt_ids: ids(p.visible_prompt_ids),
+    active_prompt_ids: ids(p.active_prompt_ids),
   }));
 }
 
@@ -69,10 +83,14 @@ const score = (s: Sums) =>
     positionFactor: s.positions > 0 ? s.invPosition / s.positions : null,
   });
 
+/** Fewer answers than this and a platform's numbers aren't shown (spec v2: "Low sample"). */
+export const LOW_SAMPLE_ANSWERS = 20;
+
 /**
  * Each platform's Visibility change, with model slugs folded into their
- * platform the way "Share of Voice by Platform" names them. Only platforms
- * answered in both windows; biggest rise first.
+ * platform (`platformOf`). Only platforms with at least LOW_SAMPLE_ANSWERS
+ * answers in both windows, so a swing over a handful of answers is never
+ * named; biggest rise first.
  */
 export function platformChanges(
   rows: PlatformRow[],
@@ -102,6 +120,7 @@ export function platformChanges(
   for (const [name, { cur, prev }] of sums) {
     const c = score(cur);
     const p = score(prev);
+    if (cur.answers < LOW_SAMPLE_ANSWERS || prev.answers < LOW_SAMPLE_ANSWERS) continue;
     if (c === null || p === null) continue;
     out.push({ name, cur: c, prev: p, change: round1(c - p) });
   }
@@ -139,4 +158,100 @@ export function rankSummary(
     count: brands.length,
     neighbour: { name: other.name, gap, side: gap === 0 ? 'tied' : i > 0 ? 'behind' : 'ahead' },
   };
+}
+
+// ─── By AI platform table (VIS-008) ─────────────────────────────────────────
+
+export interface PlatformTableRow {
+  name: string;
+  /** 'noRuns': no answers this period; 'lowSample': too few to show rates. */
+  status: 'ok' | 'lowSample' | 'noRuns';
+  /** Answers this period. */
+  runs: number;
+  visibility: number | null;
+  /** Visibility change, following Same prompts; null without one. */
+  change: number | null;
+  /** % of the prompts answered on the platform where the brand appeared. */
+  coverage: number | null;
+  shareOfVoice: number | null;
+  avgPosition: number | null;
+  /** The row with the biggest drop, tinted in the table. */
+  worst: boolean;
+}
+
+/**
+ * The "By AI platform" rows: each platform's values over every prompt in
+ * the current window, its change (the same numbers the summary line's movers
+ * use) and its share of voice. Platforms answered only in the previous
+ * window read "No runs this period", never 0%. Sorted by Visibility, then the
+ * low-sample ones, then the ones without runs.
+ */
+export function platformTable(
+  rows: PlatformRow[],
+  changes: PlatformChange[],
+  shareOfVoice: { provider: string; sov: number }[],
+  platformOf: (modelUsed: string | null, platform: string | null) => string,
+): PlatformTableRow[] {
+  const cur = new Map<
+    string,
+    Sums & { sumPosition: number; visible: Set<string>; active: Set<string> }
+  >();
+  const seen = new Set<string>();
+  for (const r of rows) {
+    const name = platformOf(r.model_used, r.platform);
+    seen.add(name);
+    if (r.win !== 'cur') continue;
+    const s = cur.get(name) ?? {
+      answers: 0,
+      mentions: 0,
+      citations: 0,
+      invPosition: 0,
+      positions: 0,
+      sumPosition: 0,
+      visible: new Set<string>(),
+      active: new Set<string>(),
+    };
+    s.answers += r.answers;
+    s.mentions += r.mention_answers;
+    s.citations += r.citation_answers;
+    s.invPosition += r.sum_inv_position ?? 0;
+    s.positions += r.position_count;
+    s.sumPosition += r.sum_position ?? 0;
+    // A prompt answered by two of the platform's engines counts once.
+    r.visible_prompt_ids.forEach((id) => s.visible.add(id));
+    r.active_prompt_ids.forEach((id) => s.active.add(id));
+    cur.set(name, s);
+  }
+
+  const out: PlatformTableRow[] = [...seen].map((name) => {
+    const s = cur.get(name);
+    const runs = s?.answers ?? 0;
+    const status = runs === 0 ? 'noRuns' : runs < LOW_SAMPLE_ANSWERS ? 'lowSample' : 'ok';
+    const ok = status === 'ok' && s;
+    return {
+      name,
+      status,
+      runs,
+      visibility: ok ? score(s) : null,
+      change: ok ? (changes.find((c) => c.name === name)?.change ?? null) : null,
+      coverage: ok ? coverage(s.visible.size, s.active.size) : null,
+      shareOfVoice: ok ? (shareOfVoice.find((p) => p.provider === name)?.sov ?? null) : null,
+      avgPosition: ok && s.positions > 0 ? round1(s.sumPosition / s.positions) : null,
+      worst: false,
+    };
+  });
+
+  const drops = out.filter((r) => r.change !== null && r.change < 0);
+  if (drops.length > 0) {
+    drops.reduce((a, b) => (b.change! < a.change! ? b : a)).worst = true;
+  }
+
+  const order = { ok: 0, lowSample: 1, noRuns: 2 };
+  return out.sort(
+    (a, b) =>
+      order[a.status] - order[b.status] ||
+      (b.visibility ?? 0) - (a.visibility ?? 0) ||
+      b.runs - a.runs ||
+      a.name.localeCompare(b.name),
+  );
 }

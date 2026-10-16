@@ -45,7 +45,14 @@ import { getPromptVolumes } from '@/lib/actions/volumes';
 import { getPromptSuggestions } from '@/lib/actions/prompt-suggestions';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import { percentageChange } from '@/lib/metrics';
-import { parsePlatformRows, platformChanges, type PlatformChange } from '@/lib/insights-summary';
+import {
+  parsePlatformRows,
+  platformChanges,
+  platformTable,
+  type PlatformChange,
+  type PlatformRow,
+  type PlatformTableRow,
+} from '@/lib/insights-summary';
 import {
   coverage as coverageRate,
   kpiRates,
@@ -727,6 +734,8 @@ export interface InsightsData {
    * window, before the backfill, or when the read failed.
    */
   platformChanges: PlatformChange[] | null;
+  /** The "By AI platform" table (VIS-008); null under the same conditions. */
+  platforms: PlatformTableRow[] | null;
   /** The run ledger, when the 24h window was anchored to it (`anchor24h`). */
   trackingWindow: TrackingWindow | null;
 }
@@ -822,6 +831,7 @@ type WindowedInsights = Pick<
   | 'coverage'
   | 'kpiSeries'
   | 'platformChanges'
+  | 'platforms'
 >;
 
 type InsightsFilterArgs = {
@@ -863,36 +873,27 @@ async function loadWindowedInsights(
           return fallback;
         });
 
-  const [
-    summary,
-    competitors,
-    sov,
-    filterOptions,
-    trend,
-    same,
-    coverage,
-    kpiSeries,
-    platformChangesData,
-  ] = await Promise.all([
-    getInsightsSummary(brandId, filterOpts),
-    lenient(
-      getCompetitorComparison(brandId, filterOpts),
-      EMPTY_COMPETITORS,
-      'competitor comparison',
-    ),
-    lenient(getShareOfVoiceData(brandId, filterOpts), EMPTY_SOV, 'share of voice'),
-    getInsightsFilterOptions(brandId),
-    // The chart follows the same window as every other number on the page.
-    lenient<VisibilityRateTrendData | null>(
-      getVisibilityRateTrend(brandId, filterOpts),
-      null,
-      'visibility trend',
-    ),
-    lenient(getSamePromptComparison(brandId, filterOpts), null, 'same-prompt comparison'),
-    lenient(getCoverageKpi(brandId, filterOpts), null, 'coverage'),
-    lenient(getKpiSeries(brandId, filterOpts), null, 'KPI sparklines'),
-    lenient(getPlatformChanges(brandId, filterOpts), null, 'platform changes'),
-  ]);
+  const [summary, competitors, sov, filterOptions, trend, same, coverage, kpiSeries, platformData] =
+    await Promise.all([
+      getInsightsSummary(brandId, filterOpts),
+      lenient(
+        getCompetitorComparison(brandId, filterOpts),
+        EMPTY_COMPETITORS,
+        'competitor comparison',
+      ),
+      lenient(getShareOfVoiceData(brandId, filterOpts), EMPTY_SOV, 'share of voice'),
+      getInsightsFilterOptions(brandId),
+      // The chart follows the same window as every other number on the page.
+      lenient<VisibilityRateTrendData | null>(
+        getVisibilityRateTrend(brandId, filterOpts),
+        null,
+        'visibility trend',
+      ),
+      lenient(getSamePromptComparison(brandId, filterOpts), null, 'same-prompt comparison'),
+      lenient(getCoverageKpi(brandId, filterOpts), null, 'coverage'),
+      lenient(getKpiSeries(brandId, filterOpts), null, 'KPI sparklines'),
+      lenient(getPlatformData(brandId, filterOpts), null, 'platforms'),
+    ]);
   const windowed = {
     ...(comparisonWindows(filterOpts).prev ? { summary, sov } : withoutChanges(summary, sov)),
     competitors,
@@ -900,7 +901,15 @@ async function loadWindowedInsights(
     trend,
     coverage,
     kpiSeries,
-    platformChanges: platformChangesData,
+    platformChanges: platformData?.changes ?? null,
+    platforms: platformData
+      ? platformTable(
+          platformData.rows,
+          platformData.changes ?? [],
+          sov.byPlatform,
+          resolveProvider,
+        )
+      : null,
   };
   return withPromptComparison(windowed, same, filterOpts.samePrompts !== false);
 }
@@ -996,49 +1005,59 @@ async function getKpiSeries(
 }
 
 /**
- * Each platform's Visibility change over the card's windows, for the summary
- * line's "Up most / Down most" (VIS-006). With Same prompts on (the default)
- * only the prompts answered in both windows count, like every other change.
+ * Each platform in the comparison windows (VIS-006, VIS-008): the rows over
+ * every prompt, for the "By AI platform" table's values, and each platform's
+ * Visibility change for the summary line's movers and the table's Change
+ * column. With Same prompts on (the default) the changes count only the
+ * prompts answered in both windows, like every other change. All time reads
+ * the current window alone and has no changes.
  */
-async function getPlatformChanges(
+async function getPlatformData(
   brandId: string,
   opts?: InsightsFilterArgs,
-): Promise<PlatformChange[] | null> {
+): Promise<{ rows: PlatformRow[]; changes: PlatformChange[] | null } | null> {
   const windows = comparisonWindows(opts);
-  if (!windows.prev) return null;
   const supabase = await dbClient();
   const base = {
     p_brand_id: brandId,
     p_models: modelFilterArray(opts?.model),
     p_region: opts?.region ?? undefined,
-    p_same_prompts: opts?.samePrompts !== false,
   };
 
-  let res;
-  if (windows.cur.kind === 'days') {
-    const { cur, prev } = deltaDayWindows(windows.cur.days);
-    res = await supabase.rpc('insights_platform_compare_daily', {
-      ...base,
-      p_cur_from: cur.dayFrom,
-      p_cur_to: cur.dayTo,
-      p_prev_from: prev.dayFrom,
-      p_prev_to: prev.dayTo,
-    });
-  } else {
-    const cur = windowBounds(windows.cur);
-    const prev = windowBounds(windows.prev);
-    res = await supabase.rpc('insights_platform_compare', {
-      ...base,
-      p_cur_from: cur.from,
-      p_cur_to: cur.to,
-      p_prev_from: prev.from,
-      p_prev_to: prev.to,
-      p_topic_id: opts?.topicId ?? undefined,
-    });
-  }
-  if (res.error) throw new Error(res.error.message);
-  const rows = parsePlatformRows(res.data);
-  return rows && platformChanges(rows, (model, platform) => resolveProvider(model, platform));
+  // An absent bound is open; without a previous window only the current one is read.
+  const prev = windows.prev && windowBounds(windows.prev);
+  const read = async (samePrompts: boolean) => {
+    const res =
+      windows.cur.kind === 'days'
+        ? await supabase.rpc('insights_platform_compare_daily', {
+            ...base,
+            p_same_prompts: samePrompts,
+            p_cur_from: windows.cur.days.dayFrom,
+            p_cur_to: windows.cur.days.dayTo,
+            p_prev_from: prev?.from,
+            p_prev_to: prev?.to,
+          })
+        : await supabase.rpc('insights_platform_compare', {
+            ...base,
+            p_same_prompts: samePrompts,
+            p_cur_from: windows.cur.from,
+            p_cur_to: windows.cur.to,
+            p_prev_from: prev?.from,
+            p_prev_to: prev?.to,
+            p_topic_id: opts?.topicId ?? undefined,
+          });
+    if (res.error) throw new Error(res.error.message);
+    return parsePlatformRows(res.data);
+  };
+
+  const samePrompts = prev !== null && opts?.samePrompts !== false;
+  const [all, same] = await Promise.all([
+    read(false),
+    samePrompts ? read(true) : Promise.resolve(null),
+  ]);
+  const changeRows = samePrompts ? same : all;
+  if (!all || !changeRows) return null;
+  return { rows: all, changes: prev ? platformChanges(changeRows, resolveProvider) : null };
 }
 
 /**
