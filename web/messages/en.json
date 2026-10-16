@@ -2347,6 +2347,54 @@
       "selectPlatformsAndModels": "Select platform & models",
       "selectedCount": "{count} selected"
     },
+    "usage": {
+      "title": "Tracked Prompts",
+      "subtitle": "Every tracked prompt for this brand · edit or pause any row in place",
+      "subtitleReadOnly": "Read-only overview of every tracked prompt for this brand",
+      "planAndUsage": "Plan & usage",
+      "planPill": "{plan} plan",
+      "planLabel": {
+        "self_hosted": "Self-Hosted",
+        "starter": "Starter",
+        "growth": "Growth",
+        "enterprise": "Enterprise"
+      },
+      "thisBrand": "This brand",
+      "account": "Account",
+      "activePrompts": "Active prompts",
+      "totalPrompts": "Total prompts",
+      "promptLocations": "Prompt locations",
+      "slotsLeft": "Slots left",
+      "paused": "{count} paused",
+      "beingTracked": "being tracked now",
+      "activePlusPaused": "active + paused",
+      "acrossBrands": "across {count, plural, one {# brand} other {# brands}}",
+      "locationPairs": "prompt × location pairs",
+      "overLimit": "over limit",
+      "ofLimit": "of {limit} on {plan}",
+      "onPlan": "on {plan}",
+      "unlimited": "Unlimited",
+      "cta": {
+        "upgrade_growth": "Upgrade to Growth",
+        "upgrade": "Upgrade plan",
+        "contact": "Contact us"
+      },
+      "footer": "Click a card to filter the table (Active · Paused · All).",
+      "updated": "Counts updated {when}",
+      "updatedJustNow": "Counts updated just now",
+      "loadFailed": "Couldn't load the counts",
+      "retry": "Retry",
+      "showPaused": "Show paused prompts",
+      "table": {
+        "active": "Active prompts ({count})",
+        "paused": "Paused prompts ({count})",
+        "all": "All prompts ({count})",
+        "filtered": "Filtered by the card above",
+        "showAll": "Show all {count}",
+        "noneActive": "No active prompts match.",
+        "nonePaused": "No paused prompts match."
+      }
+    },
     "bulkDelete": {
       "progress": "Deleting {done} of {total} prompts…",
       "failed": "{count, plural, one {Failed to delete the prompt.} other {Failed to delete the prompts.}}",
