@@ -42,6 +42,7 @@ import { runPulseCatchUp } from './lib/pulse/engine.js';
 import { runSignalCatchUp } from './lib/signals/pass.js';
 import { sweepTaskExecution } from './lib/action-center/execution/run.js';
 import { sendHealthReport } from './lib/health/report.js';
+import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -137,6 +138,12 @@ async function runDailyTracking() {
   // about why.
   runSignalCatchUp().catch((err) => {
     logger.error({ err }, '[signals] catch-up sweep crashed');
+  });
+
+  // Check the Tracked Prompts usage counters against the prompts themselves
+  // and rebuild any that drifted (PROMPT-012). Non-blocking, like the above.
+  checkPromptUsageCounters().catch((err) => {
+    logger.error({ err }, '[prompt-usage] counter check crashed');
   });
 
   // Carry out the tasks the engine can carry out itself (#818 phase 7). Runs

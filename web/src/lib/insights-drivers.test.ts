@@ -96,6 +96,8 @@ describe('whyChanged', () => {
         name: 'ChatGPT',
         prev: Math.round(score(100, 30) * 10) / 10,
         cur: Math.round(score(100, 60) * 10) / 10,
+        // Each score's sample size, for a Low sample mark on the row (VIS-005).
+        answers: { prev: 100, cur: 100 },
         impact: change,
       },
     ]);

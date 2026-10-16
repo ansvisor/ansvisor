@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useSearchParams } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MetricBreakdownSheet, type BreakdownTab } from './_metric-breakdown-sheet';
 import { FormulaDialog } from './_formula-dialog';
@@ -560,7 +560,7 @@ function NoDataForPeriod({ datePreset, onReset }: { datePreset: DatePreset; onRe
 
 import { saveTrackingJob, loadTrackingJob, clearTrackingJob } from '@/lib/tracking-job-store';
 import { toCsv } from '@/lib/csv';
-import { formatRelative } from '@/lib/format-relative';
+import { RunLine } from './_run-line';
 
 function TrackingProgressBanner({
   jobStatus,
@@ -698,6 +698,7 @@ export default function InsightsPage() {
   const tCommon = useTranslations('common');
   const router = useRouter();
   const { isCloud } = usePlanContext();
+  const locale = useLocale();
   const brand = useBrandStore((s) => s.getActiveBrand());
   const [summary, setSummary] = useState<InsightsSummary | null>(null);
   const [trackedPrompts, setTrackedPrompts] = useState<TrackedPromptsKpi | null>(null);
@@ -732,6 +733,21 @@ export default function InsightsPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [cronRun, setCronRun] = useState<TrackingWindow['activeRun']>(null);
   const cronRunRef = useRef<TrackingWindow['activeRun']>(null);
+  // The header's last and next run (VIS-012), from the ledger read every minute.
+  const [runTimes, setRunTimes] = useState<Pick<TrackingWindow, 'lastRunAt' | 'nextRunAt'>>({
+    lastRunAt: null,
+    nextRunAt: null,
+  });
+  // Kept as is when unchanged, so the minute's read doesn't re-render the page.
+  const updateRunTimes = useCallback(
+    ({ lastRunAt, nextRunAt }: Pick<TrackingWindow, 'lastRunAt' | 'nextRunAt'>) =>
+      setRunTimes((prev) =>
+        prev.lastRunAt === lastRunAt && prev.nextRunAt === nextRunAt
+          ? prev
+          : { lastRunAt, nextRunAt },
+      ),
+    [],
+  );
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
@@ -795,6 +811,7 @@ export default function InsightsPage() {
         if (insights.trackingWindow) {
           cronRunRef.current = insights.trackingWindow.activeRun;
           setCronRun(insights.trackingWindow.activeRun);
+          updateRunTimes(insights.trackingWindow);
         }
         const anchored = insights.trackingWindow?.anchored;
         setLoadedFilters({
@@ -871,7 +888,7 @@ export default function InsightsPage() {
         setIsLoading(false);
       }
     },
-    [brandId],
+    [brandId, updateRunTimes],
   );
 
   // A brand switch clears the brand-specific filters. Not on the first brand,
@@ -902,6 +919,11 @@ export default function InsightsPage() {
   // localStorage, which is why users never saw anything during the daily
   // morning run. When the active run disappears (= completed), silently
   // reload so the anchored 24h window swaps to the fresh run in one step.
+  // Another brand's run times never show under this one's name, even when
+  // its first read fails.
+  useEffect(() => {
+    updateRunTimes({ lastRunAt: null, nextRunAt: null });
+  }, [brand?.id, updateRunTimes]);
   useEffect(() => {
     if (!brand?.id) return;
     let cancelled = false;
@@ -912,6 +934,7 @@ export default function InsightsPage() {
       const wasRunning = cronRunRef.current !== null;
       cronRunRef.current = win.activeRun;
       setCronRun(win.activeRun);
+      updateRunTimes(win);
       if (wasRunning && !win.activeRun) {
         loadData(undefined, { silent: true });
       }
@@ -923,7 +946,7 @@ export default function InsightsPage() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [brand?.id, loadData]);
+  }, [brand?.id, loadData, updateRunTimes]);
 
   // Restore active job from localStorage or URL query param (post-payment redirect)
   const searchParams = useSearchParams();
@@ -1165,16 +1188,12 @@ export default function InsightsPage() {
     );
   }
 
-  const lastCheckedLabel = summary?.lastCheckedAt
-    ? formatRelative(summary.lastCheckedAt, tCommon)
-    : 'Never';
-
   // The trend's subtitle (VIS-007): "Visibility · last 30 days".
   const trendRangeLabel =
     filters.datePreset === 'custom'
       ? t('trend.range.custom', {
-          from: formatWindowBound(filters.dateFrom),
-          to: formatWindowBound(filters.dateTo),
+          from: formatWindowBound(filters.dateFrom, locale),
+          to: formatWindowBound(filters.dateTo, locale),
         })
       : t(`trend.range.${filters.datePreset}`);
 
@@ -1191,9 +1210,14 @@ export default function InsightsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
 
-          <p className="text-muted-foreground text-sm">
-            {brand.name} · Last run: {lastCheckedLabel}
-          </p>
+          {/* The brand's last full run from the ledger; before the ledger has
+              one, the newest answer in view. */}
+          <RunLine
+            brandName={brand.name}
+            lastRunAt={runTimes.lastRunAt ?? summary?.lastCheckedAt ?? null}
+            nextRunAt={runTimes.nextRunAt}
+            hasData={hasAnyData === true}
+          />
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -1278,6 +1302,7 @@ export default function InsightsPage() {
                 competitors={competitorData}
                 comparison={comparison}
                 platformChanges={platformChanges}
+                answers={summary?.totalResults}
               />
 
               {/* KPI cards (VIS-003): today's five, then the new rates. */}
@@ -1306,6 +1331,7 @@ export default function InsightsPage() {
                     data={rateTrend}
                     markers={trendMarkers}
                     rangeLabel={trendRangeLabel}
+                    answers={summary?.totalResults}
                     onPinnedChange={(pinned) =>
                       setRateTrend((current) => current && { ...current, pinned })
                     }
@@ -1316,6 +1342,7 @@ export default function InsightsPage() {
                     brands={competitorData.brands}
                     providerRows={competitorData.providerRows}
                     platforms={platforms}
+                    answers={summary?.totalResults}
                   />
                 </div>
               ) : (
