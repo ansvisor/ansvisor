@@ -84,6 +84,8 @@ export interface Driver {
   /** The slice's own Visibility in each window, as the breakdown panel scores it. */
   prev: number;
   cur: number;
+  /** The slice's answers in each window: its scores' sample sizes (VIS-005). */
+  answers: { prev: number; cur: number };
   /** Points the overall score moved because of this slice. */
   impact: number;
 }
@@ -191,6 +193,7 @@ export function whyChanged(
       name: s.name,
       prev: round1(score(s.prev)),
       cur: round1(score(s.cur)),
+      answers: { prev: s.prev.answers, cur: s.cur.answers },
       impact,
     });
   }
