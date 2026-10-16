@@ -41,7 +41,17 @@ vi.mock('../lib/action-center/task-writer/index.js', () => ({
   writeTasksForAction: (...args) => writeTasksForAction(...args),
 }));
 
-const { regenerateTasks } = await import('./action-center.js');
+const loadTask = vi.fn();
+const sendTaskToContent = vi.fn();
+const sendTaskToWebhook = vi.fn();
+vi.mock('../lib/action-center/task-send.js', () => ({
+  TaskSendError: class extends Error {},
+  loadTask: (...args) => loadTask(...args),
+  sendTaskToContent: (...args) => sendTaskToContent(...args),
+  sendTaskToWebhook: (...args) => sendTaskToWebhook(...args),
+}));
+
+const { regenerateTasks, sendTask } = await import('./action-center.js');
 
 beforeEach(() => {
   enabled = true;
@@ -87,5 +97,34 @@ describe('regenerateTasks', () => {
       status: 429,
       code: 'budget',
     });
+  });
+});
+
+describe('sendTask', () => {
+  beforeEach(() => {
+    loadTask.mockReset().mockResolvedValue({ task: { id: 't1' }, action: { brand_id: 'b1' } });
+    sendTaskToContent.mockReset().mockResolvedValue({ opportunityId: 'o1', created: true });
+    sendTaskToWebhook.mockReset().mockResolvedValue({ delivered: 1, failed: 0 });
+  });
+
+  it("checks the caller's access to the task's brand before sending", async () => {
+    assertBrandAccess.mockRejectedValueOnce(Object.assign(new Error('Forbidden'), { status: 403 }));
+    await expect(sendTask('t1', { to: 'content' }, 'u1')).rejects.toThrow('Forbidden');
+    expect(assertBrandAccess).toHaveBeenCalledWith('b1', 'u1');
+    expect(sendTaskToContent).not.toHaveBeenCalled();
+  });
+
+  it('sends where it was asked, with the text the drawer shows', async () => {
+    expect(await sendTask('t1', { to: 'content', title: 'Refresh /a' }, 'u1')).toEqual({
+      opportunityId: 'o1',
+      created: true,
+    });
+    expect(sendTaskToContent).toHaveBeenCalledWith(
+      expect.objectContaining({ taskId: 't1', title: 'Refresh /a', userId: 'u1' }),
+    );
+    await sendTask('t1', { to: 'webhook' }, 'u1');
+    expect(sendTaskToWebhook).toHaveBeenCalledWith(
+      expect.objectContaining({ taskId: 't1', userId: 'u1' }),
+    );
   });
 });

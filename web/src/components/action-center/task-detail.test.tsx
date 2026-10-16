@@ -6,6 +6,14 @@ import messages from '../../../messages/en.json';
 import { parseTaskDetails } from '@/lib/action-center/task-details';
 import { TaskDetailForm, TaskDetailView, TaskTypeBadge } from './task-detail';
 
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
 (
   globalThis as typeof globalThis & {
     IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -176,5 +184,55 @@ describe('TaskTypeBadge', () => {
     expect(container.textContent).toBe('On-page');
     render(<TaskTypeBadge type={null} />);
     expect(container.textContent).toBe('');
+  });
+});
+
+describe('sending a task (AC-004)', () => {
+  const send = (over = {}) => ({ content: true, webhook: true, onSend: vi.fn(), ...over });
+
+  it('offers Content for a content task and the webhook when the brand has one', () => {
+    const options = send();
+    render(<TaskDetailView details={details} disabled={false} onEdit={() => {}} send={options} />);
+    act(() => button('Send to Content').click());
+    act(() => button('Send to webhook').click());
+    expect(options.onSend.mock.calls).toEqual([['content'], ['webhook']]);
+  });
+
+  it('shows where it went, and links to the opportunity instead of sending again', () => {
+    render(
+      <TaskDetailView
+        details={parseTaskDetails({
+          where: '/pricing',
+          type: 'content',
+          sent: {
+            content: { opportunityId: 'o1', at: '2026-10-16T10:00:00Z' },
+            webhook: { at: '2026-10-16T11:00:00Z' },
+          },
+        })}
+        disabled={false}
+        onEdit={() => {}}
+        send={send()}
+      />,
+    );
+    expect(container.querySelector('a')?.getAttribute('href')).toBe(
+      '/dashboard/content?opportunity=o1',
+    );
+    expect(container.textContent).toContain('Sent to the webhook on Oct 16');
+    expect([...container.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
+      'Edit',
+      'Send to webhook again',
+    ]);
+  });
+
+  it('offers nothing it cannot do', () => {
+    render(
+      <TaskDetailView
+        details={details}
+        disabled={false}
+        onEdit={() => {}}
+        send={send({ content: false, webhook: false })}
+      />,
+    );
+    expect([...container.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Edit']);
   });
 });

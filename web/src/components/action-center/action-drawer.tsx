@@ -72,7 +72,8 @@ import {
 } from '@/lib/action-center/affected';
 import { actionStory } from '@/lib/action-center/story';
 import { ImproveContext } from './improve-context';
-import { TaskDetailForm, TaskDetailView, TaskTypeBadge } from './task-detail';
+import { TaskDetailForm, TaskDetailView, TaskTypeBadge, type TaskSendOptions } from './task-detail';
+import { hasActiveWebhook, sendActionTask } from '@/lib/actions/action-task-send';
 import { RegenerateTasks, taskWriterEnabled } from './regenerate-tasks';
 import { hasTaskSpec, type TaskDetailsEdit } from '@/lib/action-center/task-details';
 import { ImproveOutcomeCard } from './improve-outcome-card';
@@ -119,6 +120,23 @@ export function ActionDrawer({
   const [tab, setTab] = useState<DrawerTab>('overview');
   const [detail, setDetail] = useState<ActionDetail | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const tSend = useTranslations('actionCenter.actionsPage.drawer.send');
+
+  // Whether a task can go to the brand's webhook (AC-004). Best effort: no
+  // answer is no button.
+  const [webhookReady, setWebhookReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    hasActiveWebhook(brandId).then(
+      (ready) => {
+        if (!cancelled) setWebhookReady(ready);
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId]);
 
   // Traceability: a signal card jumps to the Signals page with that signal's
   // drawer open — the evidence must be one click from the action it created.
@@ -233,6 +251,35 @@ export function ActionDrawer({
   const opportunityPages = Array.isArray(action.payload?.pages)
     ? (action.payload.pages as unknown[]).filter((u): u is string => typeof u === 'string')
     : [];
+
+  /** Send a task to Content or the webhook (AC-004), then reload to show where it went. */
+  const sendTask = async (taskId: string, text: string, to: 'content' | 'webhook') => {
+    setIsBusy(true);
+    try {
+      const result = await sendActionTask(taskId, to, text);
+      if ('error' in result) {
+        toast.error(
+          result.error !== 'server'
+            ? tSend(result.error)
+            : result.code && SEND_ERRORS.includes(result.code)
+              ? tSend(`errors.${result.code}`)
+              : result.message,
+        );
+        return;
+      }
+      toast.success(
+        result.to === 'webhook'
+          ? tSend('sentToWebhook')
+          : result.created
+            ? tSend('sentToContent')
+            : tSend('alreadyInContent'),
+      );
+      await load();
+      onChanged();
+    } finally {
+      setIsBusy(false);
+    }
+  };
 
   /** Runs a change, then reloads; false when the change failed (and said so). */
   const mutate = async (fn: () => Promise<void>): Promise<boolean> => {
@@ -446,6 +493,12 @@ export function ActionDrawer({
                       mutate(() => updateTaskDetails(brandId, action.id, task.id, edit))
                     }
                     onDelete={() => void mutate(() => deleteTask(brandId, action.id, task.id))}
+                    send={{
+                      // A content task, unless the action itself came from Content.
+                      content: task.details?.type === 'content' && !opportunityId,
+                      webhook: webhookReady,
+                      onSend: (to) => void sendTask(task.id, taskText(task, tTasks), to),
+                    }}
                   />
                 ))}
               </div>
@@ -603,6 +656,16 @@ export function ActionDrawer({
 
 type TaskTranslator = (key: string, values?: Record<string, string | number>) => string;
 
+/** Server reasons a send can fail for, worded in actionsPage.drawer.send.errors. */
+const SEND_ERRORS = [
+  'not_found',
+  'from_content',
+  'not_content',
+  'no_title',
+  'no_webhook',
+  'webhook_failed',
+];
+
 /**
  * One task: its text, type and status, opening onto its details (AC-004).
  *
@@ -618,6 +681,7 @@ function TaskRow({
   onStatusChange,
   onEdit,
   onDelete,
+  send,
 }: {
   task: ActionTask;
   text: string;
@@ -628,6 +692,7 @@ function TaskRow({
   /** Resolves true once saved; false when the save failed. */
   onEdit: (edit: TaskDetailsEdit & { title: string | null }) => Promise<boolean>;
   onDelete: () => void;
+  send: TaskSendOptions;
 }) {
   // A task sent from the Improve tab opens on its suggestion, as it always
   // showed it; the rest open on a click.
@@ -725,6 +790,7 @@ function TaskRow({
             details={task.details}
             disabled={disabled || skipDraft !== null}
             onEdit={() => setEditing(true)}
+            send={send}
           />
         ))}
 

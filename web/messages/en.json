@@ -960,6 +960,8 @@
         "taskHow": "How",
         "taskDoneWhen": "Done when",
         "taskEffort": "Effort",
+        "sentToContent": "Sent to Content",
+        "sentToWebhook": "Sent to the webhook",
         "item": "Item",
         "volume": "Volume",
         "lostPage": "Lost page",
@@ -1135,6 +1137,7 @@
           "task_status": "Task updated",
           "task_edited": "Task edited",
           "tasks_generated": "{count, plural, one {# task} other {# tasks}} written from the action's evidence",
+          "task_sent": "{to, select, content {Sent to Content} webhook {Sent to the webhook} other {Sent}}: {title}",
           "task_ran": "{task} — carried out automatically ({tool})",
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
           "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
@@ -1149,6 +1152,22 @@
         "skipReasonPlaceholder": "e.g. handled elsewhere, no longer relevant",
         "skipConfirm": "Skip task",
         "skipCancel": "Cancel",
+        "send": {
+          "sentToContent": "Sent to Content as an opportunity",
+          "alreadyInContent": "This task is already in Content",
+          "sentToWebhook": "Sent to the webhook",
+          "timeout": "Sending took too long. Please try again.",
+          "unreachable": "Couldn't reach the server. Please try again.",
+          "unauthenticated": "Your session has ended. Please sign in again.",
+          "errors": {
+            "not_found": "This task no longer exists.",
+            "from_content": "This action came from Content, so its tasks stay here.",
+            "not_content": "Only a content task can be sent to Content.",
+            "no_title": "The task needs text before it can be sent.",
+            "no_webhook": "This brand has no active webhook. Set one up in Content → Webhook Settings.",
+            "webhook_failed": "The webhook didn't accept the task. Check its settings and try again."
+          }
+        },
         "regenerate": {
           "button": "Regenerate tasks",
           "confirm": "Write this action's tasks again from its evidence? Done, under-way and hand-added tasks stay.",
@@ -1189,7 +1208,13 @@
           "save": "Save",
           "cancel": "Cancel",
           "empty": "No details yet: add where to do it, how, and when it counts as done.",
-          "answerSource": "AI answer"
+          "answerSource": "AI answer",
+          "sendToContent": "Send to Content",
+          "sendToWebhook": "Send to webhook",
+          "sendToWebhookAgain": "Send to webhook again",
+          "sentToContent": "Sent to Content as an opportunity ·",
+          "openInContent": "Open",
+          "sentToWebhook": "Sent to the webhook on {date}"
         },
         "noSignalsOpportunity": "This action was sent from Content Optimization. Its evidence is the opportunity on the Overview tab, not detection signals.",
         "opportunity": {
@@ -2342,18 +2367,23 @@
       "groupNoTopic": "{count, plural, one {# prompt} other {# prompts}}",
       "single": "Single prompt",
       "groupHint": "Built for a group of related prompts that one piece of content can answer",
-      "singleHint": "Built for one prompt"
+      "singleHint": "Built for one prompt",
+      "action": "From {ref}",
+      "actionNoRef": "From an action",
+      "actionHint": "Sent from an Action Center task"
     },
     "source": {
       "label": "Source",
       "system": "System",
       "manual": "Manual",
-      "prompt": "Prompt"
+      "prompt": "Prompt",
+      "action": "Action"
     },
     "sourceHint": {
       "system": "Suggested automatically as tracking data comes in",
       "manual": "Created with + New",
-      "prompt": "Suggested from a prompt in the prompts table"
+      "prompt": "Suggested from a prompt in the prompts table",
+      "action": "Sent from a task in the Action Center"
     },
     "new": "New",
     "newDone": "{generated, plural, =0 {No new opportunities} one {1 opportunity created} other {# opportunities created}}{duplicates, plural, =0 {} one { · 1 duplicate skipped (not counted)} other { · # duplicates skipped (not counted)}}",
@@ -2446,6 +2476,15 @@
     },
     "detail": {
       "backToList": "Back to Opportunities",
+      "fromTask": {
+        "title": "From a task in {ref}",
+        "titleNoRef": "From an Action Center task",
+        "where": "Where",
+        "why": "Why",
+        "how": "How",
+        "doneWhen": "Done when",
+        "effort": "Effort"
+      },
       "sourceData": "Source Data",
       "relatedPrompt": "Related Prompt",
       "estAiVolume": "Est. AI Volume",

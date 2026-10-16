@@ -72,11 +72,14 @@ export function isAnalysisTask(row) {
 }
 
 /**
- * Whether a rewrite keeps a task: one done or under way, and one a person
- * added — no template, not written by the model. Everything else is replaced.
+ * Whether a rewrite keeps a task: one done or under way, one sent to Content
+ * or a webhook, and one a person added — no template, not written by the
+ * model. Everything else is replaced.
  */
 export function keepsTask(row) {
   if (isAnalysisTask(row)) return false;
+  // Sent to Content or a webhook: the work has left the list's hands.
+  if (row.details?.sent) return true;
   if (row.status === 'completed' || row.status === 'in_progress') return true;
   return !row.task_key && row.details?.source !== 'ai';
 }

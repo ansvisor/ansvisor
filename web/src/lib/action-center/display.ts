@@ -118,6 +118,8 @@ export function actionEventText(
     tool: String(event.data.tool ?? ''),
     improved: Number(event.data.improved ?? 0),
     measurable: Number(event.data.measurable ?? 0),
+    // A task's own words, as it was sent (AC-004).
+    title: String(event.data.title ?? ''),
   });
 }
 

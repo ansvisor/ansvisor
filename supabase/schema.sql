@@ -17336,3 +17336,23 @@ create index if not exists actions_tasks_pending_idx
 comment on column public.action_tasks.details is
   'What a task carries beyond its title: where, why, how, doneWhen, type, effort and role (AC-004), and for a task sent from the Improve tab its body, platform, platformLabel and sources (PROMPT-004). A written task also records source = ''ai'' and the evidence refs it rests on.';
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00151_opportunity_source_action.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- An opportunity can come from an Action Center task (AC-004): "Send to
+-- Content" on a content task makes one, with the task's target, reasons and
+-- steps, and a link back to the action it came from.
+
+alter table public.content_opportunities
+  drop constraint if exists content_opportunities_source_check;
+alter table public.content_opportunities
+  add constraint content_opportunities_source_check
+  check (source in ('system', 'manual', 'prompt', 'action'));
+
+-- One open opportunity per task: two sends at once (two tabs, two people)
+-- make one, and the second finds it. An archived one frees the task to be
+-- sent again.
+create unique index if not exists content_opportunities_action_task_idx
+  on public.content_opportunities ((source_data -> 'fromAction' ->> 'taskId'))
+  where source = 'action' and status <> 'archived';
+

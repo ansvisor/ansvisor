@@ -18,6 +18,7 @@ const empty = {
   type: null,
   effort: null,
   role: null,
+  sent: { content: null, webhook: null },
 };
 
 describe('parseTaskDetails', () => {
@@ -145,5 +146,28 @@ describe('isTaskDetailsEdit', () => {
     expect(isTaskDetailsEdit({ ...edit, how: [1] })).toBe(false);
     expect(isTaskDetailsEdit({ ...edit, where: null })).toBe(false);
     expect(isTaskDetailsEdit({ ...edit, type: 'marketing' })).toBe(false);
+  });
+});
+
+describe('where a task was sent', () => {
+  it('reads the opportunity it became and when it went to the webhook', () => {
+    expect(
+      parseTaskDetails({
+        where: '/pricing',
+        sent: {
+          content: { opportunityId: 'o1', at: '2026-10-16T10:00:00Z' },
+          webhook: { at: '2026-10-16T11:00:00Z', delivered: 1, failed: 0 },
+        },
+      })?.sent,
+    ).toEqual({
+      content: { opportunityId: 'o1', at: '2026-10-16T10:00:00Z' },
+      webhook: { at: '2026-10-16T11:00:00Z' },
+    });
+  });
+
+  it('ignores a malformed record', () => {
+    expect(
+      parseTaskDetails({ where: '/pricing', sent: { content: {}, webhook: 'x' } })?.sent,
+    ).toEqual({ content: null, webhook: null });
   });
 });

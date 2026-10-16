@@ -137,6 +137,8 @@ export interface ExportTexts {
   skipped: (reason: string) => string;
   /** "Content", "On-page"…, for a task's type (AC-004). */
   taskType: (type: string) => string;
+  /** "Sent to Content", "Sent to the webhook" (AC-004). */
+  taskSent: (to: 'content' | 'webhook') => string;
   /** What an AI answer a task rests on is called; its id means nothing outside. */
   answerSource: string;
 }
@@ -193,6 +195,8 @@ export function buildActionExport(
             ),
           ]
         : [];
+      if (d?.sent?.content) details.push(texts.taskSent('content'));
+      if (d?.sent?.webhook) details.push(texts.taskSent('webhook'));
       if (task.skipReason) details.push(texts.skipped(task.skipReason));
       return {
         number: i + 1,

@@ -237,6 +237,7 @@ export function ActionExportButtons({
         event: (event) => actionEventText(event, t, tTasks),
         skipped: (reason) => tExport('skipped', { reason }),
         taskType: (type) => tTaskTypes(type),
+        taskSent: (to) => tExport(to === 'content' ? 'sentToContent' : 'sentToWebhook'),
         answerSource: tExport('answerSource'),
       },
       { origin, timeZone: viewerTimeZone() },

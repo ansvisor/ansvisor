@@ -1,7 +1,9 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
+import { ArrowUpRight } from 'lucide-react';
+import { Link } from '@/i18n/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,22 +36,36 @@ export function TaskTypeBadge({ type }: { type: ActionTaskDetails['type'] }) {
   );
 }
 
+/** Where a task can be sent from the drawer (AC-004), and the sending. */
+export interface TaskSendOptions {
+  /** A content task, on an action that did not come from Content. */
+  content: boolean;
+  /** The brand has an active webhook. */
+  webhook: boolean;
+  onSend: (to: 'content' | 'webhook') => void;
+}
+
 /**
  * An opened task (AC-004): where to do it, why, how, when it counts as done
- * and what it takes, and for a task sent from the Improve tab its body,
- * platform and evidence (PROMPT-004).
+ * and what it takes, where it was sent, and for a task sent from the Improve
+ * tab its body, platform and evidence (PROMPT-004).
  */
 export function TaskDetailView({
   details,
   disabled,
   onEdit,
+  send,
 }: {
   details: ActionTaskDetails | null;
   disabled: boolean;
   onEdit: () => void;
+  send?: TaskSendOptions;
 }) {
   const t = useTranslations('actionCenter.actionsPage.drawer.task');
+  const format = useFormatter();
   const effort = [details?.effort, details?.role].filter(Boolean).join(' · ');
+  const sentContent = details?.sent.content ?? null;
+  const sentWebhook = details?.sent.webhook ?? null;
 
   return (
     <div className="space-y-2 border-t px-4 py-3">
@@ -96,16 +112,70 @@ export function TaskDetailView({
       ) : (
         !details && <p className="text-xs text-muted-foreground">{t('empty')}</p>
       )}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={disabled}
-        onClick={onEdit}
-        className="h-7 text-xs"
-      >
-        {t('edit')}
-      </Button>
+      {(sentContent || sentWebhook) && (
+        <div className="space-y-0.5 text-xs text-muted-foreground">
+          {sentContent && (
+            <p className="flex items-center gap-1">
+              {t('sentToContent')}
+              <Link
+                href={`/dashboard/content?opportunity=${sentContent.opportunityId}`}
+                className="inline-flex items-center gap-0.5 font-medium text-foreground underline-offset-2 hover:underline"
+              >
+                {t('openInContent')}
+                <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            </p>
+          )}
+          {sentWebhook && (
+            <p>
+              {t('sentToWebhook', {
+                date: format.dateTime(new Date(sentWebhook.at), {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                }),
+              })}
+            </p>
+          )}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={disabled}
+          onClick={onEdit}
+          className="h-7 text-xs"
+        >
+          {t('edit')}
+        </Button>
+        {send?.content && !sentContent && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={disabled}
+            onClick={() => send.onSend('content')}
+            className="h-7 text-xs"
+          >
+            {t('sendToContent')}
+          </Button>
+        )}
+        {send?.webhook && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={disabled}
+            onClick={() => send.onSend('webhook')}
+            className="h-7 text-xs"
+          >
+            {sentWebhook ? t('sendToWebhookAgain') : t('sendToWebhook')}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

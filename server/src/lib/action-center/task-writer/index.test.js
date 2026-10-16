@@ -185,6 +185,14 @@ describe('keepsTask', () => {
     expect(keepsTask({ task_key: null, status: 'todo', details: { source: 'ai' } })).toBe(false);
     expect(keepsTask({ task_key: 'analyze_citations', status: 'completed' })).toBe(false);
     expect(keepsTask({ task_key: 'validate_citations', status: 'in_progress' })).toBe(false);
+    // Sent to Content or a webhook: kept, whatever its status.
+    expect(
+      keepsTask({
+        task_key: null,
+        status: 'todo',
+        details: { source: 'ai', sent: { webhook: {} } },
+      }),
+    ).toBe(true);
   });
 });
 

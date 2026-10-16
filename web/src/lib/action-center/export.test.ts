@@ -132,6 +132,7 @@ const texts: ExportTexts = {
   event: () => 'Action created',
   skipped: (reason) => `Skipped: ${reason}`,
   taskType: (type) => ({ content: 'Content', outreach: 'Outreach' })[type] ?? type,
+  taskSent: (to) => (to === 'content' ? 'Sent to Content' : 'Sent to the webhook'),
   answerSource: 'AI answer',
 };
 
@@ -344,6 +345,7 @@ describe('a task with AC-004 fields', () => {
             type: 'content',
             effort: '~2h',
             role: 'Content writer',
+            sent: { content: null, webhook: null },
           },
         },
       ],

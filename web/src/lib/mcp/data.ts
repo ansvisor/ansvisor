@@ -2652,6 +2652,11 @@ function mcpTaskDetails(raw: unknown) {
     platform: d.platform,
     platform_label: d.platformLabel,
     sources: d.sources,
+    // Where it was sent (AC-004).
+    sent_to_content: d.sent.content
+      ? { opportunity_id: d.sent.content.opportunityId, at: d.sent.content.at }
+      : null,
+    sent_to_webhook: d.sent.webhook ? { at: d.sent.webhook.at } : null,
   };
 }
 

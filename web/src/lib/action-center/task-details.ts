@@ -31,6 +31,13 @@ export interface ActionTaskDetails {
   effort: string | null;
   /** Who would do it, e.g. "Content writer". */
   role: string | null;
+  /** Where the task was sent (AC-004): the Content opportunity it became, the webhook. */
+  sent: TaskSent;
+}
+
+export interface TaskSent {
+  content: { opportunityId: string; at: string | null } | null;
+  webhook: { at: string } | null;
 }
 
 /** The fields a person edits in the drawer. */
@@ -69,6 +76,9 @@ export function isTaskType(value: unknown): value is TaskType {
 export function parseTaskDetails(raw: unknown): ActionTaskDetails | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const r = raw as Record<string, unknown>;
+  const sent = (r.sent && typeof r.sent === 'object' ? r.sent : {}) as Record<string, unknown>;
+  const content = (sent.content ?? {}) as Record<string, unknown>;
+  const webhook = (sent.webhook ?? {}) as Record<string, unknown>;
   const details: ActionTaskDetails = {
     body: text(r.body),
     platform: text(r.platform),
@@ -88,6 +98,12 @@ export function parseTaskDetails(raw: unknown): ActionTaskDetails | null {
     type: isTaskType(r.type) ? r.type : null,
     effort: text(r.effort),
     role: text(r.role),
+    sent: {
+      content: text(content.opportunityId)
+        ? { opportunityId: text(content.opportunityId)!, at: text(content.at) }
+        : null,
+      webhook: text(webhook.at) ? { at: text(webhook.at)! } : null,
+    },
   };
   return hasTaskDetails(details) ? details : null;
 }
@@ -98,6 +114,8 @@ export function hasTaskDetails(details: ActionTaskDetails): boolean {
     details.body !== null ||
     details.platformLabel !== null ||
     details.sources.length > 0 ||
+    details.sent.content !== null ||
+    details.sent.webhook !== null ||
     hasTaskSpec(details)
   );
 }

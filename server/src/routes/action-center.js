@@ -5,6 +5,12 @@ import { assertBrandAccess } from '../lib/access.js';
 import { rescoreActionsForSignal } from '../lib/action-center/priority-data.js';
 import { PlanLimitError } from '../lib/plan-guard.js';
 import {
+  TaskSendError,
+  loadTask,
+  sendTaskToContent,
+  sendTaskToWebhook,
+} from '../lib/action-center/task-send.js';
+import {
   TaskWriterError,
   isTaskWriterEnabled,
   writeTasksForAction,
@@ -102,6 +108,41 @@ router.post('/actions/:id/tasks/regenerate', async (req, res) => {
     return res.status(status || 500).json({
       error: status ? error.message : 'Failed to write the tasks.',
       code: error.code ?? null,
+    });
+  }
+});
+
+/**
+ * Sends a task onward (AC-004): to Content as an opportunity, or to the
+ * brand's webhook. `title` is the task's text as the dashboard shows it, for
+ * a library task whose text only the dashboard renders.
+ */
+export async function sendTask(taskId, { to, title }, userId) {
+  const loaded = await loadTask(taskId);
+  await assertBrandAccess(loaded.action.brand_id, userId);
+  return to === 'content'
+    ? sendTaskToContent({ taskId, title, userId, loaded })
+    : sendTaskToWebhook({ taskId, title, userId, loaded });
+}
+
+const sendTaskSchema = z.object({
+  to: z.enum(['content', 'webhook']),
+  title: z.string().max(200).optional(),
+});
+
+/** POST /api/action-center/tasks/:id/send */
+router.post('/tasks/:id/send', async (req, res) => {
+  const id = signalIdSchema.safeParse(req.params.id);
+  const body = sendTaskSchema.safeParse(req.body ?? {});
+  if (!id.success || !body.success) return res.status(400).json({ error: 'Invalid request' });
+  try {
+    return res.json(await sendTask(id.data, body.data, req.user.id));
+  } catch (error) {
+    const status = error.status;
+    if (!status) req.log.error({ err: error }, 'send action task error');
+    return res.status(status || 500).json({
+      error: status ? error.message : 'Failed to send the task.',
+      code: error instanceof TaskSendError ? error.code : null,
     });
   }
 });
