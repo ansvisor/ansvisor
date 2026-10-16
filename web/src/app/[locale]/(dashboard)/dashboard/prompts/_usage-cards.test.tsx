@@ -9,6 +9,8 @@ import {
   countByStatus,
   locationQuotaFromUsage,
   matchesStatusFilter,
+  newFirst,
+  promptStatus,
   type PromptUsageState,
 } from './_usage-cards';
 
@@ -35,7 +37,12 @@ let root: Root;
 const onFilter = vi.fn();
 const onRetry = vi.fn();
 
-function render(state: PromptUsageState) {
+function render(state: PromptUsageState, newCount = 0) {
+  // Added an hour before the provider's clock, so they read as New.
+  const prompts = Array.from({ length: newCount }, () => ({
+    isActive: true,
+    createdAt: '2026-10-15T08:00:00.000Z',
+  }));
   act(() => {
     root.render(
       <NextIntlClientProvider
@@ -48,7 +55,8 @@ function render(state: PromptUsageState) {
           state={state}
           brandName="Acme Coffee"
           readOnly={false}
-          filter="active"
+          prompts={prompts}
+          filter="tracked"
           onFilter={onFilter}
           onRetry={onRetry}
         />
@@ -138,8 +146,20 @@ describe('PromptUsageCards', () => {
     expect(onFilter).toHaveBeenLastCalledWith('all');
     act(() => button('2 paused').click());
     expect(onFilter).toHaveBeenLastCalledWith('paused');
+    // Active prompts counts the new ones too, so it shows them all.
     act(() => button('Active prompts').click());
-    expect(onFilter).toHaveBeenLastCalledWith('active');
+    expect(onFilter).toHaveBeenLastCalledWith('tracked');
+  });
+
+  it('notes the new prompts the Active card counts, and filters to them', () => {
+    render({ status: 'ready', usage: summary() });
+    expect(container.textContent).not.toContain('new');
+
+    render({ status: 'ready', usage: summary() }, 3);
+    expect(values()[0]).toBe('44');
+    expect(container.textContent).toContain('3 new · 2 paused · being tracked now');
+    act(() => button('3 new').click());
+    expect(onFilter).toHaveBeenLastCalledWith('new');
   });
 
   it('shows dashes and a retry when the counts fail to load', () => {
@@ -189,12 +209,49 @@ describe('locationQuotaFromUsage', () => {
 });
 
 describe('the table status filter', () => {
-  const rows = [{ isActive: true }, { isActive: true }, { isActive: false }];
+  const now = Date.parse('2026-10-17T12:00:00.000Z');
+  const old = '2026-10-01T09:00:00.000Z';
+  const rows = [
+    { isActive: true, createdAt: old },
+    { isActive: true, createdAt: old },
+    { isActive: true, createdAt: '2026-10-17T08:00:00.000Z' },
+    { isActive: false, createdAt: old },
+  ];
 
-  it('opens on active rows and counts each filter for the title', () => {
-    expect(rows.filter((r) => matchesStatusFilter(r, 'active'))).toHaveLength(2);
-    expect(rows.filter((r) => matchesStatusFilter(r, 'paused'))).toHaveLength(1);
-    expect(rows.filter((r) => matchesStatusFilter(r, 'all'))).toHaveLength(3);
-    expect(countByStatus(rows)).toEqual({ active: 2, paused: 1, all: 3 });
+  it('opens on tracked rows, new ones included, and counts each filter for the title', () => {
+    expect(rows.filter((r) => matchesStatusFilter(r, 'tracked', now))).toHaveLength(3);
+    expect(rows.filter((r) => matchesStatusFilter(r, 'active', now))).toHaveLength(2);
+    expect(rows.filter((r) => matchesStatusFilter(r, 'new', now))).toHaveLength(1);
+    expect(rows.filter((r) => matchesStatusFilter(r, 'paused', now))).toHaveLength(1);
+    expect(rows.filter((r) => matchesStatusFilter(r, 'all', now))).toHaveLength(4);
+    expect(countByStatus(rows, now)).toEqual({ tracked: 3, active: 2, new: 1, paused: 1, all: 4 });
+  });
+
+  it('reads a tracked prompt as New for its first 24 hours', () => {
+    const at = (createdAt: string, isActive = true) => promptStatus({ isActive, createdAt }, now);
+    expect(at('2026-10-17T11:59:00.000Z')).toBe('new');
+    expect(at('2026-10-16T12:00:01.000Z')).toBe('new');
+    expect(at('2026-10-16T12:00:00.000Z')).toBe('active');
+    expect(at(old)).toBe('active');
+    // Paused wins: a prompt paused on its first day isn't tracked, so it isn't New.
+    expect(at('2026-10-17T11:00:00.000Z', false)).toBe('paused');
+  });
+
+  it('leads the default order with the new prompts, newest first', () => {
+    const row = (id: string, createdAt: string, isActive = true) => ({ id, isActive, createdAt });
+    const sorted = [
+      row('best', old),
+      row('earlier-today', '2026-10-17T08:00:00.000Z'),
+      row('paused-today', '2026-10-17T10:00:00.000Z', false),
+      row('good', old),
+      row('just-now', '2026-10-17T11:30:00.000Z'),
+    ];
+    expect(newFirst(sorted, now).map((r) => r.id)).toEqual([
+      'just-now',
+      'earlier-today',
+      'best',
+      'paused-today',
+      'good',
+    ]);
   });
 });

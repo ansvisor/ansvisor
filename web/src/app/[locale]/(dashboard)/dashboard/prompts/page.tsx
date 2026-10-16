@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useFormatter, useNow, useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { PROMPTS_BASE, sectionFor, sectionFromPath } from '@/lib/prompts-routes';
@@ -19,7 +19,10 @@ import {
   countByStatus,
   locationQuotaFromUsage,
   matchesStatusFilter,
+  newFirst,
+  promptStatus,
   usePromptUsage,
+  type PromptStatus,
   type PromptStatusFilter,
 } from './_usage-cards';
 import { INTENT_LABELS, INTENT_COLORS } from '@/config/intent-labels';
@@ -1286,7 +1289,7 @@ export default function PromptsPage() {
   const { state: usageState, retry: retryUsage } = usePromptUsage(activeBrandId, usageVersion);
   const usage = usageState.status === 'ready' ? usageState.usage : null;
   const locationQuota = useMemo(() => (usage ? locationQuotaFromUsage(usage) : null), [usage]);
-  const [statusFilter, setStatusFilter] = useState<PromptStatusFilter>('active');
+  const [statusFilter, setStatusFilter] = useState<PromptStatusFilter>('tracked');
   const searchParams = useSearchParams();
   // On /dashboard/prompts/{tracked,suggestions,fan-outs,insights} the route
   // names the view (PROMPT-001); ?tab= / ?view= are the older links' shape.
@@ -1936,6 +1939,7 @@ export default function PromptsPage() {
                   state={usageState}
                   brandName={activeBrand?.name}
                   readOnly={!canManage}
+                  prompts={allPrompts}
                   filter={statusFilter}
                   onFilter={setStatusFilter}
                   onRetry={retryUsage}
@@ -2555,6 +2559,15 @@ function RowActionsMenu({
 
 // ─── All Prompts Tab ──────────────────────────────────────────────────────────
 
+/** The Status badge: New is amber, so a prompt added today stands out. */
+const STATUS_BADGE: Record<PromptStatus, string> = {
+  active: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  new: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  paused: 'border-muted-foreground/20 text-muted-foreground',
+};
+
+const STATUS_FILTERS: PromptStatusFilter[] = ['tracked', 'active', 'new', 'paused', 'all'];
+
 const WORK_FILTER_LABELS: Record<string, string> = {
   all: 'All work',
   todo: 'To do',
@@ -2594,7 +2607,7 @@ function AllPromptsTab({
   positionsPreset: PromptRangePreset;
   /** Selected location; empty means every location. */
   regionFilter: string;
-  /** Which rows show, set by the usage cards above (PROMPT-012). */
+  /** Which rows show, set by the usage cards above (PROMPT-012) or the Status filter. */
   statusFilter: PromptStatusFilter;
   onStatusFilterChange: (filter: PromptStatusFilter) => void;
   /** Opens the Add Prompt dialog; undefined when the user can't write (member role). */
@@ -2609,6 +2622,8 @@ function AllPromptsTab({
   const format = useFormatter();
   const tDelete = useTranslations('prompts.bulkDelete');
   const tLate = useTranslations('prompts.lateFilter');
+  const tStatus = useTranslations('prompts.status');
+  const now = useNow({ updateInterval: 60_000 }).getTime();
   // Rows deleted from the row menu or the bulk bar, hidden at once and
   // deleted for real after the Undo window (PROMPT-006). There is no soft
   // delete for prompts — a delete drops their history — so the delay is the
@@ -3117,14 +3132,14 @@ function AllPromptsTab({
         (p) => p.text.toLowerCase().includes(q) || (p.category ?? '').toLowerCase().includes(q),
       );
     }
-    list = list.filter((p) => matchesStatusFilter(p, statusFilter));
+    list = list.filter((p) => matchesStatusFilter(p, statusFilter, now));
     if (workFilter !== 'all') {
       list = list.filter((p) =>
         workFilter === 'none' ? statusOf(p) === null : statusOf(p) === workFilter,
       );
     }
     return list;
-  }, [prompts, search, statusFilter, workFilter, statusOf]);
+  }, [prompts, search, statusFilter, workFilter, statusOf, now]);
 
   const lateCount = useMemo(
     () => searched.filter((p) => positions[p.id]?.lateOrMissing).length,
@@ -3164,8 +3179,22 @@ function AllPromptsTab({
       }
     };
 
-    return list.sort((a, b) => compareNullsLast(valueOf(a), valueOf(b), dir));
-  }, [searched, lateOnly, latenessOrder, activeSort, dir, visibility, positions, volumeByPromptId]);
+    const sorted = list.sort((a, b) => compareNullsLast(valueOf(a), valueOf(b), dir));
+    // Until a column is picked, prompts added within the last day lead: Track
+    // on Insights opens this table to show them.
+    return isAllPromptsSortKey(rawSort) ? sorted : newFirst(sorted, now);
+  }, [
+    searched,
+    lateOnly,
+    latenessOrder,
+    rawSort,
+    activeSort,
+    dir,
+    visibility,
+    positions,
+    volumeByPromptId,
+    now,
+  ]);
 
   // Pagination for the main prompt list.  resetKey encodes every variable that
   // changes the visible row set (search text, sort column, sort direction, work
@@ -3174,7 +3203,7 @@ function AllPromptsTab({
   const promptsResetKey = `${search}::${statusFilter}::${workFilter}::${lateOnly}::${activeSort}::${dir}`;
   // From every row, pending deletes included, so the title agrees with the
   // usage cards until a delete actually lands after its Undo window.
-  const statusCounts = useMemo(() => countByStatus(allRows), [allRows]);
+  const statusCounts = useMemo(() => countByStatus(allRows, now), [allRows, now]);
   const promptsPager = usePagination(filtered.length, promptsResetKey);
 
   // Rows ticked for the bulk action bar. Only rows on screen can be ticked,
@@ -3270,6 +3299,22 @@ function AllPromptsTab({
             )}
           </div>
           <div className="flex items-center gap-2">
+            <Select
+              value={statusFilter}
+              onValueChange={(v) => onStatusFilterChange((v as PromptStatusFilter | null) ?? 'all')}
+              items={STATUS_FILTERS.map((value) => ({ value, label: tStatus(value) }))}
+            >
+              <SelectTrigger className="h-8 w-32 text-xs" aria-label={tStatus('label')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_FILTERS.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {tStatus(value)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select
               value={workFilter}
               onValueChange={(v) => setWorkFilter((v as typeof workFilter) ?? 'all')}
@@ -3446,6 +3491,7 @@ function AllPromptsTab({
             {pageRows.map((p) => {
               const vol = volumeByPromptId.get(p.id);
               const vis = visibility[p.id];
+              const status = promptStatus(p, now);
               return (
                 <TableRow key={p.id} className="hover:bg-muted/50">
                   <TableCell className="pl-6 font-medium text-sm max-w-[320px]">
@@ -3474,14 +3520,10 @@ function AllPromptsTab({
                   <TableCell className="text-center">
                     <Badge
                       variant="outline"
-                      className={cn(
-                        'text-xs',
-                        p.isActive
-                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                          : 'border-muted-foreground/20 text-muted-foreground',
-                      )}
+                      className={cn('text-xs', STATUS_BADGE[status])}
+                      title={status === 'new' ? tStatus('newHint') : undefined}
                     >
-                      {p.isActive ? 'Active' : 'Paused'}
+                      {tStatus(status)}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
@@ -3638,10 +3680,10 @@ function AllPromptsTab({
               No prompts match your search.
             </div>
           ) : (
-            // The table opens on Active: a brand whose prompts are all paused
+            // The table opens on Tracked: a brand whose prompts are all paused
             // must not look empty with no way back.
             <div className="py-10 text-center text-sm text-muted-foreground">
-              {tUsage(statusFilter === 'active' ? 'table.noneActive' : 'table.nonePaused')}{' '}
+              {tUsage(`table.none.${statusFilter}`)}{' '}
               <button
                 type="button"
                 onClick={() => onStatusFilterChange('all')}
