@@ -80,7 +80,9 @@ import { SummaryLine } from './_summary-line';
 import { PlatformTable } from './_platform-table';
 import { Leaderboard } from './_leaderboard';
 import { TrendCard } from './_trend-card';
-import type { TrendMarkerData } from '@/lib/insights-trend';
+import { trendLines, type TrendMarkerData } from '@/lib/insights-trend';
+import { TopicHeatmap } from './_topic-heatmap';
+import type { TopicCompetitors } from '@/lib/insights-topics';
 import { WhyChanged } from './_why-changed';
 import type { WhyChanged as WhyChangedData } from '@/lib/insights-drivers';
 
@@ -856,6 +858,7 @@ export default function InsightsPage() {
   const [platforms, setPlatforms] = useState<PlatformTableRow[] | null>(null);
   const [whyChanged, setWhyChanged] = useState<WhyChangedData | null>(null);
   const [trendMarkers, setTrendMarkers] = useState<TrendMarkerData | null>(null);
+  const [topicCompetitors, setTopicCompetitors] = useState<TopicCompetitors[] | null>(null);
   const [breakdownMetric, setBreakdownMetric] = useState<BreakdownMetric | null>(null);
   const [breakdownTab, setBreakdownTab] = useState<BreakdownTab | undefined>(undefined);
   // The window and filters the cards were last loaded with (the 24h view
@@ -949,6 +952,7 @@ export default function InsightsPage() {
         setPlatforms(insights.platforms);
         setWhyChanged(insights.whyChanged);
         setTrendMarkers(insights.trendMarkers);
+        setTopicCompetitors(insights.topicCompetitors);
         setHasAnyData(insights.hasAnyData);
 
         // Group raw model slugs by their resolved display name so different
@@ -1472,6 +1476,20 @@ export default function InsightsPage() {
                   )}
                 </div>
               )}
+
+              {/* Topics vs competitors (VIS-010): the trend's brands, topic by topic. */}
+              {/* Its columns are the trend's lines, so it needs the trend's points. */}
+              {rateTrend &&
+                rateTrend.points.length > 0 &&
+                topicCompetitors &&
+                topicCompetitors.length > 0 && (
+                  <TopicHeatmap
+                    topics={topicCompetitors}
+                    columns={trendLines(rateTrend.entities, rateTrend.points, rateTrend.pinned).map(
+                      (line) => ({ key: line.key, name: line.name }),
+                    )}
+                  />
+                )}
 
               {/* Recommendations (#459) — stored data, not period-scoped */}
               {recommendations && <RecommendationsSection data={recommendations} />}
