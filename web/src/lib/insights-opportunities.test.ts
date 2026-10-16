@@ -136,6 +136,11 @@ describe('opportunities', () => {
     });
   });
 
+  it('has no volume when no suggestion has an estimate, never 0 (VIS-005)', () => {
+    const result = opportunities([suggestion('a', { estVolume: null })], unknown);
+    expect(result.status === 'ready' && result.items[0].volume).toBeNull();
+  });
+
   it('groups by topic name when a suggestion has no topic id', () => {
     const result = opportunities(
       [suggestion('a', { topicName: 'GEO tools' }), suggestion('b', { topicName: 'geo tools ' })],

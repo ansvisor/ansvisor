@@ -14,6 +14,7 @@ const messages: Record<string, string> = {
   upMost: 'Up most:',
   downMost: 'Down most:',
   vs: 'vs {from} – {to}',
+  lowSample: '(low sample · {count} answers)',
   newExcluded: '{count} new prompts excluded',
   newIncluded: 'includes {count} new prompts',
 };
@@ -92,5 +93,28 @@ describe('summary line', () => {
     );
 
     expect(context).toBe('vs Aug 14, 2026 – Sep 12, 2026 · includes 509 new prompts');
+  });
+
+  it('marks a score on under 20 answers and reads no change into it (VIS-005)', () => {
+    const facts = summaryFacts(input({ answers: 14 }), t);
+    expect(facts[0].parts.map((p) => p.text)).toEqual([
+      '17.4',
+      'visibility',
+      '(low sample · 14 answers)',
+    ]);
+    // 20 or more is a full sample: the change shows, no mark.
+    expect(summaryFacts(input({ answers: 20 }), t)[0].parts.map((p) => p.text)).toEqual([
+      '17.4',
+      'visibility',
+      '+1.5',
+    ]);
+  });
+
+  it('writes every number in the UI’s locale (VIS-005)', () => {
+    const tr = input({ locale: 'tr', trend: trend(1234.5, -3.2) });
+    const text = summaryText(summaryFacts(tr, t), summaryContext(tr, t, t));
+    expect(text).toContain('1.234,5 visibility −3,2');
+    expect(text).toContain('0,9 pts behind Peec AI');
+    expect(text).toContain('vs 14 Ağu 2026 – 12 Eyl 2026');
   });
 });
