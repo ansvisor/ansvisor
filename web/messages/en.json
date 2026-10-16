@@ -1420,7 +1420,7 @@
       "drawer": {
         "goal": "What was the goal?",
         "whatHappened": "What happened?",
-        "triggeredBy": "Consolidated from {count} signals",
+        "triggeredBy": "Consolidated from {count, plural, one {# signal} other {# signals}}",
         "result": "Result",
         "visibilityChange": "Visibility Change",
         "citationsChange": "Citations Change",
