@@ -1266,6 +1266,16 @@
             "note": "Before is the 7 days before this action was sent. The latest 7 days are re-read daily while the action is open and for 30 days after it's completed. A position counts as changed when it moves at least 0.5.",
             "noteFinal": "The 7 days before this action was sent, next to the 7 days ending 30 days after it was completed. A position counts as changed when it moves at least 0.5."
           }
+        },
+        "noSignalsTopicGap": "This action was sent from Insights' Topics vs competitors, so it has no detection signals. Its evidence is the topic and scores on the Overview tab.",
+        "topicGap": {
+          "source": "Source",
+          "sourceValue": "Insights › Topics vs competitors",
+          "openTopic": "Open topic",
+          "topic": "Topic",
+          "scores": "Visibility when sent",
+          "you": "You",
+          "gap": "{gap} pts behind"
         }
       }
     },
@@ -1667,6 +1677,12 @@
         "titleGeneric": "Improve a prompt's position",
         "description": "Sent from the Prompts Improve tab: platform-specific changes to get the brand mentioned earlier and cited for one prompt.",
         "goal": "Get the brand mentioned early and cited for this prompt on the platforms it covers."
+      },
+      "topic_competitor_gap": {
+        "title": "Close the {gap}-pt gap with {competitor} in {topic}",
+        "titleGeneric": "Close a topic gap with a competitor",
+        "description": "Sent from Insights: a competitor leads one of your topics on Visibility.",
+        "goal": "Lead the topic, or close most of the gap."
       }
     },
     "actionTasks": {
@@ -2316,7 +2332,15 @@
       "lowSample": "Low sample",
       "openTopic": "Open {topic}",
       "showAll": "Show all {count}",
-      "showLess": "Show less"
+      "showLess": "Show less",
+      "sendGap": "Send biggest gap to Actions",
+      "sendGapTitle": "Open a Compete action for {topic}, where {competitor} leads you by {gap} pts",
+      "noGap": "No topic where a competitor leads you",
+      "sent": "AC-{no} sent to the Action Center",
+      "alreadySent": "Already in the Action Center as AC-{no}",
+      "sendFailed": "Couldn't send to the Action Center.",
+      "openAction": "Open",
+      "gapChanged": "The gap changed since the page loaded. Refresh to see the latest."
     }
   },
   "topics": {
