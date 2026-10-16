@@ -1807,6 +1807,18 @@
       "moreActions": "{actions} +{count}",
       "goal": "Goal {value}",
       "goalLegend": "Action Center goal"
+    },
+    "topicMap": {
+      "title": "Topics vs competitors",
+      "tableLabel": "Visibility by topic and brand",
+      "topic": "Topic",
+      "you": "You",
+      "gap": "Gap",
+      "lead": "Lead",
+      "lowSample": "Low sample",
+      "openTopic": "Open {topic}",
+      "showAll": "Show all {count}",
+      "showLess": "Show less"
     }
   },
   "topics": {
