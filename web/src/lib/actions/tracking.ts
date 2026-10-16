@@ -42,6 +42,8 @@ import { getTopicById } from '@/lib/actions/topic';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
 import { getOrgLocationUsage } from '@/lib/prompt-locations';
 import { getPromptSuggestions } from '@/lib/actions/prompt-suggestions';
+import { getContentUsage } from '@/lib/actions/content';
+import type { ContentUsage } from '@/lib/content-usage';
 import { percentageChange } from '@/lib/metrics';
 import { parseChangeDrivers, whyChanged, type WhyChanged } from '@/lib/insights-drivers';
 import { parseTrendMarkers, type TrendMarkerData } from '@/lib/insights-trend';
@@ -634,6 +636,8 @@ export interface InsightsOpportunities {
   suggestions: OpportunitySuggestion[];
   /** The suggestions' topics with at least one active tracked prompt; null when unknown. */
   trackedTopicIds: string[] | null;
+  /** The month's content quota, for Suggest content (CONTENT-001); null when unread. */
+  contentUsage: ContentUsage | null;
 }
 
 /** PostgREST's default row cap: a read that fills it may have been cut short. */
@@ -650,8 +654,8 @@ async function getInsightsOpportunities(brandId: string): Promise<InsightsOpport
   try {
     const { suggestions } = await getPromptSuggestions(brandId);
     const topicIds = [...new Set(suggestions.flatMap((s) => (s.topicId ? [s.topicId] : [])))];
-    let trackedTopicIds: string[] | null = [];
-    if (topicIds.length > 0) {
+    const readTrackedTopics = async (): Promise<string[] | null> => {
+      if (topicIds.length === 0) return [];
       const supabase = await dbClient();
       const { data, error } = await supabase
         .from('prompts')
@@ -660,11 +664,16 @@ async function getInsightsOpportunities(brandId: string): Promise<InsightsOpport
         .eq('is_active', true)
         .limit(TRACKED_TOPIC_ROWS);
       // Unknown, not "none": a failed or cut-off read would call tracked topics untracked.
-      trackedTopicIds =
-        error || (data?.length ?? 0) >= TRACKED_TOPIC_ROWS
-          ? null
-          : [...new Set((data ?? []).map((r) => r.topic_id as string))];
-    }
+      return error || (data?.length ?? 0) >= TRACKED_TOPIC_ROWS
+        ? null
+        : [...new Set((data ?? []).map((r) => r.topic_id as string))];
+    };
+    const [trackedTopicIds, contentUsage] = await Promise.all([
+      readTrackedTopics(),
+      // Only Suggest content uses it. The server still enforces the quota; an
+      // unread one only leaves the button enabled.
+      suggestions.length > 0 ? getContentUsage().catch(() => null) : Promise.resolve(null),
+    ]);
     return {
       suggestions: suggestions.map((s) => ({
         id: s.id,
@@ -675,9 +684,10 @@ async function getInsightsOpportunities(brandId: string): Promise<InsightsOpport
         relevance: s.relevance,
       })),
       trackedTopicIds,
+      contentUsage,
     };
   } catch {
-    return { suggestions: [], trackedTopicIds: [] };
+    return { suggestions: [], trackedTopicIds: [], contentUsage: null };
   }
 }
 
