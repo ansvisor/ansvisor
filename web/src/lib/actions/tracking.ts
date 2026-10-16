@@ -47,6 +47,7 @@ import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import { percentageChange } from '@/lib/metrics';
 import { parseChangeDrivers, whyChanged, type WhyChanged } from '@/lib/insights-drivers';
 import { parseTrendMarkers, type TrendMarkerData } from '@/lib/insights-trend';
+import { parseTopicCompetitors, type TopicCompetitors } from '@/lib/insights-topics';
 import {
   parsePlatformRows,
   platformChanges,
@@ -749,6 +750,12 @@ export interface InsightsData {
    * chart has no days to mark, or when the read failed.
    */
   trendMarkers: TrendMarkerData | null;
+  /**
+   * "Topics vs competitors" (VIS-010): per topic, your and each competitor's
+   * Visibility components. Null on the 24h view, with a topic selected,
+   * before the backfill, or when the read failed.
+   */
+  topicCompetitors: TopicCompetitors[] | null;
   /** The run ledger, when the 24h window was anchored to it (`anchor24h`). */
   trackingWindow: TrackingWindow | null;
 }
@@ -847,6 +854,7 @@ type WindowedInsights = Pick<
   | 'platforms'
   | 'whyChanged'
   | 'trendMarkers'
+  | 'topicCompetitors'
 >;
 
 type InsightsFilterArgs = {
@@ -900,6 +908,7 @@ async function loadWindowedInsights(
     platformData,
     drivers,
     trendMarkers,
+    topicCompetitors,
   ] = await Promise.all([
     getInsightsSummary(brandId, filterOpts),
     lenient(
@@ -921,6 +930,7 @@ async function loadWindowedInsights(
     lenient(getPlatformData(brandId, filterOpts), null, 'platforms'),
     lenient(getChangeDrivers(brandId, filterOpts), null, 'why it changed'),
     lenient(getTrendMarkers(brandId, filterOpts), null, 'trend markers'),
+    lenient(getTopicCompetitors(brandId, filterOpts), null, 'topics vs competitors'),
   ]);
   const windowed = {
     ...(comparisonWindows(filterOpts).prev ? { summary, sov } : withoutChanges(summary, sov)),
@@ -942,6 +952,7 @@ async function loadWindowedInsights(
       drivers &&
       whyChanged(drivers, resolveProvider, { samePrompts: filterOpts.samePrompts !== false }),
     trendMarkers,
+    topicCompetitors,
   };
   return withPromptComparison(windowed, same, filterOpts.samePrompts !== false);
 }
@@ -1034,6 +1045,28 @@ async function getKpiSeries(
   });
   if (error) throw new Error(error.message);
   return parseKpiSeries(data);
+}
+
+/**
+ * "Topics vs competitors" (VIS-010): per active topic, the brand's and each
+ * competitor's Visibility components in the window, from the rollups. Null
+ * on the 24h view and when a topic is selected (one row isn't a map).
+ */
+async function getTopicCompetitors(
+  brandId: string,
+  opts?: InsightsFilterArgs,
+): Promise<TopicCompetitors[] | null> {
+  if (!opts?.days || opts.topicId) return null;
+  const supabase = await dbClient();
+  const { data, error } = await supabase.rpc('insights_topic_competitors_daily', {
+    p_brand_id: brandId,
+    p_day_from: opts.days.dayFrom,
+    p_day_to: opts.days.dayTo,
+    p_models: modelFilterArray(opts.model),
+    p_region: opts.region ?? undefined,
+  });
+  if (error) throw new Error(error.message);
+  return parseTopicCompetitors(data);
 }
 
 /**
