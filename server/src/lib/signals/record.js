@@ -29,6 +29,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { computePulseMetrics } from '../pulse/metrics.js';
 import { logger } from '../logger.js';
+import { readAllRpcRows } from '../rpc-pages.js';
 import { resolve } from '../../config/action-engine.js';
 import { EXCLUSIVE_KIND_GROUPS, LIBRARY_KINDS } from './library/kinds.js';
 import { libraryCandidates } from './library/detect.js';
@@ -227,20 +228,37 @@ function fromPulseEntry(entry) {
  * the window's answers mention the brand at least once and cite it never —
  * the brand is in the conversation but AI engines have nothing of its own
  * to point at. One consolidated signal (brief §29), not one per prompt.
+ *
+ * One row per prompt, read a page at a time past PostgREST's 1000-row cap.
+ * Exported for the test that pins the paging behaviour.
  */
-async function uncitedMentionCandidates(brandId, now) {
+export async function uncitedMentionCandidates(brandId, now) {
   const from = new Date(now.getTime() - detection.windowDays * DAY_MS);
-  const { data, error } = await supabaseAdmin.rpc('prompt_visibility_summaries', {
-    p_brand_id: brandId,
-    p_date_from: from.toISOString(),
-    p_date_to: now.toISOString(),
-  });
+  const { data, error } = await readAllRpcRows('prompt_visibility_summaries', (start, end) =>
+    supabaseAdmin
+      .rpc('prompt_visibility_summaries', {
+        p_brand_id: brandId,
+        p_date_from: from.toISOString(),
+        p_date_to: now.toISOString(),
+      })
+      .order('prompt_id', { ascending: true })
+      .range(start, end),
+  );
   if (error) throw new Error(error.message);
 
-  const uncited = (data ?? []).filter(
-    (row) =>
-      Number(row.runs) > 0 && Number(row.total_mentions) > 0 && Number(row.total_citations) === 0,
-  );
+  // By id, not by row: a prompt repeated at a page boundary is still one prompt.
+  const uncited = [
+    ...new Set(
+      (data ?? [])
+        .filter(
+          (row) =>
+            Number(row.runs) > 0 &&
+            Number(row.total_mentions) > 0 &&
+            Number(row.total_citations) === 0,
+        )
+        .map((row) => row.prompt_id),
+    ),
+  ];
   if (uncited.length < detection.uncitedMinPrompts) return [];
 
   return [
@@ -248,7 +266,7 @@ async function uncitedMentionCandidates(brandId, now) {
       kind: 'uncited_mentions',
       dedupKey: 'uncited_mentions',
       source: ['ai_results'],
-      payload: { promptIds: uncited.map((row) => row.prompt_id).slice(0, 50) },
+      payload: { promptIds: uncited.slice(0, 50) },
       previousValue: null,
       currentValue: uncited.length,
       changeValue: null,

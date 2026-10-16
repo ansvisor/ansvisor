@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Copy, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -18,9 +18,10 @@ import { summaryContext, summaryFacts, summaryText, type SummaryInput } from './
 export function SummaryLine(props: SummaryInput) {
   const t = useTranslations('insights.summary');
   const tCompare = useTranslations('insights.compare');
+  const input = { ...props, locale: useLocale() };
 
-  const facts = summaryFacts(props, t);
-  const context = summaryContext(props, t, tCompare);
+  const facts = summaryFacts(input, t);
+  const context = summaryContext(input, t, tCompare);
   if (facts.length === 0 && !context) return null;
 
   const copy = async () => {
