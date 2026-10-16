@@ -9,6 +9,8 @@ import { describe, expect, test } from 'vitest';
 import {
   buildPositionCell,
   compareLateness,
+  opensPositionsPanel,
+  positionCellKind,
   previousWindow,
   type PlatformDotState,
   type PromptPositionCell,
@@ -209,5 +211,44 @@ describe('previousWindow', () => {
       from: '2026-09-29T00:00:00.000Z',
       to: '2026-10-06T00:00:00.000Z',
     });
+  });
+});
+
+describe('positionCellKind', () => {
+  const counts = (runs: number, mentionAnswers: number, citationAnswers = 0) => ({
+    runs,
+    mentionAnswers,
+    citationAnswers,
+  });
+
+  test('shows the average once there is one', () => {
+    expect(positionCellKind({ avg: 2.5 }, counts(4, 3))).toBe('average');
+  });
+
+  test('says "Not mentioned" for a prompt tracked in the window but never named', () => {
+    expect(positionCellKind({ avg: null }, counts(3, 0))).toBe('notMentioned');
+    expect(positionCellKind(undefined, counts(1, 0))).toBe('notMentioned');
+  });
+
+  test('says "Cited only" when its pages were cited though it was never named', () => {
+    expect(positionCellKind({ avg: null }, counts(5, 0, 3))).toBe('citedOnly');
+  });
+
+  test('keeps "—" without answers, or with mentions whose positions are not stored', () => {
+    expect(positionCellKind(undefined, undefined)).toBe('none');
+    expect(positionCellKind({ avg: null }, counts(0, 0))).toBe('none');
+    expect(positionCellKind({ avg: null }, counts(4, 2))).toBe('none');
+  });
+});
+
+describe('opensPositionsPanel', () => {
+  test('offers the panel whenever the prompt has answers in the window, named or not', () => {
+    expect(opensPositionsPanel({ runs: 3, mentionAnswers: 0, citationAnswers: 0 })).toBe(true);
+    expect(opensPositionsPanel({ runs: 3, mentionAnswers: 2, citationAnswers: 1 })).toBe(true);
+  });
+
+  test('offers none without answers', () => {
+    expect(opensPositionsPanel({ runs: 0, mentionAnswers: 0, citationAnswers: 0 })).toBe(false);
+    expect(opensPositionsPanel(undefined)).toBe(false);
   });
 });

@@ -280,7 +280,45 @@ describe('cloro-scraper – parseScraperResponse', () => {
       ]);
     });
 
-    it('defaults to an empty array when the engine returns none (ChatGPT in practice)', () => {
+    it('reads { query } objects in searchQueries too, so a shape change cannot empty it', () => {
+      const parsed = parseScraperResponse(
+        {
+          markdown: 't',
+          sources: [],
+          searchQueries: [{ query: ' chatgpt query ' }, { query: '' }, { text: 'no query key' }],
+        },
+        'chatgpt-web',
+      );
+      expect(parsed.search_queries).toEqual([
+        { query: 'chatgpt query', source_platform: 'chatgpt-web' },
+      ]);
+    });
+
+    it("adds ChatGPT's map searches, labelled as maps", () => {
+      const parsed = parseScraperResponse(
+        {
+          markdown: 't',
+          sources: [],
+          searchQueries: ['coffee subscription'],
+          mapSearchQueries: ['coffee shops near me'],
+        },
+        'chatgpt-web',
+      );
+      expect(parsed.search_queries).toEqual([
+        { query: 'coffee subscription', source_platform: 'chatgpt-web' },
+        { query: 'coffee shops near me', engine: 'maps', source_platform: 'chatgpt-web' },
+      ]);
+    });
+
+    it('does not let an empty search_model_queries hide a populated searchQueries', () => {
+      const parsed = parseScraperResponse(
+        { markdown: 't', sources: [], search_model_queries: [], searchQueries: ['kept'] },
+        'copilot-web',
+      );
+      expect(parsed.search_queries).toEqual([{ query: 'kept', source_platform: 'copilot-web' }]);
+    });
+
+    it('defaults to an empty array when the engine returns none', () => {
       expect(
         parseScraperResponse({ markdown: 't', sources: [], searchQueries: [] }, 'chatgpt-web')
           .search_queries,

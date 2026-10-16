@@ -95,6 +95,8 @@ import {
 import { cn } from '@/lib/utils';
 import {
   compareLateness,
+  opensPositionsPanel,
+  positionCellKind,
   type PlatformDot,
   type PlatformDotState,
   type PromptPositionCell,
@@ -341,6 +343,15 @@ const PROMPT_EXPORT_HINT = 'No prompts yet - add prompts first.';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const VALID_TABS = ['all', 'fanout', 'insights'] as const;
+
+/**
+ * The window a tab opens on. Query Fan-out opens on 7 days: one day of
+ * answers holds few searches, and an engine that only some answers search
+ * with looks absent in it.
+ */
+function defaultRangeFor(tab: string): PromptRangePreset {
+  return tab === 'fanout' ? '7d' : DEFAULT_PROMPT_RANGE_PRESET;
+}
 type TabId = (typeof VALID_TABS)[number];
 
 const PROMPT_VIEWS = ['tracked', 'suggestions'] as const;
@@ -1310,7 +1321,7 @@ export default function PromptsPage() {
     // than silently dropping them back to the default.
     if (isPromptRangePreset(raw)) return raw;
     if (raw && isPromptRangePreset(`${raw}d`)) return `${raw}d` as PromptRangePreset;
-    return DEFAULT_PROMPT_RANGE_PRESET;
+    return defaultRangeFor(initialTab);
   })();
   const [rangePreset, setRangePreset] = useState<PromptRangePreset>(initialRange);
   // Which tracked location the health columns describe. Empty = every
@@ -1354,7 +1365,7 @@ export default function PromptsPage() {
     // The default range stays out of the URL so shared links keep their
     // existing shape unless the user actually picked a different window.
     const want: Record<string, string | null> = {
-      range: rangePreset === DEFAULT_PROMPT_RANGE_PRESET ? null : rangePreset,
+      range: rangePreset === defaultRangeFor(tab) ? null : rangePreset,
       from: rangePreset === 'custom' && customFrom ? customFrom : null,
       to: rangePreset === 'custom' && customTo ? customTo : null,
       region: regionFilter || null,
@@ -1769,7 +1780,16 @@ export default function PromptsPage() {
         </div>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)}>
+      <Tabs
+        value={tab}
+        onValueChange={(v) => {
+          const next = v as TabId;
+          // A window still on this tab's default wasn't picked by the user,
+          // so it follows the next tab's own (Query Fan-out opens on 7 days).
+          if (rangePreset === defaultRangeFor(tab)) setRangePreset(defaultRangeFor(next));
+          setTab(next);
+        }}
+      >
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <TabsList>
             <TabsTrigger value="all">Prompts</TabsTrigger>
@@ -2364,9 +2384,33 @@ export default function PromptsPage() {
 
 /**
  * Average position with its trend against the previous period; hovering it
- * lists each platform, which is what the "Late or missing" filter reads.
+ * lists each platform, which is what the "Late or missing" filter reads. A
+ * prompt that was tracked but never named reads "Not mentioned", not the "—"
+ * of a prompt with no answers.
  */
-function PositionValue({ cell }: { cell: PromptPositionCell | undefined }) {
+function PositionValue({
+  cell,
+  vis,
+}: {
+  cell: PromptPositionCell | undefined;
+  vis: PromptVisibilitySummary | undefined;
+}) {
+  const t = useTranslations('prompts.positions');
+  const kind = positionCellKind(cell, vis);
+  if (kind === 'notMentioned' || kind === 'citedOnly') {
+    return (
+      <span
+        className="text-xs text-muted-foreground"
+        title={
+          kind === 'citedOnly'
+            ? t('citedOnlyTitle', { cited: vis?.citationAnswers ?? 0, count: vis?.runs ?? 0 })
+            : t('notMentionedTitle', { count: vis?.runs ?? 0 })
+        }
+      >
+        {t(kind)}
+      </span>
+    );
+  }
   if (!cell || cell.avg === null) {
     return <span className="text-xs text-muted-foreground">—</span>;
   }
@@ -3513,10 +3557,11 @@ function AllPromptsTab({
                     {/* Fixed widths so the value, dots and See line up on every row. */}
                     <div className="inline-flex items-center gap-2">
                       <div className="w-[5.5rem] whitespace-nowrap">
-                        <PositionValue cell={positions[p.id]} />
+                        <PositionValue cell={positions[p.id]} vis={vis} />
                       </div>
                       <div className="w-6">
-                        {vis && (vis.mentionAnswers > 0 || vis.citationAnswers > 0) && (
+                        {/* Whenever it has answers: a prompt never named is the one to open. */}
+                        {opensPositionsPanel(vis) && (
                           <Button
                             type="button"
                             size="icon-xs"

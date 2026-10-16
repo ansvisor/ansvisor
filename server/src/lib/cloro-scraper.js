@@ -12,7 +12,7 @@ import { stripEntityMarkup } from './entity-markup.js';
 
 const CLORO_API = 'https://api.cloro.dev';
 
-const SCRAPER_TASK_TYPES = {
+export const SCRAPER_TASK_TYPES = {
   'chatgpt-web': 'CHATGPT',
   'chatgpt-shopping': 'CHATGPT',
   'google-aio': 'GOOGLE',
@@ -88,9 +88,10 @@ export function buildRequestBody(promptText, scraperId, region, state) {
       html: false,
       markdown: true,
       rawResponse: false,
-      // Opt in to the observed query fan-out (#332). Copilot/Perplexity
-      // populate it; ChatGPT surfaces the key but returns it empty in
-      // practice — enabling it is free and harmless.
+      // Opt in to the observed query fan-out (#332). Copilot and Perplexity
+      // populate it; ChatGPT does too (a +2 credit add-on), though its came
+      // back empty from 2026-09-30 — the health report's fan-out section
+      // flags an engine that stops. Gemini documents no fan-out field.
       searchQueries: true,
     },
   };
@@ -106,40 +107,39 @@ export function buildRequestBody(promptText, scraperId, region, state) {
  *    accepted so a potential upstream revert can't silently zero the field
  *    again.
  *  - Copilot / ChatGPT / Grok / Gemini → `searchQueries: string[]`
- * Anything else (or missing) → `[]`. This is OBSERVED data only — we never
- * synthesize sub-queries.
+ *  - ChatGPT also → `mapSearchQueries: string[]`, the searches it ran on its
+ *    map (kept with `engine: 'maps'`).
+ * Entries are read as strings or as `{ query }` objects in every field: when
+ * ChatGPT's fan-out went silent on 2026-09-30, nothing told an emptied field
+ * from one that changed shape, and the strings-only read would have dropped
+ * the second without a trace. Anything else (or missing) → `[]`. This is
+ * OBSERVED data only — we never synthesize sub-queries.
  */
 function normalizeSearchQueries(result, scraperId) {
   // Trim on write so the same sub-query never fragments into whitespace
   // variants — the #333 aggregation groups by query string. `engine` is only
   // kept when it's a non-empty string (never a stray non-string value).
-  if (Array.isArray(result.search_model_queries)) {
-    return result.search_model_queries
-      .map((entry) => {
-        if (typeof entry === 'string') {
-          return { query: entry.trim(), source_platform: scraperId };
-        }
-        if (typeof entry?.query === 'string') {
-          return {
-            query: entry.query.trim(),
-            ...(typeof entry.engine === 'string' && entry.engine.trim() !== ''
-              ? { engine: entry.engine.trim() }
-              : {}),
-            source_platform: scraperId,
-          };
-        }
-        return null;
-      })
-      .filter((item) => item !== null && item.query !== '');
-  }
+  const toItem = (entry, fallbackEngine) => {
+    const query =
+      typeof entry === 'string' ? entry : typeof entry?.query === 'string' ? entry.query : null;
+    if (query === null || query.trim() === '') return null;
+    const engine =
+      typeof entry?.engine === 'string' && entry.engine.trim() !== ''
+        ? entry.engine.trim()
+        : fallbackEngine;
+    return { query: query.trim(), ...(engine ? { engine } : {}), source_platform: scraperId };
+  };
+  const read = (list, fallbackEngine) =>
+    Array.isArray(list)
+      ? list.map((entry) => toItem(entry, fallbackEngine)).filter((item) => item !== null)
+      : [];
 
-  if (Array.isArray(result.searchQueries)) {
-    return result.searchQueries
-      .filter((q) => typeof q === 'string' && q.trim() !== '')
-      .map((q) => ({ query: q.trim(), source_platform: scraperId }));
-  }
+  // Perplexity's field first. An empty one falls through, so it can't hide a
+  // populated `searchQueries` beside it.
+  const perplexity = read(result.search_model_queries);
+  if (perplexity.length > 0) return perplexity;
 
-  return [];
+  return [...read(result.searchQueries), ...read(result.mapSearchQueries, 'maps')];
 }
 
 /**
