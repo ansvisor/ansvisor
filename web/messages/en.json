@@ -1892,6 +1892,22 @@
       "citationRate": "Citation rate",
       "citationRateTip": "Share of answers that cite your domain.",
       "citationRateSub": "of answers cite you"
+    },
+    "summary": {
+      "label": "Summary",
+      "visibility": "visibility",
+      "rank": "#{rank}",
+      "ofCount": "of {count}",
+      "pts": "{value} pts",
+      "behind": "behind {name}",
+      "ahead": "ahead of {name}",
+      "tied": "tied with {name}",
+      "upMost": "Up most:",
+      "downMost": "Down most:",
+      "vs": "vs {from} – {to}",
+      "copy": "Copy summary",
+      "copied": "Summary copied",
+      "copyFailed": "Couldn't copy the summary. Select the text and copy it instead."
     }
   },
   "topics": {

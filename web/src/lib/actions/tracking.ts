@@ -45,6 +45,7 @@ import { getPromptVolumes } from '@/lib/actions/volumes';
 import { getPromptSuggestions } from '@/lib/actions/prompt-suggestions';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import { percentageChange } from '@/lib/metrics';
+import { parsePlatformRows, platformChanges, type PlatformChange } from '@/lib/insights-summary';
 import {
   coverage as coverageRate,
   kpiRates,
@@ -720,6 +721,12 @@ export interface InsightsData {
    * view (a single day), when the read failed, or before the backfill.
    */
   kpiSeries: KpiSeriesDay[] | null;
+  /**
+   * Each platform's Visibility change for the summary line (VIS-006),
+   * following Same prompts; biggest rise first. Null without a previous
+   * window, before the backfill, or when the read failed.
+   */
+  platformChanges: PlatformChange[] | null;
   /** The run ledger, when the 24h window was anchored to it (`anchor24h`). */
   trackingWindow: TrackingWindow | null;
 }
@@ -814,6 +821,7 @@ type WindowedInsights = Pick<
   | 'comparison'
   | 'coverage'
   | 'kpiSeries'
+  | 'platformChanges'
 >;
 
 type InsightsFilterArgs = {
@@ -855,26 +863,36 @@ async function loadWindowedInsights(
           return fallback;
         });
 
-  const [summary, competitors, sov, filterOptions, trend, same, coverage, kpiSeries] =
-    await Promise.all([
-      getInsightsSummary(brandId, filterOpts),
-      lenient(
-        getCompetitorComparison(brandId, filterOpts),
-        EMPTY_COMPETITORS,
-        'competitor comparison',
-      ),
-      lenient(getShareOfVoiceData(brandId, filterOpts), EMPTY_SOV, 'share of voice'),
-      getInsightsFilterOptions(brandId),
-      // The chart follows the same window as every other number on the page.
-      lenient<VisibilityRateTrendData | null>(
-        getVisibilityRateTrend(brandId, filterOpts),
-        null,
-        'visibility trend',
-      ),
-      lenient(getSamePromptComparison(brandId, filterOpts), null, 'same-prompt comparison'),
-      lenient(getCoverageKpi(brandId, filterOpts), null, 'coverage'),
-      lenient(getKpiSeries(brandId, filterOpts), null, 'KPI sparklines'),
-    ]);
+  const [
+    summary,
+    competitors,
+    sov,
+    filterOptions,
+    trend,
+    same,
+    coverage,
+    kpiSeries,
+    platformChangesData,
+  ] = await Promise.all([
+    getInsightsSummary(brandId, filterOpts),
+    lenient(
+      getCompetitorComparison(brandId, filterOpts),
+      EMPTY_COMPETITORS,
+      'competitor comparison',
+    ),
+    lenient(getShareOfVoiceData(brandId, filterOpts), EMPTY_SOV, 'share of voice'),
+    getInsightsFilterOptions(brandId),
+    // The chart follows the same window as every other number on the page.
+    lenient<VisibilityRateTrendData | null>(
+      getVisibilityRateTrend(brandId, filterOpts),
+      null,
+      'visibility trend',
+    ),
+    lenient(getSamePromptComparison(brandId, filterOpts), null, 'same-prompt comparison'),
+    lenient(getCoverageKpi(brandId, filterOpts), null, 'coverage'),
+    lenient(getKpiSeries(brandId, filterOpts), null, 'KPI sparklines'),
+    lenient(getPlatformChanges(brandId, filterOpts), null, 'platform changes'),
+  ]);
   const windowed = {
     ...(comparisonWindows(filterOpts).prev ? { summary, sov } : withoutChanges(summary, sov)),
     competitors,
@@ -882,6 +900,7 @@ async function loadWindowedInsights(
     trend,
     coverage,
     kpiSeries,
+    platformChanges: platformChangesData,
   };
   return withPromptComparison(windowed, same, filterOpts.samePrompts !== false);
 }
@@ -974,6 +993,52 @@ async function getKpiSeries(
   });
   if (error) throw new Error(error.message);
   return parseKpiSeries(data);
+}
+
+/**
+ * Each platform's Visibility change over the card's windows, for the summary
+ * line's "Up most / Down most" (VIS-006). With Same prompts on (the default)
+ * only the prompts answered in both windows count, like every other change.
+ */
+async function getPlatformChanges(
+  brandId: string,
+  opts?: InsightsFilterArgs,
+): Promise<PlatformChange[] | null> {
+  const windows = comparisonWindows(opts);
+  if (!windows.prev) return null;
+  const supabase = await dbClient();
+  const base = {
+    p_brand_id: brandId,
+    p_models: modelFilterArray(opts?.model),
+    p_region: opts?.region ?? undefined,
+    p_same_prompts: opts?.samePrompts !== false,
+  };
+
+  let res;
+  if (windows.cur.kind === 'days') {
+    const { cur, prev } = deltaDayWindows(windows.cur.days);
+    res = await supabase.rpc('insights_platform_compare_daily', {
+      ...base,
+      p_cur_from: cur.dayFrom,
+      p_cur_to: cur.dayTo,
+      p_prev_from: prev.dayFrom,
+      p_prev_to: prev.dayTo,
+    });
+  } else {
+    const cur = windowBounds(windows.cur);
+    const prev = windowBounds(windows.prev);
+    res = await supabase.rpc('insights_platform_compare', {
+      ...base,
+      p_cur_from: cur.from,
+      p_cur_to: cur.to,
+      p_prev_from: prev.from,
+      p_prev_to: prev.to,
+      p_topic_id: opts?.topicId ?? undefined,
+    });
+  }
+  if (res.error) throw new Error(res.error.message);
+  const rows = parsePlatformRows(res.data);
+  return rows && platformChanges(rows, (model, platform) => resolveProvider(model, platform));
 }
 
 /**

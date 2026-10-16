@@ -107,7 +107,9 @@ import { toast } from 'sonner';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import type { PromptComparison } from '@/lib/insights-same-prompts';
 import type { KpiSeriesDay } from '@/lib/insights-kpis';
+import type { PlatformChange } from '@/lib/insights-summary';
 import { KpiRows } from './_kpi-cards';
+import { SummaryLine } from './_summary-line';
 
 // ─── Filter Types ─────────────────────────────────────────────────────────────
 
@@ -227,21 +229,6 @@ function getDateRange(
   const dayFrom = from.toISOString().slice(0, 10);
   const dayTo = to.toISOString().slice(0, 10);
   return { dateFrom: `${dayFrom}T00:00:00.000Z`, dateTo: undefined, days: { dayFrom, dayTo } };
-}
-
-/**
- * A comparison-window bound for the "vs <range>" label. Whole-day windows
- * come as 'YYYY-MM-DD' UTC days and are shown as those days; the 24h and
- * topic views come as timestamps and are shown in local time.
- */
-function formatWindowBound(value: string): string {
-  const dayOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
-  return new Date(dayOnly ? `${value}T00:00:00Z` : value).toLocaleDateString('en-US', {
-    month: 'short',
-    day: '2-digit',
-    year: 'numeric',
-    ...(dayOnly ? { timeZone: 'UTC' } : {}),
-  });
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -912,6 +899,7 @@ export default function InsightsPage() {
   const [comparison, setComparison] = useState<PromptComparison | null>(null);
   const [coverage, setCoverage] = useState<CoverageKpi | null>(null);
   const [kpiSeries, setKpiSeries] = useState<KpiSeriesDay[] | null>(null);
+  const [platformChanges, setPlatformChanges] = useState<PlatformChange[] | null>(null);
   const [breakdownMetric, setBreakdownMetric] = useState<BreakdownMetric | null>(null);
   // The window and filters the cards were last loaded with (the 24h view
   // anchored to its tracking run): the breakdown panel explains those exact
@@ -1000,6 +988,7 @@ export default function InsightsPage() {
         setComparison(insights.comparison);
         setCoverage(insights.coverage);
         setKpiSeries(insights.kpiSeries);
+        setPlatformChanges(insights.platformChanges);
         setHasAnyData(insights.hasAnyData);
 
         // Group raw model slugs by their resolved display name so different
@@ -1446,6 +1435,14 @@ export default function InsightsPage() {
             <NoDataForPeriod datePreset={filters.datePreset} onReset={handleResetFilters} />
           ) : (
             <>
+              {/* Summary line (VIS-006): the page's story in one line. */}
+              <SummaryLine
+                trend={rateTrend}
+                competitors={competitorData}
+                comparison={comparison}
+                platformChanges={platformChanges}
+              />
+
               {/* KPI cards (VIS-003): today's five, then the new rates. */}
               <KpiRows
                 summary={summary!}
@@ -1487,24 +1484,6 @@ export default function InsightsPage() {
                                 )}
                                 {rateTrend.summary.change >= 0 ? '+' : ''}
                                 {rateTrend.summary.change} pts
-                              </span>
-                            )}
-                            {rateTrend.summary.change !== null && rateTrend.summary.prevFrom && (
-                              <span className="text-muted-foreground">
-                                vs {formatWindowBound(rateTrend.summary.prevFrom)} –{' '}
-                                {formatWindowBound(rateTrend.summary.prevTo)}
-                              </span>
-                            )}
-                            {/* Shown even without a change: when every prompt is new,
-                                this is why there is nothing to compare. */}
-                            {comparison && comparison.newPrompts > 0 && (
-                              <span className="text-muted-foreground" title={t('compare.hint')}>
-                                {rateTrend.summary.change !== null &&
-                                  rateTrend.summary.prevFrom &&
-                                  '· '}
-                                {comparison.basis === 'same'
-                                  ? t('compare.newExcluded', { count: comparison.newPrompts })
-                                  : t('compare.newIncluded', { count: comparison.newPrompts })}
                               </span>
                             )}
                           </div>

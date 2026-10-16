@@ -3108,6 +3108,33 @@ export type Database = {
         }
         Returns: Json
       }
+      insights_platform_compare: {
+        Args: {
+          p_brand_id: string
+          p_cur_from: string
+          p_cur_to: string
+          p_models?: string[]
+          p_prev_from: string
+          p_prev_to: string
+          p_region?: string
+          p_same_prompts?: boolean
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      insights_platform_compare_daily: {
+        Args: {
+          p_brand_id: string
+          p_cur_from: string
+          p_cur_to: string
+          p_models?: string[]
+          p_prev_from: string
+          p_prev_to: string
+          p_region?: string
+          p_same_prompts?: boolean
+        }
+        Returns: Json
+      }
       insights_same_prompt_compare: {
         Args: {
           p_brand_id: string
