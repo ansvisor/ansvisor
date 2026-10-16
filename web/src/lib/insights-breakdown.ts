@@ -277,13 +277,15 @@ export function buildBreakdownRows(
 /**
  * The row that did the most in the direction of the overall change: the
  * biggest drop when the total fell, the biggest gain when it rose. Null when
- * nothing moved that way, or when there is no previous window.
+ * nothing moved that way, or when there is no previous window. A row
+ * answered in only one window has no change to credit: a new prompt didn't
+ * "rise 80 pts" from nothing (VIS-005).
  */
 export function pickDriver(rows: BreakdownRow[], totalDelta: number | null): BreakdownRow | null {
   if (totalDelta === null || totalDelta === 0) return null;
   let best: BreakdownRow | null = null;
   for (const r of rows) {
-    if (r.delta === null) continue;
+    if (r.delta === null || r.prevRuns === 0 || r.curRuns === 0) continue;
     if (totalDelta < 0 ? r.delta < (best?.delta ?? 0) : r.delta > (best?.delta ?? 0)) best = r;
   }
   return best;

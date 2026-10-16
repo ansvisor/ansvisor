@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { toCsv } from '@/lib/csv';
+import { formatNumber } from '@/lib/format';
 import { importPrompts } from '@/lib/actions/prompt';
 import {
   MAX_IMPORT_ROWS,
@@ -204,7 +205,7 @@ export function BulkImportPrompts({
           {fileName ?? 'Drop an .xlsx or .csv file, or click to browse'}
         </p>
         <p className="text-xs text-muted-foreground">
-          One prompt per row · up to {MAX_IMPORT_ROWS.toLocaleString()} rows
+          One prompt per row · up to {formatNumber(MAX_IMPORT_ROWS)} rows
         </p>
         <input
           ref={inputRef}
@@ -245,8 +246,8 @@ export function BulkImportPrompts({
           </p>
           {preview.truncated > 0 && (
             <p className="text-xs text-amber-700 dark:text-amber-400">
-              Only the first {MAX_IMPORT_ROWS.toLocaleString()} rows were read;{' '}
-              {preview.truncated.toLocaleString()} more were left out. Split larger files.
+              Only the first {formatNumber(MAX_IMPORT_ROWS)} rows were read;{' '}
+              {formatNumber(preview.truncated)} more were left out. Split larger files.
             </p>
           )}
           {preview.extraColumns && (
