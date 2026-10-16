@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { formatWindowBound, lowerIsGood, signedChange, signedValue, upIsGood } from './kpi-format';
+import {
+  arrowChange,
+  formatWindowBound,
+  lowerIsGood,
+  signedChange,
+  signedValue,
+  upIsGood,
+} from './kpi-format';
 
 describe('KPI card formatting', () => {
   it('writes changes with a sign, and no change as ±0', () => {
@@ -25,6 +32,13 @@ describe('KPI card formatting', () => {
     expect(lowerIsGood(-0.3)).toEqual({ text: '↑0.3', tone: 'good' });
     expect(lowerIsGood(0.5)).toEqual({ text: '↓0.5', tone: 'bad' });
     expect(lowerIsGood(0)).toEqual({ text: '±0', tone: 'neutral' });
+  });
+
+  it('writes a leaderboard change with an arrow', () => {
+    expect(arrowChange(4.1)).toEqual({ text: '↑ 4.1', tone: 'good' });
+    expect(arrowChange(-1.06)).toEqual({ text: '↓ 1.1', tone: 'bad' });
+    expect(arrowChange(0)).toEqual({ text: '±0', tone: 'neutral' });
+    expect(arrowChange(null)).toBeNull();
   });
 
   it('labels whole-day windows by their UTC days', () => {
