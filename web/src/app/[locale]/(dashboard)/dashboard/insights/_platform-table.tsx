@@ -12,13 +12,19 @@ import { TONE_TEXT, upIsGood } from './kpi-format';
  * enough answers shows why instead of numbers; the row with the biggest drop
  * is tinted. Replaces the Share of Voice donut and trend charts.
  */
-export function PlatformTable({ rows }: { rows: PlatformTableRow[] }) {
+export function PlatformTable({
+  rows,
+  className,
+}: {
+  rows: PlatformTableRow[];
+  className?: string;
+}) {
   const t = useTranslations('insights.platforms');
   // Share-of-voice bars are scaled to the largest share in the table.
   const maxSov = Math.max(0, ...rows.map((r) => r.shareOfVoice ?? 0));
 
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium">{t('title')}</CardTitle>
       </CardHeader>
