@@ -268,7 +268,7 @@ describe('Same prompts parity (VIS-002)', () => {
       getCompetitorComparison('b1', thirtyDays),
     ]);
     return withPromptComparison(
-      { trend, summary, competitors },
+      { trend, summary, competitors, sov: { overallSovChange: null }, coverage: null },
       parseSamePromptComparison(SAME),
       samePrompts,
     );

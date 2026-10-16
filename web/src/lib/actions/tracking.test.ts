@@ -135,6 +135,59 @@ describe('getInsightsSummary', () => {
 
     expect(summary.positiveSentimentPct).toBe(0);
   });
+
+  it('works out the v2 KPI card rates from the same aggregates (VIS-003)', async () => {
+    rpcMock = vi.fn(async () => ({
+      data: {
+        ...insightsAggregatesRow,
+        citation_answers: 171,
+        negative_count: 13,
+        sum_position: 305,
+        position_count: 122,
+        kpi_complete: true,
+      },
+      error: null,
+    }));
+    const { getInsightsSummary } = await import('./tracking');
+
+    const summary = await getInsightsSummary('brand-id');
+
+    // 171/427 answers cite the domain; 51 positive and 13 negative of 127.
+    expect(summary).toMatchObject({
+      citationRate: 40,
+      negativeSentimentPct: 10,
+      netSentiment: 30,
+      avgPosition: 2.5,
+    });
+  });
+
+  it('leaves Net sentiment and Avg. position empty until the rollups are backfilled', async () => {
+    rpcMock = vi.fn(async () => ({
+      data: {
+        ...insightsAggregatesRow,
+        citation_answers: 171,
+        negative_count: 2,
+        sum_position: null,
+        position_count: 0,
+        kpi_complete: false,
+      },
+      error: null,
+    }));
+    const { getInsightsSummary } = await import('./tracking');
+
+    const summary = await getInsightsSummary('brand-id');
+
+    expect(summary).toMatchObject({ netSentiment: null, avgPosition: null, citationRate: 40 });
+  });
+
+  it('shows the new rates as empty, not 0, if migration 00131 has not run', async () => {
+    rpcMock = vi.fn(async () => ({ data: insightsAggregatesRow, error: null }));
+    const { getInsightsSummary } = await import('./tracking');
+
+    const summary = await getInsightsSummary('brand-id');
+
+    expect(summary).toMatchObject({ netSentiment: null, avgPosition: null, citationRate: null });
+  });
 });
 
 describe('analyzeNewPrompt', () => {
