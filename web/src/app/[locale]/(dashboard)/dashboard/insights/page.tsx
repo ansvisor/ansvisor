@@ -1364,6 +1364,7 @@ export default function InsightsPage() {
               {/* Opportunities (VIS-011), under the map: stored suggestions, not period-scoped. */}
               {opportunities && (
                 <Opportunities
+                  brandId={brand.id}
                   suggestions={opportunities.suggestions}
                   trackedTopicIds={opportunities.trackedTopicIds}
                   topics={topicCompetitors}
@@ -1373,6 +1374,7 @@ export default function InsightsPage() {
                       ? null
                       : Math.max(0, trackedPrompts.quotaLimit - trackedPrompts.quotaUsed)
                   }
+                  contentUsage={opportunities.contentUsage}
                   onTracked={(count) =>
                     setTrackedPrompts(
                       (current) => current && { ...current, quotaUsed: current.quotaUsed + count },
