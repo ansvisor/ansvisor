@@ -11,10 +11,13 @@ import {
   enforceImproveQuota,
   getImproveQuotaStatus,
   requireFeature,
+  reserveRelevanceAllowance,
+  settleRelevanceUsage,
 } from '../lib/plan-guard.js';
 import { withRetry } from '../lib/retry.js';
 import { getGscSuggestionCandidates } from '../lib/gsc-suggestions.js';
 import { getGaSuggestionCandidates } from '../lib/ga-suggestions.js';
+import { RELEVANCE_SCALE, ratingCostUsd, toRelevance } from '../lib/suggestion-relevance.js';
 import {
   ACTIONABLE_STATES,
   IMPROVE_PLATFORM_LABELS,
@@ -209,9 +212,70 @@ const newSuggestionSchema = z.object({
     .max(SUGGESTIONS_PER_REFRESH),
 });
 
+// Relevance (VIS-011), asked for while the org's monthly allowance covers it.
+// No bounds, for the same reason as estVolume: toRelevance clamps at the insert.
+const ratedSuggestionSchema = z.object({
+  suggestions: z
+    .array(
+      newSuggestionSchema.shape.suggestions.element.extend({
+        relevance: z
+          .number()
+          .describe(
+            `How closely this prompt fits what the brand offers and who it serves, 0-${RELEVANCE_SCALE}`,
+          ),
+      }),
+    )
+    .min(MIN_SUGGESTIONS)
+    .max(SUGGESTIONS_PER_REFRESH),
+});
+
 const SUGGESTION_TTL_HOURS = 48;
 
-async function generateSuggestions(brandId) {
+/** Model calls one refresh may make (withRetry's attempts). */
+const REFRESH_ATTEMPTS = 3;
+
+/**
+ * Reserves rating for this refresh (VIS-011): its worst case, every retry,
+ * against the org's monthly allowance. Null when that doesn't fit or the
+ * allowance can't be read: the refresh then leaves relevance out rather than
+ * risk the budget.
+ */
+async function reserveRating(orgId, brandId, modelId, log) {
+  try {
+    const reservation = await reserveRelevanceAllowance(orgId, {
+      brandId,
+      modelId,
+      costUsd: ratingCostUsd(modelId, {
+        suggestions: SUGGESTIONS_PER_REFRESH,
+        attempts: REFRESH_ATTEMPTS,
+      }),
+    });
+    return reservation.unlimited || reservation.id ? reservation : null;
+  } catch (err) {
+    log.error({ err }, 'suggestion relevance allowance error');
+    return null;
+  }
+}
+
+/**
+ * Lowers the reservation to what rating added to the attempts made, failed
+ * ones included. A failure is logged, not thrown: the suggestions the user
+ * asked for still go out, and the worst case stays charged.
+ */
+async function settleRating(log, reservation, { modelId, attempts, usage }) {
+  if (!reservation.id) return;
+  try {
+    await settleRelevanceUsage(reservation.id, {
+      attempts,
+      usage,
+      costUsd: ratingCostUsd(modelId, { suggestions: SUGGESTIONS_PER_REFRESH, attempts }),
+    });
+  } catch (err) {
+    log.error({ err }, 'suggestion relevance usage settle error');
+  }
+}
+
+async function generateSuggestions(brandId, { orgId, log }) {
   const ctx = await loadSuggestionContext(brandId);
   const langName = getLanguageName(ctx.brand.language);
   const currentYear = new Date().getFullYear();
@@ -229,6 +293,11 @@ async function generateSuggestions(brandId) {
   // brands that have neither.
   const gaCandidates = await getGaSuggestionCandidates(brandId, ctx.existingPromptTexts);
 
+  const promptModel = process.env.PROMPT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
+  const aiModel = resolveModel(promptModel);
+  const reservation = await reserveRating(orgId, brandId, promptModel, log);
+  const rate = reservation !== null;
+
   const system = `You are an AEO (Answer Engine Optimization) strategist. You suggest NEW search prompts a brand should track in AI engines (ChatGPT, Perplexity, Gemini, Claude). Current year: ${currentYear}.
 
 RULES:
@@ -239,7 +308,12 @@ RULES:
 - Pick prompts where the brand could realistically appear AND where its competitors are already getting cited.
 - Volume bias: prioritize prompt ideas that resemble (in topic and intent) the HIGH-volume prompts already tracked. Avoid suggesting prompts close in topic to LOW-volume ones unless there is a strong competitor gap.
 - estVolume must be a realistic monthly AI search volume; calibrate it against the volume samples shown — do not output flat round numbers like 1000 for everything.
-- Reasons must be concrete: cite the gap, the trend, or the competitor activity. Avoid generic platitudes.
+- Reasons must be concrete: cite the gap, the trend, or the competitor activity. Avoid generic platitudes.${
+    rate
+      ? `
+- relevance: a whole number 0-${RELEVANCE_SCALE}. ${RELEVANCE_SCALE} = the brand's core offering, 6 = adjacent but a realistic fit, below 6 = off its business. Be strict.`
+      : ''
+  }
 - Diversity: mix comparison, how-to, best-of, recommendation, and problem-solving intents.${
     gscCandidates.length
       ? `
@@ -308,25 +382,30 @@ ${gaCandidates
 
 Suggest the next ${SUGGESTIONS_PER_REFRESH} prompts this brand should start tracking, with topic, reason and a calibrated monthly AI search volume (estVolume).`;
 
-  const promptModel = process.env.PROMPT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
-  const aiModel = resolveModel(promptModel);
-
   // #379 pattern — bounded retry: generateObject throws "No object generated:
   // response did not match schema" when the model misses a constraint (short
   // reason, <6 items, non-integer estVolume, …); a fresh sample usually
   // passes, so one miss must not fail the whole refresh.
-  const { object } = await withRetry(
-    () =>
-      generateObject({
-        model: aiModel,
-        schema: newSuggestionSchema,
-        system,
-        prompt: userPrompt,
-      }),
-    { attempts: 3, baseDelayMs: 500, label: 'suggestion-refresh' },
-  );
-
-  return { suggestions: object.suggestions, gscCandidates, gaCandidates };
+  let attempts = 0;
+  let usage;
+  try {
+    const { object, usage: callUsage } = await withRetry(
+      () => {
+        attempts += 1;
+        return generateObject({
+          model: aiModel,
+          schema: rate ? ratedSuggestionSchema : newSuggestionSchema,
+          system,
+          prompt: userPrompt,
+        });
+      },
+      { attempts: REFRESH_ATTEMPTS, baseDelayMs: 500, label: 'suggestion-refresh' },
+    );
+    usage = callUsage;
+    return { suggestions: object.suggestions, gscCandidates, gaCandidates };
+  } finally {
+    if (rate) await settleRating(log, reservation, { modelId: promptModel, attempts, usage });
+  }
 }
 
 async function findOrCreateTopic(brandId, topicName) {
@@ -353,9 +432,10 @@ router.post(
   requireFeature('prompt_suggestions'),
   async (req, res) => {
     try {
-      await assertBrandAccess(req.params.brandId, req.user.id);
+      const { brand } = await assertBrandAccess(req.params.brandId, req.user.id);
       const { suggestions, gscCandidates, gaCandidates } = await generateSuggestions(
         req.params.brandId,
+        { orgId: brand.organization_id, log: req.log },
       );
 
       await supabaseAdmin
@@ -397,6 +477,7 @@ router.post(
           // Sanity clamp replacing the removed schema ceiling — one absurd
           // estimate must cap out, not reject the whole generated batch.
           est_volume: Math.min(s.estVolume, 10_000_000),
+          relevance: toRelevance(s.relevance),
           source: candidate ? 'gsc' : gaCandidate ? 'ga' : 'llm',
           source_data: candidate
             ? {
