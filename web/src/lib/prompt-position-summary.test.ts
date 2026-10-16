@@ -8,7 +8,10 @@
 import { describe, expect, test } from 'vitest';
 import {
   buildPositionCell,
+  compareLateness,
   previousWindow,
+  type PlatformDotState,
+  type PromptPositionCell,
   type PlatformPositionRow,
 } from './prompt-position-summary';
 
@@ -141,6 +144,55 @@ describe('buildPositionCell', () => {
       platforms.slice(0, 2),
     );
     expect(cell.lateOrMissing).toBe(false);
+  });
+});
+
+describe('compareLateness', () => {
+  const cell = (avg: number | null, states: PlatformDotState[]): PromptPositionCell => ({
+    avg,
+    delta: null,
+    dots: states.map((state, i) => ({
+      id: `p${i}`,
+      label: `P${i}`,
+      state,
+      avg: null,
+      runs: 4,
+      mentionedRuns: 0,
+    })),
+    lateOrMissing: states.some((s) => s === 'late' || s === 'missing'),
+  });
+  const order = (cells: Record<string, PromptPositionCell | undefined>) =>
+    Object.keys(cells).sort((a, b) => compareLateness(cells[a], cells[b]));
+
+  test('puts the prompt late or missing on the most platforms first', () => {
+    expect(
+      order({
+        one: cell(1.5, ['early', 'missing', 'early']),
+        three: cell(2, ['late', 'missing', 'missing']),
+        two: cell(3, ['late', 'missing', 'early']),
+      }),
+    ).toEqual(['three', 'two', 'one']);
+  });
+
+  test('then the one missing on more of them, then the worse average', () => {
+    expect(
+      order({
+        lateTwice: cell(4, ['late', 'late']),
+        missingTwice: cell(2, ['missing', 'missing']),
+        missingOnceAt3: cell(3, ['missing', 'late']),
+        missingOnceAt5: cell(5, ['missing', 'late']),
+      }),
+    ).toEqual(['missingTwice', 'missingOnceAt5', 'missingOnceAt3', 'lateTwice']);
+  });
+
+  test('counts a prompt never ranked as the furthest back, and one without a cell last', () => {
+    expect(
+      order({
+        none: undefined,
+        ranked: cell(6, ['missing']),
+        neverRanked: cell(null, ['missing']),
+      }),
+    ).toEqual(['neverRanked', 'ranked', 'none']);
   });
 });
 

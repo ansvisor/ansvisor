@@ -2353,6 +2353,11 @@
       "stopped": "{deleted} of {total} prompts deleted",
       "stoppedDescription": "Deleting stopped at an error. {kept, plural, one {The other prompt is} other {The other # prompts are}} back in the list, so you can try again.",
       "notDeleted": "{kept} of {total} {total, plural, one {prompt} other {prompts}} couldn't be deleted."
+    },
+    "lateFilter": {
+      "label": "Late or missing · {count}",
+      "title": "Prompts named late, or not at all, on at least one AI platform. On, the furthest behind come first.",
+      "order": "Furthest behind first: late or missing on the most AI platforms, then the worse average position."
     }
   },
   "competitors": {

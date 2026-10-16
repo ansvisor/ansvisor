@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
+  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
@@ -84,10 +85,11 @@ import {
   Lightbulb,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type {
-  PlatformDot,
-  PlatformDotState,
-  PromptPositionCell,
+import {
+  compareLateness,
+  type PlatformDot,
+  type PlatformDotState,
+  type PromptPositionCell,
 } from '@/lib/prompt-position-summary';
 import { mentionRateLabel } from '@/lib/prompt-improve';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -2588,6 +2590,7 @@ function AllPromptsTab({
 }) {
   const tCommon = useTranslations('common');
   const tDelete = useTranslations('prompts.bulkDelete');
+  const tLate = useTranslations('prompts.lateFilter');
   // Rows deleted from the row menu or the bulk bar, hidden at once and
   // deleted for real after the Undo window (PROMPT-006). There is no soft
   // delete for prompts — a delete drops their history — so the delay is the
@@ -3030,6 +3033,10 @@ function AllPromptsTab({
   const rawSort = searchParams.get('sort');
   const activeSort: AllPromptsSortKey = isAllPromptsSortKey(rawSort) ? rawSort : 'visibility';
   const dir: SortDir = searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
+  // With "Late or missing" on and no column picked, the furthest behind come
+  // first: nearly every tracked prompt is late or missing somewhere, so the
+  // filter alone left the first page as it was (see compareLateness).
+  const latenessOrder = lateOnly && !isAllPromptsSortKey(rawSort);
 
   // Click a header to sort: a new column starts at desc ("show me the extremes");
   // re-clicking the active column toggles desc⇄asc. Persisted to the URL so the
@@ -3039,9 +3046,10 @@ function AllPromptsTab({
   const handleSort = useCallback(
     (key: AllPromptsSortKey) => {
       const params = new URLSearchParams(Array.from(searchParams.entries()));
-      // Position is best when lowest, so it starts at asc (#1 first).
+      // Position is best when lowest, so it starts at asc (#1 first). Under the
+      // "Late or missing" order no column is active, so any header starts afresh.
       const nextDir: SortDir =
-        activeSort === key
+        activeSort === key && !latenessOrder
           ? dir === 'desc'
             ? 'asc'
             : 'desc'
@@ -3053,10 +3061,36 @@ function AllPromptsTab({
       params.set('dir', nextDir);
       window.history.replaceState(null, '', `?${params.toString()}`);
     },
-    [searchParams, activeSort, dir],
+    [searchParams, activeSort, dir, latenessOrder],
   );
 
-  const filtered = useMemo(() => {
+  // Turning "Late or missing" on sets a picked column aside, so the furthest
+  // behind lead; turning it off brings that column back, unless a header was
+  // clicked in between, which then stays.
+  const setAsideSort = useRef<{ sort: string; dir: string | null } | null>(null);
+  // Read and flipped at click time, so a quick second click sees the first.
+  const lateOnlyNow = useRef(lateOnly);
+  const toggleLateOnly = useCallback(() => {
+    const turningOn = !lateOnlyNow.current;
+    lateOnlyNow.current = turningOn;
+    const params = new URLSearchParams(window.location.search);
+    const sort = params.get('sort');
+    if (turningOn && sort) {
+      setAsideSort.current = { sort, dir: params.get('dir') };
+      params.delete('sort');
+      params.delete('dir');
+      window.history.replaceState(null, '', `?${params.toString()}`);
+    } else if (!turningOn && !sort && setAsideSort.current) {
+      params.set('sort', setAsideSort.current.sort);
+      if (setAsideSort.current.dir) params.set('dir', setAsideSort.current.dir);
+      window.history.replaceState(null, '', `?${params.toString()}`);
+    }
+    if (!turningOn) setAsideSort.current = null;
+    setLateOnly(turningOn);
+  }, []);
+
+  // Search and work status first: the "Late or missing" count is out of these.
+  const searched = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = [...prompts];
     if (q) {
@@ -3069,7 +3103,25 @@ function AllPromptsTab({
         workFilter === 'none' ? statusOf(p) === null : statusOf(p) === workFilter,
       );
     }
-    if (lateOnly) list = list.filter((p) => positions[p.id]?.lateOrMissing);
+    return list;
+  }, [prompts, search, workFilter, statusOf]);
+
+  const lateCount = useMemo(
+    () => searched.filter((p) => positions[p.id]?.lateOrMissing).length,
+    [searched, positions],
+  );
+
+  const filtered = useMemo(() => {
+    const list = lateOnly ? searched.filter((p) => positions[p.id]?.lateOrMissing) : [...searched];
+    if (latenessOrder) {
+      // Equally far behind: the more visible prompt first, as the table opens.
+      const score = (p: Prompt) => visibility[p.id]?.score ?? 0;
+      return list.sort(
+        (a, b) =>
+          compareLateness(positions[a.id], positions[b.id]) ||
+          compareNullsLast(score(a), score(b), 'desc'),
+      );
+    }
 
     const valueOf = (p: Prompt): number | null => {
       const vis = visibility[p.id];
@@ -3093,18 +3145,7 @@ function AllPromptsTab({
     };
 
     return list.sort((a, b) => compareNullsLast(valueOf(a), valueOf(b), dir));
-  }, [
-    prompts,
-    search,
-    workFilter,
-    lateOnly,
-    statusOf,
-    activeSort,
-    dir,
-    visibility,
-    positions,
-    volumeByPromptId,
-  ]);
+  }, [searched, lateOnly, latenessOrder, activeSort, dir, visibility, positions, volumeByPromptId]);
 
   // Pagination for the main prompt list.  resetKey encodes every variable that
   // changes the visible row set (search text, sort column, sort direction, work
@@ -3223,10 +3264,10 @@ function AllPromptsTab({
               variant={lateOnly ? 'default' : 'outline'}
               className="h-8 text-xs"
               aria-pressed={lateOnly}
-              title="Prompts named late, or not at all, on at least one AI platform"
-              onClick={() => setLateOnly((v) => !v)}
+              title={tLate('title')}
+              onClick={toggleLateOnly}
             >
-              Late or missing
+              {tLate('label', { count: lateCount })}
             </Button>
             <div className="relative w-60">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
@@ -3264,6 +3305,7 @@ function AllPromptsTab({
           />
         )}
         <Table stickyHeader stickyFirstColumn>
+          {latenessOrder && <TableCaption className="sr-only">{tLate('order')}</TableCaption>}
           <TableHeader>
             <TableRow>
               <TableHead className="pl-6">
@@ -3292,7 +3334,7 @@ function AllPromptsTab({
                 className="text-right"
                 tooltip={`AI Visibility Score (0-100) for this prompt over the ${rangeLabel}: how often answers mention the brand (60%), cite its site (25%) and how early it's named (15%). Hover a value for the components.`}
                 sortKey="visibility"
-                activeSort={activeSort}
+                activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
                 onSort={handleSort}
               >
@@ -3302,7 +3344,7 @@ function AllPromptsTab({
                 className="text-right"
                 tooltip={`Total times the brand was mentioned across AI answers for this prompt over the ${rangeLabel}.`}
                 sortKey="mentions"
-                activeSort={activeSort}
+                activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
                 onSort={handleSort}
               >
@@ -3312,7 +3354,7 @@ function AllPromptsTab({
                 className="text-right"
                 tooltip={`Total times your pages were cited in AI answers for this prompt over the ${rangeLabel}.`}
                 sortKey="citations"
-                activeSort={activeSort}
+                activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
                 onSort={handleSort}
               >
@@ -3322,7 +3364,7 @@ function AllPromptsTab({
                 className="pl-8"
                 tooltip={`Average position the brand is named at in AI answers over the ${rangeLabel}, with the change against the previous period of the same length. Hover a value for each platform; the chart button opens the details.`}
                 sortKey="position"
-                activeSort={activeSort}
+                activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
                 onSort={handleSort}
               >
@@ -3332,7 +3374,7 @@ function AllPromptsTab({
                 className="text-right"
                 tooltip="Estimated monthly AI prompt volume, from keyword analysis. Empty until analysed."
                 sortKey="volume"
-                activeSort={activeSort}
+                activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
                 onSort={handleSort}
               >
@@ -3348,7 +3390,7 @@ function AllPromptsTab({
                 className="text-right"
                 tooltip={`Number of tracking runs for this prompt over the ${rangeLabel} (one per platform per day).`}
                 sortKey="runs"
-                activeSort={activeSort}
+                activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
                 onSort={handleSort}
               >
@@ -3358,7 +3400,7 @@ function AllPromptsTab({
                 className="text-right"
                 tooltip="Most recent tracking run for this prompt."
                 sortKey="lastRun"
-                activeSort={activeSort}
+                activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
                 onSort={handleSort}
               >

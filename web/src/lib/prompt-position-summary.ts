@@ -110,6 +110,28 @@ export function buildPositionCell(
   };
 }
 
+/**
+ * Orders prompts furthest behind first, for the "Late or missing" filter.
+ * Nearly every tracked prompt is late or missing somewhere, so the filter
+ * alone barely changes the table; this puts first the prompts late or missing
+ * on the most platforms, then those missing on more of them, then the worse
+ * average position, a prompt never ranked counting as the furthest back.
+ * Negative when `a` is further behind.
+ */
+export function compareLateness(
+  a: PromptPositionCell | undefined,
+  b: PromptPositionCell | undefined,
+): number {
+  const count = (cell: PromptPositionCell | undefined, states: PlatformDotState[]) =>
+    cell?.dots.filter((d) => states.includes(d.state)).length ?? 0;
+  const behind = (cell: PromptPositionCell | undefined) => cell?.avg ?? Number.POSITIVE_INFINITY;
+  return (
+    count(b, ['late', 'missing']) - count(a, ['late', 'missing']) ||
+    count(b, ['missing']) - count(a, ['missing']) ||
+    (behind(b) === behind(a) ? 0 : behind(b) > behind(a) ? 1 : -1)
+  );
+}
+
 /** The previous period of the same length, ending where this one starts. */
 export function previousWindow(window: { from: string; to?: string }, now = Date.now()) {
   const from = Date.parse(window.from);
