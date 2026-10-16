@@ -76,3 +76,40 @@ describe('applyPlanOverrides — Improve budget from the contract value', () => 
     expect(budget({ contractMonthlyUsd: 'n/a' })).toBe(4.99);
   });
 });
+
+describe('applyPlanOverrides — relevance allowance from the contract value', () => {
+  const enterprise = {
+    id: 'enterprise',
+    name: 'Enterprise',
+    limits: { maxPrompts: -1, improveMonthlyBudgetUsd: 4.99, relevanceMonthlyBudgetUsd: 0.499 },
+  };
+  const limits = (plan_overrides) =>
+    applyPlanOverrides(enterprise, { plan: 'enterprise', plan_overrides }).limits;
+
+  it('is 0.1% of the monthly contract, rounded down', () => {
+    expect(limits({ contractMonthlyUsd: 1000 }).relevanceMonthlyBudgetUsd).toBe(1);
+    expect(limits({ contractMonthlyUsd: 1234.5678 }).relevanceMonthlyBudgetUsd).toBe(1.234567);
+  });
+
+  it('never drops below the plan default, and an explicit value wins', () => {
+    expect(limits({ contractMonthlyUsd: 300 }).relevanceMonthlyBudgetUsd).toBe(0.499);
+    expect(
+      limits({ contractMonthlyUsd: 2000, relevanceMonthlyBudgetUsd: 0.5 })
+        .relevanceMonthlyBudgetUsd,
+    ).toBe(0.5);
+  });
+
+  it('leaves the Improve budget at its own 1%', () => {
+    expect(limits({ contractMonthlyUsd: 1000 }).improveMonthlyBudgetUsd).toBe(10);
+  });
+});
+
+describe('relevance allowance per plan', () => {
+  it('is 0.1% of each plan price, unlimited on self-hosted', async () => {
+    const { PLANS } = await import('../config/plans.js');
+    expect(PLANS.starter.limits.relevanceMonthlyBudgetUsd).toBe(0.049);
+    expect(PLANS.growth.limits.relevanceMonthlyBudgetUsd).toBe(0.249);
+    expect(PLANS.enterprise.limits.relevanceMonthlyBudgetUsd).toBe(0.499);
+    expect(PLANS.self_hosted.limits.relevanceMonthlyBudgetUsd).toBe(-1);
+  });
+});
