@@ -109,7 +109,7 @@ export const dashboardNav: NavGroup[] = [
         requiresBrandPref: 'shoppingModeEnabled',
       },
       {
-        title: 'AI Traffic Analytics',
+        title: 'AI Referral Traffic',
         href: '/dashboard/traffic',
         icon: LineChart,
         requiredFeature: 'advanced_analytics',

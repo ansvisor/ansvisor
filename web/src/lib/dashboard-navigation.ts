@@ -12,7 +12,7 @@ export const dashboardNavLabelKeys: Record<string, NavLabelKey> = {
   Chat: { namespace: 'nav', key: 'chat' },
   'Action Center': { namespace: 'nav', key: 'actionCenter' },
   'Answer Engine Insights': { namespace: 'nav', key: 'insights' },
-  'AI Traffic Analytics': { namespace: 'nav', key: 'traffic' },
+  'AI Referral Traffic': { namespace: 'nav', key: 'traffic' },
   Prompts: { namespace: 'nav', key: 'prompts' },
   'Tracked Prompts': { namespace: 'nav', key: 'trackedPrompts' },
   'Prompt Suggestions': { namespace: 'nav', key: 'promptSuggestions' },
