@@ -145,3 +145,28 @@ export function parseMentionsList(
     })),
   };
 }
+
+/** A correction of an answer's sentiment ("Sentiment is wrong", 00160). */
+export interface SentimentOverride {
+  sentiment: MentionSentiment;
+  previousSentiment: MentionSentiment;
+  note: string | null;
+  /** As written when the correction was made. */
+  userName: string | null;
+  createdAt: string;
+}
+
+/** A sentiment_overrides row (or the function's `override`) as the page's shape. */
+export function parseSentimentOverride(raw: unknown): SentimentOverride | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Raw;
+  const tone = (v: unknown): MentionSentiment =>
+    SENTIMENTS.includes(String(v)) ? (v as MentionSentiment) : 'neutral';
+  return {
+    sentiment: tone(r.sentiment),
+    previousSentiment: tone(r.previous_sentiment),
+    note: str(r.note),
+    userName: str(r.user_name),
+    createdAt: String(r.created_at ?? ''),
+  };
+}

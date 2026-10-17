@@ -3179,7 +3179,24 @@
       "copyFailed": "Couldn't copy the response. Select the text and copy it instead.",
       "close": "Close",
       "legendBrand": "Your brand",
-      "legendCompetitor": "Competitors"
+      "legendCompetitor": "Competitors",
+      "correction": {
+        "open": "Sentiment is wrong?",
+        "title": "Correct the sentiment toward your brand",
+        "hint": "Every figure counts the new sentiment from now on; the original stays in the history.",
+        "options": "New sentiment",
+        "note": "Note (optional)",
+        "notePlaceholder": "Why is it wrong? It helps improve the classification.",
+        "save": "Save correction",
+        "cancel": "Cancel",
+        "saved": "Sentiment corrected",
+        "savedDescription": "This answer now counts as {sentiment} everywhere.",
+        "unchanged": "The answer already has this sentiment.",
+        "failed": "Couldn't correct the sentiment",
+        "forbidden": "Only admins and managers can correct a sentiment.",
+        "correctedBy": "Corrected by {name} on {date} · was {previous}",
+        "correctedOn": "Corrected on {date} · was {previous}"
+      }
     },
     "actions": {
       "sendToActionCenter": "Send to Action Center",
