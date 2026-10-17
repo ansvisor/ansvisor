@@ -51,8 +51,26 @@ describe('actionTexts', () => {
     expect(() => actionGoal(kind, t)).not.toThrow();
   });
 
-  it('holds copy for all sixty-two definitions and the four person-sent kinds', () => {
-    expect(ACTION_KINDS).toHaveLength(66);
+  it('holds copy for all sixty-two definitions and the five person-sent kinds', () => {
+    expect(ACTION_KINDS).toHaveLength(67);
+  });
+
+  it('names answers sent from Mentions after their prompt, or how many (MS-08)', () => {
+    const one = { mentionCount: 3, negativeCount: 2, promptCount: 1, promptText: 'Best beans?' };
+    const texts = actionTexts(action({ kind: 'mention_review', payload: one }), t);
+    expect(texts.title).toBe('Improve how AI describes you for "Best beans?"');
+    expect(texts.description).toBe(
+      'Sent from Mentions: 3 answers naming your brand, 2 of them negative.',
+    );
+    const many = { mentionCount: 2, negativeCount: 0, promptCount: 4 };
+    const manyTexts = actionTexts(action({ kind: 'mention_review', payload: many }), t);
+    expect(manyTexts.title).toBe('Improve how AI describes you across 4 prompts');
+    expect(manyTexts.description).toBe('Sent from Mentions: 2 answers naming your brand.');
+    const tags = actionContextTags(
+      action({ kind: 'mention_review', payload: many, signalCount: 0 }),
+      (key: string) => key,
+    );
+    expect(tags).not.toContain('tags.signals');
   });
 
   it('names a topic opportunity after its topic and demand (VIS-011)', () => {

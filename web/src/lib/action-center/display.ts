@@ -111,6 +111,24 @@ export function actionTexts(
       description: t(`${action.kind}.description`),
     };
   }
+  // Answers sent from Mentions (MS-08) name their prompt, or how many prompts.
+  if (
+    action.kind === 'mention_review' &&
+    typeof p.mentionCount === 'number' &&
+    typeof p.promptCount === 'number'
+  ) {
+    const negative = typeof p.negativeCount === 'number' ? p.negativeCount : 0;
+    return {
+      title:
+        p.promptCount === 1 && typeof p.promptText === 'string' && p.promptText
+          ? t(`${action.kind}.title`, { prompt: p.promptText })
+          : t(`${action.kind}.titleMany`, { count: p.promptCount }),
+      description:
+        negative > 0
+          ? t(`${action.kind}.descriptionNegative`, { count: p.mentionCount, negative })
+          : t(`${action.kind}.descriptionCounts`, { count: p.mentionCount }),
+    };
+  }
   const targets = targetLabel(p, t);
   return {
     title: targets ? t(`${action.kind}.title`, { targets }) : t(`${action.kind}.titleGeneric`),
@@ -185,6 +203,7 @@ const PERSON_SENT_KINDS: string[] = [
   'prompt_improve',
   'topic_competitor_gap',
   'topic_opportunity',
+  'mention_review',
 ];
 
 /** Compact evidence chips under the title: signal count plus the kind's own

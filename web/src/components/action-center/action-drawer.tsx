@@ -68,6 +68,7 @@ import { useActionStory } from './use-action-story';
 import { ImproveContext } from './improve-context';
 import { TopicGapContext } from './topic-gap-context';
 import { TopicOpportunityContext } from './topic-opportunity-context';
+import { MentionReviewContext } from './mention-review-context';
 import { TaskDetailForm, TaskDetailView, TaskTypeBadge, type TaskSendOptions } from './task-detail';
 import { hasActiveWebhook, sendActionTask } from '@/lib/actions/action-task-send';
 import { RegenerateTasks, taskWriterEnabled } from './regenerate-tasks';
@@ -477,6 +478,11 @@ export function ActionDrawer({
                   <Separator />
                   <TopicOpportunityContext payload={action.payload ?? {}} />
                 </>
+              ) : action.kind === 'mention_review' ? (
+                <>
+                  <Separator />
+                  <MentionReviewContext payload={action.payload ?? {}} />
+                </>
               ) : opportunityId ? (
                 <>
                   <Separator />
@@ -562,9 +568,11 @@ export function ActionDrawer({
                       ? t('drawer.noSignalsTopicGap')
                       : action.kind === 'topic_opportunity'
                         ? t('drawer.noSignalsTopicOpportunity')
-                        : opportunityId
-                          ? t('drawer.noSignalsOpportunity')
-                          : t('drawer.noSignals')}
+                        : action.kind === 'mention_review'
+                          ? t('drawer.noSignalsMentionReview')
+                          : opportunityId
+                            ? t('drawer.noSignalsOpportunity')
+                            : t('drawer.noSignals')}
                 </p>
               )}
               {detail.signals.map((signal) => {

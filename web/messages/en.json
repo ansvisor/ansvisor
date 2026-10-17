@@ -1290,6 +1290,7 @@
           "gap": "{gap} pts behind"
         },
         "noSignalsTopicOpportunity": "This action was sent from Insights' Opportunities, so it has no detection signals. Its evidence is the topic and suggested prompts on the Overview tab.",
+        "noSignalsMentionReview": "This action was sent from Mentions, so it has no detection signals. Its evidence is the answers quoted on the Overview tab.",
         "topicOpportunity": {
           "source": "Source",
           "sourceValue": "Insights › Opportunities",
@@ -1301,6 +1302,20 @@
           "demand": "Suggested prompts when sent",
           "demandValue": "{count, plural, one {# prompt} other {# prompts}} · ~{volume}/mo",
           "volume": "~{volume}/mo"
+        },
+        "mentionReview": {
+          "source": "Source",
+          "sourceValue": "Mentions & Sentiment › Mentions",
+          "openMentions": "Open Mentions",
+          "answers": "Answers when sent",
+          "answersValue": "{count, plural, one {# answer naming your brand} other {# answers naming your brand}}",
+          "answersNegative": "{count, plural, one {# answer naming your brand} other {# answers naming your brand}} · {negative} negative",
+          "quotes": "What they said",
+          "sentiment": {
+            "positive": "Positive",
+            "neutral": "Neutral",
+            "negative": "Negative"
+          }
         }
       }
     },
@@ -1714,6 +1729,15 @@
         "titleGeneric": "Capture the AI demand in a topic",
         "description": "Sent from Insights: prompts suggested for one of your topics, with the monthly AI demand behind them.",
         "goal": "Get the brand into AI answers for the topic's suggested prompts."
+      },
+      "mention_review": {
+        "title": "Improve how AI describes you for \"{prompt}\"",
+        "titleMany": "Improve how AI describes you across {count, plural, one {# prompt} other {# prompts}}",
+        "titleGeneric": "Improve how AI describes you",
+        "description": "Sent from Mentions: answers naming your brand, to change how AI describes it.",
+        "descriptionCounts": "Sent from Mentions: {count, plural, one {# answer} other {# answers}} naming your brand.",
+        "descriptionNegative": "Sent from Mentions: {count, plural, one {# answer} other {# answers}} naming your brand, {negative} of them negative.",
+        "goal": "Get AI to describe the brand accurately and favourably in these answers."
       }
     },
     "actionTasks": {
@@ -3009,9 +3033,268 @@
       "topic": "Topic",
       "allTopics": "All topics",
       "search": "Search",
-      "searchPlaceholder": "Search prompts, brands, phrases…"
+      "searchPlaceholder": "Search prompts…"
     },
-    "comingSoon": "This view is on its way: its figures and charts arrive with the next updates."
+    "overview": {
+      "sectionLabel": "Mentions overview",
+      "loadError": "Couldn't load the overview. Try again in a moment.",
+      "unavailable": "Mention figures aren't available yet. They appear once the mentions data has been prepared.",
+      "pickDates": "Choose a start or end date to see the overview.",
+      "empty": "No tracked responses in this period. Try a longer range or clear the filters.",
+      "headline": {
+        "label": "Summary",
+        "net": "Net sentiment is <b>{net}</b>.",
+        "netChange": "Net sentiment is <b>{net}</b> (<tone>{change}</tone> vs the previous {period}).",
+        "netLowSample": "Net sentiment is <b>{net}</b> (low sample: {count, plural, one {# mention} other {# mentions}}).",
+        "noMentions": "AI didn't name {brand} in the tracked responses of this period.",
+        "moverDown": "Most of the drop is on <b>{platform} ({change})</b>.",
+        "moverUp": "Most of the rise is on <b>{platform} ({change})</b>.",
+        "companionsOne": "AI usually names {brand} next to <b>{first}</b>.",
+        "companionsTwo": "AI usually names {brand} next to <b>{first}</b> and <b>{second}</b>.",
+        "period": "{days, plural, one {day} other {# days}}",
+        "period24h": "24 hours",
+        "basis": "Built from aggregates with a fixed template, no LLM call · {range} · {answers, plural, one {# tracked response} other {# tracked responses}} · {mentions, plural, one {# mention} other {# mentions}}"
+      },
+      "kpi": {
+        "totalMentions": "Total mentions",
+        "totalMentionsTip": "Responses that name {brand} at least once. A response naming you twice counts once.",
+        "totalMentionsSub": "responses naming {brand}",
+        "mentionRate": "Mention rate",
+        "mentionRateTip": "The share of tracked responses that name {brand}.",
+        "mentionRateSub": "of {count} tracked responses",
+        "promptsWithMentions": "Prompts with mentions",
+        "promptsWithMentionsTip": "Prompts with at least one response naming {brand} in this period.",
+        "promptsWithMentionsSub": "of {count} tracked prompts",
+        "netSentiment": "Net sentiment",
+        "netSentimentTip": "Positive minus negative share of the responses naming {brand}, from −100 to +100. Neutral mentions count in the total.",
+        "sampleTip": "{count, plural, one {Based on # tracked response} other {Based on # tracked responses}} in this period.",
+        "sampleTipNamed": "{count, plural, one {Based on # response naming {brand}} other {Based on # responses naming {brand}}} in this period.",
+        "splitLabel": "{positive} positive, {neutral} neutral, {negative} negative",
+        "lowSample": "{count, plural, one {Low sample · # response} other {Low sample · # responses}}"
+      },
+      "sentiment": {
+        "positive": "Positive",
+        "neutral": "Neutral",
+        "negative": "Negative"
+      },
+      "trend": {
+        "title": "Mentions & sentiment over time",
+        "metricLabel": "Trend metric",
+        "mentions": "Mentions",
+        "rate": "Mention rate",
+        "net": "Net sentiment",
+        "tooltipResponses": "{count, plural, one {# response} other {# responses}}",
+        "tooltipMentions": "{count, plural, one {# mention} other {# mentions}}",
+        "lowSample": "Low sample",
+        "tooShort": "The trend needs a range of at least two days."
+      },
+      "platforms": {
+        "title": "By AI platform",
+        "tableLabel": "Mentions and sentiment by AI platform",
+        "platform": "Platform",
+        "mentions": "Mentions",
+        "rate": "Rate",
+        "sentiment": "Sentiment",
+        "net": "Net",
+        "lowSample": "Low sample",
+        "negativeNet": "negative net sentiment",
+        "disagree": "Platforms disagree: {high} is {highNet} but {low} is {lowNet}."
+      },
+      "competitors": {
+        "title": "Competitor framing",
+        "description": "How often AI names each brand, and how often in the same responses as you.",
+        "tableLabel": "Mentions of your brand and competitors",
+        "brand": "Brand",
+        "mentions": "Mentions",
+        "rate": "Rate",
+        "sentiment": "Sentiment",
+        "net": "Net",
+        "sameAnswer": "Same answer as you",
+        "you": "You",
+        "ownSentimentOnly": "Sentiment is measured for your brand only.",
+        "none": "No competitors yet. Add them on the Competitors page to compare."
+      }
+    },
+    "table": {
+      "sectionLabel": "Mentions table",
+      "tableLabel": "Answers that mention your brand",
+      "sentiment": "Sentiment",
+      "allSentiments": "All sentiments",
+      "coMentioned": "Co-mentioned",
+      "anyCompetitor": "Any or none",
+      "noCompetitor": "No competitor",
+      "groupBy": "Group by",
+      "noGrouping": "None",
+      "groupPrompt": "Prompt",
+      "groupPlatform": "Platform",
+      "sort": "Sort",
+      "sortNewest": "Newest",
+      "sortOldest": "Oldest",
+      "sortCoMentions": "Most co-mentions",
+      "sortNegative": "Most negative",
+      "summary": "{mentions, plural, one {# mention} other {# mentions}} · {prompts, plural, one {# prompt} other {# prompts}}",
+      "columns": {
+        "prompt": "Prompt",
+        "platform": "Platform",
+        "country": "Country",
+        "context": "Mention context",
+        "sentiment": "Sentiment",
+        "position": "Position",
+        "coMentioned": "Co-mentioned",
+        "topic": "Topic",
+        "date": "Date"
+      },
+      "positionOf": "#{position} of {count}",
+      "positionOnly": "#{position}",
+      "noSentiment": "Not rated",
+      "groupRow": "{label} · {count, plural, one {# mention} other {# mentions}}",
+      "openRow": "Open the answer to “{prompt}” on {platform}",
+      "empty": "No mentions match these filters. Try another sentiment or co-mention filter, or a longer range.",
+      "loadError": "Couldn't load the mentions. Try again in a moment.",
+      "unavailable": "The mentions table isn't available yet. It appears once the mentions data has been prepared.",
+      "pickDates": "Choose a start or end date to see the mentions."
+    },
+    "drawer": {
+      "label": "Answer detail",
+      "position": "Position #{position} of {count}",
+      "positionOnly": "Position #{position}",
+      "topic": "Topic: {topic}",
+      "viewPrompt": "View prompt",
+      "mention": "Mention",
+      "coMentioned": "Also named in this answer",
+      "noCoMentions": "No competitor is named in this answer.",
+      "competitorTone": "Competitors' tone isn't measured yet; the sentiment is toward your brand.",
+      "response": "Full AI response",
+      "stored": "stored, not regenerated",
+      "showResponse": "Show the response",
+      "hideResponse": "Hide the response",
+      "loading": "Loading the answer…",
+      "loadError": "Couldn't load this answer. Try again in a moment.",
+      "missing": "This answer is no longer stored.",
+      "citations": "Citations in this answer",
+      "noCitations": "This answer cites no sources.",
+      "copy": "Copy response",
+      "copied": "Response copied",
+      "copyFailed": "Couldn't copy the response. Select the text and copy it instead.",
+      "close": "Close",
+      "legendBrand": "Your brand",
+      "legendCompetitor": "Competitors",
+      "correction": {
+        "open": "Sentiment is wrong?",
+        "title": "Correct the sentiment toward your brand",
+        "hint": "Every figure counts the new sentiment from now on; the original stays in the history.",
+        "options": "New sentiment",
+        "note": "Note (optional)",
+        "notePlaceholder": "Why is it wrong? It helps improve the classification.",
+        "save": "Save correction",
+        "cancel": "Cancel",
+        "saved": "Sentiment corrected",
+        "savedDescription": "This answer now counts as {sentiment} everywhere.",
+        "unchanged": "The answer already has this sentiment.",
+        "failed": "Couldn't correct the sentiment",
+        "forbidden": "Only admins and managers can correct a sentiment.",
+        "correctedBy": "Corrected by {name} on {date} · was {previous}",
+        "correctedOn": "Corrected on {date} · was {previous}"
+      }
+    },
+    "actions": {
+      "sendToActionCenter": "Send to Action Center",
+      "sending": "Sending to the Action Center…",
+      "sent": "Sent to the Action Center",
+      "sentDescription": "AC-{number} · {count, plural, one {# answer} other {# answers}}",
+      "alreadySent": "Already in the Action Center",
+      "alreadySentDescription": "AC-{number} is open with these answers.",
+      "open": "Open",
+      "sendFailed": "Couldn't send to the Action Center",
+      "suggestContent": "Suggest content",
+      "suggesting": "Writing a content suggestion…",
+      "suggested": "Content suggestion created",
+      "suggestionExists": "This prompt already has a content suggestion",
+      "openExisting": "Open existing",
+      "suggestLimited": "Monthly content limit reached.",
+      "suggestNothing": "Couldn't write a suggestion for this prompt yet",
+      "suggestNothingDescription": "It needs tracked answers and a prompt group first; both come with its next tracking run.",
+      "suggestFailed": "Couldn't write a content suggestion",
+      "suggestTimeout": "Still writing the content suggestion",
+      "suggestTimeoutDescription": "It will appear in Content when it is done.",
+      "selected": "{count, plural, one {# answer selected} other {# answers selected}}",
+      "clearSelection": "Clear",
+      "selectAll": "Select every answer on this page",
+      "selectRow": "Select the answer to “{prompt}” on {platform}"
+    },
+    "perception": {
+      "sectionLabel": "Perception",
+      "loadError": "Couldn't load the perception figures. Try again in a moment.",
+      "unavailable": "Perception isn't available yet. It appears once the mentions data has been prepared.",
+      "pickDates": "Choose a start or end date to see the perception figures.",
+      "noMentions": "AI didn't name {brand} in the tracked responses of this period.",
+      "method": "Terms come from the sentences that name each brand, by rule (no LLM). A sentence naming two brands lends its words to both.",
+      "terms": {
+        "title": "What AI associates with {brand}",
+        "note": "Words and phrases next to your brand, by responses",
+        "tableLabel": "Terms AI uses next to your brand",
+        "responses": "{count, plural, one {# response} other {# responses}}",
+        "share": "{share} of mentions",
+        "none": "No terms yet. They appear once this period's responses have been prepared."
+      },
+      "shape": {
+        "title": "Brand shape: you vs top competitors",
+        "chartLabel": "Share of each brand's mentions on the attributes that tell them apart",
+        "notEnough": "The shape needs at least three attributes and one competitor named in this period."
+      },
+      "gap": {
+        "title": "Biggest gap",
+        "unplaced": "“{term}”: {competitor} in {competitorShare} of its mentions; AI doesn't use it for {brand}.",
+        "ranked": "“{term}”: {competitor} in {competitorShare} of its mentions; {brand} in {brandShare} (#{rank})."
+      },
+      "heatmap": {
+        "title": "Brand × attribute",
+        "note": "Share of each brand's mentions",
+        "tableLabel": "Each attribute's share of each brand's mentions",
+        "attribute": "Attribute",
+        "you": "You",
+        "none": "No attributes yet for this period."
+      },
+      "coMentions": {
+        "title": "Frequently mentioned with",
+        "tableLabel": "Competitors named in the same responses as you",
+        "note": "The trend shows whether the AI's consideration set around you is changing.",
+        "responses": "{count, plural, one {# response} other {# responses}}",
+        "none": "No competitor is named in the same responses as you in this period."
+      }
+    },
+    "export": {
+      "copySummary": "Copy summary",
+      "copying": "Copying…",
+      "copied": "Summary copied",
+      "copyFailed": "Couldn't copy the summary. Try again in a moment.",
+      "copyBlocked": "Your browser didn't allow copying here. Allow clipboard access for this site and try again.",
+      "exportFailed": "Couldn't export the mentions. Try again in a moment.",
+      "nothing": "No mentions to export for these filters.",
+      "capped": "The file holds {shown} of {total} mentions. Narrow the filters to export the rest.",
+      "pickDates": "Choose a start or end date first.",
+      "reports": "Reports",
+      "exportSelected": "Export",
+      "facts": {
+        "period": "Period",
+        "periodDays": "{from} – {to} ({days, plural, one {# day} other {# days}}, UTC)",
+        "periodMoments": "{from} – {to} UTC",
+        "responses": "Tracked responses (n)",
+        "mentions": "Mentions (n)",
+        "prompts": "Prompts with mentions (n)",
+        "inFile": "Mentions in this file (n)",
+        "note": "Note",
+        "capped": "Only the first {shown} of {total} mentions, in the table's order. Narrow the filters to export the rest.",
+        "exported": "Exported (UTC)"
+      },
+      "summary": {
+        "title": "Mentions & Sentiment · {brand}",
+        "search": "Search: “{q}”",
+        "kpi": "{label}: {value}",
+        "kpiChange": "{label}: {value} ({change})",
+        "net": "{net} · {split} (n={count})"
+      }
+    }
   },
   "competitors": {
     "title": "Competitors",

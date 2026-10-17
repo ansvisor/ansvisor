@@ -163,12 +163,14 @@ interface MetricCardProps {
   sub?: React.ReactNode;
   spark?: (number | null)[] | null;
   quota?: { used: number; limit: number; label: string } | null;
+  /** In place of the sparkline, like Mentions' sentiment split. */
+  footer?: React.ReactNode;
   onClick?: () => void;
   clickLabel?: string;
 }
 
 /** One KPI card, as in the v2 mockup: label, value with its change, a line of context, a sparkline. */
-function MetricCard({
+export function MetricCard({
   label,
   tooltip,
   icon: Icon,
@@ -177,6 +179,7 @@ function MetricCard({
   sub,
   spark,
   quota,
+  footer,
   onClick,
   clickLabel,
 }: MetricCardProps) {
@@ -233,7 +236,9 @@ function MetricCard({
         )}
       </div>
       <div className="truncate text-xs text-muted-foreground">{sub}</div>
-      {quota ? (
+      {footer ? (
+        footer
+      ) : quota ? (
         <QuotaBar used={quota.used} limit={quota.limit} label={quota.label} />
       ) : (
         <Sparkline values={spark ?? []} bad={delta?.tone === 'bad'} />

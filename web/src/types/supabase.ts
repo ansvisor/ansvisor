@@ -2374,6 +2374,112 @@ export type Database = {
           },
         ]
       }
+      mentions_answer_terms: {
+        Row: {
+          brand_id: string
+          created_at: string
+          entity: string
+          platform: string
+          prompt_id: string
+          region: string | null
+          result_id: string
+          terms: string[]
+        }
+        Insert: {
+          brand_id: string
+          created_at: string
+          entity: string
+          platform: string
+          prompt_id: string
+          region?: string | null
+          result_id: string
+          terms?: string[]
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          entity?: string
+          platform?: string
+          prompt_id?: string
+          region?: string | null
+          result_id?: string
+          terms?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentions_answer_terms_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mentions_answer_terms_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "prompt_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sentiment_overrides: {
+        Row: {
+          brand_id: string
+          created_at: string
+          id: string
+          note: string | null
+          previous_sentiment: string
+          result_id: string
+          sentiment: string
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          previous_sentiment: string
+          result_id: string
+          sentiment: string
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          previous_sentiment?: string
+          result_id?: string
+          sentiment?: string
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sentiment_overrides_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sentiment_overrides_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "prompt_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sentiment_overrides_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       signals: {
         Row: {
           action_id: string | null
@@ -3257,6 +3363,57 @@ export type Database = {
           p_from?: string
           p_to?: string
           p_topic_id?: string
+        }
+        Returns: Json
+      }
+      mentions_overview: {
+        Args: {
+          p_brand_id: string
+          p_date_from: string
+          p_date_to?: string
+          p_platform?: string
+          p_region?: string
+          p_search?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      mentions_list: {
+        Args: {
+          p_brand_id: string
+          p_competitor_id?: string
+          p_date_from: string
+          p_date_to?: string
+          p_group?: string
+          p_limit?: number
+          p_offset?: number
+          p_platform?: string
+          p_region?: string
+          p_search?: string
+          p_sentiment?: string
+          p_sort?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      mentions_perception: {
+        Args: {
+          p_brand_id: string
+          p_date_from: string
+          p_date_to?: string
+          p_platform?: string
+          p_region?: string
+          p_search?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      override_mention_sentiment: {
+        Args: {
+          p_note?: string
+          p_result_id: string
+          p_sentiment: string
+          p_user_id?: string
         }
         Returns: Json
       }

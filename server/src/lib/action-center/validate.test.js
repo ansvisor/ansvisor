@@ -195,6 +195,24 @@ describe('validateAction', () => {
     expect(patch.validation.beforeWindow.to < patch.validation.afterWindow.from).toBe(true);
   });
 
+  it("measures answers sent from Mentions on their prompts' basket", async () => {
+    const writes = mockWrites();
+    rpc.mockResolvedValue({ data: {}, error: null });
+
+    await validateAction(
+      action({
+        kind: 'mention_review',
+        kpi_keys: ['mentions'],
+        payload: { promptIds: ['p1', 'p2'] },
+      }),
+      { now: NOW },
+    );
+
+    expect(rpc).toHaveBeenCalledWith('opportunity_basket_metrics', expect.anything());
+    const patch = writes.updated.find((w) => w.table === 'actions').patch;
+    expect(patch.validation.scope).toEqual({ kind: 'basket', prompts: 2, pages: 0 });
+  });
+
   it('records the verdict on the action trail', async () => {
     const writes = mockWrites();
     rpc.mockResolvedValue({ data: { total_citations: 10 }, error: null });

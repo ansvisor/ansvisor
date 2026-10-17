@@ -37,7 +37,7 @@ export type ActionOutcome =
   | 'not_measurable';
 
 /** A kind this build has copy for — the V1 library's sixty-two definitions, plus
- *  actions sent from a content opportunity. */
+ *  the kinds a person sends from another page. */
 export type ActionKind =
   | 'capture_ai_traffic'
   | 'convert_mentions'
@@ -108,7 +108,9 @@ export type ActionKind =
   // Sent by a person from Insights' Topics vs competitors (VIS-010).
   | 'topic_competitor_gap'
   // Sent by a person from an Insights Opportunities topic (VIS-011).
-  | 'topic_opportunity';
+  | 'topic_opportunity'
+  // Sent by a person from answers on the Mentions tab (MS-08).
+  | 'mention_review';
 
 export type TaskStatus =
   | 'todo'
@@ -227,6 +229,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'prompt_improve',
   'topic_competitor_gap',
   'topic_opportunity',
+  'mention_review',
 ];
 
 /**

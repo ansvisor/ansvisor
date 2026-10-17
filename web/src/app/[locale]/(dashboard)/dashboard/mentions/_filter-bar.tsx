@@ -21,8 +21,8 @@ const ALL = '__all__';
 
 /**
  * The filter bar every Mentions & Sentiment tab shares (MS-05): the date
- * range, AI platform, country, topic and a search over prompts, brands and
- * phrases. The brand is the app's active brand, chosen in the sidebar.
+ * range, AI platform, country, topic and a search over the prompts' text.
+ * The brand is the app's active brand, chosen in the sidebar.
  */
 export function MentionsFilterBar({
   filters,
@@ -110,7 +110,7 @@ export function MentionsFilterBar({
   );
 }
 
-function FilterSelect({
+export function FilterSelect({
   label,
   value,
   items,
