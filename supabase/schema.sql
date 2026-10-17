@@ -20417,9 +20417,10 @@ grant execute on function public.override_mention_sentiment(uuid, text, text)
 --     and entity, not per term per day: the page's filters (topic, search,
 --     platform, country) and the window before stay available, and the table
 --     grows with the answers, not with the vocabulary.
---   * refresh_mentions_daily (00157) fills it for the same UTC day range as
---     the mention rollups, so it rides on the same callers: a completed run,
---     the nightly sweep and backfill-mentions-daily.js.
+--   * refresh_mention_terms fills it for a UTC day range. The server calls it
+--     beside refresh_mentions_daily (00157), for the same days and callers: a
+--     completed run, the nightly sweep and backfill-mentions-daily.js. A
+--     sentiment correction (00160) refreshes only the rollups.
 --   * mentions_perception(...) reads a window and the one before it: the
 --     brand's top terms with their trend, the attributes that tell the brand
 --     and its four most mentioned competitors apart, with each one's share
@@ -20564,9 +20565,17 @@ create policy "Users can read own org mention terms"
     join public.profiles p on p.organization_id = b.organization_id
     where p.id = auth.uid()));
 
--- ─── Refresh (00157, plus the answer terms) ─────────────────────────────────
+-- ─── Refresh the answer terms ───────────────────────────────────────────────
+-- Recomputes the terms of a brand's answers for an inclusive UTC day range:
+-- delete + insert, as refresh_mentions_daily (00157) does for the rollups.
+-- Its own function rather than part of that refresh: reading every answer's
+-- text costs a few milliseconds per answer and entity named, seconds per day
+-- on the largest brands, and a sentiment correction (00160) refreshes the
+-- rollups inside the person's request, where terms never change. The server
+-- calls both for a completed run, the nightly sweep and the backfill
+-- (server/src/lib/mentions-rollups.js). Service-role only.
 
-create or replace function public.refresh_mentions_daily(
+create or replace function public.refresh_mention_terms(
   p_brand_id uuid,
   p_day_from date,
   p_day_to   date
@@ -20579,58 +20588,8 @@ declare
   v_from timestamptz := p_day_from::timestamp at time zone 'utc';
   v_to   timestamptz := (p_day_to + 1)::timestamp at time zone 'utc';
 begin
-  delete from public.mentions_prompt_daily
-    where brand_id = p_brand_id and day between p_day_from and p_day_to;
-  delete from public.mentions_competitor_daily
-    where brand_id = p_brand_id and day between p_day_from and p_day_to;
   delete from public.mentions_answer_terms
     where brand_id = p_brand_id and created_at >= v_from and created_at < v_to;
-
-  insert into public.mentions_prompt_daily (
-    brand_id, day, prompt_id, platform, region,
-    answer_count, mention_answers, mention_occurrences,
-    positive_answers, negative_answers, position_sum, position_count, last_answer_at)
-  select
-    p_brand_id,
-    (pr.created_at at time zone 'utc')::date,
-    pr.prompt_id, pr.platform, pr.region,
-    count(*),
-    count(*) filter (where pr.mention_count > 0),
-    coalesce(sum(pr.mention_count), 0),
-    count(*) filter (where pr.mention_count > 0 and pr.sentiment = 'positive'),
-    count(*) filter (where pr.mention_count > 0 and pr.sentiment = 'negative'),
-    coalesce(sum(pr.mention_position)
-      filter (where pr.mention_count > 0 and pr.mention_position is not null), 0),
-    count(*) filter (where pr.mention_count > 0 and pr.mention_position is not null),
-    max(pr.created_at)
-  from public.prompt_results pr
-  where pr.brand_id = p_brand_id
-    and pr.prompt_id is not null
-    and pr.platform <> 'chatgpt-shopping'
-    and pr.created_at >= v_from
-    and pr.created_at < v_to
-  group by 2, pr.prompt_id, pr.platform, pr.region;
-
-  insert into public.mentions_competitor_daily (
-    brand_id, day, prompt_id, platform, region, competitor_id,
-    mention_answers, co_mention_answers)
-  select
-    p_brand_id,
-    (pr.created_at at time zone 'utc')::date,
-    pr.prompt_id, pr.platform, pr.region,
-    cm.value->>'competitor_id',
-    count(*),
-    count(*) filter (where pr.mention_count > 0)
-  from public.prompt_results pr
-  cross join lateral jsonb_array_elements(coalesce(pr.competitor_mentions, '[]'::jsonb)) cm
-  where pr.brand_id = p_brand_id
-    and pr.prompt_id is not null
-    and pr.platform <> 'chatgpt-shopping'
-    and pr.created_at >= v_from
-    and pr.created_at < v_to
-    and cm.value ? 'competitor_id'
-    and coalesce((cm.value->>'mention_count')::int, 0) > 0
-  group by 2, pr.prompt_id, pr.platform, pr.region, cm.value->>'competitor_id';
 
   -- The terms next to each entity an answer names, matched by the same names
   -- tracking counts: the brand's name and domains, each competitor's name
@@ -20689,7 +20648,7 @@ begin
 end;
 $$;
 
-revoke execute on function public.refresh_mentions_daily(uuid, date, date)
+revoke execute on function public.refresh_mention_terms(uuid, date, date)
   from public, anon, authenticated;
 
 -- ─── Read ───────────────────────────────────────────────────────────────────
