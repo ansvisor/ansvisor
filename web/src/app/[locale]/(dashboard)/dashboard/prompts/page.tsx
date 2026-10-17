@@ -144,6 +144,11 @@ import { getPromptUsage, isPromptLimitReached } from '@/lib/prompt-usage';
 import { getTopics } from '@/lib/actions/topic';
 import type { PromptVisibilitySummary } from '@/lib/actions/tracking';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
+import {
+  OPPORTUNITY_HIGH_VOLUME,
+  OPPORTUNITY_MIN_VOLUME,
+  opportunityLevel,
+} from '@/lib/prompt-volume-opportunity';
 import type { PromptVolume, Prompt, Topic } from '@/types';
 import { toast } from 'sonner';
 import {
@@ -1681,7 +1686,10 @@ export default function PromptsPage() {
 
   const totalGoogleVol = volumes.reduce((s, v) => s + v.totalGoogleVolume, 0);
   const totalAiVol = volumes.reduce((s, v) => s + v.estAiVolume, 0);
-  const totalKeywords = volumes.reduce((s, v) => s + v.keywords.length, 0);
+  // Distinct keywords: prompts share many, as Similar Topics counts them.
+  const totalKeywords = new Set(
+    volumes.flatMap((v) => v.keywords.map((k) => k.trim().toLowerCase())),
+  ).size;
 
   const filtered = volumes.filter(
     (v) =>
@@ -2145,7 +2153,7 @@ export default function PromptsPage() {
                 <KpiCard
                   title="Avg. AI Volume"
                   icon={BarChart3}
-                  value={`~${formatCompactNumber(totalAiVol / volumes.length)}`}
+                  value={`~${formatCompactNumber(Math.round(totalAiVol / volumes.length))}`}
                   sub="per prompt"
                 />
               </div>
@@ -2266,15 +2274,16 @@ export default function PromptsPage() {
                   )}
                   <div className="px-6 py-2 border-t">
                     <p className="text-xs text-muted-foreground">
-                      * Est. AI Volume = Total Google search volume of extracted keywords × AI
-                      adoption rate. Figures are approximations for planning purposes.
+                      * Est. AI Volume = the median Google search volume of the prompt&apos;s
+                      extracted keywords × AI adoption rate. Figures are approximations for planning
+                      purposes.
                     </p>
                   </div>
                 </CardContent>
               </Card>
 
               {/* High Opportunity Prompts */}
-              {volumes.filter((v) => v.estAiVolume >= 5000).length > 0 && (
+              {volumes.some((v) => opportunityLevel(v.estAiVolume)) && (
                 <Card>
                   <CardHeader className="pb-2">
                     <div className="flex items-center gap-2">
@@ -2303,7 +2312,7 @@ export default function PromptsPage() {
                           </ColHead>
                           <ColHead
                             className="text-right pr-6"
-                            tooltip="Opportunity level based on estimated AI volume. High = above 10k/mo, Medium = 5k–10k/mo."
+                            tooltip={`Opportunity level based on estimated AI volume. High = ${formatCompactNumber(OPPORTUNITY_HIGH_VOLUME)}+/mo, Medium = ${formatCompactNumber(OPPORTUNITY_MIN_VOLUME)}–${formatCompactNumber(OPPORTUNITY_HIGH_VOLUME)}/mo.`}
                           >
                             Opportunity
                           </ColHead>
@@ -2311,7 +2320,7 @@ export default function PromptsPage() {
                       </TableHeader>
                       <TableBody>
                         {volumes
-                          .filter((v) => v.estAiVolume >= 5000)
+                          .filter((v) => opportunityLevel(v.estAiVolume))
                           .sort((a, b) => b.estAiVolume - a.estAiVolume)
                           .map((row) => (
                             <TableRow key={row.id} className="hover:bg-muted/50">
@@ -2334,12 +2343,12 @@ export default function PromptsPage() {
                                   variant="outline"
                                   className={cn(
                                     'text-xs',
-                                    row.estAiVolume >= 10000
+                                    opportunityLevel(row.estAiVolume) === 'high'
                                       ? 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'
                                       : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
                                   )}
                                 >
-                                  {row.estAiVolume >= 10000 ? 'High' : 'Medium'}
+                                  {opportunityLevel(row.estAiVolume) === 'high' ? 'High' : 'Medium'}
                                 </Badge>
                               </TableCell>
                             </TableRow>
