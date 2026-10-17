@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { AuditQuota } from '@/lib/actions/audits';
 import { cn } from '@/lib/utils';
+import { EmptyPoolMessage } from './_quota-meter';
 
 export type ExportFormat = 'csv' | 'xlsx';
 
@@ -95,15 +96,19 @@ export function AuditBulkBar({
       className="mb-3 flex flex-wrap items-center gap-2 rounded-md border bg-muted/50 px-3 py-2"
     >
       <span className="text-xs font-medium">{t('selected', { count })}</span>
-      {limited && (
-        <span className={cn('text-xs', over ? 'text-destructive' : 'text-muted-foreground')}>
-          {remaining === 0
-            ? t('noneLeft')
-            : over
-              ? t('overQuota', { count, remaining })
-              : t('uses', { count, remaining })}
-        </span>
-      )}
+      {limited &&
+        (remaining === 0 && (quota.auto?.reserved ?? 0) > 0 ? (
+          // The user's share is used, the runs' isn't (spec §4.4).
+          <EmptyPoolMessage quota={quota} />
+        ) : (
+          <span className={cn('text-xs', over ? 'text-destructive' : 'text-muted-foreground')}>
+            {remaining === 0
+              ? t('noneLeft')
+              : over
+                ? t('overQuota', { count, remaining })
+                : t('uses', { count, remaining })}
+          </span>
+        ))}
       <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
         <Button
           variant="outline"

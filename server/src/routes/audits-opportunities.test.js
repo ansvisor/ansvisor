@@ -200,6 +200,12 @@ describe('GET /api/audits/opportunities', () => {
     expect(args.p_pages).toEqual(['https://acme.com/pricing']);
   });
 
+  it("leaves out pages under the brand's exclude patterns (SA-006)", async () => {
+    tables.site_audit_brand_settings = [{ brand_id: brandId, exclude_patterns: ['/pri*'] }];
+    const body = await (await fetch(`${baseUrl}/opportunities?brandId=${brandId}`)).json();
+    expect(body.opportunities).toEqual([]);
+  });
+
   it('reads every GA page past the first 1000', async () => {
     tables.page_opportunities = Array.from({ length: 1200 }, (_, i) => ({
       brand_id: brandId,

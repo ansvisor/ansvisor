@@ -14,6 +14,7 @@ let signalQueries;
 let inserted;
 let enforce;
 let pagesFetched;
+let auditsModule;
 let server;
 let baseUrl;
 
@@ -30,6 +31,7 @@ function query(table) {
     select: () => builder,
     single: () => builder,
     order: () => builder,
+    update: () => builder,
     eq: (col, val) => {
       filters.eq[col] = val;
       return builder;
@@ -82,10 +84,12 @@ async function startApp() {
     getOrgIdForUser: vi.fn(),
     PlanLimitError: class PlanLimitError extends Error {},
   }));
-  // An audit job that never gets its page, so the queue's limit can be seen.
+  // An audit job that never gets its page, so the queue's limit can be seen;
+  // a /fail page fails at once.
   vi.doMock('../lib/audit/context.js', () => ({
     buildAuditContext: (url) => {
       pagesFetched.push(url);
+      if (url.includes('/fail')) return Promise.reject(new Error('blocked'));
       return new Promise(() => {});
     },
   }));
@@ -98,7 +102,8 @@ async function startApp() {
     return { default: logger, logger };
   });
 
-  const { default: router } = await import('./audits.js');
+  auditsModule = await import('./audits.js');
+  const router = auditsModule.default;
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -254,6 +259,45 @@ describe('POST /api/audits/bulk', () => {
     expect((await post({ brandId, urls: ['not a url'] })).status).toBe(400);
     expect((await post({ urls: ['https://acme.com/'] })).status).toBe(400);
     expect(inserted).toEqual([]);
+  });
+});
+
+describe('startAutoAudits', () => {
+  const brandId = '33333333-3333-3333-3333-333333333333';
+
+  it("checks the whole quota as a run's, marks the audits auto and runs them in their own pool", async () => {
+    const urls = ['https://acme.com/a', 'https://acme.com/b', 'https://acme.com/c'];
+    const { auditIds } = await auditsModule.startAutoAudits(brandId, urls, 'org-1');
+
+    expect(enforce).toHaveBeenCalledWith('org-1', 3, { source: 'auto' });
+    expect(auditIds).toEqual(['new-0', 'new-1', 'new-2']);
+    expect(inserted.map((r) => [r.url, r.source])).toEqual([
+      ['https://acme.com/a', 'auto'],
+      ['https://acme.com/b', 'auto'],
+      ['https://acme.com/c', 'auto'],
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // Two at a time, and a user's bulk audit doesn't wait behind them.
+    expect(pagesFetched).toEqual(urls.slice(0, 2));
+    await fetch(`${baseUrl}/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandId, urls: ['https://acme.com/mine'] }),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(pagesFetched).toEqual([...urls.slice(0, 2), 'https://acme.com/mine']);
+    // A user's audit row keeps the column default.
+    expect(inserted.at(-1).source).toBeUndefined();
+  });
+
+  it('resolves done once every audit has finished', async () => {
+    const { done } = await auditsModule.startAutoAudits(
+      brandId,
+      ['https://acme.com/fail-1', 'https://acme.com/fail-2', 'https://acme.com/fail-3'],
+      'org-1',
+    );
+    await expect(done).resolves.toBeDefined();
+    expect(pagesFetched).toHaveLength(3);
   });
 });
 
