@@ -605,6 +605,7 @@ export type Database = {
           industry: string | null
           insights_pinned_competitors: string[]
           is_active: boolean
+          kpi_setup_at: string | null
           language: string | null
           logo_url: string | null
           name: string
@@ -625,6 +626,7 @@ export type Database = {
           industry?: string | null
           insights_pinned_competitors?: string[]
           is_active?: boolean
+          kpi_setup_at?: string | null
           language?: string | null
           logo_url?: string | null
           name: string
@@ -645,6 +647,7 @@ export type Database = {
           industry?: string | null
           insights_pinned_competitors?: string[]
           is_active?: boolean
+          kpi_setup_at?: string | null
           language?: string | null
           logo_url?: string | null
           name?: string
@@ -3450,6 +3453,10 @@ export type Database = {
           topic_name: string
           visible_runs: number
         }[]
+      }
+      seed_kpi_presets: {
+        Args: { p_brand_id: string; p_kpis: Json }
+        Returns: boolean
       }
       share_of_voice_aggregates: {
         Args: {

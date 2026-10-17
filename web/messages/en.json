@@ -139,6 +139,11 @@
       "noBrand": {
         "title": "No brand selected",
         "description": "Select a brand to view its KPIs."
+      },
+      "presets": {
+        "setUp": "We set up these KPIs for you. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. Change or remove them any time.",
+        "preview": "Suggested KPIs. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. They're saved the first time an admin or manager opens this tab.",
+        "dismiss": "Dismiss"
       }
     },
     "drawer": {
