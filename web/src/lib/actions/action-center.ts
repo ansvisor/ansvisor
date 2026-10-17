@@ -19,8 +19,29 @@ import {
   type TaskStatus,
 } from '@/lib/action-center/registry';
 import { SIGNAL_ROW_COLUMNS, mapSignalRows, type Signal, type SignalRow } from '@/lib/signals/map';
+import { OPEN_SIGNAL_STATUSES, type SignalStatus } from '@/lib/signals/registry';
+import { readPromptPlaces } from '@/lib/signals/prompt-places';
+import { affectedOf, affectedSignals, affectedSummary } from '@/lib/action-center/affected';
+import { readPromptDemand } from '@/lib/action-center/prompt-demand';
+import {
+  ACTION_COLUMNS,
+  EVENT_COLUMNS,
+  TASK_COLUMNS,
+  actionItemFromRow,
+  eventFromRow,
+  kpiFromRow,
+  taskFromRow,
+  type ActionRow,
+} from '@/lib/action-center/rows';
 import type { KpiTimeframe } from '@/lib/kpis/registry';
 import { parseImproveOutcome, type ImproveOutcome } from '@/lib/improve-outcome';
+import {
+  cleanTaskDetailsEdit,
+  isTaskDetailsEdit,
+  type ActionTaskDetails,
+  type TaskDetailsEdit,
+} from '@/lib/action-center/task-details';
+import type { PriorityLevel, PriorityReason } from '@/lib/action-center/priority';
 
 export interface ActionAssignee {
   id: string;
@@ -49,25 +70,11 @@ export interface ActionItem {
   taskTotal: number;
   taskCompleted: number;
   signalCount: number;
+  /** 0–100 (AC-006); null until the server has scored the action. */
+  priorityScore: number | null;
+  priorityLevel: PriorityLevel | null;
+  priorityReason: PriorityReason | null;
 }
-
-interface ActionRow {
-  id: string;
-  action_no: number;
-  category: string;
-  kind: string;
-  impact: string;
-  status: string;
-  payload: Record<string, unknown>;
-  kpi_keys: string[];
-  assignee_id: string | null;
-  due_date: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-const ACTION_COLUMNS =
-  'id, action_no, category, kind, impact, status, payload, kpi_keys, assignee_id, due_date, created_at, updated_at';
 
 export async function getActions(brandId: string): Promise<ActionItem[]> {
   const supabase = await createClient();
@@ -85,10 +92,12 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
 
   const [tasksRes, signalsRes, profilesRes] = await Promise.all([
     supabase.from('action_tasks').select('action_id, status').in('action_id', actionIds),
+    // The signals that support each action now (AC-007): its open ones.
     supabase
       .from('signals')
       .select('action_id')
       .eq('brand_id', brandId)
+      .in('status', OPEN_SIGNAL_STATUSES as SignalStatus[])
       .not('action_id', 'is', null),
     assigneeIds.length > 0
       ? supabase.from('profiles').select('id, full_name, avatar_url').in('id', assigneeIds)
@@ -124,23 +133,14 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
     ]),
   );
 
-  return rows.map((row) => ({
-    id: row.id,
-    actionNo: Number(row.action_no),
-    category: row.category as ActionCategory,
-    kind: row.kind,
-    impact: row.impact as ActionImpact,
-    status: row.status as ActionStatus,
-    payload: row.payload ?? {},
-    kpiKeys: row.kpi_keys ?? [],
-    assignee: row.assignee_id ? (profiles.get(row.assignee_id) ?? null) : null,
-    dueDate: row.due_date,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    taskTotal: taskTotals.get(row.id)?.total ?? 0,
-    taskCompleted: taskTotals.get(row.id)?.completed ?? 0,
-    signalCount: signalCounts.get(row.id) ?? 0,
-  }));
+  return rows.map((row) =>
+    actionItemFromRow(row, {
+      assignee: row.assignee_id ? (profiles.get(row.assignee_id) ?? null) : null,
+      taskTotal: taskTotals.get(row.id)?.total ?? 0,
+      taskCompleted: taskTotals.get(row.id)?.completed ?? 0,
+      signalCount: signalCounts.get(row.id) ?? 0,
+    }),
+  );
 }
 
 export interface ActionTask {
@@ -162,17 +162,11 @@ export interface ActionTask {
   /** Why the task was skipped; null for every other status. */
   skipReason: string | null;
   /**
-   * What a task sent from the Improve tab carries beyond its title (PROMPT-004):
-   * its body, platform and evidence. Null for library and hand-added tasks.
+   * What the task carries beyond its title: where, why, how, done-when, type
+   * and effort (AC-004), and for a task sent from the Improve tab its body,
+   * platform and evidence (PROMPT-004). Null when it carries nothing.
    */
   details: ActionTaskDetails | null;
-}
-
-export interface ActionTaskDetails {
-  body: string;
-  platform: string;
-  platformLabel: string;
-  sources: { type: string; ref: string }[];
 }
 
 export interface ActionEvent {
@@ -198,28 +192,50 @@ export interface ActionDetail {
   positionOutcome: ImproveOutcome | null;
 }
 
+/**
+ * Every signal the action has taken as evidence (AC-007), kept after a signal
+ * moves on to a later cycle: a closed action still shows its own. With where
+ * each prompt is tracked and its topic, as the Signals page reads them: the
+ * Affected tab's platforms and topics (AC-003).
+ */
+async function readActionSignals(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  actionId: string,
+): Promise<Signal[]> {
+  const [signalsRes, places] = await Promise.all([
+    supabase
+      .from('signals')
+      .select(`${SIGNAL_ROW_COLUMNS}, action_signals!inner(action_id)`)
+      .eq('brand_id', brandId)
+      .eq('action_signals.action_id', actionId)
+      .order('detected_at', { ascending: false }),
+    readPromptPlaces(supabase, brandId),
+  ]);
+  if (signalsRes.error) throw new Error(signalsRes.error.message);
+  return mapSignalRows((signalsRes.data ?? []) as SignalRow[], places);
+}
+
+/**
+ * An action's evidence alone, for a drawer that already has the rest: the
+ * History drawer's goal and what happened (AC-003).
+ */
+export async function getActionSignals(brandId: string, actionId: string): Promise<Signal[]> {
+  const supabase = await createClient();
+  return readActionSignals(supabase, brandId, actionId);
+}
+
 /** Everything the drawer's tabs need beyond the list row, in one round trip
  *  per source. `kpis` are the brand's configured definitions among the
  *  action's kpi_keys — evidence of which goals this work serves. */
 export async function getActionDetail(brandId: string, actionId: string): Promise<ActionDetail> {
   const supabase = await createClient();
-  const [tasksRes, signalsRes, eventsRes, kpisRes, outcomeRes] = await Promise.all([
-    supabase
-      .from('action_tasks')
-      .select(
-        'id, position, task_key, title, status, skip_reason, title_params, depends_on, details',
-      )
-      .eq('action_id', actionId)
-      .order('position'),
-    supabase
-      .from('signals')
-      .select(SIGNAL_ROW_COLUMNS)
-      .eq('brand_id', brandId)
-      .eq('action_id', actionId)
-      .order('detected_at', { ascending: false }),
+  const [tasksRes, signals, eventsRes, kpisRes, outcomeRes] = await Promise.all([
+    supabase.from('action_tasks').select(TASK_COLUMNS).eq('action_id', actionId).order('position'),
+    readActionSignals(supabase, brandId, actionId),
     supabase
       .from('action_events')
-      .select('id, event, data, actor_id, created_at')
+      .select(EVENT_COLUMNS)
       .eq('action_id', actionId)
       .order('created_at'),
     supabase
@@ -235,35 +251,14 @@ export async function getActionDetail(brandId: string, actionId: string): Promis
       .maybeSingle(),
   ]);
   if (tasksRes.error) throw new Error(tasksRes.error.message);
-  if (signalsRes.error) throw new Error(signalsRes.error.message);
   if (eventsRes.error) throw new Error(eventsRes.error.message);
   if (kpisRes.error) throw new Error(kpisRes.error.message);
 
   return {
-    tasks: (tasksRes.data ?? []).map((task) => ({
-      id: task.id,
-      position: task.position,
-      taskKey: task.task_key,
-      title: task.title,
-      status: task.status as TaskStatus,
-      titleParams: (task.title_params ?? {}) as Record<string, string | number>,
-      dependsOn: (task.depends_on ?? []) as string[],
-      skipReason: task.skip_reason,
-      details: (task.details ?? null) as ActionTaskDetails | null,
-    })),
-    signals: mapSignalRows((signalsRes.data ?? []) as SignalRow[]),
-    events: (eventsRes.data ?? []).map((event) => ({
-      id: event.id,
-      event: event.event,
-      data: (event.data ?? {}) as Record<string, unknown>,
-      actorId: event.actor_id,
-      createdAt: event.created_at,
-    })),
-    kpis: (kpisRes.data ?? []).map((kpi) => ({
-      kpiKey: kpi.kpi_key,
-      target: Number(kpi.target),
-      timeframe: kpi.timeframe as KpiTimeframe,
-    })),
+    tasks: (tasksRes.data ?? []).map(taskFromRow),
+    signals,
+    events: (eventsRes.data ?? []).map(eventFromRow),
+    kpis: (kpisRes.data ?? []).map(kpiFromRow),
     positionOutcome: parseImproveOutcome(outcomeRes.data?.position_outcome ?? null),
   };
 }
@@ -419,27 +414,51 @@ export async function addTask(brandId: string, actionId: string, title: string):
 }
 
 /**
- * Rename a task. A generated task keeps its `task_key` for provenance — which
- * template it grew from stays answerable — and the title simply wins at render
- * time.
+ * Edit a task's text and its details (AC-004): where, why, how, done-when,
+ * type, effort and role. `title` is null to leave the text as it is, so a
+ * library task keeps rendering from its template in the reader's language.
+ *
+ * The fields are merged into what the task already carries, so a task sent
+ * from the Improve tab keeps its body, platform and evidence.
  */
-export async function updateTaskTitle(
+export async function updateTaskDetails(
   brandId: string,
   actionId: string,
   taskId: string,
-  title: string,
+  edit: TaskDetailsEdit & { title: string | null },
 ): Promise<void> {
+  if (!isTaskDetailsEdit(edit) || (edit.title !== null && typeof edit.title !== 'string')) {
+    throw new Error('Invalid task details');
+  }
   const supabase = await createClient();
-  const text = cleanTaskTitle(title);
+  const { data: row, error: readError } = await supabase
+    .from('action_tasks')
+    .select('details')
+    .eq('action_id', actionId)
+    .eq('id', taskId)
+    .maybeSingle();
+  if (readError) throw new Error(readError.message);
+  if (!row) throw new Error('Task not found');
+
+  const stored =
+    row.details && typeof row.details === 'object' && !Array.isArray(row.details)
+      ? (row.details as Record<string, unknown>)
+      : {};
+  const details = { ...stored, ...cleanTaskDetailsEdit(edit) };
+  const title = edit.title === null ? null : cleanTaskTitle(edit.title);
 
   const { error } = await supabase
     .from('action_tasks')
-    .update({ title: text, updated_at: new Date().toISOString() })
+    .update({
+      details,
+      ...(title === null ? {} : { title }),
+      updated_at: new Date().toISOString(),
+    })
     .eq('action_id', actionId)
     .eq('id', taskId);
   if (error) throw new Error(error.message);
 
-  await logEvent(supabase, actionId, 'task_renamed', { taskId, title: text });
+  await logEvent(supabase, actionId, 'task_edited', { taskId, title });
   await touchAction(supabase, brandId, actionId);
 }
 
@@ -479,4 +498,91 @@ export async function deleteTask(brandId: string, actionId: string, taskId: stri
 
   await logEvent(supabase, actionId, 'task_deleted', { taskId });
   await touchAction(supabase, brandId, actionId);
+}
+
+/**
+ * The estimated monthly AI searches of these prompts, for the Affected tab's
+ * Volume column (AC-003); see readPromptDemand.
+ */
+export async function getPromptDemand(
+  brandId: string,
+  promptIds: string[],
+): Promise<Record<string, number>> {
+  if (promptIds.length === 0) return {};
+  const supabase = await createClient();
+  return Object.fromEntries(await readPromptDemand(supabase, brandId, promptIds));
+}
+
+/** Action ids per request, and signal rows per page, for the list's export. */
+const AFFECTED_ID_CHUNK = 100;
+const AFFECTED_PAGE_SIZE = 1000;
+
+/**
+ * Each action's affected items, for the actions list's Export CSV (AC-005):
+ * the count and names the drawer's Affected tab shows, from the signals the
+ * action rests on — or, for one a person sent, from what it was sent about.
+ * Read page by page, so a brand with many signals is read whole.
+ */
+export async function getActionsAffected(
+  brandId: string,
+  actionIds: string[],
+): Promise<Record<string, { count: number; items: string[] }>> {
+  const ids = [...new Set(actionIds)];
+  if (ids.length === 0) return {};
+  const supabase = await createClient();
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += AFFECTED_ID_CHUNK) {
+    chunks.push(ids.slice(i, i + AFFECTED_ID_CHUNK));
+  }
+
+  const readSignals = async (chunk: string[]) => {
+    const rows: (SignalRow & { action_signals: { action_id: string }[] })[] = [];
+    for (let from = 0; ; from += AFFECTED_PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from('signals')
+        .select(`${SIGNAL_ROW_COLUMNS}, action_signals!inner(action_id)`)
+        .eq('brand_id', brandId)
+        .in('action_signals.action_id', chunk)
+        // The drawer's order, made stable so pages don't shuffle.
+        .order('detected_at', { ascending: false })
+        .order('id')
+        .range(from, from + AFFECTED_PAGE_SIZE - 1);
+      if (error) throw new Error(error.message);
+      const batch = (data ?? []) as unknown as typeof rows;
+      rows.push(...batch);
+      if (batch.length < AFFECTED_PAGE_SIZE) return rows;
+    }
+  };
+  const readPayloads = async (chunk: string[]) => {
+    const { data, error } = await supabase
+      .from('actions')
+      .select('id, payload')
+      .eq('brand_id', brandId)
+      .in('id', chunk);
+    if (error) throw new Error(error.message);
+    return (data ?? []) as { id: string; payload: Record<string, unknown> | null }[];
+  };
+
+  const [signalChunks, payloadChunks, places] = await Promise.all([
+    Promise.all(chunks.map(readSignals)),
+    Promise.all(chunks.map(readPayloads)),
+    readPromptPlaces(supabase, brandId),
+  ]);
+
+  const rowsByAction = new Map<string, SignalRow[]>();
+  for (const row of signalChunks.flat()) {
+    for (const link of row.action_signals ?? []) {
+      const list = rowsByAction.get(link.action_id) ?? [];
+      list.push(row);
+      rowsByAction.set(link.action_id, list);
+    }
+  }
+  const summaries: Record<string, { count: number; items: string[] }> = {};
+  for (const action of payloadChunks.flat()) {
+    const signals = mapSignalRows(rowsByAction.get(action.id) ?? [], places);
+    summaries[action.id] = affectedSummary(
+      affectedOf(affectedSignals(signals, action.id), action.payload ?? {}),
+    );
+  }
+  return summaries;
 }
