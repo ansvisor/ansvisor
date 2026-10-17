@@ -120,17 +120,6 @@ export function topicHeatmap(topics: TopicCompetitors[], columns: string[]): Hea
 }
 
 /**
- * The row "Send biggest gap to Actions" sends: the topic you trail by the
- * most, against the competitor leading it. Topics you lead or with too few
- * answers are never sent. Null when no competitor leads you anywhere.
- */
-export function biggestGap(rows: HeatmapRow[]): HeatmapRow | null {
-  return rows
-    .filter((r) => r.status === 'behind' && r.leader !== 'you')
-    .reduce<HeatmapRow | null>((worst, r) => (!worst || r.gap! < worst.gap! ? r : worst), null);
-}
-
-/**
  * A cell's shade, light to dark, by where its score sits between the lowest
  * and highest non-zero score in view. The map compares, so its tones spread
  * over the scores shown whatever their level (a table of 50s and 70s still
