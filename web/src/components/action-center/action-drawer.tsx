@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { toast } from 'sonner';
@@ -43,6 +43,7 @@ import {
   ACTION_STATUSES,
   TASK_STATUSES,
   UNCOUNTED_TASK_STATUSES,
+  taskProgress,
   type ActionStatus,
   type TaskStatus,
 } from '@/lib/action-center/registry';
@@ -83,10 +84,20 @@ const TABS: DrawerTab[] = ['overview', 'tasks', 'signals', 'history'];
 const TABS_WITH_AFFECTED: DrawerTab[] = ['overview', 'affected', 'tasks', 'signals', 'history'];
 
 /**
+ * How long a due date has to stay put before it is saved. A date typed digit
+ * by digit passes through other valid dates on its way (day 1 before 18):
+ * only the one it settles on is saved.
+ */
+const DUE_DATE_SETTLE_MS = 800;
+/** A year typed digit by digit starts at 0002; these keep it from being saved. */
+const DUE_DATE_MIN = '2000-01-01';
+const DUE_DATE_MAX = '2100-12-31';
+
+/**
  * Action detail: evidence, execution, trail. Tabs are local state, not
- * routes — the drawer overlays the list, per the brief. Assignment and due
- * date live at the bottom of every tab; "Assign to Agent" is deliberately
- * absent until agent execution exists.
+ * routes — the drawer overlays the list, per the brief. Status, assignee and
+ * due date sit under the header, ahead of the tabs; "Assign to Agent" is
+ * deliberately absent until agent execution exists.
  */
 export function ActionDrawer({
   brandId,
@@ -94,13 +105,16 @@ export function ActionDrawer({
   members,
   onOpenChange,
   onChanged,
+  onPatched,
 }: {
   brandId: string;
   action: ActionItem | null;
   members: TeamMember[];
   onOpenChange: (open: boolean) => void;
-  /** Fired after any mutation so the list refetches. */
+  /** Fired when the list should be read again: after a change it can't patch, or a failed one. */
   onChanged: () => void;
+  /** A change shown in the list at once, without reading it again. */
+  onPatched: (actionId: string, patch: Partial<ActionItem>) => void;
 }) {
   const t = useTranslations('actionCenter.actionsPage');
   const tTexts = useTranslations('actionCenter.actionTexts');
@@ -139,20 +153,35 @@ export function ActionDrawer({
     router.push(`/dashboard/action-center/signals?signal=${signalId}`);
   };
 
+  // The action the drawer shows now: a read that comes back after another
+  // action was opened is dropped, not shown under it.
+  const openId = useRef<string | null>(null);
+
   // A reload after a change keeps the detail on screen until the new one is
   // in, so an opened task stays open; only a first load shows placeholders.
-  const load = useCallback(async () => {
-    if (!action) return;
+  const load = useCallback(async (): Promise<ActionDetail | null> => {
+    if (!action) return null;
+    const id = action.id;
     try {
-      setDetail(await getActionDetail(brandId, action.id));
+      const next = await getActionDetail(brandId, id);
+      if (openId.current !== id) return null;
+      setDetail(next);
+      return next;
     } catch {
       toast.error(t('error.title'));
+      return null;
     }
   }, [brandId, action, t]);
 
+  // A due date being typed, until it is saved (null: the saved one shows).
+  const [dueDraft, setDueDraft] = useState<string | null>(null);
+  const dueTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
   useEffect(() => {
+    openId.current = action?.id ?? null;
     setTab('overview');
     setDetail(null);
+    setDueDraft(null);
     if (action) void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [action?.id]);
@@ -218,7 +247,11 @@ export function ActionDrawer({
     }
   };
 
-  /** Runs a change, then reloads; false when the change failed (and said so). */
+  /**
+   * A task change: saved, then the detail read again to show it, and the
+   * list's task count patched from it rather than the list read again.
+   * False when the change failed (and said so).
+   */
   const mutate = async (fn: () => Promise<void>): Promise<boolean> => {
     setIsBusy(true);
     try {
@@ -229,12 +262,48 @@ export function ActionDrawer({
       return false;
     }
     try {
-      await load();
-      onChanged();
+      const next = await load();
+      if (next) {
+        const progress = taskProgress(next.tasks.map((task) => task.status));
+        onPatched(action.id, {
+          taskTotal: progress.total,
+          taskCompleted: progress.completed,
+          updatedAt: new Date().toISOString(),
+        });
+      }
     } finally {
       setIsBusy(false);
     }
     return true;
+  };
+
+  /**
+   * Status, assignee and due date: shown at once, in the drawer and the list,
+   * then saved. Saving, reading the detail and reading the whole list before
+   * anything showed took three server calls in a row (seconds on
+   * production), with the drawer locked; a choice that didn't show yet got
+   * made again. The detail is read again in the background, for its History.
+   * A failed save says so and reads the list again, back to what was saved.
+   */
+  const changeField = async (patch: Partial<ActionItem>, save: () => Promise<void>) => {
+    onPatched(action.id, { ...patch, updatedAt: new Date().toISOString() });
+    try {
+      await save();
+    } catch {
+      toast.error(t('updateFailed'));
+      onChanged();
+      return;
+    }
+    void load();
+  };
+
+  /** Saves a due date the field settled on, if it changed. */
+  const commitDueDate = (value: string) => {
+    clearTimeout(dueTimer.current);
+    setDueDraft(null);
+    const dueDate = value || null;
+    if (dueDate === action.dueDate) return;
+    void changeField({ dueDate }, () => setActionDueDate(brandId, action.id, dueDate));
   };
 
   return (
@@ -304,9 +373,10 @@ export function ActionDrawer({
             <Select
               value={action.status}
               onValueChange={(value) =>
-                void mutate(() => updateActionStatus(brandId, action.id, value as ActionStatus))
+                void changeField({ status: value as ActionStatus }, () =>
+                  updateActionStatus(brandId, action.id, value as ActionStatus),
+                )
               }
-              disabled={isBusy}
               items={ACTION_STATUSES.map((status) => ({
                 value: status,
                 label: t(`status.${status}`),
@@ -330,12 +400,22 @@ export function ActionDrawer({
             </Label>
             <Select
               value={action.assignee?.id ?? 'unassigned'}
-              onValueChange={(value) =>
-                void mutate(() =>
-                  assignAction(brandId, action.id, value === 'unassigned' ? null : value),
-                )
-              }
-              disabled={isBusy}
+              onValueChange={(value) => {
+                const assigneeId = value === 'unassigned' ? null : value;
+                const member = members.find((m) => m.userId === assigneeId);
+                void changeField(
+                  {
+                    assignee: assigneeId
+                      ? {
+                          id: assigneeId,
+                          fullName: member?.fullName ?? null,
+                          avatarUrl: member?.avatarUrl ?? null,
+                        }
+                      : null,
+                  },
+                  () => assignAction(brandId, action.id, assigneeId),
+                );
+              }}
               items={[
                 { value: 'unassigned', label: t('filters.unassigned') },
                 ...members.map((member) => ({
@@ -365,11 +445,28 @@ export function ActionDrawer({
               id="action-drawer-due-date"
               type="date"
               className="mt-1 h-8 text-xs"
-              value={action.dueDate ?? ''}
-              disabled={isBusy}
-              onChange={(e) =>
-                void mutate(() => setActionDueDate(brandId, action.id, e.target.value || null))
-              }
+              min={DUE_DATE_MIN}
+              max={DUE_DATE_MAX}
+              value={dueDraft ?? action.dueDate ?? ''}
+              onChange={(e) => {
+                const { value, validity } = e.target;
+                setDueDraft(value);
+                clearTimeout(dueTimer.current);
+                // Cleared, or a whole date in range: saved once it settles.
+                if (validity.valid) {
+                  dueTimer.current = setTimeout(() => commitDueDate(value), DUE_DATE_SETTLE_MS);
+                }
+              }}
+              onBlur={(e) => {
+                if (dueDraft === null) return;
+                // Leaving the field saves what it holds now; a half-typed or
+                // out-of-range date goes back to the saved one.
+                if (e.target.validity.valid) commitDueDate(e.target.value);
+                else {
+                  clearTimeout(dueTimer.current);
+                  setDueDraft(null);
+                }
+              }}
             />
           </div>
         </div>
@@ -500,12 +597,7 @@ export function ActionDrawer({
               {/* Canceled tasks leave the denominator — the work was called
                   off, so it should not hold the action short of done. */}
               <p className="text-xs text-muted-foreground">
-                {t('drawer.tasksProgress', {
-                  completed: detail.tasks.filter((task) => task.status === 'completed').length,
-                  total: detail.tasks.filter(
-                    (task) => !UNCOUNTED_TASK_STATUSES.includes(task.status),
-                  ).length,
-                })}
+                {t('drawer.tasksProgress', taskProgress(detail.tasks.map((task) => task.status)))}
               </p>
               <div className="mt-3 space-y-2">
                 {detail.tasks.map((task) => (

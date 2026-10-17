@@ -14,7 +14,7 @@ import { createClient } from '@/lib/supabase/server';
 import {
   type ActionCategory,
   type ActionImpact,
-  UNCOUNTED_TASK_STATUSES,
+  taskProgress,
   type ActionStatus,
   type TaskStatus,
 } from '@/lib/action-center/registry';
@@ -107,15 +107,11 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
   if (signalsRes.error) throw new Error(signalsRes.error.message);
   if (profilesRes.error) throw new Error(profilesRes.error.message);
 
-  // Skipped and failed tasks leave the denominator: neither is outstanding
-  // work, so neither should hold an action below 100% for good.
-  const taskTotals = new Map<string, { total: number; completed: number }>();
+  const taskStatuses = new Map<string, string[]>();
   for (const task of tasksRes.data ?? []) {
-    if ((UNCOUNTED_TASK_STATUSES as readonly string[]).includes(task.status)) continue;
-    const acc = taskTotals.get(task.action_id) ?? { total: 0, completed: 0 };
-    acc.total += 1;
-    if (task.status === 'completed') acc.completed += 1;
-    taskTotals.set(task.action_id, acc);
+    const statuses = taskStatuses.get(task.action_id) ?? [];
+    statuses.push(task.status);
+    taskStatuses.set(task.action_id, statuses);
   }
   const signalCounts = new Map<string, number>();
   for (const signal of signalsRes.data ?? []) {
@@ -133,14 +129,15 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
     ]),
   );
 
-  return rows.map((row) =>
-    actionItemFromRow(row, {
+  return rows.map((row) => {
+    const progress = taskProgress(taskStatuses.get(row.id) ?? []);
+    return actionItemFromRow(row, {
       assignee: row.assignee_id ? (profiles.get(row.assignee_id) ?? null) : null,
-      taskTotal: taskTotals.get(row.id)?.total ?? 0,
-      taskCompleted: taskTotals.get(row.id)?.completed ?? 0,
+      taskTotal: progress.total,
+      taskCompleted: progress.completed,
       signalCount: signalCounts.get(row.id) ?? 0,
-    }),
-  );
+    });
+  });
 }
 
 export interface ActionTask {
