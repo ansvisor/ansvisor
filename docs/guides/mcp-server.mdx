@@ -267,7 +267,7 @@ intent, not during exploratory queries.
 
 | Tool | What it does | Writes |
 | --- | --- | --- |
-| `get_site_audit_quota` | Monthly Site Audit allowance (`used`, `limit`, `remaining`) before starting a run. | |
+| `get_site_audit_quota` | Monthly Site Audit allowance (`used`, `running`, `limit`, `remaining`) before starting a run. Audits still running are already taken out of `remaining`. | |
 | `list_site_audits` | Recent audits for a brand (id, url, status, score) to find a past run without the id. | |
 | `run_site_audit` | Start an AEO/GEO page audit for a URL (consumes a monthly credit; poll `get_site_audit` for results). | **yes** |
 | `get_site_audit` | Fetch one audit by id — status, scores, signals, and fix recommendations (read-only). | |
