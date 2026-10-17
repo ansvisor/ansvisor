@@ -6,6 +6,7 @@ import {
   Gauge,
   Globe,
   LineChart,
+  MessageCircleMore,
   Quote,
   ShoppingBag,
   Sparkles,
@@ -83,6 +84,13 @@ export const dashboardNav: NavGroup[] = [
           { title: 'Query Fan-outs', href: '/dashboard/prompts/fan-outs' },
           { title: 'Prompts Insights', href: '/dashboard/prompts/insights' },
         ],
+      },
+      // Mentions & Sentiment (MS-05): beside Citations, its sibling concept.
+      {
+        title: 'Mentions',
+        href: '/dashboard/mentions',
+        icon: MessageCircleMore,
+        badge: 'New',
       },
       {
         title: 'Citations',
