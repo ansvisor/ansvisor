@@ -8,6 +8,10 @@
  * Mechanical/config signals (add a video, enable HTTPS, fix viewport,
  * alt-text…) are excluded — their generic howToFix is already actionable and
  * the LLM can't add page-specific value.
+ *
+ * Before saving, recommendation-guard.js swaps facts the page and brand data
+ * don't contain for [placeholders] and holds the copy to 150 characters per
+ * sentence (one rewrite, then a cut at a word boundary).
  */
 
 import { generateObject } from 'ai';
@@ -16,6 +20,15 @@ import { resolveModel } from '../ai-provider.js';
 import { signalsByKey } from './rubric.js';
 import { withRetry } from '../retry.js';
 import { logger } from '../logger.js';
+import { onBrandDomain } from './host.js';
+import {
+  MAX_COPY_CHARS,
+  buildKnownFacts,
+  cutToLength,
+  guardFacts,
+  needsShortening,
+  tooLongParts,
+} from './recommendation-guard.js';
 
 const DEFAULT_MODEL = 'google/gemini-3-flash-preview';
 
@@ -61,32 +74,127 @@ const recommendationsSchema = z.object({
       priority: z.enum(['high', 'medium', 'low']),
       recommendation: z.string().max(600),
       draft: z.string().max(2000).nullable(),
+      code: z.string().max(4000).nullable(),
     }),
   ),
 });
 
+const rewriteSchema = z.object({
+  recommendations: z.array(
+    z.object({
+      ref: z.string(),
+      recommendation: z.string().max(600),
+      draft: z.string().max(2000).nullable(),
+    }),
+  ),
+});
+
+const FACTS_RULE = `Facts: use only facts that appear in the PAGE TEXT or the BRAND DATA. Never invent customers, testimonials, case studies, statistics, percentages, prices, dates, awards or quotes. When a fact is needed but unknown, write a placeholder in square brackets instead: [customer name], [real metric], [price], [date], [source URL].`;
+
+const LENGTH_RULE = `Length: "recommendation" is one imperative sentence of at most ${MAX_COPY_CHARS} characters, specific to this page. Every sentence in "draft" is at most ${MAX_COPY_CHARS} characters.`;
+
 const SYSTEM_PROMPT = `You are an AEO/GEO content strategist. For each failing signal you are given, write ONE concrete recommendation tailored specifically to THIS page — never generic boilerplate, never restate the rule.
 
+${FACTS_RULE}
+
+${LENGTH_RULE}
+
 When the fix is content the user can paste, put the ready-to-use text in "draft":
-- meta-description → a 130–155 char description
+- meta-description → a 120–150 character description
 - h1-quality → a single improved H1
 - bluf-answer / direct-answer → an opening paragraph that leads with the answer
-- faq-schema → 3–5 Q&A pairs AND a valid FAQPage JSON-LD block
+- faq-schema → 3–5 Q&A pairs in "draft" AND a valid FAQPage JSON-LD block in "code"
 - definitions → the key terms defined inline
 - outbound-authority-links / citation-density → specific authoritative sources to cite
 - readability → a simplified rewrite of one representative paragraph (shorter sentences, plainer words)
 - length → which specific sections to expand or trim (draft can be null)
 
+Put markup (JSON-LD, HTML) only in "code", never in "draft". Code has no length limit but uses the same placeholders for unknown values, e.g. "price": "[price]".
+
 When suggesting sources to cite (outbound-authority-links, citation-density, statistic-density), prefer the most recent, currently-authoritative references and do not present older material as if it were current. Never invent URLs or fabricate statistics/dates — only suggest sources you are confident exist.
 
-Keep "recommendation" to 1–3 sentences. Set "draft" to null when the fix isn't a paste-able snippet. Prioritize by impact. Only return items you can make genuinely specific and useful.`;
+Set "draft" and "code" to null when they don't apply. Prioritize by impact. Only return items you can make genuinely specific and useful.`;
+
+const REWRITE_PROMPT = `You shorten AEO/GEO recommendations that broke the length rule. Keep each item's meaning, its [placeholders] and its ref, add no new facts, and return every item you are given.
+
+${LENGTH_RULE}`;
+
+/** The page's title, meta tags and JSON-LD: facts the body text leaves out. */
+function pageExtras(ctx) {
+  const $ = ctx.$;
+  if (!$) return [];
+  return [
+    $('title').first().text(),
+    $('meta[name="description"]').attr('content') ?? '',
+    $('meta[property="og:title"]').attr('content') ?? '',
+    $('meta[property="og:description"]').attr('content') ?? '',
+    $('script[type="application/ld+json"]')
+      .map((_, el) => $(el).text())
+      .get()
+      .join(' '),
+  ];
+}
+
+/**
+ * The brand data a recommendation may quote, when `url` is on one of the
+ * brand's domains. Null for any other page, so an audit of a competitor's
+ * page never borrows this brand's facts.
+ */
+export function brandFactsFor(url, brandRow, domainRows) {
+  const domains = (domainRows ?? []).map((d) => d.domain).filter(Boolean);
+  if (!onBrandDomain(url, domains)) return null;
+  return { name: brandRow?.name ?? null, description: brandRow?.description ?? null, domains };
+}
+
+function brandBlock(brand) {
+  if (!brand) return '';
+  const lines = [
+    brand.name && `- Name: ${brand.name}`,
+    brand.description && `- Description: ${brand.description}`,
+    brand.domains?.length && `- Domains: ${brand.domains.join(', ')}`,
+  ].filter(Boolean);
+  if (lines.length === 0) return '';
+  return `\nBRAND DATA (the brand that owns this page; facts you may reuse):\n${lines.join('\n')}\n`;
+}
+
+/**
+ * One rewrite of the items over the length limit, each sent with a `ref`.
+ * Returns the rewritten items by ref; an empty map when the call fails.
+ */
+async function rewriteTooLong(model, items) {
+  try {
+    const { object } = await withRetry(
+      () =>
+        generateObject({
+          model,
+          schema: rewriteSchema,
+          system: REWRITE_PROMPT,
+          prompt: `Rewrite these so they follow the length rule:\n${JSON.stringify(
+            items.map(({ ref, item }) => ({
+              ref,
+              recommendation: item.recommendation,
+              draft: item.draft,
+            })),
+            null,
+            2,
+          )}`,
+        }),
+      { label: 'recommendations-rewrite' },
+    );
+    return new Map((object.recommendations || []).map((r) => [r.ref, r]));
+  } catch (err) {
+    logger.warn({ err }, '[audit] recommendation rewrite failed; cutting instead');
+    return new Map();
+  }
+}
 
 /**
  * @param {import('./context.js').AuditContext} ctx
- * @param {{ results: Array<{key:string,status:string,evidence:object}>, queries?: string[] }} opts
- * @returns {Promise<Array<{ signalKey: string, label: string, category: string|null, priority: string, recommendation: string, draft: string|null }>>}
+ * @param {{ results: Array<{key:string,status:string,evidence:object}>, brand?: { name?: string|null, description?: string|null, domains?: string[] } | null, auditId?: string }} opts
+ *   `brand` only when the page is on one of the brand's domains.
+ * @returns {Promise<Array<{ signalKey: string, label: string, category: string|null, priority: string, recommendation: string, draft: string|null, code: string|null }>>}
  */
-export async function generateRecommendations(ctx, { results } = {}) {
+export async function generateRecommendations(ctx, { results, brand = null, auditId } = {}) {
   const failing = (results || []).filter(
     (r) => RECOMMENDABLE_SIGNALS.has(r.key) && (r.status === 'fail' || r.status === 'warn'),
   );
@@ -114,10 +222,11 @@ export async function generateRecommendations(ctx, { results } = {}) {
   });
 
   try {
+    const model = resolveModel(modelString);
     const { object } = await withRetry(
       () =>
         generateObject({
-          model: resolveModel(modelString),
+          model,
           schema: recommendationsSchema,
           system: SYSTEM_PROMPT,
           prompt: `Today's date is ${today}.
@@ -125,7 +234,7 @@ export async function generateRecommendations(ctx, { results } = {}) {
 PAGE URL: ${ctx.url}
 
 Improve THIS page for its own topic/intent (infer it from the content below). Never introduce subject matter the page isn't already about.
-
+${brandBlock(brand)}
 FAILING SIGNALS TO FIX:
 ${issues}
 
@@ -139,16 +248,73 @@ Return prioritized, page-specific recommendations.`,
       { label: 'recommendations' },
     );
 
-    return (object.recommendations || [])
+    // Today's date was given to the model, so a freshness date isn't invented.
+    const month = new Date(ctx.now ?? Date.now()).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+    });
+    const known = buildKnownFacts({
+      pageText: ctx.text,
+      extras: [...pageExtras(ctx), today, month],
+      brand,
+    });
+    let facts = 0;
+    const guard = (r) => {
+      const out = guardFacts(r, known);
+      facts += out.hits;
+      return out.rec;
+    };
+
+    let items = (object.recommendations || [])
       .filter((r) => RECOMMENDABLE_SIGNALS.has(r.signalKey))
-      .map((r) => ({
-        signalKey: r.signalKey,
-        label: signalsByKey[r.signalKey]?.label ?? r.signalKey,
-        category: signalsByKey[r.signalKey]?.category ?? null,
-        priority: r.priority,
-        recommendation: r.recommendation,
-        draft: r.draft || null,
-      }));
+      .map((r) => guard({ ...r, draft: r.draft || null, code: r.code || null }));
+
+    // Items are matched back by position: one signal can have several.
+    const tooLong = items
+      .map((item, i) => ({ ref: String(i), item }))
+      .filter(({ item }) => needsShortening(item));
+    let rewritten = 0;
+    if (tooLong.length > 0) {
+      const rewrites = await rewriteTooLong(model, tooLong);
+      items = items.map((r, i) => {
+        const next = rewrites.get(String(i));
+        if (!next) return r;
+        rewritten += 1;
+        // Only the parts over the limit are replaced; a part that was fine,
+        // or that the rewrite left empty, stays as it was.
+        const long = tooLongParts(r);
+        return guard({
+          ...r,
+          recommendation:
+            long.recommendation && next.recommendation ? next.recommendation : r.recommendation,
+          draft: long.draft && next.draft ? next.draft : r.draft,
+        });
+      });
+    }
+
+    let cuts = 0;
+    items = items.map((r) => {
+      const out = cutToLength(r);
+      cuts += out.cuts;
+      return out.rec;
+    });
+
+    if (facts + rewritten + cuts > 0) {
+      logger.info(
+        { auditId, url: ctx.url, facts, tooLong: tooLong.length, rewritten, cuts },
+        '[audit] recommendation guard changed the model output',
+      );
+    }
+
+    return items.map((r) => ({
+      signalKey: r.signalKey,
+      label: signalsByKey[r.signalKey]?.label ?? r.signalKey,
+      category: signalsByKey[r.signalKey]?.category ?? null,
+      priority: r.priority,
+      recommendation: r.recommendation,
+      draft: r.draft || null,
+      code: r.code || null,
+    }));
   } catch (err) {
     logger.error({ err, model: modelString }, '[audit] recommendations failed');
     return [];

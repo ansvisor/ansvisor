@@ -2114,6 +2114,8 @@
     "copied": "Copied",
     "copyFailed": "Copy failed",
     "copyDraft": "Copy draft",
+    "copyCode": "Copy code",
+    "placeholderNote": "Replace placeholders in [brackets] with your real data before publishing.",
     "finding": "Finding",
     "why": "Why",
     "recommendedFix": "Recommended fix",

@@ -28,7 +28,7 @@ import { buildTrendPoints, parseListPage, TREND_LIMIT } from '../lib/audit/histo
 import { runSignals } from '../lib/audit/engine.js';
 import { evaluateLlmSignals } from '../lib/audit/llm-signals.js';
 import { evaluateBrandEntity } from '../lib/audit/external-signals.js';
-import { generateRecommendations } from '../lib/audit/recommendations.js';
+import { brandFactsFor, generateRecommendations } from '../lib/audit/recommendations.js';
 import { scoreAudit } from '../lib/audit/scorer.js';
 import { signalsByKey, TOTAL_SIGNALS, RUBRIC_VERSION } from '../lib/audit/rubric.js';
 
@@ -82,15 +82,14 @@ function assembleAudit(audit, signalRows) {
  */
 async function runAuditJob(auditId, brandId, url, orgId) {
   try {
-    // The brand name is only needed for the Wikidata brand-entity lookup. The
-    // page is otherwise evaluated entirely on its own terms — the LLM infers
-    // the page's own target topic from its content, so an arbitrary URL (a
+    // The brand name is needed for the Wikidata brand-entity lookup. The page
+    // is otherwise evaluated entirely on its own terms — the LLM infers the
+    // page's own target topic from its content, so an arbitrary URL (a
     // competitor blog, any page) is never judged against this brand's topics.
-    const { data: brandRow } = await supabaseAdmin
-      .from('brands')
-      .select('name')
-      .eq('id', brandId)
-      .single();
+    const [{ data: brandRow }, { data: domainRows }] = await Promise.all([
+      supabaseAdmin.from('brands').select('name, description').eq('id', brandId).single(),
+      supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', brandId),
+    ]);
 
     const ctx = await buildAuditContext(url);
 
@@ -118,8 +117,13 @@ async function runAuditJob(auditId, brandId, url, orgId) {
     if (sigErr) throw sigErr;
 
     // AI fix recommendations for the fixable failing signals (own LLM call;
-    // degrades to [] on failure so it never blocks completion).
-    const recommendations = await generateRecommendations(ctx, { results });
+    // degrades to [] on failure so it never blocks completion). Brand facts
+    // (name, description, domains) may be reused only on the brand's own pages.
+    const recommendations = await generateRecommendations(ctx, {
+      results,
+      brand: brandFactsFor(ctx.url, brandRow, domainRows),
+      auditId,
+    });
 
     const { error: completeErr } = await supabaseAdmin
       .from('site_audits')
