@@ -27,7 +27,11 @@
  */
 
 import supabaseAdmin from '../../config/supabase.js';
-import { computePulseMetrics } from '../pulse/metrics.js';
+import { computePulseMetrics, LOST_CITATION_WINDOW_DAYS } from '../pulse/metrics.js';
+import { lostCitationEvidence } from './lost-citation-evidence.js';
+import { competitorEvidence } from './competitor-evidence.js';
+import { mentionEvidence } from './mention-evidence.js';
+import { TRAFFIC_WINDOW_DAYS, trafficEvidence } from './traffic-evidence.js';
 import { logger } from '../logger.js';
 import { readAllRpcRows } from '../rpc-pages.js';
 import { resolve } from '../../config/action-engine.js';
@@ -247,18 +251,22 @@ export async function uncitedMentionCandidates(brandId, now) {
   if (error) throw new Error(error.message);
 
   // By id, not by row: a prompt repeated at a page boundary is still one prompt.
-  const uncited = [
-    ...new Set(
-      (data ?? [])
-        .filter(
-          (row) =>
-            Number(row.runs) > 0 &&
-            Number(row.total_mentions) > 0 &&
-            Number(row.total_citations) === 0,
-        )
-        .map((row) => row.prompt_id),
-    ),
-  ];
+  const byPrompt = new Map();
+  for (const row of data ?? []) {
+    if (
+      Number(row.runs) > 0 &&
+      Number(row.total_mentions) > 0 &&
+      Number(row.total_citations) === 0
+    ) {
+      byPrompt.set(row.prompt_id, row);
+    }
+  }
+  // Most mentioned first: the prompts the panel describes are the first few.
+  const uncited = [...byPrompt.values()].sort(
+    (a, b) =>
+      Number(b.total_mentions) - Number(a.total_mentions) ||
+      String(a.prompt_id).localeCompare(String(b.prompt_id)),
+  );
   if (uncited.length < detection.uncitedMinPrompts) return [];
 
   return [
@@ -266,7 +274,7 @@ export async function uncitedMentionCandidates(brandId, now) {
       kind: 'uncited_mentions',
       dedupKey: 'uncited_mentions',
       source: ['ai_results'],
-      payload: { promptIds: uncited.slice(0, 50) },
+      payload: { promptIds: uncited.map((row) => row.prompt_id).slice(0, 50) },
       previousValue: null,
       currentValue: uncited.length,
       changeValue: null,
@@ -544,6 +552,232 @@ const GROUP_OF = new Map(
 );
 
 /**
+ * A lost citation arrives from the pulse naming only its prompt. Before it is
+ * written, it gets what the drawer shows (AC-001): the brand's page that was
+ * cited and when, the platforms it was lost on, who is cited now, and its
+ * cited days before and after. Best effort: without it the signal is still
+ * true and is recorded as before.
+ */
+export async function attachLostCitationEvidence(brandId, candidates, now) {
+  const lost = candidates.filter(
+    (c) => c.kind === 'lost_citations' && typeof c.payload?.promptId === 'string',
+  );
+  if (lost.length === 0) return;
+  try {
+    const evidence = await lostCitationEvidence(
+      brandId,
+      lost.map((c) => c.payload.promptId),
+      {
+        now,
+        windowDays: LOST_CITATION_WINDOW_DAYS,
+        quietDays: detection.lostCitationQuietDays,
+      },
+    );
+    for (const candidate of lost) {
+      const found = evidence.get(candidate.payload.promptId);
+      if (found) candidate.payload = { ...candidate.payload, ...found };
+    }
+  } catch (err) {
+    logger.warn({ brandId, err: err.message }, '[signals] lost-citation evidence unavailable');
+  }
+}
+
+// What each kind's evidence step writes, and the field that marks it written.
+const EVIDENCE = {
+  lost_citations: {
+    marker: 'citedDays',
+    fields: ['platforms', 'regions', 'citedDays', 'days', 'quietDays', 'lostUrls', 'citedNow'],
+  },
+};
+
+// Signals about one competitor, which get its positions and winning sources.
+const COMPETITOR_KINDS = new Set([
+  'competitor_leads',
+  'competitor_momentum',
+  'competitor_surge',
+  'competitor_crossed',
+  'competitor_overtaken',
+  'competitor_citation_gap',
+]);
+for (const kind of COMPETITOR_KINDS) {
+  EVIDENCE[kind] = { marker: 'positions', fields: ['positions', 'winningSources'] };
+}
+EVIDENCE.uncited_mentions = { marker: 'mentions', fields: ['mentions'] };
+
+// Signals about AI visits: to their pages, to one page, or to the whole site.
+const TRAFFIC_PAGE_KINDS = new Set([
+  'ai_traffic_slipping',
+  'ai_traffic_drop',
+  'ai_landing_page_winner',
+  'ai_landing_underperforming',
+  'converting_page_slipping',
+]);
+const TRAFFIC_SITE_KINDS = new Set(['cross_channel_risk', 'visibility_traffic_loss']);
+for (const kind of [...TRAFFIC_PAGE_KINDS, ...TRAFFIC_SITE_KINDS, 'page_opportunity']) {
+  EVIDENCE[kind] = {
+    marker: 'referrals',
+    fields: ['referrals', 'referralDays', 'citablePrompts', 'citablePromptsTotal'],
+  };
+}
+
+/** Pages a traffic signal's referrals describe: its first ones. */
+const TRAFFIC_PAGES_SHOWN = 5;
+
+/** Prompts a traffic signal names it could be cited on. */
+const CITABLE_PROMPTS_SHOWN = 10;
+
+/**
+ * A night whose evidence read failed refreshes a signal with its bare
+ * detector payload. Keep what an earlier night recorded instead: it is older,
+ * and still truer than nothing.
+ */
+export function keepRecordedEvidence(candidates, existing) {
+  for (const candidate of candidates) {
+    const evidence = EVIDENCE[candidate.kind];
+    if (!evidence || evidence.marker in (candidate.payload ?? {})) continue;
+    const recorded = existing.get(candidate.dedupKey)?.payload ?? {};
+    if (!(evidence.marker in recorded)) continue;
+    const kept = Object.fromEntries(
+      evidence.fields.filter((key) => key in recorded).map((key) => [key, recorded[key]]),
+    );
+    candidate.payload = { ...candidate.payload, ...kept };
+  }
+}
+
+/**
+ * An uncited-mentions signal names its prompts and nothing about them. Before
+ * it is written, its first prompts get what the drawer shows (AC-001): the
+ * platforms, the brand's position, the answers' sentiment, and a quote of
+ * the newest one. Best effort, like the other evidence.
+ */
+export async function attachMentionEvidence(brandId, candidates, now) {
+  const uncited = candidates.filter(
+    (c) => c.kind === 'uncited_mentions' && Array.isArray(c.payload?.promptIds),
+  );
+  for (const candidate of uncited) {
+    try {
+      const mentions = await mentionEvidence(brandId, candidate.payload.promptIds, {
+        now,
+        windowDays: detection.windowDays,
+      });
+      candidate.payload = { ...candidate.payload, mentions };
+    } catch (err) {
+      logger.warn({ brandId, err: err.message }, '[signals] mention evidence unavailable');
+    }
+  }
+}
+
+/** A traffic signal's pages, or its one; null for the site. */
+function trafficPagesOf(candidate) {
+  if (candidate.kind === 'page_opportunity') {
+    const page = candidate.payload?.landingPage;
+    return typeof page === 'string' && page ? [page] : [];
+  }
+  if (TRAFFIC_SITE_KINDS.has(candidate.kind)) return null;
+  if (!TRAFFIC_PAGE_KINDS.has(candidate.kind)) return [];
+  return (candidate.payload?.targets ?? [])
+    .map((target) => target?.id)
+    .filter((id) => typeof id === 'string' && id);
+}
+
+/** One traffic evidence read; null when it fails, which costs its signals only. */
+async function readTraffic(brandId, pages, opts) {
+  if (pages?.length === 0) return new Map();
+  try {
+    return await trafficEvidence(brandId, pages, opts);
+  } catch (err) {
+    logger.warn({ brandId, err: err.message }, '[signals] traffic evidence unavailable');
+    return null;
+  }
+}
+
+/**
+ * Traffic signals arrive naming their pages and a session count. Before they
+ * are written they get what the drawer shows (AC-001): for their first pages,
+ * the AI visits by platform over the last two windows, and the prompts
+ * naming any of their pages as the target. The detector's pages are matched
+ * as written, so their numbers are the finding's; a page opportunity's path
+ * as a path. Three reads at most, side by side. Best effort, like the other
+ * evidence.
+ */
+export async function attachTrafficEvidence(brandId, candidates, now) {
+  const onPages = candidates
+    .map((candidate) => ({
+      candidate,
+      pages: trafficPagesOf(candidate),
+      exact: TRAFFIC_PAGE_KINDS.has(candidate.kind),
+    }))
+    .filter(({ pages }) => pages?.length);
+  const onSite = candidates.filter((candidate) => TRAFFIC_SITE_KINDS.has(candidate.kind));
+  const pagesOf = (exact) => [
+    ...new Set(onPages.filter((o) => o.exact === exact).flatMap((o) => o.pages)),
+  ];
+
+  const [asWritten, asPaths, site] = await Promise.all([
+    readTraffic(brandId, pagesOf(true), { now, exact: true }),
+    readTraffic(brandId, pagesOf(false), { now }),
+    onSite.length ? readTraffic(brandId, null, { now }) : null,
+  ]);
+
+  for (const { candidate, pages, exact } of onPages) {
+    const evidence = exact ? asWritten : asPaths;
+    if (!evidence) continue;
+    const found = pages.map((page) => evidence.get(page)).filter(Boolean);
+    const prompts = [...new Map(found.flatMap((f) => f.prompts).map((p) => [p.id, p])).values()];
+    candidate.payload = {
+      ...candidate.payload,
+      referrals: found.slice(0, TRAFFIC_PAGES_SHOWN).map((f) => f.referrals),
+      referralDays: TRAFFIC_WINDOW_DAYS,
+      citablePrompts: prompts.slice(0, CITABLE_PROMPTS_SHOWN),
+      citablePromptsTotal: prompts.length,
+    };
+  }
+  const whole = site?.get(null);
+  if (whole) {
+    for (const candidate of onSite) {
+      candidate.payload = {
+        ...candidate.payload,
+        referrals: [whole.referrals],
+        referralDays: TRAFFIC_WINDOW_DAYS,
+      };
+    }
+  }
+}
+
+/** The competitor a signal is about: the library names it, the others key on it. */
+function competitorOf(candidate) {
+  const named = candidate.payload?.competitorId;
+  if (typeof named === 'string' && named) return named;
+  return subjectOf(candidate.dedupKey);
+}
+
+/**
+ * Competitor signals arrive naming the competitor and one number. Before they
+ * are written they get what the drawer shows (AC-001): per prompt and
+ * platform, the competitor's position against the brand's, and the sources
+ * behind its wins. Best effort, like the lost-citation evidence.
+ */
+export async function attachCompetitorEvidence(brandId, candidates, now) {
+  const about = candidates
+    .filter((c) => COMPETITOR_KINDS.has(c.kind))
+    .map((candidate) => ({ candidate, id: competitorOf(candidate) }))
+    .filter(({ id }) => id);
+  if (about.length === 0) return;
+  try {
+    const evidence = await competitorEvidence(brandId, [...new Set(about.map(({ id }) => id))], {
+      now,
+      windowDays: libraryThresholds.windowDays,
+    });
+    for (const { candidate, id } of about) {
+      const found = evidence.get(id);
+      if (found) candidate.payload = { ...candidate.payload, competitorId: id, ...found };
+    }
+  } catch (err) {
+    logger.warn({ brandId, err: err.message }, '[signals] competitor evidence unavailable');
+  }
+}
+
+/**
  * Open, persistent signals nothing detected tonight, split by why.
  *
  * - `superseded`: the subject is still there under another kind of the same
@@ -607,6 +841,7 @@ export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) 
     const candidate = fromPulseEntry(entry);
     if (candidate) candidates.push(candidate);
   }
+  await attachLostCitationEvidence(brandId, candidates, now);
   candidates.push(...(await pageOpportunityCandidates(brandId)));
   candidates.push(...(await uncitedMentionCandidates(brandId, now)));
   candidates.push(...(await auditCandidates(brandId, now)));
@@ -630,6 +865,9 @@ export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) 
   const overflow = library.overflow.filter(
     (candidate) => !(outage && DECLINE_KINDS.has(candidate.kind)),
   );
+  await attachCompetitorEvidence(brandId, [...candidates, ...overflow], now);
+  await attachMentionEvidence(brandId, candidates, now);
+  await attachTrafficEvidence(brandId, [...candidates, ...overflow], now);
 
   // Existing rows decide insert vs update vs reopen. A brand's signal set is
   // small (tens), so reading it whole is cheaper than being clever.
@@ -640,6 +878,7 @@ export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) 
     .limit(1000);
   if (readErr) throw new Error(readErr.message);
   const existing = new Map((existingRows ?? []).map((row) => [row.dedup_key, row]));
+  keepRecordedEvidence([...candidates, ...overflow], existing);
 
   const nowIso = now.toISOString();
   let inserted = 0;

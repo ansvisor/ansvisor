@@ -14,9 +14,11 @@
 
 export interface SignalWhere {
   /** Platform or model slugs as stored (`gemini-web`, `gpt-5-6`), most common first. */
-  platforms: string[];
+  platforms: readonly string[];
   /** Location codes (`US`, `US-CA`), most common first. Empty when untargeted. */
-  regions: string[];
+  regions: readonly string[];
+  /** The topics of the prompts it is about, by name; what tells copies of one prompt apart. */
+  topics: readonly string[];
 }
 
 /** Where one prompt is tracked, the topic it belongs to, and whether it still runs. */
@@ -24,10 +26,12 @@ export interface PromptPlace {
   platforms: string[];
   regions: string[];
   topicId: string | null;
+  topic: string | null;
   isActive: boolean;
 }
 
-export const NO_WHERE: SignalWhere = { platforms: [], regions: [] };
+// Shared by every signal without a place; readonly, so no caller can fill it in.
+export const NO_WHERE: SignalWhere = { platforms: [], regions: [], topics: [] };
 
 // Shopping answers never feed a signal (the detectors skip them), so the
 // platform would only be noise beside the engines that did.
@@ -43,7 +47,7 @@ function targetIds(payload: Record<string, unknown>): string[] {
 }
 
 /** Values ordered by how many of the counted items carry them, then by name. */
-function byFrequency(values: string[]): string[] {
+function byFrequency(values: readonly string[]): string[] {
   const counts = new Map<string, number>();
   for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
   return [...counts.entries()]
@@ -68,7 +72,7 @@ export function signalWhere(
   const platform = str(payload.platform);
   const region = str(payload.region);
   if (platform || region) {
-    return { platforms: platform ? [platform] : [], regions: region ? [region] : [] };
+    return { platforms: platform ? [platform] : [], regions: region ? [region] : [], topics: [] };
   }
 
   let places: PromptPlace[] = [];
@@ -83,13 +87,41 @@ export function signalWhere(
       .map((id) => prompts.get(id))
       .filter((p): p is PromptPlace => p !== undefined);
   }
-  if (places.length === 0) return NO_WHERE;
+  const tracked =
+    places.length === 0
+      ? NO_WHERE
+      : mergeWhere(
+          places.map((p) => ({
+            platforms: p.platforms.filter((x) => !IGNORED_PLATFORMS.has(x)),
+            regions: p.regions,
+            topics: p.topic ? [p.topic] : [],
+          })),
+        );
 
-  // Each prompt counts a platform once, so "most common" means most prompts.
+  // A lost citation records the platforms and locations it was lost on
+  // (server signals/lost-citation-evidence.js): where it happened, which
+  // beats where its prompt is tracked.
+  const lostOn = strings(payload.platforms);
+  if (lostOn.length === 0) return tracked;
+  return { platforms: lostOn, regions: strings(payload.regions), topics: tracked.topics };
+}
+
+function strings(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === 'string' && v !== '')
+    : [];
+}
+
+/**
+ * Several places as one: every platform, location and topic, the ones most
+ * of them share first. Each place counts a value once, so "most common"
+ * means most prompts, or most signals of a group.
+ */
+export function mergeWhere(wheres: SignalWhere[]): SignalWhere {
+  if (wheres.length === 0) return NO_WHERE;
   return {
-    platforms: byFrequency(
-      places.flatMap((p) => [...new Set(p.platforms)].filter((x) => !IGNORED_PLATFORMS.has(x))),
-    ),
-    regions: byFrequency(places.flatMap((p) => [...new Set(p.regions)])),
+    platforms: byFrequency(wheres.flatMap((w) => [...new Set(w.platforms)])),
+    regions: byFrequency(wheres.flatMap((w) => [...new Set(w.regions)])),
+    topics: byFrequency(wheres.flatMap((w) => [...new Set(w.topics)])),
   };
 }

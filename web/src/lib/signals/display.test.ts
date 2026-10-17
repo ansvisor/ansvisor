@@ -110,6 +110,32 @@ describe('signalTexts', () => {
     });
   });
 
+  it('names the lost page, and the platform when it was lost on one', () => {
+    const lost = (platforms: string[]) =>
+      signal({
+        category: 'citation',
+        kind: 'lost_citations',
+        payload: {
+          promptId: 'p1',
+          promptText: 'Best coffee subscription?',
+          platforms,
+          lostUrls: [{ url: 'https://coffee.example/guide/' }],
+        },
+      });
+    expect(signalTexts(lost(['chatgpt-web']), tTexts)).toEqual({
+      title: 'Citations lost on ChatGPT for “Best coffee subscription?”',
+      description: 'coffee.example/guide is no longer cited on ChatGPT.',
+    });
+    expect(signalTexts(lost(['chatgpt-web', 'gemini-web']), tTexts).title).toBe(
+      'Citations lost for “Best coffee subscription?”',
+    );
+    // A row recorded before the evidence keeps the generic copy.
+    expect(
+      signalTexts(signal({ kind: 'lost_citations', payload: { promptText: 'x' } }), tTexts)
+        .description,
+    ).toBe('Your pages are no longer cited in answers to this prompt.');
+  });
+
   it('names both models a platform gap compares', () => {
     const gap = signal({
       kind: 'platform_gap',
