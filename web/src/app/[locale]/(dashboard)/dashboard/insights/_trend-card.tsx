@@ -36,18 +36,11 @@ const VisibilityRateTrendChart = dynamic(
   { ssr: false, loading: () => <Skeleton className="h-[320px] w-full" /> },
 );
 
-/** Action numbers as the Action Center writes them: "AC-61", "AC-3, AC-4", "AC-3, AC-4, AC-5 +2". */
-const actionIds = (nos: number[]) =>
-  nos
-    .slice(0, 3)
-    .map((n) => `AC-${n}`)
-    .join(', ');
-
 /**
  * The visibility trend card (VIS-007), as in the v2 mockup: the score over
  * the range, your line and the pinned competitors (chips to highlight them,
  * "Pin" to choose up to five, saved on the brand), the Action Center goal,
- * and markers for the days prompts were added and actions sent.
+ * and markers for the days prompts were added.
  */
 export function TrendCard({
   brandId,
@@ -109,23 +102,12 @@ export function TrendCard({
   };
 
   const describe = (m: TrendMarker) =>
-    m.kind === 'prompts'
-      ? t('promptsAdded', { count: m.count, date: dayLabel(m.day, locale) })
-      : t('actionsSent', {
-          actions:
-            m.actionNos.length > 3
-              ? t('moreActions', {
-                  actions: actionIds(m.actionNos),
-                  count: f.number(m.actionNos.length - 3),
-                })
-              : actionIds(m.actionNos),
-          date: dayLabel(m.day, locale),
-        });
+    t('promptsAdded', { count: m.count, date: dayLabel(m.day, locale) });
   // Every marker is listed below the chart; only those with a point are drawn on it.
   const placed = markers
     ? trendMarkers(markers, data.points).map((m) => ({
         ...m,
-        glyph: m.kind === 'prompts' ? '+' : 'A',
+        glyph: '+',
         title: describe(m),
       }))
     : [];

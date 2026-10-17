@@ -49,8 +49,10 @@ describe('trendMarkers', () => {
   it('puts each marker on the point of its day, or the next one with a point', () => {
     const markers = trendMarkers(
       {
-        promptsAdded: [{ day: '2026-09-29', count: 509 }],
-        actionsSent: [{ day: '2026-10-03', actionNos: [61] }],
+        promptsAdded: [
+          { day: '2026-09-29', count: 509 },
+          { day: '2026-10-03', count: 12 },
+        ],
         goal: null,
       },
       points,
@@ -58,11 +60,11 @@ describe('trendMarkers', () => {
 
     expect(markers).toEqual([
       { kind: 'prompts', day: '2026-09-29', date: '09-29', count: 509 },
-      { kind: 'actions', day: '2026-10-03', date: '10-04', actionNos: [61] },
+      { kind: 'prompts', day: '2026-10-03', date: '10-04', count: 12 },
     ]);
   });
 
-  it('keeps the three biggest prompt days and the three latest action days', () => {
+  it('keeps the three biggest prompt days', () => {
     const markers = trendMarkers(
       {
         promptsAdded: [
@@ -71,49 +73,30 @@ describe('trendMarkers', () => {
           { day: '2026-10-01', count: 2 },
           { day: '2026-10-02', count: 40 },
         ],
-        actionsSent: ['2026-09-28', '2026-09-29', '2026-10-01', '2026-10-02'].map((day, i) => ({
-          day,
-          actionNos: [i + 1],
-        })),
         goal: null,
       },
       points,
     );
 
-    expect(markers.filter((m) => m.kind === 'prompts').map((m) => m.day)).toEqual([
-      '2026-09-29',
-      '2026-09-30',
-      '2026-10-02',
-    ]);
-    expect(markers.filter((m) => m.kind === 'actions').map((m) => m.day)).toEqual([
-      '2026-09-29',
-      '2026-10-01',
-      '2026-10-02',
-    ]);
+    expect(markers.map((m) => m.day)).toEqual(['2026-09-29', '2026-09-30', '2026-10-02']);
   });
 
   it('lists a day after the last point without placing it on the chart', () => {
     expect(
-      trendMarkers(
-        { promptsAdded: [{ day: '2026-10-05', count: 3 }], actionsSent: [], goal: null },
-        points,
-      ),
+      trendMarkers({ promptsAdded: [{ day: '2026-10-05', count: 3 }], goal: null }, points),
     ).toEqual([{ kind: 'prompts', day: '2026-10-05', date: null, count: 3 }]);
   });
 });
 
 describe('parseTrendMarkers', () => {
-  it('reads the RPC payload', () => {
+  it('reads the RPC payload, leaving the actions sent out', () => {
     expect(
       parseTrendMarkers({
         prompts_added: [{ day: '2026-10-12', count: '7' }],
         actions_sent: [{ day: '2026-10-13', action_nos: ['3', 4] }],
       }),
-    ).toEqual({
-      promptsAdded: [{ day: '2026-10-12', count: 7 }],
-      actionsSent: [{ day: '2026-10-13', actionNos: [3, 4] }],
-    });
-    expect(parseTrendMarkers(null)).toEqual({ promptsAdded: [], actionsSent: [] });
+    ).toEqual({ promptsAdded: [{ day: '2026-10-12', count: 7 }] });
+    expect(parseTrendMarkers(null)).toEqual({ promptsAdded: [] });
   });
 });
 
