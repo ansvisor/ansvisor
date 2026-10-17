@@ -1772,10 +1772,6 @@ export default function PromptsPage() {
           <h1 className="text-2xl font-bold tracking-tight">Prompts</h1>
           <p className="text-muted-foreground text-sm">
             Manage every tracked prompt and review estimated AI demand
-            <span className="ml-2 inline-flex items-center gap-1 text-xs text-muted-foreground/70">
-              <AlertCircle className="h-3 w-3" />
-              Volumes are estimates, not exact figures
-            </span>
           </p>
         </div>
       </div>
