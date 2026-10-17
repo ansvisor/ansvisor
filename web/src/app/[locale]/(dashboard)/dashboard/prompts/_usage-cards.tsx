@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 import { useFormatter, useNow, useTranslations } from 'next-intl';
-import { RotateCw } from 'lucide-react';
+import { ChevronDown, RotateCw } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,6 +18,11 @@ import { cn } from '@/lib/utils';
  * above the table. The brand cards filter the table; the account cards lead
  * to Plan & usage. They load on their own (GET /api/prompts/usage), so the
  * table never waits for them.
+ *
+ * The cards fold under the title, as the sidebar's Prompts item does: closed
+ * whenever the page opens, so the table sits right under the controls, and
+ * open only when the reader asks. Closed, the title still says when the plan's
+ * prompt locations are nearly or fully used.
  */
 
 /** How long a tracked prompt reads as New after it is added. */
@@ -188,6 +193,8 @@ export function PromptUsageCards({
   onRetry: () => void;
 }) {
   const t = useTranslations('prompts.usage');
+  const [open, setOpen] = useState(false);
+  const bodyId = useId();
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
   const n = (value: number) => format.number(value);
@@ -261,11 +268,45 @@ export function PromptUsageCards({
 
   return (
     <section className="overflow-hidden rounded-xl border bg-card">
-      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-b px-4 py-3">
-        <h2 className="text-[15px] font-semibold">{t('title')}</h2>
+      <div
+        className={cn(
+          'flex flex-wrap items-center gap-x-2.5 gap-y-1 px-4 py-3',
+          open && 'border-b',
+        )}
+      >
+        <h2 className="text-[15px] font-semibold">
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={bodyId}
+            onClick={() => setOpen((o) => !o)}
+            className="-ml-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            <ChevronDown
+              aria-hidden
+              className={cn(
+                'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+                !open && '-rotate-90',
+              )}
+            />
+            {t('title')}
+          </button>
+        </h2>
         <span className="text-xs text-muted-foreground">
           {readOnly ? t('subtitleReadOnly') : t('subtitle')}
         </span>
+        {!open && usage && limit !== null && tone !== 'normal' && (
+          <span
+            className={cn(
+              'rounded-full border px-2 py-0.5 text-[11px] font-medium tabular-nums',
+              tone === 'full'
+                ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300'
+                : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300',
+            )}
+          >
+            {t('collapsedLocations', { used: n(used), limit: n(limit) })}
+          </span>
+        )}
         {planHref && (
           <Link
             href={planHref}
@@ -279,7 +320,11 @@ export function PromptUsageCards({
         )}
       </div>
 
-      <div className="grid grid-cols-1 min-[900px]:grid-cols-[2fr_3fr]">
+      {/* Kept mounted while closed, so opening shows the counts at once. */}
+      <div
+        id={bodyId}
+        className={cn('grid grid-cols-1 min-[900px]:grid-cols-[2fr_3fr]', !open && 'hidden')}
+      >
         <div className="min-w-0 border-b min-[900px]:border-r min-[900px]:border-b-0">
           <GroupHeader name={t('thisBrand')}>
             <span className="truncate text-xs text-muted-foreground">{brandName}</span>
@@ -409,7 +454,12 @@ export function PromptUsageCards({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-4 py-2.5 text-xs text-muted-foreground">
+      <div
+        className={cn(
+          'flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-4 py-2.5 text-xs text-muted-foreground',
+          !open && 'hidden',
+        )}
+      >
         <span>{t('footer')}</span>
         {state.status === 'error' ? (
           <button

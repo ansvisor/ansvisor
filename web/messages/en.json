@@ -2920,6 +2920,7 @@
       "acrossBrands": "across {count, plural, one {# brand} other {# brands}}",
       "locationPairs": "prompt × location pairs",
       "overLimit": "over limit",
+      "collapsedLocations": "{used} / {limit} prompt locations",
       "ofLimit": "of {limit} on {plan}",
       "onPlan": "on {plan}",
       "unlimited": "Unlimited",
