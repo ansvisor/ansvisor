@@ -11,10 +11,16 @@ import { MentionsListTab } from './_mentions-tab';
 const listMentions = vi.fn();
 const getMentionResponse = vi.fn();
 const sendMentionsToActionCenter = vi.fn();
+const overrideMentionSentiment = vi.fn();
 vi.mock('@/lib/actions/mentions', () => ({
   listMentions: (...args: unknown[]) => listMentions(...args),
   getMentionResponse: (...args: unknown[]) => getMentionResponse(...args),
   sendMentionsToActionCenter: (...args: unknown[]) => sendMentionsToActionCenter(...args),
+  overrideMentionSentiment: (...args: unknown[]) => overrideMentionSentiment(...args),
+}));
+let canManage = true;
+vi.mock('@/hooks/use-user-role', () => ({
+  useUserRole: () => ({ role: canManage ? 'admin' : 'analyst', canManage, canAdmin: canManage }),
 }));
 const suggestContentForPrompt = vi.fn();
 vi.mock('@/lib/actions/content', () => ({
@@ -121,6 +127,8 @@ afterEach(() => {
   listMentions.mockReset();
   getMentionResponse.mockReset();
   sendMentionsToActionCenter.mockReset();
+  overrideMentionSentiment.mockReset();
+  canManage = true;
   suggestContentForPrompt.mockReset();
   push.mockReset();
   Object.values(toast).forEach((fn) => fn.mockClear());
@@ -299,6 +307,119 @@ describe('MentionsListTab', () => {
       'This prompt already has a content suggestion',
       expect.objectContaining({ description: 'Best espresso beans?' }),
     );
+  });
+
+  it("shows an answer's last correction, and lets a manager correct it", async () => {
+    listMentions.mockResolvedValue(list());
+    getMentionResponse.mockResolvedValue({
+      response: 'Acme Coffee.',
+      citations: [],
+      override: {
+        sentiment: 'negative',
+        previousSentiment: 'neutral',
+        note: 'Calls us pricey',
+        userName: 'Demo User',
+        createdAt: '2026-10-16T10:00:00Z',
+      },
+    });
+    overrideMentionSentiment.mockResolvedValue({
+      changed: true,
+      sentiment: 'positive',
+      override: {
+        sentiment: 'positive',
+        previousSentiment: 'negative',
+        note: 'Praises the roast',
+        userName: 'Demo User',
+        createdAt: '2026-10-17T10:00:00Z',
+      },
+    });
+    render(tab());
+    await settle();
+    await act(async () => {
+      (container.querySelector('tbody tr[tabindex]') as HTMLElement).click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const drawer = () => document.body.querySelector('[role="dialog"]') as HTMLElement;
+    expect(drawer().textContent).toContain('Corrected by Demo User on Oct 16, 2026 · was Neutral');
+    expect(drawer().textContent).toContain('“Calls us pricey”');
+
+    const button = (label: string) =>
+      [...drawer().querySelectorAll('button')].find((b) => b.textContent === label) as HTMLElement;
+    act(() => button('Sentiment is wrong?').click());
+    // The current sentiment is chosen, so there is nothing to save yet.
+    expect(button('Save correction').hasAttribute('disabled')).toBe(true);
+    act(() => button('Positive').click());
+    const note = drawer().querySelector('textarea') as HTMLTextAreaElement;
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+      setter.call(note, 'Praises the roast');
+      note.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      button('Save correction').click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(overrideMentionSentiment).toHaveBeenCalledWith('r1', 'positive', 'Praises the roast');
+    expect(toast.success).toHaveBeenCalledWith(
+      'Sentiment corrected',
+      expect.objectContaining({ description: 'This answer now counts as Positive everywhere.' }),
+    );
+    // The drawer and the row show the new sentiment at once, with the new history.
+    expect(drawer().textContent).toContain('Corrected by Demo User on Oct 17, 2026 · was Negative');
+    const firstRow = container.querySelector('tbody tr[tabindex]') as HTMLElement;
+    expect(firstRow.textContent).toContain('Positive');
+    expect(firstRow.textContent).not.toContain('Negative');
+  });
+
+  it('reads the page again when a correction takes a row out of the sentiment filter', async () => {
+    window.history.replaceState(null, '', '/dashboard/mentions?tab=mentions&sentiment=negative');
+    listMentions.mockResolvedValue(list());
+    getMentionResponse.mockResolvedValue({
+      response: 'Acme Coffee.',
+      citations: [],
+      override: null,
+    });
+    overrideMentionSentiment.mockResolvedValue({
+      changed: true,
+      sentiment: 'neutral',
+      override: null,
+    });
+    render(tab());
+    await settle();
+    expect(listMentions).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      (container.querySelector('tbody tr[tabindex]') as HTMLElement).click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const drawer = document.body.querySelector('[role="dialog"]') as HTMLElement;
+    const button = (label: string) =>
+      [...drawer.querySelectorAll('button')].find((b) => b.textContent === label) as HTMLElement;
+    act(() => button('Sentiment is wrong?').click());
+    act(() => button('Neutral').click());
+    await act(async () => {
+      button('Save correction').click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await settle();
+    expect(listMentions).toHaveBeenCalledTimes(2);
+  });
+
+  it('offers no correction to analysts', async () => {
+    canManage = false;
+    listMentions.mockResolvedValue(list());
+    getMentionResponse.mockResolvedValue({
+      response: 'Acme Coffee.',
+      citations: [],
+      override: null,
+    });
+    render(tab());
+    await settle();
+    await act(async () => {
+      (container.querySelector('tbody tr[tabindex]') as HTMLElement).click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const drawer = document.body.querySelector('[role="dialog"]') as HTMLElement;
+    expect(drawer.textContent).not.toContain('Sentiment is wrong?');
   });
 
   it('keeps its page when a read fails, and says so', async () => {

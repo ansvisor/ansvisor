@@ -23,7 +23,7 @@ import { getMentionResponse } from '@/lib/actions/mentions';
 import { classifyDomain, extractHostname, SOURCE_CATEGORY_LABELS } from '@/lib/citations/classify';
 import { stripEntityMarkup } from '@/lib/entity-markup';
 import { mentionPlatformLabel } from '@/lib/mentions-headline';
-import type { MentionRow } from '@/lib/mentions-list';
+import type { MentionRow, MentionSentiment, SentimentOverride } from '@/lib/mentions-list';
 import { formatRegionDisplay } from '@/lib/region';
 import { cn } from '@/lib/utils';
 import type { Citation } from '@/types';
@@ -34,10 +34,17 @@ import {
   SentimentPill,
   type MentionNames,
 } from './_mention-parts';
+import { SentimentCorrection } from './_sentiment-correction';
 import type { useMentionActions } from './_use-mention-actions';
 
 type Loaded =
-  | { id: string; status: 'ok'; response: string; citations: Citation[] }
+  | {
+      id: string;
+      status: 'ok';
+      response: string;
+      citations: Citation[];
+      override: SentimentOverride | null;
+    }
   | { id: string; status: 'missing' | 'error' };
 
 function Section({
@@ -75,6 +82,8 @@ export function ResponseDrawer({
   names,
   domains,
   actions,
+  canCorrect,
+  onSentimentChanged,
   onClose,
 }: {
   brandId: string;
@@ -87,6 +96,9 @@ export function ResponseDrawer({
     ReturnType<typeof useMentionActions>,
     'send' | 'sending' | 'suggest' | 'suggesting'
   >;
+  /** Admins and managers may correct the sentiment ("Sentiment is wrong"). */
+  canCorrect: boolean;
+  onSentimentChanged: (id: string, sentiment: MentionSentiment) => void;
   onClose: () => void;
 }) {
   const t = useTranslations('mentions.drawer');
@@ -114,6 +126,17 @@ export function ResponseDrawer({
 
   // A previous answer's text never shows under this one's header.
   const answer = loaded && loaded.id === id ? loaded : null;
+  // A correction made here shows at once, before the answer is read again.
+  const [corrected, setCorrected] = useState<{
+    id: string;
+    override: SentimentOverride | null;
+  } | null>(null);
+  const override =
+    corrected && corrected.id === id
+      ? corrected.override
+      : answer?.status === 'ok'
+        ? answer.override
+        : null;
   const response = answer?.status === 'ok' ? stripEntityMarkup(answer.response) : '';
 
   // The marks inside the rendered answer; keyed below so new names re-render it.
@@ -210,6 +233,17 @@ export function ResponseDrawer({
             </SheetHeader>
 
             <div className="flex-1 space-y-6 overflow-y-auto px-5 py-4">
+              <SentimentCorrection
+                key={row.id}
+                row={row}
+                override={override}
+                canCorrect={canCorrect}
+                onCorrected={(sentiment, next) => {
+                  setCorrected({ id: row.id, override: next });
+                  onSentimentChanged(row.id, sentiment);
+                }}
+              />
+
               <Section title={t('mention')}>
                 <blockquote className="rounded-md border-l-2 border-violet-400 bg-muted/40 px-3 py-2 text-sm leading-relaxed">
                   <Highlighted text={row.excerpt} names={names} />

@@ -7,8 +7,11 @@ import type { MentionsQuery } from '@/lib/mentions-filters';
 import {
   MENTIONS_PAGE_SIZE,
   parseMentionsList,
+  parseSentimentOverride,
+  type MentionSentiment,
   type MentionsList,
   type MentionsTableState,
+  type SentimentOverride,
 } from '@/lib/mentions-list';
 import { parseMentionsOverview, type MentionsOverview } from '@/lib/mentions-overview';
 import type { Citation } from '@/types';
@@ -88,26 +91,79 @@ export async function listMentions(
 }
 
 /**
- * One answer's stored text and citations, for the response drawer. Read as
- * the caller, so row-level security limits it to their organization's
- * answers; null when it isn't theirs or no longer exists.
+ * One answer's stored text and citations, and its latest sentiment
+ * correction, for the response drawer. Read as the caller, so row-level
+ * security limits it to their organization's answers; null when it isn't
+ * theirs or no longer exists.
  */
 export async function getMentionResponse(
   brandId: string,
   resultId: string,
-): Promise<{ response: string; citations: Citation[] } | null> {
+): Promise<{ response: string; citations: Citation[]; override: SentimentOverride | null } | null> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('prompt_results')
-    .select('response, citations')
-    .eq('id', resultId)
-    .eq('brand_id', brandId)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
+  const [answer, correction] = await Promise.all([
+    supabase
+      .from('prompt_results')
+      .select('response, citations')
+      .eq('id', resultId)
+      .eq('brand_id', brandId)
+      .maybeSingle(),
+    supabase
+      .from('sentiment_overrides')
+      .select('sentiment, previous_sentiment, note, user_name, created_at')
+      .eq('result_id', resultId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  if (answer.error) throw new Error(answer.error.message);
+  const data = answer.data;
   if (!data) return null;
   return {
     response: typeof data.response === 'string' ? data.response : '',
     citations: Array.isArray(data.citations) ? (data.citations as unknown as Citation[]) : [],
+    // A missing table (a build before 00160) reads as no correction.
+    override: correction.error ? null : parseSentimentOverride(correction.data),
+  };
+}
+
+/**
+ * "Sentiment is wrong" in the response drawer (MS-08): sets an answer's
+ * sentiment toward the brand, with an optional note. The database checks
+ * that the caller is an admin or manager of the answer's organization,
+ * changes the answer everywhere its sentiment counts, refreshes that day's
+ * rollups and keeps the correction's history (00160).
+ */
+export async function overrideMentionSentiment(
+  resultId: string,
+  sentiment: MentionSentiment,
+  note?: string,
+): Promise<
+  | { changed: boolean; sentiment: MentionSentiment; override: SentimentOverride | null }
+  | { error: 'forbidden' | 'invalid' | 'missing' | 'unknown'; message: string }
+> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('override_mention_sentiment', {
+    p_result_id: resultId,
+    p_sentiment: sentiment,
+    p_note: note?.trim() || undefined,
+  });
+  if (error) {
+    const kind =
+      error.code === '42501'
+        ? 'forbidden'
+        : error.code === '22023'
+          ? 'invalid'
+          : error.code === 'P0002'
+            ? 'missing'
+            : 'unknown';
+    return { error: kind, message: error.message };
+  }
+  const r = (data ?? {}) as Record<string, unknown>;
+  return {
+    changed: r.changed === true,
+    sentiment,
+    override: parseSentimentOverride(r.override),
   };
 }
 
