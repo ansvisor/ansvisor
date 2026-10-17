@@ -30,3 +30,19 @@ export function formatDate(iso: string | null): string {
     day: 'numeric',
   });
 }
+
+/** "Oct 17": a short day label, e.g. for a chart axis. */
+export function formatMonthDay(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/** "Oct 17, 2026, 2:05 PM": a date with its time, for runs on the same day. */
+export function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}

@@ -24,7 +24,13 @@ import {
 } from '../lib/plan-guard.js';
 import { buildAuditContext } from '../lib/audit/context.js';
 import { normStoredDomain } from '../lib/audit/host.js';
-import { buildTrendPoints, parseListPage, TREND_LIMIT } from '../lib/audit/history.js';
+import {
+  buildAuditPages,
+  buildTrendPoints,
+  parseListPage,
+  TREND_LIMIT,
+} from '../lib/audit/history.js';
+import { readAllRpcRows } from '../lib/rpc-pages.js';
 import { runSignals } from '../lib/audit/engine.js';
 import { evaluateLlmSignals } from '../lib/audit/llm-signals.js';
 import { evaluateBrandEntity } from '../lib/audit/external-signals.js';
@@ -72,6 +78,43 @@ function assembleAudit(audit, signalRows) {
     signals,
     recommendations: audit.recommendations ?? [],
   };
+}
+
+/** The brand's primary domain as stored (else its first domain), or null. */
+async function primaryDomainOf(brandId) {
+  const { data: domainRows } = await supabaseAdmin
+    .from('brand_domains')
+    .select('domain, is_primary')
+    .eq('brand_id', brandId);
+  return (
+    (domainRows ?? []).find((d) => d.is_primary)?.domain ?? (domainRows ?? [])[0]?.domain ?? null
+  );
+}
+
+// 20 audits × 47 signals stays under PostgREST's 1000-row page.
+const ISSUE_COUNT_CHUNK = 20;
+
+/** Failed and warning signals per audit id. */
+async function countIssues(auditIds) {
+  const counts = new Map();
+  const chunks = [];
+  for (let i = 0; i < auditIds.length; i += ISSUE_COUNT_CHUNK) {
+    chunks.push(auditIds.slice(i, i + ISSUE_COUNT_CHUNK));
+  }
+  const results = await Promise.all(
+    chunks.map((ids) =>
+      supabaseAdmin
+        .from('audit_signal_results')
+        .select('audit_id')
+        .in('audit_id', ids)
+        .in('status', ['fail', 'warn']),
+    ),
+  );
+  for (const { data, error } of results) {
+    if (error) throw error;
+    for (const row of data ?? []) counts.set(row.audit_id, (counts.get(row.audit_id) ?? 0) + 1);
+  }
+  return counts;
 }
 
 /**
@@ -259,12 +302,7 @@ router.get('/trend', async (req, res) => {
   try {
     await assertBrandAccess(brandId, userId);
 
-    const { data: domainRows } = await supabaseAdmin
-      .from('brand_domains')
-      .select('domain, is_primary')
-      .eq('brand_id', brandId);
-    const primary =
-      (domainRows ?? []).find((d) => d.is_primary)?.domain ?? (domainRows ?? [])[0]?.domain ?? null;
+    const primary = await primaryDomainOf(brandId);
     const primaryHost = normStoredDomain(primary);
 
     const { data: rows } = await supabaseAdmin
@@ -283,6 +321,58 @@ router.get('/trend', async (req, res) => {
       return res.status(err.status).json({ success: false, message: err.message });
     }
     req.log.error({ err }, 'audit trend failed');
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/audits/pages?brandId=…&limit=50&offset=0 — one row per audited
+// page (repeat audits of a URL share it), most recently audited first, with
+// its latest score, the previous one, a status, its trend, its open issues
+// and its runs. `total` is the number of pages, for paging.
+// Registered before /:id so "pages" isn't matched as an audit id.
+router.get('/pages', async (req, res) => {
+  const userId = req.user?.id;
+  const { brandId } = req.query;
+  const { limit, offset } = parseListPage(req.query);
+  if (!brandId) {
+    return res.status(400).json({ success: false, message: 'brandId is required' });
+  }
+
+  try {
+    await assertBrandAccess(brandId, userId);
+
+    const [primary, { data: rows, error }] = await Promise.all([
+      primaryDomainOf(brandId),
+      readAllRpcRows('site_audits', (from, to) =>
+        supabaseAdmin
+          .from('site_audits')
+          .select('id, url, final_url, status, total_score, created_at')
+          .eq('brand_id', brandId)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to),
+      ),
+    ]);
+    if (error) throw error;
+
+    const all = buildAuditPages(rows);
+    const pages = all.slice(offset, offset + limit);
+    const issues = await countIssues(pages.filter((p) => p.score !== null).map((p) => p.auditId));
+
+    return res.json({
+      success: true,
+      pages: pages.map((p) => ({
+        ...p,
+        issues: p.score === null ? null : (issues.get(p.auditId) ?? 0),
+      })),
+      total: all.length,
+      primaryHost: normStoredDomain(primary),
+    });
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    req.log.error({ err }, 'audit pages failed');
     return res.status(500).json({ success: false, message: err.message });
   }
 });
