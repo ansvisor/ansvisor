@@ -56,6 +56,7 @@
     "audit": "Site Audit",
     "competitors": "Competitors",
     "citations": "Citations",
+    "mentions": "Mentions",
     "shopping": "Shopping",
     "reports": "Reports",
     "settings": "Settings",
@@ -2438,6 +2439,28 @@
       "title": "Prompts named late, or not at all, on at least one AI platform. On, the furthest behind come first.",
       "order": "Furthest behind first: late or missing on the most AI platforms, then the worse average position."
     }
+  },
+  "mentions": {
+    "title": "Mentions & Sentiment",
+    "description": "Where AI mentions your brand, how it describes you, why, and what to do about it.",
+    "selectBrand": "Select a brand to see its mentions.",
+    "tabs": {
+      "label": "Mentions & Sentiment views",
+      "overview": "Overview",
+      "mentions": "Mentions",
+      "perception": "Perception"
+    },
+    "filters": {
+      "platform": "Platform",
+      "allPlatforms": "All platforms",
+      "country": "Country",
+      "allCountries": "All countries",
+      "topic": "Topic",
+      "allTopics": "All topics",
+      "search": "Search",
+      "searchPlaceholder": "Search prompts, brands, phrases…"
+    },
+    "comingSoon": "This view is on its way: its figures and charts arrive with the next updates."
   },
   "competitors": {
     "title": "Competitors",
