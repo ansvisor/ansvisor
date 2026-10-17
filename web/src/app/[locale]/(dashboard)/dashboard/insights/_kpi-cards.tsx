@@ -259,8 +259,8 @@ interface KpiRowsProps {
 
 /**
  * The Insights KPI cards (VIS-003): today's five on the first row, the new
- * rates on the second, as in the v2 mockup. Changes follow "Compare: Same
- * prompts"; the values themselves cover every prompt in the window.
+ * rates on the second, as in the v2 mockup. Changes are against the previous
+ * period; the values themselves cover every prompt in the window.
  */
 export function KpiRows({
   summary,
@@ -301,10 +301,8 @@ export function KpiRows({
             active: f.number(coverage.activePrompts),
           })
         : null;
-  const basisSub =
-    comparison?.basis === 'same'
-      ? t('samePrompts', { count: comparison.samePrompts })
-      : t('allPrompts');
+  // Under a change, what it is against; nothing without one.
+  const vsPrevious = (change: number | null) => (change === null ? null : t('vsPrevious'));
 
   const quota =
     trackedPrompts && trackedPrompts.quotaLimit !== -1
@@ -315,8 +313,11 @@ export function KpiRows({
     : !quota
       ? t('unlimited', { count: trackedPrompts.quotaUsed })
       : quota.used > quota.limit
-        ? t('overLimit', { count: quota.used - quota.limit })
-        : t('slotsLeft', { count: quota.limit - quota.used });
+        ? // Only after a downgrade or a lowered limit: adding stops at the limit.
+          t('overLimit', { count: quota.used - quota.limit })
+        : quota.used === quota.limit
+          ? t('limitReached')
+          : t('slotsLeft', { count: quota.limit - quota.used });
 
   const daily = <K extends keyof KpiSeriesDay>(key: K) =>
     series ? series.map((d) => d[key] as number | null) : null;
@@ -382,7 +383,7 @@ export function KpiRows({
           icon={MessageCircle}
           value={f.compact(summary.totalMentions)}
           delta={upIsGood(summary.mentionsChange, { percent: true, locale })}
-          sub={basisSub}
+          sub={vsPrevious(summary.mentionsChange)}
           spark={daily('mentions')}
           onClick={() => onBreakdown('mentions')}
           clickLabel={t('viewBreakdown', { metric: t('mentions') })}
@@ -393,7 +394,7 @@ export function KpiRows({
           icon={Quote}
           value={f.compact(summary.totalCitations)}
           delta={upIsGood(summary.citationsChange, { percent: true, locale })}
-          sub={basisSub}
+          sub={vsPrevious(summary.citationsChange)}
           spark={daily('citations')}
           onClick={() => onNavigate('/dashboard/citations')}
           clickLabel={t('openCitations')}

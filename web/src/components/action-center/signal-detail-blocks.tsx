@@ -11,9 +11,11 @@ import { crawlerName, locationName, platformFamily, platformName } from '@/lib/s
 import { getPlatformName } from '@/lib/traffic-platforms';
 import {
   METRIC_UNITS,
+  PERIOD_DAYS,
   signalChange,
   signalLinks,
   signalWhereFields,
+  type ChangePeriod,
   type SignalFigure,
   type WhereValue,
 } from '@/lib/signals/detail';
@@ -493,7 +495,7 @@ export function SignalWhereBlock({ signal }: { signal: Signal }) {
   );
 }
 
-function useFigureText() {
+function useFigureText(period: ChangePeriod) {
   const t = useTranslations('actionCenter.signalsPage.drawer.change');
   const format = useFormatter();
 
@@ -525,7 +527,11 @@ function useFigureText() {
     return [
       t(`metrics.${figure.metric}`),
       overTime && name ? name : null,
-      t(`roles.${figure.role}`, { name: name || t('roles.unnamed') }),
+      t(`roles.${figure.role}`, {
+        name: name || t('roles.unnamed'),
+        // Only a before and an after say their days: "previous 14 days".
+        days: PERIOD_DAYS[period] ?? '',
+      }),
     ]
       .filter(Boolean)
       .join(' · ');
@@ -536,7 +542,6 @@ function useFigureText() {
 
 export function SignalChangeBlock({ signal }: { signal: Signal }) {
   const t = useTranslations('actionCenter.signalsPage.drawer');
-  const { value, label } = useFigureText();
   const change = signalChange(signal);
 
   return (
@@ -553,52 +558,67 @@ export function SignalChangeBlock({ signal }: { signal: Signal }) {
           </p>
           <div className="mt-2 space-y-2">
             {groupByMetric(change.figures).map((figures) => {
-              const before = figures.find((f) => f.role === 'before' || f.role === 'earlier');
-              const after = figures.find((f) => f.role === 'after' || f.role === 'latest');
-              if (before && after) {
-                // Days out of different totals have no meaningful difference.
-                const delta =
-                  after.of === undefined
-                    ? { metric: after.metric, value: after.value - before.value }
-                    : { metric: after.metric, value: 0 };
-                // A rise is good news for the brand's own numbers and bad news
-                // for a competitor's.
-                const good = delta.value >= 0 !== (after.subjectType === 'competitor');
-                return (
-                  <div key={after.metric} className="flex flex-wrap items-center gap-2">
-                    <FigureBox label={label(before)} value={value(before)} />
-                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                    <FigureBox label={label(after)} value={value(after)} />
-                    {delta.value !== 0 && (
-                      <span
-                        className={cn(
-                          'text-xs font-medium',
-                          good
-                            ? 'text-green-600 dark:text-green-400'
-                            : 'text-red-600 dark:text-red-400',
-                        )}
-                      >
-                        {value(delta, true)}
-                      </span>
-                    )}
-                  </div>
-                );
-              }
+              // A metric read over another window says which, above its row.
+              const period = figures[0].period ?? change.period;
               return (
-                <div key={figures[0].metric + figures[0].role} className="flex flex-wrap gap-2">
-                  {figures.map((figure) => (
-                    <FigureBox
-                      key={figure.role + (figure.subject ?? '')}
-                      label={label(figure)}
-                      value={value(figure, figure.role === 'change')}
-                    />
-                  ))}
+                <div key={figures[0].metric}>
+                  {period !== change.period && (
+                    <p className="mb-1 text-xs text-muted-foreground">
+                      {t(`change.periods.${period}`)}
+                    </p>
+                  )}
+                  <FigureRow figures={figures} period={period} />
                 </div>
               );
             })}
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** One metric's figures: a before and an after with the difference, or side by side. */
+function FigureRow({ figures, period }: { figures: SignalFigure[]; period: ChangePeriod }) {
+  const { value, label } = useFigureText(period);
+  const before = figures.find((f) => f.role === 'before' || f.role === 'earlier');
+  const after = figures.find((f) => f.role === 'after' || f.role === 'latest');
+  if (before && after) {
+    // Days out of different totals have no meaningful difference.
+    const delta =
+      after.of === undefined
+        ? { metric: after.metric, value: after.value - before.value }
+        : { metric: after.metric, value: 0 };
+    // A rise is good news for the brand's own numbers and bad news for a
+    // competitor's.
+    const good = delta.value >= 0 !== (after.subjectType === 'competitor');
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <FigureBox label={label(before)} value={value(before)} />
+        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+        <FigureBox label={label(after)} value={value(after)} />
+        {delta.value !== 0 && (
+          <span
+            className={cn(
+              'text-xs font-medium',
+              good ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400',
+            )}
+          >
+            {value(delta, true)}
+          </span>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-wrap gap-2">
+      {figures.map((figure) => (
+        <FigureBox
+          key={figure.role + (figure.subject ?? '')}
+          label={label(figure)}
+          value={value(figure, figure.role === 'change')}
+        />
+      ))}
     </div>
   );
 }
