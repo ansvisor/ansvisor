@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { addPromptToSet } from '@/lib/actions/prompt';
 import { API_BASE_URL } from '@/config/api';
+import { FANOUT_MIN_SILENT_ANSWERS, FANOUT_SHARING_PLATFORMS } from '@/config/fanout-platforms';
 
 /**
  * Query Fan-out (#333) — read + promote actions over the OBSERVED sub-queries
@@ -39,6 +40,28 @@ export interface FanoutPromptCoverage {
   totalRuns: number;
   /** Of those, how many contained at least one observed sub-query. */
   runsWithFanout: number;
+  /** Platforms that answered this prompt in the window. */
+  platforms: string[];
+  /** Of those, the ones whose answers carried fan-out. */
+  fanoutPlatforms: string[];
+}
+
+/** One platform's fan-out over the window, for the page's engine strip. */
+export interface FanoutEngineCoverage {
+  /** Platform slug, as in `prompt_results.platform`. */
+  platform: string;
+  /** Tracked answers from this platform in the window. */
+  answers: number;
+  /** Of those, how many carried observed fan-out. */
+  answersWithFanout: number;
+  /** Distinct sub-queries this platform surfaced in the window. */
+  subQueries: number;
+  /**
+   * For a platform that shares its searches (FANOUT_SHARING_PLATFORMS) but
+   * had none in the window: when its last one arrived, up to MAX_FANOUT_DAYS
+   * back. Null otherwise, or when none arrived in that time either.
+   */
+  lastFanoutAt: string | null;
 }
 
 export interface QueryFanoutData {
@@ -55,6 +78,12 @@ export interface QueryFanoutData {
    * ranks by sub-query count). Only a stable baseline sort is applied here.
    */
   promptCoverage: FanoutPromptCoverage[];
+  /**
+   * Per-platform fan-out over the same window, every platform that answered
+   * included (those that never share searches too). Ordered by the answers
+   * that carried fan-out. Empty for the single-prompt variant.
+   */
+  engines: FanoutEngineCoverage[];
   /**
    * True when the window held more answers than `FANOUT_MAX_ROWS` and the read
    * stopped early. Rows come back oldest-first, so it's the MOST RECENT answers
@@ -242,18 +271,37 @@ export async function getQueryFanout(
   interface CoverageAcc {
     totalRuns: number;
     runsWithFanout: number;
+    platforms: Set<string>;
+    fanoutPlatforms: Set<string>;
   }
   const coverageByPrompt = new Map<string, CoverageAcc>();
+  // The same per answer, by the platform that answered.
+  const byEngine = new Map<string, { answers: number; answersWithFanout: number }>();
 
   for (const row of rows) {
     let coverage: CoverageAcc | undefined;
     if (row.prompt_id) {
       coverage = coverageByPrompt.get(row.prompt_id);
       if (!coverage) {
-        coverage = { totalRuns: 0, runsWithFanout: 0 };
+        coverage = {
+          totalRuns: 0,
+          runsWithFanout: 0,
+          platforms: new Set(),
+          fanoutPlatforms: new Set(),
+        };
         coverageByPrompt.set(row.prompt_id, coverage);
       }
       coverage.totalRuns += 1;
+      if (row.platform) coverage.platforms.add(row.platform);
+    }
+    let engine: { answers: number; answersWithFanout: number } | undefined;
+    if (row.platform) {
+      engine = byEngine.get(row.platform);
+      if (!engine) {
+        engine = { answers: 0, answersWithFanout: 0 };
+        byEngine.set(row.platform, engine);
+      }
+      engine.answers += 1;
     }
 
     const items = Array.isArray(row.search_queries)
@@ -287,14 +335,24 @@ export async function getQueryFanout(
     }
     // `seenInRow` is only written to past the validity guard above, so a
     // non-empty set means this answer contributed at least one real sub-query.
-    if (coverage && seenInRow.size > 0) coverage.runsWithFanout += 1;
+    if (seenInRow.size > 0) {
+      if (coverage) {
+        coverage.runsWithFanout += 1;
+        if (row.platform) coverage.fanoutPlatforms.add(row.platform);
+      }
+      if (engine) engine.answersWithFanout += 1;
+    }
   }
 
   if (byQuery.size === 0 && coverageByPrompt.size === 0) {
-    return { subQueries: [], totalObserved: 0, promptCoverage: [], truncated };
+    return { subQueries: [], totalObserved: 0, promptCoverage: [], engines: [], truncated };
   }
 
-  const roster = await fetchBrandPromptRoster(supabase, brandId);
+  // Independent reads: the last-fan-out lookups overlap the roster's.
+  const [engines, roster] = await Promise.all([
+    engineCoverage(supabase, brandId, since, byEngine, byQuery),
+    fetchBrandPromptRoster(supabase, brandId),
+  ]);
 
   // Prompt text for every prompt with a run in the window — a superset of the
   // fan-out-sourced prompts, since coverage reports the zero rows too. Paused
@@ -353,11 +411,75 @@ export async function getQueryFanout(
       text: promptTextById.get(id) ?? '',
       totalRuns: acc.totalRuns,
       runsWithFanout: acc.runsWithFanout,
+      platforms: [...acc.platforms].sort(),
+      fanoutPlatforms: [...acc.fanoutPlatforms].sort(),
     }))
     .filter((p) => p.text)
     .sort((a, b) => a.text.localeCompare(b.text));
 
-  return { subQueries, totalObserved: subQueries.length, promptCoverage, truncated };
+  return { subQueries, totalObserved: subQueries.length, promptCoverage, engines, truncated };
+}
+
+/**
+ * The engine strip's numbers. For a platform that shares its searches but
+ * had none in the window, also when its last ones arrived: ChatGPT's stopped
+ * on 2026-09-30, and "none since Sep 30" says far more than "0%".
+ */
+async function engineCoverage(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  since: string,
+  byEngine: Map<string, { answers: number; answersWithFanout: number }>,
+  byQuery: Map<string, { engines: Set<string> }>,
+): Promise<FanoutEngineCoverage[]> {
+  const subQueriesByEngine = new Map<string, number>();
+  for (const acc of byQuery.values()) {
+    for (const engine of acc.engines) {
+      subQueriesByEngine.set(engine, (subQueriesByEngine.get(engine) ?? 0) + 1);
+    }
+  }
+
+  const earliest = new Date(Date.now() - MAX_FANOUT_DAYS * 86_400_000).toISOString();
+  const silent = [...byEngine.entries()]
+    .filter(
+      ([platform, e]) =>
+        e.answers >= FANOUT_MIN_SILENT_ANSWERS &&
+        e.answersWithFanout === 0 &&
+        FANOUT_SHARING_PLATFORMS.includes(platform),
+    )
+    .map(([platform]) => platform);
+  const lastFanoutAt = new Map<string, string | null>();
+  await Promise.all(
+    silent.map(async (platform) => {
+      // `search_queries->0` exists only on a non-empty array, which PostgREST
+      // can test; comparing the jsonb to '[]' it can't do reliably.
+      const { data, error } = await supabase
+        .from('prompt_results')
+        .select('created_at')
+        .eq('brand_id', brandId)
+        .eq('platform', platform)
+        .gte('created_at', earliest)
+        .lt('created_at', since)
+        .not('search_queries->0', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      // The date is a nicety on top of the counts; never fail the page for it.
+      lastFanoutAt.set(platform, error ? null : ((data?.created_at as string | undefined) ?? null));
+    }),
+  );
+
+  return [...byEngine.entries()]
+    .map(([platform, e]) => ({
+      platform,
+      answers: e.answers,
+      answersWithFanout: e.answersWithFanout,
+      subQueries: subQueriesByEngine.get(platform) ?? 0,
+      lastFanoutAt: lastFanoutAt.get(platform) ?? null,
+    }))
+    .sort(
+      (a, b) => b.answersWithFanout - a.answersWithFanout || a.platform.localeCompare(b.platform),
+    );
 }
 
 /**
@@ -497,7 +619,7 @@ export async function getPromptFanout(
   // `promptCoverage` stays empty here: this variant answers for a single prompt
   // and has no prompt roster to report coverage over.
   if (byQuery.size === 0) {
-    return { subQueries: [], totalObserved: 0, promptCoverage: [], truncated };
+    return { subQueries: [], totalObserved: 0, promptCoverage: [], engines: [], truncated };
   }
 
   const subQueries: FanoutSubQuery[] = [...byQuery.entries()]
@@ -511,5 +633,11 @@ export async function getPromptFanout(
     }))
     .sort((a, b) => b.timesSearched - a.timesSearched || a.query.localeCompare(b.query));
 
-  return { subQueries, totalObserved: subQueries.length, promptCoverage: [], truncated };
+  return {
+    subQueries,
+    totalObserved: subQueries.length,
+    promptCoverage: [],
+    engines: [],
+    truncated,
+  };
 }
