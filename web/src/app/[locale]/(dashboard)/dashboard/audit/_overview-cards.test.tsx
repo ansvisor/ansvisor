@@ -112,6 +112,26 @@ describe('AuditOverviewCards', () => {
     expect(cards()[2]).toContain('No pages audited yet');
   });
 
+  it('says what auto-audit keeps for the runs still to come (SA-006)', () => {
+    const auto = {
+      enabled: true,
+      setting: null,
+      emailAfterRun: false,
+      perRun: 25,
+      reserved: 75,
+      used: 50,
+      periodStart: '2026-10-01T00:00:00.000Z',
+      periodEnd: '2026-11-01T00:00:00.000Z',
+      runs: [],
+      nextRun: { day: 14, at: '2026-10-14T00:00:00.000Z' },
+    };
+    render(overview(), { used: 245, running: 0, limit: 500, remaining: 180, auto });
+    expect(cards()[3]).toContain('180of 500 left');
+    expect(cards()[3]).toContain('245 used · 75 for auto-audit');
+    render(overview(), { used: 245, running: 5, limit: 500, remaining: 175, auto });
+    expect(cards()[3]).toContain('245 used · 5 running · 75 auto');
+  });
+
   it('shows an unlimited plan without a bar', () => {
     render(overview(), { used: 0, running: 0, limit: -1, remaining: -1 });
     expect(cards()[3]).toContain('Unlimited');

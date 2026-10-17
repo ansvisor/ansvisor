@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Pin,
   EyeOff,
+  Settings,
 } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useUserRole } from '@/hooks/use-user-role';
 import {
   runAudit,
   runAuditsBulk,
@@ -30,7 +32,9 @@ import {
   setOpportunityPrefs,
   getAuditQuota,
   getAuditTrend,
+  getLatestAutoRun,
   deleteAudit,
+  type AutoAuditRun,
   type AuditedPage,
   type AuditOverview,
   type AuditOpportunities,
@@ -44,6 +48,8 @@ import { AuditPagesTable } from './_pages-table';
 import { AuditBulkBar, ExportMenu } from './_bulk-bar';
 import { AuditOverviewCards } from './_overview-cards';
 import { OpportunitiesTable } from './_opportunities-table';
+import { AuditSettingsDialog } from './_settings-dialog';
+import { AutoRunNotice } from './_auto-run-notice';
 import { usePagesExport } from './_use-pages-export';
 import { cn } from '@/lib/utils';
 
@@ -66,6 +72,16 @@ async function readOpportunities(brandId: string): Promise<AuditOpportunities | 
     return await getAuditOpportunities(brandId);
   } catch (err) {
     console.error('Failed to load the Site Audit opportunities:', err);
+    return null;
+  }
+}
+
+/** The latest auto-audit run on the brand's pages; no notice when it can't be read. */
+async function readLatestRun(brandId: string): Promise<AutoAuditRun | null> {
+  try {
+    return await getLatestAutoRun(brandId);
+  } catch (err) {
+    console.error('Failed to load the latest auto-audit run:', err);
     return null;
   }
 }
@@ -95,6 +111,7 @@ export default function SiteAuditPage() {
   const t = useTranslations('audit');
   const router = useRouter();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
+  const { canManage } = useUserRole();
 
   // Prefill the URL with the active brand's primary domain (read once at init).
   const [url, setUrl] = useState(() => {
@@ -121,6 +138,8 @@ export default function SiteAuditPage() {
   // Opportunities when it lists pages, else Pages; chosen once per brand.
   const [tab, setTab] = useState<ListTab | null>(null);
   const [startingBulk, setStartingBulk] = useState(false);
+  const [latestRun, setLatestRun] = useState<AutoAuditRun | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { exporting, exportAll, exportPages } = usePagesExport(activeBrandId);
   // Capture "now" once (impure call belongs in a lazy initializer, not render).
   const [nowMs] = useState(() => Date.now());
@@ -137,14 +156,16 @@ export default function SiteAuditPage() {
     setSelected(new Set());
     setOppSelected(new Set());
     setTab(null);
+    setLatestRun(null);
     (async () => {
       try {
-        const [data, q, tr, ov, op] = await Promise.all([
+        const [data, q, tr, ov, op, run] = await Promise.all([
           getAuditPages(activeBrandId),
           getAuditQuota(),
           getAuditTrend(activeBrandId),
           readOverview(activeBrandId),
           readOpportunities(activeBrandId),
+          readLatestRun(activeBrandId),
         ]);
         if (!cancelled) {
           setPages(data.pages);
@@ -154,6 +175,7 @@ export default function SiteAuditPage() {
           setTrend(tr);
           setOverview(ov);
           setOpps(op);
+          setLatestRun(run);
           setTab(
             (current) =>
               current ?? ((op?.opportunities.length ?? 0) > 0 ? 'opportunities' : 'pages'),
@@ -268,12 +290,13 @@ export default function SiteAuditPage() {
     shownRef.current = pages.length;
   }, [pages.length]);
   const reloadInPlace = async (brandId: string) => {
-    const [data, q, tr, ov, op] = await Promise.all([
+    const [data, q, tr, ov, op, run] = await Promise.all([
       getAuditPages(brandId, 0, Math.min(Math.max(shownRef.current, 50), 100)),
       getAuditQuota(),
       getAuditTrend(brandId),
       readOverview(brandId),
       readOpportunities(brandId),
+      readLatestRun(brandId),
     ]);
     setPages(data.pages);
     setPagesTotal(data.total);
@@ -282,6 +305,7 @@ export default function SiteAuditPage() {
     setTrend(tr);
     setOverview(ov);
     setOpps(op);
+    setLatestRun(run);
     const oppSelectable = new Set(
       (op?.opportunities ?? []).filter((o) => !o.running).map((o) => o.key),
     );
@@ -427,10 +451,27 @@ export default function SiteAuditPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">{t('title')}</h1>
-        <p className="text-sm text-muted-foreground">{t('description')}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">{t('title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('description')}</p>
+        </div>
+        <Button variant="outline" className="shrink-0" onClick={() => setSettingsOpen(true)}>
+          <Settings className="h-4 w-4" />
+          {t('settings.button')}
+        </Button>
       </div>
+      <AuditSettingsDialog
+        brandId={activeBrandId}
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        canManage={canManage}
+        onSaved={() =>
+          void reloadInPlace(activeBrandId).catch((err) =>
+            console.error('Failed to refresh after saving the settings:', err),
+          )
+        }
+      />
 
       {/* Run bar */}
       <Card>
@@ -467,6 +508,14 @@ export default function SiteAuditPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* The latest auto-audit run on this brand's pages (SA-006) */}
+      <AutoRunNotice
+        key={activeBrandId}
+        brandId={activeBrandId}
+        run={latestRun}
+        nextRunAt={quota?.auto?.enabled ? (quota.auto.nextRun?.at ?? null) : null}
+      />
 
       {/* KPI cards, as in the v2 mockup (SA-018) */}
       {(loading || overview) && (
