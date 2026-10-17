@@ -25,8 +25,11 @@ vi.mock('../../config/supabase.js', () => ({
 vi.mock('../logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('../email.js', () => ({ sendEmail: vi.fn() }));
 
-const { probeStatus, findIssues, renderHealthEmail, collectHealthReport, PROBES } =
+const { probeStatus, findIssues, renderHealthEmail, collectHealthReport, fanoutDropped, PROBES } =
   await import('./report.js');
+
+/** The read probes' calls, without the fan-out check's. */
+const probeCalls = () => db.rpc.mock.calls.filter(([name]) => name === 'health_probe');
 
 const NOW = Date.parse('2026-10-06T06:00:00Z');
 const hoursAgo = (h) => new Date(NOW - h * 3600_000).toISOString();
@@ -58,7 +61,7 @@ describe('collectHealthReport', () => {
     db.rpc.mockResolvedValue({ data: 0.5, error: null });
     const report = await collectHealthReport(NOW);
 
-    expect(db.rpc).toHaveBeenCalledTimes(PROBES.length);
+    expect(probeCalls()).toHaveLength(PROBES.length);
     expect(db.rpc).toHaveBeenCalledWith('health_probe', {
       p_user_id: 'user-probe',
       p_brand_id: 'brand-probe',
@@ -72,7 +75,7 @@ describe('collectHealthReport', () => {
     delete process.env.HEALTH_PROBE_BRAND_ID;
     const report = await collectHealthReport(NOW);
     expect(report.probes.skipped).toBeTruthy();
-    expect(db.rpc).not.toHaveBeenCalled();
+    expect(probeCalls()).toHaveLength(0);
   });
 
   it('reports failed, stuck and missing nightly runs, ignoring manual ones', async () => {
@@ -161,6 +164,87 @@ describe('collectHealthReport', () => {
     const report = await collectHealthReport(NOW);
     expect(report.probes.results[0]).toMatchObject({ status: 'red', error: 'statement timeout' });
     expect(report.nightly.counts).toEqual({});
+  });
+});
+
+describe('query fan-out', () => {
+  const coverage = (recent, before) => (name, args) => {
+    if (name !== 'fanout_coverage_by_platform') return Promise.resolve({ data: 0.1, error: null });
+    const rows = args.p_until === new Date(NOW).toISOString() ? recent : before;
+    return Promise.resolve({ data: rows, error: null });
+  };
+
+  it("compares each platform's share of answers with fan-out to the week before", async () => {
+    db.rpc.mockImplementation(
+      coverage(
+        [
+          { platform: 'chatgpt-web', answers: 200, answers_with_fanout: 0 },
+          { platform: 'copilot-web', answers: 200, answers_with_fanout: 40 },
+          { platform: 'gemini-web', answers: 200, answers_with_fanout: 0 },
+        ],
+        [
+          { platform: 'chatgpt-web', answers: 1400, answers_with_fanout: 350 },
+          { platform: 'copilot-web', answers: 1400, answers_with_fanout: 280 },
+          { platform: 'gemini-web', answers: 1400, answers_with_fanout: 0 },
+        ],
+      ),
+    );
+    const report = await collectHealthReport(NOW);
+
+    expect(db.rpc).toHaveBeenCalledWith('fanout_coverage_by_platform', {
+      p_since: hoursAgo(24),
+      p_until: new Date(NOW).toISOString(),
+    });
+    expect(db.rpc).toHaveBeenCalledWith('fanout_coverage_by_platform', {
+      p_since: hoursAgo(24 * 4),
+      p_until: hoursAgo(24),
+    });
+    expect(report.fanout.platforms).toEqual([
+      expect.objectContaining({ platform: 'chatgpt-web', rate: 0, baselineRate: 0.25 }),
+      expect.objectContaining({ platform: 'copilot-web', rate: 0.2, baselineRate: 0.2 }),
+      expect.objectContaining({ platform: 'gemini-web', rate: 0, baselineRate: 0 }),
+    ]);
+    // ChatGPT stopped; Copilot held; Gemini never fans out, so it isn't news.
+    expect(findIssues(report).filter((i) => i.includes('fan-out'))).toEqual([
+      'chatgpt-web returned no query fan-out on any of its 200 answers in the last 24h (25% the days before) — check what Cloro returns',
+    ]);
+    expect(renderHealthEmail(report).html).toContain('Query fan-out');
+  });
+
+  it('flags a partial collapse too, but not a platform with too few answers to judge', () => {
+    const base = { platform: 'x', withFanout: 5, baselineAnswers: 500 };
+    expect(fanoutDropped({ ...base, answers: 100, rate: 0.05, baselineRate: 0.3 })).toBe(true);
+    expect(fanoutDropped({ ...base, answers: 100, rate: 0.2, baselineRate: 0.3 })).toBe(false);
+    expect(fanoutDropped({ ...base, answers: 5, rate: 0, baselineRate: 0.3 })).toBe(false);
+    expect(fanoutDropped({ ...base, answers: 100, rate: 0, baselineRate: 0.02 })).toBe(false);
+  });
+
+  it('keeps flagging an engine that should fan out, however long it has been silent', () => {
+    // ChatGPT on the day this check shipped: nothing for two weeks, so the
+    // days before are empty too.
+    const silent = {
+      platform: 'chatgpt-web',
+      answers: 400,
+      withFanout: 0,
+      rate: 0,
+      baselineAnswers: 1200,
+      baselineRate: 0,
+    };
+    expect(fanoutDropped(silent)).toBe(true);
+    // Gemini documents no fan-out, so a silent day is normal for it.
+    expect(fanoutDropped({ ...silent, platform: 'gemini-web' })).toBe(false);
+  });
+
+  it('says so when the check cannot run', async () => {
+    db.rpc.mockImplementation((name) =>
+      Promise.resolve(
+        name === 'fanout_coverage_by_platform'
+          ? { data: null, error: { message: 'timeout' } }
+          : { data: 0.1, error: null },
+      ),
+    );
+    const report = await collectHealthReport(NOW);
+    expect(findIssues(report)).toContain('Query fan-out could not be checked: timeout');
   });
 });
 

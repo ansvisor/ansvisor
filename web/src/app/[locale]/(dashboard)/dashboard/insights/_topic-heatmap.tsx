@@ -1,22 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
-import { ArrowRight } from 'lucide-react';
-import { toast } from 'sonner';
-import { Link, useRouter } from '@/i18n/navigation';
-import { Button } from '@/components/ui/button';
-import { sendTopicGapToActionCenter, type TopicGapWindow } from '@/lib/actions/topic';
+import { useLocale, useTranslations } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { biggestGap, heatShade, topicHeatmap, type TopicCompetitors } from '@/lib/insights-topics';
+import { numberFormat } from '@/lib/number-format';
+import { heatShade, topicHeatmap, type TopicCompetitors } from '@/lib/insights-topics';
 import { TONE_TEXT } from './kpi-format';
 
 /** Rows shown before "Show all". */
 const VISIBLE_ROWS = 6;
-
-/** A gap with one decimal, so the column lines up: "−29.0", "−20.3". */
-const gapText = (gap: number) => `−${Math.abs(gap).toFixed(1)}`;
 
 /**
  * Cell shades, light to dark: soft theme-relative tints, so they read in
@@ -40,19 +34,17 @@ const SHADES = [
 export function TopicHeatmap({
   topics,
   columns,
-  window,
   className,
 }: {
   topics: TopicCompetitors[];
   /** You first, then the competitors on the trend: `'you'` or a competitor id. */
   columns: { key: string; name: string }[];
-  /** The window and filters the map was loaded with, for "Send biggest gap". */
-  window: TopicGapWindow;
   className?: string;
 }) {
   const t = useTranslations('insights.topicMap');
-  const router = useRouter();
-  const [sending, setSending] = useState(false);
+  const f = numberFormat(useLocale());
+  /** A gap with one decimal, so the column lines up: "−29.0", "−20.3". */
+  const gapText = (gap: number) => `−${f.number(Math.abs(gap), 1)}`;
   // Expanded for this data only: another brand or range starts folded.
   const [expandedFor, setExpandedFor] = useState<TopicCompetitors[] | null>(null);
   const expanded = expandedFor === topics;
@@ -65,69 +57,10 @@ export function TopicHeatmap({
   // The tones spread over the scores of every row, so folding doesn't shift them.
   const named = rows.flatMap((r) => r.scores).filter((v) => v > 0);
   const [low, high] = [Math.min(...named), Math.max(...named)];
-  const target = biggestGap(rows);
-  const targetCompetitor = target && columns.find((c) => c.key === target.leader)?.name;
-
-  const sendBiggestGap = async () => {
-    if (!target) return;
-    setSending(true);
-    try {
-      const result = await sendTopicGapToActionCenter(target.topicId, target.leader, window);
-      if ('error' in result) {
-        // The page's numbers can be older than the server's: a newer run may
-        // have closed the gap since it loaded.
-        if (result.code === 'stale') toast.error(t('gapChanged'));
-        else toast.error(t('sendFailed'), { description: result.error });
-        return;
-      }
-      toast.success(
-        result.created
-          ? t('sent', { no: result.actionNo })
-          : t('alreadySent', { no: result.actionNo }),
-        {
-          action: {
-            label: t('openAction'),
-            onClick: () =>
-              router.push(`/dashboard/action-center/actions?action=${result.actionId}`),
-          },
-        },
-      );
-    } catch {
-      toast.error(t('sendFailed'));
-    } finally {
-      setSending(false);
-    }
-  };
-
   return (
     <Card className={className}>
       <CardHeader className="pb-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-sm font-medium">{t('title')}</CardTitle>
-          {/* The hint sits on a wrapper: a disabled button shows no tooltip. */}
-          <span
-            title={
-              target
-                ? t('sendGapTitle', {
-                    topic: target.name,
-                    competitor: targetCompetitor ?? '',
-                    gap: Math.abs(target.gap!).toFixed(1),
-                  })
-                : t('noGap')
-            }
-          >
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 gap-1.5 text-xs"
-              disabled={!target || sending}
-              onClick={sendBiggestGap}
-            >
-              <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-              {t('sendGap')}
-            </Button>
-          </span>
-        </div>
+        <CardTitle className="text-sm font-medium">{t('title')}</CardTitle>
       </CardHeader>
       <CardContent className="overflow-x-auto">
         {/* Fixed layout: every brand column gets the same width, as in the mockup. */}
@@ -167,7 +100,7 @@ export function TopicHeatmap({
                         row.status === 'lowSample' && 'opacity-50',
                       )}
                     >
-                      {value.toFixed(1)}
+                      {f.number(value, 1)}
                     </Link>
                   </td>
                 ))}
@@ -197,7 +130,7 @@ export function TopicHeatmap({
             onClick={() => setExpandedFor(expanded ? null : topics)}
             className="mt-1.5 w-full py-1 text-center text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
-            {expanded ? t('showLess') : t('showAll', { count: rows.length })}
+            {expanded ? t('showLess') : t('showAll', { count: f.number(rows.length) })}
           </button>
         )}
       </CardContent>

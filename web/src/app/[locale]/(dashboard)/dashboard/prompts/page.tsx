@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { PROMPTS_BASE, sectionFor, sectionFromPath } from '@/lib/prompts-routes';
@@ -14,6 +14,14 @@ const PlatformVolumeChart = dynamic(() => import('./_charts').then((m) => m.Plat
   loading: () => <Skeleton className="h-64 w-full" />,
 });
 import { QueryFanoutTab } from './_fanout-tab';
+import {
+  PromptUsageCards,
+  countByStatus,
+  locationQuotaFromUsage,
+  matchesStatusFilter,
+  usePromptUsage,
+  type PromptStatusFilter,
+} from './_usage-cards';
 import { INTENT_LABELS, INTENT_COLORS } from '@/config/intent-labels';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +30,7 @@ import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
+  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
@@ -84,10 +93,13 @@ import {
   Lightbulb,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type {
-  PlatformDot,
-  PlatformDotState,
-  PromptPositionCell,
+import {
+  compareLateness,
+  opensPositionsPanel,
+  positionCellKind,
+  type PlatformDot,
+  type PlatformDotState,
+  type PromptPositionCell,
 } from '@/lib/prompt-position-summary';
 import { mentionRateLabel } from '@/lib/prompt-improve';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -132,6 +144,11 @@ import { getPromptUsage, isPromptLimitReached } from '@/lib/prompt-usage';
 import { getTopics } from '@/lib/actions/topic';
 import type { PromptVisibilitySummary } from '@/lib/actions/tracking';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
+import {
+  OPPORTUNITY_HIGH_VOLUME,
+  OPPORTUNITY_MIN_VOLUME,
+  opportunityLevel,
+} from '@/lib/prompt-volume-opportunity';
 import type { PromptVolume, Prompt, Topic } from '@/types';
 import { toast } from 'sonner';
 import {
@@ -155,9 +172,14 @@ import { toCsv } from '@/lib/csv';
 import { formatRelative } from '@/lib/format-relative';
 import { compareNullsLast, type SortDir } from './prompt-sort';
 import { BulkActionBar } from './_bulk-action-bar';
-import { formatCompactNumber } from '@/lib/format';
+import { formatCompactNumber, formatNumber } from '@/lib/format';
 import { usePagination, TablePager } from '@/components/table-pager';
 import { PromptPositionsSheet } from '@/components/prompts/prompt-positions-sheet';
+import {
+  ClampedText,
+  ClampedTextTooltip,
+  createClampedTextHandle,
+} from '@/components/prompts/clamped-text';
 import {
   panelRangeFromTable,
   parsePositionsRange,
@@ -331,6 +353,15 @@ const PROMPT_EXPORT_HINT = 'No prompts yet - add prompts first.';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const VALID_TABS = ['all', 'fanout', 'insights'] as const;
+
+/**
+ * The window a tab opens on. Query Fan-out opens on 7 days: one day of
+ * answers holds few searches, and an engine that only some answers search
+ * with looks absent in it.
+ */
+function defaultRangeFor(tab: string): PromptRangePreset {
+  return tab === 'fanout' ? '7d' : DEFAULT_PROMPT_RANGE_PRESET;
+}
 type TabId = (typeof VALID_TABS)[number];
 
 const PROMPT_VIEWS = ['tracked', 'suggestions'] as const;
@@ -563,68 +594,6 @@ function brandLocation(region: string | undefined, state: string | undefined): s
 }
 
 // ─── Tracked prompt limit (PROMPT-009) ────────────────────────────────────────
-
-const PROMPT_USAGE_TOOLTIP =
-  'Your plan limits active prompt locations across every brand in your organization. ' +
-  "Each prompt counts once per location it targets; paused prompts don't count, and " +
-  'resuming one needs a free slot. Pause or remove prompts or locations to free slots.';
-
-/**
- * "187 / 200 prompt locations · Growth plan" with a thin progress bar. The
- * numbers are the ones the plan-limit guard enforces (getLocationQuota), so
- * the counter can't promise a slot that a save would then reject.
- */
-function PromptUsageMeter({ quota }: { quota: LocationQuota }) {
-  const usage = getPromptUsage(quota.used, quota.maxPrompts);
-
-  if (usage.state === 'unlimited') {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-        <span className="tabular-nums">{quota.used}</span> active prompt locations · Unlimited
-        <InfoTip content={PROMPT_USAGE_TOOLTIP} />
-      </span>
-    );
-  }
-
-  const tone =
-    usage.state === 'warning'
-      ? { text: 'text-amber-600 dark:text-amber-500', bar: 'bg-amber-500' }
-      : usage.state === 'full' || usage.state === 'over'
-        ? { text: 'text-red-600 dark:text-red-500', bar: 'bg-red-500' }
-        : { text: 'text-muted-foreground', bar: 'bg-primary' };
-  const status =
-    usage.state === 'full'
-      ? 'Limit reached'
-      : usage.state === 'over'
-        ? 'Over limit'
-        : `${usage.remaining} slot${usage.remaining === 1 ? '' : 's'} left`;
-
-  return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-      <span className="text-muted-foreground">
-        <span className={cn('font-medium tabular-nums', tone.text)}>
-          {quota.used} / {quota.maxPrompts}
-        </span>{' '}
-        active prompt locations · {quota.planName} plan
-      </span>
-      <div
-        className="h-1.5 w-24 overflow-hidden rounded-full bg-muted"
-        role="progressbar"
-        aria-label="Active prompt locations used"
-        aria-valuemin={0}
-        aria-valuemax={quota.maxPrompts}
-        aria-valuenow={Math.min(quota.used, quota.maxPrompts)}
-      >
-        <div
-          className={cn('h-full rounded-full', tone.bar)}
-          style={{ width: `${usage.percent}%` }}
-        />
-      </div>
-      <span className={cn('font-medium', tone.text)}>{status}</span>
-      <InfoTip content={PROMPT_USAGE_TOOLTIP} />
-    </div>
-  );
-}
 
 /**
  * Where to go when the limit is reached. Starter can upgrade to Growth in
@@ -1311,7 +1280,6 @@ export default function PromptsPage() {
   const analysisGenRef = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
   const [quota, setQuota] = useState<VolumeQuota | null>(null);
-  const [locationQuota, setLocationQuota] = useState<LocationQuota | null>(null);
   const [addPromptOpen, setAddPromptOpen] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
   const { canManage } = useUserRole();
@@ -1321,6 +1289,14 @@ export default function PromptsPage() {
   const activeBrand = useBrandStore(
     (s) => s.brands.find((brand) => brand.id === s.activeBrandId) ?? null,
   );
+  // The usage cards (PROMPT-012) load on their own; `usageVersion` refetches
+  // them after a change to the brand's prompts or locations. The Add Prompt
+  // dialog and bulk import bound themselves by the same numbers.
+  const [usageVersion, setUsageVersion] = useState(0);
+  const { state: usageState, retry: retryUsage } = usePromptUsage(activeBrandId, usageVersion);
+  const usage = usageState.status === 'ready' ? usageState.usage : null;
+  const locationQuota = useMemo(() => (usage ? locationQuotaFromUsage(usage) : null), [usage]);
+  const [statusFilter, setStatusFilter] = useState<PromptStatusFilter>('active');
   const searchParams = useSearchParams();
   // On /dashboard/prompts/{tracked,suggestions,fan-outs,insights} the route
   // names the view (PROMPT-001); ?tab= / ?view= are the older links' shape.
@@ -1355,7 +1331,7 @@ export default function PromptsPage() {
     // than silently dropping them back to the default.
     if (isPromptRangePreset(raw)) return raw;
     if (raw && isPromptRangePreset(`${raw}d`)) return `${raw}d` as PromptRangePreset;
-    return DEFAULT_PROMPT_RANGE_PRESET;
+    return defaultRangeFor(initialTab);
   })();
   const [rangePreset, setRangePreset] = useState<PromptRangePreset>(initialRange);
   // Which tracked location the health columns describe. Empty = every
@@ -1399,7 +1375,7 @@ export default function PromptsPage() {
     // The default range stays out of the URL so shared links keep their
     // existing shape unless the user actually picked a different window.
     const want: Record<string, string | null> = {
-      range: rangePreset === DEFAULT_PROMPT_RANGE_PRESET ? null : rangePreset,
+      range: rangePreset === defaultRangeFor(tab) ? null : rangePreset,
       from: rangePreset === 'custom' && customFrom ? customFrom : null,
       to: rangePreset === 'custom' && customTo ? customTo : null,
       region: regionFilter || null,
@@ -1458,7 +1434,6 @@ export default function PromptsPage() {
         if (isCancelled?.()) return;
         setVolumes(page.volumes);
         if (page.quota) setQuota(page.quota);
-        setLocationQuota(page.locationQuota);
         const prompts = page.promptSets.flatMap((ps) => ps.prompts);
         setAllPrompts(prompts);
         setVisibility(page.visibility);
@@ -1483,6 +1458,13 @@ export default function PromptsPage() {
     return () => {
       cancelled = true;
     };
+  }, [loadData]);
+
+  // After prompts are added, paused, resumed, deleted or retargeted: reload
+  // the table and the usage cards together.
+  const reloadAfterChange = useCallback(() => {
+    setUsageVersion((v) => v + 1);
+    return loadData();
   }, [loadData]);
 
   // Locations the brand has actually produced results in — the same
@@ -1709,7 +1691,10 @@ export default function PromptsPage() {
 
   const totalGoogleVol = volumes.reduce((s, v) => s + v.totalGoogleVolume, 0);
   const totalAiVol = volumes.reduce((s, v) => s + v.estAiVolume, 0);
-  const totalKeywords = volumes.reduce((s, v) => s + v.keywords.length, 0);
+  // Distinct keywords: prompts share many, as Similar Topics counts them.
+  const totalKeywords = new Set(
+    volumes.flatMap((v) => v.keywords.map((k) => k.trim().toLowerCase())),
+  ).size;
 
   const filtered = volumes.filter(
     (v) =>
@@ -1800,15 +1785,20 @@ export default function PromptsPage() {
           <h1 className="text-2xl font-bold tracking-tight">Prompts</h1>
           <p className="text-muted-foreground text-sm">
             Manage every tracked prompt and review estimated AI demand
-            <span className="ml-2 inline-flex items-center gap-1 text-xs text-muted-foreground/70">
-              <AlertCircle className="h-3 w-3" />
-              Volumes are estimates, not exact figures
-            </span>
           </p>
         </div>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)}>
+      <Tabs
+        value={tab}
+        onValueChange={(v) => {
+          const next = v as TabId;
+          // A window still on this tab's default wasn't picked by the user,
+          // so it follows the next tab's own (Query Fan-out opens on 7 days).
+          if (rangePreset === defaultRangeFor(tab)) setRangePreset(defaultRangeFor(next));
+          setTab(next);
+        }}
+      >
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <TabsList>
             <TabsTrigger value="all">Prompts</TabsTrigger>
@@ -1945,11 +1935,21 @@ export default function PromptsPage() {
           {view === 'suggestions' ? (
             activeBrandId && (
               <>
-                <SuggestionsTab brandId={activeBrandId} onAccepted={loadData} />
+                <SuggestionsTab brandId={activeBrandId} onAccepted={reloadAfterChange} />
               </>
             )
           ) : (
             <>
+              {activeBrandId && (
+                <PromptUsageCards
+                  state={usageState}
+                  brandName={activeBrand?.name}
+                  readOnly={!canManage}
+                  filter={statusFilter}
+                  onFilter={setStatusFilter}
+                  onRetry={retryUsage}
+                />
+              )}
               {!loading && unanalyzedCount > 0 && (
                 <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/50 dark:bg-amber-950/30">
                   <div className="flex items-start gap-2.5">
@@ -1997,10 +1997,11 @@ export default function PromptsPage() {
                 positionsWindow={positionsWindow}
                 positionsPreset={range ? rangePreset : '30d'}
                 regionFilter={regionFilter}
-                locationQuota={locationQuota}
+                statusFilter={statusFilter}
+                onStatusFilterChange={setStatusFilter}
                 onAddPrompt={canManage ? () => setAddPromptOpen(true) : undefined}
                 onEditPrompt={canManage ? setEditingPrompt : undefined}
-                onChanged={loadData}
+                onChanged={reloadAfterChange}
               />
             </>
           )}
@@ -2013,7 +2014,7 @@ export default function PromptsPage() {
               brandId={activeBrandId}
               range={range}
               rangeLabel={rangeLabel}
-              onTracked={loadData}
+              onTracked={reloadAfterChange}
             />
           )}
         </TabsContent>
@@ -2153,7 +2154,7 @@ export default function PromptsPage() {
                 <KpiCard
                   title="Avg. AI Volume"
                   icon={BarChart3}
-                  value={`~${formatCompactNumber(totalAiVol / volumes.length)}`}
+                  value={`~${formatCompactNumber(Math.round(totalAiVol / volumes.length))}`}
                   sub="per prompt"
                 />
               </div>
@@ -2247,7 +2248,7 @@ export default function PromptsPage() {
                           </TableCell>
 
                           <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
-                            {row.totalGoogleVolume.toLocaleString()}
+                            {formatNumber(row.totalGoogleVolume)}
                           </TableCell>
                           <TableCell className="text-right">
                             <VolumePill value={row.estAiVolume} />
@@ -2274,15 +2275,16 @@ export default function PromptsPage() {
                   )}
                   <div className="px-6 py-2 border-t">
                     <p className="text-xs text-muted-foreground">
-                      * Est. AI Volume = Total Google search volume of extracted keywords × AI
-                      adoption rate. Figures are approximations for planning purposes.
+                      * Est. AI Volume = the median Google search volume of the prompt&apos;s
+                      extracted keywords × AI adoption rate. Figures are approximations for planning
+                      purposes.
                     </p>
                   </div>
                 </CardContent>
               </Card>
 
               {/* High Opportunity Prompts */}
-              {volumes.filter((v) => v.estAiVolume >= 5000).length > 0 && (
+              {volumes.some((v) => opportunityLevel(v.estAiVolume)) && (
                 <Card>
                   <CardHeader className="pb-2">
                     <div className="flex items-center gap-2">
@@ -2311,7 +2313,7 @@ export default function PromptsPage() {
                           </ColHead>
                           <ColHead
                             className="text-right pr-6"
-                            tooltip="Opportunity level based on estimated AI volume. High = above 10k/mo, Medium = 5k–10k/mo."
+                            tooltip={`Opportunity level based on estimated AI volume. High = ${formatCompactNumber(OPPORTUNITY_HIGH_VOLUME)}+/mo, Medium = ${formatCompactNumber(OPPORTUNITY_MIN_VOLUME)}–${formatCompactNumber(OPPORTUNITY_HIGH_VOLUME)}/mo.`}
                           >
                             Opportunity
                           </ColHead>
@@ -2319,7 +2321,7 @@ export default function PromptsPage() {
                       </TableHeader>
                       <TableBody>
                         {volumes
-                          .filter((v) => v.estAiVolume >= 5000)
+                          .filter((v) => opportunityLevel(v.estAiVolume))
                           .sort((a, b) => b.estAiVolume - a.estAiVolume)
                           .map((row) => (
                             <TableRow key={row.id} className="hover:bg-muted/50">
@@ -2342,12 +2344,12 @@ export default function PromptsPage() {
                                   variant="outline"
                                   className={cn(
                                     'text-xs',
-                                    row.estAiVolume >= 10000
+                                    opportunityLevel(row.estAiVolume) === 'high'
                                       ? 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'
                                       : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
                                   )}
                                 >
-                                  {row.estAiVolume >= 10000 ? 'High' : 'Medium'}
+                                  {opportunityLevel(row.estAiVolume) === 'high' ? 'High' : 'Medium'}
                                 </Badge>
                               </TableCell>
                             </TableRow>
@@ -2371,7 +2373,7 @@ export default function PromptsPage() {
           defaultRegion={brandLocation(activeBrand?.region, activeBrand?.state)}
           open={addPromptOpen}
           onClose={() => setAddPromptOpen(false)}
-          onAdded={loadData}
+          onAdded={reloadAfterChange}
         />
       )}
 
@@ -2381,7 +2383,7 @@ export default function PromptsPage() {
           brandId={activeBrandId}
           shoppingEnabled={!!activeBrand?.shoppingModeEnabled}
           onClose={() => setEditingPrompt(null)}
-          onChanged={loadData}
+          onChanged={reloadAfterChange}
         />
       )}
     </div>
@@ -2392,9 +2394,33 @@ export default function PromptsPage() {
 
 /**
  * Average position with its trend against the previous period; hovering it
- * lists each platform, which is what the "Late or missing" filter reads.
+ * lists each platform, which is what the "Late or missing" filter reads. A
+ * prompt that was tracked but never named reads "Not mentioned", not the "—"
+ * of a prompt with no answers.
  */
-function PositionValue({ cell }: { cell: PromptPositionCell | undefined }) {
+function PositionValue({
+  cell,
+  vis,
+}: {
+  cell: PromptPositionCell | undefined;
+  vis: PromptVisibilitySummary | undefined;
+}) {
+  const t = useTranslations('prompts.positions');
+  const kind = positionCellKind(cell, vis);
+  if (kind === 'notMentioned' || kind === 'citedOnly') {
+    return (
+      <span
+        className="text-xs text-muted-foreground"
+        title={
+          kind === 'citedOnly'
+            ? t('citedOnlyTitle', { cited: vis?.citationAnswers ?? 0, count: vis?.runs ?? 0 })
+            : t('notMentionedTitle', { count: vis?.runs ?? 0 })
+        }
+      >
+        {t(kind)}
+      </span>
+    );
+  }
   if (!cell || cell.avg === null) {
     return <span className="text-xs text-muted-foreground">—</span>;
   }
@@ -2558,7 +2584,8 @@ function AllPromptsTab({
   positionsWindow,
   positionsPreset,
   regionFilter,
-  locationQuota,
+  statusFilter,
+  onStatusFilterChange,
   onAddPrompt,
   onEditPrompt,
   onChanged,
@@ -2577,8 +2604,9 @@ function AllPromptsTab({
   positionsPreset: PromptRangePreset;
   /** Selected location; empty means every location. */
   regionFilter: string;
-  /** Org-wide tracked-location usage for the header counter; null hides it. */
-  locationQuota: LocationQuota | null;
+  /** Which rows show, set by the usage cards above (PROMPT-012). */
+  statusFilter: PromptStatusFilter;
+  onStatusFilterChange: (filter: PromptStatusFilter) => void;
   /** Opens the Add Prompt dialog; undefined when the user can't write (member role). */
   onAddPrompt?: () => void;
   /** Opens the Edit Prompt dialog for a row; undefined hides the row menu (member role). */
@@ -2587,7 +2615,12 @@ function AllPromptsTab({
   onChanged: () => void;
 }) {
   const tCommon = useTranslations('common');
+  // One tooltip for every prompt and topic the table cuts short.
+  const fullText = useMemo(() => createClampedTextHandle(), []);
+  const tUsage = useTranslations('prompts.usage');
+  const format = useFormatter();
   const tDelete = useTranslations('prompts.bulkDelete');
+  const tLate = useTranslations('prompts.lateFilter');
   // Rows deleted from the row menu or the bulk bar, hidden at once and
   // deleted for real after the Undo window (PROMPT-006). There is no soft
   // delete for prompts — a delete drops their history — so the delay is the
@@ -3030,6 +3063,10 @@ function AllPromptsTab({
   const rawSort = searchParams.get('sort');
   const activeSort: AllPromptsSortKey = isAllPromptsSortKey(rawSort) ? rawSort : 'visibility';
   const dir: SortDir = searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
+  // With "Late or missing" on and no column picked, the furthest behind come
+  // first: nearly every tracked prompt is late or missing somewhere, so the
+  // filter alone left the first page as it was (see compareLateness).
+  const latenessOrder = lateOnly && !isAllPromptsSortKey(rawSort);
 
   // Click a header to sort: a new column starts at desc ("show me the extremes");
   // re-clicking the active column toggles desc⇄asc. Persisted to the URL so the
@@ -3039,9 +3076,10 @@ function AllPromptsTab({
   const handleSort = useCallback(
     (key: AllPromptsSortKey) => {
       const params = new URLSearchParams(Array.from(searchParams.entries()));
-      // Position is best when lowest, so it starts at asc (#1 first).
+      // Position is best when lowest, so it starts at asc (#1 first). Under the
+      // "Late or missing" order no column is active, so any header starts afresh.
       const nextDir: SortDir =
-        activeSort === key
+        activeSort === key && !latenessOrder
           ? dir === 'desc'
             ? 'asc'
             : 'desc'
@@ -3053,10 +3091,37 @@ function AllPromptsTab({
       params.set('dir', nextDir);
       window.history.replaceState(null, '', `?${params.toString()}`);
     },
-    [searchParams, activeSort, dir],
+    [searchParams, activeSort, dir, latenessOrder],
   );
 
-  const filtered = useMemo(() => {
+  // Turning "Late or missing" on sets a picked column aside, so the furthest
+  // behind lead; turning it off brings that column back, unless a header was
+  // clicked in between, which then stays.
+  const setAsideSort = useRef<{ sort: string; dir: string | null } | null>(null);
+  // Read and flipped at click time, so a quick second click sees the first.
+  const lateOnlyNow = useRef(lateOnly);
+  const toggleLateOnly = useCallback(() => {
+    const turningOn = !lateOnlyNow.current;
+    lateOnlyNow.current = turningOn;
+    const params = new URLSearchParams(window.location.search);
+    const sort = params.get('sort');
+    if (turningOn && sort) {
+      setAsideSort.current = { sort, dir: params.get('dir') };
+      params.delete('sort');
+      params.delete('dir');
+      window.history.replaceState(null, '', `?${params.toString()}`);
+    } else if (!turningOn && !sort && setAsideSort.current) {
+      params.set('sort', setAsideSort.current.sort);
+      if (setAsideSort.current.dir) params.set('dir', setAsideSort.current.dir);
+      window.history.replaceState(null, '', `?${params.toString()}`);
+    }
+    if (!turningOn) setAsideSort.current = null;
+    setLateOnly(turningOn);
+  }, []);
+
+  // Search, prompt status and work status first: the "Late or missing" count
+  // is out of these.
+  const searched = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = [...prompts];
     if (q) {
@@ -3064,12 +3129,31 @@ function AllPromptsTab({
         (p) => p.text.toLowerCase().includes(q) || (p.category ?? '').toLowerCase().includes(q),
       );
     }
+    list = list.filter((p) => matchesStatusFilter(p, statusFilter));
     if (workFilter !== 'all') {
       list = list.filter((p) =>
         workFilter === 'none' ? statusOf(p) === null : statusOf(p) === workFilter,
       );
     }
-    if (lateOnly) list = list.filter((p) => positions[p.id]?.lateOrMissing);
+    return list;
+  }, [prompts, search, statusFilter, workFilter, statusOf]);
+
+  const lateCount = useMemo(
+    () => searched.filter((p) => positions[p.id]?.lateOrMissing).length,
+    [searched, positions],
+  );
+
+  const filtered = useMemo(() => {
+    const list = lateOnly ? searched.filter((p) => positions[p.id]?.lateOrMissing) : [...searched];
+    if (latenessOrder) {
+      // Equally far behind: the more visible prompt first, as the table opens.
+      const score = (p: Prompt) => visibility[p.id]?.score ?? 0;
+      return list.sort(
+        (a, b) =>
+          compareLateness(positions[a.id], positions[b.id]) ||
+          compareNullsLast(score(a), score(b), 'desc'),
+      );
+    }
 
     const valueOf = (p: Prompt): number | null => {
       const vis = visibility[p.id];
@@ -3093,24 +3177,16 @@ function AllPromptsTab({
     };
 
     return list.sort((a, b) => compareNullsLast(valueOf(a), valueOf(b), dir));
-  }, [
-    prompts,
-    search,
-    workFilter,
-    lateOnly,
-    statusOf,
-    activeSort,
-    dir,
-    visibility,
-    positions,
-    volumeByPromptId,
-  ]);
+  }, [searched, lateOnly, latenessOrder, activeSort, dir, visibility, positions, volumeByPromptId]);
 
   // Pagination for the main prompt list.  resetKey encodes every variable that
   // changes the visible row set (search text, sort column, sort direction, work
   // status filter) so usePagination jumps back to page 0 automatically when
   // any filter or sort changes — satisfying the issue's acceptance criteria.
-  const promptsResetKey = `${search}::${workFilter}::${lateOnly}::${activeSort}::${dir}`;
+  const promptsResetKey = `${search}::${statusFilter}::${workFilter}::${lateOnly}::${activeSort}::${dir}`;
+  // From every row, pending deletes included, so the title agrees with the
+  // usage cards until a delete actually lands after its Undo window.
+  const statusCounts = useMemo(() => countByStatus(allRows), [allRows]);
   const promptsPager = usePagination(filtered.length, promptsResetKey);
 
   // Rows ticked for the bulk action bar. Only rows on screen can be ticked,
@@ -3186,18 +3262,24 @@ function AllPromptsTab({
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <CardTitle className="text-sm font-medium">All Prompts ({prompts.length})</CardTitle>
-            {locationQuota && (
-              <div className="mt-1">
-                <PromptUsageMeter quota={locationQuota} />
-              </div>
+          <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+            <CardTitle className="text-sm font-medium">
+              {tUsage(`table.${statusFilter}`, {
+                count: format.number(statusCounts[statusFilter]),
+              })}
+            </CardTitle>
+            {statusFilter !== 'all' && (
+              <span className="text-xs text-muted-foreground">
+                {tUsage('table.filtered')} ·{' '}
+                <button
+                  type="button"
+                  onClick={() => onStatusFilterChange('all')}
+                  className="underline underline-offset-2 hover:text-foreground"
+                >
+                  {tUsage('table.showAll', { count: format.number(statusCounts.all) })}
+                </button>
+              </span>
             )}
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {onEditPrompt
-                ? 'Every tracked prompt for this brand · edit or pause any row in place'
-                : 'Read-only overview of every tracked prompt for this brand'}
-            </p>
           </div>
           <div className="flex items-center gap-2">
             <Select
@@ -3223,10 +3305,10 @@ function AllPromptsTab({
               variant={lateOnly ? 'default' : 'outline'}
               className="h-8 text-xs"
               aria-pressed={lateOnly}
-              title="Prompts named late, or not at all, on at least one AI platform"
-              onClick={() => setLateOnly((v) => !v)}
+              title={tLate('title')}
+              onClick={toggleLateOnly}
             >
-              Late or missing
+              {tLate('label', { count: lateCount })}
             </Button>
             <div className="relative w-60">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
@@ -3264,6 +3346,7 @@ function AllPromptsTab({
           />
         )}
         <Table stickyHeader stickyFirstColumn>
+          {latenessOrder && <TableCaption className="sr-only">{tLate('order')}</TableCaption>}
           <TableHeader>
             <TableRow>
               <TableHead className="pl-6">
@@ -3292,7 +3375,7 @@ function AllPromptsTab({
                 className="text-right"
                 tooltip={`AI Visibility Score (0-100) for this prompt over the ${rangeLabel}: how often answers mention the brand (60%), cite its site (25%) and how early it's named (15%). Hover a value for the components.`}
                 sortKey="visibility"
-                activeSort={activeSort}
+                activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
                 onSort={handleSort}
               >
@@ -3302,7 +3385,7 @@ function AllPromptsTab({
                 className="text-right"
                 tooltip={`Total times the brand was mentioned across AI answers for this prompt over the ${rangeLabel}.`}
                 sortKey="mentions"
-                activeSort={activeSort}
+                activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
                 onSort={handleSort}
               >
@@ -3312,7 +3395,7 @@ function AllPromptsTab({
                 className="text-right"
                 tooltip={`Total times your pages were cited in AI answers for this prompt over the ${rangeLabel}.`}
                 sortKey="citations"
-                activeSort={activeSort}
+                activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
                 onSort={handleSort}
               >
@@ -3322,7 +3405,7 @@ function AllPromptsTab({
                 className="pl-8"
                 tooltip={`Average position the brand is named at in AI answers over the ${rangeLabel}, with the change against the previous period of the same length. Hover a value for each platform; the chart button opens the details.`}
                 sortKey="position"
-                activeSort={activeSort}
+                activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
                 onSort={handleSort}
               >
@@ -3332,7 +3415,7 @@ function AllPromptsTab({
                 className="text-right"
                 tooltip="Estimated monthly AI prompt volume, from keyword analysis. Empty until analysed."
                 sortKey="volume"
-                activeSort={activeSort}
+                activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
                 onSort={handleSort}
               >
@@ -3348,7 +3431,7 @@ function AllPromptsTab({
                 className="text-right"
                 tooltip={`Number of tracking runs for this prompt over the ${rangeLabel} (one per platform per day).`}
                 sortKey="runs"
-                activeSort={activeSort}
+                activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
                 onSort={handleSort}
               >
@@ -3358,7 +3441,7 @@ function AllPromptsTab({
                 className="text-right"
                 tooltip="Most recent tracking run for this prompt."
                 sortKey="lastRun"
-                activeSort={activeSort}
+                activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
                 onSort={handleSort}
               >
@@ -3387,18 +3470,32 @@ function AllPromptsTab({
                           aria-label={`Select ${p.text}`}
                         />
                       )}
-                      <Link
-                        href={`/dashboard/prompts/${p.id}`}
-                        className="line-clamp-2 transition-colors hover:text-primary hover:underline"
-                      >
-                        {p.text}
-                      </Link>
+                      <ClampedText
+                        handle={fullText}
+                        text={p.text}
+                        render={
+                          <Link
+                            href={`/dashboard/prompts/${p.id}`}
+                            className="line-clamp-2 transition-colors hover:text-primary hover:underline"
+                          />
+                        }
+                      />
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className="text-xs text-muted-foreground truncate inline-block max-w-[140px] align-middle">
-                      {p.category?.trim() ? p.category : '—'}
-                    </span>
+                    {p.category?.trim() ? (
+                      <ClampedText
+                        handle={fullText}
+                        text={p.category}
+                        render={
+                          <span className="text-xs text-muted-foreground truncate inline-block max-w-[140px] align-middle" />
+                        }
+                      />
+                    ) : (
+                      <span className="text-xs text-muted-foreground inline-block align-middle">
+                        —
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge
@@ -3470,14 +3567,14 @@ function AllPromptsTab({
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-sm">
                     {vis ? (
-                      vis.totalMentions.toLocaleString()
+                      formatNumber(vis.totalMentions)
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-sm">
                     {vis ? (
-                      vis.totalCitations.toLocaleString()
+                      formatNumber(vis.totalCitations)
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
@@ -3486,10 +3583,11 @@ function AllPromptsTab({
                     {/* Fixed widths so the value, dots and See line up on every row. */}
                     <div className="inline-flex items-center gap-2">
                       <div className="w-[5.5rem] whitespace-nowrap">
-                        <PositionValue cell={positions[p.id]} />
+                        <PositionValue cell={positions[p.id]} vis={vis} />
                       </div>
                       <div className="w-6">
-                        {vis && (vis.mentionAnswers > 0 || vis.citationAnswers > 0) && (
+                        {/* Whenever it has answers: a prompt never named is the one to open. */}
+                        {opensPositionsPanel(vis) && (
                           <Button
                             type="button"
                             size="icon-xs"
@@ -3521,7 +3619,7 @@ function AllPromptsTab({
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-sm">
                     {vis ? (
-                      vis.runs.toLocaleString()
+                      formatNumber(vis.runs)
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
@@ -3552,6 +3650,7 @@ function AllPromptsTab({
             })}
           </TableBody>
         </Table>
+        <ClampedTextTooltip handle={fullText} />
         <TablePager
           page={promptsPager.page}
           totalPages={promptsPager.totalPages}
@@ -3560,11 +3659,25 @@ function AllPromptsTab({
           end={promptsPager.end}
           onPage={promptsPager.setPage}
         />
-        {filtered.length === 0 && (
-          <div className="py-10 text-center text-sm text-muted-foreground">
-            No prompts match your search.
-          </div>
-        )}
+        {filtered.length === 0 &&
+          (statusFilter === 'all' ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              No prompts match your search.
+            </div>
+          ) : (
+            // The table opens on Active: a brand whose prompts are all paused
+            // must not look empty with no way back.
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              {tUsage(statusFilter === 'active' ? 'table.noneActive' : 'table.nonePaused')}{' '}
+              <button
+                type="button"
+                onClick={() => onStatusFilterChange('all')}
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                {tUsage('table.showAll', { count: format.number(statusCounts.all) })}
+              </button>
+            </div>
+          ))}
       </CardContent>
       <PromptPositionsSheet
         prompt={openPositions}

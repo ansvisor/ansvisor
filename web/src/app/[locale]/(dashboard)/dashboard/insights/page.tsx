@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useSearchParams } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MetricBreakdownSheet, type BreakdownTab } from './_metric-breakdown-sheet';
 import { FormulaDialog } from './_formula-dialog';
@@ -22,7 +22,7 @@ import {
   type TrackedPromptsKpi,
   type CompetitorComparisonData,
   type ShareOfVoiceData,
-  type InsightsRecommendations,
+  type InsightsOpportunities,
   type TrackingJobStatus,
   type BreakdownFilters,
   type BreakdownMetric,
@@ -37,7 +37,7 @@ import {
   DateRangeFilter,
   type DateRangePreset,
 } from '@/components/filters/date-range-filter';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -46,7 +46,6 @@ import {
   BarChart3,
   CalendarX2,
   Play,
-  TrendingUp,
   Loader2,
   FlaskConical,
   Users,
@@ -54,9 +53,6 @@ import {
   ArrowRight,
   Download,
   FileText,
-  Lightbulb,
-  Sparkles,
-  Tag,
 } from 'lucide-react';
 import {
   Select,
@@ -68,7 +64,6 @@ import {
 import { cn } from '@/lib/utils';
 import { getAIProviderDisplayName, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { usePlanContext } from '@/components/providers/plan-provider';
-import { formatCompactNumber } from '@/lib/format';
 import { toast } from 'sonner';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import type { PromptComparison } from '@/lib/insights-same-prompts';
@@ -82,6 +77,7 @@ import { Leaderboard } from './_leaderboard';
 import { TrendCard } from './_trend-card';
 import { trendLines, type TrendMarkerData } from '@/lib/insights-trend';
 import { TopicHeatmap } from './_topic-heatmap';
+import { Opportunities } from './_opportunities';
 import type { TopicCompetitors } from '@/lib/insights-topics';
 import { WhyChanged } from './_why-changed';
 import type { WhyChanged as WhyChangedData } from '@/lib/insights-drivers';
@@ -99,26 +95,23 @@ interface InsightsFilters {
   region: string;
   model: string;
   topic: string;
-  /** "Compare: Same prompts" (VIS-002): changes compare only prompts answered in both periods. */
-  samePrompts: boolean;
 }
 
 const DEFAULT_FILTERS: InsightsFilters = {
-  // 30 days, as in the v2 mockup (VIS-007); 24h stays one click away.
-  datePreset: '30d',
+  // The last 24 hours: what the latest run found. Longer ranges are one
+  // click away.
+  datePreset: '24h',
   dateFrom: '',
   dateTo: '',
   region: '',
   model: '',
   topic: '',
-  samePrompts: true,
 };
 
 /**
  * The filters as kept in the URL (#917): ?range=, plus ?from=/&to= for a
- * custom range, ?region=, ?model=, ?topic=, and ?compare=all when "Same
- * prompts" is off. Defaults are left out, and an unknown range falls back to
- * the default.
+ * custom range, ?region=, ?model= and ?topic=. Defaults are left out, and an
+ * unknown range falls back to the default.
  */
 function filtersFromUrl(): InsightsFilters {
   const datePreset = readUrlChoice<DatePreset>(
@@ -133,7 +126,6 @@ function filtersFromUrl(): InsightsFilters {
     region: readUrlParam('region'),
     model: readUrlParam('model'),
     topic: readUrlParam('topic'),
-    samePrompts: readUrlParam('compare') !== 'all',
   };
 }
 
@@ -147,7 +139,8 @@ function writeFiltersToUrl(f: InsightsFilters) {
       region: f.region,
       model: f.model,
       topic: f.topic,
-      compare: f.samePrompts ? null : 'all',
+      // Dropped from links made while "Same prompts" could be turned off.
+      compare: null,
     },
     { range: DEFAULT_FILTERS.datePreset },
   );
@@ -330,7 +323,6 @@ function FilterBar({
   availableTopics: Topic[];
 }) {
   const t = useTranslations('common');
-  const tInsights = useTranslations('insights');
   const set = (patch: Partial<InsightsFilters>) => onChange({ ...filters, ...patch });
 
   return (
@@ -441,35 +433,6 @@ function FilterBar({
           </SelectContent>
         </Select>
       </div>
-      {/* Compare: Same prompts (VIS-002) */}
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-          {tInsights('compare.label')}
-        </label>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={filters.samePrompts}
-          title={tInsights('compare.hint')}
-          onClick={() => set({ samePrompts: !filters.samePrompts })}
-          className="inline-flex h-8 items-center gap-2 rounded-md border bg-background px-2.5 text-xs transition-colors hover:bg-muted/50"
-        >
-          <span
-            className={cn(
-              'relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors',
-              filters.samePrompts ? 'bg-primary' : 'bg-muted-foreground/30',
-            )}
-          >
-            <span
-              className={cn(
-                'block h-3 w-3 rounded-full bg-background shadow transition-transform',
-                filters.samePrompts ? 'translate-x-3.5' : 'translate-x-0.5',
-              )}
-            />
-          </span>
-          {tInsights('compare.samePrompts')}
-        </button>
-      </div>
     </div>
   );
 }
@@ -560,143 +523,11 @@ function NoDataForPeriod({ datePreset, onReset }: { datePreset: DatePreset; onRe
   );
 }
 
-// ─── Recommendations ──────────────────────────────────────────────────────────
-
-/** Teaser targets. Topic suggestions live on the Topics page (#463) — its
- *  card expands + scrolls itself for this hash; the prompt-suggestions card
- *  lives on the Prompts page's default All Prompts tab and does the same. */
-const TOPIC_OPPORTUNITIES_HREF = '/dashboard/topics#topic-opportunities';
-const PROMPT_OPPORTUNITIES_HREF = '/dashboard/prompts?tab=all&view=suggestions';
-
-function RecommendationCard({
-  title,
-  icon: Icon,
-  href,
-  emptyText,
-  children,
-  isEmpty,
-}: {
-  title: string;
-  icon: React.ElementType;
-  href: string;
-  emptyText: string;
-  children: React.ReactNode;
-  isEmpty: boolean;
-}) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-3">
-          <CardTitle className="flex items-center gap-2 text-sm font-medium">
-            <Icon className="h-4 w-4 text-primary" />
-            {title}
-          </CardTitle>
-          {!isEmpty && (
-            <Link
-              href={href}
-              className="shrink-0 text-xs font-medium text-primary underline-offset-2 hover:underline"
-            >
-              See all
-            </Link>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isEmpty ? (
-          <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
-            <p className="text-xs text-muted-foreground max-w-xs">{emptyText}</p>
-            <Link
-              href={href}
-              className="text-xs font-medium text-primary underline-offset-2 hover:underline"
-            >
-              Generate ideas →
-            </Link>
-          </div>
-        ) : (
-          children
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-/**
- * The "so what, what next?" row (#459) filling the space freed by the removed
- * results tree (#458). Reads only stored data assembled server-side inside
- * getInsightsData — no extra client round trip, no LLM call. Deliberately
- * outside the date-filter contract: no delta badges, own section heading
- * (see #457 for why period-scoped and account-scoped numbers must not mix).
- */
-function RecommendationsSection({ data }: { data: InsightsRecommendations }) {
-  return (
-    <div className="space-y-3">
-      <div>
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <Lightbulb className="h-4 w-4 text-primary" />
-          Recommendations
-        </h2>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Ideas from your stored analyses — independent of the date filters above.
-        </p>
-      </div>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <RecommendationCard
-          title="Topic Opportunities"
-          icon={Tag}
-          href={TOPIC_OPPORTUNITIES_HREF}
-          isEmpty={data.topics.length === 0}
-          emptyText="No topic clusters yet. Analyze your prompt volumes to surface the themes with the most AI search demand."
-        >
-          <ul className="divide-y">
-            {data.topics.map((t) => (
-              <li key={t.keyword} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
-                <p className="flex-1 min-w-0 truncate text-sm">{t.keyword}</p>
-                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                  {t.promptCount} prompt{t.promptCount !== 1 ? 's' : ''}
-                </span>
-                <Badge variant="outline" className="shrink-0 gap-1 text-xs tabular-nums">
-                  <TrendingUp className="h-3 w-3" />~{formatCompactNumber(t.estimatedAiVolume)}/mo
-                </Badge>
-              </li>
-            ))}
-          </ul>
-        </RecommendationCard>
-        <RecommendationCard
-          title="Prompt Opportunities"
-          icon={Sparkles}
-          href={PROMPT_OPPORTUNITIES_HREF}
-          isEmpty={data.prompts.length === 0}
-          emptyText="No prompt suggestions stored yet. Generate AI prompt ideas based on your brand and competitor citations."
-        >
-          <ul className="divide-y">
-            {data.prompts.map((p) => (
-              <li key={p.id} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
-                <p className="flex-1 min-w-0 truncate text-sm">{p.text}</p>
-                {p.topicName && (
-                  <Badge variant="outline" className="hidden sm:inline-flex shrink-0 gap-1 text-xs">
-                    <Tag className="h-3 w-3" />
-                    {p.topicName}
-                  </Badge>
-                )}
-                {p.estVolume != null && p.estVolume > 0 && (
-                  <Badge variant="outline" className="shrink-0 gap-1 text-xs tabular-nums">
-                    <TrendingUp className="h-3 w-3" />~{formatCompactNumber(p.estVolume)}/mo
-                  </Badge>
-                )}
-              </li>
-            ))}
-          </ul>
-        </RecommendationCard>
-      </div>
-    </div>
-  );
-}
-
 // ─── Tracking Progress ────────────────────────────────────────────────────────
 
 import { saveTrackingJob, loadTrackingJob, clearTrackingJob } from '@/lib/tracking-job-store';
 import { toCsv } from '@/lib/csv';
-import { formatRelative } from '@/lib/format-relative';
+import { RunLine } from './_run-line';
 
 function TrackingProgressBanner({
   jobStatus,
@@ -834,6 +665,7 @@ export default function InsightsPage() {
   const tCommon = useTranslations('common');
   const router = useRouter();
   const { isCloud } = usePlanContext();
+  const locale = useLocale();
   const brand = useBrandStore((s) => s.getActiveBrand());
   const [summary, setSummary] = useState<InsightsSummary | null>(null);
   const [trackedPrompts, setTrackedPrompts] = useState<TrackedPromptsKpi | null>(null);
@@ -850,7 +682,7 @@ export default function InsightsPage() {
   const [competitorData, setCompetitorData] = useState<CompetitorComparisonData | null>(null);
   const [rateTrend, setRateTrend] = useState<VisibilityRateTrendData | null>(null);
   const [sovData, setSovData] = useState<ShareOfVoiceData | null>(null);
-  const [recommendations, setRecommendations] = useState<InsightsRecommendations | null>(null);
+  const [opportunities, setOpportunities] = useState<InsightsOpportunities | null>(null);
   const [comparison, setComparison] = useState<PromptComparison | null>(null);
   const [coverage, setCoverage] = useState<CoverageKpi | null>(null);
   const [kpiSeries, setKpiSeries] = useState<KpiSeriesDay[] | null>(null);
@@ -868,6 +700,21 @@ export default function InsightsPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [cronRun, setCronRun] = useState<TrackingWindow['activeRun']>(null);
   const cronRunRef = useRef<TrackingWindow['activeRun']>(null);
+  // The header's last and next run (VIS-012), from the ledger read every minute.
+  const [runTimes, setRunTimes] = useState<Pick<TrackingWindow, 'lastRunAt' | 'nextRunAt'>>({
+    lastRunAt: null,
+    nextRunAt: null,
+  });
+  // Kept as is when unchanged, so the minute's read doesn't re-render the page.
+  const updateRunTimes = useCallback(
+    ({ lastRunAt, nextRunAt }: Pick<TrackingWindow, 'lastRunAt' | 'nextRunAt'>) =>
+      setRunTimes((prev) =>
+        prev.lastRunAt === lastRunAt && prev.nextRunAt === nextRunAt
+          ? prev
+          : { lastRunAt, nextRunAt },
+      ),
+    [],
+  );
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
@@ -909,7 +756,9 @@ export default function InsightsPage() {
           // rollups (00066). Absent for 24h, whose anchored window above is
           // timestamp-shaped and stays on the raw path.
           days,
-          samePrompts: f.samePrompts,
+          // Changes compare only the prompts answered in both periods
+          // (VIS-002), so adding prompts doesn't inflate them.
+          samePrompts: true,
         };
 
         const hasFilters = Boolean(f.datePreset !== 'all' || f.model || f.region || f.topic);
@@ -931,6 +780,7 @@ export default function InsightsPage() {
         if (insights.trackingWindow) {
           cronRunRef.current = insights.trackingWindow.activeRun;
           setCronRun(insights.trackingWindow.activeRun);
+          updateRunTimes(insights.trackingWindow);
         }
         const anchored = insights.trackingWindow?.anchored;
         setLoadedFilters({
@@ -944,7 +794,7 @@ export default function InsightsPage() {
         setTrackedPrompts(insights.trackedPrompts);
         setCompetitorData(insights.competitors.brands.length > 1 ? insights.competitors : null);
         setSovData(insights.sov.byPlatform.length > 0 ? insights.sov : null);
-        setRecommendations(insights.recommendations);
+        setOpportunities(insights.opportunities);
         setComparison(insights.comparison);
         setCoverage(insights.coverage);
         setKpiSeries(insights.kpiSeries);
@@ -1007,7 +857,7 @@ export default function InsightsPage() {
         setIsLoading(false);
       }
     },
-    [brandId],
+    [brandId, updateRunTimes],
   );
 
   // A brand switch clears the brand-specific filters. Not on the first brand,
@@ -1038,6 +888,11 @@ export default function InsightsPage() {
   // localStorage, which is why users never saw anything during the daily
   // morning run. When the active run disappears (= completed), silently
   // reload so the anchored 24h window swaps to the fresh run in one step.
+  // Another brand's run times never show under this one's name, even when
+  // its first read fails.
+  useEffect(() => {
+    updateRunTimes({ lastRunAt: null, nextRunAt: null });
+  }, [brand?.id, updateRunTimes]);
   useEffect(() => {
     if (!brand?.id) return;
     let cancelled = false;
@@ -1048,6 +903,7 @@ export default function InsightsPage() {
       const wasRunning = cronRunRef.current !== null;
       cronRunRef.current = win.activeRun;
       setCronRun(win.activeRun);
+      updateRunTimes(win);
       if (wasRunning && !win.activeRun) {
         loadData(undefined, { silent: true });
       }
@@ -1059,7 +915,7 @@ export default function InsightsPage() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [brand?.id, loadData]);
+  }, [brand?.id, loadData, updateRunTimes]);
 
   // Restore active job from localStorage or URL query param (post-payment redirect)
   const searchParams = useSearchParams();
@@ -1301,16 +1157,12 @@ export default function InsightsPage() {
     );
   }
 
-  const lastCheckedLabel = summary?.lastCheckedAt
-    ? formatRelative(summary.lastCheckedAt, tCommon)
-    : 'Never';
-
   // The trend's subtitle (VIS-007): "Visibility · last 30 days".
   const trendRangeLabel =
     filters.datePreset === 'custom'
       ? t('trend.range.custom', {
-          from: formatWindowBound(filters.dateFrom),
-          to: formatWindowBound(filters.dateTo),
+          from: formatWindowBound(filters.dateFrom, locale),
+          to: formatWindowBound(filters.dateTo, locale),
         })
       : t(`trend.range.${filters.datePreset}`);
 
@@ -1327,9 +1179,14 @@ export default function InsightsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
 
-          <p className="text-muted-foreground text-sm">
-            {brand.name} · Last run: {lastCheckedLabel}
-          </p>
+          {/* The brand's last full run from the ledger; before the ledger has
+              one, the newest answer in view. */}
+          <RunLine
+            brandName={brand.name}
+            lastRunAt={runTimes.lastRunAt ?? summary?.lastCheckedAt ?? null}
+            nextRunAt={runTimes.nextRunAt}
+            hasData={hasAnyData === true}
+          />
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -1414,6 +1271,7 @@ export default function InsightsPage() {
                 competitors={competitorData}
                 comparison={comparison}
                 platformChanges={platformChanges}
+                answers={summary?.totalResults}
               />
 
               {/* KPI cards (VIS-003): today's five, then the new rates. */}
@@ -1442,6 +1300,7 @@ export default function InsightsPage() {
                     data={rateTrend}
                     markers={trendMarkers}
                     rangeLabel={trendRangeLabel}
+                    answers={summary?.totalResults}
                     onPinnedChange={(pinned) =>
                       setRateTrend((current) => current && { ...current, pinned })
                     }
@@ -1452,6 +1311,7 @@ export default function InsightsPage() {
                     brands={competitorData.brands}
                     providerRows={competitorData.providerRows}
                     platforms={platforms}
+                    answers={summary?.totalResults}
                   />
                 </div>
               ) : (
@@ -1485,20 +1345,33 @@ export default function InsightsPage() {
                 topicCompetitors.length > 0 && (
                   <TopicHeatmap
                     topics={topicCompetitors}
-                    window={{
-                      dayFrom: loadedFilters?.days?.dayFrom,
-                      dayTo: loadedFilters?.days?.dayTo,
-                      model: loadedFilters?.model,
-                      region: loadedFilters?.region,
-                    }}
                     columns={trendLines(rateTrend.entities, rateTrend.points, rateTrend.pinned).map(
                       (line) => ({ key: line.key, name: line.name }),
                     )}
                   />
                 )}
 
-              {/* Recommendations (#459) — stored data, not period-scoped */}
-              {recommendations && <RecommendationsSection data={recommendations} />}
+              {/* Opportunities (VIS-011), under the map: stored suggestions, not period-scoped. */}
+              {opportunities && (
+                <Opportunities
+                  brandId={brand.id}
+                  suggestions={opportunities.suggestions}
+                  trackedTopicIds={opportunities.trackedTopicIds}
+                  topics={topicCompetitors}
+                  entities={rateTrend?.entities ?? null}
+                  slotsLeft={
+                    !trackedPrompts || trackedPrompts.quotaLimit < 0
+                      ? null
+                      : Math.max(0, trackedPrompts.quotaLimit - trackedPrompts.quotaUsed)
+                  }
+                  contentUsage={opportunities.contentUsage}
+                  onTracked={(count) =>
+                    setTrackedPrompts(
+                      (current) => current && { ...current, quotaUsed: current.quotaUsed + count },
+                    )
+                  }
+                />
+              )}
             </>
           )}
         </div>

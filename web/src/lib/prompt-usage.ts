@@ -1,7 +1,7 @@
 /**
- * Tracked Prompts usage counter (PROMPT-009): which state the "used / limit"
- * counter is in. The numbers come from getLocationQuota, so the counter shows
- * exactly what the plan-limit guard enforces (active prompt locations,
+ * Tracked prompt usage (PROMPT-009, PROMPT-012): which state "used / limit"
+ * is in, for the usage cards' colors and for blocking Add Prompt. The numbers
+ * are the ones the plan-limit guard enforces (active prompt locations,
  * org-wide; paused prompts don't count — see prompt-locations.ts).
  */
 
@@ -15,8 +15,8 @@ export interface PromptUsage {
   percent: number;
 }
 
-/** From this share of the limit on, the counter turns amber. */
-export const PROMPT_USAGE_WARNING_RATIO = 0.8;
+/** From this share of the limit on, the usage cards turn amber (PROMPT-012: 90%). */
+export const PROMPT_USAGE_WARNING_RATIO = 0.9;
 
 /**
  * `limit === -1` is unlimited (self-host, enterprise without an override).

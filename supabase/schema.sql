@@ -17000,6 +17000,479 @@ comment on function public.insights_topic_competitors_daily(uuid, date, date, te
   'Insights "Topics vs competitors" (VIS-010, 00137): per active topic, the brand''s Visibility components over the topic''s prompts and each live competitor''s components over the same answers, from the prompt-grain rollups. complete=false until they are backfilled (00130).';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00138_prompt_suggestion_relevance.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Relevance of a prompt suggestion to the brand (VIS-011).
+--
+-- The Insights Opportunities card ranks suggestions by relevance × demand ×
+-- gap and hides any under a fixed 0.6 (Visibility spec v2). The refresh's
+-- model already writes each suggestion; relevance is one more field of that
+-- same answer, stored 0–1. Rows generated before this, or once the month's
+-- allowance below is spent, stay null, and the card doesn't list a suggestion
+-- it can't place against the threshold.
+alter table public.prompt_suggestions
+  add column if not exists relevance real
+    constraint prompt_suggestions_relevance_check
+      check (relevance is null or (relevance >= 0 and relevance <= 1));
+
+-- Monthly relevance allowance: one row per refresh that rated relevance,
+-- charged an upper estimate of what rating added to it (a full list, for
+-- every attempt), summed per organization over the subscription period
+-- against plan.limits.relevanceMonthlyBudgetUsd, 0.1% of the plan price
+-- (Starter $0.049, Growth $0.249, Enterprise $0.499 or 0.1% of
+-- plan_overrides.contractMonthlyUsd). A refresh rates only once its worst
+-- case is reserved below, so the month never passes it. Separate from the
+-- Improve budget (prompt_improve_usage, 00120). The call's own token counts
+-- are kept to check the estimate against. Self-hosted isn't limited and
+-- records nothing.
+
+create table if not exists public.suggestion_relevance_usage (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  brand_id uuid references public.brands(id) on delete set null,
+  model text,
+  attempts integer not null default 1,
+  input_tokens integer,
+  output_tokens integer,
+  cost_usd numeric(12, 6) not null default 0,
+  used_at timestamptz not null default now()
+);
+
+create index if not exists suggestion_relevance_usage_org_used_idx
+  on public.suggestion_relevance_usage (organization_id, used_at);
+
+-- Service-role only, no policy (as prompt_improve_usage).
+alter table public.suggestion_relevance_usage enable row level security;
+
+grant all on table public.suggestion_relevance_usage to service_role;
+
+-- Reserves a refresh's worst case (p_cost) in one transaction, under a
+-- per-organization lock, so two refreshes running at once (several brands of
+-- one org, or a double click) can never take the organization past
+-- p_budget. Returns the usage row id, or null when what's left can't cover
+-- it; the caller then refreshes without rating, and once the model answers
+-- lowers the row to what the attempts it made cost.
+create or replace function public.reserve_suggestion_relevance(
+  p_organization_id uuid,
+  p_brand_id uuid,
+  p_model text,
+  p_since timestamptz,
+  p_budget numeric,
+  p_cost numeric
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_spent numeric;
+  v_id uuid;
+begin
+  perform pg_advisory_xact_lock(hashtext('suggestion_relevance:' || p_organization_id::text));
+
+  select coalesce(sum(cost_usd), 0) into v_spent
+  from public.suggestion_relevance_usage
+  where organization_id = p_organization_id
+    and used_at >= p_since;
+
+  if v_spent + p_cost > p_budget then
+    return null;
+  end if;
+
+  insert into public.suggestion_relevance_usage (organization_id, brand_id, model, cost_usd)
+  values (p_organization_id, p_brand_id, p_model, p_cost)
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
+revoke all on function public.reserve_suggestion_relevance(uuid, uuid, text, timestamptz, numeric, numeric)
+  from public, anon, authenticated;
+grant execute on function public.reserve_suggestion_relevance(uuid, uuid, text, timestamptz, numeric, numeric)
+  to service_role;
+
+comment on function public.reserve_suggestion_relevance(uuid, uuid, text, timestamptz, numeric, numeric) is
+  'Atomically reserves a suggestion refresh''s worst-case relevance cost against the organization''s monthly allowance (VIS-011). Returns the suggestion_relevance_usage id, or null when it does not fit.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00139_prompt_usage_counters.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Tracked Prompts usage counters (PROMPT-012).
+--
+-- The usage cards above the Tracked Prompts table show a brand's active and
+-- paused prompts, and the account's active prompts, brands and active prompt
+-- locations. Counting those from `prompts` on every page view is what the
+-- spec rules out, so they're kept here, one row per brand, and the account
+-- figures are the sum of the org's few brand rows.
+--
+-- A row is rebuilt from `prompts` by statement-level triggers, in the same
+-- transaction as the change: a prompt added, paused, resumed, edited, moved
+-- or deleted, and a prompt set deleted or moved to another brand. Rebuilding
+-- the brand rather than adding deltas means a missed case can't leave a row
+-- wrong for good, and a per-brand advisory lock taken before the rebuild
+-- makes the last of two concurrent writers count both changes.
+--
+-- Locations follow org_prompt_location_usage (00128): an active prompt counts
+-- greatest(array_length(regions), 1), a paused one counts none.
+--
+-- prompt_usage_actual() is the one place the counts are computed from
+-- `prompts`; the rebuild, the backfill and the nightly check all read it.
+-- repair_prompt_usage_counters() compares every row with it, rebuilds the rows
+-- that differ and returns them; the server runs it nightly and logs drift.
+
+-- The rebuild looks prompts up by brand; neither join had an index.
+create index if not exists idx_prompts_prompt_set_id on public.prompts (prompt_set_id);
+create index if not exists idx_prompt_sets_brand_id on public.prompt_sets (brand_id);
+
+create table if not exists public.prompt_usage_counters (
+  brand_id uuid primary key references public.brands(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  active_prompts integer not null default 0,
+  paused_prompts integer not null default 0,
+  active_locations integer not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_prompt_usage_counters_org
+  on public.prompt_usage_counters (organization_id);
+
+alter table public.prompt_usage_counters enable row level security;
+
+drop policy if exists "prompt_usage_counters: member select" on public.prompt_usage_counters;
+create policy "prompt_usage_counters: member select" on public.prompt_usage_counters
+  for select using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+grant select on table public.prompt_usage_counters to authenticated;
+grant all on table public.prompt_usage_counters to service_role;
+
+-- Each brand's counts as they are in `prompts` right now: all brands, or the
+-- given ones. Brands without prompts come back with zeros.
+create or replace function public.prompt_usage_actual(p_brand_ids uuid[] default null)
+returns table (
+  brand_id uuid,
+  organization_id uuid,
+  active_prompts integer,
+  paused_prompts integer,
+  active_locations integer
+)
+language sql
+stable
+set search_path = public
+as $$
+  select
+    b.id,
+    b.organization_id,
+    count(p.id) filter (where p.is_active)::integer,
+    count(p.id) filter (where not p.is_active)::integer,
+    coalesce(
+      sum(greatest(coalesce(array_length(p.regions, 1), 0), 1)) filter (where p.is_active),
+      0
+    )::integer
+  from public.brands b
+  left join public.prompt_sets ps on ps.brand_id = b.id
+  left join public.prompts p on p.prompt_set_id = ps.id
+  where p_brand_ids is null or b.id = any(p_brand_ids)
+  group by b.id, b.organization_id;
+$$;
+
+revoke all on function public.prompt_usage_actual(uuid[]) from public, anon, authenticated;
+grant execute on function public.prompt_usage_actual(uuid[]) to service_role;
+
+-- Rebuilds the counter rows of the given brands. Brands that no longer exist
+-- (a brand deleted, its sets and prompts cascading) are skipped; their rows go
+-- with them.
+create or replace function public.refresh_prompt_usage_counters(p_brand_ids uuid[])
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_brand uuid;
+begin
+  -- Sorted, so two writers locking the same brands can't deadlock.
+  for v_brand in
+    select distinct id from unnest(p_brand_ids) as t(id) where id is not null order by id
+  loop
+    perform pg_advisory_xact_lock(hashtext('prompt_usage_counters:' || v_brand::text));
+
+    -- A new statement after the lock, so it counts what a writer we waited
+    -- for has committed.
+    insert into public.prompt_usage_counters as c (
+      brand_id, organization_id, active_prompts, paused_prompts, active_locations, updated_at
+    )
+    select a.brand_id, a.organization_id, a.active_prompts, a.paused_prompts, a.active_locations, now()
+    from public.prompt_usage_actual(array[v_brand]) a
+    on conflict (brand_id) do update set
+      organization_id = excluded.organization_id,
+      active_prompts = excluded.active_prompts,
+      paused_prompts = excluded.paused_prompts,
+      active_locations = excluded.active_locations,
+      updated_at = excluded.updated_at;
+  end loop;
+end;
+$$;
+
+revoke all on function public.refresh_prompt_usage_counters(uuid[]) from public, anon, authenticated;
+grant execute on function public.refresh_prompt_usage_counters(uuid[]) to service_role;
+
+-- Statement-level, so a bulk import or a plan alignment that writes hundreds
+-- of prompts in one statement rebuilds each brand once. Prompts whose set is
+-- already gone (a set deleted, its prompts cascading) resolve to no brand; the
+-- prompt_sets trigger below rebuilds that brand instead.
+create or replace function public.prompts_refresh_usage_counters()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_brands uuid[];
+begin
+  if tg_op = 'INSERT' then
+    select array_agg(distinct ps.brand_id) into v_brands
+    from new_rows r join public.prompt_sets ps on ps.id = r.prompt_set_id;
+  elsif tg_op = 'DELETE' then
+    select array_agg(distinct ps.brand_id) into v_brands
+    from old_rows r join public.prompt_sets ps on ps.id = r.prompt_set_id;
+  else
+    select array_agg(distinct ps.brand_id) into v_brands
+    from (
+      select prompt_set_id from new_rows
+      union
+      select prompt_set_id from old_rows
+    ) r
+    join public.prompt_sets ps on ps.id = r.prompt_set_id;
+  end if;
+
+  if v_brands is not null then
+    perform public.refresh_prompt_usage_counters(v_brands);
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists trg_prompts_usage_counters_insert on public.prompts;
+create trigger trg_prompts_usage_counters_insert
+  after insert on public.prompts
+  referencing new table as new_rows
+  for each statement execute function public.prompts_refresh_usage_counters();
+
+drop trigger if exists trg_prompts_usage_counters_update on public.prompts;
+create trigger trg_prompts_usage_counters_update
+  after update on public.prompts
+  referencing old table as old_rows new table as new_rows
+  for each statement execute function public.prompts_refresh_usage_counters();
+
+drop trigger if exists trg_prompts_usage_counters_delete on public.prompts;
+create trigger trg_prompts_usage_counters_delete
+  after delete on public.prompts
+  referencing old table as old_rows
+  for each statement execute function public.prompts_refresh_usage_counters();
+
+-- A prompt set deleted (its prompts cascading first) or moved to another
+-- brand: rebuild the brands it left and joined.
+create or replace function public.prompt_sets_refresh_usage_counters()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_brands uuid[];
+begin
+  if tg_op = 'DELETE' then
+    select array_agg(distinct brand_id) into v_brands from old_rows;
+  else
+    select array_agg(distinct brand_id) into v_brands
+    from (
+      select brand_id from new_rows
+      union
+      select brand_id from old_rows
+    ) r;
+  end if;
+
+  if v_brands is not null then
+    perform public.refresh_prompt_usage_counters(v_brands);
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists trg_prompt_sets_usage_counters_update on public.prompt_sets;
+create trigger trg_prompt_sets_usage_counters_update
+  after update on public.prompt_sets
+  referencing old table as old_rows new table as new_rows
+  for each statement execute function public.prompt_sets_refresh_usage_counters();
+
+drop trigger if exists trg_prompt_sets_usage_counters_delete on public.prompt_sets;
+create trigger trg_prompt_sets_usage_counters_delete
+  after delete on public.prompt_sets
+  referencing old table as old_rows
+  for each statement execute function public.prompt_sets_refresh_usage_counters();
+
+-- What the usage cards read: one brand's counts plus its account's totals,
+-- from the counter rows alone. Security invoker, so RLS returns no row for a
+-- brand outside the caller's org.
+create or replace function public.prompt_usage_summary(p_brand_id uuid)
+returns table (
+  brand_active integer,
+  brand_paused integer,
+  account_active integer,
+  account_brands integer,
+  account_locations integer
+)
+language sql
+stable
+set search_path = public
+as $$
+  select
+    coalesce(bc.active_prompts, 0),
+    coalesce(bc.paused_prompts, 0),
+    coalesce(acct.active_prompts, 0)::integer,
+    (select count(*) from public.brands b2 where b2.organization_id = b.organization_id)::integer,
+    coalesce(acct.active_locations, 0)::integer
+  from public.brands b
+  left join public.prompt_usage_counters bc on bc.brand_id = b.id
+  left join lateral (
+    select sum(c.active_prompts) as active_prompts, sum(c.active_locations) as active_locations
+    from public.prompt_usage_counters c
+    where c.organization_id = b.organization_id
+  ) acct on true
+  where b.id = p_brand_id;
+$$;
+
+revoke all on function public.prompt_usage_summary(uuid) from public, anon;
+grant execute on function public.prompt_usage_summary(uuid) to authenticated, service_role;
+
+-- The nightly consistency check: compare every row with prompt_usage_actual(),
+-- return the ones that differ (stored and actual counts) for the log, and
+-- rebuild them. A brand moved to another organization counts as drift too. A
+-- brand with no prompts and no row yet isn't drift.
+create or replace function public.repair_prompt_usage_counters()
+returns table (
+  brand_id uuid,
+  stored_active integer,
+  stored_paused integer,
+  stored_locations integer,
+  actual_active integer,
+  actual_paused integer,
+  actual_locations integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_ids uuid[] := '{}';
+  r record;
+begin
+  for r in
+    select
+      a.brand_id as id,
+      coalesce(c.active_prompts, 0) as s_active,
+      coalesce(c.paused_prompts, 0) as s_paused,
+      coalesce(c.active_locations, 0) as s_locations,
+      a.active_prompts as a_active,
+      a.paused_prompts as a_paused,
+      a.active_locations as a_locations
+    from public.prompt_usage_actual() a
+    left join public.prompt_usage_counters c on c.brand_id = a.brand_id
+    where coalesce(c.active_prompts, 0) <> a.active_prompts
+       or coalesce(c.paused_prompts, 0) <> a.paused_prompts
+       or coalesce(c.active_locations, 0) <> a.active_locations
+       or (c.brand_id is not null and c.organization_id <> a.organization_id)
+  loop
+    brand_id := r.id;
+    stored_active := r.s_active;
+    stored_paused := r.s_paused;
+    stored_locations := r.s_locations;
+    actual_active := r.a_active;
+    actual_paused := r.a_paused;
+    actual_locations := r.a_locations;
+    v_ids := v_ids || r.id;
+    return next;
+  end loop;
+
+  if cardinality(v_ids) > 0 then
+    perform public.refresh_prompt_usage_counters(v_ids);
+  end if;
+end;
+$$;
+
+revoke all on function public.repair_prompt_usage_counters() from public, anon, authenticated;
+grant execute on function public.repair_prompt_usage_counters() to service_role;
+
+-- Every existing brand starts with its current counts. One statement and no
+-- advisory locks (one per brand could exhaust the lock table on a large
+-- database): the CREATE TRIGGERs above already hold off writes to prompts and
+-- prompt_sets until this migration commits.
+insert into public.prompt_usage_counters (
+  brand_id, organization_id, active_prompts, paused_prompts, active_locations
+)
+select brand_id, organization_id, active_prompts, paused_prompts, active_locations
+from public.prompt_usage_actual()
+on conflict (brand_id) do nothing;
+
+comment on table public.prompt_usage_counters is
+  'Per-brand prompt counts for the Tracked Prompts usage cards (PROMPT-012, 00139): active, paused and active prompt locations. Rebuilt by triggers on prompts and prompt_sets; repair_prompt_usage_counters() checks them nightly.';
+comment on function public.prompt_usage_summary(uuid) is
+  'One brand''s active/paused prompts and its account''s active prompts, brands and active prompt locations, from prompt_usage_counters only (PROMPT-012). Security invoker.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00140_fanout_coverage_by_platform.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Query fan-out coverage per platform, for the daily health report.
+--
+-- ChatGPT's observed fan-out came back empty from 2026-09-30 while its
+-- answers still carried sources: the engine was searching, the field just
+-- stopped arriving. Nothing noticed for two weeks, because an empty field
+-- reads exactly like an answer that ran no search. The health report now
+-- reads each platform's share of answers with fan-out over the last day and
+-- the days before, and flags one that stops (server/src/lib/health/report.js).
+--
+-- One aggregate over the window (idx_prompt_results_created_at), across every
+-- brand; no rows leave the database. Service role only.
+create or replace function public.fanout_coverage_by_platform(
+  p_since timestamptz,
+  p_until timestamptz
+)
+returns table (platform text, answers bigint, answers_with_fanout bigint)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    r.platform,
+    count(*)::bigint,
+    count(*) filter (
+      where case
+        when jsonb_typeof(r.search_queries) = 'array' then jsonb_array_length(r.search_queries)
+        else 0
+      end > 0
+    )::bigint
+  from public.prompt_results r
+  where r.created_at >= p_since
+    and r.created_at < p_until
+  group by r.platform;
+$$;
+
+revoke all on function public.fanout_coverage_by_platform(timestamptz, timestamptz)
+  from public, anon, authenticated;
+grant execute on function public.fanout_coverage_by_platform(timestamptz, timestamptz)
+  to service_role;
+
+comment on function public.fanout_coverage_by_platform(timestamptz, timestamptz) is
+  'Answers and answers with observed query fan-out per platform in [p_since, p_until), across all brands (00140). Read by the daily health report.';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00147_insights_same_prompts_definer.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- "Compare: Same prompts" timed out on the largest brand (#1036 review).
@@ -18156,4 +18629,68 @@ grant execute on function public.insights_topic_competitors_daily(
 
 comment on function public.insights_topic_competitors_daily(uuid, date, date, text[], text) is
   'Insights "Topics vs competitors" (VIS-010, 00137; planned with its arguments, security definer, 00152): per active topic, the brand''s Visibility components over the topic''s prompts and each live competitor''s components over the same answers, from the prompt-grain rollups. complete=false until they are backfilled (00130). Null when the caller is not a member of the brand''s organization.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00154_prompt_volume_median.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- A prompt's volume is the median of its keywords' Google volumes, not their
+-- sum.
+--
+-- Volume analysis gives each prompt five head terms for its category
+-- (server/src/lib/intent-extraction.js) and looked up their Google volumes.
+-- Their sum stood for the prompt, but the five overlap, so the same searchers
+-- were counted several times over, and one very broad term ("google gemini",
+-- 5M a month) could set the whole figure: a single prompt read ~755k
+-- estimated AI searches a month, and the Insights total ran to millions.
+-- summarizeVolumes (server/src/lib/volume-analysis.js) now takes the median of
+-- the keywords that have any volume; this applies the same rule to the rows
+-- already stored, from the per-keyword volumes they keep, so no keyword is
+-- looked up again. A row with no measured keyword stays at 0.
+--
+-- total_google_volume keeps its name; it now holds that median.
+
+update public.prompt_volumes pv
+set total_google_volume = m.google_volume,
+    est_ai_volume = round(m.google_volume * pv.ai_volume_multiplier)::integer
+from (
+  select p.id,
+         coalesce(round(percentile_cont(0.5) within group (order by k.volume)), 0)::integer
+           as google_volume
+  from public.prompt_volumes p
+  left join lateral (
+    select e.value::numeric as volume
+    from jsonb_each_text(p.google_volumes) e
+    -- Only numbers are cast; the case keeps the cast behind the check.
+    where case when e.value ~ '^[0-9]+(\.[0-9]+)?$' then e.value::numeric > 0 else false end
+  ) k on true
+  group by p.id
+) m
+where m.id = pv.id
+  and (pv.total_google_volume is distinct from m.google_volume
+       or pv.est_ai_volume is distinct from round(m.google_volume * pv.ai_volume_multiplier)::integer);
+
+comment on column public.prompt_volumes.total_google_volume is
+  'The prompt''s Google volume: the median of google_volumes'' measured keywords (named before the median replaced their sum).';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00155_ai_volume_multiplier_45.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- The AI adoption rate's default goes from 15% to 45% of a prompt's Google
+-- volume.
+--
+-- est_ai_volume is the prompt's Google volume (the median of its keywords',
+-- 00154) times the AI adoption rate, AI_VOLUME_MULTIPLIER on the server.
+-- Its default was 15%, about the share of Google searches that showed an AI
+-- Overview a year ago; they now appear on roughly 43–48%
+-- (server/src/lib/intent-extraction.js). This moves the rows stored at the
+-- old default to the new one. Rows saved under any other rate were set on
+-- purpose by the install, and are left alone.
+--
+-- An install that sets AI_VOLUME_MULTIPLIER=0.15 itself (server/.env.example
+-- did) keeps analyzing at 15% until it is changed to 0.45 or removed.
+
+update public.prompt_volumes
+set ai_volume_multiplier = 0.450,
+    est_ai_volume = round(total_google_volume * 0.450)::integer
+where ai_volume_multiplier = 0.150;
 

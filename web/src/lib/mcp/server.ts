@@ -27,6 +27,7 @@ import {
   getSiteAuditFor,
   listSiteAuditsFor,
   getSiteAuditQuotaFor,
+  getPromptUsageFor,
   MCP_TASK_STATUSES,
   getActionFor,
   listActionHistoryFor,
@@ -456,6 +457,35 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
   );
 
   server.registerTool(
+    'get_prompt_usage',
+    {
+      description:
+        'Check tracked-prompt usage against the plan — the numbers on the Tracked Prompts usage cards. ' +
+        'Returns { plan: { key, name, locationLimit, cta }, brand: { active, paused, total }, ' +
+        'account: { activePrompts, brands, locationsUsed }, updatedAt }. The plan limit counts ' +
+        'prompt LOCATIONS across every brand of the account: each active prompt uses one slot per ' +
+        'location it targets, and paused prompts use none. Slots left = locationLimit − ' +
+        'locationsUsed (never below 0); locationLimit null means unlimited. Use this for "how many ' +
+        'prompts can we still add?" / "how close are we to the limit?". This is a read.',
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+      },
+    },
+    async (args) => {
+      const usage = await getPromptUsageFor(auth, args.brand_id);
+      if (!usage) {
+        return {
+          content: [{ type: 'text', text: 'Brand not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(usage, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
     'update_opportunity_status',
     {
       description:
@@ -684,7 +714,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'get_prompt_volumes',
     {
       description:
-        'Get per-prompt search demand and competition for a brand. Returns one row per analyzed prompt with its keywords, Google search volumes, total_google_volume, est_ai_volume (estimated AI search demand), competition_index (0-100), and competition label (LOW / MEDIUM / HIGH). Sorted by est_ai_volume descending. Use this for "which prompts have the most demand?" or "which prompts have the least competition?" prioritization questions. Only returns prompts that already have volume analysis — triggering a new analysis is not available here.',
+        'Get per-prompt search demand and competition for a brand. Returns one row per analyzed prompt with its keywords, the Google search volume of each keyword, total_google_volume (the Google volume of the prompt: the median of its keyword volumes, not their sum), est_ai_volume (estimated AI search demand: total_google_volume × the AI adoption rate), competition_index (0-100), and competition label (LOW / MEDIUM / HIGH). Sorted by est_ai_volume descending. Use this for "which prompts have the most demand?" or "which prompts have the least competition?" prioritization questions. Only returns prompts that already have volume analysis — triggering a new analysis is not available here.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         limit: z

@@ -1,9 +1,11 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { numberFormat } from '@/lib/number-format';
+import { LOW_SAMPLE_ANSWERS } from '@/lib/insights-summary';
 import type { Driver, DriverKind, WhyChanged as WhyChangedData } from '@/lib/insights-drivers';
 import { signedChange, TONE_TEXT } from './kpi-format';
 import type { BreakdownTab } from './_metric-breakdown-sheet';
@@ -15,9 +17,9 @@ const TAB_OF: Record<DriverKind, BreakdownTab> = {
 };
 
 /** "Oct 12", or "Sep 29 – Oct 12" when the prompts were added over several days. */
-function addedOn(first: string | null, last: string | null): string | null {
+function addedOn(first: string | null, last: string | null, locale: string): string | null {
   const day = (ts: string) =>
-    new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    new Date(ts).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
   if (!first || !last) return first ? day(first) : last ? day(last) : null;
   return day(first) === day(last) ? day(last) : `${day(first)} – ${day(last)}`;
 }
@@ -38,7 +40,9 @@ export function WhyChanged({
   className?: string;
 }) {
   const t = useTranslations('insights.whyChanged');
-  const date = addedOn(data.newPrompts.firstAdded, data.newPrompts.lastAdded);
+  const locale = useLocale();
+  const f = numberFormat(locale);
+  const date = addedOn(data.newPrompts.firstAdded, data.newPrompts.lastAdded, locale);
 
   const nameOf = (d: Driver) =>
     d.name ?? (d.kind === 'topic' ? t('uncategorized') : t('deletedPrompt'));
@@ -66,8 +70,11 @@ export function WhyChanged({
                   <span className="min-w-0 flex-1 truncate text-[13px]" title={name}>
                     {name}
                   </span>
+                  {/* A slice's own score on a handful of answers says little (VIS-005). */}
                   <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                    {t('range', { prev: d.prev.toFixed(1), cur: d.cur.toFixed(1) })}
+                    {Math.min(d.answers.prev, d.answers.cur) < LOW_SAMPLE_ANSWERS
+                      ? t('rowLowSample')
+                      : t('range', { prev: f.number(d.prev, 1), cur: f.number(d.cur, 1) })}
                   </span>
                   <span
                     className={cn(
@@ -75,7 +82,7 @@ export function WhyChanged({
                       TONE_TEXT[d.impact > 0 ? 'good' : 'bad'],
                     )}
                   >
-                    {signedChange(d.impact)}
+                    {signedChange(d.impact, locale)}
                   </span>
                 </button>
               </li>
@@ -103,7 +110,10 @@ export function WhyChanged({
       <CardContent className="flex flex-1 flex-col gap-3">
         {data.status === 'lowSample' ? (
           <p className="text-sm text-muted-foreground">
-            {t('lowSample', { cur: data.answers.cur, prev: data.answers.prev })}
+            {t('lowSample', {
+              cur: f.number(data.answers.cur),
+              prev: f.number(data.answers.prev),
+            })}
           </p>
         ) : data.gains.length === 0 && data.drops.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('steady')}</p>

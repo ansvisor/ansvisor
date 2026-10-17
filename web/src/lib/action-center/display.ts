@@ -1,5 +1,6 @@
 import type { ActionEvent, ActionItem } from '@/lib/actions/action-center';
 import { isActionKind } from '@/lib/action-center/registry';
+import { formatCompactNumber } from '@/lib/format';
 
 /**
  * Composes what an action row shows from `kind` + `payload`, mirroring the
@@ -95,6 +96,21 @@ export function actionTexts(
       description: t(`${action.kind}.description`),
     };
   }
+  // An Opportunities topic sent from Insights (VIS-011) names the topic and
+  // the demand it was sent with.
+  if (
+    action.kind === 'topic_opportunity' &&
+    typeof p.topicName === 'string' &&
+    typeof p.demand === 'number'
+  ) {
+    return {
+      title: t(`${action.kind}.title`, {
+        demand: formatCompactNumber(p.demand),
+        topic: p.topicName,
+      }),
+      description: t(`${action.kind}.description`),
+    };
+  }
   const targets = targetLabel(p, t);
   return {
     title: targets ? t(`${action.kind}.title`, { targets }) : t(`${action.kind}.titleGeneric`),
@@ -135,6 +151,12 @@ export function actionEventText(
     tool: String(event.data.tool ?? ''),
     improved: Number(event.data.improved ?? 0),
     measurable: Number(event.data.measurable ?? 0),
+    // A task someone added or renamed is named in their own words, as they
+    // typed it.
+    title: String(event.data.title ?? ''),
+    // The validation sweep's verdict once the action closed: improved,
+    // declined, and so on.
+    outcome: String(event.data.outcome ?? ''),
   });
 }
 
@@ -162,13 +184,14 @@ const PERSON_SENT_KINDS: string[] = [
   'content_opportunity',
   'prompt_improve',
   'topic_competitor_gap',
+  'topic_opportunity',
 ];
 
 /** Compact evidence chips under the title: signal count plus the kind's own
  *  count (pages, prompts, competitors). */
 export function actionContextTags(action: ActionItem, t: Translator): string[] {
   // Actions a person sent (a content opportunity, an Improve set, a topic
-  // gap) have no detection signals by design; "0 signals" would read as
+  // gap or opportunity) have no detection signals by design; "0 signals" would read as
   // missing evidence.
   const tags = PERSON_SENT_KINDS.includes(action.kind)
     ? []

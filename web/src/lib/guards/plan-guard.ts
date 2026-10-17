@@ -20,14 +20,30 @@ export async function getOrgPlan(organizationId: string): Promise<Plan> {
     .eq('id', organizationId)
     .single();
 
+  return planFromOrgRow(data);
+}
+
+/** The organization columns {@link planFromOrgRow} reads. */
+export const ORG_PLAN_COLUMNS = 'plan, subscription_status, plan_overrides';
+
+/**
+ * The plan an organization row is entitled to, for callers that read the row
+ * themselves (the MCP server has no user session, so it reads with the
+ * service role).
+ */
+export function planFromOrgRow(
+  data: { plan?: unknown; subscription_status?: unknown; plan_overrides?: unknown } | null,
+): Plan {
+  if (!isCloud()) return getPlan('self_hosted');
+
   // `trialing` is a paid plan in its trial window — treat it as active so
   // trial customers get their actual plan's limits (seats, brands, prompts…)
   // instead of being silently dropped to starter.
-  if (!isSubscriptionActive(data?.subscription_status)) {
+  if (!isSubscriptionActive(data?.subscription_status as string | null | undefined)) {
     return getPlan('starter');
   }
 
-  const plan = getPlan(data?.plan);
+  const plan = getPlan(data?.plan as string | null | undefined);
 
   // Enterprise orgs can have custom limit overrides
   if (data?.plan === 'enterprise' && data.plan_overrides) {

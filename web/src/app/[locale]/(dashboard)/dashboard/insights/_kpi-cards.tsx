@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   ArrowUpRight,
   Eye,
@@ -19,7 +19,8 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { formatCompactNumber } from '@/lib/format';
+import { numberFormat } from '@/lib/number-format';
+import { LOW_SAMPLE_ANSWERS } from '@/lib/insights-summary';
 import type {
   CompetitorComparisonData,
   CoverageKpi,
@@ -37,6 +38,8 @@ import {
   TONE_TEXT,
   upIsGood,
   type Change,
+  rateSamples,
+  type RateSample,
 } from './kpi-format';
 
 // ─── Info tooltip ─────────────────────────────────────────────────────────────
@@ -239,8 +242,6 @@ function MetricCard({
   );
 }
 
-const pct = (n: number | null) => (n === null ? null : `${n}%`);
-
 // ─── The two rows ─────────────────────────────────────────────────────────────
 
 interface KpiRowsProps {
@@ -258,8 +259,8 @@ interface KpiRowsProps {
 
 /**
  * The Insights KPI cards (VIS-003): today's five on the first row, the new
- * rates on the second, as in the v2 mockup. Changes follow "Compare: Same
- * prompts"; the values themselves cover every prompt in the window.
+ * rates on the second, as in the v2 mockup. Changes are against the previous
+ * period; the values themselves cover every prompt in the window.
  */
 export function KpiRows({
   summary,
@@ -274,19 +275,34 @@ export function KpiRows({
   onNavigate,
 }: KpiRowsProps) {
   const t = useTranslations('insights.kpi');
+  const locale = useLocale();
+  const f = numberFormat(locale);
   const none = t('noData');
+  const pct = (n: number | null) => (n === null ? none : f.percent(n));
+
+  // Every rate comes with its sample size (VIS-005): in the tooltip, and
+  // under 20 answers as "Low sample" on the context line, with no change
+  // shown for so few answers. A card without a value has nothing to qualify.
+  const samples = rateSamples(summary);
+  const low = (s: RateSample) => s.count < LOW_SAMPLE_ANSWERS;
+  const rateTip = (tip: string, s: RateSample) =>
+    `${tip} ${t(`sampleTip.${s.of}`, { count: s.count })}`;
+  const rateSub = (s: RateSample, sub: React.ReactNode, hasValue = true) =>
+    hasValue && low(s) ? t('lowSample', { count: s.count }) : sub;
+  const rateDelta = (s: RateSample, delta: Change | null) => (low(s) ? null : delta);
 
   const own = competitors?.brands.findIndex((b) => b.isOwnBrand) ?? -1;
   const visibilitySub =
     competitors && own >= 0
-      ? t('rankOf', { rank: own + 1, count: competitors.brands.length })
+      ? t('rankOf', { rank: f.number(own + 1), count: f.number(competitors.brands.length) })
       : coverage
-        ? t('appearedIn', { visible: coverage.visiblePrompts, active: coverage.activePrompts })
+        ? t('appearedIn', {
+            visible: f.number(coverage.visiblePrompts),
+            active: f.number(coverage.activePrompts),
+          })
         : null;
-  const basisSub =
-    comparison?.basis === 'same'
-      ? t('samePrompts', { count: comparison.samePrompts })
-      : t('allPrompts');
+  // Under a change, what it is against; nothing without one.
+  const vsPrevious = (change: number | null) => (change === null ? null : t('vsPrevious'));
 
   const quota =
     trackedPrompts && trackedPrompts.quotaLimit !== -1
@@ -297,8 +313,11 @@ export function KpiRows({
     : !quota
       ? t('unlimited', { count: trackedPrompts.quotaUsed })
       : quota.used > quota.limit
-        ? t('overLimit', { count: quota.used - quota.limit })
-        : t('slotsLeft', { count: quota.limit - quota.used });
+        ? // Only after a downgrade or a lowered limit: adding stops at the limit.
+          t('overLimit', { count: quota.used - quota.limit })
+        : quota.used === quota.limit
+          ? t('limitReached')
+          : t('slotsLeft', { count: quota.limit - quota.used });
 
   const daily = <K extends keyof KpiSeriesDay>(key: K) =>
     series ? series.map((d) => d[key] as number | null) : null;
@@ -308,11 +327,20 @@ export function KpiRows({
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <MetricCard
           label={t('visibility')}
-          tooltip={t('visibilityTip')}
+          tooltip={rateTip(t('visibilityTip'), samples.visibility)}
           icon={Eye}
-          value={String(trend?.summary.rate ?? 0)}
-          delta={upIsGood(trend?.summary.change ?? null)}
-          sub={visibilitySub}
+          // No trend read: "No data", never a 0 that reads as a score.
+          value={trend ? f.number(trend.summary.rate) : none}
+          delta={rateDelta(samples.visibility, upIsGood(trend?.summary.change ?? null, { locale }))}
+          // The rank stays beside a short mark (the count is in the tooltip):
+          // the card is narrow, and the leaderboard is marked too.
+          sub={
+            trend && low(samples.visibility)
+              ? visibilitySub
+                ? `${visibilitySub} · ${t('lowSampleShort')}`
+                : t('lowSample', { count: samples.visibility.count })
+              : visibilitySub
+          }
           spark={trend ? trend.points.map((p) => p.values.you ?? null) : null}
           onClick={() => onBreakdown('visibility')}
           clickLabel={t('viewBreakdown', { metric: t('visibility') })}
@@ -322,16 +350,16 @@ export function KpiRows({
           tooltip={
             quota
               ? t('trackedPromptsTip', {
-                  used: quota.used.toLocaleString('en-US'),
-                  limit: quota.limit.toLocaleString('en-US'),
+                  used: f.number(quota.used),
+                  limit: f.number(quota.limit),
                 })
               : t('trackedPromptsTipUnlimited')
           }
           icon={Layers}
-          value={(trackedPrompts?.activeInPeriod ?? 0).toLocaleString('en-US')}
+          value={f.number(trackedPrompts?.activeInPeriod ?? 0)}
           delta={
             comparison && comparison.newPrompts > 0
-              ? { text: signedChange(comparison.newPrompts), tone: 'neutral' }
+              ? { text: signedChange(comparison.newPrompts, locale), tone: 'neutral' }
               : null
           }
           sub={trackedSub}
@@ -340,8 +368,8 @@ export function KpiRows({
               ? {
                   ...quota,
                   label: t('quotaLabel', {
-                    used: quota.used.toLocaleString('en-US'),
-                    limit: quota.limit.toLocaleString('en-US'),
+                    used: f.number(quota.used),
+                    limit: f.number(quota.limit),
                   }),
                 }
               : null
@@ -353,9 +381,9 @@ export function KpiRows({
           label={t('mentions')}
           tooltip={t('mentionsTip')}
           icon={MessageCircle}
-          value={formatCompactNumber(summary.totalMentions)}
-          delta={upIsGood(summary.mentionsChange, '%')}
-          sub={basisSub}
+          value={f.compact(summary.totalMentions)}
+          delta={upIsGood(summary.mentionsChange, { percent: true, locale })}
+          sub={vsPrevious(summary.mentionsChange)}
           spark={daily('mentions')}
           onClick={() => onBreakdown('mentions')}
           clickLabel={t('viewBreakdown', { metric: t('mentions') })}
@@ -364,27 +392,29 @@ export function KpiRows({
           label={t('citations')}
           tooltip={t('citationsTip')}
           icon={Quote}
-          value={formatCompactNumber(summary.totalCitations)}
-          delta={upIsGood(summary.citationsChange, '%')}
-          sub={basisSub}
+          value={f.compact(summary.totalCitations)}
+          delta={upIsGood(summary.citationsChange, { percent: true, locale })}
+          sub={vsPrevious(summary.citationsChange)}
           spark={daily('citations')}
           onClick={() => onNavigate('/dashboard/citations')}
           clickLabel={t('openCitations')}
         />
         <MetricCard
           label={t('netSentiment')}
-          tooltip={t('netSentimentTip')}
+          tooltip={rateTip(t('netSentimentTip'), samples.netSentiment)}
           icon={Smile}
-          value={summary.netSentiment === null ? none : signedValue(summary.netSentiment)}
-          delta={upIsGood(summary.netSentimentChange)}
-          sub={
+          value={summary.netSentiment === null ? none : signedValue(summary.netSentiment, locale)}
+          delta={rateDelta(samples.netSentiment, upIsGood(summary.netSentimentChange, { locale }))}
+          sub={rateSub(
+            samples.netSentiment,
             summary.netSentiment === null
               ? null
               : t('sentimentSplit', {
-                  positive: summary.positiveSentimentPct,
-                  negative: summary.negativeSentimentPct ?? 0,
-                })
-          }
+                  positive: f.percent(summary.positiveSentimentPct),
+                  negative: f.percent(summary.negativeSentimentPct ?? 0),
+                }),
+            summary.netSentiment !== null,
+          )}
           spark={daily('netSentiment')}
         />
       </div>
@@ -394,13 +424,14 @@ export function KpiRows({
           label={t('coverage')}
           tooltip={t('coverageTip')}
           icon={Target}
-          value={pct(coverage?.value ?? null) ?? none}
-          delta={upIsGood(coverage?.change ?? null)}
+          value={pct(coverage?.value ?? null)}
+          delta={upIsGood(coverage?.change ?? null, { locale })}
+          // Coverage counts prompts, and its line already gives them.
           sub={
             coverage
               ? t('coverageSub', {
-                  visible: coverage.visiblePrompts,
-                  active: coverage.activePrompts,
+                  visible: f.number(coverage.visiblePrompts),
+                  active: f.number(coverage.activePrompts),
                 })
               : null
           }
@@ -408,29 +439,32 @@ export function KpiRows({
         />
         <MetricCard
           label={t('shareOfVoice')}
-          tooltip={t('shareOfVoiceTip')}
+          tooltip={rateTip(t('shareOfVoiceTip'), samples.shareOfVoice)}
           icon={PieChart}
-          value={pct(sov ? sov.overallSov : null) ?? none}
-          delta={upIsGood(sov?.overallSovChange ?? null)}
-          sub={t('shareOfVoiceSub')}
+          value={pct(sov ? sov.overallSov : null)}
+          delta={rateDelta(
+            samples.shareOfVoice,
+            upIsGood(sov?.overallSovChange ?? null, { locale }),
+          )}
+          sub={rateSub(samples.shareOfVoice, t('shareOfVoiceSub'), !!sov)}
           spark={daily('shareOfVoice')}
         />
         <MetricCard
           label={t('avgPosition')}
-          tooltip={t('avgPositionTip')}
+          tooltip={rateTip(t('avgPositionTip'), samples.avgPosition)}
           icon={ListOrdered}
-          value={summary.avgPosition === null ? none : `#${summary.avgPosition}`}
-          delta={lowerIsGood(summary.avgPositionChange)}
-          sub={t('avgPositionSub')}
+          value={summary.avgPosition === null ? none : `#${f.number(summary.avgPosition)}`}
+          delta={rateDelta(samples.avgPosition, lowerIsGood(summary.avgPositionChange, locale))}
+          sub={rateSub(samples.avgPosition, t('avgPositionSub'), summary.avgPosition !== null)}
           spark={daily('avgPosition')}
         />
         <MetricCard
           label={t('citationRate')}
-          tooltip={t('citationRateTip')}
+          tooltip={rateTip(t('citationRateTip'), samples.citationRate)}
           icon={Link2}
-          value={pct(summary.citationRate) ?? none}
-          delta={upIsGood(summary.citationRateChange)}
-          sub={t('citationRateSub')}
+          value={pct(summary.citationRate)}
+          delta={rateDelta(samples.citationRate, upIsGood(summary.citationRateChange, { locale }))}
+          sub={rateSub(samples.citationRate, t('citationRateSub'), summary.citationRate !== null)}
           spark={daily('citationRate')}
         />
       </div>

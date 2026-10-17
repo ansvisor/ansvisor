@@ -136,6 +136,78 @@ async function checkCloro(now) {
   return { pendingOverAnHour: count ?? 0 };
 }
 
+/**
+ * Query fan-out. ChatGPT's went from about a quarter of answers to none on
+ * 2026-09-30 and nothing noticed for two weeks. A platform is flagged when:
+ *  - Cloro documents fan-out for it (FANOUT_EXPECTED) and a whole day of its
+ *    answers carried none. This catches an outage however long it has run,
+ *    which a comparison with the days before stops doing once they are empty
+ *    too; or
+ *  - its share over the last day fell below FANOUT_DROP_RATIO of its share
+ *    over the BASELINE_DAYS before, for any other platform that fans out.
+ */
+export const FANOUT_EXPECTED = ['chatgpt-web', 'copilot-web', 'perplexity-web'];
+export const FANOUT_DROP_RATIO = 0.25;
+/** Fewer answers than this, on either side, are too few to judge. */
+export const FANOUT_MIN_ANSWERS = 20;
+/** A platform under this share before (it rarely fans out) is not flagged on a drop. */
+export const FANOUT_MIN_BASELINE = 0.05;
+/** Days before the last one that make the baseline. Kept short: the read scans every brand. */
+export const BASELINE_DAYS = 3;
+
+/** Each platform's fan-out share over the last day and over the days before. */
+async function checkFanout(now) {
+  const day = new Date(now - DAY_MS).toISOString();
+  const week = new Date(now - (1 + BASELINE_DAYS) * DAY_MS).toISOString();
+  const read = async (since, until) => {
+    const { data, error } = await supabaseAdmin.rpc('fanout_coverage_by_platform', {
+      p_since: since,
+      p_until: until,
+    });
+    if (error) throw new Error(error.message);
+    return new Map(
+      (data ?? []).map((r) => [
+        r.platform,
+        { answers: Number(r.answers), withFanout: Number(r.answers_with_fanout) },
+      ]),
+    );
+  };
+  const [recent, before] = await Promise.all([
+    read(day, new Date(now).toISOString()),
+    read(week, day),
+  ]);
+
+  const platforms = [...new Set([...recent.keys(), ...before.keys()])].sort().map((platform) => {
+    const r = recent.get(platform) ?? { answers: 0, withFanout: 0 };
+    const b = before.get(platform) ?? { answers: 0, withFanout: 0 };
+    return {
+      platform,
+      answers: r.answers,
+      withFanout: r.withFanout,
+      rate: r.answers ? r.withFanout / r.answers : null,
+      baselineRate: b.answers ? b.withFanout / b.answers : null,
+      baselineAnswers: b.answers,
+    };
+  });
+  return { platforms };
+}
+
+/** A platform whose fan-out stopped or collapsed (see FANOUT_EXPECTED). */
+export function fanoutDropped(p) {
+  if (p.answers < FANOUT_MIN_ANSWERS) return false;
+  if (FANOUT_EXPECTED.includes(p.platform) && p.withFanout === 0) return true;
+  return (
+    p.baselineAnswers >= FANOUT_MIN_ANSWERS &&
+    p.baselineRate != null &&
+    p.baselineRate >= FANOUT_MIN_BASELINE &&
+    (p.rate ?? 0) < p.baselineRate * FANOUT_DROP_RATIO
+  );
+}
+
+/** A share as a whole percent; a small non-zero one says so rather than "0%". */
+const percent = (rate) =>
+  rate == null ? '–' : rate > 0 && rate < 0.01 ? '<1%' : `${Math.round(rate * 100)}%`;
+
 async function section(name, fn) {
   try {
     return await fn();
@@ -149,12 +221,14 @@ export async function collectHealthReport(now = Date.now()) {
   const probes = await section('probes', runProbes);
   const nightly = await section('nightly', () => checkNightlyRuns(now));
   const cloro = await section('cloro', () => checkCloro(now));
+  const fanout = await section('fanout', () => checkFanout(now));
   return {
     generatedAt: new Date(now).toISOString(),
     serverUptimeHours: Math.round((process.uptime() / 3600) * 10) / 10,
     probes,
     nightly,
     cloro,
+    fanout,
   };
 }
 
@@ -185,6 +259,19 @@ export function findIssues(report) {
   if (cloro.pendingOverAnHour > 0) {
     issues.push(`${cloro.pendingOverAnHour} Cloro task(s) pending for over an hour`);
   }
+
+  // Reports from before the fan-out section have none.
+  const fanout = report.fanout ?? {};
+  if (fanout.error) issues.push(`Query fan-out could not be checked: ${fanout.error}`);
+  for (const p of (fanout.platforms ?? []).filter(fanoutDropped)) {
+    issues.push(
+      p.withFanout === 0
+        ? `${p.platform} returned no query fan-out on any of its ${p.answers} answers ` +
+            `in the last 24h (${percent(p.baselineRate)} the days before) — check what Cloro returns`
+        : `${p.platform} query fan-out fell to ${percent(p.rate)} of answers ` +
+            `(${percent(p.baselineRate)} the days before) — check what Cloro returns`,
+    );
+  }
   return issues;
 }
 
@@ -197,6 +284,22 @@ function escapeHtml(value) {
 }
 
 const STATUS_COLOR = { green: '#059669', yellow: '#d97706', red: '#dc2626' };
+
+function fanoutTable(fanout) {
+  if (!fanout) return '<p>Not checked.</p>';
+  if (fanout.error) return `<p>Could not check: ${escapeHtml(fanout.error)}</p>`;
+  const rows = (fanout.platforms ?? [])
+    .map(
+      (p) =>
+        `<tr><td>${escapeHtml(p.platform)}</td>` +
+        `<td style="${fanoutDropped(p) ? 'color:#dc2626;font-weight:600;' : ''}">${percent(p.rate)} ` +
+        `(${p.withFanout} / ${p.answers})</td><td>${percent(p.baselineRate)}</td></tr>`,
+    )
+    .join('');
+  return rows
+    ? `<table cellpadding="4" style="border-collapse:collapse;"><tr><th align="left">Platform</th><th align="left">Last 24h</th><th align="left">${BASELINE_DAYS} days before</th></tr>${rows}</table>`
+    : '<p>No answers.</p>';
+}
 
 export function renderHealthEmail(report) {
   const issues = findIssues(report);
@@ -237,6 +340,8 @@ export function renderHealthEmail(report) {
   <p>Stuck:</p>${list((n.stuck ?? []).map((s) => `${s.brand} (${s.status})`))}
   <p>No completed run:</p>${list(n.missing ?? [])}
   <p>Runs failed by a server restart: ${n.restartKills ?? 0}</p>
+  <h3>Query fan-out (answers with observed sub-queries)</h3>
+  ${fanoutTable(report.fanout)}
   <h3>Server</h3>
   <p>Uptime: ${report.serverUptimeHours}h. Cloro tasks pending over an hour: ${
     report.cloro.pendingOverAnHour ?? 'unknown'
