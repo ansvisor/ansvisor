@@ -26,7 +26,7 @@ export const OPPORTUNITY_WINDOW_DAYS = 30;
  */
 const DEMAND_CEILING = 1_000_000;
 
-const INTENT_WEIGHTS = {
+export const INTENT_WEIGHTS = {
   comparison: 1.0,
   'best-top': 0.95,
   'vs-review': 0.9,

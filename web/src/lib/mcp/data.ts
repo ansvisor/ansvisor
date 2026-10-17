@@ -18,6 +18,10 @@ import {
   toPromptUsageSummary,
   type PromptUsageSummary,
 } from '@/lib/prompt-usage-summary';
+import { mapSignalRows, type SignalRow } from '@/lib/signals/map';
+import { readPromptPlaces } from '@/lib/signals/prompt-places';
+import { currentActionFirst, signalDetailForApi, type SignalActionRef } from '@/lib/signals/detail';
+import { parseTaskDetails } from '@/lib/action-center/task-details';
 
 /**
  * Pure data-fetch functions shared by the MCP route and the parallel REST
@@ -2519,8 +2523,37 @@ export interface ActionListRow {
   assignee: { id: string; full_name: string | null } | null;
   due_date: string | null;
   task_progress: { completed: number; total: number };
+  priority: ActionPriorityForMcp | null;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * An action's priority (AC-006): its 0–100 score, its level, and the facts
+ * the score rests on (change, subject, demand, commercial intent, whether the
+ * ground was held before, days since the evidence, and each factor 0–1).
+ * Null until the server has scored the action.
+ */
+export interface ActionPriorityForMcp {
+  score: number;
+  level: string | null;
+  reason: Record<string, unknown> | null;
+}
+
+function priorityFor(row: {
+  priority_score?: number | null;
+  priority_level?: string | null;
+  priority_reason?: unknown;
+}): ActionPriorityForMcp | null {
+  if (row.priority_score === null || row.priority_score === undefined) return null;
+  return {
+    score: Number(row.priority_score),
+    level: row.priority_level ?? null,
+    reason:
+      row.priority_reason && typeof row.priority_reason === 'object'
+        ? (row.priority_reason as Record<string, unknown>)
+        : null,
+  };
 }
 
 export interface ListActionsParams {
@@ -2528,6 +2561,11 @@ export interface ListActionsParams {
   status?: string;
   category?: string;
   limit?: number;
+  /**
+   * `priority` (default): highest priority score first, unscored last — the
+   * order the app lists them in; `updated`: most recently updated first.
+   */
+  sort?: 'updated' | 'priority';
 }
 
 export async function listActionsFor(
@@ -2540,11 +2578,16 @@ export async function listActionsFor(
   let query = supabaseAdmin
     .from('actions')
     .select(
-      'id, action_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at',
+      'id, action_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason',
     )
-    .eq('brand_id', params.brandId)
-    .order('updated_at', { ascending: false })
-    .limit(limit);
+    .eq('brand_id', params.brandId);
+  query =
+    params.sort === 'updated'
+      ? query.order('updated_at', { ascending: false })
+      : query
+          .order('priority_score', { ascending: false, nullsFirst: false })
+          .order('updated_at', { ascending: false });
+  query = query.limit(limit);
   if (params.status) query = query.eq('status', params.status);
   if (params.category) query = query.eq('category', params.category);
 
@@ -2585,6 +2628,7 @@ export async function listActionsFor(
       : null,
     due_date: r.due_date ?? null,
     task_progress: progress.get(r.id) ?? { completed: 0, total: 0 },
+    priority: priorityFor(r),
     created_at: r.created_at,
     updated_at: r.updated_at,
   }));
@@ -2603,6 +2647,7 @@ export interface ActionDetailForMcp {
   kpi_keys: string[];
   assignee: { id: string; full_name: string | null } | null;
   due_date: string | null;
+  priority: ActionPriorityForMcp | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
@@ -2617,9 +2662,34 @@ export interface ActionDetailForMcp {
     mode: string | null;
     permission: string | null;
     depends_on: string[];
+    details: ReturnType<typeof mcpTaskDetails>;
   }>;
   signals: Record<string, unknown>[];
   events: Array<{ event: string; data: Record<string, unknown>; created_at: string }>;
+}
+
+/** A task's details in the snake_case the rest of the MCP output uses. */
+function mcpTaskDetails(raw: unknown) {
+  const d = parseTaskDetails(raw);
+  if (!d) return null;
+  return {
+    where: d.where,
+    why: d.why,
+    how: d.how,
+    done_when: d.doneWhen,
+    type: d.type,
+    effort: d.effort,
+    role: d.role,
+    body: d.body,
+    platform: d.platform,
+    platform_label: d.platformLabel,
+    sources: d.sources,
+    // Where it was sent (AC-004).
+    sent_to_content: d.sent.content
+      ? { opportunity_id: d.sent.content.opportunityId, at: d.sent.content.at }
+      : null,
+    sent_to_webhook: d.sent.webhook ? { at: d.sent.webhook.at } : null,
+  };
 }
 
 export async function getActionFor(
@@ -2631,7 +2701,7 @@ export async function getActionFor(
   const { data: action, error } = await supabaseAdmin
     .from('actions')
     .select(
-      'id, action_no, brand_id, category, kind, impact, status, outcome, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, brands!inner(organization_id)',
+      'id, action_no, brand_id, category, kind, impact, status, outcome, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, priority_score, priority_level, priority_reason, brands!inner(organization_id)',
     )
     .eq('id', actionId)
     .eq('brands.organization_id', auth.organizationId)
@@ -2643,15 +2713,17 @@ export async function getActionFor(
     supabaseAdmin
       .from('action_tasks')
       .select(
-        'id, position, task_key, title, title_params, status, skip_reason, mode, permission, depends_on',
+        'id, position, task_key, title, title_params, status, skip_reason, mode, permission, depends_on, details',
       )
       .eq('action_id', actionId)
       .order('position'),
+    // Every signal the action has taken as evidence (AC-007), kept after a
+    // signal moves on to a later cycle.
     supabaseAdmin
       .from('signals')
-      .select(MCP_SIGNAL_COLUMNS)
+      .select(`${MCP_SIGNAL_COLUMNS}, action_signals!inner(action_id)`)
       .eq('brand_id', action.brand_id)
-      .eq('action_id', actionId)
+      .eq('action_signals.action_id', actionId)
       .order('detected_at', { ascending: false }),
     supabaseAdmin
       .from('action_events')
@@ -2679,6 +2751,7 @@ export async function getActionFor(
       ? { id: action.assignee_id, full_name: names.get(action.assignee_id) ?? null }
       : null,
     due_date: action.due_date ?? null,
+    priority: priorityFor(action),
     created_at: action.created_at,
     updated_at: action.updated_at,
     completed_at: action.completed_at ?? null,
@@ -2693,8 +2766,13 @@ export async function getActionFor(
       mode: t.mode ?? null,
       permission: t.permission ?? null,
       depends_on: (t.depends_on ?? []) as string[],
+      // Where, why, how and done-when (AC-004); an Improve task's body and evidence.
+      details: mcpTaskDetails(t.details),
     })),
-    signals: (signalsRes.data ?? []) as Record<string, unknown>[],
+    // The join that found them is not part of a signal.
+    signals: ((signalsRes.data ?? []) as Record<string, unknown>[]).map((row) =>
+      Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'action_signals')),
+    ),
     events: (eventsRes.data ?? []).map((e) => ({
       event: e.event,
       data: (e.data ?? {}) as Record<string, unknown>,
@@ -2708,6 +2786,60 @@ export interface ListSignalsParams {
   status?: string;
   kind?: string;
   limit?: number;
+}
+
+/** Signal ids per action_signals read: 100 UUIDs keep the request line well under 8KB. */
+const SIGNAL_LINK_CHUNK = 100;
+
+type LinkedAction = { id: string; action_no: number; kind: string; status: string };
+
+/**
+ * The actions each signal has been used by, through action_signals (AC-007):
+ * its current action and the earlier ones, closed ones included, the latest
+ * link first. They only add used_by_actions, so a failed read is logged and
+ * leaves every signal's list empty rather than taking the signals down.
+ */
+async function signalActionRefs(
+  brandId: string,
+  signalIds: string[],
+): Promise<Map<string, SignalActionRef[]>> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < signalIds.length; i += SIGNAL_LINK_CHUNK) {
+    chunks.push(signalIds.slice(i, i + SIGNAL_LINK_CHUNK));
+  }
+  const results = await Promise.all(
+    chunks.map((ids) =>
+      supabaseAdmin
+        .from('action_signals')
+        .select('signal_id, actions!inner(id, action_no, kind, status)')
+        .in('signal_id', ids)
+        .eq('actions.brand_id', brandId)
+        .order('linked_at', { ascending: false }),
+    ),
+  );
+  const bySignal = new Map<string, SignalActionRef[]>();
+  for (const { data, error } of results) {
+    if (error) {
+      console.error('[mcp] signal actions read failed:', error.message);
+      return new Map();
+    }
+    // The untyped admin client models the action_signals→actions FK as an
+    // array; it is a single action, so peel it off.
+    const links =
+      (data as unknown as Array<{
+        signal_id: string;
+        actions: LinkedAction[] | LinkedAction | null;
+      }> | null) ?? [];
+    for (const link of links) {
+      const a = Array.isArray(link.actions) ? (link.actions[0] ?? null) : link.actions;
+      if (!a) continue;
+      bySignal.set(link.signal_id, [
+        ...(bySignal.get(link.signal_id) ?? []),
+        { id: a.id, action_no: Number(a.action_no), kind: a.kind, status: a.status },
+      ]);
+    }
+  }
+  return bySignal;
 }
 
 export async function listSignalsFor(
@@ -2728,7 +2860,29 @@ export async function listSignalsFor(
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-  return (data ?? []) as Record<string, unknown>[];
+  const rows = (data ?? []) as SignalRow[];
+
+  // Each signal also says where it happened, what changed with units and
+  // period, what it rests on, and which actions use it (AC-001), the same
+  // way the dashboard's signal drawer does. A signal is linked to an action
+  // only by becoming its current one, so those without one have no links.
+  const [prompts, actions] = await Promise.all([
+    readPromptPlaces(supabaseAdmin, params.brandId),
+    signalActionRefs(
+      params.brandId,
+      rows.filter((row) => row.action_id).map((row) => row.id),
+    ),
+  ]);
+  const known = new Map(mapSignalRows(rows, prompts).map((signal) => [signal.id, signal]));
+
+  return rows.map((row) => {
+    const used = currentActionFirst(actions.get(row.id) ?? [], row.action_id);
+    const signal = known.get(row.id);
+    // A kind this build has no detail for still comes back, as it always did.
+    return signal
+      ? { ...row, ...signalDetailForApi(signal, used) }
+      : { ...row, used_by_actions: used };
+  });
 }
 
 export interface ActionHistoryRow {
