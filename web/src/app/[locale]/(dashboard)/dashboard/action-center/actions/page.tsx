@@ -185,6 +185,14 @@ function ActionsContent({ brand }: { brand: Brand }) {
     }
   }, [brand.id]);
 
+  // A change made in the drawer, shown in its row at once: reading the whole
+  // list again after each one held the drawer for seconds.
+  const patchAction = useCallback((id: string, patch: Partial<ActionItem>) => {
+    setActions((prev) =>
+      prev ? prev.map((action) => (action.id === id ? { ...action, ...patch } : action)) : prev,
+    );
+  }, []);
+
   useEffect(() => {
     void load();
     listMembers()
@@ -536,6 +544,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
           if (!open) selectAction(null);
         }}
         onChanged={() => void load()}
+        onPatched={patchAction}
       />
     </div>
   );
