@@ -14,6 +14,11 @@
 -- with or ahead of the brand (or the brand is not named) are evidence of a
 -- competitor signal; those where it leads by most come first, and only the
 -- first p_limit are returned per competitor.
+--
+-- plpgsql with force_custom_plan, as 00147, 00148 and 00152: a SQL-language
+-- function is planned without its argument values, so the day range was a
+-- guess. On the largest brand, with its 19 competitors over two weeks, the
+-- read took 28.6 s that way and 0.16 s planned with its arguments.
 
 create or replace function public.ae_competitor_positions(
   p_brand_id uuid,
@@ -24,10 +29,15 @@ create or replace function public.ae_competitor_positions(
   p_prev_to date,
   p_limit integer default 5
 ) returns jsonb
-language sql
+language plpgsql
 stable
 set search_path = public
+set work_mem to '64MB'
+set plan_cache_mode to 'force_custom_plan'
 as $$
+declare
+  v_result jsonb;
+begin
   with competitor as (
     select competitor_id, prompt_id, platform,
       sum(position_count) filter (where day between p_cur_from and p_cur_to) as cur_n,
@@ -86,8 +96,12 @@ as $$
       'brand_before', brand_before
     ) order by competitor_id, rank
   ), '[]'::jsonb)
+  into v_result
   from ranked
-  where rank <= p_limit
+  where rank <= p_limit;
+
+  return v_result;
+end;
 $$;
 
 -- Service-role only, like the other detector reads.

@@ -139,4 +139,25 @@ describe('HistoryDrawer', () => {
     expect(under('What was the goal?')).not.toBe('What was the goal?');
     expect(getPromptDemand).not.toHaveBeenCalled();
   });
+
+  it.each([
+    [1, 'Consolidated from 1 signal'],
+    [3, 'Consolidated from 3 signals'],
+  ])('counts %i trigger signal(s) in the right grammatical number', async (count, text) => {
+    getActionSignals.mockResolvedValue([]);
+    const triggerSignals = Array.from({ length: count }, (_, i) => ({
+      signalId: `s${i}`,
+      kind: 'lost_citations',
+      detectedAt: '2026-10-09T00:00:00Z',
+    }));
+    render(
+      <HistoryDrawer brandId="b1" item={{ ...item, triggerSignals }} onOpenChange={() => {}} />,
+    );
+    await act(async () => {});
+
+    const line = [...document.querySelectorAll('p')].find((p) =>
+      p.textContent?.startsWith('Consolidated from'),
+    );
+    expect(line?.textContent).toBe(text);
+  });
 });

@@ -146,13 +146,34 @@ timestamps (`date_from` / `date_to`).
 **Action Center**
 
 - **`list_actions`** — open work: what the product thinks should be
-  done, with impact, status and task progress. Filters: `status`,
-  `category`.
-- **`get_action`** — one action in full: payload, triggering signals,
-  tasks and events. Each task has `mode` (system, agent, human,
-  human_or_agent) and `permission` (read, write, execute).
-- **`list_signals`** — detected changes with before/after values and
-  the `action_id` they fed.
+  done, highest priority first. Each action has a `priority`: a 0–100
+  `score`, its `level` (critical, high, medium or low) and the `reason`
+  it rests on; null until scored. Also impact, status and task
+  progress. Filters: `status`, `category`; `sort: "updated"` lists the
+  most recently updated first.
+- **`get_action`** — one action in full: priority, payload, triggering
+  signals, tasks and events. Each task has `mode` (system, agent, human,
+  human_or_agent) and `permission` (read, write, execute). Its
+  `details`, when it has them, say where to act and how:
+  - `where`: the page, prompt, platform, domain or competitor;
+  - `why`: the evidence;
+  - `how`: the steps;
+  - `done_when`: the check that closes it;
+  - `type`, `effort` and `role`.
+
+  `details` also has `sent_to_content` and `sent_to_webhook`: where the
+  task was sent.
+
+  With `format: "markdown"` it returns the action as the dashboard's
+  **Copy Data** writes it; `format: "csv"` returns its **Export CSV**.
+- **`list_signals`** — detected changes, newest first. Each signal has:
+  - `where`: the prompt, topic, platforms, locations, domain, competitor
+    or pages it is about;
+  - `change`: labelled figures with unit and period. Prefer these over
+    the raw value columns, whose meaning differs by signal kind;
+  - `evidence`: when it was detected, and app paths to the answers
+    behind it;
+  - `used_by_actions`: the actions built on it.
 - **`list_action_history`** — closed actions with their measured
   `outcome` (improved, no_meaningful_change, declined, not_measurable,
   pending_measurement) and before/after `results`.
@@ -212,8 +233,9 @@ When the user asks for a general status check:
    - Mentioned often but rarely cited → known, but no source authority
      — content gap
    - Rarely mentioned → fringe — competitors are eating the answer
-7. If `list_actions` has open high-impact actions, end with one of them
-   as the **Next** step instead of inventing your own.
+7. If `list_actions` has open critical- or high-priority actions, end
+   with the first of them as the **Next** step instead of inventing your
+   own.
 
 ### 2. Visibility deep-dive ("why did it drop?")
 
@@ -342,14 +364,20 @@ prompts for `<theme>`"_:
 ### 7. What to do next ("what should we work on?")
 
 1. Call `list_actions` with `status: "new"` (and `in_progress` if they
-   ask what's underway). Rank by `impact`.
+   ask what's underway). It comes highest priority first; keep that
+   order and lead with each action's priority `level` and `score`.
 2. For the top one or two, call `get_action` and explain the **why**
-   from its payload and signals in one sentence each.
+   from its payload and signals in one sentence each. When a task has
+   `details`, give its `where` and `done_when`: what to change, and how
+   they'll know it worked.
 3. Mention open content gaps from `list_content_opportunities` only if
    no action already covers them.
 4. When the user says they did, started or skipped a task, offer to
    record it with `update_task_status` — and only call it after they
    confirm. A skip needs a reason.
+5. When they want an action outside the chat (a ticket, a doc, a brief
+   for someone else), call `get_action` with `format: "markdown"` and
+   hand over that text as it is. Don't rewrite it.
 
 ### 8. Sending Improve suggestions to Action Center
 
