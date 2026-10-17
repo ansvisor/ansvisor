@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { Signal } from './map';
 import { NO_WHERE } from './where';
-import { groupSignals, groupStatus, groupWhere, promptTextKey, signalGroupKey } from './group';
+import {
+  groupLead,
+  groupSignals,
+  groupStatus,
+  groupWhere,
+  promptTextKey,
+  signalGroupKey,
+} from './group';
 
 const signal = (over: Partial<Signal>): Signal => ({
   id: 's1',
@@ -85,5 +92,20 @@ describe('groupStatus and groupWhere', () => {
       regions: ['US'],
       topics: ['AEO', 'GEO'],
     });
+  });
+});
+
+describe('groupLead', () => {
+  it("titles a group from every copy's lost-on platforms, not the first copy's", () => {
+    const copies = [
+      lost('a', { payload: { promptId: 'p-a', promptText: TEXT, platforms: ['chatgpt-web'] } }),
+      lost('b', { payload: { promptId: 'p-b', promptText: TEXT, platforms: ['gemini-web'] } }),
+    ];
+    expect(groupLead(copies).payload.platforms).toEqual(['chatgpt-web', 'gemini-web']);
+    expect(groupLead(copies).id).toBe('a');
+    // Copies recorded before the evidence are left as they are.
+    expect(groupLead([lost('c')])).toEqual(lost('c'));
+    // One copy without recorded platforms: the group names none.
+    expect(groupLead([copies[0], lost('d')]).payload).not.toHaveProperty('platforms');
   });
 });

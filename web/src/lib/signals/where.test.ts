@@ -100,6 +100,14 @@ describe('signalWhere', () => {
   });
 });
 
+describe('a lost citation with its evidence', () => {
+  it('is where it was lost, not everywhere its prompt is tracked', () => {
+    expect(
+      signalWhere({ promptId: 'p2', platforms: ['chatgpt-web'], regions: ['GB'] }, prompts),
+    ).toEqual({ platforms: ['chatgpt-web'], regions: ['GB'], topics: ['AEO'] });
+  });
+});
+
 describe('mergeWhere', () => {
   it('joins places, counting each once, the most shared first', () => {
     expect(

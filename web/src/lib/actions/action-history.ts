@@ -42,6 +42,7 @@ interface HistoryRow {
   payload: Record<string, unknown>;
   kpi_keys: string[];
   assignee_id: string | null;
+  due_date: string | null;
   created_at: string;
   completed_at: string | null;
   updated_at: string;
@@ -50,7 +51,7 @@ interface HistoryRow {
 }
 
 const HISTORY_COLUMNS =
-  'id, action_no, category, kind, status, outcome, validation, position_outcome, payload, kpi_keys, assignee_id, created_at, completed_at, updated_at, priority_score, priority_level';
+  'id, action_no, category, kind, status, outcome, validation, position_outcome, payload, kpi_keys, assignee_id, due_date, created_at, completed_at, updated_at, priority_score, priority_level';
 
 /** What the validation sweep stores on an action. */
 interface ValidationSnapshot {
@@ -260,6 +261,7 @@ export async function getActionHistory(
       results,
       tasks: tasksByAction.get(row.id) ?? [],
       assignee: row.assignee_id ? (profiles.get(row.assignee_id) ?? null) : null,
+      dueDate: row.due_date ?? null,
       createdAt: row.created_at,
       completedAt: row.completed_at,
       timeToCloseDays: row.completed_at ? daysBetween(row.created_at, row.completed_at) : null,

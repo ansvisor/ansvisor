@@ -125,7 +125,7 @@ const STATUS_VALUES = [
 ] as const;
 const IMPACT_VALUES = ['all', 'high', 'medium', 'low'] as const;
 const TYPE_VALUES = ['all', 'owned', 'earned'] as const;
-const SOURCE_VALUES = ['all', 'system', 'manual', 'prompt'] as const;
+const SOURCE_VALUES = ['all', 'system', 'manual', 'prompt', 'action'] as const;
 const SUGGESTED_VALUES = ['all', 'month', 'last30', 'custom'] as const;
 const URL_DEFAULTS = {
   status: 'all',
@@ -299,7 +299,11 @@ function OpportunityScope({ opp }: { opp: ContentOpportunity }) {
       ? scope.topic
         ? t('group', { topic: scope.topic, count: scope.count })
         : t('groupNoTopic', { count: scope.count })
-      : t('single');
+      : scope.kind === 'action'
+        ? scope.actionNo !== null
+          ? t('action', { ref: `AC-${scope.actionNo}` })
+          : t('actionNoRef')
+        : t('single');
   return (
     <span
       className={cn(
@@ -308,7 +312,7 @@ function OpportunityScope({ opp }: { opp: ContentOpportunity }) {
           ? 'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900'
           : 'bg-muted text-foreground/80 ring-border',
       )}
-      title={group ? t('groupHint') : t('singleHint')}
+      title={group ? t('groupHint') : scope.kind === 'action' ? t('actionHint') : t('singleHint')}
     >
       {label}
     </span>
@@ -1200,13 +1204,13 @@ export default function ContentPage() {
                         {(value) =>
                           value === 'all'
                             ? t('filters.allSources')
-                            : t(`source.${value as 'system' | 'manual' | 'prompt'}`)
+                            : t(`source.${value as 'system' | 'manual' | 'prompt' | 'action'}`)
                         }
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">{t('filters.allSources')}</SelectItem>
-                      {(['system', 'manual', 'prompt'] as const).map((value) => (
+                      {(['system', 'manual', 'prompt', 'action'] as const).map((value) => (
                         <SelectItem key={value} value={value}>
                           <span className="flex flex-col">
                             <span>{t(`source.${value}`)}</span>

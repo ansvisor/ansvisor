@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeAiVisibilityScore } from './visibility-score';
 import {
-  biggestGap,
   heatShade,
   parseTopicCompetitors,
   topicHeatmap,
@@ -75,30 +74,6 @@ describe('topicHeatmap', () => {
 
   it('reads a tie at the top as a lead', () => {
     expect(topicHeatmap([topic('tie', 100, 50, { a: 50 })], ['you', 'a'])[0].status).toBe('lead');
-  });
-});
-
-describe('biggestGap', () => {
-  it('picks the topic you trail by the most, against its leader', () => {
-    const rows = topicHeatmap(
-      [
-        topic('lead', 100, 80, { a: 50 }),
-        topic('small-gap', 100, 40, { a: 50, b: 45 }),
-        topic('big-gap', 100, 10, { a: 30, b: 70 }),
-        topic('few', 10, 0, { a: 9 }),
-      ],
-      ['you', 'a', 'b'],
-    );
-
-    expect(biggestGap(rows)).toMatchObject({ topicId: 'big-gap', leader: 'b' });
-  });
-
-  it('sends nothing when you lead everywhere or the samples are too small', () => {
-    const rows = topicHeatmap(
-      [topic('lead', 100, 80, { a: 50 }), topic('few', 10, 0, { a: 9 })],
-      ['you', 'a'],
-    );
-    expect(biggestGap(rows)).toBeNull();
   });
 });
 

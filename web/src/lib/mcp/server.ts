@@ -38,6 +38,7 @@ import {
   IMPROVE_SOURCE_TYPES,
   createImproveActionFor,
 } from './data';
+import { exportActionFor } from './action-export';
 
 /**
  * Build a fresh MCP server bound to a single authenticated request.
@@ -714,7 +715,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'get_prompt_volumes',
     {
       description:
-        'Get per-prompt search demand and competition for a brand. Returns one row per analyzed prompt with its keywords, Google search volumes, total_google_volume, est_ai_volume (estimated AI search demand), competition_index (0-100), and competition label (LOW / MEDIUM / HIGH). Sorted by est_ai_volume descending. Use this for "which prompts have the most demand?" or "which prompts have the least competition?" prioritization questions. Only returns prompts that already have volume analysis — triggering a new analysis is not available here.',
+        'Get per-prompt search demand and competition for a brand. Returns one row per analyzed prompt with its keywords, the Google search volume of each keyword, total_google_volume (the Google volume of the prompt: the median of its keyword volumes, not their sum), est_ai_volume (estimated AI search demand: total_google_volume × the AI adoption rate), competition_index (0-100), and competition label (LOW / MEDIUM / HIGH). Sorted by est_ai_volume descending. Use this for "which prompts have the most demand?" or "which prompts have the least competition?" prioritization questions. Only returns prompts that already have volume analysis — triggering a new analysis is not available here.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         limit: z
@@ -938,12 +939,26 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'get_action',
     {
       description:
-        'Get one Action Center action in full: its priority (score, level and the facts it rests on), its payload (the prompts, pages, competitors or numbers it is about), the signals that triggered it, its task list and its event trail. Each task carries `mode` (who carries it out: system, agent, human or human_or_agent) and `permission` (read, write or execute). Read both before proposing to act on a task — anything beyond read needs a human to approve it in the dashboard. A task is described by `title` when someone wrote one, otherwise by `task_key` with `title_params`.',
+        'Get one Action Center action in full: its priority (score, level and the facts it rests on), its payload (the prompts, pages, competitors or numbers it is about), the signals that triggered it, its task list and its event trail. Each task carries `mode` (who carries it out: system, agent, human or human_or_agent) and `permission` (read, write or execute). Read both before proposing to act on a task — anything beyond read needs a human to approve it in the dashboard. A task is described by `title` when someone wrote one, otherwise by `task_key` with `title_params`. `details` says what the task carries beyond that, or null: `where` (the page, prompt, platform, domain or competitor), `why` (the evidence), `how` (the steps), `done_when` (the check that closes it), `type` (content, on_page, technical, outreach, pr or product), `effort` and `role`; a task sent from the Improve tab also carries `body`, `platform`, `platform_label` and `sources`; `sent_to_content` (the opportunity it became) and `sent_to_webhook` say where it was sent. With `format` "markdown" or "csv" it returns the action as the dashboard\'s Copy Data and Export CSV write it instead (everything its tabs show, labelled in English, dates in UTC): Markdown to paste into a doc, ticket or another agent, CSV with a row per affected item, task and signal.',
       inputSchema: {
         action_id: relaxedUuid.describe('Action UUID, from list_actions or list_action_history.'),
+        format: z
+          .enum(['json', 'markdown', 'csv'])
+          .optional()
+          .describe('json (default): the fields above. markdown or csv: the export, as text.'),
       },
     },
     async (args) => {
+      if (args.format === 'markdown' || args.format === 'csv') {
+        const exported = await exportActionFor(auth, args.action_id, args.format);
+        if (!exported) {
+          return {
+            content: [{ type: 'text', text: 'Action not found' }],
+            isError: true,
+          };
+        }
+        return { content: [{ type: 'text', text: exported.body }] };
+      }
       const action = await getActionFor(auth, args.action_id);
       if (!action) {
         return {
@@ -961,7 +976,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'list_signals',
     {
       description:
-        "List the signals the Action Center detected for a brand: measured changes such as a visibility drop, a competitor gaining citations or a page losing AI traffic. Newest first. Each signal carries its raw row (previous_value, current_value, change_value, payload, action_id) and, read from it: `where` (the prompt, topic, platforms with names, locations, domain, competitor or pages it is about; a field is null when no detector records it yet), `change` (labelled figures: metric, role such as before/after or you/competitor, value, unit and the period, e.g. 'week_over_week'; null when the signal records no figures), `evidence` (first and last detection, and app paths that show the underlying answers) and `used_by_actions` (every action built on it, closed ones too, the latest first). Prefer `change` over the raw value columns: their meaning differs per signal kind. Use this to explain why an action exists or what has changed recently.",
+        "List the signals the Action Center detected for a brand: measured changes such as a visibility drop, a competitor gaining citations or a page losing AI traffic. Newest first. Each signal carries its raw row (previous_value, current_value, change_value, payload, action_id) and, read from it: `where` (the prompt, topic, platforms with names, locations, domain, competitor or pages it is about; a field is null when no detector records it yet), `change` (labelled figures: metric, role such as before/after or you/competitor, value, unit and the period it covers, e.g. 'week_over_week', given per figure since one finding can mix windows; null when the signal records no figures), `evidence` (first and last detection, and app paths that show the underlying answers) and `used_by_actions` (every action built on it, closed ones too, the latest first). Prefer `change` over the raw value columns: their meaning differs per signal kind. Use this to explain why an action exists or what has changed recently.",
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         status: z

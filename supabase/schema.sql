@@ -17426,6 +17426,53 @@ comment on function public.prompt_usage_summary(uuid) is
   'One brand''s active/paused prompts and its account''s active prompts, brands and active prompt locations, from prompt_usage_counters only (PROMPT-012). Security invoker.';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00140_fanout_coverage_by_platform.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Query fan-out coverage per platform, for the daily health report.
+--
+-- ChatGPT's observed fan-out came back empty from 2026-09-30 while its
+-- answers still carried sources: the engine was searching, the field just
+-- stopped arriving. Nothing noticed for two weeks, because an empty field
+-- reads exactly like an answer that ran no search. The health report now
+-- reads each platform's share of answers with fan-out over the last day and
+-- the days before, and flags one that stops (server/src/lib/health/report.js).
+--
+-- One aggregate over the window (idx_prompt_results_created_at), across every
+-- brand; no rows leave the database. Service role only.
+create or replace function public.fanout_coverage_by_platform(
+  p_since timestamptz,
+  p_until timestamptz
+)
+returns table (platform text, answers bigint, answers_with_fanout bigint)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    r.platform,
+    count(*)::bigint,
+    count(*) filter (
+      where case
+        when jsonb_typeof(r.search_queries) = 'array' then jsonb_array_length(r.search_queries)
+        else 0
+      end > 0
+    )::bigint
+  from public.prompt_results r
+  where r.created_at >= p_since
+    and r.created_at < p_until
+  group by r.platform;
+$$;
+
+revoke all on function public.fanout_coverage_by_platform(timestamptz, timestamptz)
+  from public, anon, authenticated;
+grant execute on function public.fanout_coverage_by_platform(timestamptz, timestamptz)
+  to service_role;
+
+comment on function public.fanout_coverage_by_platform(timestamptz, timestamptz) is
+  'Answers and answers with observed query fan-out per platform in [p_since, p_until), across all brands (00140). Read by the daily health report.';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00141_signal_groups.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- Signal groups: count copies of one finding once (AC-002).
@@ -17598,6 +17645,242 @@ as $$
   from public.signals
   where brand_id = p_brand_id and status = 'new';
 $$;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00142_competitor_signal_positions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Where a competitor beats the brand, prompt by prompt (AC-001).
+--
+-- A competitor signal ("Profound is gaining fast", "… is mentioned far more
+-- than you") said who and how much, never where: the panel is to show, per
+-- prompt and platform, the competitor's position against the brand's, this
+-- week and last. The daily rollups already hold mention positions per
+-- prompt, platform and day for the brand (insights_prompt_daily) and per
+-- competitor (insights_competitor_prompt_daily), so this reads those rather
+-- than the answers, like the other ae_* detector reads (00091).
+--
+-- A position is the harmonic mean over the answers that name the entity:
+-- position_count / sum_inv_position, from the same columns for both sides so
+-- the two compare like with like. Only rows where the competitor is level
+-- with or ahead of the brand (or the brand is not named) are evidence of a
+-- competitor signal; those where it leads by most come first, and only the
+-- first p_limit are returned per competitor.
+--
+-- plpgsql with force_custom_plan, as 00147, 00148 and 00152: a SQL-language
+-- function is planned without its argument values, so the day range was a
+-- guess. On the largest brand, with its 19 competitors over two weeks, the
+-- read took 28.6 s that way and 0.16 s planned with its arguments.
+
+create or replace function public.ae_competitor_positions(
+  p_brand_id uuid,
+  p_competitor_ids text[],
+  p_cur_from date,
+  p_cur_to date,
+  p_prev_from date,
+  p_prev_to date,
+  p_limit integer default 5
+) returns jsonb
+language plpgsql
+stable
+set search_path = public
+set work_mem to '64MB'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+declare
+  v_result jsonb;
+begin
+  with competitor as (
+    select competitor_id, prompt_id, platform,
+      sum(position_count) filter (where day between p_cur_from and p_cur_to) as cur_n,
+      sum(sum_inv_position) filter (where day between p_cur_from and p_cur_to) as cur_inv,
+      sum(position_count) filter (where day between p_prev_from and p_prev_to) as prev_n,
+      sum(sum_inv_position) filter (where day between p_prev_from and p_prev_to) as prev_inv
+    from insights_competitor_prompt_daily
+    where brand_id = p_brand_id
+      and competitor_id = any(p_competitor_ids)
+      and day between p_prev_from and p_cur_to
+      and platform is not null
+    group by competitor_id, prompt_id, platform
+  ),
+  brand as (
+    select prompt_id, platform,
+      sum(position_count) filter (where day between p_cur_from and p_cur_to) as cur_n,
+      sum(sum_inv_position) filter (where day between p_cur_from and p_cur_to) as cur_inv,
+      sum(position_count) filter (where day between p_prev_from and p_prev_to) as prev_n,
+      sum(sum_inv_position) filter (where day between p_prev_from and p_prev_to) as prev_inv
+    from insights_prompt_daily
+    where brand_id = p_brand_id
+      and day between p_prev_from and p_cur_to
+      and prompt_id in (select prompt_id from competitor)
+      and platform is not null
+    group by prompt_id, platform
+  ),
+  positions as (
+    select c.competitor_id, c.prompt_id, c.platform,
+      round(c.cur_n / nullif(c.cur_inv, 0), 1) as competitor_now,
+      round(c.prev_n / nullif(c.prev_inv, 0), 1) as competitor_before,
+      round(b.cur_n / nullif(b.cur_inv, 0), 1) as brand_now,
+      round(b.prev_n / nullif(b.prev_inv, 0), 1) as brand_before
+    from competitor c
+    left join brand b on b.prompt_id = c.prompt_id and b.platform = c.platform
+    where coalesce(c.cur_n, 0) > 0 and coalesce(c.cur_inv, 0) > 0
+  ),
+  ahead as (
+    select * from positions
+    where brand_now is null or competitor_now <= brand_now
+  ),
+  ranked as (
+    select p.*, row_number() over (
+      partition by p.competitor_id
+      order by coalesce(p.brand_now, 99) - p.competitor_now desc, p.competitor_now, p.prompt_id
+    ) as rank
+    from ahead p
+  )
+  select coalesce(jsonb_agg(
+    jsonb_build_object(
+      'competitor_id', competitor_id,
+      'prompt_id', prompt_id,
+      'platform', platform,
+      'competitor_now', competitor_now,
+      'competitor_before', competitor_before,
+      'brand_now', brand_now,
+      'brand_before', brand_before
+    ) order by competitor_id, rank
+  ), '[]'::jsonb)
+  into v_result
+  from ranked
+  where rank <= p_limit;
+
+  return v_result;
+end;
+$$;
+
+-- Service-role only, like the other detector reads.
+revoke all on function public.ae_competitor_positions(uuid, text[], date, date, date, date, integer)
+  from public, anon, authenticated;
+grant execute on function public.ae_competitor_positions(uuid, text[], date, date, date, date, integer)
+  to service_role;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00143_traffic_signal_evidence.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Where a traffic signal's AI visits come from, and the prompts its pages
+-- could be cited on (AC-001).
+--
+-- A traffic signal ("AI traffic slipping on 3 pages", "High-value page
+-- without AI traffic") named its pages and a session count, never which AI
+-- engines send the visits or which prompts the page answers. The panel is to
+-- show both. This reads, for the pages given, AI-referred sessions per
+-- platform over two windows from Analytics (ga_ai_traffic_stats) and from the
+-- tracking snippet (ai_traffic_logs), and the active prompts that name the
+-- page as their target URL. With p_pages null it reads the whole site's
+-- sessions per platform, for the site-wide signals.
+--
+-- Two ways to match a page's visits:
+--   - p_exact: as written. The AI-traffic detector's pages are these tables'
+--     own landing_page / url values (ae_ai_traffic_pages, 00091), so its
+--     signals read the same rows their numbers came from.
+--   - otherwise as the page-opportunity read matches them (00075), by
+--     lower(normalize_page_path(...)): "/pricing/" in Analytics and a
+--     snippet's full URL both name a page opportunity's "/pricing".
+-- Target URLs always match the second way: they are typed in full by users.
+-- Each row carries the page as it was asked for, so the caller can map it
+-- back.
+--
+-- Both sources are returned as they are: the snippet counts the visits
+-- Analytics counts again, so the caller picks one per page and never adds
+-- them, as the detector does (mergeTrafficPages).
+
+create or replace function public.ae_page_traffic_evidence(
+  p_brand_id uuid,
+  p_pages text[],
+  p_cur_from date,
+  p_cur_to date,
+  p_prev_from date,
+  p_prev_to date,
+  p_exact boolean default false
+) returns jsonb
+language sql
+stable
+set search_path = public
+as $$
+  with pages as (
+    select distinct page,
+      case when p_exact then page else lower(normalize_page_path(page)) end as match_key,
+      lower(normalize_page_path(page)) as page_key
+    from unnest(p_pages) as page
+  ),
+  -- Each visit row's key is computed once, so the join below is an equality
+  -- the planner can hash, not a function call per row and page.
+  ga_rows as (
+    select platform, date, sessions,
+      case
+        when p_pages is null then null
+        when p_exact then landing_page
+        else lower(normalize_page_path(landing_page))
+      end as match_key
+    from ga_ai_traffic_stats
+    where brand_id = p_brand_id
+      and date between p_prev_from and p_cur_to
+      and (p_pages is null or landing_page <> '')
+  ),
+  log_rows as (
+    select source_platform as platform, created_at,
+      case
+        when p_pages is null then null
+        when p_exact then url
+        else lower(normalize_page_path(url))
+      end as match_key
+    from ai_traffic_logs
+    where brand_id = p_brand_id
+      and created_at >= p_prev_from
+      and (p_pages is null or not p_exact or url = any(p_pages))
+  ),
+  analytics as (
+    select pg.page, r.platform,
+      coalesce(sum(r.sessions) filter (where r.date between p_cur_from and p_cur_to), 0) as cur_sessions,
+      coalesce(sum(r.sessions) filter (where r.date between p_prev_from and p_prev_to), 0) as prev_sessions
+    from ga_rows r
+    left join pages pg on pg.match_key = r.match_key
+    where p_pages is null or pg.page is not null
+    group by pg.page, r.platform
+  ),
+  snippet as (
+    select pg.page, r.platform,
+      count(*) filter (where r.created_at::date between p_cur_from and p_cur_to) as cur_sessions,
+      count(*) filter (where r.created_at::date between p_prev_from and p_prev_to) as prev_sessions
+    from log_rows r
+    left join pages pg on pg.match_key = r.match_key
+    where p_pages is null or pg.page is not null
+    group by pg.page, r.platform
+  ),
+  targeted as (
+    -- Explicit targeting only, as in 00075: a URL a customer attached to a
+    -- prompt is a fact; "a prompt covers this page's topic" is a guess. A
+    -- paused prompt is not asked, so the page can't be cited on it.
+    select distinct pg.page, p.id as prompt_id, p.text
+    from prompt_target_urls ptu
+    join prompts p on p.id = ptu.prompt_id
+    join prompt_sets ps on ps.id = p.prompt_set_id
+    join pages pg on pg.page_key = lower(normalize_page_path(ptu.url))
+    where ps.brand_id = p_brand_id
+      and p.is_active
+  )
+  select jsonb_build_object(
+    'analytics', coalesce((select jsonb_agg(a) from analytics a), '[]'::jsonb),
+    'snippet', coalesce((select jsonb_agg(s) from snippet s), '[]'::jsonb),
+    'prompts', coalesce(
+      (select jsonb_agg(t order by t.page, t.text, t.prompt_id) from targeted t),
+      '[]'::jsonb
+    )
+  )
+$$;
+
+-- Service-role only, like the other detector reads.
+revoke all on function public.ae_page_traffic_evidence(uuid, text[], date, date, date, date, boolean)
+  from public, anon, authenticated;
+grant execute on function public.ae_page_traffic_evidence(uuid, text[], date, date, date, date, boolean)
+  to service_role;
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00144_action_priority_score.sql
@@ -18710,6 +18993,65 @@ grant execute on function public.insights_same_prompt_compare(
 ) to authenticated, service_role;
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00150_action_task_writer.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- AC-004: an action's tasks written by a model from the action's evidence.
+--
+-- The writing is metered like the Improve tab's suggestions, from the same
+-- monthly budget: each attempt is a prompt_improve_usage row, which now says
+-- which action it wrote tasks for. And an action records when its tasks were
+-- written, so the nightly sweep writes each one once.
+
+alter table public.prompt_improve_usage
+  add column if not exists action_id uuid references public.actions(id) on delete set null;
+
+comment on column public.prompt_improve_usage.action_id is
+  'The action whose tasks this generation wrote (AC-004). Null for an Improve tab generation, which names its prompt.';
+
+alter table public.actions
+  add column if not exists tasks_generated_at timestamptz;
+
+comment on column public.actions.tasks_generated_at is
+  'When a model last wrote this action''s tasks from its evidence (AC-004), or found nothing it could write. Null until then; the nightly sweep writes the ones still null.';
+
+-- Held while a writer works on an action, so the nightly sweep and a
+-- person's "Regenerate tasks" never write the same action at once. A claim
+-- older than a few minutes is a writer that died and may be taken over.
+alter table public.actions
+  add column if not exists tasks_writing_since timestamptz;
+
+comment on column public.actions.tasks_writing_since is
+  'When a task writer (AC-004) started on this action; null when none is. Claimed and released by the writer.';
+
+-- The sweep's read: recent actions still waiting for their tasks.
+create index if not exists actions_tasks_pending_idx
+  on public.actions (created_at)
+  where tasks_generated_at is null;
+
+comment on column public.action_tasks.details is
+  'What a task carries beyond its title: where, why, how, doneWhen, type, effort and role (AC-004), and for a task sent from the Improve tab its body, platform, platformLabel and sources (PROMPT-004). A written task also records source = ''ai'' and the evidence refs it rests on.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00151_opportunity_source_action.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- An opportunity can come from an Action Center task (AC-004): "Send to
+-- Content" on a content task makes one, with the task's target, reasons and
+-- steps, and a link back to the action it came from.
+
+alter table public.content_opportunities
+  drop constraint if exists content_opportunities_source_check;
+alter table public.content_opportunities
+  add constraint content_opportunities_source_check
+  check (source in ('system', 'manual', 'prompt', 'action'));
+
+-- One open opportunity per task: two sends at once (two tabs, two people)
+-- make one, and the second finds it. An archived one frees the task to be
+-- sent again.
+create unique index if not exists content_opportunities_action_task_idx
+  on public.content_opportunities ((source_data -> 'fromAction' ->> 'taskId'))
+  where source = 'action' and status <> 'archived';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00152_insights_topic_competitors_definer.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- "Topics vs competitors" timed out on the largest brand (#1044 review).
@@ -18854,4 +19196,68 @@ grant execute on function public.insights_topic_competitors_daily(
 
 comment on function public.insights_topic_competitors_daily(uuid, date, date, text[], text) is
   'Insights "Topics vs competitors" (VIS-010, 00137; planned with its arguments, security definer, 00152): per active topic, the brand''s Visibility components over the topic''s prompts and each live competitor''s components over the same answers, from the prompt-grain rollups. complete=false until they are backfilled (00130). Null when the caller is not a member of the brand''s organization.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00154_prompt_volume_median.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- A prompt's volume is the median of its keywords' Google volumes, not their
+-- sum.
+--
+-- Volume analysis gives each prompt five head terms for its category
+-- (server/src/lib/intent-extraction.js) and looked up their Google volumes.
+-- Their sum stood for the prompt, but the five overlap, so the same searchers
+-- were counted several times over, and one very broad term ("google gemini",
+-- 5M a month) could set the whole figure: a single prompt read ~755k
+-- estimated AI searches a month, and the Insights total ran to millions.
+-- summarizeVolumes (server/src/lib/volume-analysis.js) now takes the median of
+-- the keywords that have any volume; this applies the same rule to the rows
+-- already stored, from the per-keyword volumes they keep, so no keyword is
+-- looked up again. A row with no measured keyword stays at 0.
+--
+-- total_google_volume keeps its name; it now holds that median.
+
+update public.prompt_volumes pv
+set total_google_volume = m.google_volume,
+    est_ai_volume = round(m.google_volume * pv.ai_volume_multiplier)::integer
+from (
+  select p.id,
+         coalesce(round(percentile_cont(0.5) within group (order by k.volume)), 0)::integer
+           as google_volume
+  from public.prompt_volumes p
+  left join lateral (
+    select e.value::numeric as volume
+    from jsonb_each_text(p.google_volumes) e
+    -- Only numbers are cast; the case keeps the cast behind the check.
+    where case when e.value ~ '^[0-9]+(\.[0-9]+)?$' then e.value::numeric > 0 else false end
+  ) k on true
+  group by p.id
+) m
+where m.id = pv.id
+  and (pv.total_google_volume is distinct from m.google_volume
+       or pv.est_ai_volume is distinct from round(m.google_volume * pv.ai_volume_multiplier)::integer);
+
+comment on column public.prompt_volumes.total_google_volume is
+  'The prompt''s Google volume: the median of google_volumes'' measured keywords (named before the median replaced their sum).';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00155_ai_volume_multiplier_45.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- The AI adoption rate's default goes from 15% to 45% of a prompt's Google
+-- volume.
+--
+-- est_ai_volume is the prompt's Google volume (the median of its keywords',
+-- 00154) times the AI adoption rate, AI_VOLUME_MULTIPLIER on the server.
+-- Its default was 15%, about the share of Google searches that showed an AI
+-- Overview a year ago; they now appear on roughly 43–48%
+-- (server/src/lib/intent-extraction.js). This moves the rows stored at the
+-- old default to the new one. Rows saved under any other rate were set on
+-- purpose by the install, and are left alone.
+--
+-- An install that sets AI_VOLUME_MULTIPLIER=0.15 itself (server/.env.example
+-- did) keeps analyzing at 15% until it is changed to 0.45 or removed.
+
+update public.prompt_volumes
+set ai_volume_multiplier = 0.450,
+    est_ai_volume = round(total_google_volume * 0.450)::integer
+where ai_volume_multiplier = 0.150;
 

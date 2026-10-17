@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import type { Signal } from '@/lib/actions/signals';
 import { signalAffected, signalTypeLabel } from '@/lib/signals/display';
 import { platformName } from '@/lib/signals/names';
-import { OPEN_SIGNAL_STATUSES } from '@/lib/signals/registry';
+import { supportingOf } from '@/lib/action-center/affected';
 
 /** How many supporting signals "Why this action?" lists before "All signals". */
 export const SUPPORT_SHOWN = 5;
@@ -33,9 +33,7 @@ export function SupportingSignals({
   const tCategories = useTranslations('actionCenter.signalCategories');
 
   // As the list counts them: open, and this action's now.
-  const supporting = signals.filter(
-    (signal) => OPEN_SIGNAL_STATUSES.includes(signal.status) && signal.actionId === actionId,
-  );
+  const supporting = supportingOf(signals, actionId);
 
   return (
     <div className="mt-3">

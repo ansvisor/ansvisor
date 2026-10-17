@@ -17,7 +17,7 @@ vi.mock('@/lib/supabase/server', () => ({
       const query = { table, calls: [] as Call[] };
       queries.push(query);
       const chain: Record<string, unknown> = {};
-      for (const method of ['select', 'eq', 'in', 'not', 'order', 'limit']) {
+      for (const method of ['select', 'eq', 'in', 'not', 'order', 'limit', 'range']) {
         chain[method] = (...args: unknown[]) => {
           query.calls.push([method, ...args]);
           return chain;
@@ -30,6 +30,9 @@ vi.mock('@/lib/supabase/server', () => ({
     },
   })),
 }));
+
+// The admin client reads prompt_volumes; nothing here reaches it.
+vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 
 const { getActionDetail, getActions } = await import('./action-center');
 const { getSignalActions } = await import('./signals');

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { stripEntityMarkup } from '@/lib/entity-markup';
 import { formatSearchQuerySource, visibleSearchQueries } from './query-fanout';
 
 /** Past this length the compact view folds the answer behind "Show full response". */
@@ -29,8 +30,9 @@ export function ResponseDetail({
   variant: 'page' | 'compact';
 }) {
   const compact = variant === 'compact';
+  const response = stripEntityMarkup(result.response);
   const searchQueries = visibleSearchQueries(result.searchQueries);
-  const foldable = compact && result.response.length > FOLD_AT_CHARS;
+  const foldable = compact && response.length > FOLD_AT_CHARS;
   const [unfolded, setUnfolded] = useState(false);
   const folded = foldable && !unfolded;
 
@@ -39,7 +41,7 @@ export function ResponseDetail({
       <Section title="AI Response" compact={compact}>
         <div className={cn('relative', folded && 'max-h-72 overflow-hidden')}>
           <div className="prose prose-sm dark:prose-invert max-w-none">
-            <Markdown>{result.response}</Markdown>
+            <Markdown>{response}</Markdown>
           </div>
           {folded && (
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-background to-transparent" />

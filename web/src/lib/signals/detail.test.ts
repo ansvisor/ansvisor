@@ -214,13 +214,20 @@ describe('signalWhereFields', () => {
       },
       currentValue: 1,
     });
+    // Recorded before the checks' evidence: the failed checks by name, page
+    // by page, in the same shape. A stale page has no crawlers to name.
+    const check = (name: string) => ({ page: '/pricing', check: name, label: name, evidence: {} });
     expect(signalWhereFields(audit)).toEqual([
       { key: 'pages', value: { type: 'list', items: ['/pricing'], total: 1 } },
-      { key: 'crawlers', value: null },
+      { key: 'issue', value: { type: 'list', items: ['dateModified', 'freshness'], total: 2 } },
       {
         key: 'evidence',
-        value: { type: 'list', items: ['dateModified', 'freshness'], total: 2 },
+        value: { type: 'issues', items: [check('dateModified'), check('freshness')] },
       },
+    ]);
+    expect(signalDetailForApi(audit, []).where.evidence).toEqual([
+      check('dateModified'),
+      check('freshness'),
     ]);
   });
 });
@@ -293,6 +300,520 @@ describe('signalDetailForApi', () => {
       unit: 'percent',
       subject: null,
       subject_type: null,
+      of: null,
+      period: 'week_over_week',
     });
+  });
+});
+
+describe('a lost citation with its evidence recorded', () => {
+  const recorded = signal({
+    category: 'citation',
+    kind: 'lost_citations',
+    payload: {
+      promptId: 'p1',
+      promptText: 'Best coffee subscription?',
+      platforms: ['chatgpt-web'],
+      regions: ['US'],
+      citedDays: 9,
+      days: 11,
+      quietDays: 3,
+      lostUrls: [
+        { url: 'https://coffee.example/guide', position: 2, lastCitedAt: '2026-10-08T05:00:00Z' },
+      ],
+      citedNow: [
+        { url: 'https://rival.example/best', domain: 'rival.example', answers: 3, position: 1 },
+      ],
+    },
+    where: { platforms: ['chatgpt-web'], regions: ['US'], topics: ['Coffee'] },
+  });
+
+  it('names the page lost and the pages cited now, on the platforms it was lost on', () => {
+    expect(signalWhereFields(recorded).map((f) => f.key)).toEqual([
+      'prompt',
+      'topic',
+      'platforms',
+      'locations',
+      'lostUrl',
+      'citedNow',
+    ]);
+    const byKey = Object.fromEntries(signalWhereFields(recorded).map((f) => [f.key, f.value]));
+    expect(byKey.lostUrl).toEqual({
+      type: 'citations',
+      items: [
+        { url: 'https://coffee.example/guide', position: 2, lastCitedAt: '2026-10-08T05:00:00Z' },
+      ],
+    });
+    expect(byKey.citedNow).toEqual({
+      type: 'citations',
+      items: [{ url: 'https://rival.example/best', position: 1, answers: 3 }],
+    });
+  });
+
+  it('counts its cited days before and since', () => {
+    expect(signalChange(recorded)).toEqual({
+      period: 'last_14_days',
+      figures: [
+        { metric: 'cited_days', role: 'earlier', value: 9, of: 11 },
+        { metric: 'cited_days', role: 'latest', value: 0, of: 3 },
+      ],
+    });
+  });
+});
+
+describe('a competitor signal with its evidence recorded', () => {
+  const recorded = signal({
+    category: 'competitor',
+    kind: 'competitor_momentum',
+    payload: {
+      entity: 'competitors',
+      competitorName: 'Profound',
+      competitorId: 'c1',
+      targets: [{ id: 'c1', label: 'Profound' }],
+      positions: [
+        {
+          promptId: 'p1',
+          promptText: 'Best AI rank tracker?',
+          platform: 'chatgpt-web',
+          competitor: { now: 1, before: 3 },
+          you: { now: 3, before: 2 },
+        },
+      ],
+      winningSources: [{ domain: 'g2.example', answers: 2, answersRead: 3 }],
+    },
+    previousValue: 12,
+    currentValue: 31,
+  });
+
+  it('shows its positions by prompt, the sources behind its wins, and where it leads', () => {
+    const byKey = Object.fromEntries(signalWhereFields(recorded).map((f) => [f.key, f.value]));
+    expect(byKey.competitor).toEqual({ type: 'text', text: 'Profound' });
+    expect(byKey.platforms).toEqual({ type: 'platforms', slugs: ['chatgpt-web'] });
+    expect(byKey.competitorPositions).toEqual({
+      type: 'positions',
+      competitor: 'Profound',
+      items: [
+        {
+          promptId: 'p1',
+          promptText: 'Best AI rank tracker?',
+          platform: 'chatgpt-web',
+          competitor: { now: 1, before: 3 },
+          you: { now: 3, before: 2 },
+        },
+      ],
+    });
+    expect(byKey.winningSources).toEqual({
+      type: 'sources',
+      items: [{ domain: 'g2.example', answers: 2, answersRead: 3 }],
+    });
+  });
+
+  it('returns the same over the API', () => {
+    const { where } = signalDetailForApi(recorded, []);
+    expect(where.competitor_positions).toEqual([
+      {
+        prompt_id: 'p1',
+        prompt_text: 'Best AI rank tracker?',
+        platform: { slug: 'chatgpt-web', name: 'ChatGPT' },
+        competitor: { now: 1, before: 3 },
+        you: { now: 3, before: 2 },
+      },
+    ]);
+    expect(where.winning_sources).toEqual([{ domain: 'g2.example', answers: 2, answers_read: 3 }]);
+  });
+});
+
+describe('an uncited-mentions signal', () => {
+  const base = {
+    category: 'mention' as const,
+    kind: 'uncited_mentions' as const,
+    currentValue: 4,
+    where: { platforms: ['chatgpt-web', 'claude'], regions: ['US'], topics: [] },
+  };
+  const mention = {
+    promptId: 'p1',
+    promptText: 'Best coffee subscription?',
+    platforms: ['gemini-web'],
+    answers: 3,
+    position: 2,
+    sentiment: 'positive',
+    excerpt: '…Acme Coffee ships beans weekly.',
+    excerptPlatform: 'gemini-web',
+    excerptAt: '2026-10-14T05:00:00Z',
+  };
+
+  it('asks for position, sentiment and an excerpt until its evidence is recorded', () => {
+    const keys = signalWhereFields(signal({ ...base, payload: { promptIds: ['p1', 'p2'] } })).map(
+      (f) => `${f.key}${f.value ? '' : ' (n/a)'}`,
+    );
+    expect(keys).toEqual([
+      'prompts',
+      'trackedOn',
+      'trackedIn',
+      'position (n/a)',
+      'sentiment (n/a)',
+      'excerpt (n/a)',
+    ]);
+  });
+
+  it('gives them per prompt once recorded, on the platforms that mention it', () => {
+    const recorded = signal({ ...base, payload: { promptIds: ['p1', 'p2'], mentions: [mention] } });
+    const fields = signalWhereFields(recorded);
+    // The evidence names the platforms; the locations are still where the
+    // prompts are tracked.
+    expect(fields.map((f) => f.key)).toEqual([
+      'prompts',
+      'platforms',
+      'trackedIn',
+      'mentionDetails',
+    ]);
+    expect(fields.find((f) => f.key === 'platforms')?.value).toEqual({
+      type: 'platforms',
+      slugs: ['gemini-web'],
+    });
+    expect(signalDetailForApi(recorded, []).where.mention_details).toEqual([
+      {
+        prompt_id: 'p1',
+        prompt_text: 'Best coffee subscription?',
+        platforms: [{ slug: 'gemini-web', name: 'Gemini' }],
+        answers: 3,
+        position: 2,
+        sentiment: 'positive',
+        excerpt: '…Acme Coffee ships beans weekly.',
+        excerpt_platform: 'gemini-web',
+        excerpt_at: '2026-10-14T05:00:00Z',
+      },
+    ]);
+  });
+});
+
+describe("a technical finding with its checks' evidence", () => {
+  const issue = {
+    check: 'ai-bot-access',
+    label: 'AI bot access (robots.txt)',
+    evidence: { aiBotsMentioned: ['gptbot', 'claudebot'], blocked: true, blockedBots: ['gptbot'] },
+  };
+  const blocked = signal({
+    category: 'technical',
+    kind: 'crawler_blocked',
+    payload: {
+      entity: 'pages',
+      targets: [{ id: '/pricing', label: '/pricing', checks: ['ai-bot-access'], issues: [issue] }],
+    },
+    currentValue: 1,
+  });
+
+  it('names the issue, the crawlers it blocks, and what the check found', () => {
+    expect(signalWhereFields(blocked)).toEqual([
+      { key: 'pages', value: { type: 'list', items: ['/pricing'], total: 1 } },
+      { key: 'issue', value: { type: 'list', items: ['AI bot access (robots.txt)'], total: 1 } },
+      { key: 'crawlers', value: { type: 'crawlers', agents: ['gptbot'] } },
+      {
+        key: 'evidence',
+        value: { type: 'issues', items: [{ page: '/pricing', ...issue }] },
+      },
+    ]);
+    expect(signalDetailForApi(blocked, []).where.crawlers).toEqual(['gptbot']);
+  });
+
+  it("doesn't guess the crawlers from an audit that only said one was blocked", () => {
+    // That audit also listed bots robots.txt allows.
+    const older = signal({
+      ...blocked,
+      payload: {
+        entity: 'pages',
+        targets: [
+          {
+            id: '/pricing',
+            issues: [
+              { ...issue, evidence: { aiBotsMentioned: ['gptbot', 'claudebot'], blocked: true } },
+            ],
+          },
+        ],
+      },
+    });
+    const byKey = Object.fromEntries(signalWhereFields(older).map((f) => [f.key, f.value]));
+    expect(byKey.crawlers).toBeNull();
+  });
+});
+
+describe('a traffic signal with its referrals and prompts', () => {
+  const referrals = {
+    page: '/pricing',
+    source: 'analytics',
+    sessions: 4,
+    before: 9,
+    platforms: [{ platform: 'chatgpt.com', sessions: 4, before: 9 }],
+  };
+  const opportunity = signal({
+    category: 'traffic',
+    kind: 'page_opportunity',
+    payload: {
+      landingPage: '/pricing',
+      valueRank: 3,
+      referrals: [referrals],
+      referralDays: 14,
+      citablePrompts: [{ id: 'p1', text: 'Best coffee subscription?' }],
+      citablePromptsTotal: 1,
+    },
+    currentValue: 120,
+  });
+
+  it('gives the AI referrals by platform and the prompts the page could be cited on', () => {
+    const byKey = Object.fromEntries(signalWhereFields(opportunity).map((f) => [f.key, f.value]));
+    expect(byKey.url).toEqual({ type: 'text', text: '/pricing' });
+    expect(byKey.aiReferrals).toEqual({ type: 'referrals', items: [referrals], days: 14 });
+    expect(byKey.citablePrompts).toEqual({
+      type: 'prompts',
+      items: [{ id: 'p1', text: 'Best coffee subscription?' }],
+      total: 1,
+    });
+    expect(signalDetailForApi(opportunity, []).where.ai_referrals).toEqual({
+      days: 14,
+      items: [
+        {
+          ...referrals,
+          platforms: [{ platform: 'chatgpt.com', name: 'ChatGPT', sessions: 4, before: 9 }],
+        },
+      ],
+    });
+  });
+
+  it('says none were found once looked for, and "Not available" before', () => {
+    const none = signal({
+      ...opportunity,
+      payload: {
+        landingPage: '/pricing',
+        referrals: [],
+        citablePrompts: [],
+        citablePromptsTotal: 0,
+      },
+    });
+    const byKey = Object.fromEntries(signalWhereFields(none).map((f) => [f.key, f.value]));
+    expect(byKey.citablePrompts).toEqual({ type: 'prompts', items: [], total: 0 });
+    expect(byKey.aiReferrals).toBeNull();
+
+    const older = signal({ ...opportunity, payload: { landingPage: '/pricing', valueRank: 3 } });
+    const fields = Object.fromEntries(signalWhereFields(older).map((f) => [f.key, f.value]));
+    expect(fields.aiReferrals).toBeNull();
+    expect(fields.citablePrompts).toBeNull();
+  });
+});
+
+describe('the AI-traffic windows', () => {
+  it('says the traffic findings compare 14 days, not 7', () => {
+    const slipping = signal({
+      category: 'traffic',
+      kind: 'ai_traffic_slipping',
+      payload: { entity: 'pages', targets: [{ id: '/a' }, { id: '/b' }] },
+      currentValue: 2,
+    });
+    expect(signalChange(slipping)?.period).toBe('last_fortnight');
+    const drop = signal({
+      ...slipping,
+      kind: 'ai_traffic_drop',
+      previousValue: 90,
+      currentValue: 40,
+    });
+    expect(signalChange(drop)?.period).toBe('fortnight_over_fortnight');
+  });
+
+  const crossChannel = signal({
+    category: 'traffic',
+    kind: 'cross_channel_risk',
+    payload: { entity: 'pages', targets: [{ id: 'site' }], clicksBefore: 900, clicksNow: 600 },
+    previousValue: 120,
+    currentValue: 80,
+  });
+  const trafficLoss = signal({
+    category: 'traffic',
+    kind: 'visibility_traffic_loss',
+    payload: { entity: 'pages', targets: [{ id: 'site' }], mentionsBefore: 40, mentionsNow: 25 },
+    previousValue: 120,
+    currentValue: 80,
+  });
+
+  it('gives a cross-channel finding the window each of its figures was read over', () => {
+    // AI sessions over 14 days, search clicks over Search Console's 28.
+    const risk = signalChange(crossChannel);
+    expect(risk?.period).toBe('fortnight_over_fortnight');
+    expect(risk?.figures.map((f) => f.period)).toEqual([
+      undefined,
+      undefined,
+      'four_weeks_over_four_weeks',
+      'four_weeks_over_four_weeks',
+    ]);
+    // AI sessions over 14 days, mentions over the library's 7.
+    const loss = signalChange(trafficLoss);
+    expect(loss?.period).toBe('fortnight_over_fortnight');
+    expect(loss?.figures.map((f) => f.period)).toEqual([
+      undefined,
+      undefined,
+      'week_over_week',
+      'week_over_week',
+    ]);
+  });
+
+  it("gives every figure's window to the MCP tools", () => {
+    const windows = (s: Signal) =>
+      signalDetailForApi(s, []).change?.figures.map((f) => `${f.metric}:${f.period}`);
+    expect(windows(crossChannel)).toEqual([
+      'ai_sessions:fortnight_over_fortnight',
+      'ai_sessions:fortnight_over_fortnight',
+      'search_clicks:four_weeks_over_four_weeks',
+      'search_clicks:four_weeks_over_four_weeks',
+    ]);
+    expect(windows(trafficLoss)).toEqual([
+      'ai_sessions:fortnight_over_fortnight',
+      'ai_sessions:fortnight_over_fortnight',
+      'mentions:week_over_week',
+      'mentions:week_over_week',
+    ]);
+  });
+
+  it('asks a site-wide finding where its visits come from, not which prompts', () => {
+    const site = signal({
+      category: 'traffic',
+      kind: 'visibility_traffic_loss',
+      payload: { entity: 'pages', targets: [{ id: 'site', label: '' }] },
+      previousValue: 120,
+      currentValue: 80,
+    });
+    expect(signalWhereFields(site).map((f) => f.key)).toEqual(['scope', 'aiReferrals']);
+  });
+});
+
+describe("an AI-traffic finding's pages", () => {
+  const winner = signal({
+    category: 'traffic',
+    kind: 'ai_landing_page_winner',
+    payload: {
+      entity: 'pages',
+      targets: [
+        {
+          id: '/pricing',
+          label: '/pricing',
+          before: 42,
+          now: 40,
+          engagedRate: 0.75,
+          keyEvents: 8,
+          keyEventsBefore: 5,
+          keyRate: 0.2,
+        },
+      ],
+      siteEngagedRate: 0.444,
+      siteKeyRate: 0.089,
+    },
+    currentValue: 1,
+  });
+
+  it('gives each page its sessions and what its AI visitors did, beside the site', () => {
+    const pages = signalWhereFields(winner).find((f) => f.key === 'pages')?.value;
+    expect(pages).toEqual({
+      type: 'trafficPages',
+      items: [
+        {
+          page: '/pricing',
+          sessions: 40,
+          before: 42,
+          engagedRate: 0.75,
+          keyRate: 0.2,
+          keyEvents: 8,
+          keyEventsBefore: 5,
+        },
+      ],
+      total: 1,
+      metrics: ['keyEvents', 'keyRate'],
+      siteEngagedRate: 0.444,
+      siteKeyRate: 0.089,
+    });
+    // `items` stays the page list other signals give; the figures ride beside.
+    expect(signalDetailForApi(winner, []).where.pages).toEqual({
+      total: 1,
+      items: ['/pricing'],
+      traffic: [
+        {
+          page: '/pricing',
+          sessions: 40,
+          sessions_before: 42,
+          engaged_rate: 0.75,
+          key_events: 8,
+          key_events_before: 5,
+          key_events_per_session: 0.2,
+        },
+      ],
+      site_engaged_rate: 0.444,
+      site_key_events_per_session: 0.089,
+    });
+  });
+
+  it("counts a drop's pages, not its sessions, and reads a snippet page's visits only", () => {
+    const drop = signal({
+      category: 'traffic',
+      kind: 'ai_traffic_drop',
+      payload: {
+        entity: 'pages',
+        targets: [{ id: '/blog', label: '/blog', before: 20, now: 6 }],
+        pageCount: 120,
+      },
+      previousValue: 120,
+      currentValue: 70,
+    });
+    expect(signalWhereFields(drop).find((f) => f.key === 'pages')?.value).toEqual({
+      type: 'trafficPages',
+      items: [
+        {
+          page: '/blog',
+          sessions: 6,
+          before: 20,
+          engagedRate: null,
+          keyRate: null,
+          keyEvents: null,
+          keyEventsBefore: null,
+        },
+      ],
+      total: 120,
+      metrics: [],
+      siteEngagedRate: null,
+      siteKeyRate: null,
+    });
+  });
+
+  it('leaves out sessions a target does not record', () => {
+    const bare = signal({
+      category: 'traffic',
+      kind: 'ai_traffic_slipping',
+      payload: { entity: 'pages', targets: [{ id: '/blog', label: '/blog' }] },
+      currentValue: 1,
+    });
+    const pages = signalWhereFields(bare).find((f) => f.key === 'pages')?.value;
+    expect(pages?.type === 'trafficPages' && pages.items[0]).toMatchObject({
+      sessions: null,
+      before: null,
+    });
+  });
+});
+
+describe('the Search Console windows', () => {
+  it('says the Search Console findings count queries over 28 days, not 7', () => {
+    const kinds = [
+      'gsc_demand_gap',
+      'search_ai_misalignment',
+      'gsc_low_ctr',
+      'gsc_risk',
+      'gsc_decline',
+    ] as const;
+    for (const kind of kinds) {
+      const queries = signal({
+        category: 'traffic',
+        kind,
+        payload: { entity: 'queries', targets: [{ id: 'aeo tools' }, { id: 'aeo audit' }] },
+        currentValue: 2,
+      });
+      expect(signalChange(queries)).toEqual({
+        period: 'last_four_weeks',
+        figures: [{ metric: 'queries', role: 'total', value: 2 }],
+      });
+    }
   });
 });

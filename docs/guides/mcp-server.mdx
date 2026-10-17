@@ -284,11 +284,26 @@ intent, not during exploratory queries.
 | Tool | What it does | Writes |
 | --- | --- | --- |
 | `list_actions` | Recommended actions for a brand with priority (0–100 score, level and reasons), status, impact, assignee, due date, and task progress. Highest priority first; `sort: "updated"` lists the most recently updated first. | |
-| `get_action` | One action in full: priority, payload, triggering signals, tasks (`mode`, `permission`), and event trail. | |
+| `get_action` | One action in full: priority, payload, triggering signals, tasks (`mode`, `permission`), and event trail. `format: "markdown"` or `"csv"` returns it as the dashboard's **Copy Data** and **Export CSV** write it instead. | |
 | `list_signals` | Detected changes (visibility, citations, traffic), each with `where` (prompt, topic, platforms, locations, domain, competitor), `change` (labelled figures with unit and period), `evidence` (detection dates, app links) and `used_by_actions`. | |
 | `list_action_history` | Closed actions with measured outcomes and before/after validation results. | |
 | `update_task_status` | Record progress on a task (`in_progress`, `completed`, `skipped`, `failed`); does not execute the task. | **yes** |
 | `create_improve_action` | Send a prompt's Improve suggestions to Action Center as a `prompt_improve` action (needs a generated suggestion set for the range and a plan with Improve; idempotent on `idempotency_key`). | **yes** |
+
+#### Export an action
+
+`get_action` takes an optional `format`:
+
+- `json` (default): the fields above.
+- `markdown`: everything the action's tabs show, ready to paste into a doc, a ticket or another agent. This is the same text as **Copy Data** in the dashboard.
+- `csv`: a row per affected item, task and signal, with a `section` column. This is the same file as **Export CSV**.
+
+Labels are in English and dates in UTC. The same export is available over REST with the same `ans_` key. The CSV comes as a download (`action-AC-52.csv`) that Excel opens as UTF-8.
+
+```bash
+curl "https://app.ansvisor.com/api/mcp/actions/<action_id>?format=markdown" \
+  -H "Authorization: Bearer ans_..."
+```
 
 New tools may ship between releases — see `server.ts` and the [project roadmap](https://github.com/ansvisor/ansvisor#whats-next).
 
