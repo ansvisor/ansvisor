@@ -1,5 +1,6 @@
 import type { ActionDetail, ActionItem } from '@/lib/actions/action-center';
 import { toCsv } from '@/lib/csv';
+import { assigneeLabel } from '@/lib/action-center/display';
 import { locationName, platformName } from '@/lib/signals/names';
 import { dayIn } from '@/lib/time-zone';
 import type { Sheet } from 'write-excel-file/browser';
@@ -173,7 +174,7 @@ export function buildActionExport(
     priority: texts.priority,
     category: texts.category,
     status: texts.status,
-    assignee: action.assignee?.fullName?.trim() ?? '',
+    assignee: action.assignee ? (assigneeLabel(action.assignee) ?? '') : '',
     dueDate: day(action.dueDate),
     tags: texts.tags,
     why: texts.why,

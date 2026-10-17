@@ -25,7 +25,12 @@ import {
 } from '@/components/ui/table';
 import type { ActionItem } from '@/lib/actions/action-center';
 import type { ActionCategory, ActionKind, ActionStatus } from '@/lib/action-center/registry';
-import { actionContextTags, actionTexts } from '@/lib/action-center/display';
+import {
+  actionContextTags,
+  actionTexts,
+  assigneeLabel,
+  labelInitials,
+} from '@/lib/action-center/display';
 import type { PriorityLevel } from '@/lib/action-center/priority';
 import { formatRelative } from '@/lib/format-relative';
 import { cn } from '@/lib/utils';
@@ -131,14 +136,11 @@ export function PriorityBadge({
 
 export function AssigneeAvatar({ assignee }: { assignee: ActionItem['assignee'] }) {
   if (!assignee) return <span className="text-xs text-muted-foreground">—</span>;
-  const initials = (assignee.fullName ?? '?')
-    .split(/\s+/)
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+  // Named as the assignee picker names them: by e-mail when there's no name.
+  const label = assigneeLabel(assignee);
+  const initials = (label && labelInitials(label)) || '?';
   return (
-    <Avatar className="h-6 w-6" title={assignee.fullName ?? undefined}>
+    <Avatar className="h-6 w-6" title={label ?? undefined}>
       {assignee.avatarUrl && <AvatarImage src={assignee.avatarUrl} alt="" />}
       <AvatarFallback className="text-[10px]">{initials}</AvatarFallback>
     </Avatar>
