@@ -3,9 +3,15 @@
 import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Check, Copy, FileDown, FileSpreadsheet } from 'lucide-react';
+import { Check, Copy, Download, FileDown, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { ActionDetail, ActionItem } from '@/lib/actions/action-center';
 import { getOpportunity, getOpportunityBasket } from '@/lib/actions/content';
 import {
@@ -33,7 +39,7 @@ import { saveBlob } from '@/lib/download';
  * tab of the drawer shows, to take into a doc, a ticket or a spreadsheet.
  * Disabled until the drawer has loaded the action's detail. Copy Data opens the
  * whole action as Markdown: select any part to copy it, or copy it all with
- * the icon.
+ * the icon. CSV and Excel share an Export menu.
  */
 export function ActionExportButtons({
   action,
@@ -185,29 +191,44 @@ export function ActionExportButtons({
   const disabled = !detail || isBusy;
   return (
     <>
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" disabled={disabled} onClick={() => void run(showData)}>
-          <Copy className="h-4 w-4" />
+      {/* The size of Site Audit's Export menu: they sit in the drawer's top row. */}
+      <div className="flex items-center gap-1.5">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5 text-xs"
+          disabled={disabled}
+          onClick={() => void run(showData)}
+        >
+          <Copy className="h-3 w-3" />
           {tExport('copyAll')}
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={disabled}
-          onClick={() => void run(downloadCsv)}
-        >
-          <FileDown className="h-4 w-4" />
-          {tExport('csv')}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={disabled}
-          onClick={() => void run(downloadExcel)}
-        >
-          <FileSpreadsheet className="h-4 w-4" />
-          {tExport('excel')}
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                disabled={disabled}
+              />
+            }
+          >
+            <Download className="h-3 w-3" />
+            {tExport('menu')}
+          </DropdownMenuTrigger>
+          {/* Wider than its trigger, so "Export Excel" stays on one line. */}
+          <DropdownMenuContent align="end" className="w-36">
+            <DropdownMenuItem onClick={() => void run(downloadCsv)}>
+              <FileDown className="mr-2 h-4 w-4" />
+              {tExport('csv')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => void run(downloadExcel)}>
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              {tExport('excel')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       <Dialog open={preview !== null} onOpenChange={(open) => !open && setPreview(null)}>
         <DialogContent className="sm:max-w-2xl" initialFocus={previewRef}>
