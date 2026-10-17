@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { createTranslator } from 'next-intl';
 import { describe, expect, it } from 'vitest';
 import {
   actionContextTags,
@@ -220,5 +223,58 @@ describe('eventTaskText', () => {
     expect(eventTaskText(undefined, withHas)).toBe('');
     expect(eventTaskText('', withHas)).toBe('');
     expect(eventTaskText(42, withHas)).toBe('');
+  });
+});
+
+/**
+ * Every event the server actions write to an action's trail is a line in the
+ * drawer's History tab, and an event with no message there shows next-intl's
+ * missing-message text instead. The events are read from the server actions'
+ * own source, so one added there without copy fails here, not in the drawer.
+ */
+describe('History events', () => {
+  const source = readFileSync(join(__dirname, '../actions/action-center.ts'), 'utf8');
+  const logged = [...source.matchAll(/logEvent\(\s*\w+,\s*\w+,\s*'(\w+)'/g)].map(
+    (match) => match[1],
+  );
+
+  const tPage = createTranslator({
+    locale: 'en',
+    messages,
+    namespace: 'actionCenter.actionsPage',
+    onError: (error) => {
+      throw error;
+    },
+  });
+  /** The values the drawer formats every event with. */
+  const values = {
+    to: 'done',
+    count: 2,
+    task: 'Validate the change',
+    tool: 'site_audit',
+    improved: 1,
+    measurable: 2,
+    title: 'Ask the agency',
+  };
+  const eventText = (event: string) =>
+    tPage(`drawer.events.${event}` as Parameters<typeof tPage>[0], values);
+
+  /** A pattern that stopped matching would pass every check below by
+   *  checking nothing. */
+  it('reads the events the server actions log', () => {
+    expect(logged).toEqual(
+      expect.arrayContaining(['status_changed', 'task_added', 'task_renamed', 'task_deleted']),
+    );
+  });
+
+  it.each(logged)('has a History line for %s', (event) => {
+    expect(() => eventText(event)).not.toThrow();
+  });
+
+  /** A task someone added or renamed is named as they typed it. */
+  it('names the task in its own words', () => {
+    expect(eventText('task_added')).toBe('Task added: “Ask the agency”');
+    expect(eventText('task_renamed')).toBe('Task renamed to “Ask the agency”');
+    expect(eventText('task_deleted')).toBe('Task deleted');
   });
 });

@@ -71,13 +71,33 @@ async function fetchVolumesForKeywords(keywords, { locationCode, languageCode })
 }
 
 /**
+ * A prompt's Google volume: the median of its keywords that have any, rounded.
+ *
+ * The keywords are five head terms for the prompt's category
+ * (intent-extraction.js), and they overlap: summing them counted the same
+ * searchers several times over, and one very broad term (a product name such
+ * as "google gemini", 5M a month) could set the whole figure. The median keeps
+ * a prompt on its category's typical demand and leaves the extremes out, and
+ * a keyword Google can't measure doesn't pull it down to 0.
+ * 00154_prompt_volume_median.sql applies the same rule to stored rows.
+ */
+export function medianVolume(volumes) {
+  const measured = volumes.filter((v) => v > 0).sort((a, b) => a - b);
+  if (measured.length === 0) return 0;
+  const mid = Math.floor(measured.length / 2);
+  return Math.round(measured.length % 2 ? measured[mid] : (measured[mid - 1] + measured[mid]) / 2);
+}
+
+/**
  * Reduce one prompt's keywords against a volume map that may cover the whole
- * brand. google_volumes stays a { keyword: number } map for the UI, and
- * competition is a volume-weighted average of the keyword indices.
+ * brand. google_volumes stays a { keyword: number } map for the UI, the
+ * prompt's volume is their median (medianVolume), and competition is a
+ * volume-weighted average of the keyword indices.
  *
  * Lookups are case-folded because the response echoes keywords in its own
  * normalised form; the stored key stays the returned one, so what lands in the
- * column is unchanged from when each prompt had the response to itself.
+ * column is unchanged from when each prompt had the response to itself. Two
+ * keywords that resolve to the same returned one count once.
  */
 function summarizeVolumes(keywords, volumes) {
   const byKeyword = new Map();
@@ -86,7 +106,6 @@ function summarizeVolumes(keywords, volumes) {
   }
 
   const googleVolumes = {};
-  let totalGoogleVolume = 0;
   let competitionWeightedSum = 0;
   let competitionWeight = 0;
 
@@ -95,8 +114,8 @@ function summarizeVolumes(keywords, volumes) {
     if (!hit) continue;
 
     const [returnedKeyword, data] = hit;
+    if (Object.hasOwn(googleVolumes, returnedKeyword)) continue;
     googleVolumes[returnedKeyword] = data.volume;
-    totalGoogleVolume += data.volume;
     if (data.competitionIndex !== null && data.competitionIndex !== undefined) {
       competitionWeightedSum += data.competitionIndex * data.volume;
       competitionWeight += data.volume;
@@ -114,12 +133,14 @@ function summarizeVolumes(keywords, volumes) {
           ? 'MEDIUM'
           : 'HIGH';
 
+  // Stored as total_google_volume: the column predates the median.
+  const googleVolume = medianVolume(Object.values(googleVolumes));
   return {
     googleVolumes,
-    totalGoogleVolume,
+    totalGoogleVolume: googleVolume,
     competitionIndex,
     competition,
-    estAiVolume: Math.round(totalGoogleVolume * AI_VOLUME_MULTIPLIER),
+    estAiVolume: Math.round(googleVolume * AI_VOLUME_MULTIPLIER),
   };
 }
 
