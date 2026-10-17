@@ -2374,6 +2374,64 @@ export type Database = {
           },
         ]
       }
+      sentiment_overrides: {
+        Row: {
+          brand_id: string
+          created_at: string
+          id: string
+          note: string | null
+          previous_sentiment: string
+          result_id: string
+          sentiment: string
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          previous_sentiment: string
+          result_id: string
+          sentiment: string
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          previous_sentiment?: string
+          result_id?: string
+          sentiment?: string
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sentiment_overrides_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sentiment_overrides_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "prompt_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sentiment_overrides_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       signals: {
         Row: {
           action_id: string | null
@@ -3288,6 +3346,10 @@ export type Database = {
           p_sort?: string
           p_topic_id?: string
         }
+        Returns: Json
+      }
+      override_mention_sentiment: {
+        Args: { p_note?: string; p_result_id: string; p_sentiment: string }
         Returns: Json
       }
       normalize_page_path: { Args: { p_url: string }; Returns: string }
