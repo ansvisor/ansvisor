@@ -83,3 +83,19 @@ export function targetName(entity: string, label: string): string {
   if (entity === 'regions') return locationName(label);
   return label;
 }
+
+// The AI crawlers the site audit checks robots.txt for, by user agent.
+const CRAWLER_NAMES: Record<string, string> = {
+  gptbot: 'GPTBot (OpenAI)',
+  'oai-searchbot': 'OAI-SearchBot (OpenAI)',
+  'chatgpt-user': 'ChatGPT-User (OpenAI)',
+  claudebot: 'ClaudeBot (Anthropic)',
+  'anthropic-ai': 'anthropic-ai (Anthropic)',
+  perplexitybot: 'PerplexityBot (Perplexity)',
+  'google-extended': 'Google-Extended (Google)',
+};
+
+/** A crawler's name as its operator writes it: `gptbot` → "GPTBot (OpenAI)". */
+export function crawlerName(agent: string): string {
+  return CRAWLER_NAMES[agent.toLowerCase()] ?? agent;
+}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { getPlatformFilterItems, getPlatformName } from './_charts';
+import { getPlatformName } from '@/lib/traffic-platforms';
+import { getPlatformFilterItems } from './_charts';
 
 describe('getPlatformFilterItems', () => {
   it('starts with the all-platforms option, whose value is empty', () => {

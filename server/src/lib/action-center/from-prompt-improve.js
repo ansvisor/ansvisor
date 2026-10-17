@@ -14,6 +14,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { IMPROVE_PLATFORM_LABELS } from '../prompt-improve.js';
 import { compareOutcome, outcomeWindow, readPlatformStates } from './improve-outcome.js';
+import { priorityOnCreate } from './priority-data.js';
 
 export const IMPROVE_ACTION_KIND = 'prompt_improve';
 
@@ -196,6 +197,7 @@ export async function sendImproveToActionCenter({
     targetCount: platforms.length,
   };
 
+  const impact = improveImpact(platforms, volumeRow?.est_ai_volume);
   const { data: action, error } = await supabaseAdmin
     .from('actions')
     .insert({
@@ -203,7 +205,7 @@ export async function sendImproveToActionCenter({
       category: 'compete',
       kind: IMPROVE_ACTION_KIND,
       definition_version: 1,
-      impact: improveImpact(platforms, volumeRow?.est_ai_volume),
+      impact,
       payload,
       kpi_keys: improveKpiKeys(pages),
       baseline: improveBaseline(snapshots, now, window),
@@ -215,6 +217,12 @@ export async function sendImproveToActionCenter({
         ...compareOutcome(snapshots, snapshots),
       },
       dedup_key: dedupKey,
+      ...(await priorityOnCreate({
+        kind: IMPROVE_ACTION_KIND,
+        category: 'compete',
+        impact,
+        payload,
+      })),
     })
     .select('id, action_no')
     .single();

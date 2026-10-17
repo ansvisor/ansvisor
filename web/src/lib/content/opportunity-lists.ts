@@ -6,7 +6,7 @@ import type { ContentOpportunity, OpportunityBasket } from '@/types';
  * The action's export lists the same.
  */
 export function opportunityLists(
-  opportunity: ContentOpportunity,
+  opportunity: Pick<ContentOpportunity, 'sourceData'>,
   basket: OpportunityBasket,
   pageUrls?: string[],
 ) {
