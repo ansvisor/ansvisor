@@ -240,7 +240,8 @@ export function ActionDrawer({
   return (
     <Sheet open={Boolean(action)} onOpenChange={onOpenChange}>
       <SheetContent className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
-        <SheetHeader className="border-b px-6 py-4 pr-12">
+        {/* pt-3: the top row's buttons line up with the sheet's close button. */}
+        <SheetHeader className="border-b px-6 pt-3 pb-4 pr-12">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge variant="outline" className="text-[10px]">
               {tCategories(action.category)}
@@ -248,9 +249,18 @@ export function ActionDrawer({
             {action.priorityScore !== null && (
               <PriorityBadge score={action.priorityScore} level={action.priorityLevel} />
             )}
-            <span className="ml-auto text-muted-foreground">
-              {t('drawer.actionId')}: AC-{action.actionNo}
-            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <ActionExportButtons
+                action={action}
+                detail={ready ? detail : null}
+                affected={affected}
+                volumes={volumes}
+                story={story}
+              />
+              <span className="text-muted-foreground">
+                {t('drawer.actionId')}: AC-{action.actionNo}
+              </span>
+            </div>
           </div>
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-muted/40">
@@ -285,13 +295,6 @@ export function ActionDrawer({
                   </Badge>
                 ))}
           </div>
-          <ActionExportButtons
-            action={action}
-            detail={ready ? detail : null}
-            affected={affected}
-            volumes={volumes}
-            story={story}
-          />
         </SheetHeader>
 
         {/* Who has it, where it stands and by when: ahead of the tabs, so they
