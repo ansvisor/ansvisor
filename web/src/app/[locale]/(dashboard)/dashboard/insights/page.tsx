@@ -95,26 +95,23 @@ interface InsightsFilters {
   region: string;
   model: string;
   topic: string;
-  /** "Compare: Same prompts" (VIS-002): changes compare only prompts answered in both periods. */
-  samePrompts: boolean;
 }
 
 const DEFAULT_FILTERS: InsightsFilters = {
-  // 30 days, as in the v2 mockup (VIS-007); 24h stays one click away.
-  datePreset: '30d',
+  // The last 24 hours: what the latest run found. Longer ranges are one
+  // click away.
+  datePreset: '24h',
   dateFrom: '',
   dateTo: '',
   region: '',
   model: '',
   topic: '',
-  samePrompts: true,
 };
 
 /**
  * The filters as kept in the URL (#917): ?range=, plus ?from=/&to= for a
- * custom range, ?region=, ?model=, ?topic=, and ?compare=all when "Same
- * prompts" is off. Defaults are left out, and an unknown range falls back to
- * the default.
+ * custom range, ?region=, ?model= and ?topic=. Defaults are left out, and an
+ * unknown range falls back to the default.
  */
 function filtersFromUrl(): InsightsFilters {
   const datePreset = readUrlChoice<DatePreset>(
@@ -129,7 +126,6 @@ function filtersFromUrl(): InsightsFilters {
     region: readUrlParam('region'),
     model: readUrlParam('model'),
     topic: readUrlParam('topic'),
-    samePrompts: readUrlParam('compare') !== 'all',
   };
 }
 
@@ -143,7 +139,8 @@ function writeFiltersToUrl(f: InsightsFilters) {
       region: f.region,
       model: f.model,
       topic: f.topic,
-      compare: f.samePrompts ? null : 'all',
+      // Dropped from links made while "Same prompts" could be turned off.
+      compare: null,
     },
     { range: DEFAULT_FILTERS.datePreset },
   );
@@ -326,7 +323,6 @@ function FilterBar({
   availableTopics: Topic[];
 }) {
   const t = useTranslations('common');
-  const tInsights = useTranslations('insights');
   const set = (patch: Partial<InsightsFilters>) => onChange({ ...filters, ...patch });
 
   return (
@@ -436,35 +432,6 @@ function FilterBar({
             })}
           </SelectContent>
         </Select>
-      </div>
-      {/* Compare: Same prompts (VIS-002) */}
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-          {tInsights('compare.label')}
-        </label>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={filters.samePrompts}
-          title={tInsights('compare.hint')}
-          onClick={() => set({ samePrompts: !filters.samePrompts })}
-          className="inline-flex h-8 items-center gap-2 rounded-md border bg-background px-2.5 text-xs transition-colors hover:bg-muted/50"
-        >
-          <span
-            className={cn(
-              'relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors',
-              filters.samePrompts ? 'bg-primary' : 'bg-muted-foreground/30',
-            )}
-          >
-            <span
-              className={cn(
-                'block h-3 w-3 rounded-full bg-background shadow transition-transform',
-                filters.samePrompts ? 'translate-x-3.5' : 'translate-x-0.5',
-              )}
-            />
-          </span>
-          {tInsights('compare.samePrompts')}
-        </button>
       </div>
     </div>
   );
@@ -789,7 +756,9 @@ export default function InsightsPage() {
           // rollups (00066). Absent for 24h, whose anchored window above is
           // timestamp-shaped and stays on the raw path.
           days,
-          samePrompts: f.samePrompts,
+          // Changes compare only the prompts answered in both periods
+          // (VIS-002), so adding prompts doesn't inflate them.
+          samePrompts: true,
         };
 
         const hasFilters = Boolean(f.datePreset !== 'all' || f.model || f.region || f.topic);
@@ -1376,12 +1345,6 @@ export default function InsightsPage() {
                 topicCompetitors.length > 0 && (
                   <TopicHeatmap
                     topics={topicCompetitors}
-                    window={{
-                      dayFrom: loadedFilters?.days?.dayFrom,
-                      dayTo: loadedFilters?.days?.dayTo,
-                      model: loadedFilters?.model,
-                      region: loadedFilters?.region,
-                    }}
                     columns={trendLines(rateTrend.entities, rateTrend.points, rateTrend.pinned).map(
                       (line) => ({ key: line.key, name: line.name }),
                     )}
