@@ -3,6 +3,8 @@ import {
   aiVisitsByPage,
   buildOpportunities,
   competitorGapPages,
+  excludePatternMatcher,
+  normalizeExcludePattern,
   opportunityKey,
 } from './opportunities.js';
 
@@ -163,6 +165,50 @@ describe('buildOpportunities', () => {
         ],
       }).rows,
     ).toEqual([]);
+  });
+});
+
+describe('exclude patterns', () => {
+  it('stores a pattern as a lowercased path without a trailing slash', () => {
+    expect(normalizeExcludePattern(' /Legal/* ')).toBe('/legal/*');
+    expect(normalizeExcludePattern('/blog/')).toBe('/blog');
+    expect(normalizeExcludePattern('/')).toBe('/');
+    expect(normalizeExcludePattern('legal/*')).toBeNull();
+    expect(normalizeExcludePattern('/a b')).toBeNull();
+    expect(normalizeExcludePattern(`/${'x'.repeat(200)}`)).toBeNull();
+  });
+
+  it('matches the whole path, * standing for anything, in any case', () => {
+    const excluded = excludePatternMatcher(['/legal/*', '/tag/*/page', '/about.html']);
+    expect(excluded('/legal/terms')).toBe(true);
+    expect(excluded('/Legal/privacy/eu')).toBe(true);
+    expect(excluded('/legal')).toBe(false);
+    expect(excluded('/tag/coffee/page')).toBe(true);
+    expect(excluded('/about.html')).toBe(true);
+    // The dot is a dot, not any character.
+    expect(excluded('/aboutxhtml')).toBe(false);
+    expect(excludePatternMatcher([])('/x')).toBe(false);
+  });
+
+  it('leaves pages under a pattern out of the inbox, unless pinned', () => {
+    const { rows, excluded } = build({
+      sitePages: [
+        { url: 'https://acme.com/stories/old', title: 'Old', ga_sessions: 1, ai_citations: 0 },
+        { url: 'https://acme.com/stories/best', title: 'Best', ga_sessions: 1, ai_citations: 0 },
+        { url: 'https://acme.com/pricing', title: 'Pricing', ga_sessions: 9, ai_citations: 0 },
+      ],
+      prefs: [
+        {
+          page_key: 'acme.com/stories/best',
+          url: 'https://acme.com/stories/best',
+          state: 'pinned',
+        },
+      ],
+      excludePatterns: ['/stories/*'],
+    });
+    expect(rows.map((r) => r.path)).toEqual(['/stories/best', '/pricing']);
+    // A pattern isn't a page to put back: the Excluded list doesn't show it.
+    expect(excluded).toEqual([]);
   });
 });
 

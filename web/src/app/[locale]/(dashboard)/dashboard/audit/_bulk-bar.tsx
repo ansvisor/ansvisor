@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { AuditQuota } from '@/lib/actions/audits';
 import { cn } from '@/lib/utils';
+import { EmptyPoolMessage } from './_quota-meter';
 
 export type ExportFormat = 'csv' | 'xlsx';
 
@@ -64,6 +65,7 @@ export function ExportMenu({
  */
 export function AuditBulkBar({
   count,
+  audits,
   quota,
   starting,
   auditLabel,
@@ -73,6 +75,8 @@ export function AuditBulkBar({
   children,
 }: {
   count: number;
+  /** Audits the audit button starts, when not one per selected row (a template's pages). */
+  audits?: number;
   quota: AuditQuota | null;
   starting: boolean;
   auditLabel?: string;
@@ -86,7 +90,8 @@ export function AuditBulkBar({
   const t = useTranslations('audit.bulk');
   const limited = quota !== null && quota.limit !== -1;
   const remaining = quota?.remaining ?? 0;
-  const over = limited && count > remaining;
+  const uses = audits ?? count;
+  const over = limited && uses > remaining;
 
   return (
     <div
@@ -95,22 +100,26 @@ export function AuditBulkBar({
       className="mb-3 flex flex-wrap items-center gap-2 rounded-md border bg-muted/50 px-3 py-2"
     >
       <span className="text-xs font-medium">{t('selected', { count })}</span>
-      {limited && (
-        <span className={cn('text-xs', over ? 'text-destructive' : 'text-muted-foreground')}>
-          {remaining === 0
-            ? t('noneLeft')
-            : over
-              ? t('overQuota', { count, remaining })
-              : t('uses', { count, remaining })}
-        </span>
-      )}
+      {limited &&
+        (remaining === 0 && (quota.auto?.reserved ?? 0) > 0 ? (
+          // The user's share is used, the runs' isn't (spec §4.4).
+          <EmptyPoolMessage quota={quota} />
+        ) : (
+          <span className={cn('text-xs', over ? 'text-destructive' : 'text-muted-foreground')}>
+            {remaining === 0
+              ? t('noneLeft')
+              : over
+                ? t('overQuota', { count: uses, remaining })
+                : t('uses', { count: uses, remaining })}
+          </span>
+        ))}
       <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
         <Button
           variant="outline"
           size="sm"
           className="h-7 gap-1.5 text-xs"
           onClick={onAudit}
-          disabled={starting || over}
+          disabled={starting || over || uses === 0}
         >
           {starting ? (
             <Loader2 className="h-3 w-3 animate-spin" />

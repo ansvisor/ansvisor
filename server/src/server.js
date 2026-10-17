@@ -29,7 +29,8 @@ import { handleScraperResult } from './lib/cloro-result-handler.js';
 import { verifyCloroWebhook } from './lib/cloro-webhook-verify.js';
 import { generateBriefForOpportunity } from './routes/content.js';
 import { sendImproveActionForKeyUser } from './routes/prompts.js';
-import { startSiteAuditForBrand } from './routes/audits.js';
+import { readOpportunityInbox, startAutoAudits, startSiteAuditForBrand } from './routes/audits.js';
+import { sweepAutoAudits } from './lib/audit/auto-audit-sweep.js';
 import { getSiteAuditQuotaStatus } from './lib/plan-guard.js';
 import { recountBrandCitations } from './lib/citation-recount.js';
 import supabaseAdmin from './config/supabase.js';
@@ -261,6 +262,9 @@ async function runDailyTracking() {
   // alongside: it reads the tables the sync writes, so running the two
   // concurrently would score yesterday's window. A sync failure skips
   // detection instead of letting it publish findings from stale data.
+  //
+  // The auto-audit runs (SA-006) come after both, so a run audits the pages
+  // this week's data ranks highest; they run whether or not the sync did.
   runGaSync()
     .then(() =>
       runPageOpportunityDetection().catch((err) => {
@@ -269,7 +273,14 @@ async function runDailyTracking() {
     )
     .catch((err) => {
       logger.error({ err }, '[ga-sync] daily run failed');
-    });
+    })
+    .finally(() =>
+      sweepAutoAudits({ readInbox: readOpportunityInbox, startAudits: startAutoAudits }).catch(
+        (err) => {
+          logger.error({ err }, '[auto-audit] daily sweep crashed');
+        },
+      ),
+    );
 
   return { triggered, total: brands.length };
 }

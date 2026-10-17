@@ -18,12 +18,13 @@ const onReaudit = vi.fn();
 const onExport = vi.fn();
 const onClear = vi.fn();
 
-function render(count: number, quota: AuditQuota | null, starting = false) {
+function render(count: number, quota: AuditQuota | null, starting = false, audits?: number) {
   act(() => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <AuditBulkBar
           count={count}
+          audits={audits}
           quota={quota}
           starting={starting}
           onAudit={onReaudit}
@@ -74,6 +75,42 @@ describe('AuditBulkBar', () => {
 
     render(1, { used: 100, limit: 100, remaining: 0 });
     expect(usage()?.textContent).toBe('No audits left this month');
+    expect(button('Re-audit').disabled).toBe(true);
+  });
+
+  it("says the runs' share is still scheduled when the user's is used up (SA-019)", () => {
+    // The spec's example: 100 auto and 375 of the user's used, day 28's 25 to come.
+    render(1, {
+      used: 475,
+      running: 0,
+      limit: 500,
+      remaining: 0,
+      auto: {
+        enabled: true,
+        setting: null,
+        emailAfterRun: false,
+        perRun: 25,
+        reserved: 25,
+        used: 100,
+        running: 0,
+        periodStart: '2026-10-01T00:00:00.000Z',
+        periodEnd: '2026-11-01T00:00:00.000Z',
+        runs: [],
+        nextRun: { day: 28, at: '2026-10-28T00:00:00.000Z' },
+      },
+    });
+    expect(container.querySelector('[role=toolbar] p')?.textContent).toBe(
+      "You've used your 375 audits. 25 auto audits are still scheduled. Turn off auto-audit to use them now, or upgrade.",
+    );
+    expect(button('Re-audit').disabled).toBe(true);
+  });
+
+  it("counts a template's pages, not the rows, against what's left (SA-007)", () => {
+    render(1, { used: 0, limit: 100, remaining: 20 }, false, 26);
+    expect(usage()?.textContent).toBe('Uses 26 of your 20 audits · select up to 20');
+    expect(button('Re-audit').disabled).toBe(true);
+    // Nothing to audit (a template audited in full): the button stays off.
+    render(1, { used: 0, limit: 100, remaining: 20 }, false, 0);
     expect(button('Re-audit').disabled).toBe(true);
   });
 
