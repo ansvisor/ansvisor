@@ -11,32 +11,39 @@ import {
   TrendingDown,
   AlertCircle,
   RefreshCw,
+  Pin,
+  EyeOff,
 } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
   runAudit,
   runAuditsBulk,
   getAuditPages,
   getAuditOverview,
+  getAuditOpportunities,
+  setOpportunityPrefs,
   getAuditQuota,
   getAuditTrend,
   deleteAudit,
   type AuditedPage,
   type AuditOverview,
+  type AuditOpportunities,
   type AuditQuota,
   type AuditTrend,
 } from '@/lib/actions/audits';
 import { pct, scoreColor, CATEGORY_META } from '@/components/audit/audit-report';
-import { formatMonthDay } from '@/lib/format';
+import { formatMonthDay, formatNumber } from '@/lib/format';
 import { ScoreTrendChart } from './_charts';
 import { AuditPagesTable } from './_pages-table';
 import { AuditBulkBar, ExportMenu } from './_bulk-bar';
 import { AuditOverviewCards } from './_overview-cards';
+import { OpportunitiesTable } from './_opportunities-table';
 import { usePagesExport } from './_use-pages-export';
 import { cn } from '@/lib/utils';
 
@@ -51,6 +58,27 @@ async function readOverview(brandId: string): Promise<AuditOverview | null> {
     console.error('Failed to load the Site Audit overview:', err);
     return null;
   }
+}
+
+/** The Opportunities inbox; its tab is left out when it can't be read. */
+async function readOpportunities(brandId: string): Promise<AuditOpportunities | null> {
+  try {
+    return await getAuditOpportunities(brandId);
+  } catch (err) {
+    console.error('Failed to load the Site Audit opportunities:', err);
+    return null;
+  }
+}
+
+type ListTab = 'opportunities' | 'pages';
+
+/** A tab's count, as the mockup's grey pill. */
+function TabCount({ count }: { count: number }) {
+  return (
+    <span className="rounded-full bg-muted px-1.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+      {formatNumber(count)}
+    </span>
+  );
 }
 
 /** While audits run, the Pages list and the quota are read again this often. */
@@ -88,6 +116,10 @@ export default function SiteAuditPage() {
   const [overview, setOverview] = useState<AuditOverview | null>(null);
   const [range, setRange] = useState<RangePreset>('30d');
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [opps, setOpps] = useState<AuditOpportunities | null>(null);
+  const [oppSelected, setOppSelected] = useState<Set<string>>(() => new Set());
+  // Opportunities when it lists pages, else Pages; chosen once per brand.
+  const [tab, setTab] = useState<ListTab | null>(null);
   const [startingBulk, setStartingBulk] = useState(false);
   const { exporting, exportAll, exportPages } = usePagesExport(activeBrandId);
   // Capture "now" once (impure call belongs in a lazy initializer, not render).
@@ -101,15 +133,18 @@ export default function SiteAuditPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    // A selection belongs to the brand it was made on.
+    // A selection, and the tab, belong to the brand they were made on.
     setSelected(new Set());
+    setOppSelected(new Set());
+    setTab(null);
     (async () => {
       try {
-        const [data, q, tr, ov] = await Promise.all([
+        const [data, q, tr, ov, op] = await Promise.all([
           getAuditPages(activeBrandId),
           getAuditQuota(),
           getAuditTrend(activeBrandId),
           readOverview(activeBrandId),
+          readOpportunities(activeBrandId),
         ]);
         if (!cancelled) {
           setPages(data.pages);
@@ -118,6 +153,11 @@ export default function SiteAuditPage() {
           setQuota(q);
           setTrend(tr);
           setOverview(ov);
+          setOpps(op);
+          setTab(
+            (current) =>
+              current ?? ((op?.opportunities.length ?? 0) > 0 ? 'opportunities' : 'pages'),
+          );
         }
       } catch (err) {
         console.error('Failed to load audit hub data:', err);
@@ -228,11 +268,12 @@ export default function SiteAuditPage() {
     shownRef.current = pages.length;
   }, [pages.length]);
   const reloadInPlace = async (brandId: string) => {
-    const [data, q, tr, ov] = await Promise.all([
+    const [data, q, tr, ov, op] = await Promise.all([
       getAuditPages(brandId, 0, Math.min(Math.max(shownRef.current, 50), 100)),
       getAuditQuota(),
       getAuditTrend(brandId),
       readOverview(brandId),
+      readOpportunities(brandId),
     ]);
     setPages(data.pages);
     setPagesTotal(data.total);
@@ -240,6 +281,11 @@ export default function SiteAuditPage() {
     setQuota(q);
     setTrend(tr);
     setOverview(ov);
+    setOpps(op);
+    const oppSelectable = new Set(
+      (op?.opportunities ?? []).filter((o) => !o.running).map((o) => o.key),
+    );
+    setOppSelected((prev) => new Set([...prev].filter((key) => oppSelectable.has(key))));
     const selectable = new Set(data.pages.filter((p) => p.status !== 'running').map((p) => p.key));
     setSelected((prev) => new Set([...prev].filter((key) => selectable.has(key))));
   };
@@ -287,7 +333,80 @@ export default function SiteAuditPage() {
   };
 
   // While any page is being audited, follow it until its run ends.
-  const anyRunning = pages.some((p) => p.status === 'running');
+  const handleOppSelect = (keys: string[], on: boolean) =>
+    setOppSelected((prev) => {
+      const next = new Set(prev);
+      for (const key of keys) {
+        if (on) next.add(key);
+        else next.delete(key);
+      }
+      return next;
+    });
+
+  const selectedOpps = (opps?.opportunities ?? []).filter((o) => oppSelected.has(o.key));
+
+  const handleAuditOpps = async () => {
+    if (!activeBrandId || selectedOpps.length === 0) return;
+    setStartingBulk(true);
+    try {
+      const { started } = await runAuditsBulk(
+        activeBrandId,
+        selectedOpps.map((o) => o.url),
+      );
+      toast.success(t('bulk.started', { count: started }));
+      setOppSelected(new Set());
+      await reloadInPlace(activeBrandId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('failed'));
+    } finally {
+      setStartingBulk(false);
+    }
+  };
+
+  // Pin, exclude or restore pages, then read the inbox again. Excluding can
+  // be undone from its toast.
+  const savePrefs = async (
+    urls: string[],
+    state: 'pinned' | 'excluded' | null,
+    message: string,
+    undo?: () => void,
+  ) => {
+    if (!activeBrandId || urls.length === 0) return;
+    try {
+      await setOpportunityPrefs(activeBrandId, urls, state);
+      setOppSelected(new Set());
+      toast.success(
+        message,
+        undo ? { action: { label: t('opportunities.undo'), onClick: undo } } : undefined,
+      );
+      await reloadInPlace(activeBrandId);
+    } catch (err) {
+      console.error('Failed to update the opportunities:', err);
+      toast.error(t('opportunities.prefsFailed'));
+    }
+  };
+
+  const allPinned = selectedOpps.length > 0 && selectedOpps.every((o) => o.pinned);
+  const handlePin = () => {
+    const urls = selectedOpps.map((o) => o.url);
+    return allPinned
+      ? savePrefs(urls, null, t('opportunities.unpinnedToast', { count: urls.length }))
+      : savePrefs(urls, 'pinned', t('opportunities.pinnedToast', { count: urls.length }));
+  };
+  const handleExclude = () => {
+    const urls = selectedOpps.map((o) => o.url);
+    return savePrefs(
+      urls,
+      'excluded',
+      t('opportunities.excludedToast', { count: urls.length }),
+      () => void savePrefs(urls, null, t('opportunities.restoredToast', { count: urls.length })),
+    );
+  };
+  const handleRestore = (urls: string[]) =>
+    savePrefs(urls, null, t('opportunities.restoredToast', { count: urls.length }));
+
+  const anyRunning =
+    pages.some((p) => p.status === 'running') || (opps?.opportunities ?? []).some((o) => o.running);
   useEffect(() => {
     if (!anyRunning || !activeBrandId) return;
     const timer = setInterval(() => {
@@ -486,7 +605,9 @@ export default function SiteAuditPage() {
             </Button>
           </CardContent>
         </Card>
-      ) : pages.length === 0 ? (
+      ) : pages.length === 0 &&
+        (opps?.opportunities.length ?? 0) === 0 &&
+        (opps?.excluded.length ?? 0) === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
             <Sparkles className="h-7 w-7 text-primary" />
@@ -495,29 +616,97 @@ export default function SiteAuditPage() {
           </CardContent>
         </Card>
       ) : (
-        <AuditPagesTable
-          pages={pages}
-          total={pagesTotal}
-          primaryHost={primaryHost}
-          loadingMore={loadingMore}
-          onLoadMore={handleLoadMore}
-          onDeleteRun={handleDelete}
-          selected={selected}
-          onSelect={handleSelect}
-          headerAction={<ExportMenu busy={exporting} onExport={exportAll} />}
-          toolbar={
-            selectedPages.length > 0 && (
-              <AuditBulkBar
-                count={selectedPages.length}
-                quota={quota}
-                starting={startingBulk}
-                onReaudit={handleBulkReaudit}
-                onExport={(format) => exportPages(selectedPages, format)}
-                onClear={() => setSelected(new Set())}
+        <Tabs value={tab ?? 'pages'} onValueChange={(v) => setTab(v as ListTab)}>
+          <TabsList variant="line" aria-label={t('lists.label')}>
+            {opps && (
+              <TabsTrigger value="opportunities">
+                {t('lists.opportunities')}
+                <TabCount count={opps.opportunities.length} />
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="pages">
+              {t('lists.pages')}
+              <TabCount count={pagesTotal} />
+            </TabsTrigger>
+          </TabsList>
+          {opps && (
+            <TabsContent value="opportunities" className="mt-3">
+              <OpportunitiesTable
+                opportunities={opps.opportunities}
+                excluded={opps.excluded}
+                staleDays={opps.staleDays}
+                selected={oppSelected}
+                onSelect={handleOppSelect}
+                onRestore={(urls) => void handleRestore(urls)}
+                toolbar={
+                  selectedOpps.length > 0 && (
+                    <AuditBulkBar
+                      count={selectedOpps.length}
+                      quota={quota}
+                      starting={startingBulk}
+                      auditLabel={t('opportunities.auditSelected')}
+                      onAudit={handleAuditOpps}
+                      onClear={() => setOppSelected(new Set())}
+                    >
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 gap-1.5 text-xs"
+                        onClick={() => void handlePin()}
+                      >
+                        <Pin className="h-3 w-3" />
+                        {allPinned ? t('opportunities.unpin') : t('opportunities.pin')}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 gap-1.5 text-xs"
+                        onClick={() => void handleExclude()}
+                      >
+                        <EyeOff className="h-3 w-3" />
+                        {t('opportunities.exclude')}
+                      </Button>
+                    </AuditBulkBar>
+                  )
+                }
               />
-            )
-          }
-        />
+            </TabsContent>
+          )}
+          <TabsContent value="pages" className="mt-3">
+            {pages.length === 0 ? (
+              <Card>
+                <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                  {t('lists.noPages')}
+                </CardContent>
+              </Card>
+            ) : (
+              <AuditPagesTable
+                showTitle={false}
+                pages={pages}
+                total={pagesTotal}
+                primaryHost={primaryHost}
+                loadingMore={loadingMore}
+                onLoadMore={handleLoadMore}
+                onDeleteRun={handleDelete}
+                selected={selected}
+                onSelect={handleSelect}
+                headerAction={<ExportMenu busy={exporting} onExport={exportAll} />}
+                toolbar={
+                  selectedPages.length > 0 && (
+                    <AuditBulkBar
+                      count={selectedPages.length}
+                      quota={quota}
+                      starting={startingBulk}
+                      onAudit={handleBulkReaudit}
+                      onExport={(format) => exportPages(selectedPages, format)}
+                      onClear={() => setSelected(new Set())}
+                    />
+                  )
+                }
+              />
+            )}
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );

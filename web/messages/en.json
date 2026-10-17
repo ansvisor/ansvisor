@@ -2107,6 +2107,53 @@
         "failed": "Failed"
       }
     },
+    "lists": {
+      "label": "Site Audit lists",
+      "opportunities": "Opportunities",
+      "pages": "Pages",
+      "noPages": "No pages audited yet. Audit an opportunity or enter a URL above."
+    },
+    "opportunities": {
+      "page": "Page",
+      "why": "Why",
+      "aiVisits": "AI visits",
+      "lastAudit": "Last audit",
+      "never": "never",
+      "lastAuditValue": "{date} · {score}",
+      "running": "Running",
+      "select": "Select {page}",
+      "selectAll": "Select all opportunities shown",
+      "reasons": {
+        "noAiTraffic": "No AI traffic",
+        "topValue": "Top {share}% by {signal}",
+        "signals": {
+          "revenue": "revenue",
+          "transactions": "transactions",
+          "key_events": "key events",
+          "engagement": "engagement"
+        },
+        "targetedNotCited": "Targeted, not cited",
+        "neverAudited": "Never audited",
+        "staleAudit": "Audited {days} days ago",
+        "pinned": "Pinned"
+      },
+      "auditSelected": "Audit selected",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "exclude": "Exclude",
+      "pinnedToast": "{count, plural, one {# page pinned} other {# pages pinned}}",
+      "unpinnedToast": "{count, plural, one {# page unpinned} other {# pages unpinned}}",
+      "excludedToast": "{count, plural, one {# page excluded} other {# pages excluded}}",
+      "undo": "Undo",
+      "excluded": "{count, plural, one {# excluded page} other {# excluded pages}}",
+      "showExcluded": "Show",
+      "hideExcluded": "Hide",
+      "restore": "Restore",
+      "restoredToast": "{count, plural, one {# page restored} other {# pages restored}}",
+      "empty": "No pages to audit right now. Opportunities come from Google Analytics (valuable pages without AI traffic) and from your site's pages that were never audited or not in {days} days.",
+      "showMore": "Show more",
+      "prefsFailed": "Couldn't update the pages"
+    },
     "overview": {
       "yourDomain": "your domain",
       "siteScore": "Site score",

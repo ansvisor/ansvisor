@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Download, FileDown, FileSpreadsheet, Loader2, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -55,25 +56,32 @@ export function ExportMenu({
 }
 
 /**
- * The Pages table's bulk bar (SA-003), shown while pages are selected: how
- * many of the month's audits a re-audit would use, Re-audit, Export and
- * Clear. Re-audit stays off when the selection is over what's left, so a
- * bulk run never goes past the quota.
+ * The bulk bar of the Pages (SA-003) and Opportunities (SA-004) tables, shown
+ * while pages are selected: how many of the month's audits an audit of them
+ * would use, the audit button (Re-audit, Audit selected), the table's own
+ * actions, Export and Clear. The audit stays off when the selection is over
+ * what's left, so a bulk run never goes past the quota.
  */
 export function AuditBulkBar({
   count,
   quota,
   starting,
-  onReaudit,
+  auditLabel,
+  onAudit,
   onExport,
   onClear,
+  children,
 }: {
   count: number;
   quota: AuditQuota | null;
   starting: boolean;
-  onReaudit: () => void;
-  onExport: (format: ExportFormat) => void;
+  auditLabel?: string;
+  onAudit: () => void;
+  /** Export of the selected pages; left out when the table has none. */
+  onExport?: (format: ExportFormat) => void;
   onClear: () => void;
+  /** The table's own actions, after the audit button (Pin, Exclude). */
+  children?: ReactNode;
 }) {
   const t = useTranslations('audit.bulk');
   const limited = quota !== null && quota.limit !== -1;
@@ -101,7 +109,7 @@ export function AuditBulkBar({
           variant="outline"
           size="sm"
           className="h-7 gap-1.5 text-xs"
-          onClick={onReaudit}
+          onClick={onAudit}
           disabled={starting || over}
         >
           {starting ? (
@@ -109,9 +117,10 @@ export function AuditBulkBar({
           ) : (
             <RefreshCw className="h-3 w-3" />
           )}
-          {t('reaudit')}
+          {auditLabel ?? t('reaudit')}
         </Button>
-        <ExportMenu onExport={onExport} />
+        {children}
+        {onExport && <ExportMenu onExport={onExport} />}
         <Button
           variant="ghost"
           size="sm"

@@ -34,6 +34,8 @@ import {
 } from '../lib/audit/history.js';
 import { readAllRpcRows } from '../lib/rpc-pages.js';
 import { AUTHORITY_CATEGORIES, buildOverview, primaryPages } from '../lib/audit/overview.js';
+import { aiVisitsByPage, buildOpportunities, opportunityKey } from '../lib/audit/opportunities.js';
+import { ENGINE_THRESHOLDS } from '../config/action-engine.js';
 import { runSignals } from '../lib/audit/engine.js';
 import { evaluateLlmSignals } from '../lib/audit/llm-signals.js';
 import { evaluateBrandEntity } from '../lib/audit/external-signals.js';
@@ -547,6 +549,169 @@ router.get('/overview', async (req, res) => {
       return res.status(err.status).json({ success: false, message: err.message });
     }
     req.log.error({ err }, 'audit overview failed');
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/** The window the Opportunities inbox counts AI visits over. */
+const OPPORTUNITY_VISITS_DAYS = 30;
+
+const isoDay = (ms) => new Date(ms).toISOString().slice(0, 10);
+
+/**
+ * AI visits per page over the last 30 days (null when the brand has neither
+ * Google Analytics nor the tracking snippet, so 0 would be a guess).
+ */
+async function opportunityAiVisits(brandId, urls) {
+  if (urls.length === 0) return new Map();
+  const [{ data: brand }, { data: logs }] = await Promise.all([
+    supabaseAdmin.from('brands').select('ga_property_id').eq('id', brandId).maybeSingle(),
+    supabaseAdmin.from('ai_traffic_logs').select('id').eq('brand_id', brandId).limit(1),
+  ]);
+  if (!brand?.ga_property_id && (logs ?? []).length === 0) return null;
+
+  const now = Date.now();
+  const from = isoDay(now - OPPORTUNITY_VISITS_DAYS * 24 * 60 * 60 * 1000);
+  const { data, error } = await supabaseAdmin.rpc('ae_page_traffic_evidence', {
+    p_brand_id: brandId,
+    p_pages: urls,
+    p_cur_from: from,
+    p_cur_to: isoDay(now),
+    // No comparison window: the previous one is left empty.
+    p_prev_from: from,
+    p_prev_to: isoDay(now - (OPPORTUNITY_VISITS_DAYS + 1) * 24 * 60 * 60 * 1000),
+  });
+  if (error) throw error;
+  return aiVisitsByPage(data);
+}
+
+// GET /api/audits/opportunities?brandId=… — the Opportunities inbox (SA-004):
+// the brand's pages worth auditing, each with why (Google Analytics pages
+// without AI traffic, pages never audited or audited long ago), pinned pages
+// first, plus the excluded pages to put back.
+// Registered before /:id so "opportunities" isn't matched as an audit id.
+router.get('/opportunities', async (req, res) => {
+  const userId = req.user?.id;
+  const { brandId } = req.query;
+  if (!brandId) {
+    return res.status(400).json({ success: false, message: 'brandId is required' });
+  }
+
+  try {
+    await assertBrandAccess(brandId, userId);
+
+    const [primary, gaPages, sitePages, audits, prefs] = await Promise.all([
+      primaryDomainOf(brandId),
+      // Up to 30% of GA's 5,000 pages a day: past PostgREST's 1000-row page.
+      readAllRpcRows('page_opportunities', (from, to) =>
+        supabaseAdmin
+          .from('page_opportunities')
+          .select(
+            'landing_page, value_signal, value_percentile, sessions, citation_state, citations',
+          )
+          .eq('brand_id', brandId)
+          .eq('kind', 'no_ai_traffic')
+          .is('resolved_at', null)
+          .order('landing_page', { ascending: true })
+          .range(from, to),
+      ),
+      supabaseAdmin
+        .from('site_pages')
+        .select('url, title, ga_sessions, ai_citations')
+        .eq('brand_id', brandId),
+      readBrandAudits(brandId),
+      supabaseAdmin
+        .from('site_audit_page_prefs')
+        .select('page_key, url, state')
+        .eq('brand_id', brandId),
+    ]);
+    for (const read of [gaPages, sitePages, audits, prefs]) if (read.error) throw read.error;
+
+    const { rows, excluded } = buildOpportunities({
+      primaryHost: normStoredDomain(primary),
+      gaPages: gaPages.data ?? [],
+      sitePages: sitePages.data ?? [],
+      auditPages: buildAuditPages(audits.data),
+      prefs: prefs.data ?? [],
+      staleDays: ENGINE_THRESHOLDS.detection.auditMaxAgeDays,
+    });
+    const visits = await opportunityAiVisits(
+      brandId,
+      rows.map((r) => r.url),
+    );
+
+    return res.json({
+      success: true,
+      opportunities: rows.map((r) => ({
+        ...r,
+        aiVisits: visits === null ? null : (visits.get(r.url) ?? 0),
+      })),
+      excluded,
+      staleDays: ENGINE_THRESHOLDS.detection.auditMaxAgeDays,
+    });
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    req.log.error({ err }, 'audit opportunities failed');
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+const prefsSchema = z.object({
+  brandId: z.guid(),
+  urls: z
+    .array(z.string().trim().min(1).max(2048))
+    .min(1)
+    .max(BULK_AUDIT_MAX)
+    .refine((urls) => urls.every((url) => opportunityKey(url)), 'Every URL must be a full URL'),
+  // null clears the page's pin or exclusion.
+  state: z.enum(['pinned', 'excluded']).nullable(),
+});
+
+// PUT /api/audits/opportunities/prefs — pin, exclude or clear pages of the
+// Opportunities inbox ({ brandId, urls, state }).
+router.put('/opportunities/prefs', async (req, res) => {
+  const userId = req.user?.id;
+  const parsed = prefsSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: parsed.error.issues[0]?.message ?? 'Invalid request',
+    });
+  }
+  const { brandId, urls, state } = parsed.data;
+
+  try {
+    await assertBrandAccess(brandId, userId);
+
+    const byKey = new Map(urls.map((url) => [opportunityKey(url), url]));
+    const { error } =
+      state === null
+        ? await supabaseAdmin
+            .from('site_audit_page_prefs')
+            .delete()
+            .eq('brand_id', brandId)
+            .in('page_key', [...byKey.keys()])
+        : await supabaseAdmin.from('site_audit_page_prefs').upsert(
+            [...byKey].map(([pageKeyValue, url]) => ({
+              brand_id: brandId,
+              page_key: pageKeyValue,
+              url,
+              state,
+              created_by: userId ?? null,
+              updated_at: new Date().toISOString(),
+            })),
+            { onConflict: 'brand_id,page_key' },
+          );
+    if (error) throw error;
+
+    return res.json({ success: true, pages: byKey.size, state });
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    req.log.error({ err }, 'audit opportunity prefs failed');
     return res.status(500).json({ success: false, message: err.message });
   }
 });

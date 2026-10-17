@@ -274,6 +274,91 @@ export async function getAuditOverview(brandId: string): Promise<AuditOverview> 
   return data.overview;
 }
 
+/** Why a page is in the Opportunities inbox. */
+export type OpportunityReason =
+  | {
+      type: 'no_ai_traffic';
+      signal: 'revenue' | 'transactions' | 'key_events' | 'engagement';
+      /** The page's value percentile within its site (0–100). */
+      percentile: number;
+      citationState: 'cited' | 'targeted_not_cited' | 'not_targeted' | null;
+    }
+  | { type: 'never_audited' }
+  | { type: 'stale_audit'; days: number };
+
+/** A page worth auditing (SA-004). */
+export interface AuditOpportunity {
+  key: string;
+  url: string;
+  path: string;
+  title: string | null;
+  reasons: OpportunityReason[];
+  pinned: boolean;
+  /** An audit of the page is running. */
+  running: boolean;
+  /** AI visits over the last 30 days; null without Analytics or the snippet. */
+  aiVisits: number | null;
+  lastAudit: { at: string; score: number; auditId: string } | null;
+}
+
+export interface ExcludedPage {
+  key: string;
+  url: string;
+  path: string;
+  title: string | null;
+}
+
+export interface AuditOpportunities {
+  opportunities: AuditOpportunity[];
+  excluded: ExcludedPage[];
+  /** An audit older than this many days no longer counts. */
+  staleDays: number;
+}
+
+export async function getAuditOpportunities(brandId: string): Promise<AuditOpportunities> {
+  const session = await getSession();
+
+  const res = await fetch(
+    `${AEO_SERVER_URL}/api/audits/opportunities?brandId=${encodeURIComponent(brandId)}`,
+    { headers: { Authorization: `Bearer ${session.access_token}` } },
+  );
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || `Server error: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return {
+    opportunities: data.opportunities ?? [],
+    excluded: data.excluded ?? [],
+    staleDays: data.staleDays ?? 90,
+  };
+}
+
+/** Pin, exclude or (null) clear pages of the Opportunities inbox. */
+export async function setOpportunityPrefs(
+  brandId: string,
+  urls: string[],
+  state: 'pinned' | 'excluded' | null,
+): Promise<void> {
+  const session = await getSession();
+
+  const res = await fetch(`${AEO_SERVER_URL}/api/audits/opportunities/prefs`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ brandId, urls, state }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || `Server error: ${res.status}`);
+  }
+}
+
 export interface AuditedPages {
   pages: AuditedPage[];
   /** Pages audited for the brand, across all pages of the list. */

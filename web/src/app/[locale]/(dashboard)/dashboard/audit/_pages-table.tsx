@@ -154,6 +154,7 @@ export function AuditPagesTable({
   onSelect,
   headerAction,
   toolbar,
+  showTitle = true,
 }: {
   pages: AuditedPage[];
   total: number;
@@ -167,6 +168,8 @@ export function AuditPagesTable({
   /** Beside the title, e.g. Export. */
   headerAction?: ReactNode;
   toolbar?: ReactNode;
+  /** Off inside the Pages tab, whose trigger already names the list. */
+  showTitle?: boolean;
 }) {
   const t = useTranslations('audit');
   const router = useRouter();
@@ -188,10 +191,14 @@ export function AuditPagesTable({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center gap-2 space-y-0">
-        <CardTitle className="text-base">{t('pages.title')}</CardTitle>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
-          {formatNumber(total)}
-        </span>
+        {showTitle && (
+          <>
+            <CardTitle className="text-base">{t('pages.title')}</CardTitle>
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
+              {formatNumber(total)}
+            </span>
+          </>
+        )}
         {headerAction && <div className="ml-auto">{headerAction}</div>}
       </CardHeader>
       <CardContent className="pt-0">

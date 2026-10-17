@@ -26,7 +26,7 @@ function render(count: number, quota: AuditQuota | null, starting = false) {
           count={count}
           quota={quota}
           starting={starting}
-          onReaudit={onReaudit}
+          onAudit={onReaudit}
           onExport={onExport}
           onClear={onClear}
         />
@@ -81,6 +81,28 @@ describe('AuditBulkBar', () => {
     render(40, { used: 0, limit: -1, remaining: -1 });
     expect(usage()).toBeUndefined();
     expect(button('Re-audit').disabled).toBe(false);
+  });
+
+  it("takes the table's own audit label and actions, and leaves Export out without one", () => {
+    act(() => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <AuditBulkBar
+            count={2}
+            quota={{ used: 0, limit: 500, remaining: 500 }}
+            starting={false}
+            auditLabel="Audit selected"
+            onAudit={onReaudit}
+            onClear={onClear}
+          >
+            <button type="button">Pin</button>
+          </AuditBulkBar>
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(button('Audit selected')).toBeDefined();
+    expect(button('Pin')).toBeDefined();
+    expect(button('Export')).toBeUndefined();
   });
 
   it('waits while a bulk start is on its way', () => {
