@@ -3236,11 +3236,9 @@
         "brand": "Brand",
         "mentions": "Mentions",
         "rate": "Rate",
-        "sentiment": "Sentiment",
-        "net": "Net",
-        "sameAnswer": "Same answer as you",
+        "alsoNamesYou": "Also names you",
+        "alsoNamesYouTip": "Of the responses naming this competitor, how many name {brand} too, and what share of its mentions that is.",
         "you": "You",
-        "ownSentimentOnly": "Sentiment is measured for your brand only.",
         "none": "No competitors yet. Add them on the Competitors page to compare."
       }
     },

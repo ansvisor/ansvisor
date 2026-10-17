@@ -44,6 +44,9 @@ import {
 
 // ─── Info tooltip ─────────────────────────────────────────────────────────────
 
+/** Half the tooltip's width (w-56, 224px) and an 8px margin from the window's edge. */
+const INFO_TIP_HALF_WIDTH = 120;
+
 export function InfoTip({ content }: { content: string }) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const ref = useRef<HTMLSpanElement>(null);
@@ -51,7 +54,14 @@ export function InfoTip({ content }: { content: string }) {
 
   function show() {
     const r = ref.current?.getBoundingClientRect();
-    if (r) setPos({ x: r.left + r.width / 2, y: r.bottom + 6 });
+    if (!r) return;
+    // Centred on the icon, but kept on screen: an icon by the window's edge
+    // (a table's last column) would push half the tooltip past it.
+    const x = Math.min(
+      Math.max(r.left + r.width / 2, INFO_TIP_HALF_WIDTH),
+      window.innerWidth - INFO_TIP_HALF_WIDTH,
+    );
+    setPos({ x, y: r.bottom + 6 });
   }
 
   function hide() {
