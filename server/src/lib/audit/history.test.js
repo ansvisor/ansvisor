@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AUDIT_RUN_TIMEOUT_MS,
   buildAuditPages,
   buildTrendPoints,
   pageKey,
@@ -177,11 +178,14 @@ describe('buildAuditPages', () => {
   });
 
   it('keeps the last completed score while a re-audit runs or after one fails', () => {
-    const [running] = buildAuditPages([
-      row('a3', 'https://acme.com/pricing', '2026-10-15T09:00:00Z', null, 'running'),
-      row('a2', 'https://acme.com/pricing', '2026-10-14T09:00:00Z', null, 'failed'),
-      row('a1', 'https://acme.com/pricing', '2026-10-01T09:00:00Z', '0.58'),
-    ]);
+    const [running] = buildAuditPages(
+      [
+        row('a3', 'https://acme.com/pricing', '2026-10-15T09:00:00Z', null, 'running'),
+        row('a2', 'https://acme.com/pricing', '2026-10-14T09:00:00Z', null, 'failed'),
+        row('a1', 'https://acme.com/pricing', '2026-10-01T09:00:00Z', '0.58'),
+      ],
+      Date.parse('2026-10-15T09:05:00Z'),
+    );
     expect(running).toMatchObject({
       status: 'running',
       score: 0.58,
@@ -194,6 +198,21 @@ describe('buildAuditPages', () => {
       row('b1', 'https://acme.com/blog', '2026-10-15T09:00:00Z', null, 'failed'),
     ]);
     expect(failed).toMatchObject({ status: 'failed', score: null, auditId: 'b1', trend: [] });
+  });
+
+  it('reads a run left running past the timeout, cut short by a restart, as failed', () => {
+    const rows = [
+      row('a2', 'https://acme.com/pricing', '2026-10-15T09:00:00Z', null, 'running'),
+      row('a1', 'https://acme.com/pricing', '2026-10-01T09:00:00Z', '0.58'),
+    ];
+    const start = Date.parse('2026-10-15T09:00:00Z');
+
+    const [stillRunning] = buildAuditPages(rows, start + AUDIT_RUN_TIMEOUT_MS);
+    expect(stillRunning.status).toBe('running');
+
+    const [cutShort] = buildAuditPages(rows, start + AUDIT_RUN_TIMEOUT_MS + 1);
+    expect(cutShort).toMatchObject({ status: 'needs_work', score: 0.58, auditId: 'a1' });
+    expect(cutShort.runs[0]).toMatchObject({ id: 'a2', status: 'failed' });
   });
 
   it('draws the trend from the newest completed scores, oldest first', () => {
