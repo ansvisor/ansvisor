@@ -54,8 +54,42 @@ function librarySignalTexts(signal: Signal, t: Translator): { title: string; des
   };
 }
 
+/** A URL as a row names it: without its protocol or trailing slash. */
+function shortUrl(url: string): string {
+  return url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+}
+
+/**
+ * A lost citation, once its evidence is recorded (server
+ * signals/lost-citation-evidence.js), names the page that stopped being cited
+ * and the platforms it was lost on, and a loss on one platform says which in
+ * its title (AC-001/AC-002). Older rows keep the generic copy.
+ */
+function lostCitationTexts(signal: Signal, t: Translator): { title: string; description: string } {
+  const p = signal.payload;
+  const platforms = Array.isArray(p.platforms)
+    ? p.platforms.filter((x): x is string => typeof x === 'string').map(platformName)
+    : [];
+  const lost = Array.isArray(p.lostUrls) ? (p.lostUrls as { url?: unknown }[]) : [];
+  const page = typeof lost[0]?.url === 'string' ? shortUrl(lost[0].url) : '';
+  const values = {
+    prompt: str(p, 'promptText'),
+    platform: platforms[0] ?? '',
+    platforms: platforms.join(', '),
+    page,
+  };
+  return {
+    title: t(platforms.length === 1 ? 'lost_citations.titleOn' : 'lost_citations.title', values),
+    description:
+      page && platforms.length
+        ? t('lost_citations.descriptionPage', values)
+        : t('lost_citations.description', values),
+  };
+}
+
 export function signalTexts(signal: Signal, t: Translator): { title: string; description: string } {
   if (isLibrarySignalKind(signal.kind)) return librarySignalTexts(signal, t);
+  if (signal.kind === 'lost_citations') return lostCitationTexts(signal, t);
   const p = signal.payload;
   const values = ((): Record<string, string | number> => {
     switch (signal.kind) {
@@ -79,8 +113,6 @@ export function signalTexts(signal: Signal, t: Translator): { title: string; des
         return { prompt: str(p, 'promptText'), gain: signal.changeValue ?? 0 };
       case 'new_engine':
         return { platform: platformName(str(p, 'platform')) };
-      case 'lost_citations':
-        return { prompt: str(p, 'promptText') };
       case 'first_citation':
         return { url: str(p, 'label') || str(p, 'url'), prompt: str(p, 'promptText') };
       case 'competitor_surge':

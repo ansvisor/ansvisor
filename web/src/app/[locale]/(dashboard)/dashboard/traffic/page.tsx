@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { getPlatformFilterItems, getPlatformName } from './_charts';
+import { getPlatformFilterItems } from './_charts';
+import { getPlatformName } from '@/lib/traffic-platforms';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getPublicApiBaseUrl } from '@/config/api';

@@ -151,6 +151,12 @@ export function actionEventText(
     tool: String(event.data.tool ?? ''),
     improved: Number(event.data.improved ?? 0),
     measurable: Number(event.data.measurable ?? 0),
+    // A task someone added or renamed is named in their own words, as they
+    // typed it.
+    title: String(event.data.title ?? ''),
+    // The validation sweep's verdict once the action closed: improved,
+    // declined, and so on.
+    outcome: String(event.data.outcome ?? ''),
   });
 }
 

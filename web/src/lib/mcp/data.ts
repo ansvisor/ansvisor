@@ -18,6 +18,9 @@ import {
   toPromptUsageSummary,
   type PromptUsageSummary,
 } from '@/lib/prompt-usage-summary';
+import { mapSignalRows, type SignalRow } from '@/lib/signals/map';
+import { readPromptPlaces } from '@/lib/signals/prompt-places';
+import { signalDetailForApi, type SignalActionRef } from '@/lib/signals/detail';
 
 /**
  * Pure data-fetch functions shared by the MCP route and the parallel REST
@@ -2028,7 +2031,8 @@ const PROMPT_VOLUMES_MAX_LIMIT = 500;
 /**
  * Return per-prompt search-volume + competition rows for a brand, scoped
  * `brand → prompt_sets → prompts → prompt_volumes`. Surfaces the demand
- * (`total_google_volume` / `est_ai_volume`) and competition meter
+ * (`total_google_volume`, the median of the keywords' volumes, and
+ * `est_ai_volume`) and competition meter
  * (`competition_index` / `competition`, see #44) so callers can answer
  * "which prompts have the most demand / the least competition?".
  *
@@ -2769,7 +2773,42 @@ export async function listSignalsFor(
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-  return (data ?? []) as Record<string, unknown>[];
+  const rows = (data ?? []) as SignalRow[];
+
+  // Each signal also says where it happened, what changed with units and
+  // period, what it rests on, and which actions use it (AC-001), the same
+  // way the dashboard's signal drawer does.
+  const actionIds = [...new Set(rows.map((row) => row.action_id).filter(Boolean))] as string[];
+  const [prompts, actionsRes] = await Promise.all([
+    readPromptPlaces(supabaseAdmin, params.brandId),
+    actionIds.length
+      ? supabaseAdmin
+          .from('actions')
+          .select('id, action_no, kind, status')
+          .eq('brand_id', params.brandId)
+          .in('id', actionIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  // The actions only add used_by_actions; a failed read leaves it empty
+  // rather than taking the signals down with it.
+  if (actionsRes.error)
+    console.error('[mcp] signal actions read failed:', actionsRes.error.message);
+  const actions = new Map<string, SignalActionRef>(
+    (actionsRes.error ? [] : (actionsRes.data ?? [])).map((a) => [
+      a.id,
+      { id: a.id, action_no: Number(a.action_no), kind: a.kind, status: a.status },
+    ]),
+  );
+  const known = new Map(mapSignalRows(rows, prompts).map((signal) => [signal.id, signal]));
+
+  return rows.map((row) => {
+    const used = row.action_id && actions.has(row.action_id) ? [actions.get(row.action_id)!] : [];
+    const signal = known.get(row.id);
+    // A kind this build has no detail for still comes back, as it always did.
+    return signal
+      ? { ...row, ...signalDetailForApi(signal, used) }
+      : { ...row, used_by_actions: used };
+  });
 }
 
 export interface ActionHistoryRow {
