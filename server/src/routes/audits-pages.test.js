@@ -167,8 +167,19 @@ describe('GET /api/audits/pages', () => {
       ['/broken', 'failed', null],
     ]);
     expect(body.pages[0]).toMatchObject({ auditId: 'p2', score: 0.63, previousScore: 0.58 });
+    // Top-level pages have no template (SA-007).
+    expect(body.pages.map((p) => p.template)).toEqual([null, null, null]);
     // Issues are counted for the latest completed audit of each row only.
     expect(signalQueries).toEqual([['p2', 'x1']]);
+  });
+
+  it("names a primary-domain page's template", async () => {
+    audits.push(audit('n1', 'https://acme.com/blog/milk-drinks', 20, '0.5'));
+    audits.push(audit('n2', 'https://other.com/blog/x', 20, '0.5'));
+    const body = await (await fetch(`${baseUrl}/pages?brandId=b1`)).json();
+    const byPath = Object.fromEntries(body.pages.map((p) => [`${p.host}${p.path}`, p.template]));
+    expect(byPath['acme.com/blog/milk-drinks']).toBe('/blog/*');
+    expect(byPath['other.com/blog/x']).toBeNull();
   });
 
   it('pages over pages, not audits', async () => {

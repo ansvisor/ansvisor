@@ -40,11 +40,13 @@ import {
   competitorGapPages,
   EXCLUDE_PATTERN_MAX_LENGTH,
   EXCLUDE_PATTERNS_MAX,
+  excludePatternMatcher,
   normalizeExcludePattern,
   opportunityKey,
 } from '../lib/audit/opportunities.js';
 import { AUTO_AUDIT } from '../lib/audit/auto-audit.js';
 import { rankOpportunities } from '../lib/audit/priority.js';
+import { buildTemplates, templateOf, templateOpportunities } from '../lib/audit/templates.js';
 import { ENGINE_THRESHOLDS } from '../config/action-engine.js';
 import { runSignals } from '../lib/audit/engine.js';
 import { evaluateLlmSignals } from '../lib/audit/llm-signals.js';
@@ -533,15 +535,18 @@ router.get('/pages', async (req, res) => {
     const all = buildAuditPages(rows);
     const pages = all.slice(offset, offset + limit);
     const issues = await countIssues(pages.filter((p) => p.score !== null).map((p) => p.auditId));
+    const primaryHost = normStoredDomain(primary);
 
     return res.json({
       success: true,
       pages: pages.map((p) => ({
         ...p,
         issues: p.score === null ? null : (issues.get(p.auditId) ?? 0),
+        // The page's template on the primary domain, for Group by template (SA-007).
+        template: p.host === primaryHost ? templateOf(p.path) : null,
       })),
       total: all.length,
-      primaryHost: normStoredDomain(primary),
+      primaryHost,
     });
   } catch (err) {
     if (err.status) {
@@ -691,6 +696,26 @@ async function opportunityAiVisits(brandId, urls) {
   return aiVisitsByPage(data);
 }
 
+/**
+ * The brand's template groups (SA-007): its primary-domain pages by template,
+ * with the gaps most of a template's audited pages share. Reads the failing
+ * and warning signals of those pages' latest audits.
+ */
+async function readTemplateGroups({ primaryHost, sitePages, auditPages }) {
+  if (!primaryHost) return [];
+  const ids = auditPages
+    .filter((p) => p.host === primaryHost && p.score !== null && templateOf(p.path))
+    .map((p) => p.auditId);
+  const failingRows = await readByAuditIds(ids, ISSUE_COUNT_CHUNK, (chunk) =>
+    supabaseAdmin
+      .from('audit_signal_results')
+      .select('audit_id, signal_key')
+      .in('audit_id', chunk)
+      .in('status', ['fail', 'warn']),
+  );
+  return buildTemplates({ primaryHost, sitePages, auditPages, failingRows });
+}
+
 /** A brand's exclude patterns (SA-006 settings), as stored. */
 async function readExcludePatterns(brandId) {
   const { data, error } = await supabaseAdmin
@@ -735,27 +760,43 @@ export async function readOpportunityInbox(brandId) {
   ]);
   for (const read of [gaPages, sitePages, audits, prefs]) if (read.error) throw read.error;
 
-  const competitorPages = await competitorOpportunityPages(brandId, sitePages.data ?? []);
+  const primaryHost = normStoredDomain(primary);
+  const auditPages = buildAuditPages(audits.data);
+  const [competitorPages, templates] = await Promise.all([
+    competitorOpportunityPages(brandId, sitePages.data ?? []),
+    readTemplateGroups({ primaryHost, sitePages: sitePages.data ?? [], auditPages }),
+  ]);
   const { rows, excluded } = buildOpportunities({
-    primaryHost: normStoredDomain(primary),
+    primaryHost,
     gaPages: gaPages.data ?? [],
     sitePages: sitePages.data ?? [],
-    auditPages: buildAuditPages(audits.data),
+    auditPages,
     competitorPages,
     prefs: prefs.data ?? [],
     excludePatterns,
     staleDays: ENGINE_THRESHOLDS.detection.auditMaxAgeDays,
   });
-  const visits = await opportunityAiVisits(
-    brandId,
-    rows.map((r) => r.url),
-  );
+  // Templates whose pages share gaps are rows too (SA-007, the mockup's
+  // "/blog/* · 38 pages"), with their pages' AI visits added up.
+  const shared = templates.filter((t) => t.sharedGaps.length > 0);
+  const templateRows = templateOpportunities(shared, excludePatternMatcher(excludePatterns));
+  const urlsOf = new Map(shared.map((t) => [`template:${t.template}`, t.urls]));
+  const visits = await opportunityAiVisits(brandId, [
+    ...new Set([...rows.map((r) => r.url), ...templateRows.flatMap((r) => urlsOf.get(r.key))]),
+  ]);
+  const visitsOf = (urls) =>
+    visits === null ? null : urls.reduce((sum, url) => sum + (visits.get(url) ?? 0), 0);
 
   return {
-    // Scored and ordered once each page has its AI visits (SA-005).
+    // Scored and ordered once each page has its AI visits (SA-005); a page
+    // whose template shares its gaps is easier to fix (SA-007).
     opportunities: rankOpportunities(
-      rows.map((r) => ({ ...r, aiVisits: visits === null ? null : (visits.get(r.url) ?? 0) })),
+      [
+        ...rows.map((r) => ({ ...r, aiVisits: visitsOf([r.url]) })),
+        ...templateRows.map((r) => ({ ...r, aiVisits: visitsOf(urlsOf.get(r.key)) })),
+      ],
       (sitePages.data ?? []).map((p) => p.ga_sessions),
+      new Set(shared.map((t) => t.template)),
     ),
     excluded,
   };
@@ -845,6 +886,38 @@ router.put('/opportunities/prefs', async (req, res) => {
       return res.status(err.status).json({ success: false, message: err.message });
     }
     req.log.error({ err }, 'audit opportunity prefs failed');
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/audits/templates?brandId=… — the brand's template groups (SA-007):
+// "/blog/* · 38 pages", with the gaps most of its audited pages share.
+// Registered before /:id so "templates" isn't matched as an audit id.
+router.get('/templates', async (req, res) => {
+  const { brandId } = req.query;
+  if (!brandId) {
+    return res.status(400).json({ success: false, message: 'brandId is required' });
+  }
+  try {
+    await assertBrandAccess(brandId, req.user?.id);
+    const [primary, sitePages, audits] = await Promise.all([
+      primaryDomainOf(brandId),
+      supabaseAdmin.from('site_pages').select('url').eq('brand_id', brandId),
+      readBrandAudits(brandId),
+    ]);
+    for (const read of [sitePages, audits]) if (read.error) throw read.error;
+
+    const templates = await readTemplateGroups({
+      primaryHost: normStoredDomain(primary),
+      sitePages: sitePages.data ?? [],
+      auditPages: buildAuditPages(audits.data),
+    });
+    return res.json({ success: true, templates });
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    req.log.error({ err }, 'audit templates failed');
     return res.status(500).json({ success: false, message: err.message });
   }
 });

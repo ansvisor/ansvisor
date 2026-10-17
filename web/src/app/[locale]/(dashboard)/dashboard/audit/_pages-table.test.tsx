@@ -3,8 +3,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
-import type { AuditedPage } from '@/lib/actions/audits';
-import { AuditPagesTable, pageLabel } from './_pages-table';
+import type { AuditedPage, AuditTemplate } from '@/lib/actions/audits';
+import { AuditPagesTable, groupPagesByTemplate, pageLabel } from './_pages-table';
 
 (
   globalThis as typeof globalThis & {
@@ -69,7 +69,11 @@ const onSelect = vi.fn();
 function render(
   pages: AuditedPage[],
   total = pages.length,
-  { selected = new Set<string>(), toolbar = null as React.ReactNode } = {},
+  {
+    selected = new Set<string>(),
+    toolbar = null as React.ReactNode,
+    templates = null as AuditTemplate[] | null,
+  } = {},
 ) {
   act(() => {
     root.render(
@@ -85,6 +89,7 @@ function render(
           onSelect={onSelect}
           headerAction={<button type="button">Export all</button>}
           toolbar={toolbar}
+          templates={templates}
         />
       </NextIntlClientProvider>,
     );
@@ -241,6 +246,58 @@ describe('AuditPagesTable selection', () => {
     expect(box('Select all pages shown').getAttribute('data-state')).toBe('checked');
     act(() => box('Select all pages shown').click());
     expect(onSelect).toHaveBeenLastCalledWith(['acme.com/pricing', 'acme.com/blog'], false);
+  });
+});
+
+describe('Group by template (SA-007)', () => {
+  const blog: AuditTemplate = {
+    template: '/blog/*',
+    pages: 38,
+    audited: 12,
+    sharedGaps: [
+      { key: 'author-byline', label: 'Author byline', category: 'authority', pages: 11 },
+      { key: 'faq-schema', label: 'FAQ schema', category: 'structure', pages: 9 },
+    ],
+  };
+  const guides: AuditTemplate = { template: '/guides/*', pages: 5, audited: 1, sharedGaps: [] };
+  const post = (path: string, template: string | null) =>
+    page({ key: `acme.com${path}`, path, url: `https://acme.com${path}`, template });
+
+  it('groups the shown pages by template, biggest first, the rest under Other pages', () => {
+    const pages = [
+      post('/pricing', null),
+      post('/guides/a', '/guides/*'),
+      post('/blog/a', '/blog/*'),
+      post('/blog/b', '/blog/*'),
+      // A template under three pages isn't one: it goes with the rest.
+      post('/docs/a', '/docs/*'),
+    ];
+    expect(
+      groupPagesByTemplate(pages, [blog, guides]).map((g) => [
+        g.template?.template ?? null,
+        g.pages.map((p) => p.path),
+      ]),
+    ).toEqual([
+      ['/blog/*', ['/blog/a', '/blog/b']],
+      ['/guides/*', ['/guides/a']],
+      [null, ['/pricing', '/docs/a']],
+    ]);
+  });
+
+  it('heads each group with its pages and what one fix covers', () => {
+    render([post('/pricing', null), post('/blog/a', '/blog/*')], 2, { templates: [blog, guides] });
+    expect(rows().map((r) => r.textContent?.trim().slice(0, 120))).toEqual([
+      '/blog/* · 12 of 38 pages audited · Fix once: Author byline, FAQ schema · applies to 38 pages',
+      expect.stringContaining('/blog/a'),
+      'Other pages',
+      expect.stringContaining('/pricing'),
+    ]);
+  });
+
+  it('lists the pages as before when grouping is off', () => {
+    render([post('/pricing', null), post('/blog/a', '/blog/*')]);
+    expect(rows()).toHaveLength(2);
+    expect(container.textContent).not.toContain('Other pages');
   });
 });
 

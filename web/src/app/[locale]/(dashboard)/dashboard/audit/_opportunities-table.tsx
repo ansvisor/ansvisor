@@ -46,6 +46,16 @@ function PriorityPill({ row }: { row: AuditOpportunity }) {
   );
 }
 
+/**
+ * The pages an audit of the selected inbox rows starts: each page, and a
+ * template's pages not audited yet (SA-007), once each.
+ */
+export function opportunityAuditUrls(rows: AuditOpportunity[]): string[] {
+  return [
+    ...new Set(rows.flatMap((o) => (o.template ? o.template.toAudit : o.url ? [o.url] : []))),
+  ];
+}
+
 /** Rows shown at first, and added by Show more. */
 export const OPPORTUNITIES_STEP = 50;
 
@@ -89,6 +99,9 @@ function ReasonChips({ row }: { row: AuditOpportunity }) {
             })}
           </Chip>
         );
+      case 'template_gaps':
+        // The gaps the template's audited pages share (SA-007).
+        return reason.gaps.map((gap) => <Chip key={`gap-${gap.key}`}>{gap.label}</Chip>);
     }
   };
   return (
@@ -231,16 +244,29 @@ export function OpportunitiesTable({
                       <PriorityPill row={row} />
                     </TableCell>
                     <TableCell className="max-w-0">
-                      <a
-                        href={row.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title={row.title ?? row.url}
-                        className="group inline-flex max-w-full items-center gap-1 font-medium hover:underline"
-                      >
-                        <span className="truncate">{row.path}</span>
-                        <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" />
-                      </a>
+                      {row.template ? (
+                        // A template's row (SA-007): "/blog/* · 38 pages".
+                        <span
+                          className="inline-flex max-w-full items-center gap-1"
+                          title={t('templateFixOnce', { pages: row.template.pages })}
+                        >
+                          <span className="truncate font-medium">{row.path}</span>
+                          <span className="shrink-0 text-muted-foreground">
+                            {` ${t('templatePages', { pages: row.template.pages })}`}
+                          </span>
+                        </span>
+                      ) : (
+                        <a
+                          href={row.url ?? undefined}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={row.title ?? row.url ?? undefined}
+                          className="group inline-flex max-w-full items-center gap-1 font-medium hover:underline"
+                        >
+                          <span className="truncate">{row.path}</span>
+                          <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                        </a>
+                      )}
                     </TableCell>
                     {/* Wide enough for a row of chips; more wrap onto a second line. */}
                     <TableCell className="min-w-[18rem] whitespace-normal">
@@ -255,6 +281,11 @@ export function OpportunitiesTable({
                           <Loader2 className="h-3 w-3 animate-spin" />
                           {t('running')}
                         </span>
+                      ) : row.template ? (
+                        t('templateAudited', {
+                          audited: row.template.audited,
+                          pages: row.template.pages,
+                        })
                       ) : row.lastAudit ? (
                         <Link
                           href={`/dashboard/audit/${row.lastAudit.auditId}`}

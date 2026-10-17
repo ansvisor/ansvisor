@@ -168,6 +168,8 @@ export interface AuditedPage {
   /** Runs, newest first. */
   runs: AuditRun[];
   runCount: number;
+  /** The page's template on the primary domain ("/blog/*"), for Group by template (SA-007). */
+  template?: string | null;
 }
 
 async function getSession() {
@@ -349,6 +351,8 @@ export type OpportunityReason =
     }
   | { type: 'never_audited' }
   | { type: 'stale_audit'; days: number }
+  /** A template's row (SA-007): the gaps most of its audited pages share. */
+  | { type: 'template_gaps'; gaps: { key: string; label: string }[] }
   | {
       type: 'competitor_cited';
       /** Prompts a competitor is cited on and the brand never is, closest to this page. */
@@ -360,7 +364,9 @@ export type OpportunityReason =
 /** A page worth auditing (SA-004). */
 export interface AuditOpportunity {
   key: string;
-  url: string;
+  /** Null for a template's row, which stands for many pages. */
+  url: string | null;
+  /** The page's path, or a template's ("/blog/*"). */
   path: string;
   title: string | null;
   reasons: OpportunityReason[];
@@ -373,6 +379,38 @@ export interface AuditOpportunity {
   /** 0–100: the cube root of value × opportunity × ease (SA-005). */
   priority: number;
   priorityParts: { value: number; opportunity: number; ease: number };
+  /** A template's row (SA-007): its pages, those audited, and those an audit of it starts. */
+  template?: { pages: number; audited: number; toAudit: string[] };
+}
+
+/** A template of the brand's pages (SA-007): "/blog/* · 38 pages", and the gaps they share. */
+export interface AuditTemplate {
+  template: string;
+  pages: number;
+  audited: number;
+  sharedGaps: { key: string; label: string; category: string | null; pages: number }[];
+}
+
+export async function getAuditTemplates(brandId: string): Promise<AuditTemplate[]> {
+  const session = await getSession();
+
+  const res = await fetch(
+    `${AEO_SERVER_URL}/api/audits/templates?brandId=${encodeURIComponent(brandId)}`,
+    { headers: { Authorization: `Bearer ${session.access_token}` } },
+  );
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || `Server error: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return (data.templates ?? []).map((t: AuditTemplate) => ({
+    template: t.template,
+    pages: t.pages,
+    audited: t.audited,
+    sharedGaps: t.sharedGaps,
+  }));
 }
 
 export interface ExcludedPage {

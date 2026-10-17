@@ -126,6 +126,8 @@ describe('pickRunPages', () => {
             row('/fresh', { pinned: true, lastAudit: { at: '2026-09-20T00:00:00Z' } }),
             row('/old', { lastAudit: { at: '2026-09-10T00:00:00Z' } }),
             row('/never'),
+            // A template's row: its pages are listed one by one.
+            row('/blog/*', { url: null, template: { pages: 38, audited: 2, toAudit: [] } }),
           ],
         },
       ],

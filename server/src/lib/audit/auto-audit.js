@@ -105,7 +105,8 @@ export function pickRunPages(inboxes, slots, now, triedKeys = new Set()) {
   const candidates = [];
   for (const { brandId, opportunities } of inboxes) {
     for (const row of opportunities) {
-      if (row.running || triedKeys.has(row.key)) continue;
+      // A template's row (SA-007) stands for pages the inbox lists one by one.
+      if (row.template || row.running || triedKeys.has(row.key)) continue;
       if (row.lastAudit && Date.parse(row.lastAudit.at) >= freshSince) continue;
       candidates.push({
         brandId,

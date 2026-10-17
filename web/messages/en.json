@@ -2105,7 +2105,12 @@
         "needs_work": "Needs work",
         "running": "Running",
         "failed": "Failed"
-      }
+      },
+      "groupByTemplate": "Group by template",
+      "templatesFailed": "Couldn't group the pages by template",
+      "templateAudited": "{audited} of {pages} pages audited",
+      "templateFix": "Fix once: <b>{gaps}</b> · applies to {pages} pages",
+      "otherPages": "Other pages"
     },
     "lists": {
       "label": "Site Audit lists",
@@ -2156,7 +2161,12 @@
       "restoredToast": "{count, plural, one {# page restored} other {# pages restored}}",
       "empty": "No pages to audit right now. Opportunities come from Google Analytics (valuable pages without AI traffic), from prompts where a competitor is cited and you aren't, and from your site's pages that were never audited or not in {days} days.",
       "showMore": "Show more",
-      "prefsFailed": "Couldn't update the pages"
+      "prefsFailed": "Couldn't update the pages",
+      "templatePages": "· {pages} pages",
+      "templateFixOnce": "Fix once, applies to {pages} pages",
+      "templateAudited": "{audited} of {pages}",
+      "templateExcludedToast": "{count, plural, one {Excluded {template} and its pages} other {Excluded # templates and their pages}}",
+      "templateRestoredToast": "The template's pages are back"
     },
     "overview": {
       "yourDomain": "your domain",

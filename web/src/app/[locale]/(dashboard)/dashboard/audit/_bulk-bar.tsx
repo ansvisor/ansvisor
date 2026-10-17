@@ -65,6 +65,7 @@ export function ExportMenu({
  */
 export function AuditBulkBar({
   count,
+  audits,
   quota,
   starting,
   auditLabel,
@@ -74,6 +75,8 @@ export function AuditBulkBar({
   children,
 }: {
   count: number;
+  /** Audits the audit button starts, when not one per selected row (a template's pages). */
+  audits?: number;
   quota: AuditQuota | null;
   starting: boolean;
   auditLabel?: string;
@@ -87,7 +90,8 @@ export function AuditBulkBar({
   const t = useTranslations('audit.bulk');
   const limited = quota !== null && quota.limit !== -1;
   const remaining = quota?.remaining ?? 0;
-  const over = limited && count > remaining;
+  const uses = audits ?? count;
+  const over = limited && uses > remaining;
 
   return (
     <div
@@ -105,8 +109,8 @@ export function AuditBulkBar({
             {remaining === 0
               ? t('noneLeft')
               : over
-                ? t('overQuota', { count, remaining })
-                : t('uses', { count, remaining })}
+                ? t('overQuota', { count: uses, remaining })
+                : t('uses', { count: uses, remaining })}
           </span>
         ))}
       <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
@@ -115,7 +119,7 @@ export function AuditBulkBar({
           size="sm"
           className="h-7 gap-1.5 text-xs"
           onClick={onAudit}
-          disabled={starting || over}
+          disabled={starting || over || uses === 0}
         >
           {starting ? (
             <Loader2 className="h-3 w-3 animate-spin" />

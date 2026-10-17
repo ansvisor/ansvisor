@@ -26,9 +26,59 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { pct, scoreColor } from '@/components/audit/audit-report';
-import type { AuditedPage, AuditedPageStatus, AuditRun } from '@/lib/actions/audits';
+import type { AuditedPage, AuditedPageStatus, AuditRun, AuditTemplate } from '@/lib/actions/audits';
 import { formatDate, formatDateTime, formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
+
+/**
+ * The shown pages by template (SA-007's Group by template): the templates in
+ * the server's order (biggest first) that have pages shown, then the pages
+ * without one, as "other" (template null).
+ */
+export function groupPagesByTemplate(
+  pages: AuditedPage[],
+  templates: AuditTemplate[],
+): { template: AuditTemplate | null; pages: AuditedPage[] }[] {
+  const known = new Map(templates.map((t) => [t.template, t]));
+  const byTemplate = new Map<string, AuditedPage[]>();
+  const other: AuditedPage[] = [];
+  for (const page of pages) {
+    const key = page.template && known.has(page.template) ? page.template : null;
+    if (key === null) other.push(page);
+    else byTemplate.set(key, [...(byTemplate.get(key) ?? []), page]);
+  }
+  return [
+    ...templates
+      .filter((t) => byTemplate.has(t.template))
+      .map((t) => ({ template: t, pages: byTemplate.get(t.template) ?? [] })),
+    ...(other.length > 0 ? [{ template: null, pages: other }] : []),
+  ];
+}
+
+/** A template group's header: "/blog/* · 12 of 38 pages audited · Fix once: … · applies to 38 pages". */
+function TemplateHeader({ template }: { template: AuditTemplate | null }) {
+  const t = useTranslations('audit.pages');
+  if (!template) return <span className="font-medium">{t('otherPages')}</span>;
+  return (
+    <span>
+      <span className="font-medium">{template.template}</span>
+      <span className="text-muted-foreground">
+        {' · '}
+        {t('templateAudited', { audited: template.audited, pages: template.pages })}
+        {template.sharedGaps.length > 0 && (
+          <>
+            {' · '}
+            {t.rich('templateFix', {
+              b: (chunks) => <span className="font-medium text-foreground">{chunks}</span>,
+              gaps: template.sharedGaps.map((g) => g.label).join(', '),
+              pages: template.pages,
+            })}
+          </>
+        )}
+      </span>
+    </span>
+  );
+}
 
 const STATUS_CLASS: Record<AuditedPageStatus, string> = {
   good: 'bg-green-600/10 text-green-700 dark:bg-green-500/15 dark:text-green-400',
@@ -155,6 +205,7 @@ export function AuditPagesTable({
   headerAction,
   toolbar,
   showTitle = true,
+  templates = null,
 }: {
   pages: AuditedPage[];
   total: number;
@@ -170,6 +221,8 @@ export function AuditPagesTable({
   toolbar?: ReactNode;
   /** Off inside the Pages tab, whose trigger already names the list. */
   showTitle?: boolean;
+  /** Given while Group by template is on (SA-007): rows grouped under their template. */
+  templates?: AuditTemplate[] | null;
 }) {
   const t = useTranslations('audit');
   const router = useRouter();
@@ -226,101 +279,124 @@ export function AuditPagesTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {pages.map((page, i) => {
-              const label = pageLabel(page, primaryHost);
-              const historyId = `${idPrefix}-history-${i}`;
-              const expanded = open.has(page.key);
-              return (
-                <Fragment key={page.key}>
-                  <TableRow
-                    className="cursor-pointer"
-                    data-state={selected.has(page.key) ? 'selected' : undefined}
-                    onClick={() => router.push(`/dashboard/audit/${page.auditId}`)}
-                  >
-                    <TableCell className="w-8 pr-0">
-                      <Checkbox
-                        aria-label={t('pages.select', { page: label })}
-                        disabled={page.status === 'running'}
-                        checked={selected.has(page.key)}
-                        onClick={(e) => e.stopPropagation()}
-                        onCheckedChange={(on) => onSelect([page.key], on === true)}
-                      />
-                    </TableCell>
-                    <TableCell className="w-9 pr-0">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        aria-expanded={expanded}
-                        aria-controls={historyId}
-                        aria-label={t(expanded ? 'pages.hideHistory' : 'pages.showHistory', {
-                          page: label,
-                        })}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggle(page.key);
-                        }}
-                      >
-                        <ChevronRight
-                          className={cn('h-4 w-4 transition-transform', expanded && 'rotate-90')}
-                        />
-                      </Button>
-                    </TableCell>
-                    <TableCell className="max-w-0">
-                      <Link
-                        href={`/dashboard/audit/${page.auditId}`}
-                        onClick={(e) => e.stopPropagation()}
-                        title={page.url}
-                        className="block truncate font-medium hover:underline"
-                      >
-                        {label}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={cn('w-7 font-semibold tabular-nums', scoreColor(page.score))}
-                        >
-                          {pct(page.score) ?? '—'}
-                        </span>
-                        <ScoreSparkline
-                          points={page.trend}
-                          label={t('pages.trend', {
-                            scores: page.trend.map((s) => pct(s)).join(', '),
-                          })}
-                        />
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {page.issues === null ? '—' : formatNumber(page.issues)}
-                    </TableCell>
-                    <TableCell>
-                      <StatusPill status={page.status} />
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatDate(page.lastAuditedAt)}
+            {(templates
+              ? groupPagesByTemplate(pages, templates)
+              : [{ template: undefined, pages }]
+            ).map((group) => (
+              <Fragment
+                key={group.template === undefined ? 'all' : (group.template?.template ?? 'other')}
+              >
+                {group.template !== undefined && (
+                  <TableRow className="bg-muted/40 hover:bg-muted/40">
+                    <TableCell colSpan={7} className="py-2 text-xs whitespace-normal">
+                      <TemplateHeader template={group.template} />
                     </TableCell>
                   </TableRow>
-                  {expanded && (
-                    <TableRow id={historyId} className="hover:bg-transparent">
-                      <TableCell colSpan={2} />
-                      <TableCell colSpan={5} className="pt-0 whitespace-normal">
-                        <ul className="divide-y rounded-md border">
-                          {page.runs.map((run) => (
-                            <HistoryRun key={run.id} run={run} onDelete={onDeleteRun} />
-                          ))}
-                        </ul>
-                        {page.runCount > page.runs.length && (
-                          <p className="mt-1.5 text-xs text-muted-foreground">
-                            {t('pages.moreRuns', { count: page.runCount - page.runs.length })}
-                          </p>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </Fragment>
-              );
-            })}
+                )}
+                {group.pages.map((page) => {
+                  const i = pages.indexOf(page);
+                  const label = pageLabel(page, primaryHost);
+                  const historyId = `${idPrefix}-history-${i}`;
+                  const expanded = open.has(page.key);
+                  return (
+                    <Fragment key={page.key}>
+                      <TableRow
+                        className="cursor-pointer"
+                        data-state={selected.has(page.key) ? 'selected' : undefined}
+                        onClick={() => router.push(`/dashboard/audit/${page.auditId}`)}
+                      >
+                        <TableCell className="w-8 pr-0">
+                          <Checkbox
+                            aria-label={t('pages.select', { page: label })}
+                            disabled={page.status === 'running'}
+                            checked={selected.has(page.key)}
+                            onClick={(e) => e.stopPropagation()}
+                            onCheckedChange={(on) => onSelect([page.key], on === true)}
+                          />
+                        </TableCell>
+                        <TableCell className="w-9 pr-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            aria-expanded={expanded}
+                            aria-controls={historyId}
+                            aria-label={t(expanded ? 'pages.hideHistory' : 'pages.showHistory', {
+                              page: label,
+                            })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggle(page.key);
+                            }}
+                          >
+                            <ChevronRight
+                              className={cn(
+                                'h-4 w-4 transition-transform',
+                                expanded && 'rotate-90',
+                              )}
+                            />
+                          </Button>
+                        </TableCell>
+                        <TableCell className="max-w-0">
+                          <Link
+                            href={`/dashboard/audit/${page.auditId}`}
+                            onClick={(e) => e.stopPropagation()}
+                            title={page.url}
+                            className="block truncate font-medium hover:underline"
+                          >
+                            {label}
+                          </Link>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={cn(
+                                'w-7 font-semibold tabular-nums',
+                                scoreColor(page.score),
+                              )}
+                            >
+                              {pct(page.score) ?? '—'}
+                            </span>
+                            <ScoreSparkline
+                              points={page.trend}
+                              label={t('pages.trend', {
+                                scores: page.trend.map((s) => pct(s)).join(', '),
+                              })}
+                            />
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {page.issues === null ? '—' : formatNumber(page.issues)}
+                        </TableCell>
+                        <TableCell>
+                          <StatusPill status={page.status} />
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {formatDate(page.lastAuditedAt)}
+                        </TableCell>
+                      </TableRow>
+                      {expanded && (
+                        <TableRow id={historyId} className="hover:bg-transparent">
+                          <TableCell colSpan={2} />
+                          <TableCell colSpan={5} className="pt-0 whitespace-normal">
+                            <ul className="divide-y rounded-md border">
+                              {page.runs.map((run) => (
+                                <HistoryRun key={run.id} run={run} onDelete={onDeleteRun} />
+                              ))}
+                            </ul>
+                            {page.runCount > page.runs.length && (
+                              <p className="mt-1.5 text-xs text-muted-foreground">
+                                {t('pages.moreRuns', { count: page.runCount - page.runs.length })}
+                              </p>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </Fragment>
+            ))}
           </TableBody>
         </Table>
         {pages.length < total && (

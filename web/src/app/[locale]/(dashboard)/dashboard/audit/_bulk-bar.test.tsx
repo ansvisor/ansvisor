@@ -18,12 +18,13 @@ const onReaudit = vi.fn();
 const onExport = vi.fn();
 const onClear = vi.fn();
 
-function render(count: number, quota: AuditQuota | null, starting = false) {
+function render(count: number, quota: AuditQuota | null, starting = false, audits?: number) {
   act(() => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <AuditBulkBar
           count={count}
+          audits={audits}
           quota={quota}
           starting={starting}
           onAudit={onReaudit}
@@ -101,6 +102,15 @@ describe('AuditBulkBar', () => {
     expect(container.querySelector('[role=toolbar] p')?.textContent).toBe(
       "You've used your 375 audits. 25 auto audits are still scheduled. Turn off auto-audit to use them now, or upgrade.",
     );
+    expect(button('Re-audit').disabled).toBe(true);
+  });
+
+  it("counts a template's pages, not the rows, against what's left (SA-007)", () => {
+    render(1, { used: 0, limit: 100, remaining: 20 }, false, 26);
+    expect(usage()?.textContent).toBe('Uses 26 of your 20 audits · select up to 20');
+    expect(button('Re-audit').disabled).toBe(true);
+    // Nothing to audit (a template audited in full): the button stays off.
+    render(1, { used: 0, limit: 100, remaining: 20 }, false, 0);
     expect(button('Re-audit').disabled).toBe(true);
   });
 

@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Pin,
   EyeOff,
+  Layers,
   Settings,
 } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
@@ -33,8 +34,12 @@ import {
   getAuditQuota,
   getAuditTrend,
   getLatestAutoRun,
+  getAuditSettings,
+  getAuditTemplates,
+  saveAuditSettings,
   deleteAudit,
   type AutoAuditRun,
+  type AuditTemplate,
   type AuditedPage,
   type AuditOverview,
   type AuditOpportunities,
@@ -47,7 +52,7 @@ import { ScoreTrendChart } from './_charts';
 import { AuditPagesTable } from './_pages-table';
 import { AuditBulkBar, ExportMenu } from './_bulk-bar';
 import { AuditOverviewCards } from './_overview-cards';
-import { OpportunitiesTable } from './_opportunities-table';
+import { OpportunitiesTable, opportunityAuditUrls } from './_opportunities-table';
 import { AuditSettingsDialog } from './_settings-dialog';
 import { AutoRunNotice } from './_auto-run-notice';
 import { AuditSummaryStrip } from './_summary-strip';
@@ -87,6 +92,9 @@ async function readLatestRun(brandId: string): Promise<AutoAuditRun | null> {
     return null;
   }
 }
+
+/** Pages one bulk request may audit (the server's BULK_AUDIT_MAX). */
+const BULK_REQUEST_MAX = 50;
 
 type ListTab = 'opportunities' | 'pages';
 
@@ -142,6 +150,9 @@ export default function SiteAuditPage() {
   const [startingBulk, setStartingBulk] = useState(false);
   const [latestRun, setLatestRun] = useState<AutoAuditRun | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Pages › Group by template (SA-007): the templates, read while it's on.
+  const [groupByTemplate, setGroupByTemplate] = useState(false);
+  const [templates, setTemplates] = useState<AuditTemplate[] | null>(null);
   const { exporting, exportAll, exportPages } = usePagesExport(activeBrandId);
   // Capture "now" once (impure call belongs in a lazy initializer, not render).
   const [nowMs] = useState(() => Date.now());
@@ -200,6 +211,26 @@ export default function SiteAuditPage() {
       cancelled = true;
     };
   }, [activeBrandId, refreshKey, t]);
+
+  useEffect(() => {
+    if (!groupByTemplate || !activeBrandId) return;
+    let cancelled = false;
+    getAuditTemplates(activeBrandId)
+      .then((next) => {
+        if (!cancelled) setTemplates(next);
+      })
+      .catch((err) => {
+        console.error('Failed to load the page templates:', err);
+        if (!cancelled) {
+          toast.error(t('pages.templatesFailed'));
+          setGroupByTemplate(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+      setTemplates(null);
+    };
+  }, [groupByTemplate, activeBrandId, refreshKey, t]);
 
   const quotaExhausted = quota !== null && quota.limit !== -1 && quota.remaining <= 0;
 
@@ -371,14 +402,24 @@ export default function SiteAuditPage() {
 
   const selectedOpps = (opps?.opportunities ?? []).filter((o) => oppSelected.has(o.key));
 
+  const oppAuditUrls = opportunityAuditUrls(selectedOpps);
+  // Pin and Exclude by page; a template is excluded by its pattern (SA-007).
+  const selectedOppUrls = selectedOpps.flatMap((o) => (!o.template && o.url ? [o.url] : []));
+  const selectedTemplates = selectedOpps.filter((o) => o.template).map((o) => o.path);
+
   const handleAuditOpps = async () => {
-    if (!activeBrandId || selectedOpps.length === 0) return;
+    if (!activeBrandId || oppAuditUrls.length === 0) return;
     setStartingBulk(true);
     try {
-      const { started } = await runAuditsBulk(
-        activeBrandId,
-        selectedOpps.map((o) => o.url),
-      );
+      // A template's pages can pass one request's limit: a request per 50.
+      let started = 0;
+      for (let i = 0; i < oppAuditUrls.length; i += BULK_REQUEST_MAX) {
+        const result = await runAuditsBulk(
+          activeBrandId,
+          oppAuditUrls.slice(i, i + BULK_REQUEST_MAX),
+        );
+        started += result.started;
+      }
       toast.success(t('bulk.started', { count: started }));
       setOppSelected(new Set());
       await reloadInPlace(activeBrandId);
@@ -412,16 +453,52 @@ export default function SiteAuditPage() {
     }
   };
 
-  const allPinned = selectedOpps.length > 0 && selectedOpps.every((o) => o.pinned);
+  const selectedPagesOpps = selectedOpps.filter((o) => !o.template);
+  const allPinned = selectedPagesOpps.length > 0 && selectedPagesOpps.every((o) => o.pinned);
   const handlePin = () => {
-    const urls = selectedOpps.map((o) => o.url);
+    const urls = selectedOppUrls;
     return allPinned
       ? savePrefs(urls, null, t('opportunities.unpinnedToast', { count: urls.length }))
       : savePrefs(urls, 'pinned', t('opportunities.pinnedToast', { count: urls.length }));
   };
-  const handleExclude = () => {
-    const urls = selectedOpps.map((o) => o.url);
-    return savePrefs(
+
+  // Excluding a template adds its pattern ("/blog/*") to the brand's exclude
+  // patterns, so its pages leave the inbox too; Undo puts the patterns back.
+  const savePatterns = async (patterns: string[], message: string, undo?: () => void) => {
+    if (!activeBrandId) return;
+    try {
+      await saveAuditSettings(activeBrandId, { excludePatterns: patterns });
+      setOppSelected(new Set());
+      toast.success(
+        message,
+        undo ? { action: { label: t('opportunities.undo'), onClick: undo } } : undefined,
+      );
+      await reloadInPlace(activeBrandId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('opportunities.prefsFailed'));
+    }
+  };
+  const excludeTemplates = async (templates: string[]) => {
+    if (!activeBrandId) return;
+    let before: string[];
+    try {
+      before = (await getAuditSettings(activeBrandId)).excludePatterns;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('opportunities.prefsFailed'));
+      return;
+    }
+    await savePatterns(
+      [...new Set([...before, ...templates])],
+      t('opportunities.templateExcludedToast', { count: templates.length, template: templates[0] }),
+      () => void savePatterns(before, t('opportunities.templateRestoredToast')),
+    );
+  };
+  const handleExclude = async () => {
+    const urls = selectedOppUrls;
+    const templates = selectedTemplates;
+    if (templates.length > 0) await excludeTemplates(templates);
+    if (urls.length === 0) return;
+    await savePrefs(
       urls,
       'excluded',
       t('opportunities.excludedToast', { count: urls.length }),
@@ -704,6 +781,7 @@ export default function SiteAuditPage() {
                   selectedOpps.length > 0 && (
                     <AuditBulkBar
                       count={selectedOpps.length}
+                      audits={oppAuditUrls.length}
                       quota={quota}
                       starting={startingBulk}
                       auditLabel={t('opportunities.auditSelected')}
@@ -714,6 +792,7 @@ export default function SiteAuditPage() {
                         variant="outline"
                         size="sm"
                         className="h-7 gap-1.5 text-xs"
+                        disabled={selectedOppUrls.length === 0}
                         onClick={() => void handlePin()}
                       >
                         <Pin className="h-3 w-3" />
@@ -752,7 +831,22 @@ export default function SiteAuditPage() {
                 onDeleteRun={handleDelete}
                 selected={selected}
                 onSelect={handleSelect}
-                headerAction={<ExportMenu busy={exporting} onExport={exportAll} />}
+                templates={groupByTemplate ? templates : null}
+                headerAction={
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant={groupByTemplate ? 'secondary' : 'ghost'}
+                      size="sm"
+                      className="h-8 gap-1.5 text-xs"
+                      aria-pressed={groupByTemplate}
+                      onClick={() => setGroupByTemplate((on) => !on)}
+                    >
+                      <Layers className="h-3.5 w-3.5" />
+                      {t('pages.groupByTemplate')}
+                    </Button>
+                    <ExportMenu busy={exporting} onExport={exportAll} />
+                  </div>
+                }
                 toolbar={
                   selectedPages.length > 0 && (
                     <AuditBulkBar
