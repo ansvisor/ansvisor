@@ -4085,7 +4085,12 @@ export type Database = {
         Returns: Json
       }
       override_mention_sentiment: {
-        Args: { p_note?: string; p_result_id: string; p_sentiment: string }
+        Args: {
+          p_note?: string
+          p_result_id: string
+          p_sentiment: string
+          p_user_id?: string
+        }
         Returns: Json
       }
       normalize_page_path: { Args: { p_url: string }; Returns: string }
