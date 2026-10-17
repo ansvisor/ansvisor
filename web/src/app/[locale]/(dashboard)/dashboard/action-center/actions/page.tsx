@@ -30,7 +30,12 @@ import {
   type ActionSort,
   type ActionStatus,
 } from '@/lib/action-center/registry';
-import { actionContextTags, actionTexts, memberLabel } from '@/lib/action-center/display';
+import {
+  actionContextTags,
+  actionTexts,
+  assigneeLabel,
+  memberLabel,
+} from '@/lib/action-center/display';
 import {
   PRIORITY_LEVELS,
   comparePriority,
@@ -274,7 +279,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
         title: actionTexts(action, tTexts).title,
         category: tCategories(action.category),
         status: t(`status.${action.status}`),
-        assignee: action.assignee?.fullName ?? '',
+        assignee: action.assignee ? (assigneeLabel(action.assignee) ?? '') : '',
         dueDate: action.dueDate ?? '',
         tasksDone: action.taskCompleted,
         tasksTotal: action.taskTotal,
