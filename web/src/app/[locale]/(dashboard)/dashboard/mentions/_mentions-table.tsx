@@ -1,0 +1,147 @@
+'use client';
+
+import { Fragment } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { mentionPlatformLabel } from '@/lib/mentions-headline';
+import type { MentionGroup, MentionRow } from '@/lib/mentions-list';
+import { formatRegionDisplay } from '@/lib/region';
+import { Highlighted, SentimentPill, type MentionNames } from './_mention-parts';
+
+/**
+ * The Mentions table (MS-07), as in the mockup: per answer naming the brand,
+ * the prompt (pinned while the table scrolls sideways, under a pinned
+ * header), platform, country, the passage around the mention with the names
+ * marked, sentiment, position, the competitors named beside you, topic and
+ * date. With grouping on, each group opens with its name and size. A row
+ * opens the answer.
+ */
+export function MentionsTable({
+  rows,
+  names,
+  group,
+  showCountry,
+  onOpen,
+}: {
+  rows: MentionRow[];
+  names: MentionNames;
+  group: MentionGroup | '';
+  showCountry: boolean;
+  onOpen: (row: MentionRow) => void;
+}) {
+  const t = useTranslations('mentions.table');
+  const locale = useLocale();
+  const columns = showCountry ? 9 : 8;
+  const day = (iso: string) =>
+    new Date(iso).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+
+  return (
+    <Table stickyHeader stickyFirstColumn aria-label={t('tableLabel')}>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="min-w-[220px] pl-4">{t('columns.prompt')}</TableHead>
+          <TableHead>{t('columns.platform')}</TableHead>
+          {showCountry && <TableHead>{t('columns.country')}</TableHead>}
+          <TableHead className="min-w-[320px]">{t('columns.context')}</TableHead>
+          <TableHead>{t('columns.sentiment')}</TableHead>
+          <TableHead>{t('columns.position')}</TableHead>
+          <TableHead className="min-w-[140px]">{t('columns.coMentioned')}</TableHead>
+          <TableHead>{t('columns.topic')}</TableHead>
+          <TableHead className="pr-4">{t('columns.date')}</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((row, i) => {
+          const platform = mentionPlatformLabel(row.platform);
+          const opensGroup = group !== '' && row.groupKey !== rows[i - 1]?.groupKey;
+          return (
+            <Fragment key={row.id}>
+              {opensGroup && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell
+                    colSpan={columns}
+                    className="bg-muted/60 py-1.5 pl-4 text-xs font-medium text-muted-foreground"
+                  >
+                    {t('groupRow', {
+                      label: group === 'prompt' ? row.promptText : platform,
+                      count: row.groupCount ?? 0,
+                    })}
+                  </TableCell>
+                </TableRow>
+              )}
+              <TableRow
+                tabIndex={0}
+                aria-label={t('openRow', { prompt: row.promptText, platform })}
+                className="cursor-pointer align-top hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none"
+                onClick={() => onOpen(row)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onOpen(row);
+                  }
+                }}
+              >
+                <TableCell className="max-w-[260px] pl-4 whitespace-normal">
+                  <span className="line-clamp-2 text-sm font-medium" title={row.promptText}>
+                    {row.promptText}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm">
+                    <AIProviderAvatar
+                      plain
+                      provider={resolveAIProvider(row.platform, row.platform)}
+                      className="h-4 w-4"
+                    />
+                    {platform}
+                  </span>
+                </TableCell>
+                {showCountry && (
+                  <TableCell className="whitespace-nowrap text-sm">
+                    {row.region ? formatRegionDisplay(row.region) : '—'}
+                  </TableCell>
+                )}
+                <TableCell className="max-w-[420px] whitespace-normal">
+                  <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                    <Highlighted text={row.excerpt} names={names} />
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <SentimentPill sentiment={row.sentiment} />
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-sm tabular-nums">
+                  {row.position === null
+                    ? '—'
+                    : row.brandsNamed
+                      ? t('positionOf', { position: row.position, count: row.brandsNamed })
+                      : t('positionOnly', { position: row.position })}
+                </TableCell>
+                <TableCell className="max-w-[200px] whitespace-normal">
+                  <span className="line-clamp-2 text-xs text-muted-foreground">
+                    {row.coMentioned.length > 0
+                      ? row.coMentioned.map((c) => c.name).join(', ')
+                      : '—'}
+                  </span>
+                </TableCell>
+                <TableCell className="max-w-[180px] whitespace-normal">
+                  <span className="line-clamp-2 text-xs">{row.topicName ?? '—'}</span>
+                </TableCell>
+                <TableCell className="whitespace-nowrap pr-4 text-xs text-muted-foreground">
+                  {day(row.createdAt)}
+                </TableCell>
+              </TableRow>
+            </Fragment>
+          );
+        })}
+      </TableBody>
+    </Table>
+  );
+}

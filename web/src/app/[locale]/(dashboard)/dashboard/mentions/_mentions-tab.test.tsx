@@ -1,0 +1,233 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { NextIntlClientProvider } from 'next-intl';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import messages from '../../../../../../messages/en.json';
+import { DEFAULT_MENTIONS_FILTERS } from '@/lib/mentions-filters';
+import type { MentionRow, MentionsList } from '@/lib/mentions-list';
+import type { Competitor } from '@/types';
+import { MentionsListTab } from './_mentions-tab';
+
+const listMentions = vi.fn();
+const getMentionResponse = vi.fn();
+vi.mock('@/lib/actions/mentions', () => ({
+  listMentions: (...args: unknown[]) => listMentions(...args),
+  getMentionResponse: (...args: unknown[]) => getMentionResponse(...args),
+}));
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
+(
+  globalThis as typeof globalThis & {
+    IS_REACT_ACT_ENVIRONMENT: boolean;
+  }
+).IS_REACT_ACT_ENVIRONMENT = true;
+
+const row = (over: Partial<MentionRow>): MentionRow => ({
+  id: 'r1',
+  createdAt: '2026-10-16T11:28:06Z',
+  promptId: 'p1',
+  promptText: 'Best espresso beans?',
+  topicId: 't1',
+  topicName: 'Beans',
+  platform: 'gemini-web',
+  model: 'gemini-2.5-flash',
+  region: 'DE',
+  sentiment: 'negative',
+  occurrences: 1,
+  position: 2,
+  brandsNamed: 3,
+  coMentioned: [{ competitorId: 'c1', name: 'Crema Club', position: 1 }],
+  excerpt: 'Crema Club is first; Acme Coffee is pricier.',
+  groupKey: null,
+  groupCount: null,
+  ...over,
+});
+
+const list = (over: Partial<MentionsList> = {}): MentionsList => ({
+  total: 2,
+  prompts: 1,
+  rows: [row({}), row({ id: 'r2', platform: 'claude', sentiment: 'positive', coMentioned: [] })],
+  brandTerms: ['Acme Coffee', 'acme.com'],
+  ...over,
+});
+
+const competitors: Competitor[] = [
+  { id: 'c1', brandId: 'b1', name: 'Crema Club', domain: 'cremaclub.com' },
+];
+
+let container: HTMLDivElement;
+let root: Root;
+
+function render(node: React.ReactNode) {
+  act(() => {
+    root.render(
+      <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+        {node}
+      </NextIntlClientProvider>,
+    );
+  });
+}
+
+async function settle() {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300);
+  });
+}
+
+const tab = (props: Partial<React.ComponentProps<typeof MentionsListTab>> = {}) => (
+  <MentionsListTab
+    brandId="b1"
+    filters={DEFAULT_MENTIONS_FILTERS}
+    competitors={competitors}
+    brandDomains={['acme.com']}
+    showCountry={false}
+    {...props}
+  />
+);
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  window.history.replaceState(null, '', '/dashboard/mentions?tab=mentions');
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+  listMentions.mockReset();
+  getMentionResponse.mockReset();
+  vi.useRealTimers();
+});
+
+describe('MentionsListTab', () => {
+  it('reads a page with the URL controls and lists the mentions with the names marked', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/dashboard/mentions?tab=mentions&sentiment=negative&with=c1',
+    );
+    listMentions.mockResolvedValue(list());
+    render(tab());
+    await settle();
+
+    expect(listMentions).toHaveBeenCalledTimes(1);
+    const [brandId, , table, page] = listMentions.mock.calls[0];
+    expect([brandId, table, page]).toEqual([
+      'b1',
+      { sentiment: 'negative', competitor: 'c1', sort: 'newest', group: '' },
+      0,
+    ]);
+    expect(container.textContent).toContain('2 mentions · 1 prompt');
+
+    const rows = container.querySelectorAll('tbody tr[tabindex]');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain('Best espresso beans?');
+    expect(rows[0].textContent).toContain('Negative');
+    expect(rows[0].textContent).toContain('#2 of 3');
+    const marks = [...rows[0].querySelectorAll('mark')].map((m) => [m.textContent, m.className]);
+    expect(marks[0][0]).toBe('Crema Club');
+    expect(marks[0][1]).toContain('bg-muted');
+    expect(marks[1][0]).toBe('Acme Coffee');
+    expect(marks[1][1]).toContain('bg-violet-100');
+    expect(rows[1].textContent).toContain('—');
+  });
+
+  it('heads each group with its name and size', async () => {
+    window.history.replaceState(null, '', '/dashboard/mentions?tab=mentions&group=platform');
+    listMentions.mockResolvedValue(
+      list({
+        rows: [
+          row({ id: 'a', platform: 'gemini-web', groupKey: 'gemini-web', groupCount: 12 }),
+          row({ id: 'b', platform: 'gemini-web', groupKey: 'gemini-web', groupCount: 12 }),
+          row({ id: 'c', platform: 'claude', groupKey: 'claude', groupCount: 1 }),
+        ],
+      }),
+    );
+    render(tab());
+    await settle();
+    expect(
+      [...container.querySelectorAll('tbody td[colspan]')].map((td) => td.textContent),
+    ).toEqual(['Gemini · 12 mentions', 'Claude · 1 mention']);
+  });
+
+  it('opens the answer: header, excerpt, the full response marked, and typed citations', async () => {
+    listMentions.mockResolvedValue(list());
+    getMentionResponse.mockResolvedValue({
+      response:
+        '## Picks\n\n- **Acme Coffee** for [beans](https://acme.com/beans)\n- Crema Club for price',
+      citations: [
+        { url: 'https://www.acme.com/beans', title: 'Our beans', startIndex: 0, endIndex: 0 },
+        { url: 'https://cremaclub.com/x', title: '', startIndex: 0, endIndex: 0 },
+        { url: 'https://reddit.com/r/coffee', title: 'Thread', startIndex: 0, endIndex: 0 },
+      ],
+    });
+    render(tab());
+    await settle();
+
+    const first = container.querySelector('tbody tr[tabindex]') as HTMLElement;
+    await act(async () => {
+      first.click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(getMentionResponse).toHaveBeenCalledWith('b1', 'r1');
+
+    const drawer = document.body.querySelector('[role="dialog"]') as HTMLElement;
+    expect(drawer).not.toBeNull();
+    const text = drawer.textContent ?? '';
+    expect(text).toContain('Gemini · gemini-2.5-flash');
+    expect(text).toContain('Best espresso beans?');
+    expect(text).toContain('Position #2 of 3');
+    expect(text).toContain('Topic: Beans');
+    expect(drawer.querySelector('a[href="/dashboard/prompts/p1"]')).not.toBeNull();
+    expect(text).toContain('Crema Club#1');
+
+    // The answer's names are marked inside the rendered markdown, bold and list items included.
+    const listItems = [...drawer.querySelectorAll('li')].filter((li) => li.closest('.prose'));
+    expect(listItems[0].querySelector('strong mark')?.textContent).toBe('Acme Coffee');
+    expect(listItems[1].querySelector('mark')?.textContent).toBe('Crema Club');
+
+    expect(text).toContain('Citations in this answer (3)');
+    const cited = [...drawer.querySelectorAll('ul.divide-y li')].map((li) => li.textContent);
+    expect(cited[0]).toContain('You');
+    expect(cited[1]).toContain('cremaclub.com');
+    expect(cited[1]).toContain('Competitor');
+    expect(cited[2]).toContain('Forum');
+  });
+
+  it('keeps its page when a read fails, and says so', async () => {
+    listMentions.mockResolvedValueOnce(list({ total: 250 }));
+    render(tab());
+    await settle();
+    const next = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Next');
+    listMentions.mockRejectedValueOnce(new Error('timeout'));
+    await act(async () => {
+      next?.click();
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(listMentions).toHaveBeenCalledTimes(2);
+    expect(listMentions.mock.calls[1][3]).toBe(1);
+    expect(container.textContent).toContain("Couldn't load the mentions.");
+    // No silent jump back to the first page.
+    await settle();
+    expect(listMentions).toHaveBeenCalledTimes(2);
+  });
+
+  it('says when nothing matches, and asks for dates on an empty custom range', async () => {
+    listMentions.mockResolvedValue(list({ total: 0, prompts: 0, rows: [] }));
+    render(tab());
+    await settle();
+    expect(container.textContent).toContain('No mentions match these filters.');
+
+    render(tab({ filters: { ...DEFAULT_MENTIONS_FILTERS, range: 'custom' } }));
+    await settle();
+    expect(container.textContent).toContain('Choose a start or end date to see the mentions.');
+  });
+});

@@ -3221,6 +3221,24 @@ export type Database = {
         }
         Returns: Json
       }
+      mentions_list: {
+        Args: {
+          p_brand_id: string
+          p_competitor_id?: string
+          p_date_from: string
+          p_date_to?: string
+          p_group?: string
+          p_limit?: number
+          p_offset?: number
+          p_platform?: string
+          p_region?: string
+          p_search?: string
+          p_sentiment?: string
+          p_sort?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
       normalize_page_path: { Args: { p_url: string }; Returns: string }
       import_prompts: {
         Args: {

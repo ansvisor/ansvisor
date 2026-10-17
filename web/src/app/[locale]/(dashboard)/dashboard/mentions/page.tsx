@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getCompetitors } from '@/lib/actions/competitor';
 import { getTopics } from '@/lib/actions/topic';
 import { getBrandFilterOptions } from '@/lib/actions/tracking';
 import {
@@ -17,8 +18,9 @@ import {
 } from '@/lib/mentions-filters';
 import { writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
-import type { Topic } from '@/types';
+import type { Competitor, Topic } from '@/types';
 import { MentionsFilterBar } from './_filter-bar';
+import { MentionsListTab } from './_mentions-tab';
 import { MentionsOverviewTab } from './_overview';
 
 /**
@@ -32,8 +34,11 @@ import { MentionsOverviewTab } from './_overview';
 export default function MentionsPage() {
   const t = useTranslations('mentions');
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
-  const brandName = useBrandStore(
-    (s) => s.brands.find((b) => b.id === s.activeBrandId)?.name ?? '',
+  const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
+  const brandName = activeBrand?.name ?? '';
+  const brandDomains = useMemo(
+    () => (activeBrand?.domains ?? []).map((d) => d.domain).filter(Boolean),
+    [activeBrand],
   );
 
   const [tab, setTab] = useState<MentionsTab>(DEFAULT_MENTIONS_TAB);
@@ -54,6 +59,7 @@ export default function MentionsPage() {
 
   const [regions, setRegions] = useState<string[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [competitors, setCompetitors] = useState<Competitor[]>([]);
   useEffect(() => {
     if (!activeBrandId) return;
     let cancelled = false;
@@ -65,6 +71,11 @@ export default function MentionsPage() {
     getTopics(activeBrandId)
       .then((rows) => {
         if (!cancelled) setTopics(rows);
+      })
+      .catch(() => {});
+    getCompetitors(activeBrandId)
+      .then((rows) => {
+        if (!cancelled) setCompetitors(rows);
       })
       .catch(() => {});
     return () => {
@@ -111,15 +122,24 @@ export default function MentionsPage() {
             <MentionsOverviewTab brandId={activeBrandId} brand={brandName} filters={filters} />
           )}
         </TabsContent>
-        {MENTIONS_TABS.filter((id) => id !== 'overview').map((id) => (
-          <TabsContent key={id} value={id} className="mt-4">
-            <Card>
-              <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                {t('comingSoon')}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        ))}
+        <TabsContent value="mentions" className="mt-4">
+          {urlRead && (
+            <MentionsListTab
+              brandId={activeBrandId}
+              filters={filters}
+              competitors={competitors}
+              brandDomains={brandDomains}
+              showCountry={regions.length > 1}
+            />
+          )}
+        </TabsContent>
+        <TabsContent value="perception" className="mt-4">
+          <Card>
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              {t('comingSoon')}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );

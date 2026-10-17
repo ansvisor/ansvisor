@@ -22,7 +22,7 @@ export interface MentionsFilters {
   platform: string;
   region: string;
   topic: string;
-  /** Free text over prompts, brands and phrases. */
+  /** Free text over the prompts' text, the same on every tab. */
   q: string;
 }
 
