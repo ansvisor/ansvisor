@@ -102,6 +102,7 @@ import {
   positionCellKind,
   type PlatformDot,
   type PlatformDotState,
+  type PromptPerformance,
   type PromptPositionCell,
 } from '@/lib/prompt-position-summary';
 import { mentionRateLabel } from '@/lib/prompt-improve';
@@ -2388,7 +2389,7 @@ export default function PromptsPage() {
 
 /**
  * Average position with its trend against the previous period; hovering it
- * lists each platform, which is what the "Late or missing" filter reads. A
+ * lists each platform, the detail behind the Performance filter. A
  * prompt that was tracked but never named reads "Not mentioned", not the "—"
  * of a prompt with no answers.
  */
@@ -2568,6 +2569,13 @@ const STATUS_BADGE: Record<PromptStatus, string> = {
 
 const STATUS_FILTERS: PromptStatusFilter[] = ['tracked', 'active', 'new', 'paused', 'all'];
 
+type PerformanceFilter = 'all' | PromptPerformance;
+
+const PERFORMANCE_FILTERS: PerformanceFilter[] = ['all', 'best', 'good', 'late', 'missing'];
+
+/** Late and Missing order the table furthest behind first (see compareLateness). */
+const isBehind = (filter: PerformanceFilter) => filter === 'late' || filter === 'missing';
+
 const WORK_FILTER_LABELS: Record<string, string> = {
   all: 'All work',
   todo: 'To do',
@@ -2621,7 +2629,7 @@ function AllPromptsTab({
   const tUsage = useTranslations('prompts.usage');
   const format = useFormatter();
   const tDelete = useTranslations('prompts.bulkDelete');
-  const tLate = useTranslations('prompts.lateFilter');
+  const tPerformance = useTranslations('prompts.performance');
   const tStatus = useTranslations('prompts.status');
   const now = useNow({ updateInterval: 60_000 }).getTime();
   // Rows deleted from the row menu or the bulk bar, hidden at once and
@@ -2984,8 +2992,8 @@ function AllPromptsTab({
   );
   const [search, setSearch] = useState('');
   const [workFilter, setWorkFilter] = useState<'all' | 'none' | PromptWorkStatus>('all');
-  // Quick filter: prompts late or missing on at least one engine.
-  const [lateOnly, setLateOnly] = useState(false);
+  // Where the brand stands in each prompt's answers: Best, Good, Late, Missing.
+  const [performanceFilter, setPerformanceFilter] = useState<PerformanceFilter>('all');
   // Optimistic per-row status overrides — the prompts prop belongs to the
   // parent's load cycle; a full reload for a one-column change would flash
   // the whole table.
@@ -3066,10 +3074,9 @@ function AllPromptsTab({
   const rawSort = searchParams.get('sort');
   const activeSort: AllPromptsSortKey = isAllPromptsSortKey(rawSort) ? rawSort : 'visibility';
   const dir: SortDir = searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
-  // With "Late or missing" on and no column picked, the furthest behind come
-  // first: nearly every tracked prompt is late or missing somewhere, so the
-  // filter alone left the first page as it was (see compareLateness).
-  const latenessOrder = lateOnly && !isAllPromptsSortKey(rawSort);
+  // With Late or Missing picked and no column, the furthest behind come first
+  // (see compareLateness).
+  const latenessOrder = isBehind(performanceFilter) && !isAllPromptsSortKey(rawSort);
 
   // Click a header to sort: a new column starts at desc ("show me the extremes");
   // re-clicking the active column toggles desc⇄asc. Persisted to the URL so the
@@ -3080,7 +3087,7 @@ function AllPromptsTab({
     (key: AllPromptsSortKey) => {
       const params = new URLSearchParams(Array.from(searchParams.entries()));
       // Position is best when lowest, so it starts at asc (#1 first). Under the
-      // "Late or missing" order no column is active, so any header starts afresh.
+      // furthest-behind order no column is active, so any header starts afresh.
       const nextDir: SortDir =
         activeSort === key && !latenessOrder
           ? dir === 'desc'
@@ -3097,15 +3104,18 @@ function AllPromptsTab({
     [searchParams, activeSort, dir, latenessOrder],
   );
 
-  // Turning "Late or missing" on sets a picked column aside, so the furthest
-  // behind lead; turning it off brings that column back, unless a header was
-  // clicked in between, which then stays.
+  // Picking Late or Missing sets a picked column aside, so the furthest behind
+  // lead; leaving them brings that column back, unless a header was clicked
+  // in between, which then stays.
   const setAsideSort = useRef<{ sort: string; dir: string | null } | null>(null);
-  // Read and flipped at click time, so a quick second click sees the first.
-  const lateOnlyNow = useRef(lateOnly);
-  const toggleLateOnly = useCallback(() => {
-    const turningOn = !lateOnlyNow.current;
-    lateOnlyNow.current = turningOn;
+  // Read and set at pick time, so a quick second pick sees the first.
+  const performanceNow = useRef(performanceFilter);
+  const changePerformance = useCallback((next: PerformanceFilter) => {
+    const wasBehind = isBehind(performanceNow.current);
+    performanceNow.current = next;
+    setPerformanceFilter(next);
+    if (wasBehind === isBehind(next)) return;
+    const turningOn = isBehind(next);
     const params = new URLSearchParams(window.location.search);
     const sort = params.get('sort');
     if (turningOn && sort) {
@@ -3119,11 +3129,10 @@ function AllPromptsTab({
       window.history.replaceState(null, '', `?${params.toString()}`);
     }
     if (!turningOn) setAsideSort.current = null;
-    setLateOnly(turningOn);
   }, []);
 
-  // Search, prompt status and work status first: the "Late or missing" count
-  // is out of these.
+  // Search, prompt status and work status first: the Performance counts are
+  // out of these.
   const searched = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = [...prompts];
@@ -3141,13 +3150,37 @@ function AllPromptsTab({
     return list;
   }, [prompts, search, statusFilter, workFilter, statusOf, now]);
 
-  const lateCount = useMemo(
-    () => searched.filter((p) => positions[p.id]?.lateOrMissing).length,
-    [searched, positions],
-  );
+  const performanceCounts = useMemo(() => {
+    const counts: Record<PerformanceFilter, number> = {
+      all: searched.length,
+      best: 0,
+      good: 0,
+      late: 0,
+      missing: 0,
+    };
+    for (const p of searched) {
+      const performance = positions[p.id]?.performance;
+      if (performance) counts[performance] += 1;
+    }
+    return counts;
+  }, [searched, positions]);
+  // The menu's options, each with its count, as the old "Late or missing · N" read.
+  const performanceItems = PERFORMANCE_FILTERS.map((value) => ({
+    value,
+    label:
+      value === 'all'
+        ? tPerformance('all')
+        : tPerformance('option', {
+            label: tPerformance(value),
+            count: format.number(performanceCounts[value]),
+          }),
+  }));
 
   const filtered = useMemo(() => {
-    const list = lateOnly ? searched.filter((p) => positions[p.id]?.lateOrMissing) : [...searched];
+    const list =
+      performanceFilter === 'all'
+        ? [...searched]
+        : searched.filter((p) => positions[p.id]?.performance === performanceFilter);
     if (latenessOrder) {
       // Equally far behind: the more visible prompt first, as the table opens.
       const score = (p: Prompt) => visibility[p.id]?.score ?? 0;
@@ -3185,7 +3218,7 @@ function AllPromptsTab({
     return isAllPromptsSortKey(rawSort) ? sorted : newFirst(sorted, now);
   }, [
     searched,
-    lateOnly,
+    performanceFilter,
     latenessOrder,
     rawSort,
     activeSort,
@@ -3200,7 +3233,7 @@ function AllPromptsTab({
   // changes the visible row set (search text, sort column, sort direction, work
   // status filter) so usePagination jumps back to page 0 automatically when
   // any filter or sort changes — satisfying the issue's acceptance criteria.
-  const promptsResetKey = `${search}::${statusFilter}::${workFilter}::${lateOnly}::${activeSort}::${dir}`;
+  const promptsResetKey = `${search}::${statusFilter}::${workFilter}::${performanceFilter}::${activeSort}::${dir}`;
   // From every row, pending deletes included, so the title agrees with the
   // usage cards until a delete actually lands after its Undo window.
   const statusCounts = useMemo(() => countByStatus(allRows, now), [allRows, now]);
@@ -3332,17 +3365,26 @@ function AllPromptsTab({
                 <SelectItem value="none">No status</SelectItem>
               </SelectContent>
             </Select>
-            <Button
-              type="button"
-              size="sm"
-              variant={lateOnly ? 'default' : 'outline'}
-              className="h-8 text-xs"
-              aria-pressed={lateOnly}
-              title={tLate('title')}
-              onClick={toggleLateOnly}
+            <Select
+              value={performanceFilter}
+              onValueChange={(v) => changePerformance((v as PerformanceFilter | null) ?? 'all')}
+              items={performanceItems}
             >
-              {tLate('label', { count: lateCount })}
-            </Button>
+              <SelectTrigger
+                className="h-8 w-36 text-xs"
+                aria-label={tPerformance('label')}
+                title={tPerformance('title')}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {performanceItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <div className="relative w-60">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
@@ -3379,7 +3421,9 @@ function AllPromptsTab({
           />
         )}
         <Table stickyHeader stickyFirstColumn>
-          {latenessOrder && <TableCaption className="sr-only">{tLate('order')}</TableCaption>}
+          {latenessOrder && (
+            <TableCaption className="sr-only">{tPerformance('order')}</TableCaption>
+          )}
           <TableHeader>
             <TableRow>
               <TableHead className="pl-6">
@@ -3675,7 +3719,19 @@ function AllPromptsTab({
           onPage={promptsPager.setPage}
         />
         {filtered.length === 0 &&
-          (statusFilter === 'all' ? (
+          (performanceFilter !== 'all' && searched.length > 0 ? (
+            // Rows are there, just none in this group: lead back to them.
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              {tPerformance('none', { label: tPerformance(performanceFilter) })}{' '}
+              <button
+                type="button"
+                onClick={() => changePerformance('all')}
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                {tPerformance('showAll')}
+              </button>
+            </div>
+          ) : statusFilter === 'all' ? (
             <div className="py-10 text-center text-sm text-muted-foreground">
               No prompts match your search.
             </div>
