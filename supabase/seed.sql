@@ -195,6 +195,8 @@ ON CONFLICT (id) DO NOTHING;
 -- won't have — so we seed them here. Without these rows the Prompts page volume
 -- view stays empty even with the backend running. Served read-only by
 -- GET /api/volumes/brand/:id (no provider keys required to read).
+-- total_google_volume is the median of the measured keyword volumes and
+-- est_ai_volume is that × 0.45, as summarizeVolumes computes them.
 
 INSERT INTO public.prompt_volumes (
   prompt_id, intent, keywords, google_volumes,
@@ -204,27 +206,27 @@ INSERT INTO public.prompt_volumes (
   ('88888888-8888-8888-8888-888888888801', 'best-top',
    '["best coffee subscription","coffee subscription","coffee subscription services","best coffee subscription 2026"]'::jsonb,
    '{"best coffee subscription":8100,"coffee subscription":22200,"coffee subscription services":5400,"best coffee subscription 2026":1300}'::jsonb,
-   37000, 0.150, 5550, 2840, 'en', now() - interval '2 days'),
+   6750, 0.450, 3038, 2840, 'en', now() - interval '2 days'),
   ('88888888-8888-8888-8888-888888888802', 'recommendation',
    '["international coffee subscription","specialty coffee subscription","coffee subscription worldwide shipping"]'::jsonb,
    '{"international coffee subscription":2400,"specialty coffee subscription":4400,"coffee subscription worldwide shipping":880}'::jsonb,
-   7680, 0.150, 1152, 2840, 'en', now() - interval '2 days'),
+   2400, 0.450, 1080, 2840, 'en', now() - interval '2 days'),
   ('88888888-8888-8888-8888-888888888803', 'best-top',
    '["office coffee subscription","monthly coffee bean subscription","coffee subscription for business"]'::jsonb,
    '{"office coffee subscription":3600,"monthly coffee bean subscription":1900,"coffee subscription for business":1600}'::jsonb,
-   7100, 0.150, 1065, 2840, 'en', now() - interval '2 days'),
+   1900, 0.450, 855, 2840, 'en', now() - interval '2 days'),
   ('88888888-8888-8888-8888-888888888804', 'best-top',
    '["best espresso machine","home espresso machine","best espresso machine under 500","espresso machine under $500"]'::jsonb,
    '{"best espresso machine":18100,"home espresso machine":9900,"best espresso machine under 500":6600,"espresso machine under $500":4400}'::jsonb,
-   39000, 0.150, 5850, 2840, 'en', now() - interval '2 days'),
+   8250, 0.450, 3713, 2840, 'en', now() - interval '2 days'),
   ('88888888-8888-8888-8888-888888888805', 'comparison',
    '["best espresso machine for beginners","beginner espresso machine","home espresso machine comparison"]'::jsonb,
    '{"best espresso machine for beginners":5400,"beginner espresso machine":2400,"home espresso machine comparison":720}'::jsonb,
-   8520, 0.150, 1278, 2840, 'en', now() - interval '2 days'),
+   2400, 0.450, 1080, 2840, 'en', now() - interval '2 days'),
   ('88888888-8888-8888-8888-888888888806', 'vs-review',
    '["manual vs automatic espresso machine","manual espresso machine","automatic espresso machine"]'::jsonb,
    '{"manual vs automatic espresso machine":1900,"manual espresso machine":3600,"automatic espresso machine":4400}'::jsonb,
-   9900, 0.150, 1485, 2840, 'en', now() - interval '2 days')
+   3600, 0.450, 1620, 2840, 'en', now() - interval '2 days')
 ON CONFLICT (prompt_id) DO NOTHING;
 
 -- ─── Competitors ─────────────────────────────────────────────────────────────

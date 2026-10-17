@@ -1199,6 +1199,23 @@ Rules:
 - Target word count should be appropriate for the content type (e.g. blog post: 1500-3000, guide: 3000-5000).`;
 
 /**
+ * What a brief is told about the Action Center task an opportunity was sent
+ * from (AC-004): it does what the task says, where it says, until its check
+ * is met. Empty for an opportunity that wasn't.
+ */
+export function briefTaskContext(sourceData) {
+  const task = sourceData?.fromAction?.task;
+  if (!task) return '';
+  const lines = [
+    task.where && `- Where: ${task.where}`,
+    task.why && `- Why: ${task.why}`,
+    task.how?.length && `- Steps: ${task.how.map((step, i) => `${i + 1}) ${step}`).join(' ')}`,
+    task.doneWhen && `- Done when: ${task.doneWhen}`,
+  ].filter(Boolean);
+  return lines.length ? `\nFrom an Action Center task:\n${lines.join('\n')}\n` : '';
+}
+
+/**
  * Generate (or fetch) an AI brief for a content opportunity.
  *
  * Shared core for both the user-facing dashboard route below and the
@@ -1303,6 +1320,8 @@ ${targetPages.map((p) => `- ${p.title || p.url} (${p.url})`).join('\n')}
         ? '\nDecision: create a new page; the site has none for this need.\n'
         : '';
 
+  const taskContext = briefTaskContext(sourceData);
+
   const clusterContext = sourceData.prompts?.length
     ? `
 Questions this content must answer (the cluster's prompts):
@@ -1330,7 +1349,7 @@ Opportunity:
 - Score: ${opportunity.opportunity_score}
 
 Related Prompt: "${promptText}"
-${clusterContext}${decisionContext}Intent: ${sourceData.intent || 'unknown'}
+${clusterContext}${decisionContext}${taskContext}Intent: ${sourceData.intent || 'unknown'}
 Est. AI Volume: ${sourceData.estAiVolume || 0}/mo
 Current Visibility: ${sourceData.visibilityScore || 0}%
 Competitor Gap: ${sourceData.competitorGap || 0}%

@@ -163,9 +163,15 @@ export interface PromptVolume {
   promptCategory: string;
   intent: string;
   keywords: string[];
+  /** Each keyword's monthly Google volume, under the provider's spelling. */
   googleVolumes: Record<string, number>;
+  /**
+   * The prompt's monthly Google volume: the median of its keywords that have
+   * one (00154). Named before the median replaced their sum.
+   */
   totalGoogleVolume: number;
   aiVolumeMultiplier: number;
+  /** totalGoogleVolume × aiVolumeMultiplier, rounded. */
   estAiVolume: number;
   competitionIndex: number | null;
   competition: 'LOW' | 'MEDIUM' | 'HIGH' | null;
@@ -234,6 +240,20 @@ export interface ContentOpportunitySourceData {
   duplicatesMerged?: number;
   /** The opportunity this one is another angle on (CONTENT-006). */
   alternativeOf?: { id: string; title: string };
+  /** Sent from an Action Center task (AC-004): the action, and what the task says. */
+  fromAction?: {
+    actionId: string;
+    actionNo: number | null;
+    taskId: string;
+    task?: {
+      where?: string;
+      why?: string;
+      how?: string[];
+      doneWhen?: string;
+      effort?: string;
+      role?: string;
+    };
+  };
   /** Why it was dismissed, when the user said (CONTENT-006). */
   dismissReason?: 'not_relevant' | 'wrong_angle';
   /** Why a finished opportunity went back to New (#857, Phase 4). */
@@ -297,7 +317,7 @@ export interface ContentBrief {
   callToAction: string;
 }
 
-export type ContentOpportunitySource = 'system' | 'manual' | 'prompt';
+export type ContentOpportunitySource = 'system' | 'manual' | 'prompt' | 'action';
 
 export interface ContentOpportunity {
   id: string;

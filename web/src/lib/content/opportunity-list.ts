@@ -11,15 +11,19 @@ export const DEFAULT_OPPORTUNITY_SORT: OpportunitySort = OPPORTUNITY_SORTS[0];
 
 /**
  * What an opportunity was built for: a group of related prompts in a topic
- * (cluster opportunities, #857), or a single prompt (the older generator).
+ * (cluster opportunities, #857), a single prompt (the older generator), or
+ * an Action Center task sent to Content (AC-004).
  */
 export type OpportunityScope =
   | { kind: 'group'; count: number; topic: string | null }
-  | { kind: 'single' };
+  | { kind: 'single' }
+  | { kind: 'action'; actionNo: number | null };
 
 export function opportunityScope(
   opp: Pick<ContentOpportunity, 'clusterId' | 'sourceData'>,
 ): OpportunityScope {
+  const from = opp.sourceData?.fromAction;
+  if (from) return { kind: 'action', actionNo: from.actionNo ?? null };
   if (!opp.clusterId) return { kind: 'single' };
   return {
     kind: 'group',

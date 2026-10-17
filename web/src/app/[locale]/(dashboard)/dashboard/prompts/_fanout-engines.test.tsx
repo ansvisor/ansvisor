@@ -21,16 +21,17 @@ const engine = (over: Partial<FanoutEngineCoverage>): FanoutEngineCoverage => ({
   ...over,
 });
 
-// What production showed on 2026-10-15: Copilot shares, ChatGPT stopped on
-// Sep 30, Google's engines never share.
+// Copilot shares; Perplexity usually does but went silent after Sep 29;
+// ChatGPT (since 2026-09-30, #1119) and Google's engines don't share.
 const engines = [
   engine({}),
   engine({
-    platform: 'chatgpt-web',
+    platform: 'perplexity-web',
     answersWithFanout: 0,
     subQueries: 0,
     lastFanoutAt: '2026-09-29T05:12:00Z',
   }),
+  engine({ platform: 'chatgpt-web', answersWithFanout: 0, subQueries: 0 }),
   engine({ platform: 'google-aio', answersWithFanout: 0, subQueries: 0 }),
   engine({ platform: 'gemini-web', answersWithFanout: 0, subQueries: 0 }),
 ];
@@ -75,14 +76,28 @@ describe('FanoutEngineStrip', () => {
     expect(buttons).toEqual([
       'All engines706',
       'Microsoft Copilot21% of answers · 706',
-      'ChatGPTnone since Sep 29',
+      'Perplexitynone since Sep 29',
     ]);
     // Never-sharing engines are labels, not filters.
+    expect(container.textContent).toContain('ChatGPT · not shared');
     expect(container.textContent).toContain('Google AI Overview · not shared');
     expect(container.textContent).toContain('Google Gemini · not shared');
 
     act(() => container.querySelectorAll('button')[2].click());
-    expect(onSelect).toHaveBeenCalledWith('chatgpt-web');
+    expect(onSelect).toHaveBeenCalledWith('perplexity-web');
+  });
+
+  it('still lets ChatGPT filter a long window that holds its older searches', () => {
+    render(
+      <FanoutEngineStrip
+        engines={[engine({ platform: 'chatgpt-web', answersWithFanout: 12, subQueries: 30 })]}
+        totalSubQueries={30}
+        selected={null}
+        onSelect={vi.fn()}
+      />,
+    );
+    const buttons = [...container.querySelectorAll('button')].map((b) => b.textContent);
+    expect(buttons).toEqual(['All engines30', 'ChatGPT12% of answers · 30']);
   });
 
   it('clears the filter when the picked engine is clicked again', () => {
@@ -104,10 +119,10 @@ describe('FanoutEngineNotices', () => {
   it('explains a silent engine and names the engines that never share', () => {
     render(<FanoutEngineNotices engines={engines} />);
     expect(container.textContent).toContain(
-      'ChatGPT usually shares the searches behind its answers, but none arrived since Sep 29.',
+      'Perplexity usually shares the searches behind its answers, but none arrived since Sep 29.',
     );
     expect(container.textContent).toContain(
-      "Google AI Overview and Google Gemini don't come with the searches behind their answers",
+      "ChatGPT, Google AI Overview, and Google Gemini don't come with the searches behind their answers",
     );
   });
 
@@ -121,10 +136,12 @@ describe('isSilentEngine', () => {
   it('is only an engine that shares searches, answered, and shared none', () => {
     expect(isSilentEngine(engines[1])).toBe(true);
     expect(isSilentEngine(engines[0])).toBe(false);
+    // ChatGPT no longer shares searches, so its none is no outage (#1119).
     expect(isSilentEngine(engines[2])).toBe(false);
+    expect(isSilentEngine(engines[3])).toBe(false);
     // Four answers with none is chance, not an outage.
     expect(
-      isSilentEngine(engine({ platform: 'chatgpt-web', answers: 4, answersWithFanout: 0 })),
+      isSilentEngine(engine({ platform: 'perplexity-web', answers: 4, answersWithFanout: 0 })),
     ).toBe(false);
   });
 });

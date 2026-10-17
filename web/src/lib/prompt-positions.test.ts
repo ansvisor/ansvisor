@@ -15,6 +15,21 @@ import { positionTone } from './position-tone';
 const accessFor = (plan: Plan) =>
   Object.fromEntries(POSITION_PLATFORMS.map((p) => [p.id, platformAccess(plan, p.id)]));
 
+describe('POSITION_PLATFORMS', () => {
+  it('lists ChatGPT, then Microsoft Copilot, and Perplexity last', () => {
+    expect(POSITION_PLATFORMS.map((p) => p.label)).toEqual([
+      'ChatGPT',
+      'Microsoft Copilot',
+      'Google AI Overviews',
+      'Google AI Mode',
+      'Gemini',
+      'Grok',
+      'Claude',
+      'Perplexity',
+    ]);
+  });
+});
+
 describe('platformAccess', () => {
   it('locks Starter to ChatGPT and Microsoft Copilot, with Grok and Claude behind sales', () => {
     const access = accessFor(PLANS.starter);

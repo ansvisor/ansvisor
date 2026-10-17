@@ -56,6 +56,39 @@ export type Database = {
           },
         ]
       }
+      action_signals: {
+        Row: {
+          action_id: string
+          linked_at: string
+          signal_id: string
+        }
+        Insert: {
+          action_id: string
+          linked_at?: string
+          signal_id: string
+        }
+        Update: {
+          action_id?: string
+          linked_at?: string
+          signal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_signals_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_signals_signal_id_fkey"
+            columns: ["signal_id"]
+            isOneToOne: false
+            referencedRelation: "signals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       action_tasks: {
         Row: {
           action_id: string
@@ -139,7 +172,13 @@ export type Database = {
           outcome: string
           payload: Json
           position_outcome: Json | null
+          priority_level: string | null
+          priority_reason: Json | null
+          priority_score: number | null
+          priority_updated_at: string | null
           status: string
+          tasks_generated_at: string | null
+          tasks_writing_since: string | null
           updated_at: string
           validated_at: string | null
           validation: Json | null
@@ -161,7 +200,13 @@ export type Database = {
           outcome?: string
           payload?: Json
           position_outcome?: Json | null
+          priority_level?: string | null
+          priority_reason?: Json | null
+          priority_score?: number | null
+          priority_updated_at?: string | null
           status?: string
+          tasks_generated_at?: string | null
+          tasks_writing_since?: string | null
           updated_at?: string
           validated_at?: string | null
           validation?: Json | null
@@ -183,7 +228,13 @@ export type Database = {
           outcome?: string
           payload?: Json
           position_outcome?: Json | null
+          priority_level?: string | null
+          priority_reason?: Json | null
+          priority_score?: number | null
+          priority_updated_at?: string | null
           status?: string
+          tasks_generated_at?: string | null
+          tasks_writing_since?: string | null
           updated_at?: string
           validated_at?: string | null
           validation?: Json | null
@@ -3416,6 +3467,10 @@ export type Database = {
         Args: { p_brand_id: string; p_from: string; p_to: string }
         Returns: Json
       }
+      signals_new_count: {
+        Args: { p_brand_id: string }
+        Returns: number
+      }
       topics_overview_aggregates: {
         Args: { p_brand_id: string }
         Returns: {
@@ -3429,6 +3484,30 @@ export type Database = {
           cur_mention_answers: number
           cur_pos_n: number
           cur_pos_sum: number
+          daily: Json
+          last_run_at: string
+          mention_answers: number
+          pos_n: number
+          pos_sum: number
+          prev_answers: number
+          prev_citation_answers: number
+          prev_mention_answers: number
+          prev_pos_n: number
+          prev_pos_sum: number
+          topic_id: string
+          total_citations: number
+          total_mentions: number
+          visible_prompts: number
+        }[]
+      }
+      topics_overview_window: {
+        Args: { p_brand_id: string; p_date_from: string; p_date_to?: string }
+        Returns: {
+          active_prompts: number
+          answers: number
+          citation_answers: number
+          comp_mentions: number
+          competitors: Json
           daily: Json
           last_run_at: string
           mention_answers: number

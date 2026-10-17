@@ -7,19 +7,18 @@
  */
 
 /** Platforms whose answers come with the searches the engine ran. */
-export const FANOUT_SHARING_PLATFORMS: readonly string[] = [
-  'chatgpt-web',
-  'copilot-web',
-  'perplexity-web',
-];
+export const FANOUT_SHARING_PLATFORMS: readonly string[] = ['copilot-web', 'perplexity-web'];
 
 /**
  * Platforms whose answers never come with their searches: those our provider
- * documents no fan-out for, and the API models (`claude`, `gemini`, `chatgpt`,
- * see resolveModelPlatform in the tracking worker), whose searches we don't
+ * documents no fan-out for; ChatGPT, whose default interface carries no query
+ * text since 2026-09-30 (#1119), so older answers in a long window may still
+ * have some; and the API models (`claude`, `gemini`, `chatgpt`, see
+ * resolveModelPlatform in the tracking worker), whose searches we don't
  * capture.
  */
 export const FANOUT_NOT_SHARED_PLATFORMS: readonly string[] = [
+  'chatgpt-web',
   'google-aio',
   'google-aimode',
   'gemini-web',
@@ -30,8 +29,8 @@ export const FANOUT_NOT_SHARED_PLATFORMS: readonly string[] = [
 
 /**
  * Answers an engine needs in the window before "it shared none" means
- * something. ChatGPT shared searches on about a quarter of its answers, so
- * four answers with none is ordinary chance on a small brand.
+ * something. An engine can share searches on only some of its answers, so a
+ * few answers with none is ordinary chance on a small brand.
  */
 export const FANOUT_MIN_SILENT_ANSWERS = 20;
 

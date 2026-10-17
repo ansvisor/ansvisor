@@ -309,6 +309,81 @@ describe('analyzeBrandVolumes', () => {
     expect(row.totalGoogleVolume).toBe(500);
   });
 
+  // The five keywords are overlapping head terms for the prompt's category,
+  // so their sum counted the same searchers several times, and one product
+  // name (5M a month) set a prompt at ~755k. The median leaves it out.
+  it("takes the median of a prompt's keyword volumes, not their sum", async () => {
+    const { analyzeBrandVolumes } = await load(seed({ activeCount: 1 }));
+    extractIntentKeywords.mockResolvedValue({
+      intent: 'how-to',
+      keywords: [
+        'generative engine optimization',
+        'ai seo',
+        'google gemini',
+        'content strategy',
+        'search optimization',
+      ],
+    });
+    getSearchVolumes.mockResolvedValue({
+      'generative engine optimization': { volume: 4400, competitionIndex: 20, competition: 'LOW' },
+      'ai seo': { volume: 8100, competitionIndex: 30, competition: 'LOW' },
+      'google gemini': { volume: 5000000, competitionIndex: 10, competition: 'LOW' },
+      'content strategy': { volume: 3600, competitionIndex: 40, competition: 'MEDIUM' },
+      'search optimization': { volume: 18100, competitionIndex: 50, competition: 'MEDIUM' },
+    });
+
+    const [row] = await analyzeBrandVolumes('b1', { onlyMissing: true });
+
+    expect(row.totalGoogleVolume).toBe(8100);
+    expect(row.estAiVolume).toBe(1215);
+    // Every keyword's own volume is still kept for the UI.
+    expect(Object.keys(row.googleVolumes)).toHaveLength(5);
+  });
+
+  it('leaves keywords Google cannot measure out of the median', async () => {
+    const { analyzeBrandVolumes } = await load(seed({ activeCount: 1 }));
+    extractIntentKeywords.mockResolvedValue({ intent: 'i', keywords: ['rare', 'mid', 'big'] });
+    getSearchVolumes.mockResolvedValue({
+      rare: { volume: 0, competitionIndex: null, competition: null },
+      mid: { volume: 1000, competitionIndex: null, competition: null },
+      big: { volume: 3000, competitionIndex: null, competition: null },
+    });
+
+    const [row] = await analyzeBrandVolumes('b1', { onlyMissing: true });
+
+    expect(row.totalGoogleVolume).toBe(2000);
+    expect(row.estAiVolume).toBe(300);
+  });
+
+  it('reads 0 when none of the keywords has a volume', async () => {
+    const { analyzeBrandVolumes } = await load(seed({ activeCount: 1 }));
+    extractIntentKeywords.mockResolvedValue({ intent: 'i', keywords: ['rare', 'rarer'] });
+    getSearchVolumes.mockResolvedValue({
+      rare: { volume: 0, competitionIndex: null, competition: null },
+    });
+
+    const [row] = await analyzeBrandVolumes('b1', { onlyMissing: true });
+
+    expect(row.totalGoogleVolume).toBe(0);
+    expect(row.estAiVolume).toBe(0);
+  });
+
+  it('counts a keyword listed twice, in any case, once', async () => {
+    const { analyzeBrandVolumes } = await load(seed({ activeCount: 1 }));
+    extractIntentKeywords.mockResolvedValue({ intent: 'i', keywords: ['CRM', 'crm', 'tools'] });
+    getSearchVolumes.mockResolvedValue({
+      crm: { volume: 100, competitionIndex: 20, competition: 'LOW' },
+      tools: { volume: 300, competitionIndex: 80, competition: 'HIGH' },
+    });
+
+    const [row] = await analyzeBrandVolumes('b1', { onlyMissing: true });
+
+    expect(row.googleVolumes).toEqual({ crm: 100, tools: 300 });
+    expect(row.totalGoogleVolume).toBe(200);
+    // The duplicate doesn't weigh twice in the competition average either.
+    expect(row.competitionIndex).toBe(65);
+  });
+
   // One request now stands in for up to two hundred prompts, so a blip that
   // used to cost one prompt would cost all of them. It is retried first.
   it('retries a failed request before giving up on the batch', async () => {
@@ -483,5 +558,19 @@ describe('getVolumeProgress', () => {
     const { getVolumeProgress } = await load(db);
 
     expect(await getVolumeProgress('b1')).toEqual({ total: 0, analyzed: 0 });
+  });
+});
+
+describe('medianVolume', () => {
+  it('takes the middle volume, or the mean of the middle two', async () => {
+    const { medianVolume } = await load(seed());
+    expect(medianVolume([18100, 9900, 6600, 4400])).toBe(8250);
+    expect(medianVolume([2400, 4400, 880])).toBe(2400);
+  });
+
+  it('ignores zeros and reads 0 for nothing measured', async () => {
+    const { medianVolume } = await load(seed());
+    expect(medianVolume([0, 0, 500])).toBe(500);
+    expect(medianVolume([])).toBe(0);
   });
 });

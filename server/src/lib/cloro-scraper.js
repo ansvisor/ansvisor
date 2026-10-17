@@ -88,13 +88,32 @@ export function buildRequestBody(promptText, scraperId, region, state) {
       html: false,
       markdown: true,
       rawResponse: false,
-      // Opt in to the observed query fan-out (#332). Copilot and Perplexity
-      // populate it; ChatGPT does too (a +2 credit add-on), though its came
-      // back empty from 2026-09-30 — the health report's fan-out section
-      // flags an engine that stops. Gemini documents no fan-out field.
-      searchQueries: true,
+      // Opt in to the observed query fan-out (#332), which Copilot and
+      // Perplexity populate; the health report's fan-out section flags one
+      // that stops. Not on ChatGPT: since 2026-09-30 its default (mobile-web)
+      // interface carries no query text, so the field came back empty on
+      // every answer while the add-on still cost +2 credits a task (#1119).
+      ...(scraperId === 'chatgpt-web' ? {} : { searchQueries: true }),
     },
   };
+}
+
+/**
+ * The sources an answer cites, as the citations we store. Since 2026-10-09
+ * ChatGPT's `sources` also list the pages it read without citing them, marked
+ * `footnote: true`; counted as citations, they put ChatGPT's citation numbers
+ * at about 2.5× what its answers cite (#1119). Only ChatGPT sets the flag, but
+ * it is honoured for every engine.
+ */
+function toCitations(sources) {
+  return (sources || [])
+    .filter((src) => src.footnote !== true)
+    .map((src, idx) => ({
+      url: src.url || '',
+      title: src.label || '',
+      startIndex: idx * 100,
+      endIndex: idx * 100 + 50,
+    }));
 }
 
 /**
@@ -157,12 +176,7 @@ export function parseScraperResponse(result, scraperId) {
     // (which exclude `platform = 'chatgpt-shopping'`) never mix this row
     // into brand-level visibility numbers.
     const text = stripEntityMarkup(result.markdown || result.text || '');
-    const citations = (result.sources || []).map((src, idx) => ({
-      url: src.url || '',
-      title: src.label || '',
-      startIndex: idx * 100,
-      endIndex: idx * 100 + 50,
-    }));
+    const citations = toCitations(result.sources);
     return {
       text,
       citations,
@@ -179,12 +193,7 @@ export function parseScraperResponse(result, scraperId) {
     }
 
     const text = stripEntityMarkup(aio.markdown || aio.text || '');
-    const citations = (aio.sources || []).map((src, idx) => ({
-      url: src.url || '',
-      title: src.label || '',
-      startIndex: idx * 100,
-      endIndex: idx * 100 + 50,
-    }));
+    const citations = toCitations(aio.sources);
 
     return { text, citations, model: 'google-aio', shopping_cards: [] };
   }
@@ -192,12 +201,7 @@ export function parseScraperResponse(result, scraperId) {
   if (scraperId === 'google-aimode') {
     const aiMode = result.result || result;
     const text = stripEntityMarkup(aiMode.markdown || aiMode.text || '');
-    const citations = (aiMode.sources || []).map((src, idx) => ({
-      url: src.url || '',
-      title: src.label || '',
-      startIndex: idx * 100,
-      endIndex: idx * 100 + 50,
-    }));
+    const citations = toCitations(aiMode.sources);
 
     // AI Mode returns its product cards under camelCase `shoppingCards`
     // (like Copilot — verified against the live response; not snake_case).
@@ -213,12 +217,7 @@ export function parseScraperResponse(result, scraperId) {
 
   const text = stripEntityMarkup(result.markdown || result.text || '');
   const model = result.model || scraperId;
-  const citations = (result.sources || []).map((src, idx) => ({
-    url: src.url || '',
-    title: src.label || '',
-    startIndex: idx * 100,
-    endIndex: idx * 100 + 50,
-  }));
+  const citations = toCitations(result.sources);
 
   return {
     text,
