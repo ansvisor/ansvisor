@@ -48,9 +48,9 @@ import {
 } from '@/lib/action-center/registry';
 import {
   actionContextTags,
+  actionEventText,
   actionGoal,
   actionTexts,
-  eventTaskText,
   memberLabel,
   taskText,
 } from '@/lib/action-center/display';
@@ -59,6 +59,7 @@ import { isKpiKey } from '@/lib/kpis/registry';
 import { ImpactDots, isSuperseded, SignalStatusBadge } from './signal-table';
 import { ActionIcon } from './action-table';
 import { OpportunityContext } from './opportunity-context';
+import { ActionExportButtons } from './action-export-buttons';
 import { ImproveContext } from './improve-context';
 import { TopicGapContext } from './topic-gap-context';
 import { TopicOpportunityContext } from './topic-opportunity-context';
@@ -191,7 +192,88 @@ export function ActionDrawer({
               </Badge>
             ))}
           </div>
+          <ActionExportButtons action={action} detail={detail} />
         </SheetHeader>
+
+        {/* Who has it, where it stands and by when: ahead of the tabs, so they
+            read and change without scrolling past the content. */}
+        <div className="grid gap-3 border-b px-6 py-3 sm:grid-cols-3">
+          <div>
+            <Label htmlFor="action-drawer-status" className="text-xs text-muted-foreground">
+              {t('drawer.statusLabel')}
+            </Label>
+            <Select
+              value={action.status}
+              onValueChange={(value) =>
+                void mutate(() => updateActionStatus(brandId, action.id, value as ActionStatus))
+              }
+              disabled={isBusy}
+              items={ACTION_STATUSES.map((status) => ({
+                value: status,
+                label: t(`status.${status}`),
+              }))}
+            >
+              <SelectTrigger id="action-drawer-status" className="mt-1 h-8 w-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ACTION_STATUSES.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {t(`status.${status}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="action-drawer-assignee" className="text-xs text-muted-foreground">
+              {t('drawer.assignee')}
+            </Label>
+            <Select
+              value={action.assignee?.id ?? 'unassigned'}
+              onValueChange={(value) =>
+                void mutate(() =>
+                  assignAction(brandId, action.id, value === 'unassigned' ? null : value),
+                )
+              }
+              disabled={isBusy}
+              items={[
+                { value: 'unassigned', label: t('filters.unassigned') },
+                ...members.map((member) => ({
+                  value: member.userId,
+                  label: memberLabel(member),
+                })),
+              ]}
+            >
+              <SelectTrigger id="action-drawer-assignee" className="mt-1 h-8 w-full text-xs">
+                <SelectValue placeholder={t('drawer.assignTo')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">{t('filters.unassigned')}</SelectItem>
+                {members.map((member) => (
+                  <SelectItem key={member.userId} value={member.userId}>
+                    {memberLabel(member)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="action-drawer-due-date" className="text-xs text-muted-foreground">
+              {t('drawer.dueDate')}
+            </Label>
+            <Input
+              id="action-drawer-due-date"
+              type="date"
+              className="mt-1 h-8 text-xs"
+              value={action.dueDate ?? ''}
+              disabled={isBusy}
+              onChange={(e) =>
+                void mutate(() => setActionDueDate(brandId, action.id, e.target.value || null))
+              }
+            />
+          </div>
+        </div>
 
         <nav className="flex gap-4 border-b px-6" aria-label={t('table.action')}>
           {TABS.map((key) => (
@@ -379,20 +461,7 @@ export function ActionDrawer({
                 <div key={event.id} className="flex gap-3">
                   <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-foreground/50" />
                   <div>
-                    <p className="text-xs font-medium">
-                      {t(`drawer.events.${event.event}`, {
-                        to: String(event.data.to ?? ''),
-                        count: Number(event.data.count ?? 0),
-                        // Work the product did itself names the task in the
-                        // reader's language and the tool as it is recorded —
-                        // the tool id is the audit fact, so it is not
-                        // translated.
-                        task: eventTaskText(event.data.task, tTasks),
-                        tool: String(event.data.tool ?? ''),
-                        improved: Number(event.data.improved ?? 0),
-                        measurable: Number(event.data.measurable ?? 0),
-                      })}
-                    </p>
+                    <p className="text-xs font-medium">{actionEventText(event, t, tTasks)}</p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(event.createdAt).toLocaleDateString('en-US', {
                         month: 'short',
@@ -406,79 +475,6 @@ export function ActionDrawer({
               ))}
             </section>
           )}
-        </div>
-
-        <div className="space-y-3 border-t px-6 py-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs text-muted-foreground">{t('drawer.statusLabel')}</Label>
-              <Select
-                value={action.status}
-                onValueChange={(value) =>
-                  void mutate(() => updateActionStatus(brandId, action.id, value as ActionStatus))
-                }
-                disabled={isBusy}
-                items={ACTION_STATUSES.map((status) => ({
-                  value: status,
-                  label: t(`status.${status}`),
-                }))}
-              >
-                <SelectTrigger className="mt-1 h-8 w-full text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ACTION_STATUSES.map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {t(`status.${status}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">{t('drawer.dueDate')}</Label>
-              <Input
-                type="date"
-                className="mt-1 h-8 text-xs"
-                value={action.dueDate ?? ''}
-                disabled={isBusy}
-                onChange={(e) =>
-                  void mutate(() => setActionDueDate(brandId, action.id, e.target.value || null))
-                }
-              />
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">{t('drawer.assignee')}</Label>
-            <Select
-              value={action.assignee?.id ?? 'unassigned'}
-              onValueChange={(value) =>
-                void mutate(() =>
-                  assignAction(brandId, action.id, value === 'unassigned' ? null : value),
-                )
-              }
-              disabled={isBusy}
-              items={[
-                { value: 'unassigned', label: t('filters.unassigned') },
-                ...members.map((member) => ({
-                  value: member.userId,
-                  label: memberLabel(member),
-                })),
-              ]}
-            >
-              <SelectTrigger className="mt-1 h-8 w-full text-xs">
-                <SelectValue placeholder={t('drawer.assignTo')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="unassigned">{t('filters.unassigned')}</SelectItem>
-                {members.map((member) => (
-                  <SelectItem key={member.userId} value={member.userId}>
-                    {memberLabel(member)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         </div>
       </SheetContent>
     </Sheet>

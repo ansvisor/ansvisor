@@ -52,7 +52,7 @@ Fed to the Express API + workers.
 | `CLORO_API_KEY` | optional | Cloro web scraper API key (for ChatGPT/Gemini/Perplexity web scraping) |
 | `PLATFORM_PROVIDER` | optional | Default `cloro`. Used to pick scraper backend |
 | `SCRAPEDO_API_KEY` | Site Audit | Scrape.do API key — required to run **Site Audit** (it fetches target pages via Scrape.do's proxy + JS render). Distinct from `CLORO_API_KEY`, which scrapes the AI answer engines. |
-| `AI_VOLUME_MULTIPLIER` | optional | Estimated AI search adoption rate (default `0.15` = 15% of Google volume) |
+| `AI_VOLUME_MULTIPLIER` | optional | Estimated AI search adoption rate (default `0.45` = 45% of a prompt's Google volume, the median of its keywords' monthly searches; AI Overviews appear on roughly 43–48% of Google searches) |
 | `CRON_SECRET` | cloud only | Shared secret with web's CRON_SECRET; protects internal cron endpoints |
 
 ## Tips for production
