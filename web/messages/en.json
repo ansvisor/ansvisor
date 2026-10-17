@@ -2451,6 +2451,22 @@
       "stoppedDescription": "Deleting stopped at an error. {kept, plural, one {The other prompt is} other {The other # prompts are}} back in the list, so you can try again.",
       "notDeleted": "{kept} of {total} {total, plural, one {prompt} other {prompts}} couldn't be deleted."
     },
+    "columns": {
+      "added": "Added",
+      "tips": {
+        "status": "New: added in the last 24 hours. Active: being tracked. Paused: not tracked.",
+        "work": "Your content work on this prompt.",
+        "visibility": "Score from 0 to 100 over the {range}: mentions 60%, citations 25%, position 15%.",
+        "mentions": "How often AI answers named your brand over the {range}.",
+        "citations": "How often AI answers cited your pages over the {range}.",
+        "positions": "Where AI answers name your brand, on average, over the {range}. Lower is better.",
+        "volume": "Estimated monthly AI searches for this prompt.",
+        "competition": "Google Ads competition for its keywords: Low, Medium or High.",
+        "runs": "AI answers collected over the {range}. One run is one AI platform answering this prompt once.",
+        "added": "When this prompt was added.",
+        "lastRun": "When this prompt was last checked."
+      }
+    },
     "performance": {
       "label": "Performance",
       "title": "Where your brand is named in this prompt's AI answers: Best in the first third of the brands listed, Good in the middle, Late in the last third, Missing in fewer than half the answers. Late and Missing list the furthest behind first.",

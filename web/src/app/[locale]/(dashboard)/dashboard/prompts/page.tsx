@@ -169,9 +169,15 @@ import {
 } from '@/lib/prompt-bulk-actions';
 import { toCsv } from '@/lib/csv';
 import { formatRelative } from '@/lib/format-relative';
-import { compareNullsLast, type SortDir } from './prompt-sort';
+import {
+  compareNullsLast,
+  isAllPromptsSortKey,
+  promptSortValue,
+  type AllPromptsSortKey,
+  type SortDir,
+} from './prompt-sort';
 import { BulkActionBar } from './_bulk-action-bar';
-import { formatCompactNumber, formatNumber } from '@/lib/format';
+import { formatCompactNumber, formatDate, formatNumber } from '@/lib/format';
 import { usePagination, TablePager } from '@/components/table-pager';
 import { PromptPositionsSheet } from '@/components/prompts/prompt-positions-sheet';
 import {
@@ -237,29 +243,6 @@ function ColHead({
 }
 
 // ─── Sortable column header (All Prompts) ─────────────────────────────────────
-
-type AllPromptsSortKey =
-  | 'visibility'
-  | 'mentions'
-  | 'citations'
-  | 'position'
-  | 'volume'
-  | 'runs'
-  | 'lastRun';
-
-const ALL_PROMPTS_SORT_KEYS: AllPromptsSortKey[] = [
-  'visibility',
-  'mentions',
-  'citations',
-  'position',
-  'volume',
-  'runs',
-  'lastRun',
-];
-
-function isAllPromptsSortKey(value: string | null): value is AllPromptsSortKey {
-  return value !== null && (ALL_PROMPTS_SORT_KEYS as string[]).includes(value);
-}
 
 /**
  * Clickable header that toggles asc⇄desc for its column and marks the active
@@ -2631,6 +2614,8 @@ function AllPromptsTab({
   const tDelete = useTranslations('prompts.bulkDelete');
   const tPerformance = useTranslations('prompts.performance');
   const tStatus = useTranslations('prompts.status');
+  const tColumns = useTranslations('prompts.columns');
+  const tTips = useTranslations('prompts.columns.tips');
   const now = useNow({ updateInterval: 60_000 }).getTime();
   // Rows deleted from the row menu or the bulk bar, hidden at once and
   // deleted for real after the Undo window (PROMPT-006). There is no soft
@@ -3191,26 +3176,13 @@ function AllPromptsTab({
       );
     }
 
-    const valueOf = (p: Prompt): number | null => {
-      const vis = visibility[p.id];
-      const vol = volumeByPromptId.get(p.id);
-      switch (activeSort) {
-        case 'visibility':
-          return vis ? (vis.score ?? 0) : null;
-        case 'mentions':
-          return vis ? vis.totalMentions : null;
-        case 'citations':
-          return vis ? vis.totalCitations : null;
-        case 'position':
-          return positions[p.id]?.avg ?? null;
-        case 'volume':
-          return vol ? vol.estAiVolume : null;
-        case 'runs':
-          return vis ? vis.runs : null;
-        case 'lastRun':
-          return vis?.lastRunAt ? new Date(vis.lastRunAt).getTime() : null;
-      }
-    };
+    const valueOf = (p: Prompt): number | null =>
+      promptSortValue(activeSort, {
+        createdAt: p.createdAt,
+        visibility: visibility[p.id],
+        position: positions[p.id],
+        volume: volumeByPromptId.get(p.id),
+      });
 
     const sorted = list.sort((a, b) => compareNullsLast(valueOf(a), valueOf(b), dir));
     // Until a column is picked, prompts added within the last day lead: Track
@@ -3441,16 +3413,15 @@ function AllPromptsTab({
                 )}
               </TableHead>
               <TableHead>Topic</TableHead>
-              <TableHead className="text-center">Status</TableHead>
-              <ColHead
-                className="text-center"
-                tooltip="Your workflow state for this prompt — has content work been done for it yet?"
-              >
+              <ColHead className="text-center" tooltip={tTips('status')}>
+                Status
+              </ColHead>
+              <ColHead className="text-center" tooltip={tTips('work')}>
                 Work
               </ColHead>
               <SortableHead
                 className="text-right"
-                tooltip={`AI Visibility Score (0-100) for this prompt over the ${rangeLabel}: how often answers mention the brand (60%), cite its site (25%) and how early it's named (15%). Hover a value for the components.`}
+                tooltip={tTips('visibility', { range: rangeLabel })}
                 sortKey="visibility"
                 activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
@@ -3460,7 +3431,7 @@ function AllPromptsTab({
               </SortableHead>
               <SortableHead
                 className="text-right"
-                tooltip={`Total times the brand was mentioned across AI answers for this prompt over the ${rangeLabel}.`}
+                tooltip={tTips('mentions', { range: rangeLabel })}
                 sortKey="mentions"
                 activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
@@ -3470,7 +3441,7 @@ function AllPromptsTab({
               </SortableHead>
               <SortableHead
                 className="text-right"
-                tooltip={`Total times your pages were cited in AI answers for this prompt over the ${rangeLabel}.`}
+                tooltip={tTips('citations', { range: rangeLabel })}
                 sortKey="citations"
                 activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
@@ -3480,7 +3451,7 @@ function AllPromptsTab({
               </SortableHead>
               <SortableHead
                 className="pl-8"
-                tooltip={`Average position the brand is named at in AI answers over the ${rangeLabel}, with the change against the previous period of the same length. Hover a value for each platform; the chart button opens the details.`}
+                tooltip={tTips('positions', { range: rangeLabel })}
                 sortKey="position"
                 activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
@@ -3490,7 +3461,7 @@ function AllPromptsTab({
               </SortableHead>
               <SortableHead
                 className="text-right"
-                tooltip="Estimated monthly AI prompt volume, from keyword analysis. Empty until analysed."
+                tooltip={tTips('volume')}
                 sortKey="volume"
                 activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
@@ -3498,15 +3469,12 @@ function AllPromptsTab({
               >
                 Volume
               </SortableHead>
-              <ColHead
-                className="text-center"
-                tooltip="Based on Google Ads competition for related keywords (LOW / MEDIUM / HIGH). A proxy for topic difficulty."
-              >
+              <ColHead className="text-center" tooltip={tTips('competition')}>
                 Competition
               </ColHead>
               <SortableHead
                 className="text-right"
-                tooltip={`Number of tracking runs for this prompt over the ${rangeLabel} (one per platform per day).`}
+                tooltip={tTips('runs', { range: rangeLabel })}
                 sortKey="runs"
                 activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
@@ -3516,7 +3484,17 @@ function AllPromptsTab({
               </SortableHead>
               <SortableHead
                 className="text-right"
-                tooltip="Most recent tracking run for this prompt."
+                tooltip={tTips('added')}
+                sortKey="added"
+                activeSort={latenessOrder ? null : activeSort}
+                dir={dir}
+                onSort={handleSort}
+              >
+                {tColumns('added')}
+              </SortableHead>
+              <SortableHead
+                className="text-right"
+                tooltip={tTips('lastRun')}
                 sortKey="lastRun"
                 activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
@@ -3683,6 +3661,15 @@ function AllPromptsTab({
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
+                  </TableCell>
+                  <TableCell
+                    className="text-right text-xs whitespace-nowrap text-muted-foreground"
+                    title={new Date(p.createdAt).toLocaleString('en-US', {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    })}
+                  >
+                    {formatDate(p.createdAt)}
                   </TableCell>
                   <TableCell className="text-right text-xs text-muted-foreground">
                     {formatRelative(vis?.lastRunAt, tCommon)}
