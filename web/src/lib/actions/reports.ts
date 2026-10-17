@@ -20,6 +20,7 @@ import {
 import { getCitationsOverview, type CitationsSourceBreakdown } from '@/lib/actions/citations';
 import { getShoppingKpis } from '@/lib/actions/shopping';
 import { type SourceCategory } from '@/lib/citations/classify';
+import { stripEntityMarkup } from '@/lib/entity-markup';
 import {
   getReportTemplate,
   ALL_REPORT_SECTIONS,
@@ -624,9 +625,9 @@ const REPORT_EVIDENCE_COUNT = 10;
 /** How many sourcing prompts each cited URL lists. */
 const EVIDENCE_PROMPTS_PER_URL = 3;
 
-/** Light markdown/URL strip so excerpts read as prose. */
+/** Light markdown/URL/entity-tag strip so excerpts read as prose. */
 function stripMarkdown(text: string): string {
-  return text
+  return stripEntityMarkup(text)
     .replace(/\[([^\]]*)\]\([^)]+\)/g, '$1')
     .replace(/https?:\/\/[^\s)>\]]+/g, '')
     .replace(/[*_#`]/g, '')

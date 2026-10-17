@@ -1,17 +1,16 @@
 /**
  * The Insights visibility trend (VIS-007), as in the v2 mockup: your line
  * and the competitors you pin (they stay the same whatever the range),
- * markers for the days prompts were added and Action Center actions were
- * sent, and the Action Center goal. Kept apart from the chart so the rules
- * are tested on their own.
+ * markers for the days prompts were added, and the Action Center goal. Kept
+ * apart from the chart so the rules are tested on their own.
  */
 
 /** At most this many competitors can be pinned (also a check on brands, 00136). */
 export const MAX_PINNED_COMPETITORS = 5;
 /** Without pins, the chart shows this many: the strongest at the end of the range. */
 const AUTO_COMPETITORS = 4;
-/** Markers of each kind shown at once, so the chart stays readable. */
-const MARKERS_PER_KIND = 3;
+/** Prompt-day markers shown at once, so the chart stays readable. */
+const MAX_MARKERS = 3;
 
 export const OWN_BRAND_COLOR = '#22c55e';
 /** Competitor colors in line order: pin order, or rank without pins. */
@@ -64,12 +63,11 @@ export function trendLines<E extends Entity>(
 
 export interface TrendMarkerData {
   promptsAdded: { day: string; count: number }[];
-  actionsSent: { day: string; actionNos: number[] }[];
   /** The active "AI visibility" Action Center KPI's target; null without one. */
   goal: number | null;
 }
 
-/** The insights_trend_markers payload (00136). */
+/** The insights_trend_markers payload (00136); its actions_sent isn't shown. */
 export function parseTrendMarkers(raw: unknown): Omit<TrendMarkerData, 'goal'> {
   const r = (raw ?? {}) as Record<string, unknown>;
   const rows = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]) : []);
@@ -78,44 +76,25 @@ export function parseTrendMarkers(raw: unknown): Omit<TrendMarkerData, 'goal'> {
       day: String(d.day),
       count: Number(d.count ?? 0),
     })),
-    actionsSent: rows(r.actions_sent).map((d) => ({
-      day: String(d.day),
-      actionNos: Array.isArray(d.action_nos) ? d.action_nos.map(Number) : [],
-    })),
   };
 }
 
-export type TrendMarker =
-  | { kind: 'prompts'; day: string; date: string | null; count: number }
-  | { kind: 'actions'; day: string; date: string | null; actionNos: number[] };
+export type TrendMarker = { kind: 'prompts'; day: string; date: string | null; count: number };
 
 /**
  * The markers, each on the chart point of its day (or the next day with a
- * point): the days the most prompts were added and the latest days actions
- * were sent, three of each at most, in day order. A day after the last point
+ * point): the days the most prompts were added, three at most, in day order. A day after the last point
  * (the latest run hasn't landed yet) gets no `date`: it is listed under the
  * chart but not drawn on a day it didn't happen.
  */
 export function trendMarkers(data: TrendMarkerData, points: Point[]): TrendMarker[] {
   const dateOf = (day: string) => points.find((p) => p.day >= day)?.date ?? null;
 
-  const prompts = [...data.promptsAdded]
+  return [...data.promptsAdded]
     .sort((a, b) => b.count - a.count || b.day.localeCompare(a.day))
-    .slice(0, MARKERS_PER_KIND)
-    .map((d) => ({ kind: 'prompts' as const, day: d.day, date: dateOf(d.day), count: d.count }));
-  const actions = [...data.actionsSent]
-    .sort((a, b) => b.day.localeCompare(a.day))
-    .slice(0, MARKERS_PER_KIND)
-    .map((d) => ({
-      kind: 'actions' as const,
-      day: d.day,
-      date: dateOf(d.day),
-      actionNos: d.actionNos,
-    }));
-
-  return [...prompts, ...actions].sort(
-    (a, b) => a.day.localeCompare(b.day) || a.kind.localeCompare(b.kind),
-  );
+    .slice(0, MAX_MARKERS)
+    .map((d) => ({ kind: 'prompts' as const, day: d.day, date: dateOf(d.day), count: d.count }))
+    .sort((a, b) => a.day.localeCompare(b.day));
 }
 
 /**

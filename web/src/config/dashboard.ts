@@ -6,6 +6,7 @@ import {
   Gauge,
   Globe,
   LineChart,
+  MessageCircleMore,
   Quote,
   ShoppingBag,
   Sparkles,
@@ -87,6 +88,13 @@ export const dashboardNav: NavGroup[] = [
         title: 'Topics',
         href: '/dashboard/topics',
         icon: Tag,
+      },
+      // Mentions & Sentiment (MS-05): beside Citations, its sibling concept.
+      {
+        title: 'Mentions',
+        href: '/dashboard/mentions',
+        icon: MessageCircleMore,
+        badge: 'New',
       },
       {
         title: 'Citations',
