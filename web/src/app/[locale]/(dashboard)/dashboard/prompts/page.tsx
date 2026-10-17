@@ -176,6 +176,11 @@ import { formatCompactNumber, formatNumber } from '@/lib/format';
 import { usePagination, TablePager } from '@/components/table-pager';
 import { PromptPositionsSheet } from '@/components/prompts/prompt-positions-sheet';
 import {
+  ClampedText,
+  ClampedTextTooltip,
+  createClampedTextHandle,
+} from '@/components/prompts/clamped-text';
+import {
   panelRangeFromTable,
   parsePositionsRange,
   positionsUrlParams,
@@ -1780,10 +1785,6 @@ export default function PromptsPage() {
           <h1 className="text-2xl font-bold tracking-tight">Prompts</h1>
           <p className="text-muted-foreground text-sm">
             Manage every tracked prompt and review estimated AI demand
-            <span className="ml-2 inline-flex items-center gap-1 text-xs text-muted-foreground/70">
-              <AlertCircle className="h-3 w-3" />
-              Volumes are estimates, not exact figures
-            </span>
           </p>
         </div>
       </div>
@@ -2614,6 +2615,8 @@ function AllPromptsTab({
   onChanged: () => void;
 }) {
   const tCommon = useTranslations('common');
+  // One tooltip for every prompt and topic the table cuts short.
+  const fullText = useMemo(() => createClampedTextHandle(), []);
   const tUsage = useTranslations('prompts.usage');
   const format = useFormatter();
   const tDelete = useTranslations('prompts.bulkDelete');
@@ -3467,18 +3470,32 @@ function AllPromptsTab({
                           aria-label={`Select ${p.text}`}
                         />
                       )}
-                      <Link
-                        href={`/dashboard/prompts/${p.id}`}
-                        className="line-clamp-2 transition-colors hover:text-primary hover:underline"
-                      >
-                        {p.text}
-                      </Link>
+                      <ClampedText
+                        handle={fullText}
+                        text={p.text}
+                        render={
+                          <Link
+                            href={`/dashboard/prompts/${p.id}`}
+                            className="line-clamp-2 transition-colors hover:text-primary hover:underline"
+                          />
+                        }
+                      />
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className="text-xs text-muted-foreground truncate inline-block max-w-[140px] align-middle">
-                      {p.category?.trim() ? p.category : '—'}
-                    </span>
+                    {p.category?.trim() ? (
+                      <ClampedText
+                        handle={fullText}
+                        text={p.category}
+                        render={
+                          <span className="text-xs text-muted-foreground truncate inline-block max-w-[140px] align-middle" />
+                        }
+                      />
+                    ) : (
+                      <span className="text-xs text-muted-foreground inline-block align-middle">
+                        —
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge
@@ -3633,6 +3650,7 @@ function AllPromptsTab({
             })}
           </TableBody>
         </Table>
+        <ClampedTextTooltip handle={fullText} />
         <TablePager
           page={promptsPager.page}
           totalPages={promptsPager.totalPages}

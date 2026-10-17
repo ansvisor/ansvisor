@@ -359,33 +359,41 @@ describe('getQueryFanout — engines', () => {
 
   it('says when an engine that shares its searches last did, and only for such an engine', async () => {
     resultRows = [
-      ...Array.from({ length: 20 }, () => answer('p-loud', [], 'chatgpt-web')),
+      ...Array.from({ length: 20 }, () => answer('p-loud', [], 'perplexity-web')),
       ...Array.from({ length: 20 }, () => answer('p-loud', [], 'gemini-web')),
+      ...Array.from({ length: 20 }, () => answer('p-loud', [], 'chatgpt-web')),
     ];
     lastFanoutRows = {
-      'chatgpt-web': '2026-09-29T05:12:00Z',
+      'perplexity-web': '2026-09-29T05:12:00Z',
       'gemini-web': '2026-09-01T00:00:00Z',
+      'chatgpt-web': '2026-09-29T05:12:00Z',
     };
     const { getQueryFanout } = await import('./fanout');
 
     const { engines } = await getQueryFanout('brand-1');
 
-    expect(engines.find((e) => e.platform === 'chatgpt-web')?.lastFanoutAt).toBe(
+    expect(engines.find((e) => e.platform === 'perplexity-web')?.lastFanoutAt).toBe(
       '2026-09-29T05:12:00Z',
     );
-    // Gemini never shares searches, so there is nothing to look back for.
+    // Gemini never shares searches, and ChatGPT no longer does (#1119), so
+    // there is nothing to look back for.
     expect(engines.find((e) => e.platform === 'gemini-web')?.lastFanoutAt).toBeNull();
-    expect(calls.filter((c) => c.single).map((c) => c.eq.platform)).toEqual(['chatgpt-web']);
+    expect(engines.find((e) => e.platform === 'chatgpt-web')?.lastFanoutAt).toBeNull();
+    expect(calls.filter((c) => c.single).map((c) => c.eq.platform)).toEqual(['perplexity-web']);
   });
 
   it('does not look back for an engine with too few answers to tell', async () => {
-    resultRows = Array.from({ length: 4 }, () => answer('p-loud', [], 'chatgpt-web'));
-    lastFanoutRows = { 'chatgpt-web': '2026-09-29T05:12:00Z' };
+    resultRows = Array.from({ length: 4 }, () => answer('p-loud', [], 'perplexity-web'));
+    lastFanoutRows = { 'perplexity-web': '2026-09-29T05:12:00Z' };
     const { getQueryFanout } = await import('./fanout');
 
     const { engines } = await getQueryFanout('brand-1');
 
-    expect(engines[0]).toMatchObject({ platform: 'chatgpt-web', answers: 4, lastFanoutAt: null });
+    expect(engines[0]).toMatchObject({
+      platform: 'perplexity-web',
+      answers: 4,
+      lastFanoutAt: null,
+    });
     expect(calls.filter((c) => c.single)).toHaveLength(0);
   });
 });

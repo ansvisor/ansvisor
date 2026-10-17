@@ -23,6 +23,7 @@ import {
   Quote,
   Wrench,
 } from 'lucide-react';
+import { AIProviderAvatar, type AIProviderKey } from '@/components/ai-provider-avatar';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
@@ -48,6 +49,8 @@ import {
   type SignalStatus,
 } from '@/lib/signals/registry';
 import { signalAffected, signalTexts } from '@/lib/signals/display';
+import { locationName, platformFamily, platformName } from '@/lib/signals/names';
+import type { SignalWhere } from '@/lib/signals/where';
 import { formatRelative } from '@/lib/format-relative';
 import { cn } from '@/lib/utils';
 
@@ -184,6 +187,86 @@ export function SignalKindIcon({
   return <Icon className={className} />;
 }
 
+const MAX_PLATFORM_ICONS = 4;
+const MAX_LOCATIONS = 2;
+
+/**
+ * Where a signal happened (AC-002), as one line under Affected: an icon per
+ * engine, then the location codes, with every platform and location named on
+ * hover. A line rather than its own column, because the table is already as
+ * wide as the page beside a pinned sidebar. Signals about a competitor, a
+ * domain or the whole brand have no place of their own and show nothing, and
+ * neither does a signal whose one place Affected already names ("Gemini").
+ */
+export function SignalWhereLine({
+  where,
+  besides = [],
+}: {
+  where: SignalWhere;
+  /** What the cell already says, so a lone platform or location isn't repeated. */
+  besides?: (string | null)[];
+}) {
+  const t = useTranslations('actionCenter.signalsPage');
+  const places = [...where.platforms.map(platformName), ...where.regions.map(locationName)];
+  if (places.length === 0 || (places.length === 1 && besides.includes(places[0]))) return null;
+
+  // Engines sharing one icon (the ChatGPT app and its API) show it once.
+  const engines = new Map<string, { family: AIProviderKey | null; names: string[] }>();
+  for (const slug of where.platforms) {
+    const family = platformFamily(slug);
+    const key = family ?? slug;
+    const entry = engines.get(key) ?? { family, names: [] };
+    entry.names.push(platformName(slug));
+    engines.set(key, entry);
+  }
+  const shown = [...engines.entries()].slice(0, MAX_PLATFORM_ICONS);
+  const hidden = engines.size - shown.length;
+  const platformNames = [...engines.values()].flatMap((engine) => engine.names).join(', ');
+  const locationNames = where.regions.map(locationName).join(', ');
+  const locations = where.regions.slice(0, MAX_LOCATIONS);
+  const label = [
+    platformNames && t('where.platforms', { names: platformNames }),
+    locationNames && t('where.locations', { names: locationNames }),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <div className="mt-1 flex min-w-0 items-center gap-1 overflow-hidden" title={label}>
+      <span className="sr-only">{label}</span>
+      {shown.map(([key, { family, names }]) =>
+        family ? (
+          <span key={key} aria-hidden="true" className="flex shrink-0">
+            <AIProviderAvatar provider={family} className="h-4 w-4 shrink-0" />
+          </span>
+        ) : (
+          <span key={key} aria-hidden="true" className="min-w-0 truncate text-xs">
+            {names[0]}
+          </span>
+        ),
+      )}
+      {hidden > 0 && (
+        <span aria-hidden="true" className="shrink-0 text-xs text-muted-foreground">
+          +{hidden}
+        </span>
+      )}
+      {locations.length > 0 && (
+        <span
+          aria-hidden="true"
+          className={cn(
+            'min-w-0 truncate text-xs text-muted-foreground',
+            engines.size > 0 && 'ml-1',
+          )}
+        >
+          {locations.join(' · ')}
+          {where.regions.length > locations.length &&
+            ` +${where.regions.length - locations.length}`}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function SignalTable({
   signals,
   onSelect,
@@ -256,6 +339,10 @@ export function SignalTable({
                   {affected.detail && (
                     <p className="truncate text-xs text-muted-foreground">{affected.detail}</p>
                   )}
+                  <SignalWhereLine
+                    where={signal.where}
+                    besides={[affected.label, affected.detail]}
+                  />
                 </TableCell>
                 <TableCell>
                   <p className="text-xs tabular-nums">
