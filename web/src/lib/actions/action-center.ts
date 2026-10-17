@@ -11,6 +11,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { API_BASE_URL } from '@/config/api';
 import {
   type ActionCategory,
   type ActionImpact,
@@ -307,6 +308,29 @@ export async function updateActionStatus(
     .eq('id', actionId);
   if (error) throw new Error(error.message);
   await logEvent(supabase, actionId, 'status_changed', { to: status });
+}
+
+/**
+ * Delete an action from its row menu (admins and managers). The server hides
+ * it rather than removing it: dismissed, with deleted_at (00168), so it
+ * leaves every list while the nightly generator keeps its rest window.
+ */
+export async function deleteAction(actionId: string): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  const res = await fetch(`${API_BASE_URL}/api/action-center/actions/${actionId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error: ${res.status}`);
+  }
 }
 
 export async function assignAction(

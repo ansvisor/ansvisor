@@ -47,6 +47,7 @@ function builder(table: string) {
   const chain = {
     select: () => chain,
     eq: () => chain,
+    is: () => chain,
     in: () => chain,
     order: (column: string, options?: Record<string, unknown>) => {
       if (table === 'actions') orders.push([column, options]);

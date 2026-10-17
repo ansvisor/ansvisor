@@ -1,20 +1,43 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   BarChart3,
+  Check,
+  CirclePlay,
   MessageSquare,
+  MoreHorizontal,
   MousePointerClick,
   Swords,
+  Trash2,
   Wrench,
   ShieldCheck,
   Layers,
   Quote,
   Sparkles,
   Target,
+  X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Table,
   TableBody,
@@ -145,14 +168,113 @@ export function AssigneeAvatar({ assignee }: { assignee: ActionItem['assignee'] 
   );
 }
 
+/**
+ * The menu column stays at the table's right edge: the table scrolls
+ * sideways below about 1,100px, and the menu is what a row is reached for.
+ * Opaque, with the row's hover tint, so it covers what scrolls under it.
+ */
+const MENU_CELL =
+  'sticky right-0 z-[5] w-10 bg-background [tr:hover>&]:bg-[color-mix(in_oklab,var(--muted)_50%,var(--background))]';
+
+/** The statuses the row menu sets, in its order. */
+const MENU_STATUSES = [
+  { status: 'in_progress', icon: CirclePlay },
+  { status: 'completed', icon: Check },
+  { status: 'dismissed', icon: X },
+] as const;
+
+/**
+ * An action's row menu: set it In Progress, Completed or Dismissed, or
+ * delete it, without opening the drawer. The status it already has is off;
+ * Delete asks first, and is off for members who can't delete.
+ */
+function ActionMenu({
+  action,
+  title,
+  canDelete,
+  disabled,
+  onStatusChange,
+  onDelete,
+}: {
+  action: ActionItem;
+  title: string;
+  canDelete: boolean;
+  disabled: boolean;
+  onStatusChange: (action: ActionItem, status: ActionStatus) => void;
+  onDelete: (action: ActionItem) => void;
+}) {
+  const t = useTranslations('actionCenter.actionsPage');
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className="rounded p-1 text-muted-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+          disabled={disabled}
+          aria-label={t('rowMenu.label', { title })}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-40">
+          {MENU_STATUSES.map(({ status, icon: Icon }) => (
+            <DropdownMenuItem
+              key={status}
+              disabled={action.status === status}
+              onClick={() => onStatusChange(action, status)}
+            >
+              <Icon className="h-4 w-4" />
+              {t(`rowMenu.${status}`)}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            variant="destructive"
+            disabled={!canDelete}
+            title={canDelete ? undefined : t('rowMenu.deleteNotAllowed')}
+            onClick={() => setConfirming(true)}
+          >
+            <Trash2 className="h-4 w-4" />
+            {t('rowMenu.delete')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Dialog open={confirming} onOpenChange={setConfirming}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('rowMenu.deleteTitle')}</DialogTitle>
+            <DialogDescription>{t('rowMenu.deleteConfirm')}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>{t('rowMenu.cancel')}</DialogClose>
+            <DialogClose render={<Button variant="destructive" onClick={() => onDelete(action)} />}>
+              {t('rowMenu.delete')}
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export function ActionTable({
   actions,
   onSelect,
+  onStatusChange,
+  onDelete,
+  canDelete = false,
+  busyIds,
 }: {
   actions: ActionItem[];
   onSelect: (action: ActionItem) => void;
+  /** With these, each row gets its menu (status changes and Delete). */
+  onStatusChange?: (action: ActionItem, status: ActionStatus) => void;
+  onDelete?: (action: ActionItem) => void;
+  canDelete?: boolean;
+  /** Actions with a change in flight: their menu waits. */
+  busyIds?: Set<string>;
 }) {
   const t = useTranslations('actionCenter.actionsPage');
+  const withMenu = Boolean(onStatusChange && onDelete);
   const tTexts = useTranslations('actionCenter.actionTexts');
   const tCategories = useTranslations('actionCenter.actionCategories');
   const tCommon = useTranslations('common');
@@ -168,6 +290,11 @@ export function ActionTable({
             <TableHead className="text-xs">{t('table.assignee')}</TableHead>
             <TableHead className="text-xs">{t('table.dueDate')}</TableHead>
             <TableHead className="text-xs">{t('table.updated')}</TableHead>
+            {withMenu && (
+              <TableHead className={MENU_CELL}>
+                <span className="sr-only">{t('table.actions')}</span>
+              </TableHead>
+            )}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -241,6 +368,19 @@ export function ActionTable({
                 <TableCell className="text-xs text-muted-foreground">
                   {formatRelative(action.updatedAt, tCommon)}
                 </TableCell>
+                {withMenu && onStatusChange && onDelete && (
+                  // The menu works on the row without opening the drawer.
+                  <TableCell className={MENU_CELL} onClick={(e) => e.stopPropagation()}>
+                    <ActionMenu
+                      action={action}
+                      title={texts.title}
+                      canDelete={canDelete}
+                      disabled={busyIds?.has(action.id) ?? false}
+                      onStatusChange={onStatusChange}
+                      onDelete={onDelete}
+                    />
+                  </TableCell>
+                )}
               </TableRow>
             );
           })}
