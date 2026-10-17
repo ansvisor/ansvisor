@@ -44,14 +44,24 @@ export interface PlatformDot {
   mentionedRuns: number;
 }
 
+/**
+ * Where the brand stands in a prompt's answers across its platforms, for the
+ * table's Performance filter. The dots' rule, over all the prompt's answers:
+ * - best     named in the first third of the brands an answer lists
+ * - good     named in the middle third, or named with no stored position
+ * - late     named in the last third
+ * - missing  named in fewer than half the runs, or never
+ */
+export type PromptPerformance = 'best' | 'good' | 'late' | 'missing';
+
 export interface PromptPositionCell {
   /** Average mention position over the window; null when never ranked. */
   avg: number | null;
   /** Previous period's average minus this one: positive means it moved up. */
   delta: number | null;
   dots: PlatformDot[];
-  /** Late or missing on at least one platform — the "work queue" filter. */
-  lateOrMissing: boolean;
+  /** Null when nothing was tracked in the window. */
+  performance: PromptPerformance | null;
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -60,6 +70,21 @@ function average(rows: PlatformPositionRow[]): number | null {
   const sum = rows.reduce((a, r) => a + r.positionSum, 0);
   const count = rows.reduce((a, r) => a + r.positionCount, 0);
   return count > 0 ? round1(sum / count) : null;
+}
+
+function performanceOf(rows: PlatformPositionRow[]): PromptPerformance | null {
+  const sum = (key: Exclude<keyof PlatformPositionRow, 'platform'>) =>
+    rows.reduce((a, r) => a + r[key], 0);
+  const runs = sum('runs');
+  if (runs === 0) return null;
+  if (sum('mentionAnswers') < runs * MIN_MENTION_RATE) return 'missing';
+  const count = sum('positionCount');
+  if (count === 0) return 'good';
+  const rank = sum('positionSum') / count;
+  const entities = sum('entityCount');
+  const total = entities > 0 ? sum('entitySum') / entities : rank;
+  const tone = positionTone(rank, Math.max(total, rank));
+  return tone === 'Early' ? 'best' : tone === 'Mid' ? 'good' : 'late';
 }
 
 function dotState(row: PlatformPositionRow | undefined): PlatformDotState {
@@ -106,7 +131,7 @@ export function buildPositionCell(
     avg,
     delta: avg !== null && prev !== null ? round1(prev - avg) : null,
     dots,
-    lateOrMissing: dots.some((d) => d.state === 'late' || d.state === 'missing'),
+    performance: performanceOf(now),
   };
 }
 
@@ -144,12 +169,11 @@ export function opensPositionsPanel(answers: AnswerCounts | undefined): boolean 
 }
 
 /**
- * Orders prompts furthest behind first, for the "Late or missing" filter.
- * Nearly every tracked prompt is late or missing somewhere, so the filter
- * alone barely changes the table; this puts first the prompts late or missing
- * on the most platforms, then those missing on more of them, then the worse
- * average position, a prompt never ranked counting as the furthest back.
- * Negative when `a` is further behind.
+ * Orders prompts furthest behind first, for the Performance filter's Late and
+ * Missing: first the prompts late or missing on the most platforms, then
+ * those missing on more of them, then the worse average position, a prompt
+ * never ranked counting as the furthest back. Negative when `a` is further
+ * behind.
  */
 export function compareLateness(
   a: PromptPositionCell | undefined,
