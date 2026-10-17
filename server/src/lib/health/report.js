@@ -145,8 +145,11 @@ async function checkCloro(now) {
  *    too; or
  *  - its share over the last day fell below FANOUT_DROP_RATIO of its share
  *    over the BASELINE_DAYS before, for any other platform that fans out.
+ *
+ * ChatGPT isn't expected: its default interface carries no query text since
+ * that day, and we no longer ask Cloro for it (#1119).
  */
-export const FANOUT_EXPECTED = ['chatgpt-web', 'copilot-web', 'perplexity-web'];
+export const FANOUT_EXPECTED = ['copilot-web', 'perplexity-web'];
 export const FANOUT_DROP_RATIO = 0.25;
 /** Fewer answers than this, on either side, are too few to judge. */
 export const FANOUT_MIN_ANSWERS = 20;

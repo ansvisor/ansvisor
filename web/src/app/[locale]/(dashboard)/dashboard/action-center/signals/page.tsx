@@ -25,6 +25,8 @@ import {
   type SignalStatus,
 } from '@/lib/signals/registry';
 import { signalAffected, signalTexts } from '@/lib/signals/display';
+import { isOnPlatform, locationName, platformName } from '@/lib/signals/names';
+import { getAIProviderDisplayName, type AIProviderKey } from '@/components/ai-provider-avatar';
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
 import { isSuperseded, SignalTable } from '@/components/action-center/signal-table';
 import { SignalDrawer } from '@/components/action-center/signal-drawer';
@@ -50,8 +52,23 @@ const SIGNAL_EXPORT_HEADERS = [
   'impact',
   'status',
   'sources',
+  'platforms',
+  'locations',
   'detected',
   'last_detected',
+];
+
+// The engines the Platform filter can name, in the order it lists them.
+const PLATFORM_FILTERS: readonly AIProviderKey[] = [
+  'openai',
+  'googleAio',
+  'googleAiMode',
+  'google',
+  'perplexity',
+  'copilot',
+  'anthropic',
+  'xai',
+  'meta',
 ];
 
 const KpiSparkline = dynamic(() => import('@/components/action-center/kpi-sparkline'), {
@@ -107,6 +124,7 @@ function SignalsContent({ brand }: { brand: Brand }) {
   const [impact, setImpact] = useState<SignalImpact | 'all'>('all');
   const [status, setStatus] = useState<SignalStatus | 'all'>('all');
   const [source, setSource] = useState<SignalSource | 'all'>('all');
+  const [platform, setPlatform] = useState<AIProviderKey | 'all'>('all');
   const [search, setSearch] = useState('');
 
   // Filters and search live in the URL (#896) so a refresh keeps them and a
@@ -120,6 +138,9 @@ function SignalsContent({ brand }: { brand: Brand }) {
     setImpact(readUrlChoice<SignalImpact | 'all'>('impact', ['all', ...SIGNAL_IMPACTS], 'all'));
     setStatus(readUrlChoice<SignalStatus | 'all'>('status', ['all', ...SIGNAL_STATUSES], 'all'));
     setSource(readUrlChoice<SignalSource | 'all'>('source', ['all', ...SIGNAL_SOURCES], 'all'));
+    setPlatform(
+      readUrlChoice<AIProviderKey | 'all'>('platform', ['all', ...PLATFORM_FILTERS], 'all'),
+    );
     setSearch(readUrlParam('q'));
     setUrlRead(true);
   }, []);
@@ -130,13 +151,20 @@ function SignalsContent({ brand }: { brand: Brand }) {
     const timer = setTimeout(
       () =>
         writeUrlParams(
-          { range: datePreset, category, impact, status, source, q: search.trim() },
-          { range: '30d', category: 'all', impact: 'all', status: 'all', source: 'all' },
+          { range: datePreset, category, impact, status, source, platform, q: search.trim() },
+          {
+            range: '30d',
+            category: 'all',
+            impact: 'all',
+            status: 'all',
+            source: 'all',
+            platform: 'all',
+          },
         ),
       300,
     );
     return () => clearTimeout(timer);
-  }, [urlRead, datePreset, category, impact, status, source, search]);
+  }, [urlRead, datePreset, category, impact, status, source, platform, search]);
 
   const [selected, setSelected] = useState<Signal | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -199,16 +227,33 @@ function SignalsContent({ brand }: { brand: Brand }) {
       if (impact !== 'all' && signal.impact !== impact) return false;
       if (status !== 'all' && signal.status !== status) return false;
       if (source !== 'all' && !signal.source.includes(source)) return false;
+      if (platform !== 'all' && !isOnPlatform(signal.where.platforms, platform)) return false;
       if (needle) {
         const texts = signalTexts(signal, tTexts);
         const affected = signalAffected(signal, t);
+        const where = [
+          ...signal.where.platforms.map(platformName),
+          ...signal.where.regions.map(locationName),
+        ].join(' ');
         const haystack =
-          `${texts.title} ${texts.description} ${affected.detail ?? ''}`.toLowerCase();
+          `${texts.title} ${texts.description} ${affected.detail ?? ''} ${where}`.toLowerCase();
         if (!haystack.includes(needle)) return false;
       }
       return true;
     });
-  }, [signals, category, impact, status, source, search, tTexts, t]);
+  }, [signals, category, impact, status, source, platform, search, tTexts, t]);
+
+  // Only the engines this window's signals are about, plus a picked one that
+  // has none, so the filter never offers an empty choice it can't explain.
+  const platformOptions = useMemo(
+    () =>
+      PLATFORM_FILTERS.filter(
+        (family) =>
+          family === platform ||
+          (signals ?? []).some((signal) => isOnPlatform(signal.where.platforms, family)),
+      ).map((family) => ({ value: family, label: getAIProviderDisplayName(family) })),
+    [signals, platform],
+  );
 
   const handleExportCsv = useCallback(() => {
     if (visible.length === 0) return;
@@ -219,6 +264,8 @@ function SignalsContent({ brand }: { brand: Brand }) {
       impact: t(`impact.${signal.impact}`),
       status: isSuperseded(signal) ? t('superseded') : t(`status.${signal.status}`),
       sources: signal.source.map((item) => t(`sources.${item}`)).join(', '),
+      platforms: signal.where.platforms.map(platformName).join(', '),
+      locations: signal.where.regions.map(locationName).join(', '),
       detected: signal.detectedAt,
       last_detected: signal.lastDetectedAt,
     }));
@@ -271,13 +318,19 @@ function SignalsContent({ brand }: { brand: Brand }) {
   }, [windowDays]);
 
   const hasActiveFilters =
-    category !== 'all' || impact !== 'all' || status !== 'all' || source !== 'all' || search !== '';
+    category !== 'all' ||
+    impact !== 'all' ||
+    status !== 'all' ||
+    source !== 'all' ||
+    platform !== 'all' ||
+    search !== '';
 
   const clearFilters = () => {
     setCategory('all');
     setImpact('all');
     setStatus('all');
     setSource('all');
+    setPlatform('all');
     setSearch('');
   };
 
@@ -439,6 +492,13 @@ function SignalsContent({ brand }: { brand: Brand }) {
           value={source}
           onChange={(v) => setSource(v as SignalSource | 'all')}
           options={SIGNAL_SOURCES.map((v) => ({ value: v, label: t(`sources.${v}`) }))}
+          allLabel={t('filters.all')}
+        />
+        <FilterSelect
+          label={t('filters.platform')}
+          value={platform}
+          onChange={(v) => setPlatform(v as AIProviderKey | 'all')}
+          options={platformOptions}
           allLabel={t('filters.all')}
         />
         <div className="relative">
