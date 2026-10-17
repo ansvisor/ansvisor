@@ -2385,6 +2385,7 @@
       "viewBreakdown": "{metric}: view breakdown",
       "openPrompts": "Tracked prompts: open Prompts",
       "openCitations": "Citations: open Citations",
+      "openMentions": "Mentions: open Mentions",
       "visibility": "Visibility",
       "visibilityTip": "AI Visibility Score (0–100) from how often answers name you, cite your site and how early you're named. See Formulas.",
       "rankOf": "#{rank} of {count} brands",
