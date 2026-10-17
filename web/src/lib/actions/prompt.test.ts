@@ -18,6 +18,14 @@ let writes: unknown[] = [];
 let promptSetRows: Record<string, unknown>[] = [];
 let positionData: Record<string, unknown>[] = [];
 let positionsError: string | null = null;
+/** The window before, for the trend; the current window's rows when null. */
+let previousPositionData: Record<string, unknown>[] | null = null;
+/** Null as the RPC returns it for a caller outside the brand's organization. */
+let positionsNull = false;
+/** The web deployed before 00153: PostgREST can't find the jsonb RPC. */
+let jsonRpcMissing = false;
+/** The position RPC calls, and whether any asked for a slice. */
+let positionCalls: { fn: string; ranged: boolean }[] = [];
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/actions/volumes', () => ({ getPromptVolumes: vi.fn() }));
@@ -29,15 +37,40 @@ vi.mock('@/lib/guards/plan-guard', () => ({
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
-    rpc: async (fn: string) => {
-      if (fn === 'prompt_position_summaries') {
-        return positionsError
-          ? { data: null, error: { message: positionsError } }
-          : { data: positionData, error: null };
-      }
-      return usageFails
-        ? { data: null, error: { message: 'rpc failed' } }
-        : { data: [{ brand_id: 'b1', locations: usedLocations }], error: null };
+    // The position sums come as one jsonb value (00153), which PostgREST's
+    // 1000-row cap doesn't cut; the old row-returning RPC would have been cut.
+    rpc: (fn: string, args?: { p_date_to?: string }) => {
+      const call = { fn, ranged: false };
+      if (fn.startsWith('prompt_position_summaries')) positionCalls.push(call);
+      const result = () => {
+        if (fn === 'prompt_position_summaries_json' && jsonRpcMissing) {
+          return {
+            data: null,
+            error: { code: 'PGRST202', message: 'Could not find the function' },
+          };
+        }
+        if (fn === 'prompt_position_summaries_json') {
+          // Only the window before the current one has an end.
+          const rows = (args?.p_date_to && previousPositionData) || positionData;
+          if (positionsError) return { data: null, error: { message: positionsError } };
+          return { data: positionsNull ? null : rows, error: null };
+        }
+        if (fn === 'prompt_position_summaries') {
+          return { data: positionData.slice(0, 1000), error: null };
+        }
+        return usageFails
+          ? { data: null, error: { message: 'rpc failed' } }
+          : { data: [{ brand_id: 'b1', locations: usedLocations }], error: null };
+      };
+      const chain = {
+        order: () => chain,
+        range: () => {
+          call.ranged = true;
+          return chain;
+        },
+        then: (resolve: (value: unknown) => unknown) => resolve(result()),
+      };
+      return chain;
     },
     from: (table: string) => ({
       select: () => ({
@@ -224,6 +257,10 @@ describe('getPromptsPageData', () => {
       },
     ];
     positionsError = null;
+    previousPositionData = null;
+    positionsNull = false;
+    jsonRpcMissing = false;
+    positionCalls = [];
     vi.mocked(getPromptVolumes).mockResolvedValue({ volumes: [], quota: {} as VolumeQuota });
     vi.mocked(getPromptVisibilitySummaries).mockResolvedValue({});
     // The location quota fails here (no brand row), which the page also absorbs.
@@ -239,6 +276,66 @@ describe('getPromptsPageData', () => {
 
     expect(page.positions.p1.avg).toBe(2);
     expect(page.positions.p1.dots.map((d) => d.id)).toEqual(['chatgpt-web']);
+  });
+
+  /** 1000 rows of other prompts, which come before p1's in the RPC's order. */
+  const others = () =>
+    Array.from({ length: 1000 }, (_, i) => ({
+      prompt_id: `other-${String(i).padStart(4, '0')}`,
+      platform: 'chatgpt-web',
+      runs: 1,
+      mention_answers: 0,
+      position_sum: 0,
+      position_count: 0,
+      entity_sum: 0,
+      entity_count: 0,
+    }));
+
+  it("reads every prompt's positions in one call, past PostgREST's 1000-row cap", async () => {
+    // A busy brand's 30 days: p1's row comes after 1000 others. Read as rows,
+    // the cap dropped it and p1 read —.
+    positionData = [...others(), positionData[0]];
+
+    const page = await getPromptsPageData('b1');
+
+    expect(page.positions.p1.avg).toBe(2);
+    // One call per window, the current one and the one before it for the
+    // trend, neither paged: paging re-ran the whole aggregate for every page.
+    expect(positionCalls).toEqual([
+      { fn: 'prompt_position_summaries_json', ranged: false },
+      { fn: 'prompt_position_summaries_json', ranged: false },
+    ]);
+  });
+
+  it("reads the trend's previous window past the cap too", async () => {
+    // Before: #3 on average (12 / 4); now #2, so the cell shows ↑1.
+    previousPositionData = [...others(), { ...positionData[0], position_sum: 12 }];
+
+    const page = await getPromptsPageData('b1');
+
+    expect(page.positions.p1).toMatchObject({ avg: 2, delta: 1 });
+  });
+
+  it('falls back to the row RPC when the web deploys before 00153', async () => {
+    jsonRpcMissing = true;
+
+    const page = await getPromptsPageData('b1');
+
+    expect(page.positions.p1.avg).toBe(2);
+    expect(positionCalls.map((c) => c.fn)).toEqual([
+      'prompt_position_summaries_json',
+      'prompt_position_summaries_json',
+      'prompt_position_summaries',
+      'prompt_position_summaries',
+    ]);
+  });
+
+  it("shows — when the caller is outside the brand's organization (null sums)", async () => {
+    positionsNull = true;
+
+    const page = await getPromptsPageData('b1');
+
+    expect(page.positions.p1).toMatchObject({ avg: null, delta: null });
   });
 
   it('shows — in the Positions column when the position query fails, instead of failing the page', async () => {

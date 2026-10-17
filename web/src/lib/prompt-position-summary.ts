@@ -4,7 +4,7 @@
  * the same length, and one dot per platform.
  *
  * Pure on purpose: the server action loads per-platform sums
- * (prompt_position_summaries, 00123) and this turns them into the cell. The
+ * (prompt_position_summaries_json, 00153) and this turns them into the cell. The
  * average is the Positions panel's: the mean mention position over the
  * answers that mention the brand, on the plan-included platforms.
  */
