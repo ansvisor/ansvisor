@@ -10,17 +10,33 @@ import { MentionsListTab } from './_mentions-tab';
 
 const listMentions = vi.fn();
 const getMentionResponse = vi.fn();
+const sendMentionsToActionCenter = vi.fn();
 vi.mock('@/lib/actions/mentions', () => ({
   listMentions: (...args: unknown[]) => listMentions(...args),
   getMentionResponse: (...args: unknown[]) => getMentionResponse(...args),
+  sendMentionsToActionCenter: (...args: unknown[]) => sendMentionsToActionCenter(...args),
 }));
+const suggestContentForPrompt = vi.fn();
+vi.mock('@/lib/actions/content', () => ({
+  suggestContentForPrompt: (...args: unknown[]) => suggestContentForPrompt(...args),
+  getGenerationJobStatus: vi.fn(),
+}));
+const push = vi.fn();
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...props}>
       {children}
     </a>
   ),
+  useRouter: () => ({ push }),
 }));
+const toast = vi.hoisted(() => ({
+  loading: vi.fn(() => 'toast-1'),
+  success: vi.fn(),
+  info: vi.fn(),
+  error: vi.fn(),
+}));
+vi.mock('sonner', () => ({ toast }));
 
 (
   globalThis as typeof globalThis & {
@@ -104,6 +120,10 @@ afterEach(() => {
   container.remove();
   listMentions.mockReset();
   getMentionResponse.mockReset();
+  sendMentionsToActionCenter.mockReset();
+  suggestContentForPrompt.mockReset();
+  push.mockReset();
+  Object.values(toast).forEach((fn) => fn.mockClear());
   vi.useRealTimers();
 });
 
@@ -200,6 +220,85 @@ describe('MentionsListTab', () => {
     expect(cited[1]).toContain('cremaclub.com');
     expect(cited[1]).toContain('Competitor');
     expect(cited[2]).toContain('Forum');
+  });
+
+  it('sends the ticked answers to the Action Center as one action', async () => {
+    listMentions.mockResolvedValue(list());
+    sendMentionsToActionCenter.mockResolvedValue({ actionId: 'a1', actionNo: 62, created: true });
+    render(tab());
+    await settle();
+
+    const boxes = () => [...container.querySelectorAll('button[role="checkbox"]')] as HTMLElement[];
+    // The header's box, then one per row.
+    expect(boxes()).toHaveLength(3);
+    act(() => boxes()[1].click());
+    expect(container.textContent).toContain('1 answer selected');
+    // Ticking doesn't open the answer.
+    expect(getMentionResponse).not.toHaveBeenCalled();
+    act(() => boxes()[0].click());
+    expect(container.textContent).toContain('2 answers selected');
+
+    const send = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Send to Action Center',
+    ) as HTMLElement;
+    await act(async () => {
+      send.click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(sendMentionsToActionCenter).toHaveBeenCalledWith('b1', [
+      { id: 'r1', excerpt: 'Crema Club is first; Acme Coffee is pricier.' },
+      { id: 'r2', excerpt: 'Crema Club is first; Acme Coffee is pricier.' },
+    ]);
+    expect(toast.success).toHaveBeenCalledWith(
+      'Sent to the Action Center',
+      expect.objectContaining({ description: 'AC-62 · 2 answers' }),
+    );
+    const [, options] = toast.success.mock.calls[0] as unknown as [
+      string,
+      { action: { onClick: () => void } },
+    ];
+    options.action.onClick();
+    expect(push).toHaveBeenCalledWith('/dashboard/action-center/actions?action=a1');
+    // Sent: the selection is cleared.
+    expect(container.textContent).not.toContain('selected');
+  });
+
+  it('sends one answer, and suggests content for its prompt, from the drawer', async () => {
+    listMentions.mockResolvedValue(list());
+    getMentionResponse.mockResolvedValue({ response: 'Acme Coffee.', citations: [] });
+    sendMentionsToActionCenter.mockResolvedValue({ actionId: 'a9', actionNo: 9, created: false });
+    suggestContentForPrompt.mockResolvedValue({ ok: true, existingId: 'opp-1' });
+    render(tab());
+    await settle();
+    await act(async () => {
+      (container.querySelector('tbody tr[tabindex]') as HTMLElement).click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const drawer = document.body.querySelector('[role="dialog"]') as HTMLElement;
+    const button = (label: string) =>
+      [...drawer.querySelectorAll('button')].find((b) => b.textContent === label) as HTMLElement;
+
+    await act(async () => {
+      button('Send to Action Center').click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(sendMentionsToActionCenter).toHaveBeenCalledWith('b1', [
+      { id: 'r1', excerpt: 'Crema Club is first; Acme Coffee is pricier.' },
+    ]);
+    expect(toast.info).toHaveBeenCalledWith(
+      'Already in the Action Center',
+      expect.objectContaining({ description: 'AC-9 is open with these answers.' }),
+    );
+
+    await act(async () => {
+      button('Suggest content').click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(suggestContentForPrompt).toHaveBeenCalledWith('p1', expect.any(String));
+    expect(toast.info).toHaveBeenCalledWith(
+      'This prompt already has a content suggestion',
+      expect.objectContaining({ description: 'Best espresso beans?' }),
+    );
   });
 
   it('keeps its page when a read fails, and says so', async () => {

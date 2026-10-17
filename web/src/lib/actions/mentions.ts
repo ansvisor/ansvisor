@@ -1,5 +1,6 @@
 'use server';
 
+import { API_BASE_URL } from '@/config/api';
 import { createClient } from '@/lib/supabase/server';
 import { mentionExcerpt } from '@/lib/mention-match';
 import type { MentionsQuery } from '@/lib/mentions-filters';
@@ -108,4 +109,41 @@ export async function getMentionResponse(
     response: typeof data.response === 'string' ? data.response : '',
     citations: Array.isArray(data.citations) ? (data.citations as unknown as Citation[]) : [],
   };
+}
+
+/**
+ * "Send to Action Center" on the Mentions tab (MS-08): the chosen answers
+ * as one action to change how AI describes the brand. The server reads the
+ * answers again; the excerpts are the table's, so the action quotes what the
+ * person saw. The same answers sent again return the open action.
+ */
+export async function sendMentionsToActionCenter(
+  brandId: string,
+  mentions: { id: string; excerpt: string }[],
+): Promise<{ actionId: string; actionNo: number; created: boolean } | { error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'Not authenticated' };
+
+  const res = await fetch(`${API_BASE_URL}/api/mentions/action`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      brandId,
+      resultIds: mentions.map((m) => m.id),
+      excerpts: Object.fromEntries(mentions.map((m) => [m.id, m.excerpt])),
+    }),
+  });
+
+  // Returned, not thrown: a thrown error's message is masked in production.
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return { error: body.details || body.error || `Server error: ${res.status}` };
+  }
+  return res.json();
 }

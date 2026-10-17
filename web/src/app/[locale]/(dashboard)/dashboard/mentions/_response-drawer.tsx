@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowUpRight, ChevronDown, Copy, ExternalLink } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, Copy, ExternalLink, Send, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Components } from 'react-markdown';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
@@ -34,6 +34,7 @@ import {
   SentimentPill,
   type MentionNames,
 } from './_mention-parts';
+import type { useMentionActions } from './_use-mention-actions';
 
 type Loaded =
   | { id: string; status: 'ok'; response: string; citations: Citation[] }
@@ -65,14 +66,15 @@ function Section({
  * position; the passage around the mention; the competitors named beside
  * you; the full stored answer with your brand marked in violet and
  * competitors in grey; and the sources it cites, typed as on the Citations
- * page. Sending to the Action Center, suggesting content and correcting the
- * sentiment come next.
+ * page. Its footer sends the answer to the Action Center, suggests content
+ * for its prompt, and copies it; correcting the sentiment comes next.
  */
 export function ResponseDrawer({
   brandId,
   row,
   names,
   domains,
+  actions,
   onClose,
 }: {
   brandId: string;
@@ -80,9 +82,15 @@ export function ResponseDrawer({
   names: MentionNames;
   /** For typing the cited sources: your domains and the competitors'. */
   domains: { brand: string[]; competitors: string[] };
+  /** Send the answer to the Action Center, or suggest content for its prompt. */
+  actions: Pick<
+    ReturnType<typeof useMentionActions>,
+    'send' | 'sending' | 'suggest' | 'suggesting'
+  >;
   onClose: () => void;
 }) {
   const t = useTranslations('mentions.drawer');
+  const tActions = useTranslations('mentions.actions');
   const locale = useLocale();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [showResponse, setShowResponse] = useState(true);
@@ -325,11 +333,31 @@ export function ResponseDrawer({
               )}
             </div>
 
-            <div className="flex items-center justify-between gap-2 border-t px-5 py-3">
-              <Button variant="outline" size="sm" onClick={copy} disabled={answer?.status !== 'ok'}>
-                <Copy className="h-3.5 w-3.5" />
-                {t('copy')}
-              </Button>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t px-5 py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" onClick={() => actions.send([row])} disabled={actions.sending}>
+                  <Send className="h-3.5 w-3.5" />
+                  {tActions('sendToActionCenter')}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => actions.suggest(row)}
+                  disabled={actions.suggesting === row.promptId}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {tActions('suggestContent')}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={copy}
+                  disabled={answer?.status !== 'ok'}
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  {t('copy')}
+                </Button>
+              </div>
               <SheetClose render={<Button variant="ghost" size="sm" />}>{t('close')}</SheetClose>
             </div>
           </>

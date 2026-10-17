@@ -11,11 +11,22 @@ const query = {
   maybeSingle: async () => tableResult,
 };
 const from = vi.fn((table: string) => (tableCalls.push(['from', table]), query));
+let session: { access_token: string } | null = { access_token: 'tok' };
 vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(async () => ({ rpc, from })),
+  createClient: vi.fn(async () => ({
+    rpc,
+    from,
+    auth: { getSession: async () => ({ data: { session } }) },
+  })),
 }));
+vi.mock('@/config/api', () => ({ API_BASE_URL: 'http://api.test' }));
 
-import { getMentionResponse, getMentionsOverview, listMentions } from './mentions';
+import {
+  getMentionResponse,
+  getMentionsOverview,
+  listMentions,
+  sendMentionsToActionCenter,
+} from './mentions';
 import { DEFAULT_MENTIONS_TABLE } from '@/lib/mentions-list';
 
 beforeEach(() => {
@@ -185,5 +196,51 @@ describe('getMentionResponse', () => {
 
   it("is null when the answer isn't readable", async () => {
     await expect(getMentionResponse('b1', 'r1')).resolves.toBeNull();
+  });
+});
+
+describe('sendMentionsToActionCenter', () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    session = { access_token: 'tok' };
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  it('posts the answers and their excerpts as the signed-in user', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ actionId: 'a1', actionNo: 62, created: true }), {
+        status: 201,
+      }),
+    );
+    await expect(
+      sendMentionsToActionCenter('b1', [
+        { id: 'r1', excerpt: '…Acme…' },
+        { id: 'r2', excerpt: '' },
+      ]),
+    ).resolves.toEqual({ actionId: 'a1', actionNo: 62, created: true });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://api.test/api/mentions/action');
+    expect(init.headers.Authorization).toBe('Bearer tok');
+    expect(JSON.parse(init.body)).toEqual({
+      brandId: 'b1',
+      resultIds: ['r1', 'r2'],
+      excerpts: { r1: '…Acme…', r2: '' },
+    });
+  });
+
+  it("returns the server's error instead of throwing", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: 'Failed', details: 'No answers naming the brand' }), {
+        status: 404,
+      }),
+    );
+    await expect(sendMentionsToActionCenter('b1', [{ id: 'r1', excerpt: '' }])).resolves.toEqual({
+      error: 'No answers naming the brand',
+    });
+    session = null;
+    await expect(sendMentionsToActionCenter('b1', [{ id: 'r1', excerpt: '' }])).resolves.toEqual({
+      error: 'Not authenticated',
+    });
   });
 });

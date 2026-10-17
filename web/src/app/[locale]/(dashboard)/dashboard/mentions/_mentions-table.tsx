@@ -3,6 +3,7 @@
 import { Fragment } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -22,22 +23,30 @@ import { Highlighted, SentimentPill, type MentionNames } from './_mention-parts'
  * header), platform, country, the passage around the mention with the names
  * marked, sentiment, position, the competitors named beside you, topic and
  * date. With grouping on, each group opens with its name and size. A row
- * opens the answer.
+ * opens the answer; its box ticks it for a bulk action.
  */
 export function MentionsTable({
   rows,
   names,
   group,
   showCountry,
+  selected,
+  onSelect,
   onOpen,
 }: {
   rows: MentionRow[];
   names: MentionNames;
   group: MentionGroup | '';
   showCountry: boolean;
+  /** The answers ticked for a bulk action, by id. */
+  selected: ReadonlySet<string>;
+  /** Ticks or unticks answers; the header box takes every row on the page. */
+  onSelect: (ids: string[], on: boolean) => void;
   onOpen: (row: MentionRow) => void;
 }) {
   const t = useTranslations('mentions.table');
+  const tActions = useTranslations('mentions.actions');
+  const ticked = rows.filter((r) => selected.has(r.id)).length;
   const locale = useLocale();
   const columns = showCountry ? 9 : 8;
   const day = (iso: string) =>
@@ -47,7 +56,21 @@ export function MentionsTable({
     <Table stickyHeader stickyFirstColumn aria-label={t('tableLabel')}>
       <TableHeader>
         <TableRow>
-          <TableHead className="min-w-[220px] pl-4">{t('columns.prompt')}</TableHead>
+          <TableHead className="min-w-[240px] pl-4">
+            <span className="flex items-center gap-3">
+              <Checkbox
+                aria-label={tActions('selectAll')}
+                checked={ticked === 0 ? false : ticked === rows.length ? true : 'indeterminate'}
+                onCheckedChange={(on) =>
+                  onSelect(
+                    rows.map((r) => r.id),
+                    on === true,
+                  )
+                }
+              />
+              {t('columns.prompt')}
+            </span>
+          </TableHead>
           <TableHead>{t('columns.platform')}</TableHead>
           {showCountry && <TableHead>{t('columns.country')}</TableHead>}
           <TableHead className="min-w-[320px]">{t('columns.context')}</TableHead>
@@ -83,15 +106,26 @@ export function MentionsTable({
                 className="cursor-pointer align-top hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none"
                 onClick={() => onOpen(row)}
                 onKeyDown={(e) => {
+                  // Space on the row's box ticks it; only the row itself opens.
+                  if (e.target !== e.currentTarget) return;
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     onOpen(row);
                   }
                 }}
               >
-                <TableCell className="max-w-[260px] pl-4 whitespace-normal">
-                  <span className="line-clamp-2 text-sm font-medium" title={row.promptText}>
-                    {row.promptText}
+                <TableCell className="max-w-[280px] pl-4 whitespace-normal">
+                  <span className="flex items-start gap-3">
+                    <Checkbox
+                      aria-label={tActions('selectRow', { prompt: row.promptText, platform })}
+                      checked={selected.has(row.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      onCheckedChange={(on) => onSelect([row.id], on === true)}
+                      className="mt-0.5"
+                    />
+                    <span className="line-clamp-2 text-sm font-medium" title={row.promptText}>
+                      {row.promptText}
+                    </span>
                   </span>
                 </TableCell>
                 <TableCell>

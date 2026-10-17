@@ -62,6 +62,7 @@ import { OpportunityContext } from './opportunity-context';
 import { ImproveContext } from './improve-context';
 import { TopicGapContext } from './topic-gap-context';
 import { TopicOpportunityContext } from './topic-opportunity-context';
+import { MentionReviewContext } from './mention-review-context';
 import { ImproveOutcomeCard } from './improve-outcome-card';
 import { improvePlatformLabels } from '@/lib/improve-outcome';
 import { cn } from '@/lib/utils';
@@ -269,6 +270,8 @@ export function ActionDrawer({
                 <TopicGapContext payload={action.payload ?? {}} />
               ) : action.kind === 'topic_opportunity' ? (
                 <TopicOpportunityContext payload={action.payload ?? {}} />
+              ) : action.kind === 'mention_review' ? (
+                <MentionReviewContext payload={action.payload ?? {}} />
               ) : opportunityId ? (
                 <OpportunityContext
                   opportunityId={opportunityId}
@@ -350,9 +353,11 @@ export function ActionDrawer({
                       ? t('drawer.noSignalsTopicGap')
                       : action.kind === 'topic_opportunity'
                         ? t('drawer.noSignalsTopicOpportunity')
-                        : opportunityId
-                          ? t('drawer.noSignalsOpportunity')
-                          : t('drawer.noSignals')}
+                        : action.kind === 'mention_review'
+                          ? t('drawer.noSignalsMentionReview')
+                          : opportunityId
+                            ? t('drawer.noSignalsOpportunity')
+                            : t('drawer.noSignals')}
                 </p>
               )}
               {detail.signals.map((signal) => {

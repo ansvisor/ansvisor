@@ -789,6 +789,7 @@
           "gap": "{gap} pts behind"
         },
         "noSignalsTopicOpportunity": "This action was sent from Insights' Opportunities, so it has no detection signals. Its evidence is the topic and suggested prompts on the Overview tab.",
+        "noSignalsMentionReview": "This action was sent from Mentions, so it has no detection signals. Its evidence is the answers quoted on the Overview tab.",
         "topicOpportunity": {
           "source": "Source",
           "sourceValue": "Insights › Opportunities",
@@ -800,6 +801,20 @@
           "demand": "Suggested prompts when sent",
           "demandValue": "{count, plural, one {# prompt} other {# prompts}} · ~{volume}/mo",
           "volume": "~{volume}/mo"
+        },
+        "mentionReview": {
+          "source": "Source",
+          "sourceValue": "Mentions & Sentiment › Mentions",
+          "openMentions": "Open Mentions",
+          "answers": "Answers when sent",
+          "answersValue": "{count, plural, one {# answer naming your brand} other {# answers naming your brand}}",
+          "answersNegative": "{count, plural, one {# answer naming your brand} other {# answers naming your brand}} · {negative} negative",
+          "quotes": "What they said",
+          "sentiment": {
+            "positive": "Positive",
+            "neutral": "Neutral",
+            "negative": "Negative"
+          }
         }
       }
     },
@@ -1213,6 +1228,15 @@
         "titleGeneric": "Capture the AI demand in a topic",
         "description": "Sent from Insights: prompts suggested for one of your topics, with the monthly AI demand behind them.",
         "goal": "Get the brand into AI answers for the topic's suggested prompts."
+      },
+      "mention_review": {
+        "title": "Improve how AI describes you for \"{prompt}\"",
+        "titleMany": "Improve how AI describes you across {count, plural, one {# prompt} other {# prompts}}",
+        "titleGeneric": "Improve how AI describes you",
+        "description": "Sent from Mentions: answers naming your brand, to change how AI describes it.",
+        "descriptionCounts": "Sent from Mentions: {count, plural, one {# answer} other {# answers}} naming your brand.",
+        "descriptionNegative": "Sent from Mentions: {count, plural, one {# answer} other {# answers}} naming your brand, {negative} of them negative.",
+        "goal": "Get AI to describe the brand accurately and favourably in these answers."
       }
     },
     "actionTasks": {
@@ -2605,6 +2629,31 @@
       "close": "Close",
       "legendBrand": "Your brand",
       "legendCompetitor": "Competitors"
+    },
+    "actions": {
+      "sendToActionCenter": "Send to Action Center",
+      "sending": "Sending to the Action Center…",
+      "sent": "Sent to the Action Center",
+      "sentDescription": "AC-{number} · {count, plural, one {# answer} other {# answers}}",
+      "alreadySent": "Already in the Action Center",
+      "alreadySentDescription": "AC-{number} is open with these answers.",
+      "open": "Open",
+      "sendFailed": "Couldn't send to the Action Center",
+      "suggestContent": "Suggest content",
+      "suggesting": "Writing a content suggestion…",
+      "suggested": "Content suggestion created",
+      "suggestionExists": "This prompt already has a content suggestion",
+      "openExisting": "Open existing",
+      "suggestLimited": "Monthly content limit reached.",
+      "suggestNothing": "Couldn't write a suggestion for this prompt yet",
+      "suggestNothingDescription": "It needs tracked answers and a prompt group first; both come with its next tracking run.",
+      "suggestFailed": "Couldn't write a content suggestion",
+      "suggestTimeout": "Still writing the content suggestion",
+      "suggestTimeoutDescription": "It will appear in Content when it is done.",
+      "selected": "{count, plural, one {# answer selected} other {# answers selected}}",
+      "clearSelection": "Clear",
+      "selectAll": "Select every answer on this page",
+      "selectRow": "Select the answer to “{prompt}” on {platform}"
     }
   },
   "competitors": {

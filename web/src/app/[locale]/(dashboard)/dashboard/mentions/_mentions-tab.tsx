@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { TablePager, usePagination } from '@/components/table-pager';
+import { Send } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { listMentions } from '@/lib/actions/mentions';
@@ -24,6 +26,7 @@ import { FilterSelect } from './_filter-bar';
 import type { MentionNames } from './_mention-parts';
 import { MentionsTable } from './_mentions-table';
 import { ResponseDrawer } from './_response-drawer';
+import { useMentionActions } from './_use-mention-actions';
 
 /** Typing in the search box reads once it pauses, not on every key. */
 const READ_DELAY_MS = 250;
@@ -47,7 +50,8 @@ function Message({ children }: { children: React.ReactNode }) {
  * The Mentions tab (MS-07): the answers naming the brand, a page of 100 at
  * a time, under the page's filters and the table's own (sentiment, a
  * competitor named in the same answer, grouping, sort), which live in the
- * URL too. A row opens the response drawer.
+ * URL too. A row opens the response drawer; ticked rows go to the Action
+ * Center together.
  */
 export function MentionsListTab({
   brandId,
@@ -63,6 +67,7 @@ export function MentionsListTab({
   showCountry: boolean;
 }) {
   const t = useTranslations('mentions.table');
+  const tActions = useTranslations('mentions.actions');
   const tSentiment = useTranslations('mentions.overview.sentiment');
   const query = useMemo(() => mentionsQuery(filters), [filters]);
 
@@ -107,6 +112,34 @@ export function MentionsListTab({
   }, [brandId, key, query, table, pager.page]);
 
   const [open, setOpen] = useState<MentionRow | null>(null);
+  const actions = useMentionActions(brandId);
+
+  // Answers ticked for a bulk action, on the page shown; a new page or
+  // filter starts with none.
+  const shownRows = useMemo(
+    () => (loaded?.status === 'ok' ? (loaded.list?.rows ?? []) : []),
+    [loaded],
+  );
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const [selectionKey, setSelectionKey] = useState<string | null>(null);
+  const shownKey = loaded?.status === 'ok' ? loaded.key : null;
+  if (selectionKey !== shownKey) {
+    setSelectionKey(shownKey);
+    setSelected(new Set());
+  }
+  const select = (ids: string[], on: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  const selectedRows = shownRows.filter((r) => selected.has(r.id));
+  const sendSelected = async () => {
+    if (await actions.send(selectedRows)) setSelected(new Set());
+  };
 
   // A new page starts at its first row: the table scrolls inside its own box.
   const tableBox = useRef<HTMLDivElement>(null);
@@ -206,6 +239,8 @@ export function MentionsListTab({
           names={names}
           group={table.group}
           showCountry={showCountry}
+          selected={selected}
+          onSelect={select}
           onOpen={setOpen}
         />
         <TablePager
@@ -223,6 +258,24 @@ export function MentionsListTab({
   return (
     <section aria-label={t('sectionLabel')} className="flex flex-col gap-3">
       {controls}
+      {selectedRows.length > 0 && (
+        <div
+          role="region"
+          aria-label={tActions('selected', { count: selectedRows.length })}
+          className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/50 px-4 py-2 text-sm"
+        >
+          <span className="font-medium">
+            {tActions('selected', { count: selectedRows.length })}
+          </span>
+          <Button size="sm" onClick={sendSelected} disabled={actions.sending}>
+            <Send className="h-3.5 w-3.5" />
+            {tActions('sendToActionCenter')}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
+            {tActions('clearSelection')}
+          </Button>
+        </div>
+      )}
       {body}
       <ResponseDrawer
         brandId={brandId}
@@ -232,6 +285,7 @@ export function MentionsListTab({
           brand: brandDomains,
           competitors: competitors.map((c) => c.domain).filter(Boolean),
         }}
+        actions={actions}
         onClose={() => setOpen(null)}
       />
     </section>
