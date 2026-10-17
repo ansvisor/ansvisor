@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normHost, normStoredDomain } from './host.js';
+import { normHost, normStoredDomain, onBrandDomain } from './host.js';
 
 describe('normHost', () => {
   it('lowercases, strips a leading www. and ignores path, query and fragment', () => {
@@ -49,5 +49,20 @@ describe('normStoredDomain', () => {
     expect(normStoredDomain(undefined)).toBeNull();
     expect(normStoredDomain('')).toBeNull();
     expect(normStoredDomain('not a domain')).toBeNull();
+  });
+});
+
+describe('onBrandDomain', () => {
+  it('matches the brand domain however it is stored, and its subdomains', () => {
+    expect(onBrandDomain('https://www.acme.com/pricing', ['https://Acme.com/'])).toBe(true);
+    expect(onBrandDomain('https://blog.acme.com/post', ['acme.com'])).toBe(true);
+    expect(onBrandDomain('https://shop.example.org/', ['acme.com', 'example.org'])).toBe(true);
+  });
+
+  it('rejects another site, a look-alike host and a brand without domains', () => {
+    expect(onBrandDomain('https://competitor.com/pricing', ['acme.com'])).toBe(false);
+    expect(onBrandDomain('https://notacme.com/', ['acme.com'])).toBe(false);
+    expect(onBrandDomain('https://acme.com/', [])).toBe(false);
+    expect(onBrandDomain('not a url', ['acme.com'])).toBe(false);
   });
 });
