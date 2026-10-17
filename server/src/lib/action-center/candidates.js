@@ -26,53 +26,31 @@ const DAY_MS = 86_400_000;
 
 const { priority } = resolve();
 
-const IMPACT_SCORE = {
-  high: priority.impactHigh,
-  medium: priority.impactMedium,
-  low: priority.impactLow,
-};
-
 /**
  * What a candidate is worth acting on, tonight.
  *
- * Three terms, in the order they matter: how bad it is, how much evidence
- * stands behind it, and how long it has been waiting. The first two reproduce
- * the ordering the Action Center has always used; the third is what a queue
- * needs and a sort does not — without it, a low-impact finding behind a brand
- * with a steady stream of high-impact ones would never come up at all.
+ * Its priority score (AC-006, priority.js) — the same number its action will
+ * carry once promoted, so the queue and the Actions list agree on what comes
+ * first — plus a little for each day it has waited. The wait is what a queue
+ * needs and a sort does not: without it a low-priority finding behind a
+ * brand with a steady stream of urgent ones would never come up at all. It
+ * is capped, so two weeks of patience is worth about one level and no more.
  *
- * Both of the lower terms are capped, so evidence and patience can move a
- * candidate up the queue but cannot make it outrank a whole grade of impact
- * on their own. Deliberate: a queue that lets forty pages of low-impact
- * opportunity outrank a visibility collapse is not a priority order, it is a
- * vote.
- *
- * Evidence is the action's reach — how many prompts, pages, sources or
- * topics it covers (`payload.targetCount`) — and falls back to the signal
- * count for a definition whose payload does not name its targets.
- *
- * @param {{ impact: string, signalCount: number, reach?: number, firstSeenAt?: string|Date }} candidate
+ * @param {{ priorityScore: number, firstSeenAt?: string|Date }} candidate
  * @param {Date} now
  */
-export function scoreCandidate({ impact, signalCount, reach, firstSeenAt }, now = new Date()) {
-  const base = IMPACT_SCORE[impact] ?? IMPACT_SCORE.low;
-
-  // Defensive rather than trusting: a caller that forgets to pass the count
-  // used to produce NaN, which sorts as "no opinion" and silently degraded
-  // the whole queue to alphabetical order. A scoring bug that still promotes
-  // something every night, just the wrong thing, is not one anybody notices.
-  const count = Number.isFinite(signalCount) ? Math.max(signalCount, 0) : 0;
-  const breadth = Number.isFinite(reach) && reach > 0 ? reach : count;
-  const evidence = Math.min(
-    Math.log2(1 + breadth) * priority.evidencePerDoubling,
-    priority.evidenceMax,
-  );
+export function scoreCandidate({ priorityScore, firstSeenAt }, now = new Date()) {
+  // Defensive rather than trusting: a missing score used to produce NaN,
+  // which sorts as "no opinion" and silently degraded the whole queue to
+  // alphabetical order. A scoring bug that still promotes something every
+  // night, just the wrong thing, is not one anybody notices.
+  const base = Number.isFinite(priorityScore) ? priorityScore : 0;
 
   const seen = firstSeenAt ? new Date(firstSeenAt).getTime() : now.getTime();
   const waitedDays = Math.max(0, Math.floor((now.getTime() - seen) / DAY_MS));
-  const age = Math.min(waitedDays, priority.ageCapDays) * priority.agePerDay;
+  const wait = Math.min(waitedDays, priority.waitCapDays) * priority.waitPerDay;
 
-  return base + evidence + age;
+  return base + wait;
 }
 
 /**

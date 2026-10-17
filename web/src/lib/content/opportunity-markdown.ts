@@ -40,6 +40,24 @@ export function opportunityToMarkdown(
       .join('\n'),
   );
 
+  // Sent from an Action Center task (AC-004): what the task says to do.
+  const task = sd.fromAction?.task;
+  parts.push(
+    section(
+      sd.fromAction?.actionNo != null
+        ? `From a task in AC-${sd.fromAction.actionNo}`
+        : 'From an Action Center task',
+      [
+        task?.where && `- Where: ${task.where}`,
+        task?.why && `- Why: ${task.why}`,
+        ...(task?.how ?? []).map((step, i) => `${i + 1}. ${step}`),
+        task?.doneWhen && `- Done when: ${task.doneWhen}`,
+        (task?.effort || task?.role) &&
+          `- Effort: ${[task?.effort, task?.role].filter(Boolean).join(' · ')}`,
+      ],
+    ),
+  );
+
   parts.push(
     section(
       'Target pages',
