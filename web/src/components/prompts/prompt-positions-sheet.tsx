@@ -627,9 +627,13 @@ function LatestView({
   );
 }
 
+/**
+ * A platform's latest answer: its mention on the left and its citation on
+ * the right, under the platform's name.
+ */
 function LatestRow({ platform: p }: { platform: PlatformPositions }) {
   return (
-    <div className="px-3 py-3">
+    <div data-platform={p.id} className="px-3 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <PlatformName platform={p} />
         {p.latest && (
@@ -655,7 +659,7 @@ function LatestRow({ platform: p }: { platform: PlatformPositions }) {
               )}
             </dd>
           </div>
-          <div>
+          <div className="sm:text-right">
             <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               Citation
             </dt>
