@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -214,12 +215,19 @@ function SortableHead({
  * shown, as its own chunk, so it costs the other tabs nothing.
  */
 export function TopicsTab({
+  actionsSlot,
   range,
   rangePreset,
   customFrom,
   customTo,
   onLoaded,
 }: {
+  /**
+   * The Prompts page's place for a tab's buttons, beside the tabs: Add Topic,
+   * Export CSV and Manage topics go there in the order and size the Prompts
+   * tab's Add prompt, Export CSV and Manage prompts have. Null until mounted.
+   */
+  actionsSlot: HTMLElement | null;
   /** The page's range resolved; null for a custom range with no dates yet. */
   range: PromptRange | null;
   rangePreset: PromptRangePreset;
@@ -413,82 +421,81 @@ export function TopicsTab({
 
   return (
     <div className="space-y-6">
-      {/* Actions: the tab sits under the Prompts header, which names the area. */}
-      <div className="flex items-center justify-end gap-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <span title={!canExport ? t('exportHint') : undefined}>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={handleExportCsv}
-              disabled={!canExport}
-            >
-              <Download className="h-4 w-4" />
-              {common('exportCsv')}
-            </Button>
-          </span>
-          <Link
-            href={`/dashboard/brands/${activeBrandId}/topics`}
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
-          >
-            <Settings2 className="h-4 w-4" />
-            {t('manageTopics')}
-          </Link>
-          {canManage && (
-            <>
-              <Button size="sm" onClick={() => setOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
+      {actionsSlot &&
+        createPortal(
+          <>
+            {canManage && (
+              <Button type="button" size="sm" className="gap-2" onClick={() => setOpen(true)}>
+                <Plus className="h-4 w-4" />
                 {t('addTopic')}
               </Button>
-              <Dialog
-                open={open}
-                onOpenChange={(value) => {
-                  setOpen(value);
-                  if (!value) {
-                    setNewName('');
-                  }
-                }}
+            )}
+            <span title={!canExport ? t('exportHint') : undefined}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={handleExportCsv}
+                disabled={!canExport}
               >
-                <DialogContent className="sm:max-w-sm">
-                  <DialogHeader>
-                    <DialogTitle>{t('addTopic')}</DialogTitle>
-                    <DialogDescription>{t('addTopicDescription')}</DialogDescription>
-                  </DialogHeader>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="e.g. Industry, Comparison..."
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && newName.trim() && handleAddTopic()}
-                      className="flex-1"
-                    />
-                  </div>
-                  <DialogFooter>
-                    <DialogClose render={<Button variant="outline" />}>
-                      {common('cancel')}
-                    </DialogClose>
-                    <Button
-                      variant="default"
-                      onClick={handleAddTopic}
-                      disabled={isAdding || !newName.trim()}
-                      className="gap-1.5 shrink-0"
-                    >
-                      {isAdding ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Plus className="h-4 w-4" />
-                      )}
-                      {t('addTopic')}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </>
-          )}
-        </div>
-      </div>
+                <Download className="h-4 w-4" />
+                {common('exportCsv')}
+              </Button>
+            </span>
+            <Link
+              href={`/dashboard/brands/${activeBrandId}/topics`}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              <Settings2 className="h-4 w-4" />
+              {t('manageTopics')}
+            </Link>
+          </>,
+          actionsSlot,
+        )}
+      {canManage && (
+        <Dialog
+          open={open}
+          onOpenChange={(value) => {
+            setOpen(value);
+            if (!value) {
+              setNewName('');
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>{t('addTopic')}</DialogTitle>
+              <DialogDescription>{t('addTopicDescription')}</DialogDescription>
+            </DialogHeader>
+            <div className="flex gap-2">
+              <Input
+                placeholder="e.g. Industry, Comparison..."
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && newName.trim() && handleAddTopic()}
+                className="flex-1"
+              />
+            </div>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>{common('cancel')}</DialogClose>
+              <Button
+                variant="default"
+                onClick={handleAddTopic}
+                disabled={isAdding || !newName.trim()}
+                className="gap-1.5 shrink-0"
+              >
+                {isAdding ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                {t('addTopic')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* KPIs */}
       {loading ? (

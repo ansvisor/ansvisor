@@ -1274,6 +1274,8 @@ export default function PromptsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [quota, setQuota] = useState<VolumeQuota | null>(null);
   const [addPromptOpen, setAddPromptOpen] = useState(false);
+  // Where a tab's own buttons go: beside the tabs, as the Prompts tab's do.
+  const [headerActions, setHeaderActions] = useState<HTMLDivElement | null>(null);
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
   const { canManage } = useUserRole();
 
@@ -1844,6 +1846,9 @@ export default function PromptsPage() {
             <TabsTrigger value="insights">Insights</TabsTrigger>
           </TabsList>
           <div className="flex items-center gap-2">
+            {/* A tab's own buttons, portalled in (Topics). `contents` keeps
+                them in this row's flex and gap. */}
+            <div ref={setHeaderActions} className="contents" />
             {tab === 'all' && canManage && (
               <Button
                 type="button"
@@ -1871,13 +1876,16 @@ export default function PromptsPage() {
               </span>
             )}
 
-            <Link
-              href={`/dashboard/brands/${activeBrandId}/prompts`}
-              className={buttonVariants({ variant: 'outline', size: 'sm' })}
-            >
-              <Settings2 className="h-4 w-4" />
-              Manage prompts
-            </Link>
+            {/* Topics has Manage topics in its place. */}
+            {tab !== 'topics' && (
+              <Link
+                href={`/dashboard/brands/${activeBrandId}/prompts`}
+                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              >
+                <Settings2 className="h-4 w-4" />
+                Manage prompts
+              </Link>
+            )}
           </div>
         </div>
 
@@ -2051,6 +2059,7 @@ export default function PromptsPage() {
         <TabsContent value="topics" className="mt-4">
           {tab === 'topics' && (
             <TopicsTab
+              actionsSlot={headerActions}
               range={range}
               rangePreset={rangePreset}
               customFrom={customFrom}
