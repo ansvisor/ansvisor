@@ -249,9 +249,7 @@ export async function uncitedMentionCandidates(brandId, now) {
   );
   if (error) throw new Error(error.message);
 
-  // By id, not by row: a prompt repeated at a page boundary is still one
-  // prompt. Most mentioned first: the prompts the panel describes are the
-  // first few.
+  // By id, not by row: a prompt repeated at a page boundary is still one prompt.
   const byPrompt = new Map();
   for (const row of data ?? []) {
     if (
@@ -262,13 +260,12 @@ export async function uncitedMentionCandidates(brandId, now) {
       byPrompt.set(row.prompt_id, row);
     }
   }
-  const uncited = [...byPrompt.values()]
-    .sort(
-      (a, b) =>
-        Number(b.total_mentions) - Number(a.total_mentions) ||
-        String(a.prompt_id).localeCompare(String(b.prompt_id)),
-    )
-    .map((row) => row.prompt_id);
+  // Most mentioned first: the prompts the panel describes are the first few.
+  const uncited = [...byPrompt.values()].sort(
+    (a, b) =>
+      Number(b.total_mentions) - Number(a.total_mentions) ||
+      String(a.prompt_id).localeCompare(String(b.prompt_id)),
+  );
   if (uncited.length < detection.uncitedMinPrompts) return [];
 
   return [
@@ -276,7 +273,7 @@ export async function uncitedMentionCandidates(brandId, now) {
       kind: 'uncited_mentions',
       dedupKey: 'uncited_mentions',
       source: ['ai_results'],
-      payload: { promptIds: uncited.slice(0, 50) },
+      payload: { promptIds: uncited.map((row) => row.prompt_id).slice(0, 50) },
       previousValue: null,
       currentValue: uncited.length,
       changeValue: null,

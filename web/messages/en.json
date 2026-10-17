@@ -56,6 +56,7 @@
     "audit": "Site Audit",
     "competitors": "Competitors",
     "citations": "Citations",
+    "mentions": "Mentions",
     "shopping": "Shopping",
     "reports": "Reports",
     "settings": "Settings",
@@ -841,6 +842,57 @@
         "description": "Select a brand to view its actions."
       },
       "updateFailed": "Couldn't update the action.",
+      "export": {
+        "copyAll": "Copy Data",
+        "csv": "Export CSV",
+        "excel": "Export Excel",
+        "copied": "Action {ref} copied: {tasks, plural, one {# task} other {# tasks}}, {signals, plural, one {# signal} other {# signals}}",
+        "exportFailed": "Couldn't create the export.",
+        "preview": {
+          "copy": "Copy all",
+          "copied": "Copied",
+          "failed": "Couldn't copy. The text is selected: press ⌘C or Ctrl+C."
+        },
+        "skipped": "Skipped: {reason}",
+        "answerSource": "AI answer",
+        "tasksHeading": "Tasks ({count})",
+        "signalsHeading": "Signals ({count})",
+        "historyHeading": "History ({count})",
+        "sheets": {
+          "action": "Action",
+          "tasks": "Tasks",
+          "signals": "Signals",
+          "history": "History"
+        },
+        "action": "Action",
+        "title": "Title",
+        "category": "Category",
+        "impact": "Impact",
+        "status": "Status",
+        "assignee": "Assignee",
+        "dueDate": "Due",
+        "tags": "Tags",
+        "why": "Why",
+        "goal": "Goal",
+        "kpis": "KPIs",
+        "decision": "Decision",
+        "pages": "Pages",
+        "created": "Created",
+        "updated": "Updated",
+        "link": "Link",
+        "task": "Task",
+        "details": "Details",
+        "type": "Type",
+        "entity": "Affected",
+        "signal": "Signal",
+        "description": "Description",
+        "platforms": "Platforms",
+        "locations": "Locations",
+        "firstDetected": "First detected",
+        "lastDetected": "Last detected",
+        "date": "Date",
+        "event": "Event"
+      },
       "drawer": {
         "actionId": "Action ID",
         "tabs": {
@@ -869,10 +921,14 @@
           "assigned": "Assignee changed",
           "due_date_set": "Due date updated",
           "task_status": "Task updated",
+          "task_added": "Task added: “{title}”",
+          "task_renamed": "Task renamed to “{title}”",
+          "task_deleted": "Task deleted",
           "task_ran": "{task} — carried out automatically ({tool})",
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
           "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
-          "position_outcome_recorded": "{measurable, plural, =0 {30-day result: not enough data to compare positions} other {30-day result: position improved on {improved} of # platforms}}"
+          "position_outcome_recorded": "{measurable, plural, =0 {30-day result: not enough data to compare positions} other {30-day result: position improved on {improved} of # platforms}}",
+          "outcome_measured": "{outcome, select, improved {Result: metrics improved after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}"
         },
         "taskText": "Task text",
         "renameTask": "Rename task",
@@ -1567,13 +1623,13 @@
         "dismissed": "Dismissed"
       },
       "affected": {
-        "prompt": "{count} prompts",
-        "url": "{count} pages",
-        "citation": "{count} signals",
-        "keyword": "{count} keywords",
-        "topic": "{count} topics",
+        "prompt": "{count, plural, one {# prompt} other {# prompts}}",
+        "url": "{count, plural, one {# page} other {# pages}}",
+        "citation": "{count, plural, one {# signal} other {# signals}}",
+        "keyword": "{count, plural, one {# keyword} other {# keywords}}",
+        "topic": "{count, plural, one {# topic} other {# topics}}",
         "competitor": "Competitor",
-        "platform": "{count} platforms"
+        "platform": "{count, plural, one {# platform} other {# platforms}}"
       },
       "range": {
         "7d": "7d",
@@ -1614,7 +1670,7 @@
       "drawer": {
         "goal": "What was the goal?",
         "whatHappened": "What happened?",
-        "triggeredBy": "Consolidated from {count} signals",
+        "triggeredBy": "Consolidated from {count, plural, one {# signal} other {# signals}}",
         "result": "Result",
         "visibilityChange": "Visibility Change",
         "citationsChange": "Citations Change",
@@ -1624,7 +1680,7 @@
         "netChange": "net change",
         "ofAffected": "of affected",
         "fromStart": "from start",
-        "days": "{n} days",
+        "days": "{n, plural, one {# day} other {# days}}",
         "affected": "Affected",
         "noAffected": "Nothing recorded.",
         "tasks": "Tasks ({completed}/{total})",
@@ -1873,8 +1929,6 @@
       "checkedAt": "Checked: {date}"
     },
     "compare": {
-      "label": "Compare",
-      "samePrompts": "Same prompts",
       "hint": "Changes compare only prompts tracked in both periods",
       "newExcluded": "{count, plural, one {# new prompt excluded} other {# new prompts excluded}}",
       "newIncluded": "{count, plural, one {includes # new prompt} other {includes # new prompts}}"
@@ -1890,18 +1944,18 @@
       "rankOf": "#{rank} of {count} brands",
       "appearedIn": "appeared in {visible} of {active} prompts",
       "trackedPrompts": "Tracked prompts",
-      "trackedPromptsTip": "Prompts answered in this period. The bar is your plan's prompt locations, shared by all brands and counting only active prompts (paused ones don't count): {used} of {limit} used.",
+      "trackedPromptsTip": "Prompts answered in this period. The bar is your plan: {used} of {limit} prompt locations in use, shared by every brand in your workspace. A prompt counts once per location it tracks; paused prompts don't count.",
       "trackedPromptsTipUnlimited": "Prompts answered in this period. Your plan has no prompt location limit.",
-      "slotsLeft": "{count, plural, one {# slot left} other {# slots left}} · all brands",
-      "overLimit": "{count, plural, one {# location over your plan} other {# locations over your plan}} · all brands",
+      "slotsLeft": "{count, plural, other {# prompts/locations left to add}}",
+      "limitReached": "Plan limit reached",
+      "overLimit": "{count, plural, other {# over your plan limit}}",
       "unlimited": "{count, plural, one {# active location} other {# active locations}} · Unlimited",
       "quotaLabel": "{used} of {limit} active prompt locations used",
       "mentions": "Mentions",
-      "mentionsTip": "Times answers named your brand. With Same prompts, the change counts only prompts tracked in both periods.",
+      "mentionsTip": "Times answers named your brand. The change is against the previous period.",
       "citations": "Citations",
-      "citationsTip": "Times answers cited your pages. With Same prompts, the change counts only prompts tracked in both periods.",
-      "samePrompts": "{count, plural, one {same # prompt} other {same # prompts}}",
-      "allPrompts": "all prompts",
+      "citationsTip": "Times answers cited your pages. The change is against the previous period.",
+      "vsPrevious": "vs previous period",
       "netSentiment": "Net sentiment",
       "netSentimentTip": "Positive minus negative share of the answers that name or cite your brand.",
       "sentimentSplit": "{positive} pos · {negative} neg",
@@ -2008,8 +2062,6 @@
       "pinLimit": "Up to 5 competitors",
       "pinFailed": "Couldn't save the pinned competitors.",
       "promptsAdded": "{count, plural, one {# prompt} other {# prompts}} added · {date}",
-      "actionsSent": "{actions} sent · {date}",
-      "moreActions": "{actions} +{count}",
       "goal": "Goal {value}",
       "goalLegend": "Action Center goal"
     },
@@ -2023,15 +2075,7 @@
       "lowSample": "Low sample",
       "openTopic": "Open {topic}",
       "showAll": "Show all {count}",
-      "showLess": "Show less",
-      "sendGap": "Send biggest gap to Actions",
-      "sendGapTitle": "Open a Compete action for {topic}, where {competitor} leads you by {gap} pts",
-      "noGap": "No topic where a competitor leads you",
-      "sent": "AC-{no} sent to the Action Center",
-      "alreadySent": "Already in the Action Center as AC-{no}",
-      "sendFailed": "Couldn't send to the Action Center.",
-      "openAction": "Open",
-      "gapChanged": "The gap changed since the page loaded. Refresh to see the latest."
+      "showLess": "Show less"
     },
     "breakdown": {
       "noData": "No data",
@@ -2491,6 +2535,19 @@
     "exportError": "Failed to export CSV"
   },
   "prompts": {
+    "positions": {
+      "answers": "{count, plural, one {# answer} other {# answers}}",
+      "answersInPeriod": "{count, plural, one {# answer} other {# answers}} in this period",
+      "mentionedIn": "In {mentioned} of {answers, plural, one {# answer} other {# answers}} · {mentions, plural, one {# mention} other {# mentions}}",
+      "citedIn": "In {cited} of {answers, plural, one {# answer} other {# answers}} · {citations, plural, one {# citation} other {# citations}}",
+      "mentionedInPeriod": "In {mentioned} of {answers, plural, one {# answer} other {# answers}} in this period · {mentions, plural, one {# mention} other {# mentions}}",
+      "citedInPeriod": "In {cited} of {answers, plural, one {# answer} other {# answers}} in this period · {citations, plural, one {# citation} other {# citations}}",
+      "includedOnly": "Answer counts cover the platforms your plan includes.",
+      "notMentioned": "Not mentioned",
+      "notMentionedTitle": "Not mentioned in any of {count, plural, one {# answer} other {# answers}} in this period",
+      "citedOnly": "Cited only",
+      "citedOnlyTitle": "Cited in {cited} of {count, plural, one {# answer} other {# answers}} in this period, named in none"
+    },
     "title": "Prompt Volumes",
     "description": "Discover query volumes and trends across AI platforms.",
     "totalVolume": "Total Volume",
@@ -2554,13 +2611,58 @@
         "nonePaused": "No paused prompts match."
       }
     },
+    "fanout": {
+      "engines": "Engines",
+      "allEngines": "All engines",
+      "share": "{percent} of answers",
+      "noneSince": "none since {date}",
+      "noneInWindow": "none in this window",
+      "notShared": "not shared",
+      "silentTitle": "{engine} usually shares the searches behind its answers, but none arrived since {date}.",
+      "silentTitleNoDate": "{engine} usually shares the searches behind its answers, but none arrived in this window.",
+      "silentBody": "Its answers are still tracked as usual; only the list of searches is missing.",
+      "notSharedNote": "{engines} don't come with the searches behind their answers, so they can't appear here.",
+      "enginesLegend": "Coloured: shared searches for this prompt in the window. Faded: tracked, but shared none.",
+      "engineEmptyTitle": "No {engine} searches in the {range}",
+      "engineEmptyBody": "{engine} usually shares the searches behind its answers. Try a longer date range.",
+      "emptyTitle": "No fan-out captured yet",
+      "emptyBody": "Copilot and Perplexity share the searches behind their answers; ChatGPT, Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
+      "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. Only Copilot and Perplexity share them."
+    },
     "bulkDelete": {
       "progress": "Deleting {done} of {total} prompts…",
       "failed": "{count, plural, one {Failed to delete the prompt.} other {Failed to delete the prompts.}}",
       "stopped": "{deleted} of {total} prompts deleted",
       "stoppedDescription": "Deleting stopped at an error. {kept, plural, one {The other prompt is} other {The other # prompts are}} back in the list, so you can try again.",
       "notDeleted": "{kept} of {total} {total, plural, one {prompt} other {prompts}} couldn't be deleted."
+    },
+    "lateFilter": {
+      "label": "Late or missing · {count}",
+      "title": "Prompts named late, or not at all, on at least one AI platform. On, the furthest behind come first.",
+      "order": "Furthest behind first: late or missing on the most AI platforms, then the worse average position."
     }
+  },
+  "mentions": {
+    "title": "Mentions & Sentiment",
+    "description": "Where AI mentions your brand, how it describes you, why, and what to do about it.",
+    "selectBrand": "Select a brand to see its mentions.",
+    "tabs": {
+      "label": "Mentions & Sentiment views",
+      "overview": "Overview",
+      "mentions": "Mentions",
+      "perception": "Perception"
+    },
+    "filters": {
+      "platform": "Platform",
+      "allPlatforms": "All platforms",
+      "country": "Country",
+      "allCountries": "All countries",
+      "topic": "Topic",
+      "allTopics": "All topics",
+      "search": "Search",
+      "searchPlaceholder": "Search prompts, brands, phrases…"
+    },
+    "comingSoon": "This view is on its way: its figures and charts arrive with the next updates."
   },
   "competitors": {
     "title": "Competitors",
