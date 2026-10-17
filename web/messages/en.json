@@ -3035,7 +3035,6 @@
       "search": "Search",
       "searchPlaceholder": "Search prompts…"
     },
-    "comingSoon": "This view is on its way: its figures and charts arrive with the next updates.",
     "overview": {
       "sectionLabel": "Mentions overview",
       "loadError": "Couldn't load the overview. Try again in a moment.",
@@ -3179,7 +3178,24 @@
       "copyFailed": "Couldn't copy the response. Select the text and copy it instead.",
       "close": "Close",
       "legendBrand": "Your brand",
-      "legendCompetitor": "Competitors"
+      "legendCompetitor": "Competitors",
+      "correction": {
+        "open": "Sentiment is wrong?",
+        "title": "Correct the sentiment toward your brand",
+        "hint": "Every figure counts the new sentiment from now on; the original stays in the history.",
+        "options": "New sentiment",
+        "note": "Note (optional)",
+        "notePlaceholder": "Why is it wrong? It helps improve the classification.",
+        "save": "Save correction",
+        "cancel": "Cancel",
+        "saved": "Sentiment corrected",
+        "savedDescription": "This answer now counts as {sentiment} everywhere.",
+        "unchanged": "The answer already has this sentiment.",
+        "failed": "Couldn't correct the sentiment",
+        "forbidden": "Only admins and managers can correct a sentiment.",
+        "correctedBy": "Corrected by {name} on {date} · was {previous}",
+        "correctedOn": "Corrected on {date} · was {previous}"
+      }
     },
     "actions": {
       "sendToActionCenter": "Send to Action Center",
@@ -3205,6 +3221,47 @@
       "clearSelection": "Clear",
       "selectAll": "Select every answer on this page",
       "selectRow": "Select the answer to “{prompt}” on {platform}"
+    },
+    "perception": {
+      "sectionLabel": "Perception",
+      "loadError": "Couldn't load the perception figures. Try again in a moment.",
+      "unavailable": "Perception isn't available yet. It appears once the mentions data has been prepared.",
+      "pickDates": "Choose a start or end date to see the perception figures.",
+      "noMentions": "AI didn't name {brand} in the tracked responses of this period.",
+      "method": "Terms come from the sentences that name each brand, by rule (no LLM). A sentence naming two brands lends its words to both.",
+      "terms": {
+        "title": "What AI associates with {brand}",
+        "note": "Words and phrases next to your brand, by responses",
+        "tableLabel": "Terms AI uses next to your brand",
+        "responses": "{count, plural, one {# response} other {# responses}}",
+        "share": "{share} of mentions",
+        "none": "No terms yet. They appear once this period's responses have been prepared."
+      },
+      "shape": {
+        "title": "Brand shape: you vs top competitors",
+        "chartLabel": "Share of each brand's mentions on the attributes that tell them apart",
+        "notEnough": "The shape needs at least three attributes and one competitor named in this period."
+      },
+      "gap": {
+        "title": "Biggest gap",
+        "unplaced": "“{term}”: {competitor} in {competitorShare} of its mentions; AI doesn't use it for {brand}.",
+        "ranked": "“{term}”: {competitor} in {competitorShare} of its mentions; {brand} in {brandShare} (#{rank})."
+      },
+      "heatmap": {
+        "title": "Brand × attribute",
+        "note": "Share of each brand's mentions",
+        "tableLabel": "Each attribute's share of each brand's mentions",
+        "attribute": "Attribute",
+        "you": "You",
+        "none": "No attributes yet for this period."
+      },
+      "coMentions": {
+        "title": "Frequently mentioned with",
+        "tableLabel": "Competitors named in the same responses as you",
+        "note": "The trend shows whether the AI's consideration set around you is changing.",
+        "responses": "{count, plural, one {# response} other {# responses}}",
+        "none": "No competitor is named in the same responses as you in this period."
+      }
     }
   },
   "competitors": {
