@@ -1,4 +1,4 @@
-import type { ActionItem } from '@/lib/actions/action-center';
+import type { ActionEvent, ActionItem } from '@/lib/actions/action-center';
 import { isActionKind } from '@/lib/action-center/registry';
 import { formatCompactNumber } from '@/lib/format';
 
@@ -135,6 +135,31 @@ export function eventTaskText(
   return t(key);
 }
 
+/** A History entry as a sentence: what happened, to what, by which tool. */
+export function actionEventText(
+  event: ActionEvent,
+  t: Translator,
+  tTasks: Translator & { has?: (key: string) => boolean },
+): string {
+  return t(`drawer.events.${event.event}`, {
+    to: String(event.data.to ?? ''),
+    count: Number(event.data.count ?? 0),
+    // Work the product did itself names the task in the reader's language
+    // and the tool as it is recorded — the tool id is the audit fact, so it
+    // is not translated.
+    task: eventTaskText(event.data.task, tTasks),
+    tool: String(event.data.tool ?? ''),
+    improved: Number(event.data.improved ?? 0),
+    measurable: Number(event.data.measurable ?? 0),
+    // A task someone added, renamed or sent is named in its own words, as it
+    // was typed (AC-004).
+    title: String(event.data.title ?? ''),
+    // The validation sweep's verdict once the action closed: improved,
+    // declined, and so on.
+    outcome: String(event.data.outcome ?? ''),
+  });
+}
+
 /**
  * What the drawer shows under "Goal".
  *
@@ -175,18 +200,6 @@ export function actionContextTags(action: ActionItem, t: Translator): string[] {
   const entity = str(action.payload ?? {}, 'targetEntity');
   if (count > 0 && entity) tags.push(t(`tags.${entity}`, { count }));
   return tags;
-}
-
-const IMPACT_RANK: Record<ActionItem['impact'], number> = { high: 3, medium: 2, low: 1 };
-
-/** Priority: impact first, then weight of evidence, then recency. The
- *  scoring formula stays out of the UI per the brief — this order IS it. */
-export function comparePriority(a: ActionItem, b: ActionItem): number {
-  return (
-    IMPACT_RANK[b.impact] - IMPACT_RANK[a.impact] ||
-    b.signalCount - a.signalCount ||
-    b.updatedAt.localeCompare(a.updatedAt)
-  );
 }
 
 /**

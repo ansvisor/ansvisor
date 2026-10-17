@@ -14,6 +14,12 @@ const PlatformVolumeChart = dynamic(() => import('./_charts').then((m) => m.Plat
   loading: () => <Skeleton className="h-64 w-full" />,
 });
 import { QueryFanoutTab } from './_fanout-tab';
+// The Topics tab loads as its own chunk, only when it is shown, so it
+// adds nothing to the other tabs' first load.
+const TopicsTab = dynamic(() => import('./_topics-tab').then((m) => m.TopicsTab), {
+  ssr: false,
+  loading: () => <Skeleton className="h-64 w-full" />,
+});
 import {
   PromptUsageCards,
   countByStatus,
@@ -148,6 +154,11 @@ import { getPromptUsage, isPromptLimitReached } from '@/lib/prompt-usage';
 import { getTopics } from '@/lib/actions/topic';
 import type { PromptVisibilitySummary } from '@/lib/actions/tracking';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
+import {
+  OPPORTUNITY_HIGH_VOLUME,
+  OPPORTUNITY_MIN_VOLUME,
+  opportunityLevel,
+} from '@/lib/prompt-volume-opportunity';
 import type { PromptVolume, Prompt, Topic } from '@/types';
 import { toast } from 'sonner';
 import {
@@ -180,6 +191,11 @@ import { BulkActionBar } from './_bulk-action-bar';
 import { formatCompactNumber, formatDate, formatNumber } from '@/lib/format';
 import { usePagination, TablePager } from '@/components/table-pager';
 import { PromptPositionsSheet } from '@/components/prompts/prompt-positions-sheet';
+import {
+  ClampedText,
+  ClampedTextTooltip,
+  createClampedTextHandle,
+} from '@/components/prompts/clamped-text';
 import {
   panelRangeFromTable,
   parsePositionsRange,
@@ -329,7 +345,7 @@ const PROMPT_EXPORT_HINT = 'No prompts yet - add prompts first.';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const VALID_TABS = ['all', 'fanout', 'insights'] as const;
+const VALID_TABS = ['all', 'topics', 'fanout', 'insights'] as const;
 
 /**
  * The window a tab opens on. Query Fan-out opens on 7 days: one day of
@@ -1263,6 +1279,7 @@ export default function PromptsPage() {
 
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const tCommon = useTranslations('common');
+  const tNav = useTranslations('nav');
   const activeBrand = useBrandStore(
     (s) => s.brands.find((brand) => brand.id === s.activeBrandId) ?? null,
   );
@@ -1275,7 +1292,7 @@ export default function PromptsPage() {
   const locationQuota = useMemo(() => (usage ? locationQuotaFromUsage(usage) : null), [usage]);
   const [statusFilter, setStatusFilter] = useState<PromptStatusFilter>('tracked');
   const searchParams = useSearchParams();
-  // On /dashboard/prompts/{tracked,suggestions,fan-outs,insights} the route
+  // On /dashboard/prompts/{tracked,suggestions,topics,fan-outs,insights} the route
   // names the view (PROMPT-001); ?tab= / ?view= are the older links' shape.
   const section = sectionFromPath(usePathname());
 
@@ -1286,6 +1303,11 @@ export default function PromptsPage() {
     return 'all';
   })();
   const [tab, setTab] = useState<TabId>(initialTab);
+  // Opened on Topics, the page holds back what only the other tabs show (the
+  // table, its locations, the volume run's status) until the topics are in or
+  // another tab is opened: server actions queue one behind another, and the
+  // table's read would otherwise make the topics wait. Once wanted, it stays.
+  const [promptDataWanted, setPromptDataWanted] = useState(initialTab !== 'topics');
 
   // The Prompts tab holds two views of the same roster: what is tracked, and
   // what could be. A sub-tab rather than a fourth top-level tab, because the
@@ -1345,35 +1367,80 @@ export default function PromptsPage() {
   // the URL with no server request; Next's router syncs with the History API.
   //
   // The tab and view live in the path (PROMPT-001): /dashboard/prompts/tracked,
-  // /suggestions, /fan-outs, /insights — the routes the sidebar's Prompts
-  // submenu links to, so the sidebar and these tabs always agree. The path is
-  // rewritten in place under any locale prefix.
+  // /suggestions, /topics, /fan-outs, /insights — the routes the sidebar's
+  // Prompts submenu links to, so the sidebar and these tabs always agree. The
+  // path is rewritten in place under any locale prefix.
+  const writeUrl = useCallback(
+    (next: {
+      tab: TabId;
+      view: PromptsView;
+      rangePreset: PromptRangePreset;
+      customFrom: string;
+      customTo: string;
+      regionFilter: string;
+    }) => {
+      // The default range stays out of the URL so shared links keep their
+      // existing shape unless the user actually picked a different window.
+      const want: Record<string, string | null> = {
+        range: next.rangePreset === defaultRangeFor(next.tab) ? null : next.rangePreset,
+        from: next.rangePreset === 'custom' && next.customFrom ? next.customFrom : null,
+        to: next.rangePreset === 'custom' && next.customTo ? next.customTo : null,
+        region: next.regionFilter || null,
+        tab: null,
+        view: null,
+      };
+      const { pathname, search, hash } = window.location;
+      const at = pathname.indexOf(PROMPTS_BASE);
+      const wantPath = `${at > 0 ? pathname.slice(0, at) : ''}${sectionFor(next.tab, next.view).href}`;
+      const params = new URLSearchParams(search);
+      if (pathname === wantPath && Object.entries(want).every(([k, v]) => params.get(k) === v)) {
+        return;
+      }
+      for (const [k, v] of Object.entries(want)) {
+        if (v) params.set(k, v);
+        else params.delete(k);
+      }
+      const query = params.toString();
+      // Keep the hash: deep links like #prompt-opportunities must keep their anchor.
+      window.history.replaceState(null, '', `${wantPath}${query ? `?${query}` : ''}${hash}`);
+    },
+    [],
+  );
   useEffect(() => {
-    // The default range stays out of the URL so shared links keep their
-    // existing shape unless the user actually picked a different window.
-    const want: Record<string, string | null> = {
-      range: rangePreset === defaultRangeFor(tab) ? null : rangePreset,
-      from: rangePreset === 'custom' && customFrom ? customFrom : null,
-      to: rangePreset === 'custom' && customTo ? customTo : null,
-      region: regionFilter || null,
-      tab: null,
-      view: null,
-    };
-    const { pathname, search, hash } = window.location;
-    const at = pathname.indexOf(PROMPTS_BASE);
-    const wantPath = `${at > 0 ? pathname.slice(0, at) : ''}${sectionFor(tab, view).href}`;
-    const params = new URLSearchParams(search);
-    if (pathname === wantPath && Object.entries(want).every(([k, v]) => params.get(k) === v)) {
-      return;
-    }
-    for (const [k, v] of Object.entries(want)) {
-      if (v) params.set(k, v);
-      else params.delete(k);
-    }
-    const query = params.toString();
-    // Keep the hash: deep links like #prompt-opportunities must keep their anchor.
-    window.history.replaceState(null, '', `${wantPath}${query ? `?${query}` : ''}${hash}`);
-  }, [tab, view, rangePreset, customFrom, customTo, regionFilter, searchParams]);
+    writeUrl({ tab, view, rangePreset, customFrom, customTo, regionFilter });
+  }, [tab, view, rangePreset, customFrom, customTo, regionFilter, searchParams, writeUrl]);
+
+  /**
+   * Move to another tab or list view, writing its route first.
+   *
+   * Next routes a replaceState through its action queue (a "restore"), and in
+   * Next 16 a restore that lands while a server action is in flight leaves
+   * the queue pointing at the discarded action: actions queued after it never
+   * run, and the table spins forever. The tab about to show fires its own
+   * server actions as it mounts, before the effect above would rewrite the
+   * route, so the route is written here, on an idle queue, ahead of them.
+   */
+  const showSection = useCallback(
+    (nextTab: TabId, nextView: PromptsView) => {
+      // A window still on this tab's default wasn't picked by the user, so it
+      // follows the next tab's own (Query Fan-out opens on 7 days).
+      const nextRange =
+        rangePreset === defaultRangeFor(tab) ? defaultRangeFor(nextTab) : rangePreset;
+      writeUrl({
+        tab: nextTab,
+        view: nextView,
+        rangePreset: nextRange,
+        customFrom,
+        customTo,
+        regionFilter,
+      });
+      setRangePreset(nextRange);
+      setView(nextView);
+      setTab(nextTab);
+      if (nextTab !== 'topics') setPromptDataWanted(true);
+    },
+    [tab, rangePreset, customFrom, customTo, regionFilter, writeUrl],
+  );
 
   // Deep link from the Insights Recommendations row (#459): the target card
   // only exists once the Insights tab's volume data has rendered, so a bare
@@ -1430,12 +1497,13 @@ export default function PromptsPage() {
   );
 
   useEffect(() => {
+    if (!promptDataWanted) return undefined;
     let cancelled = false;
     loadData(() => cancelled);
     return () => {
       cancelled = true;
     };
-  }, [loadData]);
+  }, [loadData, promptDataWanted]);
 
   // After prompts are added, paused, resumed, deleted or retargeted: reload
   // the table and the usage cards together.
@@ -1453,6 +1521,7 @@ export default function PromptsPage() {
       setAvailableRegions([]);
       return;
     }
+    if (!promptDataWanted) return;
     let cancelled = false;
     getBrandFilterOptions(activeBrandId)
       .then((options) => {
@@ -1463,7 +1532,7 @@ export default function PromptsPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId]);
+  }, [activeBrandId, promptDataWanted]);
 
   // A location that stops producing results must not keep filtering the
   // table to nothing — fall back to the blended view.
@@ -1525,7 +1594,7 @@ export default function PromptsPage() {
    * page's narration of it stops.
    */
   useEffect(() => {
-    if (!activeBrandId) return undefined;
+    if (!activeBrandId || !promptDataWanted) return undefined;
 
     const brandId = activeBrandId;
     const gen = ++analysisGenRef.current;
@@ -1553,7 +1622,7 @@ export default function PromptsPage() {
       setAnalyzing(false);
       setAnalysisProgress(null);
     };
-  }, [activeBrandId, watchVolumeAnalysis]);
+  }, [activeBrandId, promptDataWanted, watchVolumeAnalysis]);
 
   /**
    * Start a run, then follow it to the end.
@@ -1668,7 +1737,10 @@ export default function PromptsPage() {
 
   const totalGoogleVol = volumes.reduce((s, v) => s + v.totalGoogleVolume, 0);
   const totalAiVol = volumes.reduce((s, v) => s + v.estAiVolume, 0);
-  const totalKeywords = volumes.reduce((s, v) => s + v.keywords.length, 0);
+  // Distinct keywords: prompts share many, as Similar Topics counts them.
+  const totalKeywords = new Set(
+    volumes.flatMap((v) => v.keywords.map((k) => k.trim().toLowerCase())),
+  ).size;
 
   const filtered = volumes.filter(
     (v) =>
@@ -1759,27 +1831,15 @@ export default function PromptsPage() {
           <h1 className="text-2xl font-bold tracking-tight">Prompts</h1>
           <p className="text-muted-foreground text-sm">
             Manage every tracked prompt and review estimated AI demand
-            <span className="ml-2 inline-flex items-center gap-1 text-xs text-muted-foreground/70">
-              <AlertCircle className="h-3 w-3" />
-              Volumes are estimates, not exact figures
-            </span>
           </p>
         </div>
       </div>
 
-      <Tabs
-        value={tab}
-        onValueChange={(v) => {
-          const next = v as TabId;
-          // A window still on this tab's default wasn't picked by the user,
-          // so it follows the next tab's own (Query Fan-out opens on 7 days).
-          if (rangePreset === defaultRangeFor(tab)) setRangePreset(defaultRangeFor(next));
-          setTab(next);
-        }}
-      >
+      <Tabs value={tab} onValueChange={(v) => showSection(v as TabId, view)}>
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <TabsList>
             <TabsTrigger value="all">Prompts</TabsTrigger>
+            <TabsTrigger value="topics">{tNav('topics')}</TabsTrigger>
             <TabsTrigger value="fanout">Query Fan-out</TabsTrigger>
             <TabsTrigger value="insights">Insights</TabsTrigger>
           </TabsList>
@@ -1843,7 +1903,7 @@ export default function PromptsPage() {
                 type="button"
                 role="tab"
                 aria-selected={view === id}
-                onClick={() => setView(id)}
+                onClick={() => showSection(tab, id)}
                 className={cn(
                   'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
                   view === id
@@ -1860,7 +1920,8 @@ export default function PromptsPage() {
 
         {/* Filter bar — same shape and position as Visibility and Citations
             (#713). It sits outside the tab panels because the range governs
-            both All Prompts and Query Fan-out.
+            All Prompts, Topics and Query Fan-out. Location doesn't apply to
+            Topics, so it is left off there.
             Hidden on Insights: that tab shows keyword volume estimates, which
             carry no date dimension, so a range there would be a control that
             changes nothing. */}
@@ -1876,7 +1937,7 @@ export default function PromptsPage() {
               onToChange={setCustomTo}
             />
 
-            {availableRegions.length > 1 && (
+            {availableRegions.length > 1 && tab !== 'topics' && (
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
                   Location
@@ -1983,6 +2044,19 @@ export default function PromptsPage() {
                 onChanged={reloadAfterChange}
               />
             </>
+          )}
+        </TabsContent>
+
+        {/* ─── Topics tab ───────────────────────────────────────────────── */}
+        <TabsContent value="topics" className="mt-4">
+          {tab === 'topics' && (
+            <TopicsTab
+              range={range}
+              rangePreset={rangePreset}
+              customFrom={customFrom}
+              customTo={customTo}
+              onLoaded={() => setPromptDataWanted(true)}
+            />
           )}
         </TabsContent>
 
@@ -2133,7 +2207,7 @@ export default function PromptsPage() {
                 <KpiCard
                   title="Avg. AI Volume"
                   icon={BarChart3}
-                  value={`~${formatCompactNumber(totalAiVol / volumes.length)}`}
+                  value={`~${formatCompactNumber(Math.round(totalAiVol / volumes.length))}`}
                   sub="per prompt"
                 />
               </div>
@@ -2254,15 +2328,16 @@ export default function PromptsPage() {
                   )}
                   <div className="px-6 py-2 border-t">
                     <p className="text-xs text-muted-foreground">
-                      * Est. AI Volume = Total Google search volume of extracted keywords × AI
-                      adoption rate. Figures are approximations for planning purposes.
+                      * Est. AI Volume = the median Google search volume of the prompt&apos;s
+                      extracted keywords × AI adoption rate. Figures are approximations for planning
+                      purposes.
                     </p>
                   </div>
                 </CardContent>
               </Card>
 
               {/* High Opportunity Prompts */}
-              {volumes.filter((v) => v.estAiVolume >= 5000).length > 0 && (
+              {volumes.some((v) => opportunityLevel(v.estAiVolume)) && (
                 <Card>
                   <CardHeader className="pb-2">
                     <div className="flex items-center gap-2">
@@ -2291,7 +2366,7 @@ export default function PromptsPage() {
                           </ColHead>
                           <ColHead
                             className="text-right pr-6"
-                            tooltip="Opportunity level based on estimated AI volume. High = above 10k/mo, Medium = 5k–10k/mo."
+                            tooltip={`Opportunity level based on estimated AI volume. High = ${formatCompactNumber(OPPORTUNITY_HIGH_VOLUME)}+/mo, Medium = ${formatCompactNumber(OPPORTUNITY_MIN_VOLUME)}–${formatCompactNumber(OPPORTUNITY_HIGH_VOLUME)}/mo.`}
                           >
                             Opportunity
                           </ColHead>
@@ -2299,7 +2374,7 @@ export default function PromptsPage() {
                       </TableHeader>
                       <TableBody>
                         {volumes
-                          .filter((v) => v.estAiVolume >= 5000)
+                          .filter((v) => opportunityLevel(v.estAiVolume))
                           .sort((a, b) => b.estAiVolume - a.estAiVolume)
                           .map((row) => (
                             <TableRow key={row.id} className="hover:bg-muted/50">
@@ -2322,12 +2397,12 @@ export default function PromptsPage() {
                                   variant="outline"
                                   className={cn(
                                     'text-xs',
-                                    row.estAiVolume >= 10000
+                                    opportunityLevel(row.estAiVolume) === 'high'
                                       ? 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'
                                       : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
                                   )}
                                 >
-                                  {row.estAiVolume >= 10000 ? 'High' : 'Medium'}
+                                  {opportunityLevel(row.estAiVolume) === 'high' ? 'High' : 'Medium'}
                                 </Badge>
                               </TableCell>
                             </TableRow>
@@ -2609,6 +2684,8 @@ function AllPromptsTab({
   onChanged: () => void;
 }) {
   const tCommon = useTranslations('common');
+  // One tooltip for every prompt and topic the table cuts short.
+  const fullText = useMemo(() => createClampedTextHandle(), []);
   const tUsage = useTranslations('prompts.usage');
   const format = useFormatter();
   const tDelete = useTranslations('prompts.bulkDelete');
@@ -3526,18 +3603,32 @@ function AllPromptsTab({
                           aria-label={`Select ${p.text}`}
                         />
                       )}
-                      <Link
-                        href={`/dashboard/prompts/${p.id}`}
-                        className="line-clamp-2 transition-colors hover:text-primary hover:underline"
-                      >
-                        {p.text}
-                      </Link>
+                      <ClampedText
+                        handle={fullText}
+                        text={p.text}
+                        render={
+                          <Link
+                            href={`/dashboard/prompts/${p.id}`}
+                            className="line-clamp-2 transition-colors hover:text-primary hover:underline"
+                          />
+                        }
+                      />
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className="text-xs text-muted-foreground truncate inline-block max-w-[140px] align-middle">
-                      {p.category?.trim() ? p.category : '—'}
-                    </span>
+                    {p.category?.trim() ? (
+                      <ClampedText
+                        handle={fullText}
+                        text={p.category}
+                        render={
+                          <span className="text-xs text-muted-foreground truncate inline-block max-w-[140px] align-middle" />
+                        }
+                      />
+                    ) : (
+                      <span className="text-xs text-muted-foreground inline-block align-middle">
+                        —
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge
@@ -3697,6 +3788,7 @@ function AllPromptsTab({
             })}
           </TableBody>
         </Table>
+        <ClampedTextTooltip handle={fullText} />
         <TablePager
           page={promptsPager.page}
           totalPages={promptsPager.totalPages}

@@ -12,17 +12,20 @@ import { extractHostname, normalizeDomain } from '@/lib/citations/classify';
 import { dayIn, nextDay, startOfDayIn } from '@/lib/time-zone';
 import type { Sentiment } from '@/types';
 
-/** The engines the panel lists, in the order it lists them. */
+/**
+ * The engines the panel and the table's platform dots list, in the order
+ * they list them: ChatGPT and Microsoft Copilot first, Perplexity last.
+ */
 export const POSITION_PLATFORMS = [
   { id: 'chatgpt-web', label: 'ChatGPT' },
-  { id: 'perplexity-web', label: 'Perplexity' },
+  { id: 'copilot-web', label: 'Microsoft Copilot' },
   { id: 'google-aio', label: 'Google AI Overviews' },
   { id: 'google-aimode', label: 'Google AI Mode' },
   { id: 'gemini-web', label: 'Gemini' },
-  { id: 'copilot-web', label: 'Microsoft Copilot' },
   { id: 'grok-web', label: 'Grok' },
   // API-model tracking stores its answers under this platform.
   { id: 'claude', label: 'Claude' },
+  { id: 'perplexity-web', label: 'Perplexity' },
 ] as const;
 
 export type PositionPlatformId = (typeof POSITION_PLATFORMS)[number]['id'];

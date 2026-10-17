@@ -17,13 +17,15 @@ describe('sectionFromPath', () => {
       tab: 'all',
       view: 'suggestions',
     });
+    expect(sectionFromPath('/dashboard/prompts/topics')?.tab).toBe('topics');
     expect(sectionFromPath('/dashboard/prompts/fan-outs')?.tab).toBe('fanout');
     expect(sectionFromPath('/dashboard/prompts/insights')?.tab).toBe('insights');
   });
 
-  test('is null off the four routes (the base path, a prompt detail page)', () => {
+  test('is null off the five routes (the base path, a prompt or topic detail page)', () => {
     expect(sectionFromPath('/dashboard/prompts')).toBeNull();
     expect(sectionFromPath('/dashboard/prompts/8a1c-uuid')).toBeNull();
+    expect(sectionFromPath('/dashboard/prompts/topics/8a1c-uuid')).toBeNull();
   });
 });
 
@@ -31,6 +33,7 @@ describe('sectionFor', () => {
   test('maps the in-page tabs to the routes', () => {
     expect(sectionFor('all', 'tracked').href).toBe('/dashboard/prompts/tracked');
     expect(sectionFor('all', 'suggestions').href).toBe('/dashboard/prompts/suggestions');
+    expect(sectionFor('topics', 'suggestions').href).toBe('/dashboard/prompts/topics');
     expect(sectionFor('fanout', 'suggestions').href).toBe('/dashboard/prompts/fan-outs');
     expect(sectionFor('insights', 'tracked').href).toBe('/dashboard/prompts/insights');
   });

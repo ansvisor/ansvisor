@@ -22,6 +22,22 @@ describe('getDashboardNavLabel', () => {
     }
   });
 
+  // Topics moved into Prompts as one of its views, under the suggestions;
+  // /dashboard/topics redirects there.
+  it('lists Topics under Prompts, after Prompt Suggestions, and not as its own item', () => {
+    const items = dashboardNav.flatMap((group) => group.items);
+    const prompts = items.find((item) => item.title === 'Prompts')!;
+    expect(prompts.children?.map((c) => c.title)).toEqual([
+      'Tracked Prompts',
+      'Prompt Suggestions',
+      'Topics',
+      'Query Fan-outs',
+      'Prompts Insights',
+    ]);
+    expect(prompts.children?.[2].href).toBe('/dashboard/prompts/topics');
+    expect(items.some((item) => item.href === '/dashboard/topics')).toBe(false);
+  });
+
   it('uses the brands namespace only for Brands', () => {
     expect(getDashboardNavLabel('Brands', translateNav, translateBrands)).toBe('brands.title');
     expect(getDashboardNavLabel('Shopping', translateNav, translateBrands)).toBe('nav.shopping');
@@ -43,5 +59,18 @@ describe('shouldShowDashboardNavItem', () => {
 
   it('shows Shopping when the active brand enables shopping mode', () => {
     expect(shouldShowDashboardNavItem(shopping, { shoppingModeEnabled: true })).toBe(true);
+  });
+});
+
+describe('the Mentions item', () => {
+  const analytics = dashboardNav.find((group) => group.title === 'Analytics')!.items;
+  const index = (title: string) => analytics.findIndex((item) => item.title === title);
+
+  it('sits directly above Citations, marked New', () => {
+    expect(index('Mentions')).toBe(index('Citations') - 1);
+    expect(analytics[index('Mentions')]).toMatchObject({
+      href: '/dashboard/mentions',
+      badge: 'New',
+    });
   });
 });

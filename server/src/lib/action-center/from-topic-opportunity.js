@@ -35,10 +35,18 @@ export function topicOpportunityPlan(trackedPrompts) {
   return trackedPrompts > 0 ? expandTopicVisibility : createContentForTopics;
 }
 
-/** How much the demand matters: 50k+ AI searches a month is high, 10k+ medium. */
+/**
+ * How much the demand matters: 10k+ AI searches a month is high, 2k+ medium.
+ *
+ * The demand is the topic's suggestions' estimated volumes added up, and the
+ * model estimates those against the brand's tracked prompts. Those used to
+ * sum five keywords' Google volumes at a 15% rate; at their median and 45%
+ * (#1103) a brand's average prompt reads about a fifth of what it did, so
+ * the old 50k and 10k became five times harder to reach.
+ */
 export function topicOpportunityImpact(volume) {
-  if (volume >= 50_000) return 'high';
-  if (volume >= 10_000) return 'medium';
+  if (volume >= 10_000) return 'high';
+  if (volume >= 2_000) return 'medium';
   return 'low';
 }
 
