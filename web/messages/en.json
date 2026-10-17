@@ -213,6 +213,10 @@
         "name": "AI Referral Traffic",
         "description": "Visits arriving from AI platforms"
       },
+      "positive_sentiment": {
+        "name": "Positive Sentiment",
+        "description": "Positive share of the AI responses naming you"
+      },
       "competitor_lead": {
         "name": "Lead over top competitor",
         "description": "Your visibility minus the strongest competitor's on the same prompts, in points"
@@ -2155,6 +2159,8 @@
     "copied": "Copied",
     "copyFailed": "Copy failed",
     "copyDraft": "Copy draft",
+    "copyCode": "Copy code",
+    "placeholderNote": "Replace placeholders in [brackets] with your real data before publishing.",
     "finding": "Finding",
     "why": "Why",
     "recommendedFix": "Recommended fix",
@@ -2961,6 +2967,7 @@
       "acrossBrands": "across {count, plural, one {# brand} other {# brands}}",
       "locationPairs": "prompt × location pairs",
       "overLimit": "over limit",
+      "collapsedLocations": "{used} / {limit} prompt locations",
       "ofLimit": "of {limit} on {plan}",
       "onPlan": "on {plan}",
       "unlimited": "Unlimited",

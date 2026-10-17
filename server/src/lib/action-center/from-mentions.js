@@ -20,7 +20,7 @@ import { planTasks } from './tasks/plan.js';
 export const MENTION_ACTION_KIND = 'mention_review';
 
 const ACTIVE = ['new', 'in_progress', 'on_hold'];
-const KPI_KEYS = ['mentions', 'ai_visibility'];
+const KPI_KEYS = ['mentions', 'ai_visibility', 'positive_sentiment'];
 /** At most a page of the Mentions table at once. */
 export const MAX_MENTIONS = 100;
 /** The answers quoted on the action. */

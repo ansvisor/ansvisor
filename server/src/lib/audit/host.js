@@ -24,3 +24,12 @@ export function normStoredDomain(domain) {
   const value = String(domain).trim();
   return normHost(/^https?:\/\//i.test(value) ? value : `https://${value}`);
 }
+
+/** True when `url` is on one of the stored brand domains or a subdomain of one. */
+export function onBrandDomain(url, domains) {
+  const host = normHost(url);
+  if (!host) return false;
+  return (domains ?? [])
+    .map(normStoredDomain)
+    .some((d) => d && (host === d || host.endsWith(`.${d}`)));
+}

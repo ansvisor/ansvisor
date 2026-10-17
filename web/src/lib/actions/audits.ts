@@ -33,6 +33,8 @@ export interface AuditRecommendation {
   priority: 'high' | 'medium' | 'low';
   recommendation: string;
   draft: string | null;
+  /** JSON-LD or HTML to paste. Older audits keep markup in `draft` and lack this. */
+  code?: string | null;
 }
 
 export interface AuditResult {

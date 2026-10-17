@@ -118,7 +118,8 @@ async function fetchWindowMetrics(
   const days = windowOverride ?? { dayFrom: daysAgo(windowDays - 1), dayTo: utcToday() };
   const trendFrom = daysAgo(TREND_DAYS - 1);
 
-  const wantsInsights = keys.has('citations') || keys.has('mentions');
+  const wantsInsights =
+    keys.has('citations') || keys.has('mentions') || keys.has('positive_sentiment');
 
   const [visibility, insights, sov, traffic, trafficTrend, dailyTotals] = await Promise.all([
     keys.has('ai_visibility') ? getVisibilityRateTrend(brandId, { days }) : null,
@@ -138,7 +139,8 @@ async function fetchWindowMetrics(
       : null,
     // Mentions/citations have window aggregates but no daily-series RPC, so
     // the 7-point sparkline is seven one-day aggregates in parallel. Each is
-    // a rollup read returning one JSON row; both KPIs share the same seven.
+    // a rollup read returning one JSON row; the KPIs read from the answers'
+    // rollups (mentions, citations, positive sentiment) share the same seven.
     wantsInsights ? fetchDailyInsightTotals(brandId) : null,
   ]);
 
@@ -159,11 +161,18 @@ async function fetchDailyInsightTotals(brandId: string) {
         p_day_to: day,
       });
       if (error) throw new Error(error.message);
-      const agg = (data ?? {}) as { total_mentions?: number; total_citations?: number };
+      const agg = (data ?? {}) as {
+        total_mentions?: number;
+        total_citations?: number;
+        positive_count?: number;
+        mentioning_results?: number;
+      };
       return {
         date: day,
         mentions: Number(agg.total_mentions ?? 0),
         citations: Number(agg.total_citations ?? 0),
+        positive: Number(agg.positive_count ?? 0),
+        mentioning: Number(agg.mentioning_results ?? 0),
       };
     }),
   );
@@ -208,6 +217,20 @@ function buildSnapshot(
       change = metrics.insights.mentionsChange;
       changeKind = 'percent';
       trend = metrics.dailyTotals.map((d) => ({ date: d.date, value: d.mentions }));
+      break;
+    }
+    case 'positive_sentiment': {
+      if (!metrics.insights || !metrics.dailyTotals) return null;
+      // Insights' Positive sentiment card: the positive share of the answers
+      // naming the brand, its change in points.
+      value = metrics.insights.positiveSentimentPct;
+      change = metrics.insights.sentimentChange;
+      changeKind = 'points';
+      // A day without an answer naming the brand has no share; it is left
+      // out rather than drawn as 0%.
+      trend = metrics.dailyTotals
+        .filter((d) => d.mentioning > 0)
+        .map((d) => ({ date: d.date, value: Math.round((d.positive * 100) / d.mentioning) }));
       break;
     }
     case 'share_of_voice': {

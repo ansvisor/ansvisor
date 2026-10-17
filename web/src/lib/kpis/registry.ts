@@ -16,7 +16,8 @@ export type KpiKey =
   | 'citations'
   | 'mentions'
   | 'share_of_voice'
-  | 'ai_referral_traffic';
+  | 'ai_referral_traffic'
+  | 'positive_sentiment';
 
 export type KpiCategory = 'visibility' | 'citations' | 'mentions' | 'traffic' | 'content';
 
@@ -87,6 +88,17 @@ export const KPI_REGISTRY: Record<KpiKey, KpiMeta> = {
     source: 'tracking',
     defaultTarget: 100,
   },
+  // The positive share of the answers naming the brand, as Insights'
+  // Positive sentiment card: sentiment is read over mentions, so it files
+  // under them.
+  positive_sentiment: {
+    key: 'positive_sentiment',
+    category: 'mentions',
+    unit: 'percent',
+    direction: 'higher_is_better',
+    source: 'tracking',
+    defaultTarget: 50,
+  },
 };
 
 export const KPI_KEYS = Object.keys(KPI_REGISTRY) as KpiKey[];
@@ -105,6 +117,7 @@ export const DEFAULT_KPI_SET: KpiKey[] = [
   'mentions',
   'share_of_voice',
   'ai_referral_traffic',
+  'positive_sentiment',
 ];
 
 export type KpiTemplateKey =
@@ -116,8 +129,8 @@ export type KpiTemplateKey =
 /**
  * Templates are presets over the registry, nothing more — picking one checks
  * a set of KPIs and seeds their default targets. A template with no
- * computable KPIs yet (content, brand monitoring) renders disabled in the
- * drawer rather than being hidden: the roadmap is allowed to show.
+ * computable KPIs yet (content) renders disabled in the drawer rather than
+ * being hidden: the roadmap is allowed to show.
  *
  * AI Search Visibility is deliberately the four answer-engine KPIs, not the
  * whole registry: referral traffic measures what arrives at the site, not
@@ -127,7 +140,7 @@ export type KpiTemplateKey =
 export const KPI_TEMPLATES: Record<KpiTemplateKey, KpiKey[]> = {
   ai_search_visibility: ['ai_visibility', 'citations', 'mentions', 'share_of_voice'],
   content_performance: [],
-  brand_monitoring: [],
+  brand_monitoring: ['mentions', 'positive_sentiment'],
   custom: [],
 };
 
