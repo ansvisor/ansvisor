@@ -52,6 +52,16 @@ function ReasonChips({ row }: { row: AuditOpportunity }) {
         return <Chip key="never">{t('neverAudited')}</Chip>;
       case 'stale_audit':
         return <Chip key="stale">{t('staleAudit', { days: reason.days })}</Chip>;
+      case 'competitor_cited':
+        return (
+          <Chip key="competitor">
+            {t('competitorCited', {
+              name: reason.competitors[0] ?? '',
+              others: Math.max(0, reason.competitors.length - 1),
+              prompts: reason.prompts,
+            })}
+          </Chip>
+        );
     }
   };
   return (

@@ -120,6 +120,25 @@ describe('OpportunitiesTable', () => {
     expect(rows()[1].querySelectorAll('a')[1].getAttribute('href')).toBe('/dashboard/audit/a1');
   });
 
+  it('names the competitor cited on the prompts closest to a page', () => {
+    render([
+      opportunity({
+        reasons: [
+          { type: 'competitor_cited', prompts: 3, competitors: ['Crema Club', 'Northline'] },
+        ],
+      }),
+      opportunity({
+        key: 'k2',
+        path: '/gifts',
+        reasons: [{ type: 'competitor_cited', prompts: 1, competitors: ['Crema Club'] }],
+      }),
+    ]);
+    expect(rows().map((r) => cells(r)[2])).toEqual([
+      'Crema Club +1 cited on 3 prompts',
+      'Crema Club cited on 1 prompt',
+    ]);
+  });
+
   it('selects pages not being audited, one by one or all shown', () => {
     const running = opportunity({ key: 'run', path: '/run', running: true, lastAudit: null });
     render([opportunity(), blog, running], {

@@ -8,12 +8,16 @@
  *   valuable pages AI engines send no visitors to (refreshed nightly).
  * - Site pages (site_pages: the sitemap, GA and cited pages): pages never
  *   audited, or whose last audit is older than auditMaxAgeDays.
+ * - Citations: prompts where a competitor is cited and the brand never is
+ *   (audit_competitor_cited_prompts), each through the brand page closest
+ *   to it (the prompt's target URL, else the best site_pages match).
  *
  * Pinned pages always show, first. Excluded pages are left out of the rows
  * and listed apart, so they can be put back.
  */
 
 import { isExcludedPath } from '../page-paths.js';
+import { candidatePages } from '../page-matching.js';
 import { pageKey } from './history.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -31,6 +35,55 @@ export function opportunityKey(url) {
 const pathOf = (url) => pageKey(url)?.path ?? '/';
 
 /**
+ * The brand pages closest to the prompts a competitor is cited on and the
+ * brand never is: the prompt's target URLs when it has any (a customer said
+ * which page answers it), else the site page that best matches its text.
+ * Prompts with no such page are left out: there is nothing to audit.
+ *
+ * @param {object} input
+ * @param {Array<{ prompt_id: string, prompt_text: string, own_results: number|string, competitor_domains: string[] }>} input.prompts
+ *   audit_competitor_cited_prompts rows
+ * @param {Array<{ prompt_id: string, url: string }>} input.targetUrls  prompt_target_urls of those prompts
+ * @param {Array<{ url: string, title?: string|null, h1?: string|null, description?: string|null }>} input.sitePages
+ * @param {Map<string, string>} input.competitorNames  competitor host → name
+ * @returns {Array<{ url: string, prompts: number, competitors: string[] }>}
+ */
+export function competitorGapPages({
+  prompts = [],
+  targetUrls = [],
+  sitePages = [],
+  competitorNames,
+}) {
+  const targets = new Map();
+  for (const t of targetUrls) {
+    if (!targets.has(t.prompt_id)) targets.set(t.prompt_id, []);
+    targets.get(t.prompt_id).push(t.url);
+  }
+  const pages = new Map();
+  for (const prompt of prompts) {
+    if (Number(prompt.own_results) > 0) continue;
+    const urls =
+      targets.get(prompt.prompt_id) ??
+      candidatePages(prompt.prompt_text, sitePages, 1).map((page) => page.url);
+    for (const url of urls) {
+      const key = opportunityKey(url);
+      if (!key) continue;
+      if (!pages.has(key)) pages.set(key, { url, prompts: new Set(), competitors: new Set() });
+      const page = pages.get(key);
+      page.prompts.add(prompt.prompt_id);
+      for (const domain of prompt.competitor_domains ?? []) {
+        page.competitors.add(competitorNames?.get(domain) ?? domain);
+      }
+    }
+  }
+  return [...pages.values()].map((page) => ({
+    url: page.url,
+    prompts: page.prompts.size,
+    competitors: [...page.competitors].sort((a, b) => a.localeCompare(b)),
+  }));
+}
+
+/**
  * @param {object} input
  * @param {string|null} input.primaryHost   the brand's primary host (normStoredDomain)
  * @param {Array<{ landing_page: string, value_signal: string, value_percentile: number|string, sessions: number, citation_state: string|null, citations: number|null }>} input.gaPages
@@ -38,6 +91,8 @@ const pathOf = (url) => pageKey(url)?.path ?? '/';
  * @param {Array<{ url: string, title: string|null, ga_sessions: number|null, ai_citations: number|null }>} input.sitePages
  * @param {Array<{ key: string, url: string, score: number|null, auditId: string, lastAuditedAt: string, status: string }>} input.auditPages
  *   buildAuditPages output
+ * @param {Array<{ url: string, prompts: number, competitors: string[] }>} [input.competitorPages]
+ *   competitorGapPages output
  * @param {Array<{ page_key: string, url: string, state: 'pinned'|'excluded' }>} input.prefs
  * @param {number} input.staleDays   an audit older than this no longer counts
  * @param {number} [input.now]
@@ -47,6 +102,7 @@ export function buildOpportunities({
   gaPages = [],
   sitePages = [],
   auditPages = [],
+  competitorPages = [],
   prefs = [],
   staleDays,
   now = Date.now(),
@@ -109,6 +165,16 @@ export function buildOpportunities({
     }
   }
 
+  for (const gap of competitorPages) {
+    const page = pageFor(gap.url);
+    if (!page) continue;
+    page.reasons.push({
+      type: 'competitor_cited',
+      prompts: gap.prompts,
+      competitors: gap.competitors,
+    });
+  }
+
   for (const pref of prefs) {
     const page = pref.state === 'pinned' ? pageFor(pref.url) : null;
     if (page) page.pinned = true;
@@ -150,16 +216,20 @@ export function buildOpportunities({
 
 const gaPercentile = (row) => row.reasons.find((r) => r.type === 'no_ai_traffic')?.percentile ?? -1;
 const neverAudited = (row) => row.reasons.some((r) => r.type === 'never_audited');
+const competitorPrompts = (row) =>
+  row.reasons.find((r) => r.type === 'competitor_cited')?.prompts ?? 0;
 
 /**
  * Until the priority score (SA-005): pinned first, then GA's most valuable
- * pages without AI traffic, then pages never audited before stale ones, then
- * the most cited and visited.
+ * pages without AI traffic, then the pages closest to the most prompts a
+ * competitor wins, then pages never audited before stale ones, then the most
+ * cited and visited.
  */
 export function compareOpportunities(a, b) {
   return (
     Number(b.pinned) - Number(a.pinned) ||
     gaPercentile(b) - gaPercentile(a) ||
+    competitorPrompts(b) - competitorPrompts(a) ||
     Number(neverAudited(b)) - Number(neverAudited(a)) ||
     (b.citations ?? 0) - (a.citations ?? 0) ||
     (b.sessions ?? 0) - (a.sessions ?? 0) ||

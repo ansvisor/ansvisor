@@ -73,6 +73,12 @@ async function startApp() {
       from: (t) => query(t),
       rpc: async (name, args) => {
         rpcCalls.push({ name, args });
+        if (name === 'audit_competitor_cited_prompts') {
+          if (tables.competitorPromptsMissing) {
+            return { data: null, error: { code: 'PGRST202', message: 'not found' } };
+          }
+          return { data: tables.competitorPrompts ?? [], error: null };
+        }
         return {
           data: {
             analytics: [{ page: args.p_pages[0], platform: 'chatgpt', cur_sessions: 7 }],
@@ -184,7 +190,7 @@ describe('GET /api/audits/opportunities', () => {
     expect(body.staleDays).toBe(90);
 
     // AI visits over the last 30 days, for the listed pages.
-    const [{ name, args }] = rpcCalls;
+    const { name, args } = rpcCalls.find((c) => c.name === 'ae_page_traffic_evidence');
     expect(name).toBe('ae_page_traffic_evidence');
     expect(args.p_pages).toEqual(['https://acme.com/pricing']);
   });
@@ -207,7 +213,71 @@ describe('GET /api/audits/opportunities', () => {
     tables.brands = [{ id: brandId, ga_property_id: null }];
     const body = await (await fetch(`${baseUrl}/opportunities?brandId=${brandId}`)).json();
     expect(body.opportunities[0].aiVisits).toBeNull();
-    expect(rpcCalls).toEqual([]);
+    expect(rpcCalls.map((c) => c.name)).not.toContain('ae_page_traffic_evidence');
+  });
+
+  it("adds the pages closest to the prompts a competitor wins and the brand doesn't", async () => {
+    tables.competitors = [
+      { brand_id: brandId, name: 'Crema Club', domain: 'https://www.Crema.example/' },
+      { brand_id: brandId, name: 'No domain', domain: '' },
+    ];
+    tables.site_pages.push({
+      brand_id: brandId,
+      url: 'https://acme.com/subscriptions',
+      title: 'Coffee subscription plans',
+      h1: 'Coffee subscriptions',
+      description: null,
+      ga_sessions: 5,
+      ai_citations: 0,
+    });
+    tables.competitorPrompts = [
+      {
+        prompt_id: 'p1',
+        prompt_text: 'best coffee subscription plans',
+        results: 6,
+        competitor_results: 4,
+        own_results: 0,
+        competitor_domains: ['crema.example'],
+      },
+      // Cited on this one too: not a gap.
+      {
+        prompt_id: 'p2',
+        prompt_text: 'coffee subscription plans for offices',
+        results: 6,
+        competitor_results: 2,
+        own_results: 1,
+        competitor_domains: ['crema.example'],
+      },
+    ];
+    tables.prompt_target_urls = [];
+
+    const body = await (await fetch(`${baseUrl}/opportunities?brandId=${brandId}`)).json();
+    const page = body.opportunities.find((o) => o.path === '/subscriptions');
+    expect(page.reasons).toContainEqual({
+      type: 'competitor_cited',
+      prompts: 1,
+      competitors: ['Crema Club'],
+    });
+
+    const { args } = rpcCalls.find((c) => c.name === 'audit_competitor_cited_prompts');
+    expect(args).toMatchObject({
+      p_brand_id: brandId,
+      p_own_domains: ['acme.com'],
+      p_competitor_domains: ['crema.example'],
+    });
+  });
+
+  it('lists the other sources on a database without migration 00165', async () => {
+    tables.competitors = [{ brand_id: brandId, name: 'Crema Club', domain: 'crema.example' }];
+    tables.competitorPromptsMissing = true;
+    const res = await fetch(`${baseUrl}/opportunities?brandId=${brandId}`);
+    expect(res.status).toBe(200);
+    expect((await res.json()).opportunities.map((o) => o.path)).toEqual(['/pricing']);
+  });
+
+  it('asks for no citations without competitor domains', async () => {
+    await fetch(`${baseUrl}/opportunities?brandId=${brandId}`);
+    expect(rpcCalls.map((c) => c.name)).not.toContain('audit_competitor_cited_prompts');
   });
 
   it('needs a brand', async () => {

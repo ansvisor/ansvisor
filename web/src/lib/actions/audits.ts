@@ -284,7 +284,14 @@ export type OpportunityReason =
       citationState: 'cited' | 'targeted_not_cited' | 'not_targeted' | null;
     }
   | { type: 'never_audited' }
-  | { type: 'stale_audit'; days: number };
+  | { type: 'stale_audit'; days: number }
+  | {
+      type: 'competitor_cited';
+      /** Prompts a competitor is cited on and the brand never is, closest to this page. */
+      prompts: number;
+      /** The competitors cited on them, by name. */
+      competitors: string[];
+    };
 
 /** A page worth auditing (SA-004). */
 export interface AuditOpportunity {

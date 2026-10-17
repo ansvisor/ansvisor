@@ -34,7 +34,12 @@ import {
 } from '../lib/audit/history.js';
 import { readAllRpcRows } from '../lib/rpc-pages.js';
 import { AUTHORITY_CATEGORIES, buildOverview, primaryPages } from '../lib/audit/overview.js';
-import { aiVisitsByPage, buildOpportunities, opportunityKey } from '../lib/audit/opportunities.js';
+import {
+  aiVisitsByPage,
+  buildOpportunities,
+  competitorGapPages,
+  opportunityKey,
+} from '../lib/audit/opportunities.js';
 import { ENGINE_THRESHOLDS } from '../config/action-engine.js';
 import { runSignals } from '../lib/audit/engine.js';
 import { evaluateLlmSignals } from '../lib/audit/llm-signals.js';
@@ -553,8 +558,58 @@ router.get('/overview', async (req, res) => {
   }
 });
 
-/** The window the Opportunities inbox counts AI visits over. */
+/** The window the Opportunities inbox counts AI visits and citations over. */
 const OPPORTUNITY_VISITS_DAYS = 30;
+
+/**
+ * Pages closest to the prompts a competitor is cited on and the brand never
+ * is, over the last 30 days (empty without competitor domains).
+ */
+async function competitorOpportunityPages(brandId, sitePages) {
+  const [{ data: competitors, error: compErr }, { data: domains, error: domErr }] =
+    await Promise.all([
+      supabaseAdmin.from('competitors').select('name, domain').eq('brand_id', brandId),
+      supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', brandId),
+    ]);
+  if (compErr) throw compErr;
+  if (domErr) throw domErr;
+
+  const competitorNames = new Map();
+  for (const c of competitors ?? []) {
+    const host = normStoredDomain(c.domain);
+    if (host) competitorNames.set(host, c.name);
+  }
+  const ownHosts = (domains ?? []).map((d) => normStoredDomain(d.domain)).filter(Boolean);
+  if (competitorNames.size === 0 || ownHosts.length === 0) return [];
+
+  const { data: prompts, error } = await supabaseAdmin.rpc('audit_competitor_cited_prompts', {
+    p_brand_id: brandId,
+    p_since: new Date(Date.now() - OPPORTUNITY_VISITS_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+    p_own_domains: ownHosts,
+    p_competitor_domains: [...competitorNames.keys()],
+  });
+  // A server deployed before migration 00165 lists the other sources without this one.
+  if (error?.code === 'PGRST202') return [];
+  if (error) throw error;
+
+  const gaps = (prompts ?? []).filter((p) => Number(p.own_results) === 0);
+  if (gaps.length === 0) return [];
+  const { data: targetUrls, error: targetErr } = await supabaseAdmin
+    .from('prompt_target_urls')
+    .select('prompt_id, url')
+    .in(
+      'prompt_id',
+      gaps.map((p) => p.prompt_id),
+    );
+  if (targetErr) throw targetErr;
+
+  return competitorGapPages({
+    prompts: gaps,
+    targetUrls: targetUrls ?? [],
+    sitePages,
+    competitorNames,
+  });
+}
 
 const isoDay = (ms) => new Date(ms).toISOString().slice(0, 10);
 
@@ -617,7 +672,7 @@ router.get('/opportunities', async (req, res) => {
       ),
       supabaseAdmin
         .from('site_pages')
-        .select('url, title, ga_sessions, ai_citations')
+        .select('url, title, h1, description, ga_sessions, ai_citations')
         .eq('brand_id', brandId),
       readBrandAudits(brandId),
       supabaseAdmin
@@ -627,11 +682,13 @@ router.get('/opportunities', async (req, res) => {
     ]);
     for (const read of [gaPages, sitePages, audits, prefs]) if (read.error) throw read.error;
 
+    const competitorPages = await competitorOpportunityPages(brandId, sitePages.data ?? []);
     const { rows, excluded } = buildOpportunities({
       primaryHost: normStoredDomain(primary),
       gaPages: gaPages.data ?? [],
       sitePages: sitePages.data ?? [],
       auditPages: buildAuditPages(audits.data),
+      competitorPages,
       prefs: prefs.data ?? [],
       staleDays: ENGINE_THRESHOLDS.detection.auditMaxAgeDays,
     });

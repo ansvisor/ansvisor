@@ -3,6 +3,7 @@ import {
   aiVisitsByPage,
   buildOpportunities,
   compareOpportunities,
+  competitorGapPages,
   opportunityKey,
 } from './opportunities.js';
 
@@ -206,5 +207,113 @@ describe('aiVisitsByPage', () => {
       ['https://acme.com/b', 3],
     ]);
     expect(aiVisitsByPage(null).size).toBe(0);
+  });
+});
+
+describe('competitorGapPages', () => {
+  const sitePages = [
+    {
+      url: 'https://acme.com/subscriptions/pricing',
+      title: 'Coffee subscription plans and pricing',
+      h1: 'Plans & Pricing',
+      description: 'Compare our coffee subscription plans.',
+    },
+    {
+      url: 'https://acme.com/guides/espresso',
+      title: 'Espresso machines for beginners',
+      h1: 'Espresso machines',
+      description: 'How to choose a home espresso machine.',
+    },
+  ];
+  const names = new Map([
+    ['crema.example', 'Crema Club'],
+    ['north.example', 'Northline'],
+  ]);
+  const prompt = (id, text, over = {}) => ({
+    prompt_id: id,
+    prompt_text: text,
+    own_results: 0,
+    competitor_domains: ['crema.example'],
+    ...over,
+  });
+
+  it("maps each prompt a competitor wins to the brand's closest page", () => {
+    const pages = competitorGapPages({
+      prompts: [
+        prompt('p1', 'best coffee subscription plans pricing'),
+        prompt('p2', 'cheapest coffee subscription plans', {
+          competitor_domains: ['north.example', 'crema.example'],
+        }),
+        prompt('p3', 'which espresso machine for beginners at home'),
+      ],
+      sitePages,
+      competitorNames: names,
+    });
+    expect(pages).toEqual([
+      {
+        url: 'https://acme.com/subscriptions/pricing',
+        prompts: 2,
+        competitors: ['Crema Club', 'Northline'],
+      },
+      { url: 'https://acme.com/guides/espresso', prompts: 1, competitors: ['Crema Club'] },
+    ]);
+  });
+
+  it("prefers a prompt's target URLs, and skips prompts the brand is cited on or no page matches", () => {
+    const pages = competitorGapPages({
+      prompts: [
+        prompt('p1', 'best coffee subscription plans pricing'),
+        prompt('p2', 'espresso machine for beginners', { own_results: '2' }),
+        prompt('p3', 'gift ideas for tea lovers'),
+      ],
+      targetUrls: [{ prompt_id: 'p1', url: 'https://acme.com/gifts' }],
+      sitePages,
+      competitorNames: names,
+    });
+    expect(pages).toEqual([
+      { url: 'https://acme.com/gifts', prompts: 1, competitors: ['Crema Club'] },
+    ]);
+  });
+
+  it('names an unknown competitor domain by its domain', () => {
+    const [page] = competitorGapPages({
+      prompts: [
+        prompt('p1', 'coffee subscription plans', { competitor_domains: ['other.example'] }),
+      ],
+      sitePages,
+      competitorNames: names,
+    });
+    expect(page.competitors).toEqual(['other.example']);
+  });
+});
+
+describe('buildOpportunities with competitor-cited pages', () => {
+  it('adds the reason to the page and ranks it after GA value, before never audited', () => {
+    const { rows } = build({
+      gaPages: [
+        { landing_page: '/ga', value_signal: 'revenue', value_percentile: 90, sessions: 10 },
+      ],
+      sitePages: [
+        { url: 'https://acme.com/never', title: null, ga_sessions: 999, ai_citations: 9 },
+        { url: 'https://acme.com/pricing', title: 'Pricing', ga_sessions: 1, ai_citations: 0 },
+      ],
+      competitorPages: [
+        { url: 'https://acme.com/pricing', prompts: 3, competitors: ['Crema Club'] },
+        { url: 'https://acme.com/fresh', prompts: 1, competitors: ['Northline'] },
+      ],
+      auditPages: [audit('https://acme.com/fresh', 0.8, 2)],
+    });
+    expect(rows.map((r) => [r.path, r.reasons.map((x) => x.type)])).toEqual([
+      ['/ga', ['no_ai_traffic']],
+      ['/pricing', ['never_audited', 'competitor_cited']],
+      // Audited two days ago, still listed: the competitor gap is the reason.
+      ['/fresh', ['competitor_cited']],
+      ['/never', ['never_audited']],
+    ]);
+    expect(rows[1].reasons[1]).toEqual({
+      type: 'competitor_cited',
+      prompts: 3,
+      competitors: ['Crema Club'],
+    });
   });
 });
