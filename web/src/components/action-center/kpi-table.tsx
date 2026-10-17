@@ -10,6 +10,7 @@ import {
   Pencil,
   PieChart,
   Quote,
+  Smile,
   TrendingDown,
   TrendingUp,
   Trash2,
@@ -48,6 +49,7 @@ const KPI_ICONS: Record<KpiKey, React.ComponentType<{ className?: string }>> = {
   mentions: MessageSquare,
   share_of_voice: PieChart,
   ai_referral_traffic: MousePointerClick,
+  positive_sentiment: Smile,
 };
 
 /**

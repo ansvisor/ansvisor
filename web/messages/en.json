@@ -213,6 +213,10 @@
         "name": "AI Referral Traffic",
         "description": "Visits arriving from AI platforms"
       },
+      "positive_sentiment": {
+        "name": "Positive Sentiment",
+        "description": "Positive share of the AI responses naming you"
+      },
       "competitor_lead": {
         "name": "Lead over top competitor",
         "description": "Your visibility minus the strongest competitor's on the same prompts, in points"
