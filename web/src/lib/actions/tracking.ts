@@ -516,6 +516,7 @@ export async function getVisibilityRateKpi(
         p_region: opts?.region ?? undefined,
         p_day_from: daily.dayFrom,
         p_day_to: daily.dayTo,
+        p_topic_id: opts?.topicId ?? undefined,
       })
     : await supabase.rpc('visible_prompt_stats', {
         p_brand_id: brandId,
@@ -589,6 +590,7 @@ export async function getTrackedPromptsKpi(
           p_region: opts?.region ?? undefined,
           p_day_from: daily.dayFrom,
           p_day_to: daily.dayTo,
+          p_topic_id: opts?.topicId ?? undefined,
         })
       : supabase.rpc('tracked_prompt_count', {
           p_brand_id: brandId,
@@ -1012,7 +1014,12 @@ async function getCoverageKpi(brandId: string, opts?: InsightsFilterArgs): Promi
     let visible;
     let active;
     if (win.kind === 'days') {
-      const days = { ...base, p_day_from: win.days.dayFrom, p_day_to: win.days.dayTo };
+      const days = {
+        ...base,
+        p_day_from: win.days.dayFrom,
+        p_day_to: win.days.dayTo,
+        p_topic_id: opts?.topicId ?? undefined,
+      };
       [visible, active] = await Promise.all([
         supabase.rpc('visible_prompt_stats_daily', days),
         supabase.rpc('tracked_prompt_count_daily', days),
@@ -1159,6 +1166,7 @@ async function getChangeDrivers(
       p_cur_to: cur.dayTo,
       p_prev_from: prev.dayFrom,
       p_prev_to: prev.dayTo,
+      p_topic_id: opts?.topicId ?? undefined,
     });
   } else {
     const cur = windowBounds(windows.cur);
@@ -1208,6 +1216,7 @@ async function getPlatformData(
             p_cur_to: windows.cur.days.dayTo,
             p_prev_from: prev?.from,
             p_prev_to: prev?.to,
+            p_topic_id: opts?.topicId ?? undefined,
           })
         : await supabase.rpc('insights_platform_compare', {
             ...base,
@@ -1262,6 +1271,7 @@ async function getSamePromptComparison(
       p_cur_to: cur.dayTo,
       p_prev_from: prev.dayFrom,
       p_prev_to: prev.dayTo,
+      p_topic_id: opts?.topicId ?? undefined,
     });
   } else {
     const cur = windowBounds(windows.cur);
@@ -1812,6 +1822,7 @@ export async function getInsightsSummary(
     p_platform: undefined as string | undefined,
     p_models,
     p_region: opts?.region ?? undefined,
+    p_topic_id: opts?.topicId ?? undefined,
   };
 
   const { data: curData, error } = daily
@@ -2456,6 +2467,7 @@ function aiVisibilityWindow(
         ...base,
         p_day_from: win.days.dayFrom,
         p_day_to: win.days.dayTo,
+        p_topic_id: opts?.topicId ?? undefined,
       })
     : supabase.rpc('ai_visibility_aggregates', {
         ...base,
@@ -2587,6 +2599,7 @@ export async function getCompetitorComparison(
     p_platform: undefined as string | undefined,
     p_models,
     p_region: opts?.region ?? undefined,
+    p_topic_id: opts?.topicId ?? undefined,
   };
 
   // The heaviest reads on the page: competitor_aggregates over the raw rows
@@ -2882,6 +2895,7 @@ export async function getShareOfVoiceData(
           p_region: opts?.region ?? undefined,
           p_day_from: win.dayFrom,
           p_day_to: win.dayTo,
+          p_topic_id: opts?.topicId ?? undefined,
         })
       : supabase.rpc('share_of_voice_aggregates', {
           ...baseArgs,
@@ -3128,6 +3142,7 @@ export async function getVisibilityRateTrend(
     p_region: opts?.region ?? undefined,
     p_day_from: dayFrom,
     p_day_to: dayTo,
+    p_topic_id: opts?.topicId ?? undefined,
   });
   // The chart's warm-up range on the rollup path starts at the previous
   // window's first day.
@@ -3459,6 +3474,7 @@ export async function getInsightsBreakdown(
             p_region,
             p_day_from: win.days.dayFrom,
             p_day_to: win.days.dayTo,
+            p_topic_id: opts?.topicId ?? undefined,
           })
         : await supabase.rpc('insights_aggregates', {
             p_brand_id: brandId,
@@ -3653,36 +3669,26 @@ export interface TopicDetailData {
  * Output is identical to the old per-call results — this is a perf refactor.
  */
 export async function getTopicDetail(brandId: string, topicId: string): Promise<TopicDetailData> {
-  // Access first, on the caller's own client: RLS answers whether this user
-  // may see the brand, and the query ties the topic to that brand.
-  const topic = await getTopicById(brandId, topicId);
+  // All time, as whole UTC days: the empty window routes every aggregate to
+  // the daily rollups (00164), whose cost follows the topic's days rather
+  // than its answers. Raw, these reads took 11-18 s on a 91-prompt topic and
+  // ran under the service role to get past the 8 s statement timeout; from
+  // the rollups they take under half a second. Everything runs on the
+  // caller's own client, so RLS scopes every read.
+  const allTime: DayWindow = {};
+  const [topic, summary, rateTrend, sov, competitors, results] = await Promise.all([
+    getTopicById(brandId, topicId),
+    getInsightsSummary(brandId, { topicId, days: allTime }),
+    // #685 — use the new-formula RPC so the trend sits on the same 0-100
+    // scale as the headline AI Visibility Score. getVisibilityTrend
+    // averaged raw visibility_score over all answers (incl. 0-scored
+    // absent-brand rows).
+    getVisibilityRateTrend(brandId, { topicId, days: allTime }),
+    getShareOfVoiceData(brandId, { topicId, days: allTime }),
+    getCompetitorComparison(brandId, { topicId, days: allTime }),
+    getPromptResults(brandId, { topicId, limit: 50 }),
+  ]);
   if (!topic) throw new Error('Topic not found');
-
-  // Topic-filtered reads cannot use the daily rollups, so they scan raw
-  // results over the topic's whole history. On a 91-prompt topic with 27k
-  // results the calls below ran 5-9s each when run together — past the
-  // authenticated role's 8s statement timeout, so the page never loaded.
-  // They run on the service-role client instead (120s, migration 00100).
-  // That skips RLS, which is safe only because the brand was checked above
-  // and every read in these loaders filters by brand_id.
-  // Imported here, not at module load: the admin client needs the service key
-  // the moment it is created, and most of this module never touches it.
-  const { supabaseAdmin } = await import('@/lib/supabase/admin');
-  const [summary, rateTrend, sov, competitors, results] = await withDbClient(
-    supabaseAdmin as unknown as Awaited<ReturnType<typeof dbClient>>,
-    () =>
-      Promise.all([
-        getInsightsSummary(brandId, { topicId }),
-        // #685 — use the new-formula RPC so the trend sits on the same 0-100
-        // scale as the headline AI Visibility Score. getVisibilityTrend
-        // averaged raw visibility_score over all answers (incl. 0-scored
-        // absent-brand rows).
-        getVisibilityRateTrend(brandId, { topicId }),
-        getShareOfVoiceData(brandId, { topicId }),
-        getCompetitorComparison(brandId, { topicId }),
-        getPromptResults(brandId, { topicId, limit: 50 }),
-      ]),
-  );
 
   // Adapt VisibilityRateTrendData → VisibilityTrendPoint[] so topic_charts.tsx
   // keeps its existing VisibilityTrendPoint shape without modification.

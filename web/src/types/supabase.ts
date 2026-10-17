@@ -2843,6 +2843,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: Json
       }
@@ -3057,6 +3058,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: Json
       }
@@ -3189,6 +3191,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: Json
       }
@@ -3229,6 +3232,7 @@ export type Database = {
           p_prev_to: string
           p_region?: string
           p_same_prompts?: boolean
+          p_topic_id?: string
         }
         Returns: Json
       }
@@ -3274,6 +3278,7 @@ export type Database = {
           p_prev_to?: string
           p_region?: string
           p_same_prompts?: boolean
+          p_topic_id?: string
         }
         Returns: Json
       }
@@ -3299,6 +3304,7 @@ export type Database = {
           p_prev_from: string
           p_prev_to: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: Json
       }
@@ -3541,6 +3547,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: Json
       }
@@ -3643,6 +3650,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: number
       }
@@ -3667,6 +3675,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: Json
       }
@@ -3702,6 +3711,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: Json
       }
