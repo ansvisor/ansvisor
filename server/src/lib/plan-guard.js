@@ -508,39 +508,76 @@ async function countSiteAuditUsageThisMonth(orgId) {
   return count || 0;
 }
 
+// How long a running audit holds a quota slot. An audit takes a minute or
+// two, a queued bulk run waits longer, and one older than this was cut short
+// by a restart and will never complete.
+const SITE_AUDIT_IN_FLIGHT_MS = 2 * 60 * 60 * 1000;
+
 /**
- * Enforce the monthly Site Audit quota for an organization. Counts completed
- * audits this calendar month against plan.limits.maxSiteAudits (Starter 100,
- * Growth 500, Enterprise/Self-hosted unlimited). Throws PlanLimitError (429)
- * when exhausted; returns { plan, remaining } otherwise.
+ * Audits of the org's brands still running. They're charged when they
+ * complete, so each holds a slot until then: otherwise a run started while
+ * others are in flight could take the quota past its limit.
  */
-export async function enforceSiteAuditQuota(orgId) {
+async function countRunningSiteAudits(orgId) {
+  const since = new Date(Date.now() - SITE_AUDIT_IN_FLIGHT_MS).toISOString();
+  const { count } = await supabaseAdmin
+    .from('site_audits')
+    .select('id, brands!inner(organization_id)', { count: 'exact', head: true })
+    .eq('status', 'running')
+    .eq('brands.organization_id', orgId)
+    .gte('created_at', since);
+  return count || 0;
+}
+
+/**
+ * Enforce the monthly Site Audit quota for an organization before starting
+ * `count` audits. Counts completed audits this billing period, plus the ones
+ * still running, against plan.limits.maxSiteAudits (Starter 100, Growth 500,
+ * Enterprise/Self-hosted unlimited). Throws PlanLimitError (429) when the
+ * audits don't fit, starting none; returns { plan, remaining } otherwise.
+ */
+export async function enforceSiteAuditQuota(orgId, count = 1) {
   const plan = await resolveOrgPlanByOrgId(orgId);
   const max = plan.limits.maxSiteAudits;
   if (max === -1) return { plan, remaining: -1 };
 
-  const used = await countSiteAuditUsageThisMonth(orgId);
-  if (used >= max) {
+  const [used, running] = await Promise.all([
+    countSiteAuditUsageThisMonth(orgId),
+    countRunningSiteAudits(orgId),
+  ]);
+  const remaining = max - used - running;
+  if (remaining <= 0) {
+    const inFlight = running > 0 ? `, ${running} still running` : '';
     throw new PlanLimitError(
-      `Monthly Site Audit limit reached (${used}/${max}) on the ${plan.name} plan. Resets when your subscription renews — upgrade for more.`,
+      `Monthly Site Audit limit reached (${used + running}/${max}${inFlight}) on the ${plan.name} plan. Resets when your subscription renews — upgrade for more.`,
+      429,
+    );
+  }
+  if (count > remaining) {
+    throw new PlanLimitError(
+      `These ${count} audits need more than the ${remaining} left this month on the ${plan.name} plan. Select up to ${remaining}.`,
       429,
     );
   }
 
-  return { plan, remaining: max - used };
+  return { plan, remaining };
 }
 
 /**
  * Get current Site Audit quota status without enforcing.
- * Returns { used, limit, remaining }.
+ * Returns { used, running, limit, remaining }; running audits are already
+ * taken out of what remains.
  */
 export async function getSiteAuditQuotaStatus(orgId) {
   const plan = await resolveOrgPlanByOrgId(orgId);
   const max = plan.limits.maxSiteAudits;
-  if (max === -1) return { used: 0, limit: -1, remaining: -1 };
+  if (max === -1) return { used: 0, running: 0, limit: -1, remaining: -1 };
 
-  const used = await countSiteAuditUsageThisMonth(orgId);
-  return { used, limit: max, remaining: Math.max(0, max - used) };
+  const [used, running] = await Promise.all([
+    countSiteAuditUsageThisMonth(orgId),
+    countRunningSiteAudits(orgId),
+  ]);
+  return { used, running, limit: max, remaining: Math.max(0, max - used - running) };
 }
 
 /**

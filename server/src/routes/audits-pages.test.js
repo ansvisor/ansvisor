@@ -11,6 +11,9 @@ let audits;
 let signals;
 let domains;
 let signalQueries;
+let inserted;
+let enforce;
+let pagesFetched;
 let server;
 let baseUrl;
 
@@ -18,8 +21,14 @@ let baseUrl;
 function query(table) {
   const filters = { eq: {}, in: {} };
   let range = null;
+  let insertRows = null;
   const builder = {
+    insert: (rows) => {
+      insertRows = rows;
+      return builder;
+    },
     select: () => builder,
+    single: () => builder,
     order: () => builder,
     eq: (col, val) => {
       filters.eq[col] = val;
@@ -35,6 +44,11 @@ function query(table) {
     },
     then: (resolve) => {
       let data = [];
+      if (insertRows) {
+        const rows = insertRows.map((r, i) => ({ id: `new-${inserted.length + i}`, ...r }));
+        inserted.push(...rows);
+        return resolve({ data: rows, error: null });
+      }
       if (table === 'site_audits') {
         data = audits.filter((a) => a.brand_id === filters.eq.brand_id);
         if (range) data = data.slice(range[0], range[1] + 1);
@@ -55,15 +69,21 @@ function query(table) {
 async function startApp() {
   vi.resetModules();
   vi.doMock('../config/supabase.js', () => ({ default: { from: (t) => query(t) } }));
-  vi.doMock('../lib/access.js', () => ({ assertBrandAccess: vi.fn() }));
+  vi.doMock('../lib/access.js', () => ({ assertBrandAccess: async () => ({ orgId: 'org-1' }) }));
   vi.doMock('../lib/plan-guard.js', () => ({
     requireFeature: () => (req, res, next) => next(),
-    enforceSiteAuditQuota: vi.fn(),
+    enforceSiteAuditQuota: (...args) => enforce(...args),
     getSiteAuditQuotaStatus: vi.fn(),
     getOrgIdForUser: vi.fn(),
     PlanLimitError: class PlanLimitError extends Error {},
   }));
-  vi.doMock('../lib/audit/context.js', () => ({ buildAuditContext: vi.fn() }));
+  // An audit job that never gets its page, so the queue's limit can be seen.
+  vi.doMock('../lib/audit/context.js', () => ({
+    buildAuditContext: (url) => {
+      pagesFetched.push(url);
+      return new Promise(() => {});
+    },
+  }));
   vi.doMock('../lib/audit/engine.js', () => ({ runSignals: vi.fn() }));
   vi.doMock('../lib/audit/llm-signals.js', () => ({ evaluateLlmSignals: vi.fn() }));
   vi.doMock('../lib/audit/external-signals.js', () => ({ evaluateBrandEntity: vi.fn() }));
@@ -75,6 +95,7 @@ async function startApp() {
 
   const { default: router } = await import('./audits.js');
   const app = express();
+  app.use(express.json());
   app.use((req, _res, next) => {
     req.user = { id: 'u1' };
     req.log = { error: vi.fn(), info: vi.fn() };
@@ -99,6 +120,9 @@ const audit = (id, url, day, score, status = 'completed') => ({
 
 beforeEach(async () => {
   signalQueries = [];
+  inserted = [];
+  pagesFetched = [];
+  enforce = vi.fn(async () => ({ remaining: 10 }));
   domains = [{ domain: 'https://www.Acme.com/', is_primary: true }];
   audits = [
     audit('p2', 'https://acme.com/pricing', 14, '0.63'),
@@ -164,5 +188,66 @@ describe('GET /api/audits/pages', () => {
   it('needs a brand', async () => {
     const res = await fetch(`${baseUrl}/pages`);
     expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /api/audits/bulk', () => {
+  const post = (body) =>
+    fetch(`${baseUrl}/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  const brandId = '33333333-3333-3333-3333-333333333333';
+
+  it('checks the quota for every page at once, then starts them, repeat spellings once', async () => {
+    const res = await post({
+      brandId,
+      urls: ['https://acme.com/pricing', 'https://www.acme.com/pricing/', 'https://acme.com/blog'],
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(202);
+    expect(enforce).toHaveBeenCalledWith('org-1', 2);
+    expect(inserted.map((r) => [r.url, r.status, r.brand_id])).toEqual([
+      ['https://acme.com/pricing', 'running', brandId],
+      ['https://acme.com/blog', 'running', brandId],
+    ]);
+    expect(body.audits.map((a) => a.status)).toEqual(['running', 'running']);
+  });
+
+  it('starts none when the quota refuses them', async () => {
+    const { PlanLimitError } = await import('../lib/plan-guard.js');
+    enforce = vi.fn(async () => {
+      throw Object.assign(new PlanLimitError('These 2 audits need more than the 1 left'), {
+        statusCode: 429,
+      });
+    });
+    const res = await post({ brandId, urls: ['https://acme.com/a', 'https://acme.com/b'] });
+
+    expect(res.status).toBe(429);
+    expect((await res.json()).error).toBe('quota_exceeded');
+    expect(inserted).toEqual([]);
+  });
+
+  it('runs a few at a time and keeps the rest waiting', async () => {
+    const urls = Array.from({ length: 5 }, (_, i) => `https://acme.com/p${i}`);
+    await post({ brandId, urls });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    // All five are running rows; three fetch their page, two wait.
+    expect(inserted).toHaveLength(5);
+    expect(pagesFetched).toEqual(urls.slice(0, 3));
+  });
+
+  it('refuses a request without URLs, with too many, or with something that is not a URL', async () => {
+    expect((await post({ brandId, urls: [] })).status).toBe(400);
+    expect(
+      (await post({ brandId, urls: Array.from({ length: 51 }, (_, i) => `https://a.com/${i}`) }))
+        .status,
+    ).toBe(400);
+    expect((await post({ brandId, urls: ['not a url'] })).status).toBe(400);
+    expect((await post({ urls: ['https://acme.com/'] })).status).toBe(400);
+    expect(inserted).toEqual([]);
   });
 });

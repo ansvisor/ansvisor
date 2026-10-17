@@ -2087,6 +2087,8 @@
       "showHistory": "Show earlier audits of {page}",
       "hideHistory": "Hide earlier audits of {page}",
       "viewReport": "View report",
+      "select": "Select {page}",
+      "selectAll": "Select all pages shown",
       "moreRuns": "{count, plural, one {# older audit} other {# older audits}} not shown",
       "statuses": {
         "good": "Good",
@@ -2095,6 +2097,26 @@
         "running": "Running",
         "failed": "Failed"
       }
+    },
+    "bulk": {
+      "toolbar": "Actions for the selected pages",
+      "selected": "{count} selected",
+      "uses": "Uses {count} of your {remaining} audits",
+      "overQuota": "Uses {count} of your {remaining} audits · select up to {remaining}",
+      "noneLeft": "No audits left this month",
+      "reaudit": "Re-audit",
+      "clear": "Clear selection",
+      "started": "{count, plural, one {# audit started} other {# audits started}} · they run a few at a time"
+    },
+    "export": {
+      "button": "Export",
+      "csv": "CSV",
+      "excel": "Excel",
+      "sheet": "Pages",
+      "previousScore": "Previous score",
+      "change": "Change",
+      "audits": "Audits",
+      "failed": "Couldn't export the pages"
     },
     "loadMore": "Load more",
     "retry": "Retry",

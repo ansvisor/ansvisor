@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useId, useState } from 'react';
+import { Fragment, useId, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { ChevronRight, Loader2, Trash2 } from 'lucide-react';
 import {
@@ -16,6 +16,7 @@ import {
 import { Link, useRouter } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -139,7 +140,8 @@ function HistoryRun({ run, onDelete }: { run: AuditRun; onDelete: (id: string) =
 
 /**
  * The audited pages, one row per page: the row opens its latest report and
- * the arrow lists its earlier audits underneath.
+ * the arrow lists its earlier audits underneath. Pages not being audited can
+ * be selected for the bulk bar (`toolbar`, shown above the rows).
  */
 export function AuditPagesTable({
   pages,
@@ -148,6 +150,10 @@ export function AuditPagesTable({
   loadingMore,
   onLoadMore,
   onDeleteRun,
+  selected,
+  onSelect,
+  headerAction,
+  toolbar,
 }: {
   pages: AuditedPage[];
   total: number;
@@ -155,11 +161,21 @@ export function AuditPagesTable({
   loadingMore: boolean;
   onLoadMore: () => void;
   onDeleteRun: (id: string) => void;
+  /** Keys of the selected pages. */
+  selected: Set<string>;
+  onSelect: (keys: string[], on: boolean) => void;
+  /** Beside the title, e.g. Export. */
+  headerAction?: ReactNode;
+  toolbar?: ReactNode;
 }) {
   const t = useTranslations('audit');
   const router = useRouter();
   const idPrefix = useId();
   const [open, setOpen] = useState<Set<string>>(() => new Set());
+
+  // A page being audited can't be re-audited until its run ends.
+  const selectable = pages.filter((p) => p.status !== 'running').map((p) => p.key);
+  const ticked = selectable.filter((key) => selected.has(key)).length;
 
   const toggle = (key: string) =>
     setOpen((prev) => {
@@ -176,11 +192,23 @@ export function AuditPagesTable({
         <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
           {formatNumber(total)}
         </span>
+        {headerAction && <div className="ml-auto">{headerAction}</div>}
       </CardHeader>
       <CardContent className="pt-0">
+        {toolbar}
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-8 pr-0">
+                <Checkbox
+                  aria-label={t('pages.selectAll')}
+                  disabled={selectable.length === 0}
+                  checked={
+                    ticked === 0 ? false : ticked === selectable.length ? true : 'indeterminate'
+                  }
+                  onCheckedChange={(on) => onSelect(selectable, on === true)}
+                />
+              </TableHead>
               <TableHead className="w-9" />
               {/* The page column takes the room left, and long URLs truncate in it. */}
               <TableHead className="w-full">{t('pages.page')}</TableHead>
@@ -199,8 +227,18 @@ export function AuditPagesTable({
                 <Fragment key={page.key}>
                   <TableRow
                     className="cursor-pointer"
+                    data-state={selected.has(page.key) ? 'selected' : undefined}
                     onClick={() => router.push(`/dashboard/audit/${page.auditId}`)}
                   >
+                    <TableCell className="w-8 pr-0">
+                      <Checkbox
+                        aria-label={t('pages.select', { page: label })}
+                        disabled={page.status === 'running'}
+                        checked={selected.has(page.key)}
+                        onClick={(e) => e.stopPropagation()}
+                        onCheckedChange={(on) => onSelect([page.key], on === true)}
+                      />
+                    </TableCell>
                     <TableCell className="w-9 pr-0">
                       <Button
                         variant="ghost"
@@ -258,7 +296,7 @@ export function AuditPagesTable({
                   </TableRow>
                   {expanded && (
                     <TableRow id={historyId} className="hover:bg-transparent">
-                      <TableCell />
+                      <TableCell colSpan={2} />
                       <TableCell colSpan={5} className="pt-0 whitespace-normal">
                         <ul className="divide-y rounded-md border">
                           {page.runs.map((run) => (

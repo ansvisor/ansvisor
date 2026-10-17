@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import {
@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
   runAudit,
+  runAuditsBulk,
   getAuditPages,
   getAuditQuota,
   getAuditTrend,
@@ -32,10 +33,15 @@ import { pct, scoreColor, CATEGORY_META } from '@/components/audit/audit-report'
 import { formatMonthDay } from '@/lib/format';
 import { ScoreTrendChart } from './_charts';
 import { AuditPagesTable } from './_pages-table';
+import { AuditBulkBar, ExportMenu } from './_bulk-bar';
+import { usePagesExport } from './_use-pages-export';
 import { cn } from '@/lib/utils';
 
 type RangePreset = '7d' | '30d' | '90d' | 'all';
 const RANGE_DAYS: Record<RangePreset, number | null> = { '7d': 7, '30d': 30, '90d': 90, all: null };
+
+/** While audits run, the Pages list and the quota are read again this often. */
+const RUNNING_POLL_MS = 10_000;
 
 function barClass(score: number | null): string {
   if (score === null) return 'bg-muted';
@@ -67,6 +73,9 @@ export default function SiteAuditPage() {
   const [quota, setQuota] = useState<AuditQuota | null>(null);
   const [trend, setTrend] = useState<AuditTrend | null>(null);
   const [range, setRange] = useState<RangePreset>('30d');
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [startingBulk, setStartingBulk] = useState(false);
+  const { exporting, exportAll, exportPages } = usePagesExport(activeBrandId);
   // Capture "now" once (impure call belongs in a lazy initializer, not render).
   const [nowMs] = useState(() => Date.now());
 
@@ -78,6 +87,8 @@ export default function SiteAuditPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    // A selection belongs to the brand it was made on.
+    setSelected(new Set());
     (async () => {
       try {
         const [data, q, tr] = await Promise.all([
@@ -193,25 +204,81 @@ export default function SiteAuditPage() {
     }
   };
 
+  // Read the pages shown (up to the server's 100), the quota and the trend
+  // again, in place: the table stays up with its open histories. Selected
+  // pages that are gone or now running are dropped from the selection.
+  const shownRef = useRef(0);
+  useEffect(() => {
+    shownRef.current = pages.length;
+  }, [pages.length]);
+  const reloadInPlace = async (brandId: string) => {
+    const [data, q, tr] = await Promise.all([
+      getAuditPages(brandId, 0, Math.min(Math.max(shownRef.current, 50), 100)),
+      getAuditQuota(),
+      getAuditTrend(brandId),
+    ]);
+    setPages(data.pages);
+    setPagesTotal(data.total);
+    setPrimaryHost(data.primaryHost);
+    setQuota(q);
+    setTrend(tr);
+    const selectable = new Set(data.pages.filter((p) => p.status !== 'running').map((p) => p.key));
+    setSelected((prev) => new Set([...prev].filter((key) => selectable.has(key))));
+  };
+
   // Deleting a run can change its page's score, status or trend, or remove
-  // the page, so the pages shown and the trend are read again, in place: the
-  // table stays up with its open histories.
+  // the page.
   const handleDelete = async (id: string) => {
     if (!activeBrandId) return;
     try {
       await deleteAudit(id);
-      const [data, tr] = await Promise.all([
-        getAuditPages(activeBrandId, 0, Math.min(Math.max(pages.length, 50), 100)),
-        getAuditTrend(activeBrandId),
-      ]);
-      setPages(data.pages);
-      setPagesTotal(data.total);
-      setPrimaryHost(data.primaryHost);
-      setTrend(tr);
+      await reloadInPlace(activeBrandId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('failed'));
     }
   };
+
+  const handleSelect = (keys: string[], on: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const key of keys) {
+        if (on) next.add(key);
+        else next.delete(key);
+      }
+      return next;
+    });
+
+  const selectedPages = pages.filter((p) => selected.has(p.key));
+
+  const handleBulkReaudit = async () => {
+    if (!activeBrandId || selectedPages.length === 0) return;
+    setStartingBulk(true);
+    try {
+      const { started } = await runAuditsBulk(
+        activeBrandId,
+        selectedPages.map((p) => p.url),
+      );
+      toast.success(t('bulk.started', { count: started }));
+      setSelected(new Set());
+      await reloadInPlace(activeBrandId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('failed'));
+    } finally {
+      setStartingBulk(false);
+    }
+  };
+
+  // While any page is being audited, follow it until its run ends.
+  const anyRunning = pages.some((p) => p.status === 'running');
+  useEffect(() => {
+    if (!anyRunning || !activeBrandId) return;
+    const timer = setInterval(() => {
+      reloadInPlace(activeBrandId).catch((err) =>
+        console.error('Failed to refresh the audited pages:', err),
+      );
+    }, RUNNING_POLL_MS);
+    return () => clearInterval(timer);
+  }, [anyRunning, activeBrandId]);
 
   if (!activeBrandId) {
     return (
@@ -416,6 +483,21 @@ export default function SiteAuditPage() {
           loadingMore={loadingMore}
           onLoadMore={handleLoadMore}
           onDeleteRun={handleDelete}
+          selected={selected}
+          onSelect={handleSelect}
+          headerAction={<ExportMenu busy={exporting} onExport={exportAll} />}
+          toolbar={
+            selectedPages.length > 0 && (
+              <AuditBulkBar
+                count={selectedPages.length}
+                quota={quota}
+                starting={startingBulk}
+                onReaudit={handleBulkReaudit}
+                onExport={(format) => exportPages(selectedPages, format)}
+                onClear={() => setSelected(new Set())}
+              />
+            )
+          }
         />
       )}
     </div>

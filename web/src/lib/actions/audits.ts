@@ -56,7 +56,10 @@ export interface AuditResult {
 export interface AuditQuota {
   used: number;
   limit: number;
+  /** What's left this month, the running audits already taken out. */
   remaining: number;
+  /** Audits started and not finished yet: they're charged when they complete. */
+  running?: number;
 }
 
 export interface AuditTrendPoint {
@@ -201,6 +204,31 @@ export async function getAuditTrend(brandId: string): Promise<AuditTrend> {
 
   const data = await res.json();
   return { primaryDomain: data.primaryDomain ?? null, points: data.points ?? [] };
+}
+
+/**
+ * Re-audit several pages at once. Every page must fit the monthly quota, or
+ * none starts; the server runs them a few at a time.
+ */
+export async function runAuditsBulk(brandId: string, urls: string[]): Promise<{ started: number }> {
+  const session = await getSession();
+
+  const res = await fetch(`${AEO_SERVER_URL}/api/audits/bulk`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ brandId, urls }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || `Server error: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return { started: (data.audits ?? []).length };
 }
 
 export interface AuditedPages {

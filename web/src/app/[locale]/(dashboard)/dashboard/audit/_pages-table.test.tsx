@@ -64,8 +64,13 @@ let container: HTMLDivElement;
 let root: Root;
 const onLoadMore = vi.fn();
 const onDeleteRun = vi.fn();
+const onSelect = vi.fn();
 
-function render(pages: AuditedPage[], total = pages.length) {
+function render(
+  pages: AuditedPage[],
+  total = pages.length,
+  { selected = new Set<string>(), toolbar = null as React.ReactNode } = {},
+) {
   act(() => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
@@ -76,6 +81,10 @@ function render(pages: AuditedPage[], total = pages.length) {
           loadingMore={false}
           onLoadMore={onLoadMore}
           onDeleteRun={onDeleteRun}
+          selected={selected}
+          onSelect={onSelect}
+          headerAction={<button type="button">Export all</button>}
+          toolbar={toolbar}
         />
       </NextIntlClientProvider>,
     );
@@ -117,8 +126,8 @@ describe('AuditPagesTable', () => {
 
     expect(container.querySelector('[data-slot=card-title]')?.textContent).toBe('Pages');
     expect(rows().map(cells)).toEqual([
-      ['', '/pricing', '63', '14', 'Improving', 'Oct 14, 2026'],
-      ['', '/blog', '74', '7', 'Good', 'Oct 2, 2026'],
+      ['', '', '/pricing', '63', '14', 'Improving', 'Oct 14, 2026'],
+      ['', '', '/blog', '74', '7', 'Good', 'Oct 2, 2026'],
     ]);
     // A trend needs two scores to draw.
     const lines = container.querySelectorAll('svg[role=img]');
@@ -179,8 +188,8 @@ describe('AuditPagesTable', () => {
     ]);
 
     expect(rows().map(cells)).toEqual([
-      ['', '/broken', '—', '—', 'Failed', 'Oct 14, 2026'],
-      ['', '/pricing', '63', '14', 'Running', 'Oct 14, 2026'],
+      ['', '', '/broken', '—', '—', 'Failed', 'Oct 14, 2026'],
+      ['', '', '/pricing', '63', '14', 'Running', 'Oct 14, 2026'],
     ]);
     expect(rows()[1].querySelector('.animate-spin')).not.toBeNull();
   });
@@ -192,6 +201,46 @@ describe('AuditPagesTable', () => {
 
     render([page()], 1);
     expect(button('Load more')).toBeUndefined();
+  });
+});
+
+describe('AuditPagesTable selection', () => {
+  const blog = page({ key: 'acme.com/blog', path: '/blog', auditId: 'b1' });
+  const running = page({ key: 'acme.com/run', path: '/run', status: 'running' });
+  const box = (label: string) =>
+    container.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement;
+
+  it('selects a page from its box without opening it, and all pages not being audited', () => {
+    render([page(), blog, running]);
+
+    act(() => box('Select /pricing').click());
+    expect(onSelect).toHaveBeenLastCalledWith(['acme.com/pricing'], true);
+    expect(push).not.toHaveBeenCalled();
+
+    // A page being audited can't be selected, so Select all leaves it out.
+    expect(box('Select /run').disabled).toBe(true);
+    act(() => box('Select all pages shown').click());
+    expect(onSelect).toHaveBeenLastCalledWith(['acme.com/pricing', 'acme.com/blog'], true);
+  });
+
+  it('marks the selection and shows the bulk bar and the header action', () => {
+    render([page(), blog], 2, {
+      selected: new Set(['acme.com/blog']),
+      toolbar: <div role="toolbar">bulk</div>,
+    });
+
+    expect(box('Select /blog').getAttribute('data-state')).toBe('checked');
+    expect(box('Select /pricing').getAttribute('data-state')).toBe('unchecked');
+    expect(box('Select all pages shown').getAttribute('data-state')).toBe('indeterminate');
+    expect(rows()[1].getAttribute('data-state')).toBe('selected');
+    expect(container.querySelector('[role=toolbar]')?.textContent).toBe('bulk');
+    expect(button('Export all')).toBeDefined();
+
+    // Clearing every box asks for all of them off.
+    render([page(), blog], 2, { selected: new Set(['acme.com/pricing', 'acme.com/blog']) });
+    expect(box('Select all pages shown').getAttribute('data-state')).toBe('checked');
+    act(() => box('Select all pages shown').click());
+    expect(onSelect).toHaveBeenLastCalledWith(['acme.com/pricing', 'acme.com/blog'], false);
   });
 });
 

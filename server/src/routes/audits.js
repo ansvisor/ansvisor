@@ -12,6 +12,7 @@
  */
 
 import { Router } from 'express';
+import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import logger from '../lib/logger.js';
 import { assertBrandAccess } from '../lib/access.js';
@@ -27,6 +28,7 @@ import { normStoredDomain } from '../lib/audit/host.js';
 import {
   buildAuditPages,
   buildTrendPoints,
+  pageKey,
   parseListPage,
   TREND_LIMIT,
 } from '../lib/audit/history.js';
@@ -221,6 +223,75 @@ export async function createAndRunAudit(brandId, url, orgId) {
   return assembleAudit(created, []);
 }
 
+/** Pages one bulk request may audit: the Pages list's own page size. */
+export const BULK_AUDIT_MAX = 50;
+
+/** Bulk audits run at once; the rest wait their turn, still `running`. */
+export const BULK_AUDIT_CONCURRENCY = 3;
+
+// One pool for every bulk request, so 50 re-audits don't fetch and score 50
+// pages at the same time.
+const bulkQueue = [];
+let bulkActive = 0;
+
+function drainBulkQueue() {
+  while (bulkActive < BULK_AUDIT_CONCURRENCY && bulkQueue.length > 0) {
+    const job = bulkQueue.shift();
+    bulkActive += 1;
+    job()
+      .catch((err) => logger.error({ err }, 'bulk audit job crashed'))
+      .finally(() => {
+        bulkActive -= 1;
+        drainBulkQueue();
+      });
+  }
+}
+
+/**
+ * Start audits of several pages of a brand. The quota is checked for all of
+ * them first, so either every page is queued or none is (PlanLimitError).
+ * Repeat spellings of one page are audited once. Returns the running rows.
+ */
+export async function createAndQueueAudits(brandId, urls, orgId) {
+  const byPage = new Map();
+  for (const url of urls) {
+    const key = pageKey(url)?.key;
+    if (key && !byPage.has(key)) byPage.set(key, url);
+  }
+  const unique = [...byPage.values()];
+
+  await enforceSiteAuditQuota(orgId, unique.length);
+
+  const { data: created, error } = await supabaseAdmin
+    .from('site_audits')
+    .insert(
+      unique.map((url) => ({
+        brand_id: brandId,
+        url,
+        status: 'running',
+        rubric_version: RUBRIC_VERSION,
+      })),
+    )
+    .select('*');
+  if (error) throw error;
+
+  for (const row of created) {
+    bulkQueue.push(() => runAuditJob(row.id, brandId, row.url, orgId));
+  }
+  drainBulkQueue();
+
+  return created.map((row) => assembleAudit(row, []));
+}
+
+const bulkSchema = z.object({
+  brandId: z.guid(),
+  urls: z
+    .array(z.string().trim().min(1).max(2048))
+    .min(1)
+    .max(BULK_AUDIT_MAX)
+    .refine((urls) => urls.every((url) => pageKey(url)), 'Every URL must be a full URL'),
+});
+
 /**
  * Internal/MCP entry point: start an audit addressed by brand id + url.
  * Org-ownership is verified upstream in the web MCP layer; here we resolve the
@@ -265,6 +336,38 @@ router.post('/', requireFeature('content_optimization'), async (req, res) => {
       return res.status(err.status).json({ success: false, message: err.message });
     }
     req.log.error({ err }, 'audit start failed');
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/audits/bulk — re-audit several pages at once ({ brandId, urls },
+// up to BULK_AUDIT_MAX). All of them must fit the monthly quota, or none
+// starts. Returns 202 with the running rows; they run a few at a time.
+router.post('/bulk', requireFeature('content_optimization'), async (req, res) => {
+  const userId = req.user?.id;
+  const parsed = bulkSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: parsed.error.issues[0]?.message ?? 'Invalid request',
+    });
+  }
+  const { brandId, urls } = parsed.data;
+
+  try {
+    const { orgId } = await assertBrandAccess(brandId, userId);
+    const audits = await createAndQueueAudits(brandId, urls, orgId);
+    return res.status(202).json({ success: true, audits });
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      return res
+        .status(err.statusCode)
+        .json({ success: false, error: 'quota_exceeded', message: err.message });
+    }
+    if (err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    req.log.error({ err }, 'bulk audit start failed');
     return res.status(500).json({ success: false, message: err.message });
   }
 });
