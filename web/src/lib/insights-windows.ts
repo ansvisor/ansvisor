@@ -9,10 +9,11 @@ import { expandDateToEndOfDay } from '@/lib/dates';
 // pre-aggregated daily tables instead — cost scales with days in the window,
 // never with accumulated results.
 //
-// Topic-filtered calls deliberately stay on the raw RPCs: topic is a live
-// prompt attribute (reassigning a prompt must move its history), the rollups
-// have no prompt dimension at brand grain, and a topic slice is a small
-// fraction of the scan that made the raw path unaffordable.
+// Topic-filtered calls are served from the rollups too (00164): with
+// p_topic_id the *_daily reads answer from the prompt-grain tables, keyed
+// through each prompt's current topic, so reassigning a prompt still moves
+// its history. Every daily call must pass p_topic_id along — without it the
+// rollup answers for the whole brand.
 
 /**
  * Whole-day UTC window, 'YYYY-MM-DD' inclusive on both ends. Its presence in
@@ -31,7 +32,7 @@ export interface WindowedOpts {
 
 /** The day window to serve from rollups, or null when the raw path must answer. */
 export function dailyWindow(opts?: WindowedOpts): DayWindow | null {
-  return opts?.days && !opts.topicId ? opts.days : null;
+  return opts?.days ?? null;
 }
 
 export const DAY_MS = 86_400_000;
@@ -70,7 +71,7 @@ export function deltaDayWindows(days: DayWindow): {
 /**
  * One window an Insights number is computed over: whole UTC days, answered
  * from the daily rollups, or a timestamp range, answered from the raw rows
- * (the 24h view and any topic filter). An absent bound is open.
+ * (the 24h view). An absent bound is open.
  */
 export type MetricWindow =
   | { kind: 'days'; days: DayWindow }
@@ -119,11 +120,7 @@ export function comparisonWindows(
   return {
     cur: { kind: 'range', from, to },
     prev: { kind: 'range', from: new Date(Date.parse(from) - span).toISOString(), to: from },
-    // A day preset read raw (a topic is selected) still covers whole days:
-    // count them, as on the rollup path, rather than rounding elapsed time.
-    windowDays: opts?.days?.dayFrom
-      ? dayCount(deltaDayWindows(opts.days).cur)
-      : Math.max(1, Math.round(span / DAY_MS)),
+    windowDays: Math.max(1, Math.round(span / DAY_MS)),
   };
 }
 

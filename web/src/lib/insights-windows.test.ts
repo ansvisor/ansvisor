@@ -27,42 +27,15 @@ describe('comparisonWindows', () => {
     expect(w.windowDays).toBeNull();
   });
 
-  it('uses raw timestamps when a topic is selected, like the card', () => {
-    const now = new Date('2026-10-14T12:00:00.000Z');
-    const w = comparisonWindows(
-      {
-        topicId: 'topic-1',
-        dateFrom: '2026-10-08T00:00:00.000Z',
-        days: { dayFrom: '2026-10-08', dayTo: '2026-10-14' },
-      },
-      now,
-    );
-
-    expect(w.cur).toEqual({
-      kind: 'range',
-      from: '2026-10-08T00:00:00.000Z',
-      to: '2026-10-14T12:00:00.000Z',
+  it('compares whole days when a topic is selected too (00164)', () => {
+    const w = comparisonWindows({
+      topicId: 'topic-1',
+      dateFrom: '2026-09-15T00:00:00.000Z',
+      days: { dayFrom: '2026-09-15', dayTo: '2026-10-14' },
     });
-    expect(w.prev).toEqual({
-      kind: 'range',
-      from: '2026-10-01T12:00:00.000Z',
-      to: '2026-10-08T00:00:00.000Z',
-    });
-  });
 
-  it('counts whole days on the raw path too, so a topic-filtered 30d view is 30 days', () => {
-    // 09:00 UTC: the elapsed time since the first day's midnight rounds to 29.
-    const now = new Date('2026-10-14T09:00:00.000Z');
-    const w = comparisonWindows(
-      {
-        topicId: 'topic-1',
-        dateFrom: '2026-09-15T00:00:00.000Z',
-        days: { dayFrom: '2026-09-15', dayTo: '2026-10-14' },
-      },
-      now,
-    );
-
-    expect(w.cur.kind).toBe('range');
+    expect(w.cur).toEqual({ kind: 'days', days: { dayFrom: '2026-09-15', dayTo: '2026-10-14' } });
+    expect(w.prev).toEqual({ kind: 'days', days: { dayFrom: '2026-08-16', dayTo: '2026-09-14' } });
     expect(w.windowDays).toBe(30);
   });
 
@@ -82,7 +55,7 @@ describe('comparisonWindows', () => {
 
   it('has no previous window on the raw path without a start', () => {
     const now = new Date('2026-10-14T12:00:00.000Z');
-    const w = comparisonWindows({ topicId: 'topic-1', days: {} }, now);
+    const w = comparisonWindows({}, now);
 
     expect(w.cur).toEqual({ kind: 'range', from: undefined, to: '2026-10-14T12:00:00.000Z' });
     expect(w.prev).toBeNull();
