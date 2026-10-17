@@ -247,7 +247,7 @@ describe('getPromptsPageData', () => {
     const page = await getPromptsPageData('b1');
 
     expect(page.promptSets[0].prompts.map((p) => p.id)).toEqual(['p1']);
-    expect(page.positions.p1).toEqual({ avg: null, delta: null, dots: [], lateOrMissing: false });
+    expect(page.positions.p1).toEqual({ avg: null, delta: null, dots: [], performance: null });
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining('position summaries'),
       expect.any(Error),

@@ -151,8 +151,8 @@ export function actionEventText(
     tool: String(event.data.tool ?? ''),
     improved: Number(event.data.improved ?? 0),
     measurable: Number(event.data.measurable ?? 0),
-    // A task someone added or renamed is named in their own words, as they
-    // typed it.
+    // A task someone added, renamed or sent is named in its own words, as it
+    // was typed (AC-004).
     title: String(event.data.title ?? ''),
     // The validation sweep's verdict once the action closed: improved,
     // declined, and so on.
@@ -200,18 +200,6 @@ export function actionContextTags(action: ActionItem, t: Translator): string[] {
   const entity = str(action.payload ?? {}, 'targetEntity');
   if (count > 0 && entity) tags.push(t(`tags.${entity}`, { count }));
   return tags;
-}
-
-const IMPACT_RANK: Record<ActionItem['impact'], number> = { high: 3, medium: 2, low: 1 };
-
-/** Priority: impact first, then weight of evidence, then recency. The
- *  scoring formula stays out of the UI per the brief — this order IS it. */
-export function comparePriority(a: ActionItem, b: ActionItem): number {
-  return (
-    IMPACT_RANK[b.impact] - IMPACT_RANK[a.impact] ||
-    b.signalCount - a.signalCount ||
-    b.updatedAt.localeCompare(a.updatedAt)
-  );
 }
 
 /**

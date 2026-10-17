@@ -1,9 +1,28 @@
 import { act } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ActionHistoryItem } from '@/lib/action-center/history';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
+import type { ActionHistoryItem } from '@/lib/action-center/history';
+import type { Signal } from '@/lib/signals/map';
+
+/**
+ * The History drawer's goal and what happened, told from the action's own
+ * signals as the Actions drawer tells them (AC-003), with the general
+ * sentences while nothing can be read.
+ */
+
+const { getActionSignals, getPromptDemand } = vi.hoisted(() => ({
+  getActionSignals: vi.fn(),
+  getPromptDemand: vi.fn(),
+}));
+vi.mock('@/lib/actions/action-center', () => ({ getActionSignals, getPromptDemand }));
+vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+
+const { HistoryDrawer } = await import('./history-drawer');
+
+// Days are read where the reader is; pin it so the fixtures' days hold anywhere.
+process.env.TZ = 'UTC';
 
 (
   globalThis as typeof globalThis & {
@@ -11,66 +30,134 @@ import messages from '../../../messages/en.json';
   }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-vi.mock('@/i18n/navigation', () => ({
-  useRouter: () => ({ push: vi.fn() }),
-}));
+let container: HTMLDivElement;
+let root: Root;
 
-import { HistoryDrawer } from './history-drawer';
-
-const item = (signalCount: number): ActionHistoryItem => ({
-  id: 'action-id',
-  actionNo: 1,
-  kind: 'recover_visibility',
+const item = {
+  id: 'a1',
+  actionNo: 12,
+  kind: 'recover_lost_citations',
   type: 'recover',
-  impact: 'high',
+  priorityScore: 84,
+  priorityLevel: 'high',
   status: 'completed',
-  outcome: 'pending_measurement',
+  outcome: 'improved',
   payload: {},
   kpiKeys: [],
-  sources: [],
-  triggerSignals: Array.from({ length: signalCount }, (_, i) => ({
-    signalId: `signal-${i}`,
-    kind: 'visibility_drop',
-    detectedAt: '2026-01-01T00:00:00.000Z',
-  })),
+  sources: ['ai_results'],
+  triggerSignals: [{ signalId: 's1', kind: 'lost_citations', detectedAt: '2026-10-09T00:00:00Z' }],
   affected: [],
   results: [],
   positionOutcome: null,
   tasks: [],
   assignee: null,
-  createdAt: '2026-01-01T00:00:00.000Z',
-  completedAt: '2026-01-05T00:00:00.000Z',
-  timeToCloseDays: 4,
-});
+  dueDate: '2026-11-09',
+  createdAt: '2026-10-10T00:00:00Z',
+  completedAt: '2026-10-20T00:00:00Z',
+  timeToCloseDays: 10,
+} as ActionHistoryItem;
 
-async function renderDrawer(signalCount: number) {
-  const container = document.createElement('div');
-  document.body.append(container);
-  const root = createRoot(container);
-  await act(async () => {
+const signal = {
+  id: 's1',
+  category: 'citation',
+  kind: 'lost_citations',
+  impact: 'high',
+  status: 'resolved',
+  source: ['ai_results'],
+  detectedAt: '2026-10-09T00:00:00Z',
+  lastDetectedAt: '2026-10-09T00:00:00Z',
+  resolvedAt: '2026-10-20T00:00:00Z',
+  previousValue: null,
+  currentValue: null,
+  changeValue: null,
+  payload: {
+    promptId: 'p1',
+    promptText: 'Best coffee subscription?',
+    lostUrls: [{ url: 'https://acme.example/pricing', position: 2 }],
+  },
+  kpiKeys: [],
+  actionId: 'a1',
+  where: { platforms: ['chatgpt-web'], regions: [], topics: [] },
+} as unknown as Signal;
+
+function render(node: React.ReactNode) {
+  act(() => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <HistoryDrawer item={item(signalCount)} onOpenChange={() => {}} />
+        {node}
       </NextIntlClientProvider>,
     );
   });
-  return root;
 }
 
+/** The text under a section's label. */
+const under = (label: string) =>
+  [...document.querySelectorAll('section')].find((s) => s.textContent?.startsWith(label))
+    ?.textContent ?? '';
+
+beforeEach(() => {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  getActionSignals.mockReset();
+  getPromptDemand.mockReset();
+});
+
 afterEach(() => {
-  document.body.replaceChildren();
+  act(() => root.unmount());
+  container.remove();
 });
 
 describe('HistoryDrawer', () => {
+  it("tells the goal and what happened from the action's signals once they are read", async () => {
+    let answer: (value: unknown) => void = () => {};
+    getActionSignals.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    getPromptDemand.mockResolvedValue({ p1: 5500 });
+    render(<HistoryDrawer brandId="b1" item={item} onOpenChange={() => {}} />);
+
+    // Placeholders while reading, not the general sentences.
+    expect(under('What was the goal?')).toBe('What was the goal?');
+    expect(getActionSignals).toHaveBeenCalledWith('b1', 'a1');
+
+    await act(async () => answer([signal]));
+    const happened = under('What happened?');
+    expect(happened).toContain('Best coffee subscription?');
+    expect(happened).toContain('~5.5k');
+    expect(happened).toContain('Oct 9');
+    // The goal is dated by the action's due date.
+    expect(under('What was the goal?')).toContain('Nov 9');
+  });
+
+  it('keeps the general sentences when the signals cannot be read', async () => {
+    getActionSignals.mockRejectedValue(new Error('offline'));
+    render(<HistoryDrawer brandId="b1" item={item} onOpenChange={() => {}} />);
+    await act(async () => {});
+
+    expect(under('What happened?')).toContain(
+      `What happened?${messages.actionCenter.actionTexts.recover_lost_citations.description}`,
+    );
+    expect(under('What was the goal?')).not.toBe('What was the goal?');
+    expect(getPromptDemand).not.toHaveBeenCalled();
+  });
+
   it.each([
     [1, 'Consolidated from 1 signal'],
     [3, 'Consolidated from 3 signals'],
   ])('counts %i trigger signal(s) in the right grammatical number', async (count, text) => {
-    const root = await renderDrawer(count);
-    const line = Array.from(document.body.querySelectorAll('p')).find((p) =>
+    getActionSignals.mockResolvedValue([]);
+    const triggerSignals = Array.from({ length: count }, (_, i) => ({
+      signalId: `s${i}`,
+      kind: 'lost_citations',
+      detectedAt: '2026-10-09T00:00:00Z',
+    }));
+    render(
+      <HistoryDrawer brandId="b1" item={{ ...item, triggerSignals }} onOpenChange={() => {}} />,
+    );
+    await act(async () => {});
+
+    const line = [...document.querySelectorAll('p')].find((p) =>
       p.textContent?.startsWith('Consolidated from'),
     );
     expect(line?.textContent).toBe(text);
-    await act(async () => root.unmount());
   });
 });

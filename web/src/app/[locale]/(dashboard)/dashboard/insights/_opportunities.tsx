@@ -12,6 +12,7 @@ import { trackSuggestions } from '@/lib/actions/prompt-suggestions';
 import { sendTopicOpportunityToActionCenter } from '@/lib/actions/topic';
 import { generateOpportunitiesOnDemand, getGenerationJobStatus } from '@/lib/actions/content';
 import { waitForContentJob } from '@/lib/content-job';
+import { openPendingTab } from '@/lib/pending-tab';
 import type { ContentUsage } from '@/lib/content-usage';
 import {
   contentLeft,
@@ -27,6 +28,8 @@ import type { TopicCompetitors } from '@/lib/insights-topics';
 const VISIBLE_ITEMS = 4;
 
 const SUGGESTIONS_HREF = '/dashboard/prompts/suggestions';
+/** Where Track takes the user: the table, with what they added on top as New. */
+const TRACKED_HREF = '/dashboard/prompts/tracked';
 
 /**
  * Opportunities (VIS-011), as in the v2 mockup: what to track next, from the
@@ -198,6 +201,9 @@ export function Opportunities({
     left === null ? t('suggestHint') : `${t('suggestHint')} ${t('suggestHintQuota')}`;
 
   const track = async (item: Opportunity) => {
+    // Tracked Prompts opens in a new tab, opened here in the click so it isn't
+    // blocked as a pop-up; it moves to the table once the prompts are added.
+    const tab = openPendingTab(t('addingPrompts'));
     setBusy(item.key);
     try {
       const {
@@ -210,8 +216,16 @@ export function Opportunities({
       if (done.length + skippedIds.length > 0) {
         setTrackedIds((prev) => new Set([...prev, ...done, ...skippedIds]));
       }
-      if (done.length > 0) onTracked(done.length);
-      const open = { label: t('openPrompts'), onClick: () => router.push('/dashboard/prompts') };
+      if (done.length > 0) {
+        onTracked(done.length);
+        tab.go(TRACKED_HREF);
+      } else {
+        tab.close();
+      }
+      // With the tab blocked, the toast's Open is the way there.
+      const open = tab.opened
+        ? undefined
+        : { label: t('openPrompts'), onClick: () => router.push(TRACKED_HREF) };
       if (!error && done.length === 0) {
         toast.info(t('alreadyHandled'));
       } else if (!error && item.kind === 'topic' && item.topicId) {
@@ -236,6 +250,7 @@ export function Opportunities({
         toast.error(t('trackFailed'), { description: error });
       }
     } catch {
+      tab.close();
       toast.error(t('trackFailed'));
     } finally {
       setBusy(null);
