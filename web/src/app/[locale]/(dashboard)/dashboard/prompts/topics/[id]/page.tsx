@@ -10,7 +10,7 @@ import {
   type VisibilityTrendPoint,
   type ShareOfVoiceData,
   type CompetitorComparisonData,
-  type PromptResultWithText,
+  type TopicRecentRun,
 } from '@/lib/actions/tracking';
 import type { Topic } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -154,7 +154,7 @@ export default function TopicDetailPage({ params }: { params: Promise<{ id: stri
   const [trend, setTrend] = useState<VisibilityTrendPoint[]>([]);
   const [sov, setSov] = useState<ShareOfVoiceData | null>(null);
   const [competitors, setCompetitors] = useState<CompetitorComparisonData | null>(null);
-  const [results, setResults] = useState<PromptResultWithText[]>([]);
+  const [results, setResults] = useState<TopicRecentRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
