@@ -41,6 +41,7 @@ import { runPageOpportunityDetection } from './lib/page-opportunities.js';
 import { runPulseCatchUp } from './lib/pulse/engine.js';
 import { runSignalCatchUp } from './lib/signals/pass.js';
 import { sweepTaskExecution } from './lib/action-center/execution/run.js';
+import { sweepActionTasks } from './lib/action-center/task-writer/index.js';
 import { sendHealthReport } from './lib/health/report.js';
 import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
 
@@ -154,6 +155,13 @@ async function runDailyTracking() {
   // somebody does by hand, not a reason to hold up tracking.
   sweepTaskExecution().catch((err) => {
     logger.error({ err }, '[task-run] sweep crashed');
+  });
+
+  // Write the tasks of recent actions whose writing a pass missed (AC-004):
+  // the budget was spent, the model failed, or the process restarted.
+  // Bounded per sweep; a no-op unless ACTION_TASKS_AI is on.
+  sweepActionTasks().catch((err) => {
+    logger.error({ err }, '[task-writer] daily sweep crashed');
   });
 
   // Insights rollup backstop (00066). Re-refreshes the trailing days for

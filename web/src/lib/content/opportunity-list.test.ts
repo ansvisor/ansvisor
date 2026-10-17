@@ -34,3 +34,14 @@ describe('Content Opportunities list', () => {
     });
   });
 });
+
+describe('an opportunity sent from an action task (AC-004)', () => {
+  it('reads as from that action, not as a single prompt', () => {
+    expect(
+      opportunityScope({
+        clusterId: null,
+        sourceData: { fromAction: { actionId: 'a1', actionNo: 12, taskId: 't1' } },
+      }),
+    ).toEqual({ kind: 'action', actionNo: 12 });
+  });
+});

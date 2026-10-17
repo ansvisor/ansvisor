@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
+import { getPlatformName } from '@/lib/traffic-platforms';
 import {
   AreaChart,
   Area,
@@ -50,7 +51,8 @@ function ChartContainer({
 //
 // Keys must stay in sync with the detection host list in the tracking snippet
 // (`server/src/public/t.js`): every platform t.js can resolve and store needs a
-// label + color here, otherwise it renders as a raw hostname. `unknown` is kept
+// color here and a name in `@/lib/traffic-platforms`, otherwise it renders as
+// a raw hostname. `unknown` is kept
 // only for historical rows that predate #288 (null source_platform); new visits
 // always carry a concrete platform.
 
@@ -71,29 +73,8 @@ const PLATFORM_COLORS: Record<string, string> = {
   unknown: '#94a3b8',
 };
 
-const PLATFORM_NAMES: Record<string, string> = {
-  'chatgpt.com': 'ChatGPT',
-  'chat.openai.com': 'ChatGPT',
-  'search.chatgpt.com': 'ChatGPT',
-  'perplexity.ai': 'Perplexity',
-  'claude.ai': 'Claude',
-  'gemini.google.com': 'Gemini',
-  'copilot.microsoft.com': 'Copilot',
-  'you.com': 'You.com',
-  'phind.com': 'Phind',
-  'meta.ai': 'Meta AI',
-  'poe.com': 'Poe',
-  'labs.google': 'Google Labs',
-  'bing.com': 'Bing',
-  unknown: 'Unknown',
-};
-
 function getColor(platform: string): string {
   return PLATFORM_COLORS[platform] ?? '#94a3b8';
-}
-
-export function getPlatformName(platform: string): string {
-  return PLATFORM_NAMES[platform] ?? platform;
 }
 
 /**

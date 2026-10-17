@@ -11,14 +11,18 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import type {
-  SignalCategory,
-  SignalImpact,
-  SignalSource,
-  SignalStatus,
+import { after } from 'next/server';
+import { API_BASE_URL } from '@/config/api';
+import {
+  OPEN_SIGNAL_STATUSES,
+  type SignalCategory,
+  type SignalImpact,
+  type SignalSource,
+  type SignalStatus,
 } from '@/lib/signals/registry';
 import { SIGNAL_ROW_COLUMNS, mapSignalRows, type Signal, type SignalRow } from '@/lib/signals/map';
-import type { PromptPlace } from '@/lib/signals/where';
+import { readPromptPlaces } from '@/lib/signals/prompt-places';
+import type { ActionStatus } from '@/lib/action-center/registry';
 
 export type { Signal } from '@/lib/signals/map';
 
@@ -58,44 +62,47 @@ export async function getSignals(brandId: string, filters: SignalFilters): Promi
   if (filters.status) query = query.eq('status', filters.status);
   if (filters.source) query = query.contains('source', [filters.source]);
 
-  const [{ data, error }, prompts] = await Promise.all([query, getPromptPlaces(supabase, brandId)]);
+  const [{ data, error }, prompts] = await Promise.all([
+    query,
+    readPromptPlaces(supabase, brandId),
+  ]);
   if (error) throw new Error(error.message);
 
   return mapSignalRows((data ?? []) as SignalRow[], prompts);
 }
 
+/** An action a signal feeds, as its drawer lists it under "Used by actions". */
+export interface SignalAction {
+  id: string;
+  actionNo: number;
+  kind: string;
+  status: ActionStatus;
+  payload: Record<string, unknown>;
+}
+
 /**
- * Where each of the brand's prompts is tracked, by id. Paged, because a
- * brand can hold more prompts than one PostgREST response carries. A failed
- * read costs the Where line, not the page, so it is logged and the page
- * shows signals without it.
+ * Every action a signal has been used by (spec §10: signal → action
+ * traceability), through action_signals (AC-007): not only its current
+ * `action_id` but the earlier ones it supported, closed ones included, the
+ * latest link first. Read when a drawer opens rather than with the list, so
+ * the list stays one query of signals.
  */
-async function getPromptPlaces(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  brandId: string,
-): Promise<Map<string, PromptPlace>> {
-  const places = new Map<string, PromptPlace>();
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await supabase
-      .from('prompts')
-      .select('id, platforms, regions, topic_id, is_active, prompt_sets!inner(brand_id)')
-      .eq('prompt_sets.brand_id', brandId)
-      .order('id')
-      .range(from, from + 999);
-    if (error) {
-      console.error('[signals] prompt places read failed:', error.message);
-      return new Map();
-    }
-    for (const row of data ?? []) {
-      places.set(row.id, {
-        platforms: row.platforms ?? [],
-        regions: row.regions ?? [],
-        topicId: row.topic_id,
-        isActive: row.is_active,
-      });
-    }
-    if ((data ?? []).length < 1000) return places;
-  }
+export async function getSignalActions(brandId: string, signalId: string): Promise<SignalAction[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('action_signals')
+    .select('actions!inner(id, action_no, kind, status, payload)')
+    .eq('signal_id', signalId)
+    .eq('actions.brand_id', brandId)
+    .order('linked_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(({ actions: row }) => ({
+    id: row.id,
+    actionNo: Number(row.action_no),
+    kind: row.kind,
+    status: row.status as ActionStatus,
+    payload: (row.payload ?? {}) as Record<string, unknown>,
+  }));
 }
 
 export interface SignalsSummary {
@@ -166,31 +173,37 @@ export async function getSignalsSummary(
   };
 }
 
-/** Count of untriaged signals, for the Action Center tab badge. A head
- *  count query — no rows transferred, immune to the row cap. */
+/**
+ * Untriaged signals for the Action Center tab badge, counted the way the list
+ * shows them: copies of one finding count once (signals_new_count, 00141).
+ * One number back, immune to the row cap.
+ */
 export async function getNewSignalCount(brandId: string): Promise<number> {
   const supabase = await createClient();
-  const { count, error } = await supabase
-    .from('signals')
-    .select('id', { count: 'exact', head: true })
-    .eq('brand_id', brandId)
-    .eq('status', 'new');
+  const { data, error } = await supabase.rpc('signals_new_count', { p_brand_id: brandId });
   if (error) throw new Error(error.message);
-  return count ?? 0;
+  return Number(data ?? 0);
 }
 
 /**
- * Triage: any org member can move a signal through its lifecycle (RLS
- * enforces membership). Resolving stamps resolved_at; leaving the resolved
- * state clears it so the summary's "Resolved" count stays truthful.
+ * Triage: any org member can move signals through their lifecycle (RLS
+ * enforces membership). Several at once for a group's menu, which acts on
+ * every copy. Resolving stamps resolved_at; leaving the resolved state
+ * clears it so the summary's "Resolved" count stays truthful.
  */
 export async function updateSignalStatus(
   brandId: string,
-  signalId: string,
+  signalIds: string[],
   status: SignalStatus,
 ): Promise<void> {
+  if (signalIds.length === 0) return;
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: before } = await supabase
+    .from('signals')
+    .select('id, status')
+    .eq('brand_id', brandId)
+    .in('id', signalIds);
+  const { data, error } = await supabase
     .from('signals')
     .update({
       status,
@@ -198,8 +211,47 @@ export async function updateSignalStatus(
       updated_at: new Date().toISOString(),
     })
     .eq('brand_id', brandId)
-    .eq('id', signalId);
+    .in('id', signalIds)
+    .select('id, action_id');
   if (error) throw new Error(error.message);
+
+  // When a signal starts or stops supporting its action, the action's support
+  // and confidence follow at once, not the next night (AC-007). Acknowledging
+  // leaves it open, so nothing changes for the action. Copies of one finding
+  // move together and usually share their action: it is scored once.
+  const isOpen = (value: unknown) => OPEN_SIGNAL_STATUSES.includes(value as SignalStatus);
+  const wasOpen = new Map((before ?? []).map((row) => [row.id, isOpen(row.status)]));
+  const byAction = new Map<string, string>();
+  for (const row of data ?? []) {
+    if (!row.action_id || wasOpen.get(row.id) === isOpen(status)) continue;
+    if (!byAction.has(row.action_id)) byAction.set(row.action_id, row.id);
+  }
+  if (byAction.size === 0) return;
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return;
+  for (const signalId of byAction.values()) scheduleRescore(signalId, session.access_token);
+}
+
+/**
+ * Asks the server to score again the active actions a signal supports, once
+ * the response has gone: the click doesn't wait for it. Best effort, as the
+ * status change is saved either way and the nightly pass scores every action
+ * again.
+ */
+function scheduleRescore(signalId: string, accessToken: string) {
+  after(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/action-center/signals/${signalId}/rescore`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) console.warn(`[signals] action rescore failed: ${res.status}`);
+    } catch (err) {
+      console.warn('[signals] action rescore failed:', err);
+    }
+  });
 }
 
 function nextDay(day: string): string {

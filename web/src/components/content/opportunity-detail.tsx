@@ -410,25 +410,32 @@ export function OpportunityDetail({
           <Badge variant="outline" className="text-xs tabular-nums">
             Score: {Math.round(opportunity.opportunityScore)}
           </Badge>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            className="ml-auto gap-1 text-xs text-muted-foreground"
-            onClick={() => setAlternativeOpen(true)}
-            disabled={alternativeRunning}
-            title={t('alternative.hint')}
-          >
-            {alternativeRunning ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <RefreshCw className="h-3 w-3" />
-            )}
-            {alternativeRunning ? t('alternative.running') : t('alternative.button')}
-          </Button>
+          {/* Another angle is written from a cluster or a prompt; a task sent
+              from the Action Center (AC-004) has neither. */}
+          {opportunity.source !== 'action' && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="ml-auto gap-1 text-xs text-muted-foreground"
+              onClick={() => setAlternativeOpen(true)}
+              disabled={alternativeRunning}
+              title={t('alternative.hint')}
+            >
+              {alternativeRunning ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3 w-3" />
+              )}
+              {alternativeRunning ? t('alternative.running') : t('alternative.button')}
+            </Button>
+          )}
           {/* The UI's language, not the browser's: an English page showed "25 Eyl". */}
           <span
-            className="text-xs text-muted-foreground flex items-center gap-1.5"
+            className={cn(
+              'text-xs text-muted-foreground flex items-center gap-1.5',
+              opportunity.source === 'action' && 'ml-auto',
+            )}
             title={suggestedDate(opportunity.createdAt, locale).full}
           >
             <Clock className="h-3.5 w-3.5" />
@@ -592,106 +599,112 @@ export function OpportunityDetail({
       )}
 
       <div className="grid grid-cols-1 gap-4 @3xl:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">{t('detail.sourceData')}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {sd.promptText && !opportunity.clusterId && (
-              <StatCard icon={Search} label={t('detail.relatedPrompt')} value={sd.promptText} />
-            )}
+        {/* Sent from an Action Center task (AC-004): what the task says to do,
+            where a generated one shows the data it was built from. */}
+        {sd.fromAction?.task ? (
+          <FromTaskCard from={sd.fromAction} />
+        ) : (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">{t('detail.sourceData')}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {sd.promptText && !opportunity.clusterId && (
+                <StatCard icon={Search} label={t('detail.relatedPrompt')} value={sd.promptText} />
+              )}
 
-            <div className="grid grid-cols-2 gap-3">
-              {sd.estAiVolume !== undefined && (
-                <StatCard
-                  icon={TrendingUp}
-                  label={t('detail.estAiVolume')}
-                  value={`~${sd.estAiVolume.toLocaleString()}/mo`}
-                />
-              )}
-              {sd.visibilityScore !== undefined && (
-                <StatCard
-                  icon={Eye}
-                  label={t('detail.visibility')}
-                  value={`${Math.round(sd.visibilityScore)}%`}
-                />
-              )}
-              {sd.competitorGap !== undefined && (
-                <StatCard
-                  icon={Users}
-                  label={t('detail.competitorGap')}
-                  value={`${sd.competitorGap > 0 ? '+' : ''}${Math.round(sd.competitorGap)}%`}
-                />
-              )}
-              {sd.topCompetitorVisibility !== undefined && (
-                <StatCard
-                  icon={Users}
-                  label={t('detail.topCompetitor')}
-                  value={`${Math.round(sd.topCompetitorVisibility)}%`}
-                />
-              )}
-              {sd.intent && (
-                <StatCard
-                  icon={Tag}
-                  label={t('detail.intent')}
-                  value={INTENT_LABELS[sd.intent] || sd.intent}
-                />
-              )}
-            </div>
-
-            {sd.keywords && sd.keywords.length > 0 && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-1.5">{t('detail.keywords')}</p>
-                <div className="flex flex-wrap gap-1">
-                  {sd.keywords.map((kw) => (
-                    <Badge key={kw} variant="outline" className="text-xs">
-                      {kw}
-                    </Badge>
-                  ))}
-                </div>
+              <div className="grid grid-cols-2 gap-3">
+                {sd.estAiVolume !== undefined && (
+                  <StatCard
+                    icon={TrendingUp}
+                    label={t('detail.estAiVolume')}
+                    value={`~${sd.estAiVolume.toLocaleString()}/mo`}
+                  />
+                )}
+                {sd.visibilityScore !== undefined && (
+                  <StatCard
+                    icon={Eye}
+                    label={t('detail.visibility')}
+                    value={`${Math.round(sd.visibilityScore)}%`}
+                  />
+                )}
+                {sd.competitorGap !== undefined && (
+                  <StatCard
+                    icon={Users}
+                    label={t('detail.competitorGap')}
+                    value={`${sd.competitorGap > 0 ? '+' : ''}${Math.round(sd.competitorGap)}%`}
+                  />
+                )}
+                {sd.topCompetitorVisibility !== undefined && (
+                  <StatCard
+                    icon={Users}
+                    label={t('detail.topCompetitor')}
+                    value={`${Math.round(sd.topCompetitorVisibility)}%`}
+                  />
+                )}
+                {sd.intent && (
+                  <StatCard
+                    icon={Tag}
+                    label={t('detail.intent')}
+                    value={INTENT_LABELS[sd.intent] || sd.intent}
+                  />
+                )}
               </div>
-            )}
 
-            {fanoutQueries.length > 0 && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-1.5">Observed fan-out queries</p>
-                <div className="flex flex-wrap gap-1">
-                  {fanoutQueries.map((sq) => (
-                    <Badge
-                      key={sq.query}
-                      variant="outline"
-                      className="text-xs border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400 gap-1"
-                      title={`Searched ${sq.timesSearched}× by answer engines`}
-                    >
-                      <Search className="h-2.5 w-2.5 shrink-0" />
-                      {sq.query}
-                      <span className="opacity-60 tabular-nums">×{sq.timesSearched}</span>
-                    </Badge>
-                  ))}
+              {sd.keywords && sd.keywords.length > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1.5">{t('detail.keywords')}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {sd.keywords.map((kw) => (
+                      <Badge key={kw} variant="outline" className="text-xs">
+                        {kw}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {sd.competitorsCited && sd.competitorsCited.length > 0 && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-1.5">
-                  {t('detail.competitorsCited')}
-                </p>
-                <div className="flex flex-wrap gap-1">
-                  {sd.competitorsCited.map((comp) => (
-                    <Badge
-                      key={comp}
-                      variant="outline"
-                      className="text-xs border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                    >
-                      {comp}
-                    </Badge>
-                  ))}
+              {fanoutQueries.length > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1.5">Observed fan-out queries</p>
+                  <div className="flex flex-wrap gap-1">
+                    {fanoutQueries.map((sq) => (
+                      <Badge
+                        key={sq.query}
+                        variant="outline"
+                        className="text-xs border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400 gap-1"
+                        title={`Searched ${sq.timesSearched}× by answer engines`}
+                      >
+                        <Search className="h-2.5 w-2.5 shrink-0" />
+                        {sq.query}
+                        <span className="opacity-60 tabular-nums">×{sq.timesSearched}</span>
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              )}
+
+              {sd.competitorsCited && sd.competitorsCited.length > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1.5">
+                    {t('detail.competitorsCited')}
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {sd.competitorsCited.map((comp) => (
+                      <Badge
+                        key={comp}
+                        variant="outline"
+                        className="text-xs border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                      >
+                        {comp}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {brief ? (
           <Card>
@@ -839,5 +852,65 @@ export function OpportunityDetail({
         onChoose={(reason) => void handleDismiss(reason)}
       />
     </div>
+  );
+}
+
+/** The Action Center task an opportunity was sent from (AC-004): where, why, how, done when. */
+function FromTaskCard({
+  from,
+}: {
+  from: NonNullable<ContentOpportunity['sourceData']['fromAction']>;
+}) {
+  const t = useTranslations('content.detail.fromTask');
+  const task = from.task ?? {};
+  const effort = [task.effort, task.role].filter(Boolean).join(' · ');
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium">
+          {from.actionNo !== null ? t('title', { ref: `AC-${from.actionNo}` }) : t('titleNoRef')}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <dl className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1.5 text-sm">
+          {task.where && (
+            <>
+              <dt className="text-muted-foreground">{t('where')}</dt>
+              <dd className="min-w-0 break-words">{task.where}</dd>
+            </>
+          )}
+          {task.why && (
+            <>
+              <dt className="text-muted-foreground">{t('why')}</dt>
+              <dd className="min-w-0 break-words">{task.why}</dd>
+            </>
+          )}
+          {task.how && task.how.length > 0 && (
+            <>
+              <dt className="text-muted-foreground">{t('how')}</dt>
+              <dd>
+                <ol className="list-decimal space-y-0.5 pl-4">
+                  {task.how.map((step, i) => (
+                    <li key={i}>{step}</li>
+                  ))}
+                </ol>
+              </dd>
+            </>
+          )}
+          {task.doneWhen && (
+            <>
+              <dt className="text-muted-foreground">{t('doneWhen')}</dt>
+              <dd className="min-w-0 break-words">{task.doneWhen}</dd>
+            </>
+          )}
+          {effort && (
+            <>
+              <dt className="text-muted-foreground">{t('effort')}</dt>
+              <dd>{effort}</dd>
+            </>
+          )}
+        </dl>
+      </CardContent>
+    </Card>
   );
 }
