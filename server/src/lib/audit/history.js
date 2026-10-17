@@ -76,6 +76,14 @@ export function pageKey(url) {
   }
 }
 
+/**
+ * How long a run may stay `running`. An audit takes a minute or two and a
+ * queued bulk run waits longer; one older than this was cut short by a
+ * restart (the bulk queue lives in memory) and will never complete, so it
+ * reads as failed and stops holding a quota slot (plan-guard.js).
+ */
+export const AUDIT_RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+
 const points = (score) => Math.round(score * 100);
 
 /**
@@ -96,9 +104,10 @@ export function pageStatus(latestRun, current, previous) {
  * Group audit rows read NEWEST first into one entry per page (pageKey of
  * final_url, else url), most recently audited page first. Each page carries
  * its latest completed score and audit, the one before it, a status, its
- * trend and its runs.
+ * trend and its runs. A run still `running` past AUDIT_RUN_TIMEOUT_MS reads as
+ * failed, so the page isn't left Running (and the hub polling) for good.
  */
-export function buildAuditPages(rowsNewestFirst) {
+export function buildAuditPages(rowsNewestFirst, now = Date.now()) {
   const groups = new Map();
   // Rows read in slices can repeat one at a slice boundary.
   const seen = new Set();
@@ -111,7 +120,10 @@ export function buildAuditPages(rowsNewestFirst) {
     groups.get(page.key).runs.push({
       id: r.id,
       url,
-      status: r.status,
+      status:
+        r.status === 'running' && now - Date.parse(r.created_at) > AUDIT_RUN_TIMEOUT_MS
+          ? 'failed'
+          : r.status,
       totalScore: r.total_score === null ? null : Number(r.total_score),
       createdAt: r.created_at,
     });

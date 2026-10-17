@@ -3,12 +3,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { AlertCircle, ListFilter, Plus, Settings2, Target } from 'lucide-react';
+import { AlertCircle, ListFilter, Plus, Settings2, Sparkles, Target, X } from 'lucide-react';
+import { useUserRole } from '@/hooks/use-user-role';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
 import {
+  getKpiPresetPreview,
   getKpiSnapshots,
   removeKpi,
+  seedKpiPresets,
+  type KpiSnapshot,
   type KpiSnapshotsResult,
   type KpiWindow,
 } from '@/lib/actions/kpis';
@@ -67,7 +71,12 @@ function KpisContent({ brand }: { brand: Brand }) {
   const t = useTranslations('actionCenter.kpis');
   const tCategories = useTranslations('actionCenter.categories');
 
+  const { canManage } = useUserRole();
   const [result, setResult] = useState<KpiSnapshotsResult | null>(null);
+  // A brand that never had a KPI opens on the ready-made set: saved for an
+  // admin or manager (and said so once), shown unsaved to everyone else.
+  const [preview, setPreview] = useState<KpiSnapshot[] | null>(null);
+  const [justSetUp, setJustSetUp] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [category, setCategory] = useState<KpiCategory | 'all'>('all');
@@ -91,19 +100,39 @@ function KpisContent({ brand }: { brand: Brand }) {
     setIsLoading(true);
     setLoadFailed(false);
     try {
-      setResult(await getKpiSnapshots(brand.id, window));
+      let next = await getKpiSnapshots(brand.id, window);
+      let unsaved: KpiSnapshot[] | null = null;
+      if (!next.configured && next.everSetUp === false) {
+        if (canManage) {
+          // Once per brand (00163): a failed setup leaves the empty state.
+          // Read again either way: a colleague may have set it up meanwhile.
+          // Only a setup that happened says so: a second read racing it (as
+          // React's development double run does) must not hide the note.
+          const seeded = await seedKpiPresets(brand.id).catch(() => false);
+          if (seeded) setJustSetUp(true);
+          next = await getKpiSnapshots(brand.id, window);
+        } else {
+          unsaved = await getKpiPresetPreview(brand.id, window).catch(() => null);
+        }
+      }
+      setPreview(unsaved);
+      setResult(next);
     } catch {
       setLoadFailed(true);
     } finally {
       setIsLoading(false);
     }
-  }, [brand.id, window]);
+  }, [brand.id, window, canManage]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const kpis = useMemo(() => result?.kpis ?? [], [result]);
+  const previewing = !result?.configured && (preview?.length ?? 0) > 0;
+  const kpis = useMemo(
+    () => (result?.configured ? result.kpis : (preview ?? [])),
+    [result, preview],
+  );
   const categories = useMemo(() => {
     const counts = new Map<KpiCategory, number>();
     for (const kpi of kpis) counts.set(kpi.category, (counts.get(kpi.category) ?? 0) + 1);
@@ -175,7 +204,7 @@ function KpisContent({ brand }: { brand: Brand }) {
     />
   );
 
-  if (!result?.configured) {
+  if (!result?.configured && !previewing) {
     return (
       <>
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
@@ -194,6 +223,22 @@ function KpisContent({ brand }: { brand: Brand }) {
 
   return (
     <div className="space-y-4">
+      {(justSetUp || previewing) && (
+        <div className="flex items-start gap-3 rounded-lg border bg-muted/40 px-4 py-3 text-sm">
+          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          <p className="flex-1">{previewing ? t('presets.preview') : t('presets.setUp')}</p>
+          {justSetUp && (
+            <button
+              type="button"
+              onClick={() => setJustSetUp(false)}
+              aria-label={t('presets.dismiss')}
+              className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <CategoryPill
@@ -264,22 +309,26 @@ function KpisContent({ brand }: { brand: Brand }) {
               </button>
             ))}
           </div>
-          <Button variant="outline" size="sm" className="text-xs" onClick={() => openDrawer()}>
-            <Settings2 className="h-3.5 w-3.5" />
-            {t('editKpis')}
-          </Button>
-          <Button size="sm" className="text-xs" onClick={() => openDrawer()}>
-            <Plus className="h-3.5 w-3.5" />
-            {t('addKpi')}
-          </Button>
+          {!previewing && (
+            <>
+              <Button variant="outline" size="sm" className="text-xs" onClick={() => openDrawer()}>
+                <Settings2 className="h-3.5 w-3.5" />
+                {t('editKpis')}
+              </Button>
+              <Button size="sm" className="text-xs" onClick={() => openDrawer()}>
+                <Plus className="h-3.5 w-3.5" />
+                {t('addKpi')}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
       {visible.length > 0 ? (
         <KpiTable
           kpis={visible}
-          onEdit={(key) => openDrawer(key)}
-          onRemove={(key) => void handleRemove(key)}
+          onEdit={previewing ? undefined : (key) => openDrawer(key)}
+          onRemove={previewing ? undefined : (key) => void handleRemove(key)}
           busyKey={busyKey}
         />
       ) : kpis.length > 0 ? (

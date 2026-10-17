@@ -139,6 +139,11 @@
       "noBrand": {
         "title": "No brand selected",
         "description": "Select a brand to view its KPIs."
+      },
+      "presets": {
+        "setUp": "We set up these KPIs for you. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. Change or remove them any time.",
+        "preview": "Suggested KPIs. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. They're saved the first time an admin or manager opens this tab.",
+        "dismiss": "Dismiss"
       }
     },
     "drawer": {
@@ -212,6 +217,10 @@
       "ai_referral_traffic": {
         "name": "AI Referral Traffic",
         "description": "Visits arriving from AI platforms"
+      },
+      "positive_sentiment": {
+        "name": "Positive Sentiment",
+        "description": "Positive share of the AI responses naming you"
       },
       "competitor_lead": {
         "name": "Lead over top competitor",
@@ -2179,6 +2188,8 @@
     "copied": "Copied",
     "copyFailed": "Copy failed",
     "copyDraft": "Copy draft",
+    "copyCode": "Copy code",
+    "placeholderNote": "Replace placeholders in [brackets] with your real data before publishing.",
     "finding": "Finding",
     "why": "Why",
     "recommendedFix": "Recommended fix",
@@ -2985,6 +2996,7 @@
       "acrossBrands": "across {count, plural, one {# brand} other {# brands}}",
       "locationPairs": "prompt × location pairs",
       "overLimit": "over limit",
+      "collapsedLocations": "{used} / {limit} prompt locations",
       "ofLimit": "of {limit} on {plan}",
       "onPlan": "on {plan}",
       "unlimited": "Unlimited",
@@ -3244,7 +3256,24 @@
       "copyFailed": "Couldn't copy the response. Select the text and copy it instead.",
       "close": "Close",
       "legendBrand": "Your brand",
-      "legendCompetitor": "Competitors"
+      "legendCompetitor": "Competitors",
+      "correction": {
+        "open": "Sentiment is wrong?",
+        "title": "Correct the sentiment toward your brand",
+        "hint": "Every figure counts the new sentiment from now on; the original stays in the history.",
+        "options": "New sentiment",
+        "note": "Note (optional)",
+        "notePlaceholder": "Why is it wrong? It helps improve the classification.",
+        "save": "Save correction",
+        "cancel": "Cancel",
+        "saved": "Sentiment corrected",
+        "savedDescription": "This answer now counts as {sentiment} everywhere.",
+        "unchanged": "The answer already has this sentiment.",
+        "failed": "Couldn't correct the sentiment",
+        "forbidden": "Only admins and managers can correct a sentiment.",
+        "correctedBy": "Corrected by {name} on {date} · was {previous}",
+        "correctedOn": "Corrected on {date} · was {previous}"
+      }
     },
     "actions": {
       "sendToActionCenter": "Send to Action Center",
@@ -3270,6 +3299,38 @@
       "clearSelection": "Clear",
       "selectAll": "Select every answer on this page",
       "selectRow": "Select the answer to “{prompt}” on {platform}"
+    },
+    "export": {
+      "copySummary": "Copy summary",
+      "copying": "Copying…",
+      "copied": "Summary copied",
+      "copyFailed": "Couldn't copy the summary. Try again in a moment.",
+      "copyBlocked": "Your browser didn't allow copying here. Allow clipboard access for this site and try again.",
+      "exportFailed": "Couldn't export the mentions. Try again in a moment.",
+      "nothing": "No mentions to export for these filters.",
+      "capped": "The file holds {shown} of {total} mentions. Narrow the filters to export the rest.",
+      "pickDates": "Choose a start or end date first.",
+      "reports": "Reports",
+      "exportSelected": "Export",
+      "facts": {
+        "period": "Period",
+        "periodDays": "{from} – {to} ({days, plural, one {# day} other {# days}}, UTC)",
+        "periodMoments": "{from} – {to} UTC",
+        "responses": "Tracked responses (n)",
+        "mentions": "Mentions (n)",
+        "prompts": "Prompts with mentions (n)",
+        "inFile": "Mentions in this file (n)",
+        "note": "Note",
+        "capped": "Only the first {shown} of {total} mentions, in the table's order. Narrow the filters to export the rest.",
+        "exported": "Exported (UTC)"
+      },
+      "summary": {
+        "title": "Mentions & Sentiment · {brand}",
+        "search": "Search: “{q}”",
+        "kpi": "{label}: {value}",
+        "kpiChange": "{label}: {value} ({change})",
+        "net": "{net} · {split} (n={count})"
+      }
     }
   },
   "competitors": {

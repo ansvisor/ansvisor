@@ -20,16 +20,19 @@ import { writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Competitor, Topic } from '@/types';
 import { MentionsFilterBar } from './_filter-bar';
+import { MentionsHeaderActions } from './_header-actions';
 import { MentionsListTab } from './_mentions-tab';
 import { MentionsOverviewTab } from './_overview';
+import { useMentionsExport } from './_use-mentions-export';
 
 /**
  * Mentions & Sentiment (MS-05): where AI mentions the brand, how it describes
  * it, and what to do about it — built from the answers tracking already
  * stores, so opening the page or changing a filter never calls an LLM.
  *
- * Top-down as the spec orders it: the tabs, then the filters every tab
- * shares, then the tab's content. Tab and filters live in the URL.
+ * Top-down as the spec orders it: the header's Copy summary, Export CSV and
+ * Reports, the tabs, then the filters every tab shares, then the tab's
+ * content. Tab and filters live in the URL.
  */
 export default function MentionsPage() {
   const t = useTranslations('mentions');
@@ -83,6 +86,15 @@ export default function MentionsPage() {
     };
   }, [activeBrandId]);
 
+  const exporter = useMentionsExport({
+    brandId: activeBrandId ?? '',
+    brand: brandName,
+    slug: activeBrand?.slug ?? '',
+    filters,
+    topics,
+    competitors,
+  });
+
   if (!activeBrandId) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
@@ -93,9 +105,12 @@ export default function MentionsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-        <p className="text-sm text-muted-foreground">{t('description')}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('description')}</p>
+        </div>
+        {urlRead && <MentionsHeaderActions tab={tab} exporter={exporter} />}
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as MentionsTab)}>
@@ -130,6 +145,7 @@ export default function MentionsPage() {
               competitors={competitors}
               brandDomains={brandDomains}
               showCountry={regions.length > 1}
+              exporter={exporter}
             />
           )}
         </TabsContent>

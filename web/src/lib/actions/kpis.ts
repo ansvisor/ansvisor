@@ -34,6 +34,7 @@ import {
   scaleTargetToWindow,
   type KpiStatus,
 } from '@/lib/kpis/status';
+import { presetKpiKeys, presetTarget } from '@/lib/kpis/presets';
 import { getInsightsSummary, getShareOfVoiceData, getVisibilityRateTrend } from './tracking';
 import { getTrafficSummary, getTrafficTrend } from './traffic';
 
@@ -71,6 +72,12 @@ export interface KpiSnapshotsResult {
   /** False only when the brand has no definitions at all → empty state. */
   configured: boolean;
   kpis: KpiSnapshot[];
+  /**
+   * With no definitions: whether the brand ever had a KPI (00163's
+   * kpi_setup_at). Before that, the page offers the ready-made set; after
+   * it, a brand whose KPIs were all removed shows the empty state.
+   */
+  everSetUp?: boolean;
 }
 
 interface KpiDefinitionRow {
@@ -118,7 +125,8 @@ async function fetchWindowMetrics(
   const days = windowOverride ?? { dayFrom: daysAgo(windowDays - 1), dayTo: utcToday() };
   const trendFrom = daysAgo(TREND_DAYS - 1);
 
-  const wantsInsights = keys.has('citations') || keys.has('mentions');
+  const wantsInsights =
+    keys.has('citations') || keys.has('mentions') || keys.has('positive_sentiment');
 
   const [visibility, insights, sov, traffic, trafficTrend, dailyTotals] = await Promise.all([
     keys.has('ai_visibility') ? getVisibilityRateTrend(brandId, { days }) : null,
@@ -138,7 +146,8 @@ async function fetchWindowMetrics(
       : null,
     // Mentions/citations have window aggregates but no daily-series RPC, so
     // the 7-point sparkline is seven one-day aggregates in parallel. Each is
-    // a rollup read returning one JSON row; both KPIs share the same seven.
+    // a rollup read returning one JSON row; the KPIs read from the answers'
+    // rollups (mentions, citations, positive sentiment) share the same seven.
     wantsInsights ? fetchDailyInsightTotals(brandId) : null,
   ]);
 
@@ -159,11 +168,18 @@ async function fetchDailyInsightTotals(brandId: string) {
         p_day_to: day,
       });
       if (error) throw new Error(error.message);
-      const agg = (data ?? {}) as { total_mentions?: number; total_citations?: number };
+      const agg = (data ?? {}) as {
+        total_mentions?: number;
+        total_citations?: number;
+        positive_count?: number;
+        mentioning_results?: number;
+      };
       return {
         date: day,
         mentions: Number(agg.total_mentions ?? 0),
         citations: Number(agg.total_citations ?? 0),
+        positive: Number(agg.positive_count ?? 0),
+        mentioning: Number(agg.mentioning_results ?? 0),
       };
     }),
   );
@@ -208,6 +224,20 @@ function buildSnapshot(
       change = metrics.insights.mentionsChange;
       changeKind = 'percent';
       trend = metrics.dailyTotals.map((d) => ({ date: d.date, value: d.mentions }));
+      break;
+    }
+    case 'positive_sentiment': {
+      if (!metrics.insights || !metrics.dailyTotals) return null;
+      // Insights' Positive sentiment card: the positive share of the answers
+      // naming the brand, its change in points.
+      value = metrics.insights.positiveSentimentPct;
+      change = metrics.insights.sentimentChange;
+      changeKind = 'points';
+      // A day without an answer naming the brand has no share; it is left
+      // out rather than drawn as 0%.
+      trend = metrics.dailyTotals
+        .filter((d) => d.mentioning > 0)
+        .map((d) => ({ date: d.date, value: Math.round((d.positive * 100) / d.mentioning) }));
       break;
     }
     case 'share_of_voice': {
@@ -282,7 +312,16 @@ export async function getKpiSnapshots(
   if (error) throw new Error(error.message);
 
   const rows = (data ?? []) as KpiDefinitionRow[];
-  if (rows.length === 0) return { configured: false, kpis: [] };
+  if (rows.length === 0) {
+    const { data: brand, error: brandError } = await supabase
+      .from('brands')
+      .select('kpi_setup_at')
+      .eq('id', brandId)
+      .maybeSingle();
+    // Without the column (a database before 00163) nothing is offered.
+    const everSetUp = brandError ? true : Boolean(brand?.kpi_setup_at);
+    return { configured: false, kpis: [], everSetUp };
+  }
 
   // Only registry-known keys are computable. An unknown key (a KPI removed
   // from the registry, or a future source not shipped yet) is skipped, not
@@ -421,4 +460,77 @@ export async function removeKpi(brandId: string, kpiKey: KpiKey): Promise<void> 
     .eq('brand_id', brandId)
     .eq('kpi_key', kpiKey);
   if (error) throw new Error(error.message);
+}
+
+/**
+ * The ready-made KPIs and their first targets: each KPI's last 30 days, 20%
+ * up (lib/kpis/presets.ts), with AI Referral Traffic only when the brand has
+ * a Google Analytics property mapped. The metrics are returned too, so a
+ * preview over the same 30 days needn't read them twice.
+ */
+async function readPresets(brandId: string) {
+  const supabase = await createClient();
+  const { data: brand } = await supabase
+    .from('brands')
+    .select('ga_property_id')
+    .eq('id', brandId)
+    .maybeSingle();
+  const keys = presetKpiKeys(Boolean(brand?.ga_property_id));
+  const metrics = await fetchWindowMetrics(brandId, 'monthly', new Set(keys));
+  const entries = keys.map((key) => {
+    const now = buildSnapshot(
+      { kpiKey: key, target: KPI_REGISTRY[key].defaultTarget, timeframe: 'monthly' },
+      metrics,
+    );
+    return { key, target: presetTarget(key, now?.value ?? null) };
+  });
+  return { entries, metrics };
+}
+
+/**
+ * Sets up the ready-made KPIs once, for an admin or manager opening the KPI
+ * tab of a brand that never had one (seed_kpi_presets, 00163). True when it
+ * added them; false when the brand was set up meanwhile, or on a database
+ * without the function.
+ */
+export async function seedKpiPresets(brandId: string): Promise<boolean> {
+  const { entries } = await readPresets(brandId);
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('seed_kpi_presets', {
+    p_brand_id: brandId,
+    p_kpis: entries,
+  });
+  if (error?.code === 'PGRST202') return false;
+  if (error) throw new Error(error.message);
+  return data === true;
+}
+
+/**
+ * The ready-made KPIs as rows, unsaved: what a member who can't set up KPIs
+ * sees on a brand that has none, so the tab isn't empty for them either.
+ */
+export async function getKpiPresetPreview(
+  brandId: string,
+  window?: KpiWindow,
+): Promise<KpiSnapshot[]> {
+  const { entries, metrics } = await readPresets(brandId);
+  const windowDays = window
+    ? Math.round((Date.parse(window.dayTo) - Date.parse(window.dayFrom)) / DAY_MS) + 1
+    : undefined;
+  // The presets read the last 30 days; another window needs its own read.
+  const sameDays = !window || (windowDays === 30 && window.dayTo === utcToday());
+  const shown = sameDays
+    ? metrics
+    : await fetchWindowMetrics(brandId, 'monthly', new Set(entries.map((e) => e.key)), window);
+  const order = new Map(DEFAULT_KPI_SET.map((k, i) => [k, i]));
+  return entries
+    .map((entry) =>
+      buildSnapshot(
+        { kpiKey: entry.key, target: entry.target, timeframe: 'monthly' },
+        shown,
+        windowDays,
+      ),
+    )
+    .filter((snapshot): snapshot is KpiSnapshot => snapshot !== null)
+    .sort((a, b) => (order.get(a.key) ?? 99) - (order.get(b.key) ?? 99));
 }

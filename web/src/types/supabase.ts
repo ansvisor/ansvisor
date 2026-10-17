@@ -605,6 +605,7 @@ export type Database = {
           industry: string | null
           insights_pinned_competitors: string[]
           is_active: boolean
+          kpi_setup_at: string | null
           language: string | null
           logo_url: string | null
           name: string
@@ -625,6 +626,7 @@ export type Database = {
           industry?: string | null
           insights_pinned_competitors?: string[]
           is_active?: boolean
+          kpi_setup_at?: string | null
           language?: string | null
           logo_url?: string | null
           name: string
@@ -645,6 +647,7 @@ export type Database = {
           industry?: string | null
           insights_pinned_competitors?: string[]
           is_active?: boolean
+          kpi_setup_at?: string | null
           language?: string | null
           logo_url?: string | null
           name?: string
@@ -2374,6 +2377,64 @@ export type Database = {
           },
         ]
       }
+      sentiment_overrides: {
+        Row: {
+          brand_id: string
+          created_at: string
+          id: string
+          note: string | null
+          previous_sentiment: string
+          result_id: string
+          sentiment: string
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          previous_sentiment: string
+          result_id: string
+          sentiment: string
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          previous_sentiment?: string
+          result_id?: string
+          sentiment?: string
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sentiment_overrides_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sentiment_overrides_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "prompt_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sentiment_overrides_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       signals: {
         Row: {
           action_id: string | null
@@ -3290,6 +3351,10 @@ export type Database = {
         }
         Returns: Json
       }
+      override_mention_sentiment: {
+        Args: { p_note?: string; p_result_id: string; p_sentiment: string }
+        Returns: Json
+      }
       normalize_page_path: { Args: { p_url: string }; Returns: string }
       import_prompts: {
         Args: {
@@ -3450,6 +3515,10 @@ export type Database = {
           topic_name: string
           visible_runs: number
         }[]
+      }
+      seed_kpi_presets: {
+        Args: { p_brand_id: string; p_kpis: Json }
+        Returns: boolean
       }
       share_of_voice_aggregates: {
         Args: {

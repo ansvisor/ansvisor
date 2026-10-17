@@ -37,7 +37,7 @@ let root: Root;
 const onFilter = vi.fn();
 const onRetry = vi.fn();
 
-function render(state: PromptUsageState, newCount = 0) {
+function render(state: PromptUsageState, newCount = 0, { open = true } = {}) {
   // Added an hour before the provider's clock, so they read as New.
   const prompts = Array.from({ length: newCount }, () => ({
     isActive: true,
@@ -63,6 +63,9 @@ function render(state: PromptUsageState, newCount = 0) {
       </NextIntlClientProvider>,
     );
   });
+  // The cards open folded; most tests read them open.
+  const toggle = container.querySelector('h2 button') as HTMLButtonElement;
+  if (open && toggle.getAttribute('aria-expanded') === 'false') act(() => toggle.click());
 }
 
 const values = () =>
@@ -180,6 +183,76 @@ describe('PromptUsageCards', () => {
 
     expect(container.textContent).toContain('Team plan');
     expect(container.textContent).toContain('of 500 on Team plan');
+  });
+
+  it('opens folded under the title, and opens on the arrow', () => {
+    render({ status: 'ready', usage: summary() }, 0, { open: false });
+    const toggle = container.querySelector('h2 button') as HTMLButtonElement;
+    expect(toggle.textContent).toBe('Tracked Prompts');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    const body = document.getElementById(toggle.getAttribute('aria-controls')!)!;
+    expect(body.className).toContain('hidden');
+    expect(container.textContent).toContain('Plan & usage');
+
+    act(() => toggle.click());
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(body.className).not.toContain('hidden');
+    expect(values()[0]).toBe('44');
+
+    act(() => toggle.click());
+    expect(body.className).toContain('hidden');
+  });
+
+  it('says in the folded title when the prompt locations are nearly or fully used', () => {
+    render({ status: 'ready', usage: summary() }, 0, { open: false });
+    const pill = () =>
+      [...container.querySelectorAll('h2 ~ span')].find((el) =>
+        el.textContent?.includes('prompt locations'),
+      ) as HTMLElement | undefined;
+    expect(pill()?.textContent).toBe('46 / 50 prompt locations');
+    expect(pill()?.className).toContain('amber');
+
+    render(
+      {
+        status: 'ready',
+        usage: summary({ account: { activePrompts: 50, brands: 1, locationsUsed: 52 } }),
+      },
+      0,
+      { open: false },
+    );
+    expect(pill()?.textContent).toBe('52 / 50 prompt locations');
+    expect(pill()?.className).toContain('red');
+
+    // Open, the cards carry it instead.
+    act(() => (container.querySelector('h2 button') as HTMLButtonElement).click());
+    expect(pill()).toBeUndefined();
+  });
+
+  it('adds nothing to the folded title well under the limit, or with no limit', () => {
+    render(
+      {
+        status: 'ready',
+        usage: summary({ account: { activePrompts: 10, brands: 1, locationsUsed: 10 } }),
+      },
+      0,
+      { open: false },
+    );
+    expect(container.querySelector('h2')?.parentElement?.textContent).not.toContain(
+      'prompt locations',
+    );
+    render(
+      {
+        status: 'ready',
+        usage: summary({
+          plan: { key: 'self_hosted', name: 'Self-Hosted', locationLimit: null, cta: null },
+        }),
+      },
+      0,
+      { open: false },
+    );
+    expect(container.querySelector('h2')?.parentElement?.textContent).not.toContain(
+      'prompt locations',
+    );
   });
 
   it('shows skeletons, not zeros, while loading', () => {

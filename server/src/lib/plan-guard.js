@@ -14,6 +14,7 @@ import {
   typicalCostUsd,
 } from './improve-cost.js';
 import { RELEVANCE_BUDGET_SHARE } from './suggestion-relevance.js';
+import { AUDIT_RUN_TIMEOUT_MS } from './audit/history.js';
 
 export class PlanLimitError extends Error {
   constructor(message, statusCode = 403) {
@@ -508,10 +509,9 @@ async function countSiteAuditUsageThisMonth(orgId) {
   return count || 0;
 }
 
-// How long a running audit holds a quota slot. An audit takes a minute or
-// two, a queued bulk run waits longer, and one older than this was cut short
-// by a restart and will never complete.
-const SITE_AUDIT_IN_FLIGHT_MS = 2 * 60 * 60 * 1000;
+// How long a running audit holds a quota slot (AUDIT_RUN_TIMEOUT_MS): one
+// older than that was cut short by a restart and will never complete.
+const SITE_AUDIT_IN_FLIGHT_MS = AUDIT_RUN_TIMEOUT_MS;
 
 /**
  * Audits of the org's brands still running. They're charged when they
