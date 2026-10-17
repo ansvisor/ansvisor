@@ -79,8 +79,9 @@ export interface AuditAutoStatus {
   perRun: number;
   /** Audits the runs still to come keep out of `remaining`. */
   reserved: number;
-  /** Audits the runs used this period. */
+  /** Audits the runs used this period, and have running now. */
   used: number;
+  running: number;
   periodStart: string;
   periodEnd: string;
   runs: { day: number; at: string; done: boolean }[];
@@ -315,6 +316,8 @@ export interface AuditOverview {
   siteScoreChange: number | null;
   authority: number | null;
   eeat: number | null;
+  /** The weakest of the five categories, for the summary strip (SA-019). */
+  lowestCategory: { key: string; score: number } | null;
   gaps: AuditGap[];
 }
 

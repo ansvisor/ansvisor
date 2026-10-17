@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { CalendarDays, FileText, Gauge, ShieldCheck } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -9,6 +10,7 @@ import type { AuditOverview, AuditQuota } from '@/lib/actions/audits';
 import { formatNumber } from '@/lib/format';
 import { MetricCard } from '../insights/_kpi-cards';
 import { upIsGood } from '../insights/kpi-format';
+import { autoSharePct, quotaShares, QuotaSegments, RunDots } from './_quota-meter';
 
 /** The Authority · E-E-A-T card's gaps: the signal, and on how many pages it fails. */
 function GapList({ overview }: { overview: AuditOverview }) {
@@ -28,6 +30,50 @@ function GapList({ overview }: { overview: AuditOverview }) {
   );
 }
 
+/**
+ * "How it works" under the cards (spec §4.4), closed until asked for: the
+ * plan's audits, the auto-audit share and the user's, and where to turn it
+ * off. Settings opens the Site Audit settings.
+ */
+function HowItWorks({ quota, onOpenSettings }: { quota: AuditQuota; onOpenSettings?: () => void }) {
+  const t = useTranslations('audit.quota');
+  const auto = quota.auto;
+  const limit = formatNumber(quota.limit);
+  const share = auto ? autoSharePct(auto, quota.limit) : 0;
+  const rich = {
+    b: (chunks: React.ReactNode) => <b className="font-semibold text-foreground">{chunks}</b>,
+    settings: (chunks: React.ReactNode) =>
+      onOpenSettings ? (
+        <button type="button" className="underline underline-offset-2" onClick={onOpenSettings}>
+          {chunks}
+        </button>
+      ) : (
+        chunks
+      ),
+  };
+  const points = auto?.enabled
+    ? [
+        t.rich('how1', { ...rich, limit }),
+        t.rich('how2', { ...rich, share, runShare: Math.round(share / 5) }),
+        t.rich('how3', { ...rich, rest: 100 - share }),
+        t.rich('how4', { ...rich, limit }),
+      ]
+    : [
+        t.rich('how1', { ...rich, limit }),
+        t.rich('howOff2', { ...rich, limit }),
+        t.rich('howOff3', rich),
+      ];
+  return (
+    <div id="audit-how-it-works" className="rounded-xl border px-4 py-3">
+      <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+        {points.map((point, i) => (
+          <li key={i}>{point}</li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 // Four in a row from 1,200px, two below, one on a phone (spec §4.5). In rem,
 // so Tailwind orders it after sm: (a px breakpoint would sort before it).
 const GRID = 'grid grid-cols-1 gap-3 sm:grid-cols-2 min-[75rem]:grid-cols-4';
@@ -41,11 +87,16 @@ const GRID = 'grid grid-cols-1 gap-3 sm:grid-cols-2 min-[75rem]:grid-cols-4';
 export function AuditOverviewCards({
   overview,
   quota,
+  onOpenSettings,
 }: {
   overview: AuditOverview | null;
   quota: AuditQuota | null;
+  /** Opens the Site Audit settings, from How it works. */
+  onOpenSettings?: () => void;
 }) {
   const t = useTranslations('audit.overview');
+  const tq = useTranslations('audit.quota');
+  const [howOpen, setHowOpen] = useState(false);
 
   if (!overview) {
     return (
@@ -62,74 +113,89 @@ export function AuditOverviewCards({
   }
 
   const domain = overview.primaryHost ?? t('yourDomain');
-  const limited = quota !== null && quota.limit !== -1;
-  const running = quota?.running ?? 0;
-  // What the auto-audit runs still to come keep out of what's left (SA-006).
-  const reserved = quota?.auto?.reserved ?? 0;
-  const usedSub = () => {
-    if (!quota) return '';
-    if (!limited) return t('unlimitedSub');
-    const used = quota.used;
-    if (running > 0) {
-      return reserved > 0
-        ? t('usedRunningReserved', { used, running, reserved })
-        : t('usedRunning', { used, running });
-    }
-    return reserved > 0 ? t('usedReserved', { used, reserved }) : t('used', { used });
-  };
+  const shares = quota ? quotaShares(quota) : null;
+  const auto = quota?.auto;
   const gapsSub =
     overview.pages === 0 ? t('noPages') : overview.gaps.length > 0 ? t('gapsSub') : t('noGaps');
 
+  // The quota card (SA-019): the bar, the five runs, and How it works.
+  const howToggle = (
+    <button
+      type="button"
+      className="underline underline-offset-2"
+      aria-expanded={howOpen}
+      aria-controls="audit-how-it-works"
+      onClick={() => setHowOpen((open) => !open)}
+    >
+      {tq('howItWorks')}
+    </button>
+  );
+  const quotaFooter = !quota ? null : shares ? (
+    <div className="space-y-2 pb-0.5">
+      <QuotaSegments quota={quota} />
+      {auto?.enabled && <RunDots auto={auto} />}
+      <div className="truncate text-xs text-muted-foreground">
+        {auto?.enabled
+          ? tq('autoShare', { share: autoSharePct(auto, quota.limit) })
+          : tq('autoOff')}
+        {' · '}
+        {howToggle}
+      </div>
+    </div>
+  ) : auto?.enabled ? (
+    <div className="space-y-2 pb-0.5">
+      <RunDots auto={auto} />
+      <div className="truncate text-xs text-muted-foreground">
+        {tq('autoPerRun', { perRun: auto.perRun })}
+      </div>
+    </div>
+  ) : null;
+
   return (
-    <div className={GRID}>
-      <MetricCard
-        label={t('siteScore')}
-        tooltip={t('siteScoreTip', { domain })}
-        icon={Gauge}
-        value={pct(overview.siteScore)?.toString() ?? '—'}
-        delta={upIsGood(overview.siteScoreChange)}
-        sub={t('siteScoreSub')}
-      />
-      <MetricCard
-        label={t('pagesAudited')}
-        tooltip={t('pagesAuditedTip', { domain })}
-        icon={FileText}
-        value={formatNumber(overview.pages)}
-        sub={
-          overview.otherPages > 0
-            ? t('pagesSubOther', { count: overview.otherPages })
-            : t('pagesSub', { domain })
-        }
-      />
-      <MetricCard
-        label={t('authority')}
-        tooltip={t('authorityTip')}
-        icon={ShieldCheck}
-        value={`${pct(overview.authority) ?? '—'} · ${pct(overview.eeat) ?? '—'}`}
-        sub={gapsSub}
-        footer={<GapList overview={overview} />}
-      />
-      <MetricCard
-        label={t('auditsThisMonth')}
-        tooltip={t('auditsTip')}
-        icon={CalendarDays}
-        value={limited ? formatNumber(quota.remaining) : t('unlimited')}
-        delta={
-          limited
-            ? { text: t('ofLeft', { limit: formatNumber(quota.limit) }), tone: 'neutral' }
-            : null
-        }
-        sub={usedSub()}
-        quota={
-          limited
-            ? {
-                used: quota.used + running,
-                limit: quota.limit,
-                label: t('quotaBar', { used: quota.used + running, limit: quota.limit }),
-              }
-            : null
-        }
-      />
+    <div className="space-y-2.5">
+      <div className={GRID}>
+        <MetricCard
+          label={t('siteScore')}
+          tooltip={t('siteScoreTip', { domain })}
+          icon={Gauge}
+          value={pct(overview.siteScore)?.toString() ?? '—'}
+          delta={upIsGood(overview.siteScoreChange)}
+          sub={t('siteScoreSub')}
+        />
+        <MetricCard
+          label={t('pagesAudited')}
+          tooltip={t('pagesAuditedTip', { domain })}
+          icon={FileText}
+          value={formatNumber(overview.pages)}
+          sub={
+            overview.otherPages > 0
+              ? t('pagesSubOther', { count: overview.otherPages })
+              : t('pagesSub', { domain })
+          }
+        />
+        <MetricCard
+          label={t('authority')}
+          tooltip={t('authorityTip')}
+          icon={ShieldCheck}
+          value={`${pct(overview.authority) ?? '—'} · ${pct(overview.eeat) ?? '—'}`}
+          sub={gapsSub}
+          footer={<GapList overview={overview} />}
+        />
+        <MetricCard
+          label={t('auditsThisMonth')}
+          tooltip={t('auditsTip')}
+          icon={CalendarDays}
+          value={shares ? formatNumber(shares.left) : t('unlimited')}
+          delta={
+            shares && quota
+              ? { text: t('ofLeft', { limit: formatNumber(quota.limit) }), tone: 'neutral' }
+              : null
+          }
+          sub={quota && !shares ? t('unlimitedSub') : undefined}
+          footer={quotaFooter}
+        />
+      </div>
+      {howOpen && quota && shares && <HowItWorks quota={quota} onOpenSettings={onOpenSettings} />}
     </div>
   );
 }

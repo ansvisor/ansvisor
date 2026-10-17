@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 let used;
 let autoUsed;
 let running;
+let autoRunning;
 let runningQuery;
 let settings;
 let recordedDays;
@@ -37,6 +38,9 @@ function query(table) {
         return resolve({ count: auto ? autoUsed : used, error: null });
       }
       if (table === 'site_audits') {
+        if (filters.some(([, col, val]) => col === 'source' && val === 'auto')) {
+          return resolve({ count: autoRunning, error: null });
+        }
         runningQuery = filters;
         return resolve({ count: running, error: null });
       }
@@ -62,6 +66,7 @@ beforeEach(async () => {
   used = 0;
   autoUsed = 0;
   running = 0;
+  autoRunning = 0;
   settings = null;
   recordedDays = [];
   vi.doMock('../config/supabase.js', () => ({ default: { from: (t) => query(t) } }));
@@ -128,16 +133,21 @@ describe('Site Audit quota', () => {
     recordedDays = [1];
     used = 30;
     autoUsed = 5;
+    running = 3;
+    autoRunning = 2;
     expect(await quota.getSiteAuditQuotaStatus('org-1', { now })).toMatchObject({
       used: 30,
+      running: 3,
       limit: 100,
-      remaining: 50,
+      remaining: 47,
       auto: {
         enabled: true,
         setting: null,
         perRun: 5,
         reserved: 20,
         used: 5,
+        // Of the running audits, the runs' own (SA-019's card).
+        running: 2,
         due: { day: 7 },
         nextRun: { day: 7, at: now.toISOString() },
         periodStart: '2026-10-01T00:00:00.000Z',
@@ -153,17 +163,17 @@ describe('Site Audit quota', () => {
     });
 
     // The user can't take the runs' slots; a run can.
-    await expect(quota.enforceSiteAuditQuota('org-1', 51, { now })).rejects.toThrow(
-      'These 51 audits need more than the 50 left this month on the Starter plan (20 more are kept for auto-audits). Select up to 50.',
+    await expect(quota.enforceSiteAuditQuota('org-1', 48, { now })).rejects.toThrow(
+      'These 48 audits need more than the 47 left this month on the Starter plan (20 more are kept for auto-audits). Select up to 47.',
     );
     await expect(
       quota.enforceSiteAuditQuota('org-1', 5, { source: 'auto', now }),
-    ).resolves.toMatchObject({ remaining: 70 });
+    ).resolves.toMatchObject({ remaining: 67 });
 
     // Day 7 recorded: its unused slots are back in the user's pool.
     recordedDays = [1, 7];
     expect(await quota.getSiteAuditQuotaStatus('org-1', { now })).toMatchObject({
-      remaining: 55,
+      remaining: 52,
       auto: { reserved: 15, due: null, nextRun: { day: 14 } },
     });
   });

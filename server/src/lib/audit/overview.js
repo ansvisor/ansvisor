@@ -1,13 +1,14 @@
 /**
  * The Site Audit hub's KPI cards (SA-018): site score, pages audited, and the
- * Authority and E-E-A-T scores with their biggest gaps. Pure, so the route
- * only reads rows and this decides what they add up to.
+ * Authority and E-E-A-T scores with their biggest gaps; and the summary
+ * strip's lowest category (SA-019). Pure, so the route only reads rows and
+ * this decides what they add up to.
  *
  * Everything covers the brand's primary domain, like the Score over time
  * chart, and each page counts once, through its latest completed audit.
  */
 
-import { signalsByKey } from './rubric.js';
+import { categories, signalsByKey } from './rubric.js';
 
 /** The categories the Authority · E-E-A-T card reads. */
 export const AUTHORITY_CATEGORIES = ['authority', 'eeat'];
@@ -72,12 +73,22 @@ export function buildOverview(own, categoryScoresById, failingRows) {
     .sort((a, b) => b.pages - a.pages || a.key.localeCompare(b.key))
     .slice(0, OVERVIEW_GAPS);
 
+  // The weakest of the five categories; a tie goes to the rubric's order.
+  let lowestCategory = null;
+  for (const { key } of categories) {
+    const score = categoryAverage(key);
+    if (score !== null && (lowestCategory === null || score < lowestCategory.score)) {
+      lowestCategory = { key, score };
+    }
+  }
+
   return {
     pages: own.length,
     siteScore,
     siteScoreChange,
     authority: categoryAverage('authority'),
     eeat: categoryAverage('eeat'),
+    lowestCategory,
     gaps,
   };
 }

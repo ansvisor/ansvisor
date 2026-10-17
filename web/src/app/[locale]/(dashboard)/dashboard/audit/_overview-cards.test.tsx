@@ -1,9 +1,9 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
-import type { AuditOverview, AuditQuota } from '@/lib/actions/audits';
+import type { AuditAutoStatus, AuditOverview, AuditQuota } from '@/lib/actions/audits';
 import { AuditOverviewCards } from './_overview-cards';
 
 (
@@ -20,6 +20,7 @@ const overview = (over: Partial<AuditOverview> = {}): AuditOverview => ({
   siteScoreChange: 4,
   authority: 0.38,
   eeat: 0.36,
+  lowestCategory: { key: 'eeat', score: 0.36 },
   gaps: [
     { key: 'author-byline', label: 'Author byline', category: 'authority', pages: 31 },
     { key: 'press-mentions', label: 'Press mentions', category: 'eeat', pages: 22 },
@@ -30,6 +31,34 @@ const overview = (over: Partial<AuditOverview> = {}): AuditOverview => ({
 
 const growth: AuditQuota = { used: 245, running: 5, limit: 500, remaining: 250 };
 
+/** Growth with auto-audit: four runs done (100 audits), day 28's 25 still to come. */
+const auto = (over: Partial<AuditAutoStatus> = {}): AuditAutoStatus => ({
+  enabled: true,
+  setting: null,
+  emailAfterRun: false,
+  perRun: 25,
+  reserved: 25,
+  used: 100,
+  running: 0,
+  periodStart: '2026-10-01T00:00:00.000Z',
+  periodEnd: '2026-11-01T00:00:00.000Z',
+  runs: [1, 7, 14, 21, 28].map((day) => ({
+    day,
+    at: `2026-10-${String(day).padStart(2, '0')}T00:00:00.000Z`,
+    done: day < 28,
+  })),
+  nextRun: { day: 28, at: '2026-10-28T00:00:00.000Z' },
+  ...over,
+});
+const growthAuto: AuditQuota = {
+  used: 250,
+  running: 0,
+  limit: 500,
+  remaining: 225,
+  auto: auto(),
+};
+const onOpenSettings = vi.fn();
+
 let container: HTMLDivElement;
 let root: Root;
 
@@ -37,7 +66,7 @@ function render(data: AuditOverview | null, quota: AuditQuota | null = growth) {
   act(() => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <AuditOverviewCards overview={data} quota={quota} />
+        <AuditOverviewCards overview={data} quota={quota} onOpenSettings={onOpenSettings} />
       </NextIntlClientProvider>,
     );
   });
@@ -83,11 +112,11 @@ describe('AuditOverviewCards', () => {
 
     expect(audits).toContain('Audits this month');
     expect(audits).toContain('250of 500 left');
-    expect(audits).toContain('245 used · 5 running');
-    // Running audits fill the bar with the used ones.
+    // Running audits count as used; without auto-audit, all of it is the user's.
     expect(container.querySelector('[role=img][aria-label]')?.getAttribute('aria-label')).toBe(
-      '250 of 500 audits used',
+      'Auto used 0 · Auto scheduled 0 · You used 250 · Free 250',
     );
+    expect(audits).toContain('Auto-audit off · How it works');
   });
 
   it('counts the pages on other sites apart, and says when there are no gaps or pages', () => {
@@ -112,31 +141,98 @@ describe('AuditOverviewCards', () => {
     expect(cards()[2]).toContain('No pages audited yet');
   });
 
-  it('says what auto-audit keeps for the runs still to come (SA-006)', () => {
-    const auto = {
-      enabled: true,
-      setting: null,
-      emailAfterRun: false,
-      perRun: 25,
-      reserved: 75,
-      used: 50,
-      periodStart: '2026-10-01T00:00:00.000Z',
-      periodEnd: '2026-11-01T00:00:00.000Z',
-      runs: [],
-      nextRun: { day: 14, at: '2026-10-14T00:00:00.000Z' },
-    };
-    render(overview(), { used: 245, running: 0, limit: 500, remaining: 180, auto });
-    expect(cards()[3]).toContain('180of 500 left');
-    expect(cards()[3]).toContain('245 used · 75 for auto-audit');
-    render(overview(), { used: 245, running: 5, limit: 500, remaining: 175, auto });
-    expect(cards()[3]).toContain('245 used · 5 running · 75 auto');
+  it("splits the month as the mockup: auto used, scheduled, the user's and free (SA-019)", () => {
+    render(overview(), growthAuto);
+    const audits = cards()[3];
+    // What's left counts the runs' scheduled share.
+    expect(audits).toContain('250of 500 left');
+    const bar = container.querySelector('[role=img][aria-label]')!;
+    expect(bar.getAttribute('aria-label')).toBe(
+      'Auto used 100 · Auto scheduled 25 · You used 150 · Free 225',
+    );
+    expect([...bar.children].map((seg) => (seg as HTMLElement).style.width)).toEqual([
+      '20%',
+      '5%',
+      '30%',
+    ]);
+    expect(audits).toContain('Auto 25% · How it works');
+
+    // The five runs: done, done, done, done, next.
+    const runs = [...container.querySelectorAll('ol[aria-label] li')];
+    expect(runs.map((li) => li.textContent)).toEqual([
+      '1done',
+      '7done',
+      '14done',
+      '21done',
+      '28next run',
+    ]);
+    expect(runs[4].className).toContain('font-semibold');
   });
 
-  it('shows an unlimited plan without a bar', () => {
+  it("counts a run's running audits as auto, not the user's", () => {
+    render(overview(), {
+      ...growthAuto,
+      used: 240,
+      running: 10,
+      auto: auto({ used: 90, running: 10 }),
+    });
+    expect(container.querySelector('[role=img][aria-label]')?.getAttribute('aria-label')).toBe(
+      'Auto used 100 · Auto scheduled 25 · You used 150 · Free 225',
+    );
+  });
+
+  it('opens How it works under the cards, with Settings opening the settings', () => {
+    render(overview(), growthAuto);
+    expect(container.querySelector('#audit-how-it-works')).toBeNull();
+    const toggle = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'How it works',
+    )!;
+    act(() => toggle.click());
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    const points = [...container.querySelectorAll('#audit-how-it-works li')].map(
+      (li) => li.textContent,
+    );
+    expect(points).toEqual([
+      'Your plan includes 500 audits a month.',
+      '25% runs automatically: 5% on days 1, 7, 14, 21 and 28 of your billing month, on the top-priority pages.',
+      'The other 75% is yours: a single URL, or in bulk from Opportunities.',
+      'Turn auto-audit off in Settings to keep all 500.',
+    ]);
+    const settings = [...container.querySelectorAll('#audit-how-it-works button')][0];
+    act(() => (settings as HTMLElement).click());
+    expect(onOpenSettings).toHaveBeenCalled();
+  });
+
+  it("says all of it is the user's when auto-audit is off, without the runs", () => {
+    render(overview(), { ...growth, auto: auto({ enabled: false, reserved: 0, used: 0 }) });
+    expect(container.querySelector('ol[aria-label]')).toBeNull();
+    act(() =>
+      [...container.querySelectorAll('button')]
+        .find((b) => b.textContent === 'How it works')!
+        .click(),
+    );
+    expect(container.querySelector('#audit-how-it-works')?.textContent).toContain(
+      'Auto-audit is off, so all 500 are yours',
+    );
+  });
+
+  it('shows an unlimited plan without a bar, and its runs when auto-audit is on', () => {
     render(overview(), { used: 0, running: 0, limit: -1, remaining: -1 });
     expect(cards()[3]).toContain('Unlimited');
     expect(cards()[3]).toContain('no monthly limit');
     expect(cards()[3]).not.toContain('left');
+    expect(container.querySelector('ol[aria-label]')).toBeNull();
+
+    render(overview(), {
+      used: 0,
+      running: 0,
+      limit: -1,
+      remaining: -1,
+      auto: auto({ reserved: 0 }),
+    });
+    expect(container.querySelector('[role=img][aria-label]')).toBeNull();
+    expect(container.querySelectorAll('ol[aria-label] li')).toHaveLength(5);
+    expect(cards()[3]).toContain('Auto · 25 pages a run');
   });
 
   it('holds the cards with placeholders while loading', () => {

@@ -50,6 +50,8 @@ import { AuditOverviewCards } from './_overview-cards';
 import { OpportunitiesTable } from './_opportunities-table';
 import { AuditSettingsDialog } from './_settings-dialog';
 import { AutoRunNotice } from './_auto-run-notice';
+import { AuditSummaryStrip } from './_summary-strip';
+import { EmptyPoolMessage } from './_quota-meter';
 import { usePagesExport } from './_use-pages-export';
 import { cn } from '@/lib/utils';
 
@@ -473,39 +475,46 @@ export default function SiteAuditPage() {
         }
       />
 
+      {/* Summary strip, as in the v2 mockup (SA-019) */}
+      <AuditSummaryStrip overview={loading ? null : overview} quota={quota} now={new Date(nowMs)} />
+
       {/* Run bar */}
       <Card>
-        <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center">
-          <Input
-            type="url"
-            inputMode="url"
-            placeholder="https://example.com/page"
-            aria-label="Website URL"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !running && !quotaExhausted && handleRun()}
-            disabled={running}
-            className="flex-1"
-          />
-          {/* The Audits this month card shows what's left; here only why Run is off. */}
-          {quotaExhausted && (
-            <span className="shrink-0 text-xs tabular-nums text-destructive">
-              {quota.remaining}/{quota.limit} {t('auditsLeft')}
-            </span>
-          )}
-          <Button onClick={handleRun} disabled={running || quotaExhausted} className="shrink-0">
-            {running ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {t('running')}
-              </>
-            ) : (
-              <>
-                <Search className="mr-2 h-4 w-4" />
-                {t('runAudit')}
-              </>
+        <CardContent className="space-y-2 py-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Input
+              type="url"
+              inputMode="url"
+              placeholder="https://example.com/page"
+              aria-label="Website URL"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !running && !quotaExhausted && handleRun()}
+              disabled={running}
+              className="flex-1"
+            />
+            {/* The Audits this month card shows what's left; here only why Run is off. */}
+            {quotaExhausted && !(quota.auto?.reserved ?? 0) && (
+              <span className="shrink-0 text-xs tabular-nums text-destructive">
+                {quota.remaining}/{quota.limit} {t('auditsLeft')}
+              </span>
             )}
-          </Button>
+            <Button onClick={handleRun} disabled={running || quotaExhausted} className="shrink-0">
+              {running ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {t('running')}
+                </>
+              ) : (
+                <>
+                  <Search className="mr-2 h-4 w-4" />
+                  {t('runAudit')}
+                </>
+              )}
+            </Button>
+          </div>
+          {/* The user's share is used, the runs' isn't (spec §4.4). */}
+          <EmptyPoolMessage quota={quota} onOpenSettings={() => setSettingsOpen(true)} />
         </CardContent>
       </Card>
 
@@ -519,7 +528,11 @@ export default function SiteAuditPage() {
 
       {/* KPI cards, as in the v2 mockup (SA-018) */}
       {(loading || overview) && (
-        <AuditOverviewCards overview={loading ? null : overview} quota={quota} />
+        <AuditOverviewCards
+          overview={loading ? null : overview}
+          quota={quota}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
       )}
 
       {/* Primary-domain score trend + category breakdown */}

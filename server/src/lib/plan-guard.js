@@ -529,18 +529,21 @@ async function countSiteAuditUsage(orgId, periodStart) {
 const SITE_AUDIT_IN_FLIGHT_MS = AUDIT_RUN_TIMEOUT_MS;
 
 /**
- * Audits of the org's brands still running. They're charged when they
- * complete, so each holds a slot until then: otherwise a run started while
- * others are in flight could take the quota past its limit.
+ * Audits of the org's brands still running (only `source`'s, when given).
+ * They're charged when they complete, so each holds a slot until then:
+ * otherwise a run started while others are in flight could take the quota
+ * past its limit.
  */
-async function countRunningSiteAudits(orgId) {
+async function countRunningSiteAudits(orgId, source) {
   const since = new Date(Date.now() - SITE_AUDIT_IN_FLIGHT_MS).toISOString();
-  const { count } = await supabaseAdmin
+  let query = supabaseAdmin
     .from('site_audits')
     .select('id, brands!inner(organization_id)', { count: 'exact', head: true })
     .eq('status', 'running')
     .eq('brands.organization_id', orgId)
     .gte('created_at', since);
+  if (source) query = query.eq('source', source);
+  const { count } = await query;
   return count || 0;
 }
 
@@ -615,12 +618,14 @@ async function siteAuditQuota(orgId, now) {
   const plan = await resolveOrgPlanByOrgId(orgId);
   const limit = plan.limits.maxSiteAudits;
   const periodStart = await quotaPeriodStart(orgId, now);
-  const [{ used, autoUsed }, running, auto] = await Promise.all([
+  const [{ used, autoUsed }, running, autoRunning, auto] = await Promise.all([
     limit === -1 ? { used: 0, autoUsed: 0 } : countSiteAuditUsage(orgId, periodStart),
     limit === -1 ? 0 : countRunningSiteAudits(orgId),
+    limit === -1 ? 0 : countRunningSiteAudits(orgId, 'auto'),
     siteAuditAutoStatus(orgId, limit, periodStart, now),
   ]);
-  return { plan, limit, used, running, auto: { ...auto, used: autoUsed } };
+  // The quota card tells the runs' audits (done and running) from the user's.
+  return { plan, limit, used, running, auto: { ...auto, used: autoUsed, running: autoRunning } };
 }
 
 /**
@@ -676,7 +681,7 @@ export async function enforceSiteAuditQuota(
  * Returns { used, running, limit, remaining, auto }: remaining is the user's
  * pool, with running audits and the auto-audit runs still to come taken out;
  * auto is where auto-audit stands (siteAuditAutoStatus, plus what its runs
- * used this period).
+ * used this period and have running).
  */
 export async function getSiteAuditQuotaStatus(orgId, { now = new Date() } = {}) {
   const { limit, used, running, auto } = await siteAuditQuota(orgId, now);

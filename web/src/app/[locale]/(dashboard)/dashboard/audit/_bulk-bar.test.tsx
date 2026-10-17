@@ -77,6 +77,33 @@ describe('AuditBulkBar', () => {
     expect(button('Re-audit').disabled).toBe(true);
   });
 
+  it("says the runs' share is still scheduled when the user's is used up (SA-019)", () => {
+    // The spec's example: 100 auto and 375 of the user's used, day 28's 25 to come.
+    render(1, {
+      used: 475,
+      running: 0,
+      limit: 500,
+      remaining: 0,
+      auto: {
+        enabled: true,
+        setting: null,
+        emailAfterRun: false,
+        perRun: 25,
+        reserved: 25,
+        used: 100,
+        running: 0,
+        periodStart: '2026-10-01T00:00:00.000Z',
+        periodEnd: '2026-11-01T00:00:00.000Z',
+        runs: [],
+        nextRun: { day: 28, at: '2026-10-28T00:00:00.000Z' },
+      },
+    });
+    expect(container.querySelector('[role=toolbar] p')?.textContent).toBe(
+      "You've used your 375 audits. 25 auto audits are still scheduled. Turn off auto-audit to use them now, or upgrade.",
+    );
+    expect(button('Re-audit').disabled).toBe(true);
+  });
+
   it('counts nothing against an unlimited plan', () => {
     render(40, { used: 0, limit: -1, remaining: -1 });
     expect(usage()).toBeUndefined();
