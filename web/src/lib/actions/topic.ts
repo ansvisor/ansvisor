@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
+import { API_BASE_URL } from '@/config/api';
 import type { Topic } from '@/types';
 
 function mapTopicRow(row: Record<string, unknown>): Topic {
@@ -405,4 +406,42 @@ export async function deleteTopic(topicId: string): Promise<void> {
   // Delete the topic
   const { error } = await supabase.from('topics').delete().eq('id', topicId);
   if (error) throw new Error(error.message);
+}
+
+/**
+ * "Send action" on an Insights Opportunities topic (VIS-011): a Growth
+ * action to capture the demand of the topic's suggested prompts. The server
+ * reads the suggestions again; the same topic sent again returns the open
+ * action.
+ */
+export async function sendTopicOpportunityToActionCenter(
+  topicId: string,
+  suggestionIds: string[],
+): Promise<
+  | { actionId: string; actionNo: number; created: boolean }
+  // 'stale': none of the suggestions is still open in the topic (409).
+  | { error: string; code?: 'stale' }
+> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'Not authenticated' };
+
+  const res = await fetch(`${API_BASE_URL}/api/topics/${topicId}/opportunity-action`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ suggestionIds }),
+  });
+
+  // Returned, not thrown: a thrown error's message is masked in production.
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const error = body.details || body.error || `Server error: ${res.status}`;
+    return res.status === 409 ? { error, code: 'stale' } : { error };
+  }
+  return res.json();
 }

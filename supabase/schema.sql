@@ -15417,6 +15417,2062 @@ comment on function public.insights_same_prompt_compare(
   'Insights "Same prompts" (VIS-002, 00130) for timestamp windows (24h, topic views), from prompt_results. Same output as insights_same_prompt_compare_daily.';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00131_insights_kpi_cards.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Insights KPI cards v2 (VIS-003).
+--
+-- The v2 mockup's KPI rows add Net sentiment (positive share minus negative
+-- share of the answers naming the brand), Avg. position (mean position when
+-- named), Citation rate, Coverage and Share of voice, each with a sparkline
+-- and a change that follows "Compare: Same prompts" (00130).
+--
+-- The rollups had no negative count and no position sum (only the 1/position
+-- sum behind the Visibility score), so both day-grain and prompt-grain brand
+-- tables gain them. Like 00130, the columns are nullable: a day not rewritten
+-- by refresh_insights_daily since this migration reads NULL, the functions
+-- below report it (kpi_complete / complete = false) and the app shows those
+-- two cards without a value instead of a partial one. After deploying, run
+-- the backfill once (it covers 00130 too):
+--
+--   cd server && node src/scripts/backfill-insights-daily.js
+--
+-- Also here:
+--   insights_aggregates[_daily]        + citation, negative and position totals
+--   insights_same_prompt_compare[_daily] + the same, the shared prompts that
+--                                      appeared, and competitor mentions for
+--                                      share of voice
+--   insights_kpi_series (new)          one row of components per day, for the
+--                                      cards' sparklines
+
+-- ─── Columns ────────────────────────────────────────────────────────────────
+
+alter table public.insights_brand_daily
+  add column if not exists negative_count integer,
+  add column if not exists sum_position numeric;
+
+alter table public.insights_prompt_daily
+  add column if not exists negative_count integer,
+  add column if not exists sum_position numeric;
+
+comment on column public.insights_brand_daily.sum_position is
+  'Sum of mention_position over answers naming the brand (00131); with position_count gives the mean position. NULL until refresh_insights_daily rewrites the day.';
+
+-- ─── Refresh: 00130 plus the new columns ────────────────────────────────────
+
+create or replace function public.refresh_insights_daily(
+  p_brand_id uuid,
+  p_day_from date,
+  p_day_to date
+) returns void
+language plpgsql
+set search_path to 'public'
+as $$
+begin
+  delete from public.insights_brand_daily
+    where brand_id = p_brand_id and day between p_day_from and p_day_to;
+  delete from public.insights_competitor_daily
+    where brand_id = p_brand_id and day between p_day_from and p_day_to;
+  delete from public.insights_prompt_daily
+    where brand_id = p_brand_id and day between p_day_from and p_day_to;
+  delete from public.insights_competitor_prompt_daily
+    where brand_id = p_brand_id and day between p_day_from and p_day_to;
+
+  insert into public.insights_brand_daily (
+    brand_id, day, model_used, platform, region,
+    answer_count, mention_answers, citation_answers, mentioning_answers,
+    sum_visibility, sum_visibility_visible, total_mentions, total_citations,
+    positive_count, sum_inv_position, position_count, max_created_at,
+    negative_count, sum_position)
+  select
+    p_brand_id,
+    (pr.created_at at time zone 'utc')::date,
+    pr.model_used, pr.platform, pr.region,
+    count(*),
+    count(*) filter (where pr.mention_count > 0),
+    count(*) filter (where pr.citation_count > 0),
+    count(*) filter (where pr.mention_count > 0 or pr.citation_count > 0),
+    coalesce(sum(pr.visibility_score), 0),
+    coalesce(sum(pr.visibility_score)
+      filter (where pr.mention_count > 0 or pr.citation_count > 0), 0),
+    coalesce(sum(pr.mention_count), 0),
+    coalesce(sum(pr.citation_count), 0),
+    count(*) filter (where pr.sentiment = 'positive'),
+    sum(1.0 / pr.mention_position) filter (where pr.mention_position is not null),
+    count(*) filter (where pr.mention_position is not null),
+    max(pr.created_at),
+    count(*) filter (where pr.sentiment = 'negative'),
+    sum(pr.mention_position) filter (where pr.mention_position is not null)
+  from public.prompt_results pr
+  where pr.brand_id = p_brand_id
+    and pr.platform <> 'chatgpt-shopping'  -- #155 — isolate from Insights
+    and (pr.created_at at time zone 'utc')::date between p_day_from and p_day_to
+  group by 2, pr.model_used, pr.platform, pr.region;
+
+  insert into public.insights_prompt_daily (
+    brand_id, day, prompt_id, model_used, platform, region,
+    answer_count, has_mention, has_citation,
+    mention_answers, citation_answers, mentioning_answers, positive_count,
+    total_mentions, total_citations, sum_inv_position, position_count,
+    negative_count, sum_position)
+  select
+    p_brand_id,
+    (pr.created_at at time zone 'utc')::date,
+    pr.prompt_id, pr.model_used, pr.platform, pr.region,
+    count(*),
+    bool_or(pr.mention_count > 0),
+    bool_or(pr.citation_count > 0),
+    count(*) filter (where pr.mention_count > 0),
+    count(*) filter (where pr.citation_count > 0),
+    count(*) filter (where pr.mention_count > 0 or pr.citation_count > 0),
+    count(*) filter (where pr.sentiment = 'positive'),
+    coalesce(sum(pr.mention_count), 0),
+    coalesce(sum(pr.citation_count), 0),
+    sum(1.0 / pr.mention_position) filter (where pr.mention_position is not null),
+    count(*) filter (where pr.mention_position is not null),
+    count(*) filter (where pr.sentiment = 'negative'),
+    sum(pr.mention_position) filter (where pr.mention_position is not null)
+  from public.prompt_results pr
+  where pr.brand_id = p_brand_id
+    and pr.prompt_id is not null
+    and pr.platform <> 'chatgpt-shopping'
+    and (pr.created_at at time zone 'utc')::date between p_day_from and p_day_to
+  group by 2, pr.prompt_id, pr.model_used, pr.platform, pr.region;
+
+  insert into public.insights_competitor_daily (
+    brand_id, day, competitor_id, model_used, platform, region,
+    answer_count, sum_visibility, total_mentions, total_citations,
+    mention_answers, citation_answers, sum_inv_position, position_count)
+  select
+    p_brand_id,
+    (pr.created_at at time zone 'utc')::date,
+    cm.value->>'competitor_id',
+    pr.model_used, pr.platform, pr.region,
+    count(*),
+    sum((cm.value->>'visibility_score')::numeric),
+    coalesce(sum(coalesce((cm.value->>'mention_count')::int, 0)), 0),
+    coalesce(sum(coalesce((cm.value->>'citation_count')::int, 0)), 0),
+    count(*) filter (where coalesce((cm.value->>'mention_count')::int, 0) > 0),
+    count(*) filter (where coalesce((cm.value->>'citation_count')::int, 0) > 0),
+    sum(1.0 / (cm.value->>'mention_position')::numeric)
+      filter (where (cm.value->>'mention_position') is not null),
+    count(*) filter (where (cm.value->>'mention_position') is not null)
+  from public.prompt_results pr,
+       lateral jsonb_array_elements(coalesce(pr.competitor_mentions, '[]'::jsonb)) cm
+  where pr.brand_id = p_brand_id
+    and pr.platform <> 'chatgpt-shopping'
+    and (pr.created_at at time zone 'utc')::date between p_day_from and p_day_to
+    and cm.value ? 'competitor_id'
+  group by 2, cm.value->>'competitor_id', pr.model_used, pr.platform, pr.region;
+
+  insert into public.insights_competitor_prompt_daily (
+    brand_id, day, competitor_id, prompt_id, model_used, platform, region, mention_count,
+    mention_answers, citation_answers, sum_inv_position, position_count)
+  select
+    p_brand_id,
+    (pr.created_at at time zone 'utc')::date,
+    cm.value->>'competitor_id',
+    pr.prompt_id, pr.model_used, pr.platform, pr.region,
+    sum(coalesce((cm.value->>'mention_count')::int, 0)),
+    count(*) filter (where coalesce((cm.value->>'mention_count')::int, 0) > 0),
+    count(*) filter (where coalesce((cm.value->>'citation_count')::int, 0) > 0),
+    sum(1.0 / (cm.value->>'mention_position')::numeric)
+      filter (where (cm.value->>'mention_position') is not null),
+    count(*) filter (where (cm.value->>'mention_position') is not null)
+  from public.prompt_results pr,
+       lateral jsonb_array_elements(coalesce(pr.competitor_mentions, '[]'::jsonb)) cm
+  where pr.brand_id = p_brand_id
+    and pr.prompt_id is not null
+    and pr.platform <> 'chatgpt-shopping'
+    and (pr.created_at at time zone 'utc')::date between p_day_from and p_day_to
+    and cm.value ? 'competitor_id'
+    and (coalesce((cm.value->>'mention_count')::int, 0) > 0
+      or coalesce((cm.value->>'citation_count')::int, 0) > 0
+      or coalesce((cm.value->>'visibility_score')::numeric, 0) > 0)
+  group by 2, cm.value->>'competitor_id', pr.prompt_id, pr.model_used, pr.platform, pr.region;
+end;
+$$;
+
+revoke execute on function public.refresh_insights_daily(uuid, date, date)
+  from public, anon, authenticated;
+
+-- ─── Window totals: the cards' new components ──────────────────────────────
+
+CREATE OR REPLACE FUNCTION public.insights_aggregates(
+  p_brand_id   uuid,
+  p_platform   text         DEFAULT NULL,
+  p_models     text[]       DEFAULT NULL,
+  p_region     text         DEFAULT NULL,
+  p_date_from  timestamptz  DEFAULT NULL,
+  p_date_to    timestamptz  DEFAULT NULL,
+  p_prompt_id  uuid         DEFAULT NULL,
+  p_topic_id   uuid         DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = public
+AS $$
+  WITH filtered AS (
+    SELECT pr.visibility_score, pr.mention_count, pr.citation_count,
+           pr.sentiment, pr.model_used, pr.created_at, pr.mention_position
+    FROM public.prompt_results pr
+    WHERE pr.brand_id = p_brand_id
+      AND pr.platform <> 'chatgpt-shopping'  -- #155 — isolate from Insights
+      AND (p_platform  IS NULL OR pr.platform    = p_platform)
+      AND (p_models    IS NULL OR pr.model_used  = ANY (p_models))
+      AND (p_region    IS NULL OR pr.region      = p_region)
+      AND (p_date_from IS NULL OR pr.created_at >= p_date_from)
+      AND (p_date_to   IS NULL OR pr.created_at <= p_date_to)
+      AND (p_prompt_id IS NULL OR pr.prompt_id   = p_prompt_id)
+      AND (p_topic_id  IS NULL OR EXISTS (
+             SELECT 1 FROM public.prompts p
+             WHERE p.id = pr.prompt_id AND p.topic_id = p_topic_id))
+  ),
+  totals AS (
+    SELECT
+      COUNT(*)                                                AS total_results,
+      COALESCE(SUM(visibility_score), 0)                      AS sum_visibility,
+      COALESCE(SUM(mention_count), 0)                         AS total_mentions,
+      COALESCE(SUM(citation_count), 0)                        AS total_citations,
+      COUNT(*) FILTER (WHERE sentiment = 'positive')          AS positive_count,
+      COUNT(*) FILTER (WHERE mention_count > 0
+                          OR citation_count > 0)               AS mentioning_results,
+      MAX(created_at)                                         AS last_checked_at,
+      COUNT(*) FILTER (WHERE citation_count > 0)              AS citation_answers,
+      COUNT(*) FILTER (WHERE sentiment = 'negative')          AS negative_count,
+      SUM(mention_position)
+        FILTER (WHERE mention_position IS NOT NULL)           AS sum_position,
+      COUNT(*) FILTER (WHERE mention_position IS NOT NULL)    AS position_count
+    FROM filtered
+  ),
+  by_model AS (
+    SELECT
+      COALESCE(model_used, 'unknown') AS model_used,
+      SUM(visibility_score)           AS sum_visibility,
+      COUNT(*)                        AS result_count
+    FROM filtered
+    GROUP BY COALESCE(model_used, 'unknown')
+  )
+  SELECT jsonb_build_object(
+    'total_results',       t.total_results,
+    'sum_visibility',      t.sum_visibility,
+    'total_mentions',      t.total_mentions,
+    'total_citations',     t.total_citations,
+    'positive_count',      t.positive_count,
+    'mentioning_results',  t.mentioning_results,
+    'last_checked_at',     t.last_checked_at,
+    'citation_answers',    t.citation_answers,
+    'negative_count',      t.negative_count,
+    'sum_position',        t.sum_position,
+    'position_count',      t.position_count,
+    'kpi_complete',        true,
+    'by_model', COALESCE(
+      (SELECT jsonb_agg(jsonb_build_object(
+                'model_used',     bm.model_used,
+                'sum_visibility', bm.sum_visibility,
+                'result_count',   bm.result_count)
+              ORDER BY bm.result_count DESC, bm.model_used)
+       FROM by_model bm),
+      '[]'::jsonb)
+  )
+  FROM totals t;
+$$;
+
+create or replace function public.insights_aggregates_daily(
+  p_brand_id uuid,
+  p_platform text default null,
+  p_models text[] default null,
+  p_region text default null,
+  p_day_from date default null,
+  p_day_to date default null
+) returns jsonb
+language sql
+stable
+set search_path to 'public'
+as $$
+  with filtered as (
+    select * from public.insights_brand_daily d
+    where d.brand_id = p_brand_id
+      and (p_platform is null or d.platform = p_platform)
+      and (p_models is null or d.model_used = any (p_models))
+      and (p_region is null or d.region = p_region)
+      and (p_day_from is null or d.day >= p_day_from)
+      and (p_day_to is null or d.day <= p_day_to)
+  ),
+  totals as (
+    select
+      coalesce(sum(answer_count), 0)       as total_results,
+      coalesce(sum(sum_visibility), 0)     as sum_visibility,
+      coalesce(sum(total_mentions), 0)     as total_mentions,
+      coalesce(sum(total_citations), 0)    as total_citations,
+      coalesce(sum(positive_count), 0)     as positive_count,
+      coalesce(sum(mentioning_answers), 0) as mentioning_results,
+      max(max_created_at)                  as last_checked_at,
+      coalesce(sum(citation_answers), 0)   as citation_answers,
+      coalesce(sum(negative_count), 0)     as negative_count,
+      sum(sum_position)                    as sum_position,
+      coalesce(sum(position_count), 0)     as position_count,
+      -- A day not rewritten since 00131 has no negative or position totals.
+      not exists (select 1 from filtered where negative_count is null) as kpi_complete
+    from filtered
+  ),
+  by_model as (
+    select
+      coalesce(model_used, 'unknown') as model_used,
+      sum(sum_visibility)             as sum_visibility,
+      sum(answer_count)               as result_count
+    from filtered
+    group by coalesce(model_used, 'unknown')
+  )
+  select jsonb_build_object(
+    'total_results',      t.total_results,
+    'sum_visibility',     t.sum_visibility,
+    'total_mentions',     t.total_mentions,
+    'total_citations',    t.total_citations,
+    'positive_count',     t.positive_count,
+    'mentioning_results', t.mentioning_results,
+    'last_checked_at',    t.last_checked_at,
+    'citation_answers',   t.citation_answers,
+    'negative_count',     t.negative_count,
+    'sum_position',       t.sum_position,
+    'position_count',     t.position_count,
+    'kpi_complete',       t.kpi_complete,
+    'by_model', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'model_used',     bm.model_used,
+                'sum_visibility', bm.sum_visibility,
+                'result_count',   bm.result_count)
+              order by bm.result_count desc, bm.model_used)
+       from by_model bm),
+      '[]'::jsonb)
+  )
+  from totals t;
+$$;
+
+-- ─── Same prompts: the new components too ──────────────────────────────────
+
+create or replace function public.insights_same_prompt_compare_daily(
+  p_brand_id uuid,
+  p_cur_from date,
+  p_cur_to date,
+  p_prev_from date,
+  p_prev_to date,
+  p_models text[] default null,
+  p_region text default null
+)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  with prompt_rows as (
+    select d.*,
+           case when d.day between p_cur_from and p_cur_to then 'cur' else 'prev' end as win
+    from public.insights_prompt_daily d
+    where d.brand_id = p_brand_id
+      and (p_models is null or d.model_used = any (p_models))
+      and (p_region is null or d.region = p_region)
+      and (d.day between p_cur_from and p_cur_to or d.day between p_prev_from and p_prev_to)
+  ),
+  presence as (
+    select prompt_id,
+           bool_or(win = 'cur' and answer_count > 0)  as in_cur,
+           bool_or(win = 'prev' and answer_count > 0) as in_prev
+    from prompt_rows
+    group by prompt_id
+  ),
+  same_prompts as (
+    select prompt_id from presence where in_cur and in_prev
+  ),
+  brand_agg as (
+    select r.win,
+           sum(r.answer_count)       as answers,
+           sum(r.mention_answers)    as mention_answers,
+           sum(r.citation_answers)   as citation_answers,
+           sum(r.sum_inv_position) / nullif(sum(r.position_count), 0) as position_factor,
+           sum(r.total_mentions)     as total_mentions,
+           sum(r.total_citations)    as total_citations,
+           sum(r.positive_count)     as positive_count,
+           sum(r.mentioning_answers) as mentioning_answers,
+           sum(r.negative_count)     as negative_count,
+           sum(r.sum_position)       as sum_position,
+           sum(r.position_count)     as position_count,
+           count(distinct r.prompt_id) filter (where r.has_mention or r.has_citation)
+                                     as visible_prompts
+    from prompt_rows r
+    join same_prompts s using (prompt_id)
+    group by r.win
+  ),
+  comp_rows as (
+    select cd.*,
+           case when cd.day between p_cur_from and p_cur_to then 'cur' else 'prev' end as win
+    from public.insights_competitor_prompt_daily cd
+    join same_prompts s using (prompt_id)
+    where cd.brand_id = p_brand_id
+      and (p_models is null or cd.model_used = any (p_models))
+      and (p_region is null or cd.region = p_region)
+      and (cd.day between p_cur_from and p_cur_to or cd.day between p_prev_from and p_prev_to)
+  ),
+  -- Competitors tracked in each window, from the dense day-grain table: the
+  -- prompt-grain one only records sightings, so it can't tell a competitor
+  -- never named from one not tracked yet. A competitor added during the
+  -- period then has no previous value, as on all prompts, instead of a gain
+  -- from 0.
+  tracked as (
+    select distinct
+           case when cd.day between p_cur_from and p_cur_to then 'cur' else 'prev' end as win,
+           cd.competitor_id
+    from public.insights_competitor_daily cd
+    where cd.brand_id = p_brand_id
+      and (p_models is null or cd.model_used = any (p_models))
+      and (p_region is null or cd.region = p_region)
+      and (cd.day between p_cur_from and p_cur_to or cd.day between p_prev_from and p_prev_to)
+  ),
+  comp_agg as (
+    select t.win,
+           t.competitor_id,
+           max(c.name)                           as name,
+           coalesce(sum(cr.mention_answers), 0)  as mention_answers,
+           coalesce(sum(cr.citation_answers), 0) as citation_answers,
+           sum(cr.sum_inv_position) / nullif(sum(cr.position_count), 0) as position_factor
+    from tracked t
+    join public.competitors c
+      on c.id::text = t.competitor_id and c.brand_id = p_brand_id
+    left join comp_rows cr
+      on cr.win = t.win and cr.competitor_id = t.competitor_id
+    group by t.win, t.competitor_id
+  ),
+  -- Every competitor's mentions on the shared prompts, for share of voice
+  -- (which counts all competitors, as share_of_voice_aggregates does).
+  comp_mentions as (
+    select win, sum(mention_count) as mentions from comp_rows group by win
+  ),
+  windows(win) as (values ('cur'), ('prev'))
+  select jsonb_build_object(
+    'complete', not exists (
+                  select 1 from prompt_rows
+                  where mention_answers is null or negative_count is null)
+                and not exists (select 1 from comp_rows where mention_answers is null),
+    'same_prompts',    (select count(*) from same_prompts),
+    'new_prompts',     (select count(*) from presence where in_cur and not in_prev),
+    'dropped_prompts', (select count(*) from presence where in_prev and not in_cur)
+  ) || (
+    select jsonb_object_agg(w.win, jsonb_build_object(
+      'answers',            coalesce(b.answers, 0),
+      'mention_answers',    coalesce(b.mention_answers, 0),
+      'citation_answers',   coalesce(b.citation_answers, 0),
+      'position_factor',    b.position_factor,
+      'total_mentions',     coalesce(b.total_mentions, 0),
+      'total_citations',    coalesce(b.total_citations, 0),
+      'positive_count',     coalesce(b.positive_count, 0),
+      'mentioning_answers', coalesce(b.mentioning_answers, 0),
+      'negative_count',     coalesce(b.negative_count, 0),
+      'sum_position',       b.sum_position,
+      'position_count',     coalesce(b.position_count, 0),
+      'visible_prompts',    coalesce(b.visible_prompts, 0),
+      'competitor_mentions', coalesce((select cm.mentions from comp_mentions cm where cm.win = w.win), 0),
+      'by_competitor', coalesce(
+        (select jsonb_agg(jsonb_build_object(
+                  'competitor_id',    ca.competitor_id,
+                  'name',             ca.name,
+                  'mention_answers',  ca.mention_answers,
+                  'citation_answers', ca.citation_answers,
+                  'position_factor',  ca.position_factor)
+                order by ca.mention_answers desc, ca.competitor_id)
+         from comp_agg ca where ca.win = w.win),
+        '[]'::jsonb)))
+    from windows w
+    left join brand_agg b on b.win = w.win
+  );
+$$;
+
+create or replace function public.insights_same_prompt_compare(
+  p_brand_id uuid,
+  p_cur_from timestamptz,
+  p_cur_to timestamptz,
+  p_prev_from timestamptz,
+  p_prev_to timestamptz,
+  p_models text[] default null,
+  p_region text default null,
+  p_topic_id uuid default null
+)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  with filtered as (
+    select pr.prompt_id, pr.created_at, pr.mention_count, pr.citation_count,
+           pr.mention_position, pr.sentiment, pr.competitor_mentions
+    from public.prompt_results pr
+    where pr.brand_id = p_brand_id
+      and pr.platform <> 'chatgpt-shopping'
+      and (p_models is null or pr.model_used = any (p_models))
+      and (p_region is null or pr.region = p_region)
+      and pr.created_at >= p_prev_from
+      and pr.created_at <= p_cur_to
+      and (p_topic_id is null or exists (
+             select 1 from public.prompts p
+             where p.id = pr.prompt_id and p.topic_id = p_topic_id))
+  ),
+  windowed as (
+    select 'cur' as win, f.* from filtered f
+    where f.created_at >= p_cur_from and f.created_at <= p_cur_to
+    union all
+    select 'prev' as win, f.* from filtered f
+    where f.created_at >= p_prev_from and f.created_at <= p_prev_to
+  ),
+  presence as (
+    select prompt_id,
+           bool_or(win = 'cur')  as in_cur,
+           bool_or(win = 'prev') as in_prev
+    from windowed
+    group by prompt_id
+  ),
+  same_prompts as (
+    select prompt_id from presence where in_cur and in_prev
+  ),
+  same_rows as (
+    select w.* from windowed w join same_prompts s using (prompt_id)
+  ),
+  brand_agg as (
+    select win,
+           count(*)                                                   as answers,
+           count(*) filter (where mention_count > 0)                  as mention_answers,
+           count(*) filter (where citation_count > 0)                 as citation_answers,
+           avg(1.0 / mention_position) filter (where mention_position is not null)
+                                                                      as position_factor,
+           coalesce(sum(mention_count), 0)                            as total_mentions,
+           coalesce(sum(citation_count), 0)                           as total_citations,
+           count(*) filter (where sentiment = 'positive')             as positive_count,
+           count(*) filter (where mention_count > 0 or citation_count > 0)
+                                                                      as mentioning_answers,
+           count(*) filter (where sentiment = 'negative')             as negative_count,
+           sum(mention_position) filter (where mention_position is not null)
+                                                                      as sum_position,
+           count(*) filter (where mention_position is not null)       as position_count,
+           count(distinct prompt_id) filter (where mention_count > 0 or citation_count > 0)
+                                                                      as visible_prompts
+    from same_rows
+    group by win
+  ),
+  comp_agg as (
+    select r.win,
+           cm.value->>'competitor_id' as competitor_id,
+           max(c.name)                as name,
+           count(*) filter (where coalesce((cm.value->>'mention_count')::int, 0) > 0)
+                                      as mention_answers,
+           count(*) filter (where coalesce((cm.value->>'citation_count')::int, 0) > 0)
+                                      as citation_answers,
+           avg(1.0 / (cm.value->>'mention_position')::numeric)
+             filter (where (cm.value->>'mention_position') is not null)
+                                      as position_factor
+    from same_rows r
+    cross join lateral jsonb_array_elements(coalesce(r.competitor_mentions, '[]'::jsonb)) cm
+    join public.competitors c
+      on c.id::text = cm.value->>'competitor_id' and c.brand_id = p_brand_id
+    where cm.value ? 'competitor_id'
+    group by r.win, cm.value->>'competitor_id'
+  ),
+  -- Every competitor's mentions on the shared prompts, for share of voice.
+  comp_mentions as (
+    select r.win, sum(coalesce((cm.value->>'mention_count')::int, 0)) as mentions
+    from same_rows r
+    cross join lateral jsonb_array_elements(coalesce(r.competitor_mentions, '[]'::jsonb)) cm
+    where cm.value ? 'competitor_id'
+    group by r.win
+  ),
+  windows(win) as (values ('cur'), ('prev'))
+  select jsonb_build_object(
+    'complete',        true,
+    'same_prompts',    (select count(*) from same_prompts),
+    'new_prompts',     (select count(*) from presence where in_cur and not in_prev),
+    'dropped_prompts', (select count(*) from presence where in_prev and not in_cur)
+  ) || (
+    select jsonb_object_agg(w.win, jsonb_build_object(
+      'answers',            coalesce(b.answers, 0),
+      'mention_answers',    coalesce(b.mention_answers, 0),
+      'citation_answers',   coalesce(b.citation_answers, 0),
+      'position_factor',    b.position_factor,
+      'total_mentions',     coalesce(b.total_mentions, 0),
+      'total_citations',    coalesce(b.total_citations, 0),
+      'positive_count',     coalesce(b.positive_count, 0),
+      'mentioning_answers', coalesce(b.mentioning_answers, 0),
+      'negative_count',     coalesce(b.negative_count, 0),
+      'sum_position',       b.sum_position,
+      'position_count',     coalesce(b.position_count, 0),
+      'visible_prompts',    coalesce(b.visible_prompts, 0),
+      'competitor_mentions', coalesce((select cm.mentions from comp_mentions cm where cm.win = w.win), 0),
+      'by_competitor', coalesce(
+        (select jsonb_agg(jsonb_build_object(
+                  'competitor_id',    ca.competitor_id,
+                  'name',             ca.name,
+                  'mention_answers',  ca.mention_answers,
+                  'citation_answers', ca.citation_answers,
+                  'position_factor',  ca.position_factor)
+                order by ca.mention_answers desc, ca.competitor_id)
+         from comp_agg ca where ca.win = w.win),
+        '[]'::jsonb)))
+    from windows w
+    left join brand_agg b on b.win = w.win
+  );
+$$;
+
+-- ─── Sparklines: one row of components per day ────────────────────────────
+--
+-- From the prompt-grain rollups, so a topic filter works too (a topic is a
+-- set of prompts). Each day's values are that day's own, for the cards'
+-- sparklines; the card values themselves come from the window aggregates.
+
+create or replace function public.insights_kpi_series(
+  p_brand_id uuid,
+  p_day_from date default null,
+  p_day_to date default null,
+  p_models text[] default null,
+  p_region text default null,
+  p_topic_id uuid default null
+)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  with prompt_rows as (
+    select d.*
+    from public.insights_prompt_daily d
+    where d.brand_id = p_brand_id
+      and (p_models is null or d.model_used = any (p_models))
+      and (p_region is null or d.region = p_region)
+      and (p_day_from is null or d.day >= p_day_from)
+      and (p_day_to is null or d.day <= p_day_to)
+      and (p_topic_id is null or exists (
+             select 1 from public.prompts p
+             where p.id = d.prompt_id and p.topic_id = p_topic_id))
+  ),
+  comp_days as (
+    select cd.day, sum(cd.mention_count) as competitor_mentions
+    from public.insights_competitor_prompt_daily cd
+    where cd.brand_id = p_brand_id
+      and (p_models is null or cd.model_used = any (p_models))
+      and (p_region is null or cd.region = p_region)
+      and (p_day_from is null or cd.day >= p_day_from)
+      and (p_day_to is null or cd.day <= p_day_to)
+      and (p_topic_id is null or exists (
+             select 1 from public.prompts p
+             where p.id = cd.prompt_id and p.topic_id = p_topic_id))
+    group by cd.day
+  ),
+  days as (
+    select r.day,
+           sum(r.answer_count)       as answers,
+           sum(r.citation_answers)   as citation_answers,
+           sum(r.total_mentions)     as total_mentions,
+           sum(r.total_citations)    as total_citations,
+           sum(r.positive_count)     as positive_count,
+           sum(r.negative_count)     as negative_count,
+           sum(r.mentioning_answers) as mentioning_answers,
+           sum(r.sum_position)       as sum_position,
+           sum(r.position_count)     as position_count,
+           count(distinct r.prompt_id) filter (where r.has_mention or r.has_citation)
+                                     as visible_prompts,
+           count(distinct r.prompt_id) as active_prompts
+    from prompt_rows r
+    group by r.day
+  )
+  select jsonb_build_object(
+    'complete', not exists (
+                  select 1 from prompt_rows
+                  where mention_answers is null or negative_count is null),
+    'days', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'day',                 d.day,
+                'answers',             d.answers,
+                'citation_answers',    d.citation_answers,
+                'total_mentions',      d.total_mentions,
+                'total_citations',     d.total_citations,
+                'positive_count',      d.positive_count,
+                'negative_count',      d.negative_count,
+                'mentioning_answers',  d.mentioning_answers,
+                'sum_position',        d.sum_position,
+                'position_count',      d.position_count,
+                'visible_prompts',     d.visible_prompts,
+                'active_prompts',      d.active_prompts,
+                'competitor_mentions', coalesce(c.competitor_mentions, 0))
+              order by d.day)
+       from days d
+       left join comp_days c using (day)),
+      '[]'::jsonb)
+  );
+$$;
+
+revoke all on function public.insights_kpi_series(uuid, date, date, text[], text, uuid) from public;
+grant execute on function public.insights_kpi_series(uuid, date, date, text[], text, uuid)
+  to authenticated, service_role;
+
+comment on function public.insights_kpi_series(uuid, date, date, text[], text, uuid) is
+  'Insights KPI sparklines (VIS-003, 00131): the cards'' components per day from the prompt-grain rollups, topic filter included. complete=false until the rows are rewritten by refresh_insights_daily.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00132_insights_platform_compare.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Insights summary line (VIS-006): which platform moved Visibility most.
+--
+-- The v2 mockup's summary line names the platform whose Visibility rose most
+-- and the one that fell most ("Up most: Google AI Mode +16.1 · Down most:
+-- ChatGPT −3.2"). That needs each platform's score components in both
+-- comparison windows, and with "Compare: Same prompts" (00130) only over the
+-- prompts answered in both, like every other change on the page.
+--
+-- These return one row per (model_used, platform, window) with the
+-- Visibility components; the app folds model slugs into providers and scores
+-- them with the card's formula. Same windows and filters as
+-- insights_same_prompt_compare[_daily]: the rollups for whole days, the raw
+-- rows for the 24h and topic views. `complete` is false while the
+-- prompt-grain rollups behind the window are not backfilled (00130).
+
+create or replace function public.insights_platform_compare_daily(
+  p_brand_id uuid,
+  p_cur_from date,
+  p_cur_to date,
+  p_prev_from date,
+  p_prev_to date,
+  p_models text[] default null,
+  p_region text default null,
+  p_same_prompts boolean default true
+)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  with prompt_rows as (
+    select d.*,
+           case when d.day between p_cur_from and p_cur_to then 'cur' else 'prev' end as win
+    from public.insights_prompt_daily d
+    where d.brand_id = p_brand_id
+      and (p_models is null or d.model_used = any (p_models))
+      and (p_region is null or d.region = p_region)
+      and (d.day between p_cur_from and p_cur_to or d.day between p_prev_from and p_prev_to)
+  ),
+  shared as (
+    select prompt_id
+    from prompt_rows
+    group by prompt_id
+    having bool_or(win = 'cur') and bool_or(win = 'prev')
+  ),
+  scoped as (
+    select * from prompt_rows
+    where not p_same_prompts or prompt_id in (select prompt_id from shared)
+  ),
+  platforms as (
+    select model_used, platform, win,
+           sum(answer_count)     as answers,
+           sum(mention_answers)  as mention_answers,
+           sum(citation_answers) as citation_answers,
+           sum(sum_inv_position) as sum_inv_position,
+           sum(position_count)   as position_count
+    from scoped
+    group by model_used, platform, win
+  )
+  select jsonb_build_object(
+    'complete', not exists (select 1 from prompt_rows where mention_answers is null),
+    'platforms', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'model_used',       p.model_used,
+                'platform',         p.platform,
+                'win',              p.win,
+                'answers',          p.answers,
+                'mention_answers',  p.mention_answers,
+                'citation_answers', p.citation_answers,
+                'sum_inv_position', p.sum_inv_position,
+                'position_count',   p.position_count))
+       from platforms p),
+      '[]'::jsonb)
+  );
+$$;
+
+create or replace function public.insights_platform_compare(
+  p_brand_id uuid,
+  p_cur_from timestamptz,
+  p_cur_to timestamptz,
+  p_prev_from timestamptz,
+  p_prev_to timestamptz,
+  p_models text[] default null,
+  p_region text default null,
+  p_topic_id uuid default null,
+  p_same_prompts boolean default true
+)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  with filtered as (
+    select pr.prompt_id, pr.model_used, pr.platform, pr.created_at,
+           pr.mention_count, pr.citation_count, pr.mention_position
+    from public.prompt_results pr
+    where pr.brand_id = p_brand_id
+      and pr.platform <> 'chatgpt-shopping'
+      and (p_models is null or pr.model_used = any (p_models))
+      and (p_region is null or pr.region = p_region)
+      and pr.created_at >= p_prev_from
+      and pr.created_at <= p_cur_to
+      and (p_topic_id is null or exists (
+             select 1 from public.prompts p
+             where p.id = pr.prompt_id and p.topic_id = p_topic_id))
+  ),
+  -- Each window selected on its own, inclusive at both ends like the card.
+  windowed as (
+    select 'cur' as win, f.* from filtered f
+    where f.created_at >= p_cur_from and f.created_at <= p_cur_to
+    union all
+    select 'prev' as win, f.* from filtered f
+    where f.created_at >= p_prev_from and f.created_at <= p_prev_to
+  ),
+  shared as (
+    select prompt_id
+    from windowed
+    group by prompt_id
+    having bool_or(win = 'cur') and bool_or(win = 'prev')
+  ),
+  scoped as (
+    select * from windowed
+    where not p_same_prompts or prompt_id in (select prompt_id from shared)
+  ),
+  platforms as (
+    select model_used, platform, win,
+           count(*)                                         as answers,
+           count(*) filter (where mention_count > 0)        as mention_answers,
+           count(*) filter (where citation_count > 0)       as citation_answers,
+           sum(1.0 / mention_position) filter (where mention_position is not null)
+                                                            as sum_inv_position,
+           count(*) filter (where mention_position is not null) as position_count
+    from scoped
+    group by model_used, platform, win
+  )
+  select jsonb_build_object(
+    'complete', true,
+    'platforms', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'model_used',       p.model_used,
+                'platform',         p.platform,
+                'win',              p.win,
+                'answers',          p.answers,
+                'mention_answers',  p.mention_answers,
+                'citation_answers', p.citation_answers,
+                'sum_inv_position', p.sum_inv_position,
+                'position_count',   p.position_count))
+       from platforms p),
+      '[]'::jsonb)
+  );
+$$;
+
+revoke all on function public.insights_platform_compare_daily(
+  uuid, date, date, date, date, text[], text, boolean
+) from public;
+grant execute on function public.insights_platform_compare_daily(
+  uuid, date, date, date, date, text[], text, boolean
+) to authenticated, service_role;
+
+revoke all on function public.insights_platform_compare(
+  uuid, timestamptz, timestamptz, timestamptz, timestamptz, text[], text, uuid, boolean
+) from public;
+grant execute on function public.insights_platform_compare(
+  uuid, timestamptz, timestamptz, timestamptz, timestamptz, text[], text, uuid, boolean
+) to authenticated, service_role;
+
+comment on function public.insights_platform_compare_daily(
+  uuid, date, date, date, date, text[], text, boolean
+) is
+  'Insights summary line (VIS-006, 00132): Visibility components per (model, platform) in both comparison windows, over the prompts answered in both when p_same_prompts, from the prompt-grain rollups. complete=false until they are backfilled (00130).';
+
+comment on function public.insights_platform_compare(
+  uuid, timestamptz, timestamptz, timestamptz, timestamptz, text[], text, uuid, boolean
+) is
+  'Insights summary line (VIS-006, 00132) for timestamp windows (24h, topic views), from prompt_results. Same output as insights_platform_compare_daily.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00133_insights_platform_table.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Insights "By AI platform" table (VIS-008).
+--
+-- The v2 mockup replaces the Share of Voice donut and trend with one table:
+-- per platform, Visibility, its change, Coverage, Share of voice and Avg.
+-- position, with "Low sample" / "No runs this period" in place of numbers
+-- a platform can't support.
+--
+-- insights_platform_compare[_daily] (00132) already return each platform's
+-- Visibility components in both windows; this adds what Coverage and Avg.
+-- position need: the position sum (00131) and, for the current window, the
+-- prompts answered on each engine and the ones where the brand appeared.
+-- They are prompt ids, not counts, because the app folds engines into
+-- platforms (ChatGPT is several models and a scraper): a prompt answered
+-- by two of them must still count once.
+--
+-- The window bounds now default to null, read as open, and a missing
+-- previous window reads the current one alone: the table also shows on All
+-- time, which has nothing to compare with. Same argument order, so the
+-- summary line keeps reading them unchanged. `complete` now also waits for
+-- the 00131 backfill, which the position sum depends on.
+
+create or replace function public.insights_platform_compare_daily(
+  p_brand_id uuid,
+  p_cur_from date default null,
+  p_cur_to date default null,
+  p_prev_from date default null,
+  p_prev_to date default null,
+  p_models text[] default null,
+  p_region text default null,
+  p_same_prompts boolean default true
+)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  with prompt_rows as (
+    select d.*,
+           case when d.day between coalesce(p_cur_from, '-infinity'::date)
+                               and coalesce(p_cur_to, 'infinity'::date)
+                then 'cur' else 'prev' end as win
+    from public.insights_prompt_daily d
+    where d.brand_id = p_brand_id
+      and (p_models is null or d.model_used = any (p_models))
+      and (p_region is null or d.region = p_region)
+      and (d.day between coalesce(p_cur_from, '-infinity'::date)
+                     and coalesce(p_cur_to, 'infinity'::date)
+           or d.day between p_prev_from and p_prev_to)
+  ),
+  shared as (
+    select prompt_id
+    from prompt_rows
+    group by prompt_id
+    having bool_or(win = 'cur') and bool_or(win = 'prev')
+  ),
+  scoped as (
+    select * from prompt_rows
+    where not p_same_prompts or prompt_id in (select prompt_id from shared)
+  ),
+  platforms as (
+    select model_used, platform, win,
+           sum(answer_count)     as answers,
+           sum(mention_answers)  as mention_answers,
+           sum(citation_answers) as citation_answers,
+           sum(sum_inv_position) as sum_inv_position,
+           sum(position_count)   as position_count,
+           sum(sum_position)     as sum_position,
+           case when win = 'cur' then
+             coalesce(array_agg(distinct prompt_id) filter (where has_mention or has_citation),
+                      '{}')
+           end                   as visible_prompt_ids,
+           case when win = 'cur' then array_agg(distinct prompt_id) end
+                                 as active_prompt_ids
+    from scoped
+    group by model_used, platform, win
+  )
+  select jsonb_build_object(
+    'complete', not exists (
+                  select 1 from prompt_rows
+                  where mention_answers is null or negative_count is null),
+    'platforms', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'model_used',         p.model_used,
+                'platform',           p.platform,
+                'win',                p.win,
+                'answers',            p.answers,
+                'mention_answers',    p.mention_answers,
+                'citation_answers',   p.citation_answers,
+                'sum_inv_position',   p.sum_inv_position,
+                'position_count',     p.position_count,
+                'sum_position',       p.sum_position,
+                'visible_prompt_ids', p.visible_prompt_ids,
+                'active_prompt_ids',  p.active_prompt_ids))
+       from platforms p),
+      '[]'::jsonb)
+  );
+$$;
+
+create or replace function public.insights_platform_compare(
+  p_brand_id uuid,
+  p_cur_from timestamptz default null,
+  p_cur_to timestamptz default null,
+  p_prev_from timestamptz default null,
+  p_prev_to timestamptz default null,
+  p_models text[] default null,
+  p_region text default null,
+  p_topic_id uuid default null,
+  p_same_prompts boolean default true
+)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  with filtered as (
+    select pr.prompt_id, pr.model_used, pr.platform, pr.created_at,
+           pr.mention_count, pr.citation_count, pr.mention_position
+    from public.prompt_results pr
+    where pr.brand_id = p_brand_id
+      and pr.platform <> 'chatgpt-shopping'
+      and (p_models is null or pr.model_used = any (p_models))
+      and (p_region is null or pr.region = p_region)
+      and pr.created_at >= coalesce(p_prev_from, p_cur_from, '-infinity'::timestamptz)
+      and pr.created_at <= coalesce(p_cur_to, 'infinity'::timestamptz)
+      and (p_topic_id is null or exists (
+             select 1 from public.prompts p
+             where p.id = pr.prompt_id and p.topic_id = p_topic_id))
+  ),
+  -- Each window selected on its own, inclusive at both ends like the card.
+  windowed as (
+    select 'cur' as win, f.* from filtered f
+    where f.created_at >= coalesce(p_cur_from, '-infinity'::timestamptz)
+      and f.created_at <= coalesce(p_cur_to, 'infinity'::timestamptz)
+    union all
+    select 'prev' as win, f.* from filtered f
+    where f.created_at >= p_prev_from and f.created_at <= p_prev_to
+  ),
+  shared as (
+    select prompt_id
+    from windowed
+    group by prompt_id
+    having bool_or(win = 'cur') and bool_or(win = 'prev')
+  ),
+  scoped as (
+    select * from windowed
+    where not p_same_prompts or prompt_id in (select prompt_id from shared)
+  ),
+  platforms as (
+    select model_used, platform, win,
+           count(*)                                         as answers,
+           count(*) filter (where mention_count > 0)        as mention_answers,
+           count(*) filter (where citation_count > 0)       as citation_answers,
+           sum(1.0 / mention_position) filter (where mention_position is not null)
+                                                            as sum_inv_position,
+           count(*) filter (where mention_position is not null) as position_count,
+           sum(mention_position) filter (where mention_position is not null)
+                                                            as sum_position,
+           case when win = 'cur' then
+             coalesce(array_agg(distinct prompt_id)
+                        filter (where mention_count > 0 or citation_count > 0),
+                      '{}')
+           end                                              as visible_prompt_ids,
+           case when win = 'cur' then array_agg(distinct prompt_id) end
+                                                            as active_prompt_ids
+    from scoped
+    group by model_used, platform, win
+  )
+  select jsonb_build_object(
+    'complete', true,
+    'platforms', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'model_used',         p.model_used,
+                'platform',           p.platform,
+                'win',                p.win,
+                'answers',            p.answers,
+                'mention_answers',    p.mention_answers,
+                'citation_answers',   p.citation_answers,
+                'sum_inv_position',   p.sum_inv_position,
+                'position_count',     p.position_count,
+                'sum_position',       p.sum_position,
+                'visible_prompt_ids', p.visible_prompt_ids,
+                'active_prompt_ids',  p.active_prompt_ids))
+       from platforms p),
+      '[]'::jsonb)
+  );
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00134_starter_copilot.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Starter tracks ChatGPT and Microsoft Copilot, no longer ChatGPT and
+-- Perplexity.
+--
+-- The plan's engine list lives in config/plans (web and server), and new or
+-- edited prompts follow it. The tracking worker, though, runs each prompt's
+-- stored `platforms`, so prompts saved under the old list would keep running
+-- Perplexity and never get Copilot. This swaps the engine on the prompts of
+-- every organization on the Starter plan, as alignPromptsToPlanForOrg does on
+-- a plan change. Past Perplexity results stay as they are.
+--
+-- Only cloud organizations are touched: a Stripe customer exists only there.
+-- Self-hosted installs run every engine, whatever `plan` holds.
+
+update public.prompts p
+set platforms = case
+      -- Already tracking Copilot: drop Perplexity rather than list Copilot twice.
+      when 'copilot-web' = any (p.platforms) then array_remove(p.platforms, 'perplexity-web')
+      else array_replace(p.platforms, 'perplexity-web', 'copilot-web')
+    end
+from public.prompt_sets ps
+join public.brands b on b.id = ps.brand_id
+join public.organizations o on o.id = b.organization_id
+where p.prompt_set_id = ps.id
+  and o.plan = 'starter'
+  and o.stripe_customer_id is not null
+  and 'perplexity-web' = any (p.platforms);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00135_insights_change_drivers.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Insights "Why it changed" (VIS-009).
+--
+-- The v2 mockup explains the Visibility change beside the By AI platform
+-- table: the platforms, topics and prompts that moved it most, each with its
+-- own score before → after and its effect on the overall score, plus a line
+-- for the prompts added this period ("509 new prompts · Sep 29 · own
+-- baseline, not counted").
+--
+-- These return the Visibility components per prompt and per (model,
+-- platform) in both comparison windows, over the prompts answered in both
+-- when p_same_prompts (00130), with each prompt's text and topic; the app
+-- folds engines into platforms and prompts into topics, and scores every
+-- slice with the card's formula. They also count the prompts answered this
+-- period but not the one before, and when the ones created this period were
+-- added. The rollups serve whole days, so the box costs what the cards cost;
+-- prompt_results serves the 24h and topic views, like
+-- insights_platform_compare (00132).
+-- `complete` is false while the prompt-grain rollups behind the window are
+-- not backfilled (00130).
+
+create or replace function public.insights_change_drivers_daily(
+  p_brand_id uuid,
+  p_cur_from date,
+  p_cur_to date,
+  p_prev_from date,
+  p_prev_to date,
+  p_models text[] default null,
+  p_region text default null,
+  p_same_prompts boolean default true
+)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  with prompt_rows as (
+    select d.*,
+           case when d.day between p_cur_from and p_cur_to then 'cur' else 'prev' end as win
+    from public.insights_prompt_daily d
+    where d.brand_id = p_brand_id
+      and (p_models is null or d.model_used = any (p_models))
+      and (p_region is null or d.region = p_region)
+      and (d.day between p_cur_from and p_cur_to or d.day between p_prev_from and p_prev_to)
+  ),
+  presence as (
+    select prompt_id,
+           bool_or(win = 'cur')  as in_cur,
+           bool_or(win = 'prev') as in_prev
+    from prompt_rows
+    group by prompt_id
+  ),
+  scoped as (
+    select r.* from prompt_rows r join presence p using (prompt_id)
+    where not p_same_prompts or (p.in_cur and p.in_prev)
+  ),
+  by_prompt as (
+    select prompt_id, win,
+           sum(answer_count)     as answers,
+           sum(mention_answers)  as mention_answers,
+           sum(citation_answers) as citation_answers,
+           sum(sum_inv_position) as sum_inv_position,
+           sum(position_count)   as position_count
+    from scoped
+    group by prompt_id, win
+  ),
+  by_engine as (
+    select model_used, platform, win,
+           sum(answer_count)     as answers,
+           sum(mention_answers)  as mention_answers,
+           sum(citation_answers) as citation_answers,
+           sum(sum_inv_position) as sum_inv_position,
+           sum(position_count)   as position_count
+    from scoped
+    group by model_used, platform, win
+  ),
+  added as (
+    select p.created_at
+    from presence pr
+    join public.prompts p on p.id = pr.prompt_id
+    where pr.in_cur and not pr.in_prev
+  )
+  select jsonb_build_object(
+    'complete', not exists (select 1 from prompt_rows where mention_answers is null),
+    'prompts', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'prompt_id',        b.prompt_id,
+                'win',              b.win,
+                'answers',          b.answers,
+                'mention_answers',  b.mention_answers,
+                'citation_answers', b.citation_answers,
+                'sum_inv_position', b.sum_inv_position,
+                'position_count',   b.position_count))
+       from by_prompt b),
+      '[]'::jsonb),
+    'engines', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'model_used',       e.model_used,
+                'platform',         e.platform,
+                'win',              e.win,
+                'answers',          e.answers,
+                'mention_answers',  e.mention_answers,
+                'citation_answers', e.citation_answers,
+                'sum_inv_position', e.sum_inv_position,
+                'position_count',   e.position_count))
+       from by_engine e),
+      '[]'::jsonb),
+    'prompt_info', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'id',         p.id,
+                'text',       p.text,
+                'topic_id',   p.topic_id,
+                'topic_name', t.name))
+       from public.prompts p
+       left join public.topics t on t.id = p.topic_id
+       where p.id in (select prompt_id from by_prompt)),
+      '[]'::jsonb),
+    -- Dates only for prompts created this period: one answered again after
+    -- a pause is new to the comparison, not newly added.
+    'new_prompts', (select jsonb_build_object(
+                      'count',       count(*),
+                      'first_added', min(created_at) filter (
+                                       where created_at >= (p_cur_from::timestamp at time zone 'utc')),
+                      'last_added',  max(created_at) filter (
+                                       where created_at >= (p_cur_from::timestamp at time zone 'utc')))
+                    from added)
+  );
+$$;
+
+create or replace function public.insights_change_drivers(
+  p_brand_id uuid,
+  p_cur_from timestamptz,
+  p_cur_to timestamptz,
+  p_prev_from timestamptz,
+  p_prev_to timestamptz,
+  p_models text[] default null,
+  p_region text default null,
+  p_topic_id uuid default null,
+  p_same_prompts boolean default true
+)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  with filtered as (
+    select pr.prompt_id, pr.model_used, pr.platform, pr.created_at,
+           pr.mention_count, pr.citation_count, pr.mention_position
+    from public.prompt_results pr
+    where pr.brand_id = p_brand_id
+      and pr.platform <> 'chatgpt-shopping'
+      and (p_models is null or pr.model_used = any (p_models))
+      and (p_region is null or pr.region = p_region)
+      and pr.created_at >= p_prev_from
+      and pr.created_at <= p_cur_to
+      and (p_topic_id is null or exists (
+             select 1 from public.prompts p
+             where p.id = pr.prompt_id and p.topic_id = p_topic_id))
+  ),
+  -- Each window selected on its own, inclusive at both ends like the card.
+  windowed as (
+    select 'cur' as win, f.* from filtered f
+    where f.created_at >= p_cur_from and f.created_at <= p_cur_to
+    union all
+    select 'prev' as win, f.* from filtered f
+    where f.created_at >= p_prev_from and f.created_at <= p_prev_to
+  ),
+  presence as (
+    select prompt_id,
+           bool_or(win = 'cur')  as in_cur,
+           bool_or(win = 'prev') as in_prev
+    from windowed
+    group by prompt_id
+  ),
+  scoped as (
+    select w.* from windowed w join presence p using (prompt_id)
+    where not p_same_prompts or (p.in_cur and p.in_prev)
+  ),
+  by_prompt as (
+    select prompt_id, win,
+           count(*)                                    as answers,
+           count(*) filter (where mention_count > 0)   as mention_answers,
+           count(*) filter (where citation_count > 0)  as citation_answers,
+           sum(1.0 / mention_position) filter (where mention_position is not null)
+                                                       as sum_inv_position,
+           count(*) filter (where mention_position is not null) as position_count
+    from scoped
+    group by prompt_id, win
+  ),
+  by_engine as (
+    select model_used, platform, win,
+           count(*)                                    as answers,
+           count(*) filter (where mention_count > 0)   as mention_answers,
+           count(*) filter (where citation_count > 0)  as citation_answers,
+           sum(1.0 / mention_position) filter (where mention_position is not null)
+                                                       as sum_inv_position,
+           count(*) filter (where mention_position is not null) as position_count
+    from scoped
+    group by model_used, platform, win
+  ),
+  added as (
+    select p.created_at
+    from presence pr
+    join public.prompts p on p.id = pr.prompt_id
+    where pr.in_cur and not pr.in_prev
+  )
+  select jsonb_build_object(
+    'complete', true,
+    'prompts', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'prompt_id',        b.prompt_id,
+                'win',              b.win,
+                'answers',          b.answers,
+                'mention_answers',  b.mention_answers,
+                'citation_answers', b.citation_answers,
+                'sum_inv_position', b.sum_inv_position,
+                'position_count',   b.position_count))
+       from by_prompt b),
+      '[]'::jsonb),
+    'engines', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'model_used',       e.model_used,
+                'platform',         e.platform,
+                'win',              e.win,
+                'answers',          e.answers,
+                'mention_answers',  e.mention_answers,
+                'citation_answers', e.citation_answers,
+                'sum_inv_position', e.sum_inv_position,
+                'position_count',   e.position_count))
+       from by_engine e),
+      '[]'::jsonb),
+    'prompt_info', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'id',         p.id,
+                'text',       p.text,
+                'topic_id',   p.topic_id,
+                'topic_name', t.name))
+       from public.prompts p
+       left join public.topics t on t.id = p.topic_id
+       where p.id in (select prompt_id from by_prompt)),
+      '[]'::jsonb),
+    -- Dates only for prompts created this period: one answered again after
+    -- a pause is new to the comparison, not newly added.
+    'new_prompts', (select jsonb_build_object(
+                      'count',       count(*),
+                      'first_added', min(created_at) filter (where created_at >= p_cur_from),
+                      'last_added',  max(created_at) filter (where created_at >= p_cur_from))
+                    from added)
+  );
+$$;
+
+revoke all on function public.insights_change_drivers_daily(
+  uuid, date, date, date, date, text[], text, boolean
+) from public;
+grant execute on function public.insights_change_drivers_daily(
+  uuid, date, date, date, date, text[], text, boolean
+) to authenticated, service_role;
+
+revoke all on function public.insights_change_drivers(
+  uuid, timestamptz, timestamptz, timestamptz, timestamptz, text[], text, uuid, boolean
+) from public;
+grant execute on function public.insights_change_drivers(
+  uuid, timestamptz, timestamptz, timestamptz, timestamptz, text[], text, uuid, boolean
+) to authenticated, service_role;
+
+comment on function public.insights_change_drivers_daily(
+  uuid, date, date, date, date, text[], text, boolean
+) is
+  'Insights "Why it changed" (VIS-009, 00135): Visibility components per prompt and per (model, platform) in both comparison windows, over the prompts answered in both when p_same_prompts, with prompt text and topic, and the prompts new this period, from the prompt-grain rollups. complete=false until they are backfilled (00130).';
+
+comment on function public.insights_change_drivers(
+  uuid, timestamptz, timestamptz, timestamptz, timestamptz, text[], text, uuid, boolean
+) is
+  'Insights "Why it changed" (VIS-009, 00135) for timestamp windows (24h, topic views), from prompt_results. Same output as insights_change_drivers_daily.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00136_insights_trend.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Insights visibility trend (VIS-007).
+--
+-- The v2 mockup's trend keeps the competitors you pin (up to five) on the
+-- chart whatever the range, and marks the days that explain a step in the
+-- line: prompts added ("+509 prompts added · Sep 29") and Action Center
+-- actions sent ("AC-61 sent · Oct 4").
+--
+-- Pins are saved on the brand, so the whole team sees the same lines; like
+-- every brand setting they're written by admins and managers (the brands
+-- update policy). Ids of competitors deleted since are ignored on read.
+
+alter table public.brands
+  add column if not exists insights_pinned_competitors uuid[] not null default '{}'
+    constraint brands_insights_pinned_competitors_max
+      check (cardinality(insights_pinned_competitors) <= 5);
+
+comment on column public.brands.insights_pinned_competitors is
+  'Competitors pinned on the Insights visibility trend (VIS-007, 00136), in pin order; at most five.';
+
+-- Per UTC day (the trend's days), the prompts created for the brand (in the
+-- topic, when the trend is filtered to one) and the actions a person sent
+-- from it. Actions the nightly generator created have no actor on their
+-- "created" event and aren't markers.
+create or replace function public.insights_trend_markers(
+  p_brand_id uuid,
+  p_from timestamptz default null,
+  p_to timestamptz default null,
+  p_topic_id uuid default null
+)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  select jsonb_build_object(
+    'prompts_added', coalesce(
+      (select jsonb_agg(jsonb_build_object('day', d.day, 'count', d.n) order by d.day)
+       from (
+         select (p.created_at at time zone 'utc')::date as day, count(*) as n
+         from public.prompts p
+         join public.prompt_sets ps on ps.id = p.prompt_set_id
+         where ps.brand_id = p_brand_id
+           and (p_topic_id is null or p.topic_id = p_topic_id)
+           and (p_from is null or p.created_at >= p_from)
+           and (p_to is null or p.created_at <= p_to)
+         group by 1
+       ) d),
+      '[]'::jsonb),
+    'actions_sent', coalesce(
+      (select jsonb_agg(jsonb_build_object('day', d.day, 'action_nos', d.nos) order by d.day)
+       from (
+         select (a.created_at at time zone 'utc')::date as day,
+                array_agg(a.action_no order by a.action_no) as nos
+         from public.actions a
+         where a.brand_id = p_brand_id
+           and (p_from is null or a.created_at >= p_from)
+           and (p_to is null or a.created_at <= p_to)
+           and exists (
+                 select 1 from public.action_events e
+                 where e.action_id = a.id
+                   and e.event = 'created'
+                   and e.actor_id is not null)
+         group by 1
+       ) d),
+      '[]'::jsonb)
+  );
+$$;
+
+revoke all on function public.insights_trend_markers(uuid, timestamptz, timestamptz, uuid) from public;
+grant execute on function public.insights_trend_markers(uuid, timestamptz, timestamptz, uuid)
+  to authenticated, service_role;
+
+comment on function public.insights_trend_markers(uuid, timestamptz, timestamptz, uuid) is
+  'Insights trend markers (VIS-007, 00136): per UTC day, the prompts created for the brand (optionally in one topic) and the Action Center actions a person sent, between two optional bounds. Security invoker.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00137_insights_topic_competitors.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Insights "Topics vs competitors" (VIS-010).
+--
+-- The v2 mockup's heat map has a row per topic and a column for you and each
+-- competitor on the trend, each cell the Visibility score in that topic. The
+-- score is the card's formula with the brand's answers as the shared
+-- denominator (as the leaderboard scores competitors), so this returns, per
+-- active topic, the brand's components over the topic's prompts and each
+-- live competitor's components over the same answers. The app scores them
+-- and picks the columns.
+--
+-- Prompts take their history to the topic they're in now (topic is read at
+-- query time, like the other topic reads). Whole UTC days only, from the
+-- prompt-grain rollups (00130): the heat map isn't shown on the 24h view.
+-- `complete` is false while those rollups aren't backfilled.
+
+create or replace function public.insights_topic_competitors_daily(
+  p_brand_id uuid,
+  p_day_from date default null,
+  p_day_to date default null,
+  p_models text[] default null,
+  p_region text default null
+)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  with topic_prompts as (
+    select p.id as prompt_id, t.id as topic_id
+    from public.prompts p
+    join public.prompt_sets ps on ps.id = p.prompt_set_id
+    join public.topics t on t.id = p.topic_id
+    where ps.brand_id = p_brand_id
+      and t.is_active
+  ),
+  brand_rows as (
+    select tp.topic_id, d.prompt_id, d.answer_count, d.mention_answers, d.citation_answers,
+           d.sum_inv_position, d.position_count
+    from public.insights_prompt_daily d
+    join topic_prompts tp on tp.prompt_id = d.prompt_id
+    where d.brand_id = p_brand_id
+      and (p_day_from is null or d.day >= p_day_from)
+      and (p_day_to is null or d.day <= p_day_to)
+      and (p_models is null or d.model_used = any (p_models))
+      and (p_region is null or d.region = p_region)
+  ),
+  competitor_rows as (
+    select tp.topic_id, c.id as competitor_id, cpd.mention_answers, cpd.citation_answers,
+           cpd.sum_inv_position, cpd.position_count
+    from public.insights_competitor_prompt_daily cpd
+    join topic_prompts tp on tp.prompt_id = cpd.prompt_id
+    -- Live competitors only, like the leaderboard.
+    join public.competitors c on c.id::text = cpd.competitor_id and c.brand_id = p_brand_id
+    where cpd.brand_id = p_brand_id
+      and (p_day_from is null or cpd.day >= p_day_from)
+      and (p_day_to is null or cpd.day <= p_day_to)
+      and (p_models is null or cpd.model_used = any (p_models))
+      and (p_region is null or cpd.region = p_region)
+  ),
+  brand as (
+    select topic_id,
+           count(distinct prompt_id) as prompts,
+           sum(answer_count)         as answers,
+           sum(mention_answers)      as mention_answers,
+           sum(citation_answers)     as citation_answers,
+           sum(sum_inv_position)     as sum_inv_position,
+           sum(position_count)       as position_count
+    from brand_rows
+    group by topic_id
+  ),
+  competitor as (
+    select topic_id, competitor_id,
+           sum(mention_answers)  as mention_answers,
+           sum(citation_answers) as citation_answers,
+           sum(sum_inv_position) as sum_inv_position,
+           sum(position_count)   as position_count
+    from competitor_rows
+    group by topic_id, competitor_id
+  )
+  select jsonb_build_object(
+    'complete', not exists (select 1 from brand_rows where mention_answers is null)
+                and not exists (select 1 from competitor_rows where mention_answers is null),
+    'topics', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'topic_id',         b.topic_id,
+                'name',             t.name,
+                'prompts',          b.prompts,
+                'answers',          b.answers,
+                'mention_answers',  b.mention_answers,
+                'citation_answers', b.citation_answers,
+                'sum_inv_position', b.sum_inv_position,
+                'position_count',   b.position_count,
+                'competitors', coalesce(
+                  (select jsonb_agg(jsonb_build_object(
+                            'competitor_id',    c.competitor_id,
+                            'mention_answers',  c.mention_answers,
+                            'citation_answers', c.citation_answers,
+                            'sum_inv_position', c.sum_inv_position,
+                            'position_count',   c.position_count))
+                   from competitor c
+                   where c.topic_id = b.topic_id),
+                  '[]'::jsonb)))
+       from brand b
+       join public.topics t on t.id = b.topic_id),
+      '[]'::jsonb)
+  );
+$$;
+
+revoke all on function public.insights_topic_competitors_daily(
+  uuid, date, date, text[], text
+) from public;
+grant execute on function public.insights_topic_competitors_daily(
+  uuid, date, date, text[], text
+) to authenticated, service_role;
+
+comment on function public.insights_topic_competitors_daily(uuid, date, date, text[], text) is
+  'Insights "Topics vs competitors" (VIS-010, 00137): per active topic, the brand''s Visibility components over the topic''s prompts and each live competitor''s components over the same answers, from the prompt-grain rollups. complete=false until they are backfilled (00130).';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00138_prompt_suggestion_relevance.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Relevance of a prompt suggestion to the brand (VIS-011).
+--
+-- The Insights Opportunities card ranks suggestions by relevance × demand ×
+-- gap and hides any under a fixed 0.6 (Visibility spec v2). The refresh's
+-- model already writes each suggestion; relevance is one more field of that
+-- same answer, stored 0–1. Rows generated before this, or once the month's
+-- allowance below is spent, stay null, and the card doesn't list a suggestion
+-- it can't place against the threshold.
+alter table public.prompt_suggestions
+  add column if not exists relevance real
+    constraint prompt_suggestions_relevance_check
+      check (relevance is null or (relevance >= 0 and relevance <= 1));
+
+-- Monthly relevance allowance: one row per refresh that rated relevance,
+-- charged an upper estimate of what rating added to it (a full list, for
+-- every attempt), summed per organization over the subscription period
+-- against plan.limits.relevanceMonthlyBudgetUsd, 0.1% of the plan price
+-- (Starter $0.049, Growth $0.249, Enterprise $0.499 or 0.1% of
+-- plan_overrides.contractMonthlyUsd). A refresh rates only once its worst
+-- case is reserved below, so the month never passes it. Separate from the
+-- Improve budget (prompt_improve_usage, 00120). The call's own token counts
+-- are kept to check the estimate against. Self-hosted isn't limited and
+-- records nothing.
+
+create table if not exists public.suggestion_relevance_usage (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  brand_id uuid references public.brands(id) on delete set null,
+  model text,
+  attempts integer not null default 1,
+  input_tokens integer,
+  output_tokens integer,
+  cost_usd numeric(12, 6) not null default 0,
+  used_at timestamptz not null default now()
+);
+
+create index if not exists suggestion_relevance_usage_org_used_idx
+  on public.suggestion_relevance_usage (organization_id, used_at);
+
+-- Service-role only, no policy (as prompt_improve_usage).
+alter table public.suggestion_relevance_usage enable row level security;
+
+grant all on table public.suggestion_relevance_usage to service_role;
+
+-- Reserves a refresh's worst case (p_cost) in one transaction, under a
+-- per-organization lock, so two refreshes running at once (several brands of
+-- one org, or a double click) can never take the organization past
+-- p_budget. Returns the usage row id, or null when what's left can't cover
+-- it; the caller then refreshes without rating, and once the model answers
+-- lowers the row to what the attempts it made cost.
+create or replace function public.reserve_suggestion_relevance(
+  p_organization_id uuid,
+  p_brand_id uuid,
+  p_model text,
+  p_since timestamptz,
+  p_budget numeric,
+  p_cost numeric
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_spent numeric;
+  v_id uuid;
+begin
+  perform pg_advisory_xact_lock(hashtext('suggestion_relevance:' || p_organization_id::text));
+
+  select coalesce(sum(cost_usd), 0) into v_spent
+  from public.suggestion_relevance_usage
+  where organization_id = p_organization_id
+    and used_at >= p_since;
+
+  if v_spent + p_cost > p_budget then
+    return null;
+  end if;
+
+  insert into public.suggestion_relevance_usage (organization_id, brand_id, model, cost_usd)
+  values (p_organization_id, p_brand_id, p_model, p_cost)
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
+revoke all on function public.reserve_suggestion_relevance(uuid, uuid, text, timestamptz, numeric, numeric)
+  from public, anon, authenticated;
+grant execute on function public.reserve_suggestion_relevance(uuid, uuid, text, timestamptz, numeric, numeric)
+  to service_role;
+
+comment on function public.reserve_suggestion_relevance(uuid, uuid, text, timestamptz, numeric, numeric) is
+  'Atomically reserves a suggestion refresh''s worst-case relevance cost against the organization''s monthly allowance (VIS-011). Returns the suggestion_relevance_usage id, or null when it does not fit.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00139_prompt_usage_counters.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Tracked Prompts usage counters (PROMPT-012).
+--
+-- The usage cards above the Tracked Prompts table show a brand's active and
+-- paused prompts, and the account's active prompts, brands and active prompt
+-- locations. Counting those from `prompts` on every page view is what the
+-- spec rules out, so they're kept here, one row per brand, and the account
+-- figures are the sum of the org's few brand rows.
+--
+-- A row is rebuilt from `prompts` by statement-level triggers, in the same
+-- transaction as the change: a prompt added, paused, resumed, edited, moved
+-- or deleted, and a prompt set deleted or moved to another brand. Rebuilding
+-- the brand rather than adding deltas means a missed case can't leave a row
+-- wrong for good, and a per-brand advisory lock taken before the rebuild
+-- makes the last of two concurrent writers count both changes.
+--
+-- Locations follow org_prompt_location_usage (00128): an active prompt counts
+-- greatest(array_length(regions), 1), a paused one counts none.
+--
+-- prompt_usage_actual() is the one place the counts are computed from
+-- `prompts`; the rebuild, the backfill and the nightly check all read it.
+-- repair_prompt_usage_counters() compares every row with it, rebuilds the rows
+-- that differ and returns them; the server runs it nightly and logs drift.
+
+-- The rebuild looks prompts up by brand; neither join had an index.
+create index if not exists idx_prompts_prompt_set_id on public.prompts (prompt_set_id);
+create index if not exists idx_prompt_sets_brand_id on public.prompt_sets (brand_id);
+
+create table if not exists public.prompt_usage_counters (
+  brand_id uuid primary key references public.brands(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  active_prompts integer not null default 0,
+  paused_prompts integer not null default 0,
+  active_locations integer not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_prompt_usage_counters_org
+  on public.prompt_usage_counters (organization_id);
+
+alter table public.prompt_usage_counters enable row level security;
+
+drop policy if exists "prompt_usage_counters: member select" on public.prompt_usage_counters;
+create policy "prompt_usage_counters: member select" on public.prompt_usage_counters
+  for select using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+grant select on table public.prompt_usage_counters to authenticated;
+grant all on table public.prompt_usage_counters to service_role;
+
+-- Each brand's counts as they are in `prompts` right now: all brands, or the
+-- given ones. Brands without prompts come back with zeros.
+create or replace function public.prompt_usage_actual(p_brand_ids uuid[] default null)
+returns table (
+  brand_id uuid,
+  organization_id uuid,
+  active_prompts integer,
+  paused_prompts integer,
+  active_locations integer
+)
+language sql
+stable
+set search_path = public
+as $$
+  select
+    b.id,
+    b.organization_id,
+    count(p.id) filter (where p.is_active)::integer,
+    count(p.id) filter (where not p.is_active)::integer,
+    coalesce(
+      sum(greatest(coalesce(array_length(p.regions, 1), 0), 1)) filter (where p.is_active),
+      0
+    )::integer
+  from public.brands b
+  left join public.prompt_sets ps on ps.brand_id = b.id
+  left join public.prompts p on p.prompt_set_id = ps.id
+  where p_brand_ids is null or b.id = any(p_brand_ids)
+  group by b.id, b.organization_id;
+$$;
+
+revoke all on function public.prompt_usage_actual(uuid[]) from public, anon, authenticated;
+grant execute on function public.prompt_usage_actual(uuid[]) to service_role;
+
+-- Rebuilds the counter rows of the given brands. Brands that no longer exist
+-- (a brand deleted, its sets and prompts cascading) are skipped; their rows go
+-- with them.
+create or replace function public.refresh_prompt_usage_counters(p_brand_ids uuid[])
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_brand uuid;
+begin
+  -- Sorted, so two writers locking the same brands can't deadlock.
+  for v_brand in
+    select distinct id from unnest(p_brand_ids) as t(id) where id is not null order by id
+  loop
+    perform pg_advisory_xact_lock(hashtext('prompt_usage_counters:' || v_brand::text));
+
+    -- A new statement after the lock, so it counts what a writer we waited
+    -- for has committed.
+    insert into public.prompt_usage_counters as c (
+      brand_id, organization_id, active_prompts, paused_prompts, active_locations, updated_at
+    )
+    select a.brand_id, a.organization_id, a.active_prompts, a.paused_prompts, a.active_locations, now()
+    from public.prompt_usage_actual(array[v_brand]) a
+    on conflict (brand_id) do update set
+      organization_id = excluded.organization_id,
+      active_prompts = excluded.active_prompts,
+      paused_prompts = excluded.paused_prompts,
+      active_locations = excluded.active_locations,
+      updated_at = excluded.updated_at;
+  end loop;
+end;
+$$;
+
+revoke all on function public.refresh_prompt_usage_counters(uuid[]) from public, anon, authenticated;
+grant execute on function public.refresh_prompt_usage_counters(uuid[]) to service_role;
+
+-- Statement-level, so a bulk import or a plan alignment that writes hundreds
+-- of prompts in one statement rebuilds each brand once. Prompts whose set is
+-- already gone (a set deleted, its prompts cascading) resolve to no brand; the
+-- prompt_sets trigger below rebuilds that brand instead.
+create or replace function public.prompts_refresh_usage_counters()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_brands uuid[];
+begin
+  if tg_op = 'INSERT' then
+    select array_agg(distinct ps.brand_id) into v_brands
+    from new_rows r join public.prompt_sets ps on ps.id = r.prompt_set_id;
+  elsif tg_op = 'DELETE' then
+    select array_agg(distinct ps.brand_id) into v_brands
+    from old_rows r join public.prompt_sets ps on ps.id = r.prompt_set_id;
+  else
+    select array_agg(distinct ps.brand_id) into v_brands
+    from (
+      select prompt_set_id from new_rows
+      union
+      select prompt_set_id from old_rows
+    ) r
+    join public.prompt_sets ps on ps.id = r.prompt_set_id;
+  end if;
+
+  if v_brands is not null then
+    perform public.refresh_prompt_usage_counters(v_brands);
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists trg_prompts_usage_counters_insert on public.prompts;
+create trigger trg_prompts_usage_counters_insert
+  after insert on public.prompts
+  referencing new table as new_rows
+  for each statement execute function public.prompts_refresh_usage_counters();
+
+drop trigger if exists trg_prompts_usage_counters_update on public.prompts;
+create trigger trg_prompts_usage_counters_update
+  after update on public.prompts
+  referencing old table as old_rows new table as new_rows
+  for each statement execute function public.prompts_refresh_usage_counters();
+
+drop trigger if exists trg_prompts_usage_counters_delete on public.prompts;
+create trigger trg_prompts_usage_counters_delete
+  after delete on public.prompts
+  referencing old table as old_rows
+  for each statement execute function public.prompts_refresh_usage_counters();
+
+-- A prompt set deleted (its prompts cascading first) or moved to another
+-- brand: rebuild the brands it left and joined.
+create or replace function public.prompt_sets_refresh_usage_counters()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_brands uuid[];
+begin
+  if tg_op = 'DELETE' then
+    select array_agg(distinct brand_id) into v_brands from old_rows;
+  else
+    select array_agg(distinct brand_id) into v_brands
+    from (
+      select brand_id from new_rows
+      union
+      select brand_id from old_rows
+    ) r;
+  end if;
+
+  if v_brands is not null then
+    perform public.refresh_prompt_usage_counters(v_brands);
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists trg_prompt_sets_usage_counters_update on public.prompt_sets;
+create trigger trg_prompt_sets_usage_counters_update
+  after update on public.prompt_sets
+  referencing old table as old_rows new table as new_rows
+  for each statement execute function public.prompt_sets_refresh_usage_counters();
+
+drop trigger if exists trg_prompt_sets_usage_counters_delete on public.prompt_sets;
+create trigger trg_prompt_sets_usage_counters_delete
+  after delete on public.prompt_sets
+  referencing old table as old_rows
+  for each statement execute function public.prompt_sets_refresh_usage_counters();
+
+-- What the usage cards read: one brand's counts plus its account's totals,
+-- from the counter rows alone. Security invoker, so RLS returns no row for a
+-- brand outside the caller's org.
+create or replace function public.prompt_usage_summary(p_brand_id uuid)
+returns table (
+  brand_active integer,
+  brand_paused integer,
+  account_active integer,
+  account_brands integer,
+  account_locations integer
+)
+language sql
+stable
+set search_path = public
+as $$
+  select
+    coalesce(bc.active_prompts, 0),
+    coalesce(bc.paused_prompts, 0),
+    coalesce(acct.active_prompts, 0)::integer,
+    (select count(*) from public.brands b2 where b2.organization_id = b.organization_id)::integer,
+    coalesce(acct.active_locations, 0)::integer
+  from public.brands b
+  left join public.prompt_usage_counters bc on bc.brand_id = b.id
+  left join lateral (
+    select sum(c.active_prompts) as active_prompts, sum(c.active_locations) as active_locations
+    from public.prompt_usage_counters c
+    where c.organization_id = b.organization_id
+  ) acct on true
+  where b.id = p_brand_id;
+$$;
+
+revoke all on function public.prompt_usage_summary(uuid) from public, anon;
+grant execute on function public.prompt_usage_summary(uuid) to authenticated, service_role;
+
+-- The nightly consistency check: compare every row with prompt_usage_actual(),
+-- return the ones that differ (stored and actual counts) for the log, and
+-- rebuild them. A brand moved to another organization counts as drift too. A
+-- brand with no prompts and no row yet isn't drift.
+create or replace function public.repair_prompt_usage_counters()
+returns table (
+  brand_id uuid,
+  stored_active integer,
+  stored_paused integer,
+  stored_locations integer,
+  actual_active integer,
+  actual_paused integer,
+  actual_locations integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_ids uuid[] := '{}';
+  r record;
+begin
+  for r in
+    select
+      a.brand_id as id,
+      coalesce(c.active_prompts, 0) as s_active,
+      coalesce(c.paused_prompts, 0) as s_paused,
+      coalesce(c.active_locations, 0) as s_locations,
+      a.active_prompts as a_active,
+      a.paused_prompts as a_paused,
+      a.active_locations as a_locations
+    from public.prompt_usage_actual() a
+    left join public.prompt_usage_counters c on c.brand_id = a.brand_id
+    where coalesce(c.active_prompts, 0) <> a.active_prompts
+       or coalesce(c.paused_prompts, 0) <> a.paused_prompts
+       or coalesce(c.active_locations, 0) <> a.active_locations
+       or (c.brand_id is not null and c.organization_id <> a.organization_id)
+  loop
+    brand_id := r.id;
+    stored_active := r.s_active;
+    stored_paused := r.s_paused;
+    stored_locations := r.s_locations;
+    actual_active := r.a_active;
+    actual_paused := r.a_paused;
+    actual_locations := r.a_locations;
+    v_ids := v_ids || r.id;
+    return next;
+  end loop;
+
+  if cardinality(v_ids) > 0 then
+    perform public.refresh_prompt_usage_counters(v_ids);
+  end if;
+end;
+$$;
+
+revoke all on function public.repair_prompt_usage_counters() from public, anon, authenticated;
+grant execute on function public.repair_prompt_usage_counters() to service_role;
+
+-- Every existing brand starts with its current counts. One statement and no
+-- advisory locks (one per brand could exhaust the lock table on a large
+-- database): the CREATE TRIGGERs above already hold off writes to prompts and
+-- prompt_sets until this migration commits.
+insert into public.prompt_usage_counters (
+  brand_id, organization_id, active_prompts, paused_prompts, active_locations
+)
+select brand_id, organization_id, active_prompts, paused_prompts, active_locations
+from public.prompt_usage_actual()
+on conflict (brand_id) do nothing;
+
+comment on table public.prompt_usage_counters is
+  'Per-brand prompt counts for the Tracked Prompts usage cards (PROMPT-012, 00139): active, paused and active prompt locations. Rebuilt by triggers on prompts and prompt_sets; repair_prompt_usage_counters() checks them nightly.';
+comment on function public.prompt_usage_summary(uuid) is
+  'One brand''s active/paused prompts and its account''s active prompts, brands and active prompt locations, from prompt_usage_counters only (PROMPT-012). Security invoker.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00140_fanout_coverage_by_platform.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Query fan-out coverage per platform, for the daily health report.
+--
+-- ChatGPT's observed fan-out came back empty from 2026-09-30 while its
+-- answers still carried sources: the engine was searching, the field just
+-- stopped arriving. Nothing noticed for two weeks, because an empty field
+-- reads exactly like an answer that ran no search. The health report now
+-- reads each platform's share of answers with fan-out over the last day and
+-- the days before, and flags one that stops (server/src/lib/health/report.js).
+--
+-- One aggregate over the window (idx_prompt_results_created_at), across every
+-- brand; no rows leave the database. Service role only.
+create or replace function public.fanout_coverage_by_platform(
+  p_since timestamptz,
+  p_until timestamptz
+)
+returns table (platform text, answers bigint, answers_with_fanout bigint)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    r.platform,
+    count(*)::bigint,
+    count(*) filter (
+      where case
+        when jsonb_typeof(r.search_queries) = 'array' then jsonb_array_length(r.search_queries)
+        else 0
+      end > 0
+    )::bigint
+  from public.prompt_results r
+  where r.created_at >= p_since
+    and r.created_at < p_until
+  group by r.platform;
+$$;
+
+revoke all on function public.fanout_coverage_by_platform(timestamptz, timestamptz)
+  from public, anon, authenticated;
+grant execute on function public.fanout_coverage_by_platform(timestamptz, timestamptz)
+  to service_role;
+
+comment on function public.fanout_coverage_by_platform(timestamptz, timestamptz) is
+  'Answers and answers with observed query fan-out per platform in [p_since, p_until), across all brands (00140). Read by the daily health report.';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00147_insights_same_prompts_definer.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- "Compare: Same prompts" timed out on the largest brand (#1036 review).
@@ -15745,4 +17801,896 @@ revoke execute on function public.insights_same_prompt_compare(
 grant execute on function public.insights_same_prompt_compare(
   uuid, timestamptz, timestamptz, timestamptz, timestamptz, text[], text, uuid
 ) to authenticated, service_role;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00148_insights_change_drivers_definer.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- "Why it changed" timed out on the largest brand (#1042 review).
+--
+-- insights_change_drivers_daily (00135) took 0.58 s as the table owner but
+-- over 20 s for a signed-in member on the largest brand (~219k answers, 30
+-- days against the 30 before), so the box never showed for that brand and
+-- each open spent the authenticated role's whole 8 s statement_timeout. The
+-- same query with literal values plans fine: a SQL-language function is
+-- planned without its argument values (PostgreSQL 17 and older), so the
+-- brand and both day ranges were guesses (a range between unknown bounds is
+-- estimated at 0.5% of the rows), and the RLS membership subquery was
+-- planned into that small guess. plan_cache_mode does not reach SQL
+-- functions.
+--
+-- As for insights_same_prompt_compare[_daily] (00147): both functions
+-- become plpgsql with force_custom_plan, so every call is planned with its
+-- real arguments, and security definer with the organization check made
+-- explicit, as citations_urls_daily does (00119). The service role still
+-- reads, for the cached 24h view (cachedAnchoredInsights), which checks the
+-- caller's access to the brand first. The rows are folded to one per
+-- prompt, engine and window before the presence check and the two
+-- groupings read them. Output and counting rules are 00135's.
+
+-- ─── Over the rollups (whole-day windows) ──────────────────────────────────
+
+create or replace function public.insights_change_drivers_daily(
+  p_brand_id uuid,
+  p_cur_from date,
+  p_cur_to date,
+  p_prev_from date,
+  p_prev_to date,
+  p_models text[] default null,
+  p_region text default null,
+  p_same_prompts boolean default true
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set work_mem to '64MB'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+declare
+  v_result jsonb;
+begin
+  if auth.role() is distinct from 'service_role' and not exists (
+    select 1 from public.brands b
+    join public.profiles pf on pf.organization_id = b.organization_id
+    where b.id = p_brand_id and pf.id = auth.uid()
+  ) then
+    return null;
+  end if;
+
+  with per_engine as (
+    -- One row per prompt, engine and window: nothing below reads the
+    -- per-day rows.
+    select d.prompt_id, d.model_used, d.platform,
+           case when d.day between p_cur_from and p_cur_to then 'cur' else 'prev' end as win,
+           sum(d.answer_count)                as answers,
+           sum(d.mention_answers)             as mention_answers,
+           sum(d.citation_answers)            as citation_answers,
+           sum(d.sum_inv_position)            as sum_inv_position,
+           sum(d.position_count)              as position_count,
+           bool_or(d.mention_answers is null) as stale
+    from public.insights_prompt_daily d
+    where d.brand_id = p_brand_id
+      and (p_models is null or d.model_used = any (p_models))
+      and (p_region is null or d.region = p_region)
+      and (d.day between p_cur_from and p_cur_to or d.day between p_prev_from and p_prev_to)
+    group by 1, 2, 3, 4
+  ),
+  presence as (
+    select prompt_id,
+           bool_or(win = 'cur')  as in_cur,
+           bool_or(win = 'prev') as in_prev
+    from per_engine
+    group by prompt_id
+  ),
+  scoped as (
+    select r.* from per_engine r join presence p using (prompt_id)
+    where not p_same_prompts or (p.in_cur and p.in_prev)
+  ),
+  by_prompt as (
+    select prompt_id, win,
+           sum(answers)          as answers,
+           sum(mention_answers)  as mention_answers,
+           sum(citation_answers) as citation_answers,
+           sum(sum_inv_position) as sum_inv_position,
+           sum(position_count)   as position_count
+    from scoped
+    group by prompt_id, win
+  ),
+  by_engine as (
+    select model_used, platform, win,
+           sum(answers)          as answers,
+           sum(mention_answers)  as mention_answers,
+           sum(citation_answers) as citation_answers,
+           sum(sum_inv_position) as sum_inv_position,
+           sum(position_count)   as position_count
+    from scoped
+    group by model_used, platform, win
+  ),
+  added as (
+    select p.created_at
+    from presence pr
+    join public.prompts p on p.id = pr.prompt_id
+    where pr.in_cur and not pr.in_prev
+  )
+  select jsonb_build_object(
+    'complete', not exists (select 1 from per_engine where stale),
+    'prompts', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'prompt_id',        b.prompt_id,
+                'win',              b.win,
+                'answers',          b.answers,
+                'mention_answers',  b.mention_answers,
+                'citation_answers', b.citation_answers,
+                'sum_inv_position', b.sum_inv_position,
+                'position_count',   b.position_count))
+       from by_prompt b),
+      '[]'::jsonb),
+    'engines', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'model_used',       e.model_used,
+                'platform',         e.platform,
+                'win',              e.win,
+                'answers',          e.answers,
+                'mention_answers',  e.mention_answers,
+                'citation_answers', e.citation_answers,
+                'sum_inv_position', e.sum_inv_position,
+                'position_count',   e.position_count))
+       from by_engine e),
+      '[]'::jsonb),
+    'prompt_info', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'id',         p.id,
+                'text',       p.text,
+                'topic_id',   p.topic_id,
+                'topic_name', t.name))
+       from public.prompts p
+       left join public.topics t on t.id = p.topic_id
+       where p.id in (select prompt_id from by_prompt)),
+      '[]'::jsonb),
+    -- Dates only for prompts created this period: one answered again after
+    -- a pause is new to the comparison, not newly added.
+    'new_prompts', (select jsonb_build_object(
+                      'count',       count(*),
+                      'first_added', min(created_at) filter (
+                                       where created_at >= (p_cur_from::timestamp at time zone 'utc')),
+                      'last_added',  max(created_at) filter (
+                                       where created_at >= (p_cur_from::timestamp at time zone 'utc')))
+                    from added)
+  )
+  into v_result;
+
+  return v_result;
+end;
+$$;
+
+-- ─── Over the raw rows (24h and topic views) ───────────────────────────────
+
+create or replace function public.insights_change_drivers(
+  p_brand_id uuid,
+  p_cur_from timestamptz,
+  p_cur_to timestamptz,
+  p_prev_from timestamptz,
+  p_prev_to timestamptz,
+  p_models text[] default null,
+  p_region text default null,
+  p_topic_id uuid default null,
+  p_same_prompts boolean default true
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set work_mem to '64MB'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+declare
+  v_result jsonb;
+begin
+  if auth.role() is distinct from 'service_role' and not exists (
+    select 1 from public.brands b
+    join public.profiles pf on pf.organization_id = b.organization_id
+    where b.id = p_brand_id and pf.id = auth.uid()
+  ) then
+    return null;
+  end if;
+
+  with filtered as (
+    select pr.prompt_id, pr.model_used, pr.platform,
+           pr.mention_count, pr.citation_count, pr.mention_position,
+           pr.created_at >= p_cur_from and pr.created_at <= p_cur_to   as in_cur,
+           pr.created_at >= p_prev_from and pr.created_at <= p_prev_to as in_prev
+    from public.prompt_results pr
+    where pr.brand_id = p_brand_id
+      and pr.platform <> 'chatgpt-shopping'
+      and (p_models is null or pr.model_used = any (p_models))
+      and (p_region is null or pr.region = p_region)
+      and pr.created_at >= p_prev_from
+      and pr.created_at <= p_cur_to
+      and (p_topic_id is null or exists (
+             select 1 from public.prompts p
+             where p.id = pr.prompt_id and p.topic_id = p_topic_id))
+  ),
+  -- Each window selected on its own, inclusive at both ends like the card,
+  -- and folded to one row per prompt, engine and window.
+  per_engine as (
+    select f.prompt_id, f.model_used, f.platform, w.win,
+           count(*)                                      as answers,
+           count(*) filter (where f.mention_count > 0)   as mention_answers,
+           count(*) filter (where f.citation_count > 0)  as citation_answers,
+           sum(1.0 / f.mention_position) filter (where f.mention_position is not null)
+                                                         as sum_inv_position,
+           count(*) filter (where f.mention_position is not null) as position_count
+    from filtered f
+    cross join lateral (values ('cur', f.in_cur), ('prev', f.in_prev)) w(win, inside)
+    where w.inside
+    group by 1, 2, 3, 4
+  ),
+  presence as (
+    select prompt_id,
+           bool_or(win = 'cur')  as in_cur,
+           bool_or(win = 'prev') as in_prev
+    from per_engine
+    group by prompt_id
+  ),
+  scoped as (
+    select r.* from per_engine r join presence p using (prompt_id)
+    where not p_same_prompts or (p.in_cur and p.in_prev)
+  ),
+  by_prompt as (
+    select prompt_id, win,
+           sum(answers)          as answers,
+           sum(mention_answers)  as mention_answers,
+           sum(citation_answers) as citation_answers,
+           sum(sum_inv_position) as sum_inv_position,
+           sum(position_count)   as position_count
+    from scoped
+    group by prompt_id, win
+  ),
+  by_engine as (
+    select model_used, platform, win,
+           sum(answers)          as answers,
+           sum(mention_answers)  as mention_answers,
+           sum(citation_answers) as citation_answers,
+           sum(sum_inv_position) as sum_inv_position,
+           sum(position_count)   as position_count
+    from scoped
+    group by model_used, platform, win
+  ),
+  added as (
+    select p.created_at
+    from presence pr
+    join public.prompts p on p.id = pr.prompt_id
+    where pr.in_cur and not pr.in_prev
+  )
+  select jsonb_build_object(
+    'complete', true,
+    'prompts', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'prompt_id',        b.prompt_id,
+                'win',              b.win,
+                'answers',          b.answers,
+                'mention_answers',  b.mention_answers,
+                'citation_answers', b.citation_answers,
+                'sum_inv_position', b.sum_inv_position,
+                'position_count',   b.position_count))
+       from by_prompt b),
+      '[]'::jsonb),
+    'engines', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'model_used',       e.model_used,
+                'platform',         e.platform,
+                'win',              e.win,
+                'answers',          e.answers,
+                'mention_answers',  e.mention_answers,
+                'citation_answers', e.citation_answers,
+                'sum_inv_position', e.sum_inv_position,
+                'position_count',   e.position_count))
+       from by_engine e),
+      '[]'::jsonb),
+    'prompt_info', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'id',         p.id,
+                'text',       p.text,
+                'topic_id',   p.topic_id,
+                'topic_name', t.name))
+       from public.prompts p
+       left join public.topics t on t.id = p.topic_id
+       where p.id in (select prompt_id from by_prompt)),
+      '[]'::jsonb),
+    -- Dates only for prompts created this period: one answered again after
+    -- a pause is new to the comparison, not newly added.
+    'new_prompts', (select jsonb_build_object(
+                      'count',       count(*),
+                      'first_added', min(created_at) filter (where created_at >= p_cur_from),
+                      'last_added',  max(created_at) filter (where created_at >= p_cur_from))
+                    from added)
+  )
+  into v_result;
+
+  return v_result;
+end;
+$$;
+
+revoke execute on function public.insights_change_drivers_daily(
+  uuid, date, date, date, date, text[], text, boolean
+) from public, anon;
+grant execute on function public.insights_change_drivers_daily(
+  uuid, date, date, date, date, text[], text, boolean
+) to authenticated, service_role;
+
+revoke execute on function public.insights_change_drivers(
+  uuid, timestamptz, timestamptz, timestamptz, timestamptz, text[], text, uuid, boolean
+) from public, anon;
+grant execute on function public.insights_change_drivers(
+  uuid, timestamptz, timestamptz, timestamptz, timestamptz, text[], text, uuid, boolean
+) to authenticated, service_role;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00149_insights_kpi_same_prompts_definer.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- The KPI cards' "Same prompts" read, made fast again (#1036 review).
+--
+-- 00147 (#1036) rewrote insights_same_prompt_compare[_daily] as plpgsql,
+-- security definer, with the organization check made explicit, because the
+-- SQL-language version timed out on the largest brand: 4.5 s as the table
+-- owner, over 30 s for a signed-in member against the authenticated role's
+-- 8 s statement_timeout. It carries 00130's output, so on this branch it
+-- would drop the components 00131 added (negative count, position sum and
+-- count, visible prompts, competitor mentions). This is 00131's output with
+-- 00147's shape: planned per call with its real arguments
+-- (force_custom_plan), no RLS inside the scan, the rollup rows folded to one
+-- row per prompt and window first, and the raw rows kept once. The service
+-- role still reads, for the cached 24h view (cachedAnchoredInsights).
+
+-- ─── Over the rollups (whole-day windows) ──────────────────────────────────
+
+create or replace function public.insights_same_prompt_compare_daily(
+  p_brand_id uuid,
+  p_cur_from date,
+  p_cur_to date,
+  p_prev_from date,
+  p_prev_to date,
+  p_models text[] default null,
+  p_region text default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set work_mem to '64MB'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+declare
+  v_result jsonb;
+begin
+  if auth.role() is distinct from 'service_role' and not exists (
+    select 1 from public.brands b
+    join public.profiles pf on pf.organization_id = b.organization_id
+    where b.id = p_brand_id and pf.id = auth.uid()
+  ) then
+    return null;
+  end if;
+
+  with per_prompt as (
+    -- One row per prompt and window: nothing below reads the per-day rows.
+    select d.prompt_id,
+           case when d.day between p_cur_from and p_cur_to then 'cur' else 'prev' end as win,
+           sum(d.answer_count)                as answers,
+           sum(d.mention_answers)             as mention_answers,
+           sum(d.citation_answers)            as citation_answers,
+           sum(d.sum_inv_position)            as sum_inv_position,
+           sum(d.position_count)              as position_count,
+           sum(d.total_mentions)              as total_mentions,
+           sum(d.total_citations)             as total_citations,
+           sum(d.positive_count)              as positive_count,
+           sum(d.mentioning_answers)          as mentioning_answers,
+           sum(d.negative_count)              as negative_count,
+           sum(d.sum_position)                as sum_position,
+           bool_or(d.has_mention or d.has_citation) as visible,
+           bool_or(d.mention_answers is null or d.negative_count is null) as stale
+    from public.insights_prompt_daily d
+    where d.brand_id = p_brand_id
+      and (p_models is null or d.model_used = any (p_models))
+      and (p_region is null or d.region = p_region)
+      and (d.day between p_cur_from and p_cur_to or d.day between p_prev_from and p_prev_to)
+    group by 1, 2
+  ),
+  presence as (
+    select prompt_id,
+           bool_or(win = 'cur' and answers > 0)  as in_cur,
+           bool_or(win = 'prev' and answers > 0) as in_prev
+    from per_prompt
+    group by prompt_id
+  ),
+  same_prompts as (
+    select prompt_id from presence where in_cur and in_prev
+  ),
+  brand_agg as (
+    select p.win,
+           sum(p.answers)            as answers,
+           sum(p.mention_answers)    as mention_answers,
+           sum(p.citation_answers)   as citation_answers,
+           sum(p.sum_inv_position) / nullif(sum(p.position_count), 0) as position_factor,
+           sum(p.total_mentions)     as total_mentions,
+           sum(p.total_citations)    as total_citations,
+           sum(p.positive_count)     as positive_count,
+           sum(p.mentioning_answers) as mentioning_answers,
+           sum(p.negative_count)     as negative_count,
+           sum(p.sum_position)       as sum_position,
+           sum(p.position_count)     as position_count,
+           count(*) filter (where p.visible) as visible_prompts
+    from per_prompt p
+    join same_prompts s using (prompt_id)
+    group by p.win
+  ),
+  comp_sums as (
+    select case when cd.day between p_cur_from and p_cur_to then 'cur' else 'prev' end as win,
+           cd.competitor_id,
+           sum(cd.mention_answers)  as mention_answers,
+           sum(cd.citation_answers) as citation_answers,
+           sum(cd.sum_inv_position) / nullif(sum(cd.position_count), 0) as position_factor,
+           sum(cd.mention_count)    as mentions,
+           bool_or(cd.mention_answers is null) as stale
+    from public.insights_competitor_prompt_daily cd
+    where cd.brand_id = p_brand_id
+      and cd.prompt_id in (select prompt_id from same_prompts)
+      and (p_models is null or cd.model_used = any (p_models))
+      and (p_region is null or cd.region = p_region)
+      and (cd.day between p_cur_from and p_cur_to or cd.day between p_prev_from and p_prev_to)
+    group by 1, 2
+  ),
+  -- Competitors tracked in each window, from the dense day-grain table (see
+  -- 00130): one added during the period then has no previous value.
+  tracked as (
+    select distinct
+           case when cd.day between p_cur_from and p_cur_to then 'cur' else 'prev' end as win,
+           cd.competitor_id
+    from public.insights_competitor_daily cd
+    where cd.brand_id = p_brand_id
+      and (p_models is null or cd.model_used = any (p_models))
+      and (p_region is null or cd.region = p_region)
+      and (cd.day between p_cur_from and p_cur_to or cd.day between p_prev_from and p_prev_to)
+  ),
+  comp_agg as (
+    select t.win,
+           t.competitor_id,
+           c.name,
+           coalesce(cs.mention_answers, 0)  as mention_answers,
+           coalesce(cs.citation_answers, 0) as citation_answers,
+           cs.position_factor
+    from tracked t
+    join public.competitors c
+      on c.id::text = t.competitor_id and c.brand_id = p_brand_id
+    left join comp_sums cs
+      on cs.win = t.win and cs.competitor_id = t.competitor_id
+  ),
+  -- Every competitor's mentions on the shared prompts, for share of voice
+  -- (which counts all competitors, as share_of_voice_aggregates does).
+  comp_mentions as (
+    select win, sum(mentions) as mentions from comp_sums group by win
+  ),
+  windows(win) as (values ('cur'), ('prev'))
+  select jsonb_build_object(
+    'complete', not exists (select 1 from per_prompt where stale)
+                and not exists (select 1 from comp_sums where stale),
+    'same_prompts',    (select count(*) from same_prompts),
+    'new_prompts',     (select count(*) from presence where in_cur and not in_prev),
+    'dropped_prompts', (select count(*) from presence where in_prev and not in_cur)
+  ) || (
+    select jsonb_object_agg(w.win, jsonb_build_object(
+      'answers',            coalesce(b.answers, 0),
+      'mention_answers',    coalesce(b.mention_answers, 0),
+      'citation_answers',   coalesce(b.citation_answers, 0),
+      'position_factor',    b.position_factor,
+      'total_mentions',     coalesce(b.total_mentions, 0),
+      'total_citations',    coalesce(b.total_citations, 0),
+      'positive_count',     coalesce(b.positive_count, 0),
+      'mentioning_answers', coalesce(b.mentioning_answers, 0),
+      'negative_count',     coalesce(b.negative_count, 0),
+      'sum_position',       b.sum_position,
+      'position_count',     coalesce(b.position_count, 0),
+      'visible_prompts',    coalesce(b.visible_prompts, 0),
+      'competitor_mentions', coalesce((select cm.mentions from comp_mentions cm where cm.win = w.win), 0),
+      'by_competitor', coalesce(
+        (select jsonb_agg(jsonb_build_object(
+                  'competitor_id',    ca.competitor_id,
+                  'name',             ca.name,
+                  'mention_answers',  ca.mention_answers,
+                  'citation_answers', ca.citation_answers,
+                  'position_factor',  ca.position_factor)
+                order by ca.mention_answers desc, ca.competitor_id)
+         from comp_agg ca where ca.win = w.win),
+        '[]'::jsonb)))
+    from windows w
+    left join brand_agg b on b.win = w.win
+  )
+  into v_result;
+
+  return v_result;
+end;
+$$;
+
+-- ─── Over the raw rows (24h and topic views) ───────────────────────────────
+
+create or replace function public.insights_same_prompt_compare(
+  p_brand_id uuid,
+  p_cur_from timestamptz,
+  p_cur_to timestamptz,
+  p_prev_from timestamptz,
+  p_prev_to timestamptz,
+  p_models text[] default null,
+  p_region text default null,
+  p_topic_id uuid default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set work_mem to '64MB'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+declare
+  v_result jsonb;
+begin
+  if auth.role() is distinct from 'service_role' and not exists (
+    select 1 from public.brands b
+    join public.profiles pf on pf.organization_id = b.organization_id
+    where b.id = p_brand_id and pf.id = auth.uid()
+  ) then
+    return null;
+  end if;
+
+  with filtered as (
+    select pr.prompt_id, pr.mention_count, pr.citation_count,
+           pr.mention_position, pr.sentiment, pr.competitor_mentions,
+           pr.created_at >= p_cur_from and pr.created_at <= p_cur_to   as in_cur,
+           pr.created_at >= p_prev_from and pr.created_at <= p_prev_to as in_prev
+    from public.prompt_results pr
+    where pr.brand_id = p_brand_id
+      and pr.platform <> 'chatgpt-shopping'
+      and (p_models is null or pr.model_used = any (p_models))
+      and (p_region is null or pr.region = p_region)
+      and pr.created_at >= p_prev_from
+      and pr.created_at <= p_cur_to
+      and (p_topic_id is null or exists (
+             select 1 from public.prompts p
+             where p.id = pr.prompt_id and p.topic_id = p_topic_id))
+  ),
+  presence as (
+    select prompt_id,
+           bool_or(in_cur)  as in_cur,
+           bool_or(in_prev) as in_prev
+    from filtered
+    group by prompt_id
+  ),
+  same_prompts as (
+    select prompt_id from presence where in_cur and in_prev
+  ),
+  -- Each window selected on its own, inclusive at both ends like
+  -- ai_visibility_aggregates: an answer exactly on the boundary counts in
+  -- both, as it does on the card.
+  same_rows as not materialized (
+    select w.win, f.*
+    from filtered f
+    join same_prompts s using (prompt_id)
+    cross join lateral (values ('cur', f.in_cur), ('prev', f.in_prev)) w(win, inside)
+    where w.inside
+  ),
+  brand_agg as (
+    select win,
+           count(*)                                                   as answers,
+           count(*) filter (where mention_count > 0)                  as mention_answers,
+           count(*) filter (where citation_count > 0)                 as citation_answers,
+           avg(1.0 / mention_position) filter (where mention_position is not null)
+                                                                      as position_factor,
+           coalesce(sum(mention_count), 0)                            as total_mentions,
+           coalesce(sum(citation_count), 0)                           as total_citations,
+           count(*) filter (where sentiment = 'positive')             as positive_count,
+           count(*) filter (where mention_count > 0 or citation_count > 0)
+                                                                      as mentioning_answers,
+           count(*) filter (where sentiment = 'negative')             as negative_count,
+           sum(mention_position) filter (where mention_position is not null)
+                                                                      as sum_position,
+           count(*) filter (where mention_position is not null)       as position_count,
+           count(distinct prompt_id) filter (where mention_count > 0 or citation_count > 0)
+                                                                      as visible_prompts
+    from same_rows
+    group by win
+  ),
+  -- The competitor entries of the shared prompts' answers, unpacked once.
+  comp_entries as materialized (
+    select r.win, cm.value as entry
+    from same_rows r
+    cross join lateral jsonb_array_elements(coalesce(r.competitor_mentions, '[]'::jsonb)) cm
+    where cm.value ? 'competitor_id'
+  ),
+  comp_agg as (
+    select e.win,
+           e.entry->>'competitor_id' as competitor_id,
+           max(c.name)               as name,
+           count(*) filter (where coalesce((e.entry->>'mention_count')::int, 0) > 0)
+                                     as mention_answers,
+           count(*) filter (where coalesce((e.entry->>'citation_count')::int, 0) > 0)
+                                     as citation_answers,
+           avg(1.0 / (e.entry->>'mention_position')::numeric)
+             filter (where (e.entry->>'mention_position') is not null)
+                                     as position_factor
+    from comp_entries e
+    join public.competitors c
+      on c.id::text = e.entry->>'competitor_id' and c.brand_id = p_brand_id
+    group by e.win, e.entry->>'competitor_id'
+  ),
+  -- Every competitor's mentions on the shared prompts, for share of voice.
+  comp_mentions as (
+    select win, sum(coalesce((entry->>'mention_count')::int, 0)) as mentions
+    from comp_entries
+    group by win
+  ),
+  windows(win) as (values ('cur'), ('prev'))
+  select jsonb_build_object(
+    'complete',        true,
+    'same_prompts',    (select count(*) from same_prompts),
+    'new_prompts',     (select count(*) from presence where in_cur and not in_prev),
+    'dropped_prompts', (select count(*) from presence where in_prev and not in_cur)
+  ) || (
+    select jsonb_object_agg(w.win, jsonb_build_object(
+      'answers',            coalesce(b.answers, 0),
+      'mention_answers',    coalesce(b.mention_answers, 0),
+      'citation_answers',   coalesce(b.citation_answers, 0),
+      'position_factor',    b.position_factor,
+      'total_mentions',     coalesce(b.total_mentions, 0),
+      'total_citations',    coalesce(b.total_citations, 0),
+      'positive_count',     coalesce(b.positive_count, 0),
+      'mentioning_answers', coalesce(b.mentioning_answers, 0),
+      'negative_count',     coalesce(b.negative_count, 0),
+      'sum_position',       b.sum_position,
+      'position_count',     coalesce(b.position_count, 0),
+      'visible_prompts',    coalesce(b.visible_prompts, 0),
+      'competitor_mentions', coalesce((select cm.mentions from comp_mentions cm where cm.win = w.win), 0),
+      'by_competitor', coalesce(
+        (select jsonb_agg(jsonb_build_object(
+                  'competitor_id',    ca.competitor_id,
+                  'name',             ca.name,
+                  'mention_answers',  ca.mention_answers,
+                  'citation_answers', ca.citation_answers,
+                  'position_factor',  ca.position_factor)
+                order by ca.mention_answers desc, ca.competitor_id)
+         from comp_agg ca where ca.win = w.win),
+        '[]'::jsonb)))
+    from windows w
+    left join brand_agg b on b.win = w.win
+  )
+  into v_result;
+
+  return v_result;
+end;
+$$;
+
+revoke execute on function public.insights_same_prompt_compare_daily(
+  uuid, date, date, date, date, text[], text
+) from public, anon;
+grant execute on function public.insights_same_prompt_compare_daily(
+  uuid, date, date, date, date, text[], text
+) to authenticated, service_role;
+
+revoke execute on function public.insights_same_prompt_compare(
+  uuid, timestamptz, timestamptz, timestamptz, timestamptz, text[], text, uuid
+) from public, anon;
+grant execute on function public.insights_same_prompt_compare(
+  uuid, timestamptz, timestamptz, timestamptz, timestamptz, text[], text, uuid
+) to authenticated, service_role;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00152_insights_topic_competitors_definer.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- "Topics vs competitors" timed out on the largest brand (#1044 review).
+--
+-- insights_topic_competitors_daily (00137) took 13.5 s for a signed-in
+-- member of the largest brand over 30 days, against the authenticated
+-- role's 8 s statement_timeout, and 1.3 s with the same body planned with
+-- its real arguments. A SQL-language function is planned without its
+-- argument values (PostgreSQL 17 and older), so the day range was a guess:
+-- the competitor rows (212k) were joined to the topic prompts (611) in a
+-- nested loop that discarded 129M rows. And the per-topic competitor
+-- subquery rescanned every competitor row once per topic.
+--
+-- As insights_same_prompt_compare (00147) and insights_change_drivers
+-- (00148) do, the function becomes plpgsql with force_custom_plan, so every
+-- call is planned with its real arguments, and work_mem; and security
+-- definer with the organization check made explicit, as citations_urls_daily
+-- does (00119). Each topic's competitors are folded once, by topic and
+-- competitor, and joined to its row. Output and counting rules are 00137's.
+
+create or replace function public.insights_topic_competitors_daily(
+  p_brand_id uuid,
+  p_day_from date default null,
+  p_day_to date default null,
+  p_models text[] default null,
+  p_region text default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set work_mem to '64MB'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+declare
+  v_result jsonb;
+begin
+  if auth.role() is distinct from 'service_role' and not exists (
+    select 1 from public.brands b
+    join public.profiles pf on pf.organization_id = b.organization_id
+    where b.id = p_brand_id and pf.id = auth.uid()
+  ) then
+    return null;
+  end if;
+
+  with topic_prompts as (
+    select p.id as prompt_id, t.id as topic_id
+    from public.prompts p
+    join public.prompt_sets ps on ps.id = p.prompt_set_id
+    join public.topics t on t.id = p.topic_id
+    where ps.brand_id = p_brand_id
+      and t.is_active
+  ),
+  brand_rows as (
+    select tp.topic_id, d.prompt_id, d.answer_count, d.mention_answers, d.citation_answers,
+           d.sum_inv_position, d.position_count
+    from public.insights_prompt_daily d
+    join topic_prompts tp on tp.prompt_id = d.prompt_id
+    where d.brand_id = p_brand_id
+      and (p_day_from is null or d.day >= p_day_from)
+      and (p_day_to is null or d.day <= p_day_to)
+      and (p_models is null or d.model_used = any (p_models))
+      and (p_region is null or d.region = p_region)
+  ),
+  competitor_rows as (
+    select tp.topic_id, c.id as competitor_id, cpd.mention_answers, cpd.citation_answers,
+           cpd.sum_inv_position, cpd.position_count
+    from public.insights_competitor_prompt_daily cpd
+    join topic_prompts tp on tp.prompt_id = cpd.prompt_id
+    -- Live competitors only, like the leaderboard.
+    join public.competitors c on c.id::text = cpd.competitor_id and c.brand_id = p_brand_id
+    where cpd.brand_id = p_brand_id
+      and (p_day_from is null or cpd.day >= p_day_from)
+      and (p_day_to is null or cpd.day <= p_day_to)
+      and (p_models is null or cpd.model_used = any (p_models))
+      and (p_region is null or cpd.region = p_region)
+  ),
+  brand as (
+    select topic_id,
+           count(distinct prompt_id) as prompts,
+           sum(answer_count)         as answers,
+           sum(mention_answers)      as mention_answers,
+           sum(citation_answers)     as citation_answers,
+           sum(sum_inv_position)     as sum_inv_position,
+           sum(position_count)       as position_count
+    from brand_rows
+    group by topic_id
+  ),
+  competitor as (
+    select topic_id, competitor_id,
+           sum(mention_answers)  as mention_answers,
+           sum(citation_answers) as citation_answers,
+           sum(sum_inv_position) as sum_inv_position,
+           sum(position_count)   as position_count
+    from competitor_rows
+    group by topic_id, competitor_id
+  ),
+  -- Each topic's competitors, folded once and joined to its row below.
+  competitor_lists as (
+    select topic_id,
+           jsonb_agg(jsonb_build_object(
+             'competitor_id',    competitor_id,
+             'mention_answers',  mention_answers,
+             'citation_answers', citation_answers,
+             'sum_inv_position', sum_inv_position,
+             'position_count',   position_count)) as competitors
+    from competitor
+    group by topic_id
+  )
+  select jsonb_build_object(
+    'complete', not exists (select 1 from brand_rows where mention_answers is null)
+                and not exists (select 1 from competitor_rows where mention_answers is null),
+    'topics', coalesce(
+      (select jsonb_agg(jsonb_build_object(
+                'topic_id',         b.topic_id,
+                'name',             t.name,
+                'prompts',          b.prompts,
+                'answers',          b.answers,
+                'mention_answers',  b.mention_answers,
+                'citation_answers', b.citation_answers,
+                'sum_inv_position', b.sum_inv_position,
+                'position_count',   b.position_count,
+                'competitors',      coalesce(cl.competitors, '[]'::jsonb)))
+       from brand b
+       join public.topics t on t.id = b.topic_id
+       left join competitor_lists cl on cl.topic_id = b.topic_id),
+      '[]'::jsonb)
+  )
+  into v_result;
+
+  return v_result;
+end;
+$$;
+
+revoke execute on function public.insights_topic_competitors_daily(
+  uuid, date, date, text[], text
+) from public, anon;
+grant execute on function public.insights_topic_competitors_daily(
+  uuid, date, date, text[], text
+) to authenticated, service_role;
+
+comment on function public.insights_topic_competitors_daily(uuid, date, date, text[], text) is
+  'Insights "Topics vs competitors" (VIS-010, 00137; planned with its arguments, security definer, 00152): per active topic, the brand''s Visibility components over the topic''s prompts and each live competitor''s components over the same answers, from the prompt-grain rollups. complete=false until they are backfilled (00130). Null when the caller is not a member of the brand''s organization.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00154_prompt_volume_median.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- A prompt's volume is the median of its keywords' Google volumes, not their
+-- sum.
+--
+-- Volume analysis gives each prompt five head terms for its category
+-- (server/src/lib/intent-extraction.js) and looked up their Google volumes.
+-- Their sum stood for the prompt, but the five overlap, so the same searchers
+-- were counted several times over, and one very broad term ("google gemini",
+-- 5M a month) could set the whole figure: a single prompt read ~755k
+-- estimated AI searches a month, and the Insights total ran to millions.
+-- summarizeVolumes (server/src/lib/volume-analysis.js) now takes the median of
+-- the keywords that have any volume; this applies the same rule to the rows
+-- already stored, from the per-keyword volumes they keep, so no keyword is
+-- looked up again. A row with no measured keyword stays at 0.
+--
+-- total_google_volume keeps its name; it now holds that median.
+
+update public.prompt_volumes pv
+set total_google_volume = m.google_volume,
+    est_ai_volume = round(m.google_volume * pv.ai_volume_multiplier)::integer
+from (
+  select p.id,
+         coalesce(round(percentile_cont(0.5) within group (order by k.volume)), 0)::integer
+           as google_volume
+  from public.prompt_volumes p
+  left join lateral (
+    select e.value::numeric as volume
+    from jsonb_each_text(p.google_volumes) e
+    -- Only numbers are cast; the case keeps the cast behind the check.
+    where case when e.value ~ '^[0-9]+(\.[0-9]+)?$' then e.value::numeric > 0 else false end
+  ) k on true
+  group by p.id
+) m
+where m.id = pv.id
+  and (pv.total_google_volume is distinct from m.google_volume
+       or pv.est_ai_volume is distinct from round(m.google_volume * pv.ai_volume_multiplier)::integer);
+
+comment on column public.prompt_volumes.total_google_volume is
+  'The prompt''s Google volume: the median of google_volumes'' measured keywords (named before the median replaced their sum).';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00155_ai_volume_multiplier_45.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- The AI adoption rate's default goes from 15% to 45% of a prompt's Google
+-- volume.
+--
+-- est_ai_volume is the prompt's Google volume (the median of its keywords',
+-- 00154) times the AI adoption rate, AI_VOLUME_MULTIPLIER on the server.
+-- Its default was 15%, about the share of Google searches that showed an AI
+-- Overview a year ago; they now appear on roughly 43–48%
+-- (server/src/lib/intent-extraction.js). This moves the rows stored at the
+-- old default to the new one. Rows saved under any other rate were set on
+-- purpose by the install, and are left alone.
+--
+-- An install that sets AI_VOLUME_MULTIPLIER=0.15 itself (server/.env.example
+-- did) keeps analyzing at 15% until it is changed to 0.45 or removed.
+
+update public.prompt_volumes
+set ai_volume_multiplier = 0.450,
+    est_ai_volume = round(total_google_volume * 0.450)::integer
+where ai_volume_multiplier = 0.150;
 
