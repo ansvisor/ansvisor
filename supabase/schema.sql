@@ -22343,7 +22343,7 @@ create policy site_audit_page_prefs_member_select on public.site_audit_page_pref
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
--- migrations/00165_audit_competitor_cited_prompts.sql
+-- migrations/00166_audit_competitor_cited_prompts.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- Site Audit Opportunities (SA-004): prompts where a competitor is cited and
 -- the brand isn't.

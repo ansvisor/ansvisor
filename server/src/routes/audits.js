@@ -588,7 +588,7 @@ async function competitorOpportunityPages(brandId, sitePages) {
     p_own_domains: ownHosts,
     p_competitor_domains: [...competitorNames.keys()],
   });
-  // A server deployed before migration 00165 lists the other sources without this one.
+  // A server deployed before migration 00166 lists the other sources without this one.
   if (error?.code === 'PGRST202') return [];
   if (error) throw error;
 

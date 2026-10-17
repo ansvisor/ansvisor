@@ -267,7 +267,7 @@ describe('GET /api/audits/opportunities', () => {
     });
   });
 
-  it('lists the other sources on a database without migration 00165', async () => {
+  it('lists the other sources on a database without migration 00166', async () => {
     tables.competitors = [{ brand_id: brandId, name: 'Crema Club', domain: 'crema.example' }];
     tables.competitorPromptsMissing = true;
     const res = await fetch(`${baseUrl}/opportunities?brandId=${brandId}`);
