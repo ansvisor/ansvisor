@@ -11,6 +11,10 @@ vi.mock('./ai-provider.js', () => ({
   resolveModel: vi.fn(),
 }));
 
+vi.mock('../config/supabase.js', () => ({ default: {} }));
+
+const { medianVolume } = await import('./volume-analysis.js');
+
 const AI_VOLUME_MULTIPLIER = parseFloat(process.env.AI_VOLUME_MULTIPLIER || '0.15');
 
 describe('test-volumes pipeline (mocked)', () => {
@@ -35,7 +39,7 @@ describe('test-volumes pipeline (mocked)', () => {
     expect(getSearchVolumes).toHaveBeenCalledTimes(1);
   });
 
-  it('should compute estimated AI volume from Google volumes', async () => {
+  it('should estimate AI volume from the median of the Google volumes', async () => {
     const mockVolumes = {
       'keyword one': { volume: 10000, competitionIndex: 70, competition: 'HIGH' },
       'keyword two': { volume: 5000, competitionIndex: 50, competition: 'MEDIUM' },
@@ -44,11 +48,11 @@ describe('test-volumes pipeline (mocked)', () => {
     getSearchVolumes.mockResolvedValue(mockVolumes);
 
     const volumes = await getSearchVolumes(['keyword one', 'keyword two']);
-    const totalGoogleVolume = Object.values(volumes).reduce((sum, v) => sum + v.volume, 0);
-    const estAiVolume = Math.round(totalGoogleVolume * AI_VOLUME_MULTIPLIER);
+    const googleVolume = medianVolume(Object.values(volumes).map((v) => v.volume));
+    const estAiVolume = Math.round(googleVolume * AI_VOLUME_MULTIPLIER);
 
-    expect(totalGoogleVolume).toBe(15000);
-    expect(estAiVolume).toBeCloseTo(2250);
+    expect(googleVolume).toBe(7500);
+    expect(estAiVolume).toBe(1125);
   });
 
   it('should handle zero volumes gracefully', async () => {
@@ -59,10 +63,10 @@ describe('test-volumes pipeline (mocked)', () => {
     getSearchVolumes.mockResolvedValue(mockVolumes);
 
     const volumes = await getSearchVolumes(['rare term']);
-    const totalGoogleVolume = Object.values(volumes).reduce((sum, v) => sum + v.volume, 0);
-    const estAiVolume = Math.round(totalGoogleVolume * AI_VOLUME_MULTIPLIER);
+    const googleVolume = medianVolume(Object.values(volumes).map((v) => v.volume));
+    const estAiVolume = Math.round(googleVolume * AI_VOLUME_MULTIPLIER);
 
-    expect(totalGoogleVolume).toBe(0);
+    expect(googleVolume).toBe(0);
     expect(estAiVolume).toBe(0);
   });
 

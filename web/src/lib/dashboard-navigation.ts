@@ -22,6 +22,7 @@ export const dashboardNavLabelKeys: Record<string, NavLabelKey> = {
   'Content Optimization': { namespace: 'nav', key: 'content' },
   'Site Audit': { namespace: 'nav', key: 'audit' },
   Citations: { namespace: 'nav', key: 'citations' },
+  Mentions: { namespace: 'nav', key: 'mentions' },
   Shopping: { namespace: 'nav', key: 'shopping' },
   Reports: { namespace: 'nav', key: 'reports' },
 };

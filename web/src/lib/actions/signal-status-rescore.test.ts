@@ -21,15 +21,22 @@ vi.mock('@/lib/supabase/server', () => ({
       const chain = {
         select: () => chain,
         eq: () => chain,
+        in: () => chain,
         update: (values: Record<string, unknown>) => {
           patch = values;
           writes.push(values);
           return chain;
         },
-        maybeSingle: async () =>
-          patch
-            ? { data: { action_id: actionId }, error: null }
-            : { data: previousStatus ? { status: previousStatus } : null, error: null },
+        // The read before the change, then the updated rows.
+        then: (resolve: (value: unknown) => unknown) =>
+          resolve(
+            patch
+              ? { data: [{ id: 's1', action_id: actionId }], error: null }
+              : {
+                  data: previousStatus ? [{ id: 's1', status: previousStatus }] : [],
+                  error: null,
+                },
+          ),
       };
       return chain;
     },
@@ -49,7 +56,7 @@ beforeEach(() => {
 
 describe('updateSignalStatus', () => {
   it("asks the server to rescore the signal's actions when it is resolved", async () => {
-    await updateSignalStatus('b1', 's1', 'resolved');
+    await updateSignalStatus('b1', ['s1'], 'resolved');
 
     expect(writes[0]).toMatchObject({ status: 'resolved' });
     expect(fetchMock).toHaveBeenCalledWith(
@@ -63,26 +70,26 @@ describe('updateSignalStatus', () => {
 
   it('asks again when a dismissed signal is reopened', async () => {
     previousStatus = 'dismissed';
-    await updateSignalStatus('b1', 's1', 'new');
+    await updateSignalStatus('b1', ['s1'], 'new');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('asks nothing when the signal stays open', async () => {
-    await updateSignalStatus('b1', 's1', 'acknowledged');
+    await updateSignalStatus('b1', ['s1'], 'acknowledged');
     expect(writes).toHaveLength(1);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('asks nothing for a signal no action holds', async () => {
     actionId = null;
-    await updateSignalStatus('b1', 's1', 'resolved');
+    await updateSignalStatus('b1', ['s1'], 'resolved');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('keeps the status change when the server cannot be reached', async () => {
     fetchMock.mockRejectedValue(new Error('offline'));
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    await expect(updateSignalStatus('b1', 's1', 'dismissed')).resolves.toBeUndefined();
+    await expect(updateSignalStatus('b1', ['s1'], 'dismissed')).resolves.toBeUndefined();
     expect(writes[0]).toMatchObject({ status: 'dismissed' });
     warn.mockRestore();
   });
