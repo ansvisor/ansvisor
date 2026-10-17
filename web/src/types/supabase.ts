@@ -3652,6 +3652,30 @@ export type Database = {
           visible_prompts: number
         }[]
       }
+      topics_overview_window: {
+        Args: { p_brand_id: string; p_date_from: string; p_date_to?: string }
+        Returns: {
+          active_prompts: number
+          answers: number
+          citation_answers: number
+          comp_mentions: number
+          competitors: Json
+          daily: Json
+          last_run_at: string
+          mention_answers: number
+          pos_n: number
+          pos_sum: number
+          prev_answers: number
+          prev_citation_answers: number
+          prev_mention_answers: number
+          prev_pos_n: number
+          prev_pos_sum: number
+          topic_id: string
+          total_citations: number
+          total_mentions: number
+          visible_prompts: number
+        }[]
+      }
       tracked_prompt_count: {
         Args: {
           p_brand_id: string

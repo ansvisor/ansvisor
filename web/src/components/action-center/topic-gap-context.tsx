@@ -31,7 +31,7 @@ export function TopicGapContext({ payload }: { payload: Record<string, unknown> 
             <span>{topicName}</span>
             {topicId && (
               <Link
-                href={`/dashboard/topics/${topicId}`}
+                href={`/dashboard/prompts/topics/${topicId}`}
                 className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
               >
                 {t('openTopic')}
