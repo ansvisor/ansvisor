@@ -220,10 +220,9 @@ describe('query fan-out', () => {
   });
 
   it('keeps flagging an engine that should fan out, however long it has been silent', () => {
-    // ChatGPT on the day this check shipped: nothing for two weeks, so the
-    // days before are empty too.
+    // Nothing for two weeks, so the days before are empty too.
     const silent = {
-      platform: 'chatgpt-web',
+      platform: 'copilot-web',
       answers: 400,
       withFanout: 0,
       rate: 0,
@@ -233,6 +232,8 @@ describe('query fan-out', () => {
     expect(fanoutDropped(silent)).toBe(true);
     // Gemini documents no fan-out, so a silent day is normal for it.
     expect(fanoutDropped({ ...silent, platform: 'gemini-web' })).toBe(false);
+    // Nor is it news on ChatGPT, whose default interface carries none (#1119).
+    expect(fanoutDropped({ ...silent, platform: 'chatgpt-web' })).toBe(false);
   });
 
   it('says so when the check cannot run', async () => {

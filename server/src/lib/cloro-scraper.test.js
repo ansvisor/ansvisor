@@ -170,6 +170,40 @@ describe('cloro-scraper – parseScraperResponse', () => {
     });
   });
 
+  describe('ChatGPT footnote sources (#1119)', () => {
+    // Since 2026-10-09 ChatGPT lists the pages it read without citing them,
+    // marked footnote: true, after the cited ones.
+    const sources = [
+      { url: 'https://cited.com/a', label: 'Cited A', position: 1, footnote: false },
+      { url: 'https://cited.com/b', label: 'Cited B', position: 2, footnote: false },
+      { url: 'https://read.com/c', label: 'Read only', position: 3, footnote: true },
+    ];
+
+    it('stores only the sources the answer cites', () => {
+      const parsed = parseScraperResponse({ markdown: 't', sources }, 'chatgpt-web');
+      expect(parsed.citations).toEqual([
+        { url: 'https://cited.com/a', title: 'Cited A', startIndex: 0, endIndex: 50 },
+        { url: 'https://cited.com/b', title: 'Cited B', startIndex: 100, endIndex: 150 },
+      ]);
+    });
+
+    it('does the same on ChatGPT Shopping', () => {
+      const parsed = parseScraperResponse({ markdown: 't', sources }, 'chatgpt-shopping');
+      expect(parsed.citations.map((c) => c.url)).toEqual([
+        'https://cited.com/a',
+        'https://cited.com/b',
+      ]);
+    });
+
+    it('keeps sources without the flag', () => {
+      const parsed = parseScraperResponse(
+        { markdown: 't', sources: [{ url: 'https://foo.com', label: 'Foo' }] },
+        'copilot-web',
+      );
+      expect(parsed.citations).toHaveLength(1);
+    });
+  });
+
   describe('ChatGPT entity markup', () => {
     const markdown =
       'Top tools: **<Entity category="software" value="Tesseract" disambig="Adlift AI search optimization platform"/>** and <Entity category="software" value="Ansvisor" />.';
@@ -327,6 +361,18 @@ describe('cloro-scraper – parseScraperResponse', () => {
         parseScraperResponse({ markdown: 't', sources: [] }, 'gemini-web').search_queries,
       ).toEqual([]);
     });
+  });
+});
+
+describe('cloro-scraper – buildRequestBody query fan-out (#332, #1119)', () => {
+  it('asks Copilot, Perplexity, Gemini and Grok for their searches', () => {
+    for (const scraperId of ['copilot-web', 'perplexity-web', 'gemini-web', 'grok-web']) {
+      expect(buildRequestBody('p', scraperId, 'US').include.searchQueries).toBe(true);
+    }
+  });
+
+  it("doesn't ask ChatGPT, whose default interface no longer carries them", () => {
+    expect(buildRequestBody('p', 'chatgpt-web', 'US').include).not.toHaveProperty('searchQueries');
   });
 });
 
