@@ -33,6 +33,7 @@ import {
   TREND_LIMIT,
 } from '../lib/audit/history.js';
 import { readAllRpcRows } from '../lib/rpc-pages.js';
+import { AUTHORITY_CATEGORIES, buildOverview, primaryPages } from '../lib/audit/overview.js';
 import { runSignals } from '../lib/audit/engine.js';
 import { evaluateLlmSignals } from '../lib/audit/llm-signals.js';
 import { evaluateBrandEntity } from '../lib/audit/external-signals.js';
@@ -96,26 +97,43 @@ async function primaryDomainOf(brandId) {
 // 20 audits × 47 signals stays under PostgREST's 1000-row page.
 const ISSUE_COUNT_CHUNK = 20;
 
-/** Failed and warning signals per audit id. */
-async function countIssues(auditIds) {
-  const counts = new Map();
-  const chunks = [];
-  for (let i = 0; i < auditIds.length; i += ISSUE_COUNT_CHUNK) {
-    chunks.push(auditIds.slice(i, i + ISSUE_COUNT_CHUNK));
-  }
-  const results = await Promise.all(
-    chunks.map((ids) =>
-      supabaseAdmin
-        .from('audit_signal_results')
-        .select('audit_id')
-        .in('audit_id', ids)
-        .in('status', ['fail', 'warn']),
-    ),
+/** Every audit of the brand, newest first, read past PostgREST's 1000-row page. */
+function readBrandAudits(brandId) {
+  return readAllRpcRows('site_audits', (from, to) =>
+    supabaseAdmin
+      .from('site_audits')
+      .select('id, url, final_url, status, total_score, created_at')
+      .eq('brand_id', brandId)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to),
   );
+}
+
+/** Rows for the given audit ids, read a chunk of ids at a time by `query`. */
+async function readByAuditIds(ids, chunkSize, query) {
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += chunkSize) chunks.push(ids.slice(i, i + chunkSize));
+  const results = await Promise.all(chunks.map(query));
+  const rows = [];
   for (const { data, error } of results) {
     if (error) throw error;
-    for (const row of data ?? []) counts.set(row.audit_id, (counts.get(row.audit_id) ?? 0) + 1);
+    rows.push(...(data ?? []));
   }
+  return rows;
+}
+
+/** Failed and warning signals per audit id. */
+async function countIssues(auditIds) {
+  const rows = await readByAuditIds(auditIds, ISSUE_COUNT_CHUNK, (ids) =>
+    supabaseAdmin
+      .from('audit_signal_results')
+      .select('audit_id')
+      .in('audit_id', ids)
+      .in('status', ['fail', 'warn']),
+  );
+  const counts = new Map();
+  for (const row of rows) counts.set(row.audit_id, (counts.get(row.audit_id) ?? 0) + 1);
   return counts;
 }
 
@@ -446,15 +464,7 @@ router.get('/pages', async (req, res) => {
 
     const [primary, { data: rows, error }] = await Promise.all([
       primaryDomainOf(brandId),
-      readAllRpcRows('site_audits', (from, to) =>
-        supabaseAdmin
-          .from('site_audits')
-          .select('id, url, final_url, status, total_score, created_at')
-          .eq('brand_id', brandId)
-          .order('created_at', { ascending: false })
-          .order('id', { ascending: false })
-          .range(from, to),
-      ),
+      readBrandAudits(brandId),
     ]);
     if (error) throw error;
 
@@ -476,6 +486,63 @@ router.get('/pages', async (req, res) => {
       return res.status(err.status).json({ success: false, message: err.message });
     }
     req.log.error({ err }, 'audit pages failed');
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/audits/overview?brandId=… — the hub's KPI cards: site score and
+// its change, pages audited, and the Authority / E-E-A-T scores with their
+// biggest gaps, over the latest audit of each page on the primary domain.
+// Registered before /:id so "overview" isn't matched as an audit id.
+router.get('/overview', async (req, res) => {
+  const userId = req.user?.id;
+  const { brandId } = req.query;
+  if (!brandId) {
+    return res.status(400).json({ success: false, message: 'brandId is required' });
+  }
+
+  try {
+    await assertBrandAccess(brandId, userId);
+
+    const [primary, { data: rows, error }] = await Promise.all([
+      primaryDomainOf(brandId),
+      readBrandAudits(brandId),
+    ]);
+    if (error) throw error;
+
+    const primaryHost = normStoredDomain(primary);
+    const { own, otherPages } = primaryPages(buildAuditPages(rows), primaryHost);
+    const ids = own.map((p) => p.auditId);
+
+    const [scoreRows, failingRows] = await Promise.all([
+      readByAuditIds(ids, 100, (chunk) =>
+        supabaseAdmin.from('site_audits').select('id, category_scores').in('id', chunk),
+      ),
+      // 50 audits × 16 Authority and E-E-A-T signals stays under 1000 rows.
+      readByAuditIds(ids, 50, (chunk) =>
+        supabaseAdmin
+          .from('audit_signal_results')
+          .select('audit_id, signal_key')
+          .in('audit_id', chunk)
+          .in('category', AUTHORITY_CATEGORIES)
+          .in('status', ['fail', 'warn']),
+      ),
+    ]);
+    const categoryScoresById = new Map(scoreRows.map((r) => [r.id, r.category_scores ?? {}]));
+
+    return res.json({
+      success: true,
+      overview: {
+        primaryHost,
+        otherPages,
+        ...buildOverview(own, categoryScoresById, failingRows),
+      },
+    });
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    req.log.error({ err }, 'audit overview failed');
     return res.status(500).json({ success: false, message: err.message });
   }
 });

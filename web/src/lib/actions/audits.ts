@@ -231,6 +231,47 @@ export async function runAuditsBulk(brandId: string, urls: string[]): Promise<{ 
   return { started: (data.audits ?? []).length };
 }
 
+/** One of the most common Authority / E-E-A-T gaps across the audited pages. */
+export interface AuditGap {
+  key: string;
+  label: string;
+  category: string | null;
+  /** Pages whose latest audit fails or warns on it. */
+  pages: number;
+}
+
+/** The hub's KPI cards, over the latest audit of each page on the primary domain. */
+export interface AuditOverview {
+  primaryHost: string | null;
+  /** Audited pages on the primary domain. */
+  pages: number;
+  /** Audited pages on other sites, left out of the numbers. */
+  otherPages: number;
+  siteScore: number | null;
+  /** Points against each page's previous audit; null when none was audited twice. */
+  siteScoreChange: number | null;
+  authority: number | null;
+  eeat: number | null;
+  gaps: AuditGap[];
+}
+
+export async function getAuditOverview(brandId: string): Promise<AuditOverview> {
+  const session = await getSession();
+
+  const res = await fetch(
+    `${AEO_SERVER_URL}/api/audits/overview?brandId=${encodeURIComponent(brandId)}`,
+    { headers: { Authorization: `Bearer ${session.access_token}` } },
+  );
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || `Server error: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data.overview;
+}
+
 export interface AuditedPages {
   pages: AuditedPage[];
   /** Pages audited for the brand, across all pages of the list. */

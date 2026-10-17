@@ -49,7 +49,9 @@ function query(table) {
         inserted.push(...rows);
         return resolve({ data: rows, error: null });
       }
-      if (table === 'site_audits') {
+      if (table === 'site_audits' && filters.in.id) {
+        data = audits.filter((a) => filters.in.id.includes(a.id));
+      } else if (table === 'site_audits') {
         data = audits.filter((a) => a.brand_id === filters.eq.brand_id);
         if (range) data = data.slice(range[0], range[1] + 1);
       } else if (table === 'brand_domains') {
@@ -57,7 +59,10 @@ function query(table) {
       } else if (table === 'audit_signal_results') {
         signalQueries.push(filters.in.audit_id);
         data = signals.filter(
-          (s) => filters.in.audit_id.includes(s.audit_id) && filters.in.status.includes(s.status),
+          (s) =>
+            filters.in.audit_id.includes(s.audit_id) &&
+            filters.in.status.includes(s.status) &&
+            (!filters.in.category || filters.in.category.includes(s.category)),
         );
       }
       return resolve({ data, error: null });
@@ -249,5 +254,40 @@ describe('POST /api/audits/bulk', () => {
     expect((await post({ brandId, urls: ['not a url'] })).status).toBe(400);
     expect((await post({ urls: ['https://acme.com/'] })).status).toBe(400);
     expect(inserted).toEqual([]);
+  });
+});
+
+describe('GET /api/audits/overview', () => {
+  it("adds up the primary domain's latest audits: score, change, categories and gaps", async () => {
+    audits[0].category_scores = { authority: { score: 0.4 }, eeat: { score: 0.3 } };
+    signals = [
+      { audit_id: 'p2', status: 'fail', category: 'authority', signal_key: 'author-byline' },
+      { audit_id: 'p2', status: 'warn', category: 'eeat', signal_key: 'press-mentions' },
+      { audit_id: 'p2', status: 'fail', category: 'structure', signal_key: 'h1-quality' },
+      // The older audit of the page doesn't count.
+      { audit_id: 'p1', status: 'fail', category: 'eeat', signal_key: 'quotations' },
+    ];
+    const res = await fetch(`${baseUrl}/overview?brandId=b1`);
+    const { overview } = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(overview).toMatchObject({
+      primaryHost: 'acme.com',
+      // acme.com/pricing; other.com/ is another site; /broken never completed.
+      pages: 1,
+      otherPages: 1,
+      siteScore: 0.63,
+      siteScoreChange: 5,
+      authority: 0.4,
+      eeat: 0.3,
+    });
+    expect(overview.gaps.map((g) => [g.key, g.pages])).toEqual([
+      ['author-byline', 1],
+      ['press-mentions', 1],
+    ]);
+  });
+
+  it('needs a brand', async () => {
+    expect((await fetch(`${baseUrl}/overview`)).status).toBe(400);
   });
 });

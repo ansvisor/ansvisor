@@ -2098,6 +2098,30 @@
         "failed": "Failed"
       }
     },
+    "overview": {
+      "yourDomain": "your domain",
+      "siteScore": "Site score",
+      "siteScoreTip": "The average score of each page's latest audit on {domain}. The change compares it with each page's previous audit.",
+      "siteScoreSub": "average of latest audits",
+      "pagesAudited": "Pages audited",
+      "pagesAuditedTip": "Pages of {domain} with a completed audit. Audits of other sites are listed under Pages but left out of these cards.",
+      "pagesSub": "on {domain}",
+      "pagesSubOther": "+ {count} on other sites",
+      "authority": "Authority · E-E-A-T",
+      "authorityTip": "The Authority and E-E-A-T scores, averaged over each page's latest audit, and the signals that fail or warn on the most pages.",
+      "gapsSub": "Top gaps",
+      "noGaps": "No Authority or E-E-A-T gaps",
+      "noPages": "No pages audited yet",
+      "gapPages": "{pages} of {total}",
+      "auditsThisMonth": "Audits this month",
+      "auditsTip": "Your plan's audits this billing month. Audits still running already count; failed ones don't.",
+      "ofLeft": "of {limit} left",
+      "used": "{used} used",
+      "usedRunning": "{used} used · {running} running",
+      "quotaBar": "{used} of {limit} audits used",
+      "unlimited": "Unlimited",
+      "unlimitedSub": "no monthly limit"
+    },
     "bulk": {
       "toolbar": "Actions for the selected pages",
       "selected": "{count} selected",

@@ -22,10 +22,12 @@ import {
   runAudit,
   runAuditsBulk,
   getAuditPages,
+  getAuditOverview,
   getAuditQuota,
   getAuditTrend,
   deleteAudit,
   type AuditedPage,
+  type AuditOverview,
   type AuditQuota,
   type AuditTrend,
 } from '@/lib/actions/audits';
@@ -34,11 +36,22 @@ import { formatMonthDay } from '@/lib/format';
 import { ScoreTrendChart } from './_charts';
 import { AuditPagesTable } from './_pages-table';
 import { AuditBulkBar, ExportMenu } from './_bulk-bar';
+import { AuditOverviewCards } from './_overview-cards';
 import { usePagesExport } from './_use-pages-export';
 import { cn } from '@/lib/utils';
 
 type RangePreset = '7d' | '30d' | '90d' | 'all';
 const RANGE_DAYS: Record<RangePreset, number | null> = { '7d': 7, '30d': 30, '90d': 90, all: null };
+
+/** The KPI cards' numbers; the cards are left out when they can't be read. */
+async function readOverview(brandId: string): Promise<AuditOverview | null> {
+  try {
+    return await getAuditOverview(brandId);
+  } catch (err) {
+    console.error('Failed to load the Site Audit overview:', err);
+    return null;
+  }
+}
 
 /** While audits run, the Pages list and the quota are read again this often. */
 const RUNNING_POLL_MS = 10_000;
@@ -72,6 +85,7 @@ export default function SiteAuditPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [quota, setQuota] = useState<AuditQuota | null>(null);
   const [trend, setTrend] = useState<AuditTrend | null>(null);
+  const [overview, setOverview] = useState<AuditOverview | null>(null);
   const [range, setRange] = useState<RangePreset>('30d');
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [startingBulk, setStartingBulk] = useState(false);
@@ -91,10 +105,11 @@ export default function SiteAuditPage() {
     setSelected(new Set());
     (async () => {
       try {
-        const [data, q, tr] = await Promise.all([
+        const [data, q, tr, ov] = await Promise.all([
           getAuditPages(activeBrandId),
           getAuditQuota(),
           getAuditTrend(activeBrandId),
+          readOverview(activeBrandId),
         ]);
         if (!cancelled) {
           setPages(data.pages);
@@ -102,6 +117,7 @@ export default function SiteAuditPage() {
           setPrimaryHost(data.primaryHost);
           setQuota(q);
           setTrend(tr);
+          setOverview(ov);
         }
       } catch (err) {
         console.error('Failed to load audit hub data:', err);
@@ -212,16 +228,18 @@ export default function SiteAuditPage() {
     shownRef.current = pages.length;
   }, [pages.length]);
   const reloadInPlace = async (brandId: string) => {
-    const [data, q, tr] = await Promise.all([
+    const [data, q, tr, ov] = await Promise.all([
       getAuditPages(brandId, 0, Math.min(Math.max(shownRef.current, 50), 100)),
       getAuditQuota(),
       getAuditTrend(brandId),
+      readOverview(brandId),
     ]);
     setPages(data.pages);
     setPagesTotal(data.total);
     setPrimaryHost(data.primaryHost);
     setQuota(q);
     setTrend(tr);
+    setOverview(ov);
     const selectable = new Set(data.pages.filter((p) => p.status !== 'running').map((p) => p.key));
     setSelected((prev) => new Set([...prev].filter((key) => selectable.has(key))));
   };
@@ -294,6 +312,47 @@ export default function SiteAuditPage() {
         <h1 className="text-2xl font-bold">{t('title')}</h1>
         <p className="text-sm text-muted-foreground">{t('description')}</p>
       </div>
+
+      {/* Run bar */}
+      <Card>
+        <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center">
+          <Input
+            type="url"
+            inputMode="url"
+            placeholder="https://example.com/page"
+            aria-label="Website URL"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && !running && !quotaExhausted && handleRun()}
+            disabled={running}
+            className="flex-1"
+          />
+          {/* The Audits this month card shows what's left; here only why Run is off. */}
+          {quotaExhausted && (
+            <span className="shrink-0 text-xs tabular-nums text-destructive">
+              {quota.remaining}/{quota.limit} {t('auditsLeft')}
+            </span>
+          )}
+          <Button onClick={handleRun} disabled={running || quotaExhausted} className="shrink-0">
+            {running ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {t('running')}
+              </>
+            ) : (
+              <>
+                <Search className="mr-2 h-4 w-4" />
+                {t('runAudit')}
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* KPI cards, as in the v2 mockup (SA-018) */}
+      {(loading || overview) && (
+        <AuditOverviewCards overview={loading ? null : overview} quota={quota} />
+      )}
 
       {/* Primary-domain score trend + category breakdown */}
       {trend && trend.points.length > 0 && (
@@ -397,46 +456,6 @@ export default function SiteAuditPage() {
           </CardContent>
         </Card>
       )}
-
-      {/* Run bar */}
-      <Card>
-        <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center">
-          <Input
-            type="url"
-            inputMode="url"
-            placeholder="https://example.com/page"
-            aria-label="Website URL"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !running && !quotaExhausted && handleRun()}
-            disabled={running}
-            className="flex-1"
-          />
-          {quota && quota.limit !== -1 && (
-            <span
-              className={cn(
-                'shrink-0 text-xs tabular-nums',
-                quotaExhausted ? 'text-destructive' : 'text-muted-foreground',
-              )}
-            >
-              {quota.remaining}/{quota.limit} {t('auditsLeft')}
-            </span>
-          )}
-          <Button onClick={handleRun} disabled={running || quotaExhausted} className="shrink-0">
-            {running ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {t('running')}
-              </>
-            ) : (
-              <>
-                <Search className="mr-2 h-4 w-4" />
-                {t('runAudit')}
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
 
       {loading ? (
         <Card>
