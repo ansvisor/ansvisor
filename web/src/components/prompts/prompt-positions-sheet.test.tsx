@@ -49,7 +49,7 @@ const answer = (over: Partial<PositionAnswer> & { createdAt: string }): Position
   ...over,
 });
 
-function data(locked = false): PromptPositionsData {
+function data({ locked = false, unanswered = false } = {}): PromptPositionsData {
   const { summary, platforms } = summarizePositions(
     [
       answer({
@@ -66,6 +66,15 @@ function data(locked = false): PromptPositionsData {
     ],
     [
       { id: 'chatgpt-web', label: 'ChatGPT', access: { state: 'included' } },
+      ...(unanswered
+        ? [
+            {
+              id: 'copilot-web' as const,
+              label: 'Microsoft Copilot',
+              access: { state: 'included' as const },
+            },
+          ]
+        : []),
       ...(locked
         ? [
             {
@@ -137,8 +146,23 @@ describe('PromptPositionsSheet', () => {
     expect(text).toContain('In 1 of 2 answers in this period · 3 mentions');
   });
 
+  it("lists each platform's latest answer in 24h, mention first, then citation", async () => {
+    getPromptPositions.mockResolvedValue(data({ unanswered: true }));
+    await open('24h');
+    const rows = [...document.querySelectorAll<HTMLElement>('[data-platform]')];
+    expect(rows.map((r) => r.dataset.platform)).toEqual(['chatgpt-web', 'copilot-web']);
+
+    // The latest answer (Oct 9) named and cited nothing; the one before did.
+    const blocks = [...rows[0].querySelectorAll('dl > div')].map((b) => b.textContent);
+    expect(blocks).toEqual([
+      'MentionNot mentionedDetected earlier in this period',
+      'CitationNot citedDetected earlier in this period',
+    ]);
+    expect(rows[1].textContent).toContain('No completed tracking runs in this period');
+  });
+
   it('says the counts leave out a platform the plan locks', async () => {
-    getPromptPositions.mockResolvedValue(data(true));
+    getPromptPositions.mockResolvedValue(data({ locked: true }));
     await open();
     expect(document.body.textContent).toContain(
       'Answer counts cover the platforms your plan includes.',

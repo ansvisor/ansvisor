@@ -710,6 +710,9 @@
           "assigned": "Assignee changed",
           "due_date_set": "Due date updated",
           "task_status": "Task updated",
+          "task_added": "Task added: “{title}”",
+          "task_renamed": "Task renamed to “{title}”",
+          "task_deleted": "Task deleted",
           "task_ran": "{task} — carried out automatically ({tool})",
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
           "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
@@ -1714,8 +1717,6 @@
       "checkedAt": "Checked: {date}"
     },
     "compare": {
-      "label": "Compare",
-      "samePrompts": "Same prompts",
       "hint": "Changes compare only prompts tracked in both periods",
       "newExcluded": "{count, plural, one {# new prompt excluded} other {# new prompts excluded}}",
       "newIncluded": "{count, plural, one {includes # new prompt} other {includes # new prompts}}"
@@ -1849,8 +1850,6 @@
       "pinLimit": "Up to 5 competitors",
       "pinFailed": "Couldn't save the pinned competitors.",
       "promptsAdded": "{count, plural, one {# prompt} other {# prompts}} added · {date}",
-      "actionsSent": "{actions} sent · {date}",
-      "moreActions": "{actions} +{count}",
       "goal": "Goal {value}",
       "goalLegend": "Action Center goal"
     },
@@ -1864,15 +1863,7 @@
       "lowSample": "Low sample",
       "openTopic": "Open {topic}",
       "showAll": "Show all {count}",
-      "showLess": "Show less",
-      "sendGap": "Send biggest gap to Actions",
-      "sendGapTitle": "Open a Compete action for {topic}, where {competitor} leads you by {gap} pts",
-      "noGap": "No topic where a competitor leads you",
-      "sent": "AC-{no} sent to the Action Center",
-      "alreadySent": "Already in the Action Center as AC-{no}",
-      "sendFailed": "Couldn't send to the Action Center.",
-      "openAction": "Open",
-      "gapChanged": "The gap changed since the page loaded. Refresh to see the latest."
+      "showLess": "Show less"
     },
     "breakdown": {
       "noData": "No data",
