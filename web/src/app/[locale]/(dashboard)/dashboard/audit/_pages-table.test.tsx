@@ -134,10 +134,8 @@ describe('AuditPagesTable', () => {
       ['', '', '/pricing', '63', '14', 'Improving', 'Oct 14, 2026'],
       ['', '', '/blog', '74', '7', 'Good', 'Oct 2, 2026'],
     ]);
-    // A trend needs two scores to draw.
-    const lines = container.querySelectorAll('svg[role=img]');
-    expect(lines).toHaveLength(1);
-    expect(lines[0].getAttribute('aria-label')).toBe('Score trend: 50, 58, 63');
+    // The score alone: no trend line next to it.
+    expect(container.querySelectorAll('tbody svg[role=img]')).toHaveLength(0);
   });
 
   it('opens the latest report from the row, and the earlier audits from the arrow', () => {

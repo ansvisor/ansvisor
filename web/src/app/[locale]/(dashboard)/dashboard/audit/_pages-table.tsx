@@ -94,39 +94,6 @@ export function pageLabel(page: Pick<AuditedPage, 'host' | 'path'>, primaryHost:
   return page.path === '/' ? page.host : `${page.host}${page.path}`;
 }
 
-/** A small line of a page's latest scores (0–1), oldest first. */
-export function ScoreSparkline({ points, label }: { points: number[]; label: string }) {
-  if (points.length < 2) return null;
-  const width = 48;
-  const height = 16;
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const y = (p: number) =>
-    max === min ? height / 2 : height - 1 - ((p - min) / (max - min)) * (height - 2);
-  const coords = points
-    .map((p, i) => `${((i / (points.length - 1)) * width).toFixed(1)},${y(p).toFixed(1)}`)
-    .join(' ');
-  return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      width={width}
-      height={height}
-      role="img"
-      aria-label={label}
-      className="shrink-0 text-muted-foreground"
-    >
-      <polyline
-        points={coords}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 function StatusPill({ status }: { status: AuditedPageStatus }) {
   const t = useTranslations('audit.pages');
   return (
@@ -347,23 +314,10 @@ export function AuditPagesTable({
                             {label}
                           </Link>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={cn(
-                                'w-7 font-semibold tabular-nums',
-                                scoreColor(page.score),
-                              )}
-                            >
-                              {pct(page.score) ?? '—'}
-                            </span>
-                            <ScoreSparkline
-                              points={page.trend}
-                              label={t('pages.trend', {
-                                scores: page.trend.map((s) => pct(s)).join(', '),
-                              })}
-                            />
-                          </div>
+                        <TableCell
+                          className={cn('font-semibold tabular-nums', scoreColor(page.score))}
+                        >
+                          {pct(page.score) ?? '—'}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {page.issues === null ? '—' : formatNumber(page.issues)}
