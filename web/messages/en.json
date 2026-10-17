@@ -853,6 +853,19 @@
       "menu": {
         "label": "Actions for this item"
       },
+      "rowMenu": {
+        "label": "Actions for {title}",
+        "in_progress": "In Progress",
+        "completed": "Completed",
+        "dismissed": "Dismiss",
+        "delete": "Delete",
+        "deleteNotAllowed": "Only admins and managers can delete actions",
+        "deleteTitle": "Delete this action?",
+        "deleteConfirm": "It leaves the Action Center for everyone and won't come back on its own tomorrow.",
+        "cancel": "Cancel",
+        "statusChanged": "Moved to {status}",
+        "deleted": "Action deleted"
+      },
       "empty": {
         "title": "No actions yet",
         "description": "Actions are generated from your signals after daily tracking runs. When meaningful work emerges, it will appear here — quality over quantity."
