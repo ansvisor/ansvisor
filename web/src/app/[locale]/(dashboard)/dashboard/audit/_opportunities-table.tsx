@@ -18,6 +18,33 @@ import {
 import { pct } from '@/components/audit/audit-report';
 import type { AuditOpportunity, ExcludedPage, OpportunityReason } from '@/lib/actions/audits';
 import { formatMonthDay, formatNumber } from '@/lib/format';
+import { cn } from '@/lib/utils';
+import { InfoTip } from '../insights/_kpi-cards';
+
+/** A priority at or above this shows dark, as the mockup's high ones. */
+const HIGH_PRIORITY = 80;
+
+function PriorityPill({ row }: { row: AuditOpportunity }) {
+  const t = useTranslations('audit.opportunities');
+  const parts = t('priorityParts', {
+    value: row.priorityParts.value.toFixed(2),
+    opportunity: row.priorityParts.opportunity.toFixed(2),
+    ease: row.priorityParts.ease.toFixed(2),
+  });
+  return (
+    <span
+      title={parts}
+      className={cn(
+        'inline-flex h-6 min-w-[2.125rem] items-center justify-center rounded-md px-1.5 text-xs font-semibold tabular-nums',
+        row.priority >= HIGH_PRIORITY
+          ? 'bg-foreground text-background'
+          : 'bg-muted text-foreground',
+      )}
+    >
+      {row.priority}
+    </span>
+  );
+}
 
 /** Rows shown at first, and added by Show more. */
 export const OPPORTUNITIES_STEP = 50;
@@ -173,6 +200,12 @@ export function OpportunitiesTable({
                       onCheckedChange={(on) => onSelect(selectable, on === true)}
                     />
                   </TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center gap-1">
+                      {t('priority')}
+                      <InfoTip content={t('priorityTip')} />
+                    </span>
+                  </TableHead>
                   {/* The page column takes the room left, and long paths truncate in it. */}
                   <TableHead className="w-full">{t('page')}</TableHead>
                   <TableHead>{t('why')}</TableHead>
@@ -193,6 +226,9 @@ export function OpportunitiesTable({
                         checked={selected.has(row.key)}
                         onCheckedChange={(on) => onSelect([row.key], on === true)}
                       />
+                    </TableCell>
+                    <TableCell>
+                      <PriorityPill row={row} />
                     </TableCell>
                     <TableCell className="max-w-0">
                       <a

@@ -306,6 +306,9 @@ export interface AuditOpportunity {
   /** AI visits over the last 30 days; null without Analytics or the snippet. */
   aiVisits: number | null;
   lastAudit: { at: string; score: number; auditId: string } | null;
+  /** 0–100: the cube root of value × opportunity × ease (SA-005). */
+  priority: number;
+  priorityParts: { value: number; opportunity: number; ease: number };
 }
 
 export interface ExcludedPage {

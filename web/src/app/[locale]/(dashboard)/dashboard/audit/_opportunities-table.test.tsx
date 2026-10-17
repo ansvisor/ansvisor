@@ -33,6 +33,8 @@ const opportunity = (over: Partial<AuditOpportunity> = {}): AuditOpportunity => 
   running: false,
   aiVisits: 0,
   lastAudit: { at: '2026-10-14T12:00:00.000Z', score: 0.63, auditId: 'a1' },
+  priority: 88,
+  priorityParts: { value: 0.96, opportunity: 0.9, ease: 0.8 },
   ...over,
 });
 
@@ -44,6 +46,8 @@ const blog = opportunity({
   pinned: true,
   aiVisits: 12,
   lastAudit: null,
+  priority: 41,
+  priorityParts: { value: 0.3, opportunity: 0.4, ease: 0.8 },
 });
 
 let container: HTMLDivElement;
@@ -109,9 +113,16 @@ describe('OpportunitiesTable', () => {
     ]);
 
     expect(rows().map(cells)).toEqual([
-      ['', '/blog', 'PinnedNever audited', '12', 'never'],
-      ['', '/pricing', 'No AI trafficTop 5% by revenueTargeted, not cited', '0', 'Oct 14 · 63'],
-      ['', '/compare', 'Audited 120 days ago', '—', 'Oct 14 · 63'],
+      ['', '41', '/blog', 'PinnedNever audited', '12', 'never'],
+      [
+        '',
+        '88',
+        '/pricing',
+        'No AI trafficTop 5% by revenueTargeted, not cited',
+        '0',
+        'Oct 14 · 63',
+      ],
+      ['', '88', '/compare', 'Audited 120 days ago', '—', 'Oct 14 · 63'],
     ]);
     // The page opens the live page; the last audit its report.
     const [pageLink] = rows()[1].querySelectorAll('a');
@@ -133,10 +144,22 @@ describe('OpportunitiesTable', () => {
         reasons: [{ type: 'competitor_cited', prompts: 1, competitors: ['Crema Club'] }],
       }),
     ]);
-    expect(rows().map((r) => cells(r)[2])).toEqual([
+    expect(rows().map((r) => cells(r)[3])).toEqual([
       'Crema Club +1 cited on 3 prompts',
       'Crema Club cited on 1 prompt',
     ]);
+  });
+
+  it('shows the priority, dark from 80, with its parts on hover', () => {
+    render([opportunity(), blog]);
+    const pill = (row: Element) => row.querySelectorAll('td')[1].querySelector('span')!;
+    const [high, low] = rows().map(pill);
+    expect(high.textContent).toBe('88');
+    expect(high.className).toContain('bg-foreground');
+    expect(high.getAttribute('title')).toBe('Value 0.96 × opportunity 0.90 × ease 0.80');
+    expect(low.textContent).toBe('41');
+    expect(low.className).toContain('bg-muted');
+    expect(container.querySelector('thead')?.textContent).toContain('Priority');
   });
 
   it('selects pages not being audited, one by one or all shown', () => {

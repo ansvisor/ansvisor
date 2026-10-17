@@ -12,8 +12,9 @@
  *   (audit_competitor_cited_prompts), each through the brand page closest
  *   to it (the prompt's target URL, else the best site_pages match).
  *
- * Pinned pages always show, first. Excluded pages are left out of the rows
- * and listed apart, so they can be put back.
+ * Pinned pages always show. Excluded pages are left out of the rows and
+ * listed apart, so they can be put back. The order is the priority score's
+ * (priority.js rankOpportunities); here rows come pinned first, then by path.
  */
 
 import { isExcludedPath } from '../page-paths.js';
@@ -108,6 +109,8 @@ export function buildOpportunities({
   now = Date.now(),
 }) {
   const audits = new Map(auditPages.map((p) => [p.key.toLowerCase(), p]));
+  // A page listed for another reason still takes its title and traffic from site_pages.
+  const sitePagesByKey = new Map(sitePages.map((p) => [opportunityKey(p.url), p]));
   const prefsByKey = new Map(prefs.map((p) => [p.page_key, p]));
   const pages = new Map();
 
@@ -193,8 +196,12 @@ export function buildOpportunities({
     if (!page.pinned && page.reasons.length === 0) continue;
 
     const audit = audits.get(page.key);
+    const site = sitePagesByKey.get(page.key);
     rows.push({
       ...page,
+      title: page.title ?? site?.title ?? null,
+      sessions: page.sessions ?? site?.ga_sessions ?? null,
+      citations: page.citations ?? site?.ai_citations ?? null,
       running: audit?.status === 'running',
       lastAudit:
         audit && audit.score !== null
@@ -209,32 +216,9 @@ export function buildOpportunities({
     }
   }
 
-  rows.sort(compareOpportunities);
+  rows.sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.path.localeCompare(b.path));
   excluded.sort((a, b) => a.path.localeCompare(b.path));
   return { rows, excluded };
-}
-
-const gaPercentile = (row) => row.reasons.find((r) => r.type === 'no_ai_traffic')?.percentile ?? -1;
-const neverAudited = (row) => row.reasons.some((r) => r.type === 'never_audited');
-const competitorPrompts = (row) =>
-  row.reasons.find((r) => r.type === 'competitor_cited')?.prompts ?? 0;
-
-/**
- * Until the priority score (SA-005): pinned first, then GA's most valuable
- * pages without AI traffic, then the pages closest to the most prompts a
- * competitor wins, then pages never audited before stale ones, then the most
- * cited and visited.
- */
-export function compareOpportunities(a, b) {
-  return (
-    Number(b.pinned) - Number(a.pinned) ||
-    gaPercentile(b) - gaPercentile(a) ||
-    competitorPrompts(b) - competitorPrompts(a) ||
-    Number(neverAudited(b)) - Number(neverAudited(a)) ||
-    (b.citations ?? 0) - (a.citations ?? 0) ||
-    (b.sessions ?? 0) - (a.sessions ?? 0) ||
-    a.path.localeCompare(b.path)
-  );
 }
 
 /**

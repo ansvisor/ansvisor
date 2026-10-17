@@ -2114,6 +2114,9 @@
       "noPages": "No pages audited yet. Audit an opportunity or enter a URL above."
     },
     "opportunities": {
+      "priority": "Priority",
+      "priorityTip": "How much auditing this page could win: its value to the business × the opportunity (no AI traffic, a competitor cited, never or long ago audited) × how easy it is to fix (how close it is to passing), each 0–1, on a 0–100 scale.",
+      "priorityParts": "Value {value} × opportunity {opportunity} × ease {ease}",
       "page": "Page",
       "why": "Why",
       "aiVisits": "AI visits",

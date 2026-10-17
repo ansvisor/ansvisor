@@ -40,6 +40,7 @@ import {
   competitorGapPages,
   opportunityKey,
 } from '../lib/audit/opportunities.js';
+import { rankOpportunities } from '../lib/audit/priority.js';
 import { ENGINE_THRESHOLDS } from '../config/action-engine.js';
 import { runSignals } from '../lib/audit/engine.js';
 import { evaluateLlmSignals } from '../lib/audit/llm-signals.js';
@@ -699,10 +700,11 @@ router.get('/opportunities', async (req, res) => {
 
     return res.json({
       success: true,
-      opportunities: rows.map((r) => ({
-        ...r,
-        aiVisits: visits === null ? null : (visits.get(r.url) ?? 0),
-      })),
+      // Scored and ordered once each page has its AI visits (SA-005).
+      opportunities: rankOpportunities(
+        rows.map((r) => ({ ...r, aiVisits: visits === null ? null : (visits.get(r.url) ?? 0) })),
+        (sitePages.data ?? []).map((p) => p.ga_sessions),
+      ),
       excluded,
       staleDays: ENGINE_THRESHOLDS.detection.auditMaxAgeDays,
     });

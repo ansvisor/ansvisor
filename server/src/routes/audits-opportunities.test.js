@@ -187,6 +187,11 @@ describe('GET /api/audits/opportunities', () => {
       }),
     ]);
     expect(body.excluded.map((e) => e.path)).toEqual(['/blog']);
+    // Scored once its AI visits are in (SA-005).
+    expect(body.opportunities[0]).toMatchObject({
+      priority: expect.any(Number),
+      priorityParts: { value: 0.96, opportunity: 0.75, ease: 0.8 },
+    });
     expect(body.staleDays).toBe(90);
 
     // AI visits over the last 30 days, for the listed pages.

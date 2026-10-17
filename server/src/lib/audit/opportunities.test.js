@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   aiVisitsByPage,
   buildOpportunities,
-  compareOpportunities,
   competitorGapPages,
   opportunityKey,
 } from './opportunities.js';
@@ -93,10 +92,11 @@ describe('buildOpportunities', () => {
         audit('https://acme.com/team', null, 2, 'failed'),
       ],
     });
+    // Path order here; the priority score orders the inbox (priority.js).
     expect(rows.map((r) => [r.path, r.reasons])).toEqual([
       ['/blog/guide', [{ type: 'never_audited' }]],
-      ['/team', [{ type: 'never_audited' }]],
       ['/compare', [{ type: 'stale_audit', days: 120 }]],
+      ['/team', [{ type: 'never_audited' }]],
     ]);
     expect(rows[0]).toMatchObject({ title: 'Guide', citations: 3, sessions: 40, lastAudit: null });
   });
@@ -163,29 +163,6 @@ describe('buildOpportunities', () => {
         ],
       }).rows,
     ).toEqual([]);
-  });
-});
-
-describe('compareOpportunities', () => {
-  const row = (path, over = {}) => ({ path, pinned: false, reasons: [], ...over });
-
-  it('orders pinned, then GA value, then never audited, then citations and visits', () => {
-    const rows = [
-      row('/stale', { reasons: [{ type: 'stale_audit', days: 100 }], citations: 9 }),
-      row('/never-quiet', { reasons: [{ type: 'never_audited' }], citations: 0, sessions: 1 }),
-      row('/never-cited', { reasons: [{ type: 'never_audited' }], citations: 4 }),
-      row('/ga-80', { reasons: [{ type: 'no_ai_traffic', percentile: 80 }] }),
-      row('/ga-95', { reasons: [{ type: 'no_ai_traffic', percentile: 95 }] }),
-      row('/pinned', { pinned: true }),
-    ];
-    expect(rows.sort(compareOpportunities).map((r) => r.path)).toEqual([
-      '/pinned',
-      '/ga-95',
-      '/ga-80',
-      '/never-cited',
-      '/never-quiet',
-      '/stale',
-    ]);
   });
 });
 
@@ -288,14 +265,11 @@ describe('competitorGapPages', () => {
 });
 
 describe('buildOpportunities with competitor-cited pages', () => {
-  it('adds the reason to the page and ranks it after GA value, before never audited', () => {
+  it('adds the reason to the page, with its traffic from site_pages', () => {
     const { rows } = build({
-      gaPages: [
-        { landing_page: '/ga', value_signal: 'revenue', value_percentile: 90, sessions: 10 },
-      ],
       sitePages: [
-        { url: 'https://acme.com/never', title: null, ga_sessions: 999, ai_citations: 9 },
-        { url: 'https://acme.com/pricing', title: 'Pricing', ga_sessions: 1, ai_citations: 0 },
+        { url: 'https://acme.com/pricing', title: 'Pricing', ga_sessions: 40, ai_citations: 1 },
+        { url: 'https://acme.com/fresh', title: 'Fresh', ga_sessions: 12, ai_citations: 0 },
       ],
       competitorPages: [
         { url: 'https://acme.com/pricing', prompts: 3, competitors: ['Crema Club'] },
@@ -303,17 +277,17 @@ describe('buildOpportunities with competitor-cited pages', () => {
       ],
       auditPages: [audit('https://acme.com/fresh', 0.8, 2)],
     });
-    expect(rows.map((r) => [r.path, r.reasons.map((x) => x.type)])).toEqual([
-      ['/ga', ['no_ai_traffic']],
-      ['/pricing', ['never_audited', 'competitor_cited']],
-      // Audited two days ago, still listed: the competitor gap is the reason.
-      ['/fresh', ['competitor_cited']],
-      ['/never', ['never_audited']],
+    const byPath = Object.fromEntries(rows.map((r) => [r.path, r]));
+    expect(byPath['/pricing'].reasons).toEqual([
+      { type: 'never_audited' },
+      { type: 'competitor_cited', prompts: 3, competitors: ['Crema Club'] },
     ]);
-    expect(rows[1].reasons[1]).toEqual({
-      type: 'competitor_cited',
-      prompts: 3,
-      competitors: ['Crema Club'],
+    // Audited two days ago, still listed: the competitor gap is the reason,
+    // and its title and sessions come from site_pages.
+    expect(byPath['/fresh']).toMatchObject({
+      reasons: [{ type: 'competitor_cited', prompts: 1, competitors: ['Northline'] }],
+      title: 'Fresh',
+      sessions: 12,
     });
   });
 });
