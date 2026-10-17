@@ -12,17 +12,20 @@ import { extractHostname, normalizeDomain } from '@/lib/citations/classify';
 import { dayIn, nextDay, startOfDayIn } from '@/lib/time-zone';
 import type { Sentiment } from '@/types';
 
-/** The engines the panel lists, in the order it lists them. */
+/**
+ * The engines the panel and the table's platform dots list, in the order
+ * they list them: ChatGPT and Microsoft Copilot first, Perplexity last.
+ */
 export const POSITION_PLATFORMS = [
   { id: 'chatgpt-web', label: 'ChatGPT' },
-  { id: 'perplexity-web', label: 'Perplexity' },
+  { id: 'copilot-web', label: 'Microsoft Copilot' },
   { id: 'google-aio', label: 'Google AI Overviews' },
   { id: 'google-aimode', label: 'Google AI Mode' },
   { id: 'gemini-web', label: 'Gemini' },
-  { id: 'copilot-web', label: 'Microsoft Copilot' },
   { id: 'grok-web', label: 'Grok' },
   // API-model tracking stores its answers under this platform.
   { id: 'claude', label: 'Claude' },
+  { id: 'perplexity-web', label: 'Perplexity' },
 ] as const;
 
 export type PositionPlatformId = (typeof POSITION_PLATFORMS)[number]['id'];
@@ -106,12 +109,16 @@ export interface PositionAnswer {
   createdAt: string;
   region: string | null;
   mentioned: boolean;
+  /** How often the answer names the brand, as the table's Mentions column sums it. */
+  mentions: number;
   /** 1-based rank among the tracked brands the answer names; null when not stored. */
   mentionPosition: number | null;
   /** How many tracked brands the answer names. */
   mentionTotal: number | null;
   sentiment: Sentiment | null;
   cited: boolean;
+  /** The brand's own sources in the answer, as the table's Citations column sums them. */
+  citations: number;
   /** The brand's first source; null when not cited or the source can't be found. */
   citation: { rank: number; total: number } | null;
 }
@@ -127,10 +134,12 @@ export interface AnswerView {
   at: string;
   region: string | null;
   mentioned: boolean;
+  mentions: number;
   /** Null when not mentioned, or mentioned with no stored position. */
   mention: { position: number; total: number | null } | null;
   sentiment: Sentiment | null;
   cited: boolean;
+  citations: number;
   /** Null when not cited, or cited with no locatable source. */
   citation: { rank: number; total: number } | null;
 }
@@ -169,6 +178,16 @@ export interface PositionsSummary {
   days: string[];
   /** Tracking runs that produced an answer for this prompt, across engines. */
   runs: number;
+  /**
+   * The answers themselves, and the brand's mentions and own sources in them:
+   * what the Prompts table's Runs, Mentions and Citations columns count, for
+   * the engines the panel shows.
+   */
+  answers: number;
+  mentionedAnswers: number;
+  citedAnswers: number;
+  mentions: number;
+  citations: number;
   trackedDays: number;
   mentionedDays: number;
   citedDays: number;
@@ -235,12 +254,14 @@ function toView(a: PositionAnswer): AnswerView {
     at: a.createdAt,
     region: a.region,
     mentioned: a.mentioned,
+    mentions: a.mentions,
     mention:
       a.mentioned && a.mentionPosition !== null && a.mentionPosition > 0
         ? { position: a.mentionPosition, total: a.mentionTotal }
         : null,
     sentiment: a.mentioned ? a.sentiment : null,
     cited: a.cited,
+    citations: a.citations,
     citation: a.cited ? a.citation : null,
   };
 }
@@ -325,6 +346,11 @@ export function summarizePositions(
     summary: {
       days,
       runs: countRuns(counted.map((a) => a.at)),
+      answers: counted.length,
+      mentionedAnswers: counted.filter((a) => a.mentioned).length,
+      citedAnswers: counted.filter((a) => a.cited).length,
+      mentions: counted.reduce((sum, a) => sum + a.mentions, 0),
+      citations: counted.reduce((sum, a) => sum + a.citations, 0),
       trackedDays: tracked.size,
       mentionedDays: mentioned.size,
       citedDays: cited.size,

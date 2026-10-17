@@ -280,6 +280,7 @@ describe('signalDetailForApi', () => {
       subject: null,
       subject_type: null,
       of: null,
+      period: 'week_over_week',
     });
   });
 });
@@ -596,6 +597,59 @@ describe('the AI-traffic windows', () => {
     expect(signalChange(drop)?.period).toBe('fortnight_over_fortnight');
   });
 
+  const crossChannel = signal({
+    category: 'traffic',
+    kind: 'cross_channel_risk',
+    payload: { entity: 'pages', targets: [{ id: 'site' }], clicksBefore: 900, clicksNow: 600 },
+    previousValue: 120,
+    currentValue: 80,
+  });
+  const trafficLoss = signal({
+    category: 'traffic',
+    kind: 'visibility_traffic_loss',
+    payload: { entity: 'pages', targets: [{ id: 'site' }], mentionsBefore: 40, mentionsNow: 25 },
+    previousValue: 120,
+    currentValue: 80,
+  });
+
+  it('gives a cross-channel finding the window each of its figures was read over', () => {
+    // AI sessions over 14 days, search clicks over Search Console's 28.
+    const risk = signalChange(crossChannel);
+    expect(risk?.period).toBe('fortnight_over_fortnight');
+    expect(risk?.figures.map((f) => f.period)).toEqual([
+      undefined,
+      undefined,
+      'four_weeks_over_four_weeks',
+      'four_weeks_over_four_weeks',
+    ]);
+    // AI sessions over 14 days, mentions over the library's 7.
+    const loss = signalChange(trafficLoss);
+    expect(loss?.period).toBe('fortnight_over_fortnight');
+    expect(loss?.figures.map((f) => f.period)).toEqual([
+      undefined,
+      undefined,
+      'week_over_week',
+      'week_over_week',
+    ]);
+  });
+
+  it("gives every figure's window to the MCP tools", () => {
+    const windows = (s: Signal) =>
+      signalDetailForApi(s, []).change?.figures.map((f) => `${f.metric}:${f.period}`);
+    expect(windows(crossChannel)).toEqual([
+      'ai_sessions:fortnight_over_fortnight',
+      'ai_sessions:fortnight_over_fortnight',
+      'search_clicks:four_weeks_over_four_weeks',
+      'search_clicks:four_weeks_over_four_weeks',
+    ]);
+    expect(windows(trafficLoss)).toEqual([
+      'ai_sessions:fortnight_over_fortnight',
+      'ai_sessions:fortnight_over_fortnight',
+      'mentions:week_over_week',
+      'mentions:week_over_week',
+    ]);
+  });
+
   it('asks a site-wide finding where its visits come from, not which prompts', () => {
     const site = signal({
       category: 'traffic',
@@ -716,5 +770,29 @@ describe("an AI-traffic finding's pages", () => {
       sessions: null,
       before: null,
     });
+  });
+});
+
+describe('the Search Console windows', () => {
+  it('says the Search Console findings count queries over 28 days, not 7', () => {
+    const kinds = [
+      'gsc_demand_gap',
+      'search_ai_misalignment',
+      'gsc_low_ctr',
+      'gsc_risk',
+      'gsc_decline',
+    ] as const;
+    for (const kind of kinds) {
+      const queries = signal({
+        category: 'traffic',
+        kind,
+        payload: { entity: 'queries', targets: [{ id: 'aeo tools' }, { id: 'aeo audit' }] },
+        currentValue: 2,
+      });
+      expect(signalChange(queries)).toEqual({
+        period: 'last_four_weeks',
+        figures: [{ metric: 'queries', role: 'total', value: 2 }],
+      });
+    }
   });
 });
