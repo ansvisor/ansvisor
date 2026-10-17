@@ -130,3 +130,20 @@ describe('actionPromptScope', () => {
     });
   });
 });
+
+describe('an opportunity a task was sent as (AC-004)', () => {
+  it('opens the action it came from instead of starting a second one', async () => {
+    const { sendToActionCenter } = await import('./from-opportunity.js');
+    expect(
+      await sendToActionCenter(
+        {
+          id: 'o1',
+          brand_id: 'b1',
+          source: 'action',
+          source_data: { fromAction: { actionId: 'a1' } },
+        },
+        { userId: 'u1' },
+      ),
+    ).toEqual({ actionId: 'a1', created: false });
+  });
+});

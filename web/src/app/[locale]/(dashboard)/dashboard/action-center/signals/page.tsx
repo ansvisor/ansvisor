@@ -4,7 +4,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { AlertCircle, Download, Radar, Search, TrendingDown, TrendingUp, X } from 'lucide-react';
+import {
+  AlertCircle,
+  Download,
+  Info,
+  Minus,
+  Radar,
+  Search,
+  TrendingDown,
+  TrendingUp,
+  X,
+} from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
 import {
@@ -26,6 +36,7 @@ import {
 } from '@/lib/signals/registry';
 import { signalAffected, signalTexts } from '@/lib/signals/display';
 import { isOnPlatform, locationName, platformName } from '@/lib/signals/names';
+import { groupSignals } from '@/lib/signals/group';
 import { getAIProviderDisplayName, type AIProviderKey } from '@/components/ai-provider-avatar';
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
 import { isSuperseded, SignalTable } from '@/components/action-center/signal-table';
@@ -45,6 +56,7 @@ import { cn } from '@/lib/utils';
 import { toCsv } from '@/lib/csv';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import type { KpiTrendPoint } from '@/lib/actions/kpis';
+import { signalChangeTone, signedPercent, type SignalMetric } from '@/lib/signals/metrics';
 
 const SIGNAL_EXPORT_HEADERS = [
   'title',
@@ -167,7 +179,7 @@ function SignalsContent({ brand }: { brand: Brand }) {
   }, [urlRead, datePreset, category, impact, status, source, platform, search]);
 
   const [selected, setSelected] = useState<Signal | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
 
   // The open drawer lives in the URL (?signal=<id>), mirroring the Actions
   // page: back from a prompt page — or a refresh — restores it, and the
@@ -284,13 +296,18 @@ function SignalsContent({ brand }: { brand: Brand }) {
     URL.revokeObjectURL(url);
   }, [brand.slug, visible, tTexts, tCategories, t]);
 
+  // The list shows copies of one finding as one row, and the counts follow.
+  const groups = useMemo(() => groupSignals(visible), [visible]);
+  const allGroups = useMemo(() => groupSignals(signals ?? []), [signals]);
+
   const categoryCounts = useMemo(() => {
     const counts = new Map<SignalCategory, number>();
-    for (const signal of signals ?? []) {
-      counts.set(signal.category, (counts.get(signal.category) ?? 0) + 1);
+    for (const { signals: members } of allGroups) {
+      const category = members[0].category;
+      counts.set(category, (counts.get(category) ?? 0) + 1);
     }
     return counts;
-  }, [signals]);
+  }, [allGroups]);
 
   // One sparkline series per card, over the window's days (capped at 30
   // points so 90d stays legible at sparkline size).
@@ -317,6 +334,9 @@ function SignalsContent({ brand }: { brand: Brand }) {
     return `${fmt(utcDay(windowDays * 2 - 1))} – ${fmt(utcDay(windowDays))}`;
   }, [windowDays]);
 
+  const countsNote =
+    allGroups.length < (signals?.length ?? 0) ? t('grouped.countsNote') : undefined;
+
   const hasActiveFilters =
     category !== 'all' ||
     impact !== 'all' ||
@@ -334,12 +354,23 @@ function SignalsContent({ brand }: { brand: Brand }) {
     setSearch('');
   };
 
-  const handleStatusChange = async (signal: Signal, nextStatus: SignalStatus) => {
-    setBusyId(signal.id);
+  // One signal from its drawer or row, or every copy a group's menu applies to.
+  const handleStatusChange = async (targets: Signal[], nextStatus: SignalStatus) => {
+    const ids = new Set(targets.map((signal) => signal.id));
+    const withBusy = (on: boolean) =>
+      setBusyIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) {
+          if (on) next.add(id);
+          else next.delete(id);
+        }
+        return next;
+      });
+    withBusy(true);
     try {
-      await updateSignalStatus(brand.id, signal.id, nextStatus);
+      await updateSignalStatus(brand.id, [...ids], nextStatus);
       const patch = (s: Signal) =>
-        s.id === signal.id
+        ids.has(s.id)
           ? {
               ...s,
               status: nextStatus,
@@ -347,11 +378,11 @@ function SignalsContent({ brand }: { brand: Brand }) {
             }
           : s;
       setSignals((prev) => (prev ?? []).map(patch));
-      setSelected((prev) => (prev && prev.id === signal.id ? patch(prev) : prev));
+      setSelected((prev) => (prev && ids.has(prev.id) ? patch(prev) : prev));
     } catch {
       toast.error(t('statusChangeFailed'));
     } finally {
-      setBusyId(null);
+      withBusy(false);
     }
   };
 
@@ -399,32 +430,44 @@ function SignalsContent({ brand }: { brand: Brand }) {
       {summary && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <SummaryCard
+            metric="total"
             label={t('cards.total')}
+            population={t('cards.totalPopulation', { days: windowDays })}
             value={summary.total}
             prev={summary.prevTotal}
             rangeLabel={prevRangeLabel}
             spark={sparkSeries(summary.byDayActive)}
+            note={countsNote}
           />
           <SummaryCard
+            metric="important"
             label={t('cards.important')}
+            population={t('cards.importantPopulation', { days: windowDays })}
             value={summary.important}
             prev={summary.prevImportant}
             rangeLabel={prevRangeLabel}
             spark={sparkSeries(summary.byDayImportant)}
+            note={countsNote}
           />
           <SummaryCard
+            metric="new"
             label={t('cards.new')}
+            population={t('cards.newPopulation', { days: windowDays })}
             value={summary.newCount}
             prev={summary.prevNew}
             rangeLabel={prevRangeLabel}
             spark={sparkSeries(summary.byDayNew)}
+            note={countsNote}
           />
           <SummaryCard
+            metric="resolved"
             label={t('cards.resolved')}
+            population={t('cards.resolvedPopulation', { days: windowDays })}
             value={summary.resolved}
             prev={summary.prevResolved}
             rangeLabel={prevRangeLabel}
             spark={sparkSeries(summary.byDayResolved)}
+            note={countsNote}
           />
           <AvgImpactCard summary={summary} days={windowDays} />
         </div>
@@ -434,7 +477,7 @@ function SignalsContent({ brand }: { brand: Brand }) {
         <div className="flex flex-wrap items-center gap-2">
           <CategoryPill
             label={t('allSignals')}
-            count={signals?.length ?? 0}
+            count={allGroups.length}
             isActive={category === 'all'}
             onClick={() => setCategory('all')}
           />
@@ -447,6 +490,12 @@ function SignalsContent({ brand }: { brand: Brand }) {
               onClick={() => setCategory(key)}
             />
           ))}
+          {countsNote && (
+            <span className="flex items-center text-muted-foreground" title={countsNote}>
+              <Info className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="sr-only">{countsNote}</span>
+            </span>
+          )}
         </div>
         <div
           className="flex h-8 overflow-hidden rounded-md border"
@@ -531,10 +580,11 @@ function SignalsContent({ brand }: { brand: Brand }) {
 
       {visible.length > 0 ? (
         <SignalTable
-          signals={visible}
+          groups={groups}
           onSelect={selectSignal}
-          onStatusChange={(signal, next) => void handleStatusChange(signal, next)}
-          busyId={busyId}
+          onStatusChange={(targets, next) => void handleStatusChange(targets, next)}
+          busyIds={busyIds}
+          selectedId={selected?.id ?? null}
         />
       ) : (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
@@ -546,36 +596,53 @@ function SignalsContent({ brand }: { brand: Brand }) {
       )}
 
       <SignalDrawer
+        brandId={brand.id}
         signal={selected}
         onOpenChange={(open) => {
           if (!open) selectSignal(null);
         }}
-        onStatusChange={(signal, next) => void handleStatusChange(signal, next)}
-        isBusy={busyId === selected?.id}
+        onStatusChange={(signal, next) => void handleStatusChange([signal], next)}
+        isBusy={selected ? busyIds.has(selected.id) : false}
       />
     </div>
   );
 }
 
 function SummaryCard({
+  metric,
   label,
+  population,
   value,
   prev,
   rangeLabel,
   spark,
+  note,
 }: {
+  metric: SignalMetric;
   label: string;
+  /** What the count counts, in the selected range (AC-008). */
+  population: string;
   value: number;
   prev: number;
   rangeLabel: string;
   spark: KpiTrendPoint[];
+  /** Why the count may be lower than the rows behind it. */
+  note?: string;
 }) {
   const t = useTranslations('actionCenter.signalsPage');
   const change = prev > 0 ? Math.round(((value - prev) / prev) * 100) : null;
   return (
     <Card>
       <CardContent className="p-4">
-        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+        <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+          {label}
+          {note && (
+            <span title={note}>
+              <Info className="h-3 w-3" aria-hidden="true" />
+              <span className="sr-only">{note}</span>
+            </span>
+          )}
+        </p>
         <div className="mt-1 flex items-end justify-between gap-2">
           <span className="text-2xl font-bold tabular-nums">{value}</span>
           {spark.length > 1 && (
@@ -584,21 +651,26 @@ function SummaryCard({
             </span>
           )}
         </div>
+        <p className="mt-0.5 text-xs text-muted-foreground">{population}</p>
         <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
           {change !== null ? (
             <>
               <span
                 className={cn(
                   'flex items-center gap-0.5 font-medium',
-                  change >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500',
+                  signalChangeTone(metric, change) === 'positive'
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-foreground/80',
                 )}
               >
-                {change >= 0 ? (
-                  <TrendingUp className="h-3 w-3" />
+                {change > 0 ? (
+                  <TrendingUp className="h-3 w-3" aria-hidden="true" />
+                ) : change < 0 ? (
+                  <TrendingDown className="h-3 w-3" aria-hidden="true" />
                 ) : (
-                  <TrendingDown className="h-3 w-3" />
+                  <Minus className="h-3 w-3" aria-hidden="true" />
                 )}
-                {Math.abs(change)}%
+                {signedPercent(change)}
               </span>
               {t('cards.vsRange', { range: rangeLabel })}
             </>
@@ -633,6 +705,9 @@ function AvgImpactCard({ summary, days }: { summary: SignalsSummary; days: numbe
       <CardContent className="p-4">
         <p className="text-xs font-medium text-muted-foreground">{t('cards.avgImpact')}</p>
         <p className="mt-1 text-2xl font-bold">{t(`impact.${level}`)}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {t('cards.avgImpactPopulation', { days })}
+        </p>
         <div className="mt-1.5 flex gap-0.5" aria-hidden="true">
           {Array.from({ length: 12 }, (_, i) => (
             <span

@@ -314,6 +314,9 @@ async function newEngineAppearances(brandId, from) {
   return firsts;
 }
 
+/** How far back the lost-citation detector looks, in days. */
+export const LOST_CITATION_WINDOW_DAYS = 14;
+
 /**
  * High-volume prompts that stopped being cited: cited on >= 60% of the
  * days with results over the last 14 days, but 0 citations on the most
@@ -333,7 +336,7 @@ async function lostCitationPrompts(brandId, promptById, now) {
   const volumeIds = (volumes ?? []).map((v) => v.prompt_id);
   if (!volumeIds.length) return [];
 
-  const since = new Date(now.getTime() - 14 * DAY_MS).toISOString();
+  const since = new Date(now.getTime() - LOST_CITATION_WINDOW_DAYS * DAY_MS).toISOString();
   const PAGE = 1000;
   const rows = [];
   // Paging runs inside each id chunk rather than across the whole list: the
