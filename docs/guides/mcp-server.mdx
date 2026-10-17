@@ -285,7 +285,7 @@ intent, not during exploratory queries.
 | --- | --- | --- |
 | `list_actions` | Recommended actions for a brand with status, impact, assignee, due date, and task progress. | |
 | `get_action` | One action in full: payload, triggering signals, tasks (`mode`, `permission`), and event trail. | |
-| `list_signals` | Detected changes (visibility, citations, traffic) with before/after values and linked `action_id`. | |
+| `list_signals` | Detected changes (visibility, citations, traffic), each with `where` (prompt, topic, platforms, locations, domain, competitor), `change` (labelled figures with unit and period), `evidence` (detection dates, app links) and `used_by_actions`. | |
 | `list_action_history` | Closed actions with measured outcomes and before/after validation results. | |
 | `update_task_status` | Record progress on a task (`in_progress`, `completed`, `skipped`, `failed`); does not execute the task. | **yes** |
 | `create_improve_action` | Send a prompt's Improve suggestions to Action Center as a `prompt_improve` action (needs a generated suggestion set for the range and a plan with Improve; idempotent on `idempotency_key`). | **yes** |

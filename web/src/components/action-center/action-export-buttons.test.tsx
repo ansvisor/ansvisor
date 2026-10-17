@@ -105,7 +105,7 @@ const detail = {
       payload: {},
       kpiKeys: [],
       actionId: 'a1',
-      where: { platforms: ['gemini-web'], regions: [] },
+      where: { platforms: ['gemini-web'], regions: [], topics: [] },
     },
   ],
   events: [

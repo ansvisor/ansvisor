@@ -1,8 +1,14 @@
 import { generateObject } from 'ai';
 import { z } from 'zod';
 
+/**
+ * The share of a prompt's Google volume estimated to get an AI answer: the
+ * AI adoption rate. 45% by default, as AI Overviews now appear on roughly
+ * 43–48% of Google searches (2026 estimates; it was about 15% a year
+ * before, the old default). AI_VOLUME_MULTIPLIER overrides it.
+ */
 const parsedMultiplier = parseFloat(process.env.AI_VOLUME_MULTIPLIER);
-export const AI_VOLUME_MULTIPLIER = Number.isFinite(parsedMultiplier) ? parsedMultiplier : 0.15;
+export const AI_VOLUME_MULTIPLIER = Number.isFinite(parsedMultiplier) ? parsedMultiplier : 0.45;
 
 export const intentKeywordSchema = z.object({
   intent: z

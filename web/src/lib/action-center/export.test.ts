@@ -47,7 +47,7 @@ const signal: Signal = {
   payload: {},
   kpiKeys: [],
   actionId: 'a1',
-  where: { platforms: ['chatgpt-web', 'gemini-web'], regions: ['US'] },
+  where: { platforms: ['chatgpt-web', 'gemini-web'], regions: ['US'], topics: [] },
 };
 
 const detail = {

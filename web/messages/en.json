@@ -56,6 +56,7 @@
     "audit": "Site Audit",
     "competitors": "Competitors",
     "citations": "Citations",
+    "mentions": "Mentions",
     "shopping": "Shopping",
     "reports": "Reports",
     "settings": "Settings",
@@ -230,10 +231,15 @@
       "subtitle": "Real-time signals from AI Search, your site, and the web. These signals drive your Action Center.",
       "cards": {
         "total": "Total Signals",
+        "totalPopulation": "active in the last {days, plural, one {day} other {# days}}",
         "important": "Important Signals",
+        "importantPopulation": "high impact, active in the last {days, plural, one {day} other {# days}}",
         "new": "New Signals",
+        "newPopulation": "detected in the last {days, plural, one {day} other {# days}}",
         "resolved": "Resolved Signals",
+        "resolvedPopulation": "resolved in the last {days, plural, one {day} other {# days}}",
         "avgImpact": "Avg. Signal Impact",
+        "avgImpactPopulation": "across signals active in the last {days, plural, one {day} other {# days}}",
         "noPrev": "no previous data",
         "vsRange": "vs {range}",
         "impactSame": "Same as previous {days} days",
@@ -263,6 +269,13 @@
       "where": {
         "platforms": "Tracked on {names}",
         "locations": "Tracked in {names}"
+      },
+      "grouped": {
+        "badge": "×{count} grouped",
+        "toggle": "{count} grouped signals, one per prompt",
+        "topic": "In {topic}",
+        "noTopic": "No topic",
+        "countsNote": "Copies of one finding count once: the same prompt text, found in the same run, tracked as several prompts."
       },
       "status": {
         "new": "New",
@@ -331,14 +344,176 @@
         "description": "Select a brand to view its signals."
       },
       "drawer": {
+        "where": "Where",
         "whatChanged": "What changed",
-        "affected": "Affected",
+        "evidence": "Evidence and links",
         "relatedKpis": "Related KPIs",
-        "detected": "Detected",
+        "detected": "First detected",
         "lastDetected": "Last detected",
         "source": "Source",
         "status": "Status",
-        "viewPrompt": "View prompt"
+        "viewPrompt": "View prompt",
+        "notAvailable": "Not available",
+        "none": "None",
+        "trafficPages": {
+          "sessions": "Sessions {before} → {now}",
+          "engagement": "Engagement rate {rate}",
+          "engagementVsSite": "Engagement rate {rate} (site {site})",
+          "keyEvents": "Key events {before} → {now}",
+          "keyRate": "{rate} key events per session",
+          "keyRateVsSite": "{rate} key events per session (site {site})"
+        },
+        "referrals": {
+          "none": "No AI referrals",
+          "period": "Visits in the last {days} days, against the {days} before"
+        },
+        "allPlatforms": "All tracked platforms",
+        "checkEvidence": {
+          "yes": "yes",
+          "no": "no",
+          "keys": {
+            "aiBotsMentioned": "In robots.txt",
+            "ageDays": "Age in days",
+            "newest": "Newest date",
+            "dateSignals": "Date signals",
+            "blockCount": "JSON-LD blocks",
+            "blocks": "JSON-LD blocks",
+            "parsed": "Parsed",
+            "wellFormedNodes": "Well-formed nodes",
+            "types": "Schema types",
+            "faqPage": "FAQ schema",
+            "questionCount": "Questions",
+            "internalLinks": "Internal links",
+            "matches": "Wikidata matches",
+            "qid": "Wikidata ID",
+            "label": "Wikidata label",
+            "description": "Wikidata description",
+            "note": "Note"
+          }
+        },
+        "mentions": {
+          "sentiment": {
+            "positive": "Positive",
+            "neutral": "Neutral",
+            "negative": "Negative"
+          },
+          "quotedFrom": "{platform}, {date}"
+        },
+        "positions": {
+          "you": "You",
+          "new": "new",
+          "lost": "lost",
+          "untitled": "Untitled prompt",
+          "sourceAnswers": "cited in {count} of the {of, plural, one {# latest answer} other {# latest answers}} they win"
+        },
+        "cited": {
+          "position": "#{position}",
+          "lastCited": "last cited {date}",
+          "answers": "{count, plural, one {in # answer} other {in # answers}}",
+          "answersOf": "in {count} of {of, plural, one {# latest answer} other {# latest answers}}"
+        },
+        "loading": "Loading…",
+        "more": "+{count} more",
+        "usedBy": "Used by actions",
+        "usedByNone": "No action uses this signal yet.",
+        "usedByFailed": "Couldn’t load the actions.",
+        "actionLabel": "AC-{no} · {title}",
+        "fields": {
+          "scope": "Scope",
+          "prompt": "Prompt",
+          "prompts": "Prompts",
+          "topic": "Topic",
+          "platforms": "Platforms",
+          "locations": "Locations",
+          "trackedOn": "Tracked on",
+          "trackedIn": "Tracked in",
+          "domain": "Domain",
+          "competitor": "Competitor",
+          "url": "URL",
+          "pages": "Pages",
+          "queries": "Queries",
+          "engagementRank": "Engagement rank",
+          "lostUrl": "Your page cited before",
+          "citedNow": "Cited now",
+          "exampleUrls": "Example cited URLs",
+          "competitorsNamed": "Competitors it names",
+          "bestPage": "Your best matching page",
+          "position": "Mention position",
+          "sentiment": "Sentiment",
+          "excerpt": "Answer excerpt",
+          "aiReferrals": "AI referrals by platform",
+          "citablePrompts": "Prompts it could be cited on",
+          "issue": "Issue",
+          "crawlers": "Affected crawlers",
+          "evidence": "Failed checks",
+          "competitorPositions": "Positions by prompt",
+          "winningSources": "Sources behind their wins",
+          "mentionDetails": "Mentions by prompt"
+        },
+        "scopes": {
+          "all_prompts": "All prompts",
+          "site": "Whole site",
+          "topic": "Topic",
+          "platform": "Platform",
+          "location": "Location",
+          "prompt": "Prompt"
+        },
+        "change": {
+          "points": "{value} pts",
+          "periods": {
+            "week_over_week": "Last 7 days against the 7 days before",
+            "fortnight_over_fortnight": "Last 14 days against the 14 days before",
+            "four_weeks_over_four_weeks": "Last 28 days against the 28 days before",
+            "last_7_days": "Last 7 days",
+            "last_fortnight": "Last 14 days",
+            "last_four_weeks": "Last 28 days",
+            "last_14_days": "Days with answers in the last 14 days",
+            "latest": "Latest data"
+          },
+          "metrics": {
+            "visibility_rate": "Visibility rate",
+            "mention_rate": "Mention rate",
+            "coverage": "Coverage",
+            "mentions": "Mentions",
+            "citation_answers": "Answers citing",
+            "answers_citing": "Answers citing it",
+            "visibility_score": "Visibility score",
+            "ai_sessions": "AI referral sessions",
+            "search_clicks": "Search clicks",
+            "sessions": "Sessions",
+            "engagement_rank": "Engagement rank",
+            "prompts": "Prompts",
+            "pages": "Pages",
+            "queries": "Queries",
+            "cited_days": "Cited days"
+          },
+          "roles": {
+            "before": "previous {days} days",
+            "after": "last {days} days",
+            "earlier": "earlier days",
+            "latest": "latest days",
+            "change": "change",
+            "you": "you",
+            "competitor": "{name}",
+            "best": "{name} (best)",
+            "this": "{name}",
+            "total": "all",
+            "naming_you": "naming you",
+            "competitors_only": "naming only competitors",
+            "now": "now",
+            "unnamed": "competitor"
+          }
+        },
+        "links": {
+          "prompt_answers": "View AI answers",
+          "prompts": "Open Prompts",
+          "topic": "Open topic",
+          "citations": "Open Citations",
+          "competitors": "Open Competitors",
+          "traffic": "Open Traffic",
+          "audit": "Open Site Audit",
+          "insights": "Open Insights"
+        }
       }
     },
     "signalTexts": {
@@ -356,7 +531,9 @@
       },
       "lost_citations": {
         "title": "Citations lost for “{prompt}”",
-        "description": "Your pages are no longer cited in answers to this prompt."
+        "titleOn": "Citations lost on {platform} for “{prompt}”",
+        "description": "Your pages are no longer cited in answers to this prompt.",
+        "descriptionPage": "{page} is no longer cited on {platforms}."
       },
       "first_citation": {
         "title": "First citation for {url}",
@@ -766,10 +943,14 @@
           "assigned": "Assignee changed",
           "due_date_set": "Due date updated",
           "task_status": "Task updated",
+          "task_added": "Task added: “{title}”",
+          "task_renamed": "Task renamed to “{title}”",
+          "task_deleted": "Task deleted",
           "task_ran": "{task} — carried out automatically ({tool})",
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
           "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
-          "position_outcome_recorded": "{measurable, plural, =0 {30-day result: not enough data to compare positions} other {30-day result: position improved on {improved} of # platforms}}"
+          "position_outcome_recorded": "{measurable, plural, =0 {30-day result: not enough data to compare positions} other {30-day result: position improved on {improved} of # platforms}}",
+          "outcome_measured": "{outcome, select, improved {Result: metrics improved after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}"
         },
         "taskText": "Task text",
         "renameTask": "Rename task",
@@ -1464,13 +1645,13 @@
         "dismissed": "Dismissed"
       },
       "affected": {
-        "prompt": "{count} prompts",
-        "url": "{count} pages",
-        "citation": "{count} signals",
-        "keyword": "{count} keywords",
-        "topic": "{count} topics",
+        "prompt": "{count, plural, one {# prompt} other {# prompts}}",
+        "url": "{count, plural, one {# page} other {# pages}}",
+        "citation": "{count, plural, one {# signal} other {# signals}}",
+        "keyword": "{count, plural, one {# keyword} other {# keywords}}",
+        "topic": "{count, plural, one {# topic} other {# topics}}",
         "competitor": "Competitor",
-        "platform": "{count} platforms"
+        "platform": "{count, plural, one {# platform} other {# platforms}}"
       },
       "range": {
         "7d": "7d",
@@ -1511,7 +1692,7 @@
       "drawer": {
         "goal": "What was the goal?",
         "whatHappened": "What happened?",
-        "triggeredBy": "Consolidated from {count} signals",
+        "triggeredBy": "Consolidated from {count, plural, one {# signal} other {# signals}}",
         "result": "Result",
         "visibilityChange": "Visibility Change",
         "citationsChange": "Citations Change",
@@ -1521,7 +1702,7 @@
         "netChange": "net change",
         "ofAffected": "of affected",
         "fromStart": "from start",
-        "days": "{n} days",
+        "days": "{n, plural, one {# day} other {# days}}",
         "affected": "Affected",
         "noAffected": "Nothing recorded.",
         "tasks": "Tasks ({completed}/{total})",
@@ -1770,8 +1951,6 @@
       "checkedAt": "Checked: {date}"
     },
     "compare": {
-      "label": "Compare",
-      "samePrompts": "Same prompts",
       "hint": "Changes compare only prompts tracked in both periods",
       "newExcluded": "{count, plural, one {# new prompt excluded} other {# new prompts excluded}}",
       "newIncluded": "{count, plural, one {includes # new prompt} other {includes # new prompts}}"
@@ -1787,18 +1966,18 @@
       "rankOf": "#{rank} of {count} brands",
       "appearedIn": "appeared in {visible} of {active} prompts",
       "trackedPrompts": "Tracked prompts",
-      "trackedPromptsTip": "Prompts answered in this period. The bar is your plan's prompt locations, shared by all brands and counting only active prompts (paused ones don't count): {used} of {limit} used.",
+      "trackedPromptsTip": "Prompts answered in this period. The bar is your plan: {used} of {limit} prompt locations in use, shared by every brand in your workspace. A prompt counts once per location it tracks; paused prompts don't count.",
       "trackedPromptsTipUnlimited": "Prompts answered in this period. Your plan has no prompt location limit.",
-      "slotsLeft": "{count, plural, one {# slot left} other {# slots left}} · all brands",
-      "overLimit": "{count, plural, one {# location over your plan} other {# locations over your plan}} · all brands",
+      "slotsLeft": "{count, plural, other {# prompts/locations left to add}}",
+      "limitReached": "Plan limit reached",
+      "overLimit": "{count, plural, other {# over your plan limit}}",
       "unlimited": "{count, plural, one {# active location} other {# active locations}} · Unlimited",
       "quotaLabel": "{used} of {limit} active prompt locations used",
       "mentions": "Mentions",
-      "mentionsTip": "Times answers named your brand. With Same prompts, the change counts only prompts tracked in both periods.",
+      "mentionsTip": "Times answers named your brand. The change is against the previous period.",
       "citations": "Citations",
-      "citationsTip": "Times answers cited your pages. With Same prompts, the change counts only prompts tracked in both periods.",
-      "samePrompts": "{count, plural, one {same # prompt} other {same # prompts}}",
-      "allPrompts": "all prompts",
+      "citationsTip": "Times answers cited your pages. The change is against the previous period.",
+      "vsPrevious": "vs previous period",
       "netSentiment": "Net sentiment",
       "netSentimentTip": "Positive minus negative share of the answers that name or cite your brand.",
       "sentimentSplit": "{positive} pos · {negative} neg",
@@ -1905,8 +2084,6 @@
       "pinLimit": "Up to 5 competitors",
       "pinFailed": "Couldn't save the pinned competitors.",
       "promptsAdded": "{count, plural, one {# prompt} other {# prompts}} added · {date}",
-      "actionsSent": "{actions} sent · {date}",
-      "moreActions": "{actions} +{count}",
       "goal": "Goal {value}",
       "goalLegend": "Action Center goal"
     },
@@ -1920,15 +2097,7 @@
       "lowSample": "Low sample",
       "openTopic": "Open {topic}",
       "showAll": "Show all {count}",
-      "showLess": "Show less",
-      "sendGap": "Send biggest gap to Actions",
-      "sendGapTitle": "Open a Compete action for {topic}, where {competitor} leads you by {gap} pts",
-      "noGap": "No topic where a competitor leads you",
-      "sent": "AC-{no} sent to the Action Center",
-      "alreadySent": "Already in the Action Center as AC-{no}",
-      "sendFailed": "Couldn't send to the Action Center.",
-      "openAction": "Open",
-      "gapChanged": "The gap changed since the page loaded. Refresh to see the latest."
+      "showLess": "Show less"
     },
     "breakdown": {
       "noData": "No data",
@@ -2388,6 +2557,19 @@
     "exportError": "Failed to export CSV"
   },
   "prompts": {
+    "positions": {
+      "answers": "{count, plural, one {# answer} other {# answers}}",
+      "answersInPeriod": "{count, plural, one {# answer} other {# answers}} in this period",
+      "mentionedIn": "In {mentioned} of {answers, plural, one {# answer} other {# answers}} · {mentions, plural, one {# mention} other {# mentions}}",
+      "citedIn": "In {cited} of {answers, plural, one {# answer} other {# answers}} · {citations, plural, one {# citation} other {# citations}}",
+      "mentionedInPeriod": "In {mentioned} of {answers, plural, one {# answer} other {# answers}} in this period · {mentions, plural, one {# mention} other {# mentions}}",
+      "citedInPeriod": "In {cited} of {answers, plural, one {# answer} other {# answers}} in this period · {citations, plural, one {# citation} other {# citations}}",
+      "includedOnly": "Answer counts cover the platforms your plan includes.",
+      "notMentioned": "Not mentioned",
+      "notMentionedTitle": "Not mentioned in any of {count, plural, one {# answer} other {# answers}} in this period",
+      "citedOnly": "Cited only",
+      "citedOnlyTitle": "Cited in {cited} of {count, plural, one {# answer} other {# answers}} in this period, named in none"
+    },
     "title": "Prompt Volumes",
     "description": "Discover query volumes and trends across AI platforms.",
     "totalVolume": "Total Volume",
@@ -2451,13 +2633,58 @@
         "nonePaused": "No paused prompts match."
       }
     },
+    "fanout": {
+      "engines": "Engines",
+      "allEngines": "All engines",
+      "share": "{percent} of answers",
+      "noneSince": "none since {date}",
+      "noneInWindow": "none in this window",
+      "notShared": "not shared",
+      "silentTitle": "{engine} usually shares the searches behind its answers, but none arrived since {date}.",
+      "silentTitleNoDate": "{engine} usually shares the searches behind its answers, but none arrived in this window.",
+      "silentBody": "Its answers are still tracked as usual; only the list of searches is missing.",
+      "notSharedNote": "{engines} don't come with the searches behind their answers, so they can't appear here.",
+      "enginesLegend": "Coloured: shared searches for this prompt in the window. Faded: tracked, but shared none.",
+      "engineEmptyTitle": "No {engine} searches in the {range}",
+      "engineEmptyBody": "{engine} usually shares the searches behind its answers. Try a longer date range.",
+      "emptyTitle": "No fan-out captured yet",
+      "emptyBody": "Copilot and Perplexity share the searches behind their answers; ChatGPT, Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
+      "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. Only Copilot and Perplexity share them."
+    },
     "bulkDelete": {
       "progress": "Deleting {done} of {total} prompts…",
       "failed": "{count, plural, one {Failed to delete the prompt.} other {Failed to delete the prompts.}}",
       "stopped": "{deleted} of {total} prompts deleted",
       "stoppedDescription": "Deleting stopped at an error. {kept, plural, one {The other prompt is} other {The other # prompts are}} back in the list, so you can try again.",
       "notDeleted": "{kept} of {total} {total, plural, one {prompt} other {prompts}} couldn't be deleted."
+    },
+    "lateFilter": {
+      "label": "Late or missing · {count}",
+      "title": "Prompts named late, or not at all, on at least one AI platform. On, the furthest behind come first.",
+      "order": "Furthest behind first: late or missing on the most AI platforms, then the worse average position."
     }
+  },
+  "mentions": {
+    "title": "Mentions & Sentiment",
+    "description": "Where AI mentions your brand, how it describes you, why, and what to do about it.",
+    "selectBrand": "Select a brand to see its mentions.",
+    "tabs": {
+      "label": "Mentions & Sentiment views",
+      "overview": "Overview",
+      "mentions": "Mentions",
+      "perception": "Perception"
+    },
+    "filters": {
+      "platform": "Platform",
+      "allPlatforms": "All platforms",
+      "country": "Country",
+      "allCountries": "All countries",
+      "topic": "Topic",
+      "allTopics": "All topics",
+      "search": "Search",
+      "searchPlaceholder": "Search prompts, brands, phrases…"
+    },
+    "comingSoon": "This view is on its way: its figures and charts arrive with the next updates."
   },
   "competitors": {
     "title": "Competitors",
