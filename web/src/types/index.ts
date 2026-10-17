@@ -163,9 +163,15 @@ export interface PromptVolume {
   promptCategory: string;
   intent: string;
   keywords: string[];
+  /** Each keyword's monthly Google volume, under the provider's spelling. */
   googleVolumes: Record<string, number>;
+  /**
+   * The prompt's monthly Google volume: the median of its keywords that have
+   * one (00154). Named before the median replaced their sum.
+   */
   totalGoogleVolume: number;
   aiVolumeMultiplier: number;
+  /** totalGoogleVolume × aiVolumeMultiplier, rounded. */
   estAiVolume: number;
   competitionIndex: number | null;
   competition: 'LOW' | 'MEDIUM' | 'HIGH' | null;

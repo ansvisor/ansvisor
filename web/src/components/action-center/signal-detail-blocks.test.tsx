@@ -107,6 +107,34 @@ describe('SignalChangeBlock', () => {
     expect(container.textContent).toContain('Mentions · Profound · last 7 days31');
   });
 
+  it('names the window of each figure a cross-channel finding mixes', () => {
+    render(
+      <SignalChangeBlock
+        signal={signal({
+          category: 'traffic',
+          kind: 'cross_channel_risk',
+          payload: {
+            entity: 'pages',
+            targets: [{ id: 'site' }],
+            clicksBefore: 900,
+            clicksNow: 600,
+          },
+          previousValue: 120,
+          currentValue: 80,
+          changeValue: -40,
+        })}
+      />,
+    );
+    const text = container.textContent ?? '';
+    expect(text).toContain('Last 14 days against the 14 days before');
+    expect(text).toContain('AI referral sessions · previous 14 days120');
+    expect(text).toContain('AI referral sessions · last 14 days80');
+    expect(text).toContain('Last 28 days against the 28 days before');
+    expect(text).toContain('Search clicks · previous 28 days900');
+    expect(text).toContain('Search clicks · last 28 days600');
+    expect(text).not.toContain('7 days');
+  });
+
   it("names a source's counts rather than showing 0 → 251 +167", () => {
     render(
       <SignalChangeBlock

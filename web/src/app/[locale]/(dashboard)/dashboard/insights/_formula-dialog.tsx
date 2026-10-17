@@ -153,13 +153,12 @@ export function FormulaDialog() {
               <Formula>Coverage = prompts you appeared in ÷ prompts answered × 100</Formula>
             </Section>
 
-            <Section title="Changes and “Same prompts”">
+            <Section title="Changes">
               <p>
                 Each card&apos;s change compares the selected period with the period of the same
-                length just before it. With &quot;Compare: Same prompts&quot; on, it compares only
-                the prompts answered in both periods, so adding prompts doesn&apos;t inflate it; the
-                numbers themselves still cover every prompt. With &quot;All time&quot; there is no
-                earlier period, so no change is shown.
+                length just before it, over the prompts answered in both periods only, so adding
+                prompts doesn&apos;t inflate it; the numbers themselves still cover every prompt.
+                With &quot;All time&quot; there is no earlier period, so no change is shown.
               </p>
             </Section>
           </div>

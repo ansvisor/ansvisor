@@ -127,9 +127,9 @@ mirrors the MCP tool of the same purpose and returns the same data.
 
 | Endpoint | Query / body | Returns |
 | --- | --- | --- |
-| `GET /actions` | `brand_id`, `status`, `category`, `limit` | `{ actions: [...] }` open work with impact and task progress |
-| `GET /actions/{id}` | — | one action: payload, signals, tasks (`mode`, `permission`), events |
-| `GET /signals` | `brand_id`, `status`, `kind`, `limit` | `{ signals: [...] }` detected changes |
+| `GET /actions` | `brand_id`, `status`, `category`, `limit`, `sort` (`priority` default, or `updated`) | `{ actions: [...] }` open work, highest priority first: `priority` (`score` 0–100, `level`, `reason`; null until scored), impact, status, task progress |
+| `GET /actions/{id}` | `format`: `json` (default), `markdown` or `csv` | one action: priority, payload, signals, tasks (`mode`, `permission`, `details` with `where`, `why`, `how`, `done_when`, `type`, `effort`, `role`, `sent_to_content`, `sent_to_webhook`), events. `markdown` returns the dashboard's **Copy Data** text, `csv` its **Export CSV** file — read both as text (see below) |
+| `GET /signals` | `brand_id`, `status`, `kind`, `limit` | `{ signals: [...] }` detected changes, each with `where`, `change` (labelled figures with unit and period — prefer them over the raw values), `evidence` and `used_by_actions` |
 | `GET /action-history` | `brand_id`, `limit` | `{ actions: [...] }` closed, with `outcome` and `results` |
 | `PATCH /action-tasks/{id}/status` *(write)* | `{ status, skip_reason }`: `in_progress`, `completed`, `skipped` (reason required), `failed` | the updated task |
 | `POST /prompts/{id}/improve-action` *(write)* | `{ range: { preset, from, to, region }, idempotency_key, suggestions: [...] }` — see workflow 8 | `{ actionId, actionNo, created, taskCount }` |
@@ -170,6 +170,20 @@ Then for example:
 brands = call("/brands")["brands"]
 summary = call("/visibility-summary",
                {"brand_id": brands[0]["id"], "date_from": "2026-05-09T00:00:00Z"})
+```
+
+`GET /actions/{id}?format=markdown` and `?format=csv` return text, not
+JSON. Read them like this (the CSV starts with a byte order mark, which
+`utf-8-sig` drops):
+
+```python
+def call_text(path, params):
+    url = f"{BASE_URL}/api/mcp{path}?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {API_KEY}"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return r.read().decode("utf-8-sig")
+
+brief = call_text(f"/actions/{action_id}", {"format": "markdown"})
 ```
 
 If a request returns a non-2xx status, the response body usually has an
@@ -222,8 +236,9 @@ When the user asks for a general status check:
    - Mentioned often but rarely cited → known, but no source authority
      — content gap
    - Rarely mentioned → fringe — competitors are eating the answer
-7. If `GET /actions` has open high-impact actions, end with one of them
-   as the **Next** step instead of inventing your own.
+7. If `GET /actions` has open critical- or high-priority actions, end
+   with the first of them as the **Next** step instead of inventing your
+   own.
 
 ### 2. Visibility deep-dive ("why did it drop?")
 
@@ -352,14 +367,20 @@ prompts for `<theme>`"_:
 ### 7. What to do next ("what should we work on?")
 
 1. Call `GET /actions` with `status=new` (and `in_progress` if they
-   ask what's underway). Rank by `impact`.
+   ask what's underway). It comes highest priority first; keep that
+   order and lead with each action's priority `level` and `score`.
 2. For the top one or two, call `GET /actions/{id}` and explain the **why**
-   from its payload and signals in one sentence each.
+   from its payload and signals in one sentence each. When a task has
+   `details`, give its `where` and `done_when`: what to change, and how
+   they'll know it worked.
 3. Mention open content gaps from `GET /content-opportunities` only if
    no action already covers them.
 4. When the user says they did, started or skipped a task, offer to
    record it with `PATCH /action-tasks/{id}/status` — and only call it after they
    confirm. A skip needs a reason.
+5. When they want an action outside the chat (a ticket, a doc, a brief
+   for someone else), call `GET /actions/{id}?format=markdown` and hand
+   over that text as it is. Don't rewrite it.
 
 ### 8. Sending Improve suggestions to Action Center
 

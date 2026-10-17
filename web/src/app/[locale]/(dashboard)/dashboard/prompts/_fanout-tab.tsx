@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
 import {
@@ -29,6 +30,12 @@ import {
 } from '@/components/ui/table';
 import { Check, ChevronRight, Plus, Loader2, Search } from 'lucide-react';
 import { usePagination, TablePager } from '@/components/table-pager';
+import {
+  FanoutEngineNotices,
+  FanoutEngineStrip,
+  PromptEnginesCell,
+  platformLabel,
+} from './_fanout-engines';
 
 type View = 'frequency' | 'by-prompt';
 
@@ -39,6 +46,9 @@ interface PromptGroup {
   totalRuns: number;
   /** Of those, how many triggered at least one live search. */
   runsWithFanout: number;
+  /** Platforms that answered it, and those whose answers shared searches. */
+  platforms: string[];
+  fanoutPlatforms: string[];
 }
 
 type QueryFanoutTabProps = {
@@ -85,6 +95,8 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
   const [intents, setIntents] = useState<Record<string, string>>({});
   const [view, setView] = useState<View>('by-prompt');
   const [searchText, setSearchText] = useState('');
+  // The engine chip picked above the lists; null shows every engine.
+  const [engine, setEngine] = useState<string | null>(null);
 
   // Mirror of `intents` for the async classification chain (avoids stale
   // closures), plus a run counter so a reload/brand switch/unmount cancels
@@ -94,16 +106,19 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
 
   const filteredSubQueries = useMemo<FanoutSubQuery[]>(() => {
     if (!data) return [];
-    if (!searchText) return data.subQueries;
     const lower = searchText.toLowerCase();
-    return data.subQueries.filter((sq) => sq.query.toLowerCase().includes(lower));
-  }, [data, searchText]);
+    return data.subQueries.filter(
+      (sq) =>
+        (!engine || sq.engines.includes(engine)) &&
+        (!searchText || sq.query.toLowerCase().includes(lower)),
+    );
+  }, [data, searchText, engine]);
 
-  // Shared pager for the HighFrequencyView — reset whenever brandId, view, or the search term changes.
+  // Shared pager for the HighFrequencyView — reset whenever brandId, view, the engine or the search term changes.
   const pager = usePagination(
     filteredSubQueries.length,
-    // resetKey: changing brand, switching away from/back to frequency view, or typing a search term resets to page 0
-    `${brandId}::${view}::${searchText}`,
+    // resetKey: changing brand, switching away from/back to frequency view, picking an engine or typing a search term resets to page 0
+    `${brandId}::${view}::${engine}::${searchText}`,
     FANOUT_PAGE_SIZE,
   );
 
@@ -154,7 +169,13 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
       } catch (err) {
         console.error('[fanout] load failed', err);
         toast.error(userErrorMessage(err, 'Failed to load query fan-out — please retry.'));
-        setData({ subQueries: [], totalObserved: 0, promptCoverage: [], truncated: false });
+        setData({
+          subQueries: [],
+          totalObserved: 0,
+          promptCoverage: [],
+          engines: [],
+          truncated: false,
+        });
       } finally {
         if (!silent) {
           setLoading(false);
@@ -174,6 +195,7 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
 
   useEffect(() => {
     setSearchText('');
+    setEngine(null);
   }, [brandId, range]);
 
   useEffect(() => {
@@ -193,13 +215,22 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
         subQueries: [],
         totalRuns: c.totalRuns,
         runsWithFanout: c.runsWithFanout,
+        platforms: c.platforms,
+        fanoutPlatforms: c.fanoutPlatforms,
       });
     }
     for (const sq of data.subQueries) {
       for (const p of sq.sourcedPrompts) {
         // Defensive: a sourced prompt should always have a coverage entry.
         if (!map.has(p.id)) {
-          map.set(p.id, { prompt: p, subQueries: [], totalRuns: 0, runsWithFanout: 0 });
+          map.set(p.id, {
+            prompt: p,
+            subQueries: [],
+            totalRuns: 0,
+            runsWithFanout: 0,
+            platforms: [],
+            fanoutPlatforms: [],
+          });
         }
         map.get(p.id)!.subQueries.push(sq);
       }
@@ -216,16 +247,26 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
   }, [data]);
 
   const filteredByPrompt = useMemo<PromptGroup[]>(() => {
-    if (!searchText) return byPrompt;
     const lower = searchText.toLowerCase();
-    return byPrompt.filter((group) => group.prompt.text.toLowerCase().includes(lower));
-  }, [byPrompt, searchText]);
+    const groups = searchText
+      ? byPrompt.filter((group) => group.prompt.text.toLowerCase().includes(lower))
+      : byPrompt;
+    if (!engine) return groups;
+    // With an engine picked, a prompt shows that engine's searches only, and
+    // a prompt it shared none for drops out.
+    return groups
+      .map((group) => ({
+        ...group,
+        subQueries: group.subQueries.filter((sq) => sq.engines.includes(engine)),
+      }))
+      .filter((group) => group.subQueries.length > 0);
+  }, [byPrompt, searchText, engine]);
 
   // The By-prompt list now covers every tracked prompt with a run in the
   // window, not just those with observed fan-out, so it needs its own pager.
   const byPromptPager = usePagination(
     filteredByPrompt.length,
-    `${brandId}::${view}::${searchText}`,
+    `${brandId}::${view}::${engine}::${searchText}`,
     FANOUT_PAGE_SIZE,
   );
 
@@ -309,6 +350,17 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
         </p>
       </CardHeader>
       <CardContent>
+        {!loading && data && data.engines.length > 0 && (
+          <div className="mb-4 space-y-2.5">
+            <FanoutEngineStrip
+              engines={data.engines}
+              totalSubQueries={data.totalObserved}
+              selected={engine}
+              onSelect={setEngine}
+            />
+            <FanoutEngineNotices engines={data.engines} />
+          </div>
+        )}
         {loading ? (
           <div className="space-y-2">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -323,6 +375,8 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
             intents={intents}
             addingKey={addingKey}
             pager={pager}
+            rangeLabel={rangeLabel}
+            engine={engine}
             onTrack={handleTrack}
             searchText={searchText}
             onSearchChange={setSearchText}
@@ -334,6 +388,7 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
             addingKey={addingKey}
             pager={byPromptPager}
             rangeLabel={rangeLabel}
+            engine={engine}
             onTrack={handleTrack}
             searchText={searchText}
             onSearchChange={setSearchText}
@@ -351,14 +406,28 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
 }
 
 function EmptyState() {
+  const t = useTranslations('prompts.fanout');
   return (
     <div className="flex flex-col items-center gap-2 py-12 text-center">
       <Search className="h-8 w-8 text-muted-foreground/50" />
-      <p className="text-sm font-medium">No fan-out captured yet</p>
+      <p className="text-sm font-medium">{t('emptyTitle')}</p>
+      <p className="max-w-md text-xs text-muted-foreground">{t('emptyBody')}</p>
+    </div>
+  );
+}
+
+/** An engine is picked and shared nothing in the window. */
+function EngineEmptyState({ engine, rangeLabel }: { engine: string; rangeLabel: string }) {
+  const t = useTranslations('prompts.fanout');
+  const label = platformLabel(engine);
+  return (
+    <div className="flex flex-col items-center gap-2 py-12 text-center">
+      <Search className="h-8 w-8 text-muted-foreground/50" />
+      <p className="text-sm font-medium">
+        {t('engineEmptyTitle', { engine: label, range: rangeLabel })}
+      </p>
       <p className="max-w-md text-xs text-muted-foreground">
-        Fan-out is emitted mostly by <span className="font-medium">Copilot</span> and{' '}
-        <span className="font-medium">Perplexity</span>, and only for some queries. Once those
-        platforms run for your prompts, the observed sub-queries will appear here.
+        {t('engineEmptyBody', { engine: label })}
       </p>
     </div>
   );
@@ -379,6 +448,8 @@ function HighFrequencyView({
   intents,
   addingKey,
   pager,
+  rangeLabel,
+  engine,
   onTrack,
   searchText,
   onSearchChange,
@@ -387,6 +458,8 @@ function HighFrequencyView({
   intents: Record<string, string>;
   addingKey: string | null;
   pager: ReturnType<typeof usePagination>;
+  rangeLabel: string;
+  engine: string | null;
   onTrack: (query: string) => void;
   searchText: string;
   onSearchChange: (text: string) => void;
@@ -405,6 +478,8 @@ function HighFrequencyView({
         // no longer gates on that, so this view has to explain it itself.
         searchText ? (
           <NoMatches label="No sub-queries match your search" />
+        ) : engine ? (
+          <EngineEmptyState engine={engine} rangeLabel={rangeLabel} />
         ) : (
           <EmptyState />
         )
@@ -487,6 +562,7 @@ function ByPromptView({
   addingKey,
   pager,
   rangeLabel,
+  engine,
   onTrack,
   searchText,
   onSearchChange,
@@ -496,10 +572,12 @@ function ByPromptView({
   addingKey: string | null;
   pager: ReturnType<typeof usePagination>;
   rangeLabel: string;
+  engine: string | null;
   onTrack: (query: string) => void;
   searchText: string;
   onSearchChange: (text: string) => void;
 }) {
+  const t = useTranslations('prompts.fanout');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const pageRows = groups.slice(pager.start, pager.end);
 
@@ -522,6 +600,8 @@ function ByPromptView({
       {groups.length === 0 ? (
         searchText ? (
           <NoMatches label="No prompts match your search" />
+        ) : engine ? (
+          <EngineEmptyState engine={engine} rangeLabel={rangeLabel} />
         ) : (
           <NoMatches label={`No tracked answers in the ${rangeLabel}`} />
         )
@@ -532,110 +612,124 @@ function ByPromptView({
               <TableRow>
                 <TableHead className="w-[28px]" />
                 <TableHead>Prompt</TableHead>
+                <TableHead className="w-[150px]" title={t('enginesLegend')}>
+                  {t('engines')}
+                </TableHead>
                 <TableHead className="w-[170px] text-right">Answers with fan-out</TableHead>
                 <TableHead className="w-[110px] text-right">Sub-queries</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pageRows.map(({ prompt, subQueries, totalRuns, runsWithFanout }) => {
-                // Nothing fanned out — there is no panel to open, so the row
-                // stays inert rather than expanding into an empty box.
-                const expandable = subQueries.length > 0;
-                const isOpen = expandable && expanded.has(prompt.id);
-                return (
-                  <Fragment key={prompt.id}>
-                    <TableRow
-                      className={cn(expandable && 'cursor-pointer select-none')}
-                      onClick={expandable ? () => toggle(prompt.id) : undefined}
-                    >
-                      <TableCell className="pr-0">
-                        {expandable && (
-                          // The whole row is clickable for the mouse, but a
-                          // <tr> can't carry button semantics without breaking
-                          // the table for screen readers — so the toggle itself
-                          // is the real, focusable control.
-                          <button
-                            type="button"
-                            aria-expanded={isOpen}
-                            aria-label={`${isOpen ? 'Hide' : 'Show'} fan-out for "${prompt.text}"`}
-                            className="flex items-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggle(prompt.id);
-                            }}
-                          >
-                            <ChevronRight
-                              className={cn(
-                                'h-4 w-4 text-muted-foreground transition-transform duration-150',
-                                isOpen && 'rotate-90',
-                              )}
-                            />
-                          </button>
-                        )}
-                      </TableCell>
-                      <TableCell className="font-medium">{prompt.text}</TableCell>
-                      <TableCell className="text-right">
-                        <FanoutCoverageCell totalRuns={totalRuns} runsWithFanout={runsWithFanout} />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant="secondary" className="tabular-nums text-[10px]">
-                          {subQueries.length}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                    {isOpen && (
-                      <TableRow key={`${prompt.id}-expanded`} className="hover:bg-transparent">
-                        <TableCell />
-                        <TableCell colSpan={3} className="pb-3 pt-0">
-                          <div className="rounded-md border">
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Sub-query</TableHead>
-                                  <TableHead className="w-[160px]">Engine</TableHead>
-                                  <TableHead className="w-[120px] text-right">
-                                    Times searched
-                                  </TableHead>
-                                  <TableHead className="w-[130px] pl-6">Intent</TableHead>
-                                  <TableHead className="w-[64px] text-right">Track</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {subQueries.map((sq) => {
-                                  const key = sq.query.toLowerCase();
-                                  return (
-                                    <TableRow key={key} className="align-middle">
-                                      <TableCell className="align-middle font-medium">
-                                        {sq.query}
-                                      </TableCell>
-                                      <TableCell className="align-middle">
-                                        <PlatformsCell models={sq.engines} />
-                                      </TableCell>
-                                      <TableCell className="align-middle text-right tabular-nums">
-                                        {sq.timesSearched}
-                                      </TableCell>
-                                      <TableCell className="align-middle pl-6">
-                                        <IntentBadge intent={intents[key]} />
-                                      </TableCell>
-                                      <TableCell className="align-middle text-right">
-                                        <TrackCell
-                                          sq={sq}
-                                          adding={addingKey === key}
-                                          onTrack={onTrack}
-                                        />
-                                      </TableCell>
-                                    </TableRow>
-                                  );
-                                })}
-                              </TableBody>
-                            </Table>
-                          </div>
+              {pageRows.map(
+                ({ prompt, subQueries, totalRuns, runsWithFanout, platforms, fanoutPlatforms }) => {
+                  // Nothing fanned out — there is no panel to open, so the row
+                  // stays inert rather than expanding into an empty box.
+                  const expandable = subQueries.length > 0;
+                  const isOpen = expandable && expanded.has(prompt.id);
+                  return (
+                    <Fragment key={prompt.id}>
+                      <TableRow
+                        className={cn(expandable && 'cursor-pointer select-none')}
+                        onClick={expandable ? () => toggle(prompt.id) : undefined}
+                      >
+                        <TableCell className="pr-0">
+                          {expandable && (
+                            // The whole row is clickable for the mouse, but a
+                            // <tr> can't carry button semantics without breaking
+                            // the table for screen readers — so the toggle itself
+                            // is the real, focusable control.
+                            <button
+                              type="button"
+                              aria-expanded={isOpen}
+                              aria-label={`${isOpen ? 'Hide' : 'Show'} fan-out for "${prompt.text}"`}
+                              className="flex items-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggle(prompt.id);
+                              }}
+                            >
+                              <ChevronRight
+                                className={cn(
+                                  'h-4 w-4 text-muted-foreground transition-transform duration-150',
+                                  isOpen && 'rotate-90',
+                                )}
+                              />
+                            </button>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-medium">{prompt.text}</TableCell>
+                        <TableCell>
+                          <PromptEnginesCell
+                            platforms={platforms}
+                            fanoutPlatforms={fanoutPlatforms}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <FanoutCoverageCell
+                            totalRuns={totalRuns}
+                            runsWithFanout={runsWithFanout}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant="secondary" className="tabular-nums text-[10px]">
+                            {subQueries.length}
+                          </Badge>
                         </TableCell>
                       </TableRow>
-                    )}
-                  </Fragment>
-                );
-              })}
+                      {isOpen && (
+                        <TableRow key={`${prompt.id}-expanded`} className="hover:bg-transparent">
+                          <TableCell />
+                          <TableCell colSpan={4} className="pb-3 pt-0">
+                            <div className="rounded-md border">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Sub-query</TableHead>
+                                    <TableHead className="w-[160px]">Engine</TableHead>
+                                    <TableHead className="w-[120px] text-right">
+                                      Times searched
+                                    </TableHead>
+                                    <TableHead className="w-[130px] pl-6">Intent</TableHead>
+                                    <TableHead className="w-[64px] text-right">Track</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {subQueries.map((sq) => {
+                                    const key = sq.query.toLowerCase();
+                                    return (
+                                      <TableRow key={key} className="align-middle">
+                                        <TableCell className="align-middle font-medium">
+                                          {sq.query}
+                                        </TableCell>
+                                        <TableCell className="align-middle">
+                                          <PlatformsCell models={sq.engines} />
+                                        </TableCell>
+                                        <TableCell className="align-middle text-right tabular-nums">
+                                          {sq.timesSearched}
+                                        </TableCell>
+                                        <TableCell className="align-middle pl-6">
+                                          <IntentBadge intent={intents[key]} />
+                                        </TableCell>
+                                        <TableCell className="align-middle text-right">
+                                          <TrackCell
+                                            sq={sq}
+                                            adding={addingKey === key}
+                                            onTrack={onTrack}
+                                          />
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
+                  );
+                },
+              )}
             </TableBody>
           </Table>
           <TablePager
@@ -737,6 +831,7 @@ function FanoutCoverageCell({
   totalRuns: number;
   runsWithFanout: number;
 }) {
+  const t = useTranslations('prompts.fanout');
   if (totalRuns === 0) return <span className="text-xs text-muted-foreground">—</span>;
 
   const pct = (runsWithFanout / totalRuns) * 100;
@@ -748,10 +843,7 @@ function FanoutCoverageCell({
   return (
     <span
       className="text-xs text-muted-foreground tabular-nums"
-      title={
-        `Of ${totalRuns} tracked answers in this window, ${runsWithFanout} triggered live searches. ` +
-        'Most engines never fan out — Copilot and Perplexity are the main sources.'
-      }
+      title={t('coverageTooltip', { total: totalRuns, withFanout: runsWithFanout })}
     >
       {runsWithFanout} / {totalRuns} · {label}
     </span>

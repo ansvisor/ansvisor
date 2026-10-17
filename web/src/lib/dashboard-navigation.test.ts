@@ -45,3 +45,16 @@ describe('shouldShowDashboardNavItem', () => {
     expect(shouldShowDashboardNavItem(shopping, { shoppingModeEnabled: true })).toBe(true);
   });
 });
+
+describe('the Mentions item', () => {
+  const analytics = dashboardNav.find((group) => group.title === 'Analytics')!.items;
+  const index = (title: string) => analytics.findIndex((item) => item.title === title);
+
+  it('sits directly above Citations, marked New', () => {
+    expect(index('Mentions')).toBe(index('Citations') - 1);
+    expect(analytics[index('Mentions')]).toMatchObject({
+      href: '/dashboard/mentions',
+      badge: 'New',
+    });
+  });
+});
