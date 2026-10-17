@@ -101,7 +101,7 @@ describe('sendMentionsToActionCenter', () => {
       category: 'protect',
       kind: 'mention_review',
       impact: 'medium',
-      kpi_keys: ['mentions', 'ai_visibility'],
+      kpi_keys: ['mentions', 'ai_visibility', 'positive_sentiment'],
       baseline: { mentions: 3, positive: 1, negative: 1, netSentiment: 0 },
       // r4 isn't a mention, so it doesn't change which action these answers find.
       dedup_key: mentionDedupKey(['r1', 'r2', 'r3']),

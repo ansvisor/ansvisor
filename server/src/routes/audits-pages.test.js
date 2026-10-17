@@ -1,0 +1,168 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import express from 'express';
+
+/**
+ * Route-level tests for GET /api/audits/pages: the brand's audits read in
+ * full (past PostgREST's 1000-row page), grouped into one row per page,
+ * paged, and the open issues counted for the rows returned.
+ */
+
+let audits;
+let signals;
+let domains;
+let signalQueries;
+let server;
+let baseUrl;
+
+// A query builder that answers from the arrays above.
+function query(table) {
+  const filters = { eq: {}, in: {} };
+  let range = null;
+  const builder = {
+    select: () => builder,
+    order: () => builder,
+    eq: (col, val) => {
+      filters.eq[col] = val;
+      return builder;
+    },
+    in: (col, vals) => {
+      filters.in[col] = vals;
+      return builder;
+    },
+    range: (from, to) => {
+      range = [from, to];
+      return builder;
+    },
+    then: (resolve) => {
+      let data = [];
+      if (table === 'site_audits') {
+        data = audits.filter((a) => a.brand_id === filters.eq.brand_id);
+        if (range) data = data.slice(range[0], range[1] + 1);
+      } else if (table === 'brand_domains') {
+        data = domains;
+      } else if (table === 'audit_signal_results') {
+        signalQueries.push(filters.in.audit_id);
+        data = signals.filter(
+          (s) => filters.in.audit_id.includes(s.audit_id) && filters.in.status.includes(s.status),
+        );
+      }
+      return resolve({ data, error: null });
+    },
+  };
+  return builder;
+}
+
+async function startApp() {
+  vi.resetModules();
+  vi.doMock('../config/supabase.js', () => ({ default: { from: (t) => query(t) } }));
+  vi.doMock('../lib/access.js', () => ({ assertBrandAccess: vi.fn() }));
+  vi.doMock('../lib/plan-guard.js', () => ({
+    requireFeature: () => (req, res, next) => next(),
+    enforceSiteAuditQuota: vi.fn(),
+    getSiteAuditQuotaStatus: vi.fn(),
+    getOrgIdForUser: vi.fn(),
+    PlanLimitError: class PlanLimitError extends Error {},
+  }));
+  vi.doMock('../lib/audit/context.js', () => ({ buildAuditContext: vi.fn() }));
+  vi.doMock('../lib/audit/engine.js', () => ({ runSignals: vi.fn() }));
+  vi.doMock('../lib/audit/llm-signals.js', () => ({ evaluateLlmSignals: vi.fn() }));
+  vi.doMock('../lib/audit/external-signals.js', () => ({ evaluateBrandEntity: vi.fn() }));
+  vi.doMock('../lib/audit/recommendations.js', () => ({ generateRecommendations: vi.fn() }));
+  vi.doMock('../lib/logger.js', () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    return { default: logger, logger };
+  });
+
+  const { default: router } = await import('./audits.js');
+  const app = express();
+  app.use((req, _res, next) => {
+    req.user = { id: 'u1' };
+    req.log = { error: vi.fn(), info: vi.fn() };
+    next();
+  });
+  app.use('/api/audits', router);
+  await new Promise((resolve) => {
+    server = app.listen(0, resolve);
+  });
+  baseUrl = `http://127.0.0.1:${server.address().port}/api/audits`;
+}
+
+const audit = (id, url, day, score, status = 'completed') => ({
+  id,
+  brand_id: 'b1',
+  url,
+  final_url: status === 'completed' ? url : null,
+  status,
+  total_score: score,
+  created_at: `2026-10-${String(day).padStart(2, '0')}T09:00:00Z`,
+});
+
+beforeEach(async () => {
+  signalQueries = [];
+  domains = [{ domain: 'https://www.Acme.com/', is_primary: true }];
+  audits = [
+    audit('p2', 'https://acme.com/pricing', 14, '0.63'),
+    audit('x1', 'https://other.com/', 13, '0.8'),
+    audit('p1', 'https://acme.com/pricing/', 1, '0.58'),
+    audit('f1', 'https://acme.com/broken', 1, null, 'failed'),
+  ];
+  signals = [
+    { audit_id: 'p2', status: 'fail' },
+    { audit_id: 'p2', status: 'warn' },
+    { audit_id: 'p1', status: 'fail' },
+  ];
+  await startApp();
+});
+
+afterEach(async () => {
+  await new Promise((resolve) => server.close(resolve));
+  vi.doUnmock('../config/supabase.js');
+});
+
+describe('GET /api/audits/pages', () => {
+  it('returns one row per page with its issues, the total and the primary host', async () => {
+    const res = await fetch(`${baseUrl}/pages?brandId=b1`);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.total).toBe(3);
+    expect(body.primaryHost).toBe('acme.com');
+    expect(body.pages.map((p) => [p.path, p.status, p.issues])).toEqual([
+      ['/pricing', 'improving', 2],
+      ['/', 'good', 0],
+      ['/broken', 'failed', null],
+    ]);
+    expect(body.pages[0]).toMatchObject({ auditId: 'p2', score: 0.63, previousScore: 0.58 });
+    // Issues are counted for the latest completed audit of each row only.
+    expect(signalQueries).toEqual([['p2', 'x1']]);
+  });
+
+  it('pages over pages, not audits', async () => {
+    const res = await fetch(`${baseUrl}/pages?brandId=b1&limit=1&offset=1`);
+    const body = await res.json();
+    expect(body.total).toBe(3);
+    expect(body.pages.map((p) => p.host)).toEqual(['other.com']);
+  });
+
+  it('reads past the first 1000 audits', async () => {
+    audits = Array.from({ length: 1200 }, (_, i) =>
+      audit(`a${i}`, `https://acme.com/p${i % 600}`, 1, '0.5'),
+    );
+    const body = await (await fetch(`${baseUrl}/pages?brandId=b1&limit=1`)).json();
+    expect(body.total).toBe(600);
+    expect(body.pages[0].runCount).toBe(2);
+  });
+
+  it('counts issues in chunks that stay under the 1000-row page', async () => {
+    audits = Array.from({ length: 45 }, (_, i) =>
+      audit(`a${i}`, `https://acme.com/p${i}`, 1, '0.5'),
+    );
+    await fetch(`${baseUrl}/pages?brandId=b1&limit=45`);
+    expect(signalQueries.map((ids) => ids.length)).toEqual([20, 20, 5]);
+  });
+
+  it('needs a brand', async () => {
+    const res = await fetch(`${baseUrl}/pages`);
+    expect(res.status).toBe(400);
+  });
+});

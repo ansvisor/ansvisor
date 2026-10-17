@@ -1,6 +1,5 @@
 /**
- * Backfill the Mentions daily rollups (00157) and per-answer terms (00161)
- * from historical prompt_results.
+ * Backfill the Mentions daily rollups (00157) from historical prompt_results.
  *
  * Run: `node src/scripts/backfill-mentions-daily.js`
  *
@@ -15,7 +14,7 @@
  *
  * Idempotent and restartable. `refresh_mentions_daily` is delete + insert per
  * day range, so an interrupted run can be started again. Chunked by
- * MENTION_HISTORY_CHUNK_DAYS, with a pause between calls because this shares the
+ * HISTORY_CHUNK_DAYS, with a pause between calls because this shares the
  * instance with live dashboards.
  */
 

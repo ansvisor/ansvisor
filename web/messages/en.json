@@ -213,6 +213,10 @@
         "name": "AI Referral Traffic",
         "description": "Visits arriving from AI platforms"
       },
+      "positive_sentiment": {
+        "name": "Positive Sentiment",
+        "description": "Positive share of the AI responses naming you"
+      },
       "competitor_lead": {
         "name": "Lead over top competitor",
         "description": "Your visibility minus the strongest competitor's on the same prompts, in points"
@@ -2076,7 +2080,26 @@
     "description": "Score any page against the 47-signal AEO/GEO",
     "runAudit": "Run Audit",
     "running": "Auditing…",
-    "recent": "Recent Audits",
+    "pages": {
+      "title": "Pages",
+      "page": "Page",
+      "score": "Score",
+      "issues": "Issues",
+      "status": "Status",
+      "lastAudit": "Last audit",
+      "trend": "Score trend: {scores}",
+      "showHistory": "Show earlier audits of {page}",
+      "hideHistory": "Hide earlier audits of {page}",
+      "viewReport": "View report",
+      "moreRuns": "{count, plural, one {# older audit} other {# older audits}} not shown",
+      "statuses": {
+        "good": "Good",
+        "improving": "Improving",
+        "needs_work": "Needs work",
+        "running": "Running",
+        "failed": "Failed"
+      }
+    },
     "loadMore": "Load more",
     "retry": "Retry",
     "deleteAudit": "Delete audit",
@@ -2114,6 +2137,8 @@
     "copied": "Copied",
     "copyFailed": "Copy failed",
     "copyDraft": "Copy draft",
+    "copyCode": "Copy code",
+    "placeholderNote": "Replace placeholders in [brackets] with your real data before publishing.",
     "finding": "Finding",
     "why": "Why",
     "recommendedFix": "Recommended fix",
@@ -2920,6 +2945,7 @@
       "acrossBrands": "across {count, plural, one {# brand} other {# brands}}",
       "locationPairs": "prompt × location pairs",
       "overLimit": "over limit",
+      "collapsedLocations": "{used} / {limit} prompt locations",
       "ofLimit": "of {limit} on {plan}",
       "onPlan": "on {plan}",
       "unlimited": "Unlimited",
@@ -3035,6 +3061,7 @@
       "search": "Search",
       "searchPlaceholder": "Search prompts…"
     },
+    "comingSoon": "This view is on its way: its figures and charts arrive with the next updates.",
     "overview": {
       "sectionLabel": "Mentions overview",
       "loadError": "Couldn't load the overview. Try again in a moment.",
@@ -3221,47 +3248,6 @@
       "clearSelection": "Clear",
       "selectAll": "Select every answer on this page",
       "selectRow": "Select the answer to “{prompt}” on {platform}"
-    },
-    "perception": {
-      "sectionLabel": "Perception",
-      "loadError": "Couldn't load the perception figures. Try again in a moment.",
-      "unavailable": "Perception isn't available yet. It appears once the mentions data has been prepared.",
-      "pickDates": "Choose a start or end date to see the perception figures.",
-      "noMentions": "AI didn't name {brand} in the tracked responses of this period.",
-      "method": "Terms come from the sentences that name each brand, by rule (no LLM). A sentence naming two brands lends its words to both.",
-      "terms": {
-        "title": "What AI associates with {brand}",
-        "note": "Words and phrases next to your brand, by responses",
-        "tableLabel": "Terms AI uses next to your brand",
-        "responses": "{count, plural, one {# response} other {# responses}}",
-        "share": "{share} of mentions",
-        "none": "No terms yet. They appear once this period's responses have been prepared."
-      },
-      "shape": {
-        "title": "Brand shape: you vs top competitors",
-        "chartLabel": "Share of each brand's mentions on the attributes that tell them apart",
-        "notEnough": "The shape needs at least three attributes and one competitor named in this period."
-      },
-      "gap": {
-        "title": "Biggest gap",
-        "unplaced": "“{term}”: {competitor} in {competitorShare} of its mentions; AI doesn't use it for {brand}.",
-        "ranked": "“{term}”: {competitor} in {competitorShare} of its mentions; {brand} in {brandShare} (#{rank})."
-      },
-      "heatmap": {
-        "title": "Brand × attribute",
-        "note": "Share of each brand's mentions",
-        "tableLabel": "Each attribute's share of each brand's mentions",
-        "attribute": "Attribute",
-        "you": "You",
-        "none": "No attributes yet for this period."
-      },
-      "coMentions": {
-        "title": "Frequently mentioned with",
-        "tableLabel": "Competitors named in the same responses as you",
-        "note": "The trend shows whether the AI's consideration set around you is changing.",
-        "responses": "{count, plural, one {# response} other {# responses}}",
-        "none": "No competitor is named in the same responses as you in this period."
-      }
     },
     "export": {
       "copySummary": "Copy summary",

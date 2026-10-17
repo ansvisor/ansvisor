@@ -6,24 +6,13 @@ import { toast } from 'sonner';
 import {
   Search,
   Loader2,
-  Trash2,
   Sparkles,
   TrendingUp,
   TrendingDown,
   AlertCircle,
   RefreshCw,
 } from 'lucide-react';
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Link, useRouter } from '@/i18n/navigation';
+import { useRouter } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,16 +20,18 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
   runAudit,
-  getAudits,
+  getAuditPages,
   getAuditQuota,
   getAuditTrend,
   deleteAudit,
-  type AuditSummary,
+  type AuditedPage,
   type AuditQuota,
   type AuditTrend,
 } from '@/lib/actions/audits';
 import { pct, scoreColor, CATEGORY_META } from '@/components/audit/audit-report';
+import { formatMonthDay } from '@/lib/format';
 import { ScoreTrendChart } from './_charts';
+import { AuditPagesTable } from './_pages-table';
 import { cn } from '@/lib/utils';
 
 type RangePreset = '7d' | '30d' | '90d' | 'all';
@@ -69,8 +60,9 @@ export default function SiteAuditPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [history, setHistory] = useState<AuditSummary[]>([]);
-  const [historyTotal, setHistoryTotal] = useState(0);
+  const [pages, setPages] = useState<AuditedPage[]>([]);
+  const [pagesTotal, setPagesTotal] = useState(0);
+  const [primaryHost, setPrimaryHost] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [quota, setQuota] = useState<AuditQuota | null>(null);
   const [trend, setTrend] = useState<AuditTrend | null>(null);
@@ -80,7 +72,7 @@ export default function SiteAuditPage() {
 
   const refetch = () => setRefreshKey((k: number) => k + 1);
 
-  // Load recent audits + the monthly quota + the primary-domain trend.
+  // Load the audited pages + the monthly quota + the primary-domain trend.
   useEffect(() => {
     if (!activeBrandId) return;
     let cancelled = false;
@@ -89,13 +81,14 @@ export default function SiteAuditPage() {
     (async () => {
       try {
         const [data, q, tr] = await Promise.all([
-          getAudits(activeBrandId),
+          getAuditPages(activeBrandId),
           getAuditQuota(),
           getAuditTrend(activeBrandId),
         ]);
         if (!cancelled) {
-          setHistory(data.audits);
-          setHistoryTotal(data.total);
+          setPages(data.pages);
+          setPagesTotal(data.total);
+          setPrimaryHost(data.primaryHost);
           setQuota(q);
           setTrend(tr);
         }
@@ -149,7 +142,7 @@ export default function SiteAuditPage() {
   const chartData = dailyPoints
     .filter((p) => p.totalScore !== null)
     .map((p) => ({
-      date: new Date(p.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      date: formatMonthDay(p.createdAt),
       score: pct(p.totalScore) ?? 0,
     }));
 
@@ -181,18 +174,18 @@ export default function SiteAuditPage() {
     }
   };
 
-  // Append the next page of Recent audits. Dedupe by id: an audit started
-  // since the first page shifts offsets by one.
+  // Append the next page of the Pages list. Dedupe by page: a page audited
+  // since the first read moves to the top and shifts offsets by one.
   const handleLoadMore = async () => {
     if (!activeBrandId) return;
     setLoadingMore(true);
     try {
-      const next = await getAudits(activeBrandId, history.length);
-      setHistory((h) => {
-        const seen = new Set(h.map((a) => a.id));
-        return [...h, ...next.audits.filter((a) => !seen.has(a.id))];
+      const next = await getAuditPages(activeBrandId, pages.length);
+      setPages((current) => {
+        const seen = new Set(current.map((p) => p.key));
+        return [...current, ...next.pages.filter((p) => !seen.has(p.key))];
       });
-      setHistoryTotal(next.total);
+      setPagesTotal(next.total);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('failed'));
     } finally {
@@ -200,14 +193,22 @@ export default function SiteAuditPage() {
     }
   };
 
+  // Deleting a run can change its page's score, status or trend, or remove
+  // the page, so the pages shown and the trend are read again, in place: the
+  // table stays up with its open histories.
   const handleDelete = async (id: string) => {
-    const prev = history;
-    setHistory((h) => h.filter((a) => a.id !== id));
+    if (!activeBrandId) return;
     try {
       await deleteAudit(id);
-      refetch();
+      const [data, tr] = await Promise.all([
+        getAuditPages(activeBrandId, 0, Math.min(Math.max(pages.length, 50), 100)),
+        getAuditTrend(activeBrandId),
+      ]);
+      setPages(data.pages);
+      setPagesTotal(data.total);
+      setPrimaryHost(data.primaryHost);
+      setTrend(tr);
     } catch (err) {
-      setHistory(prev);
       toast.error(err instanceof Error ? err.message : t('failed'));
     }
   };
@@ -399,7 +400,7 @@ export default function SiteAuditPage() {
             </Button>
           </CardContent>
         </Card>
-      ) : history.length === 0 ? (
+      ) : pages.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
             <Sparkles className="h-7 w-7 text-primary" />
@@ -408,75 +409,14 @@ export default function SiteAuditPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t('recent')}</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            {history.map((h) => (
-              <div
-                key={h.id}
-                className="flex items-center gap-3 border-b py-1 last:border-b-0 hover:bg-muted/40"
-              >
-                <Link
-                  href={`/dashboard/audit/${h.id}`}
-                  className="flex flex-1 items-center gap-3 py-2 text-left"
-                >
-                  <span className="flex-1 truncate text-sm">{h.url}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(h.created_at).toLocaleDateString()}
-                  </span>
-                  <span
-                    className={cn(
-                      'w-12 text-right text-sm font-semibold tabular-nums',
-                      scoreColor(h.total_score),
-                    )}
-                  >
-                    {h.status === 'completed'
-                      ? (pct(h.total_score) ?? '—')
-                      : t(`status.${h.status}`)}
-                  </span>
-                </Link>
-                <Dialog>
-                  <DialogTrigger
-                    render={
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                        aria-label={t('deleteAudit')}
-                      />
-                    }
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-sm">
-                    <DialogHeader>
-                      <DialogTitle>{t('deleteAudit')}</DialogTitle>
-                      <DialogDescription>{t('deleteConfirm')}</DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                      <DialogClose render={<Button variant="outline" />}>{t('cancel')}</DialogClose>
-                      <DialogClose
-                        render={<Button variant="destructive" onClick={() => handleDelete(h.id)} />}
-                      >
-                        {t('deleteAudit')}
-                      </DialogClose>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            ))}
-            {history.length < historyTotal && (
-              <div className="flex justify-center pt-3">
-                <Button variant="outline" size="sm" onClick={handleLoadMore} disabled={loadingMore}>
-                  {loadingMore && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {t('loadMore')}
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <AuditPagesTable
+          pages={pages}
+          total={pagesTotal}
+          primaryHost={primaryHost}
+          loadingMore={loadingMore}
+          onLoadMore={handleLoadMore}
+          onDeleteRun={handleDelete}
+        />
       )}
     </div>
   );
