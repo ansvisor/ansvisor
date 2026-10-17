@@ -95,12 +95,13 @@ describe('topicOpportunityPlan', () => {
 });
 
 describe('topicOpportunityImpact', () => {
-  it('is high from 50k a month, medium from 10k', () => {
-    expect([92_000, 50_000, 12_000, 10_000, 900].map(topicOpportunityImpact)).toEqual([
+  it('is high from 10k a month, medium from 2k', () => {
+    expect([48_000, 10_000, 9_999, 2_000, 1_999, 0].map(topicOpportunityImpact)).toEqual([
       'high',
       'high',
       'medium',
       'medium',
+      'low',
       'low',
     ]);
   });

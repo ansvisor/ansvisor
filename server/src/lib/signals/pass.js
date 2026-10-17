@@ -22,6 +22,7 @@ import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { recordSignalsForBrand } from './record.js';
 import { generateActionsForBrand } from '../action-center/generate.js';
+import { sweepActionTasks } from '../action-center/task-writer/index.js';
 
 /**
  * How far back the sweep looks. Long enough to cover a missed night plus the
@@ -80,6 +81,14 @@ export async function runSignalPass(brandId, { runAt, now = new Date() } = {}) {
     { onConflict: 'brand_id,tracking_run_at' },
   );
   if (error) throw new Error(error.message);
+
+  // Tonight's new actions get their tasks written (AC-004) without holding up
+  // the pass: a slow or failed model call costs only the template tasks.
+  if (generated?.created > 0) {
+    sweepActionTasks({ brandId, now }).catch((err) => {
+      logger.error({ err, brandId }, '[task-writer] sweep after the pass crashed');
+    });
+  }
 
   return { trackingRunAt, signals: recorded, actions: generated };
 }

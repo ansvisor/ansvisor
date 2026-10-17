@@ -13,6 +13,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { resolveBrandSources } from './sources.js';
 import { planTasks } from './tasks/plan.js';
+import { priorityOnCreate } from './priority-data.js';
 
 export const OPPORTUNITY_ACTION_KIND = 'content_opportunity';
 
@@ -120,6 +121,11 @@ export async function sendToActionCenter(
   opportunity,
   { assetKey = null, userId, readable = opportunity },
 ) {
+  // An opportunity a task was sent as (AC-004) is that action's work already:
+  // it opens the action rather than starting a second one for the same thing.
+  const from = opportunity.source_data?.fromAction?.actionId;
+  if (opportunity.source === 'action' && from) return { actionId: from, created: false };
+
   const assets = opportunityAssets(readable);
   const chosen = assetKey ? assets.filter((a) => a.key === assetKey) : assets;
   if (!chosen.length) {
@@ -189,6 +195,12 @@ export async function sendToActionCenter(
       kpi_keys: KPI_KEYS,
       baseline: {},
       dedup_key: dedupKey,
+      ...(await priorityOnCreate({
+        kind: OPPORTUNITY_ACTION_KIND,
+        category: 'growth',
+        impact: opportunity.impact,
+        payload,
+      })),
     })
     .select('id')
     .single();

@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link } from '@/i18n/navigation';
 import { getOpportunity, getOpportunityBasket } from '@/lib/actions/content';
+import { opportunityLists } from '@/lib/content/opportunity-lists';
 import type { ContentOpportunity, OpportunityBasket } from '@/types';
 
 /** Fan-out queries listed before the rest fold away. */
@@ -60,13 +61,7 @@ export function OpportunityContext({
     );
   }
 
-  const sd = opportunity.sourceData;
-  const allPages = [...(sd.targetPages ?? []), ...(sd.assets ?? []).flatMap((a) => a.pages)].filter(
-    (p, i, list) => list.findIndex((q) => q.url === p.url) === i,
-  );
-  const pages = pageUrls?.length ? allPages.filter((p) => pageUrls.includes(p.url)) : allPages;
-  const prompts = basket.clusters.flatMap((c) => c.prompts);
-  const queries = basket.queries.filter((q) => q.included);
+  const { pages, prompts, queries } = opportunityLists(opportunity, basket, pageUrls);
   const brief = opportunity.brief;
 
   return (
