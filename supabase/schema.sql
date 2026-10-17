@@ -19992,6 +19992,14 @@ grant execute on function public.mentions_overview(uuid, timestamptz, timestampt
 -- Security definer with the organization check made explicit, as
 -- mentions_overview: a caller outside the brand's organization gets null.
 
+-- The brand's mentions by time: about one answer in twelve names the brand,
+-- so the table reads those rows alone. On a large prompt_results, build it
+-- by hand first with `create index concurrently`, which doesn't hold back
+-- tracking's writes; this statement then finds it in place.
+create index if not exists idx_prompt_results_brand_mentions
+  on public.prompt_results (brand_id, created_at desc)
+  where mention_count > 0;
+
 create or replace function public.mentions_list(
   p_brand_id      uuid,
   p_date_from     timestamptz,
@@ -20056,31 +20064,19 @@ begin
       and (p_topic_id is null or p.topic_id = p_topic_id)
       and (v_search is null or position(v_search in lower(p.text)) > 0)
   ),
-  hits as (
-    select pr.id,
-           pr.created_at,
-           pr.prompt_id,
-           pi.text as prompt_text,
-           pr.platform,
-           pr.sentiment,
-           -- Competitors named beside you; the array lists every competitor,
-           -- named or not.
-           (select count(*)
-              from jsonb_array_elements(coalesce(pr.competitor_mentions, '[]'::jsonb)) cm
-             where cm.value ? 'competitor_id'
-               and coalesce((cm.value->>'mention_count')::int, 0) > 0) as co_count,
-           (p_competitor_id is not null and p_competitor_id <> 'none' and exists (
-              select 1
-                from jsonb_array_elements(coalesce(pr.competitor_mentions, '[]'::jsonb)) cm
-               where cm.value->>'competitor_id' = p_competitor_id
-                 and coalesce((cm.value->>'mention_count')::int, 0) > 0)) as with_competitor
+  -- The brand's mentions in the window, read first, through the partial
+  -- index below, and only then joined to the prompts. Driven by the prompts
+  -- instead, the planner walks each prompt's whole history: 8.8 s for 30
+  -- days of the largest brand, against 0.2 s this way.
+  mention_rows as materialized (
+    select pr.id, pr.created_at, pr.prompt_id, pr.platform, pr.sentiment,
+           pr.competitor_mentions
     from public.prompt_results pr
-    join prompts_in pi on pi.id = pr.prompt_id
     where pr.brand_id = p_brand_id
+      and pr.mention_count > 0
       and pr.platform <> 'chatgpt-shopping'
       and pr.created_at >= v_start
       and pr.created_at < v_end
-      and pr.mention_count > 0
       and (p_platform is null or pr.platform = p_platform)
       and (p_region is null or pr.region = p_region)
       and (p_sentiment is null
@@ -20088,6 +20084,27 @@ begin
            or (p_sentiment = 'neutral'
                and pr.sentiment is distinct from 'positive'
                and pr.sentiment is distinct from 'negative'))
+  ),
+  hits as (
+    select m.id,
+           m.created_at,
+           m.prompt_id,
+           pi.text as prompt_text,
+           m.platform,
+           m.sentiment,
+           -- Competitors named beside you; the array lists every competitor,
+           -- named or not.
+           (select count(*)
+              from jsonb_array_elements(coalesce(m.competitor_mentions, '[]'::jsonb)) cm
+             where cm.value ? 'competitor_id'
+               and coalesce((cm.value->>'mention_count')::int, 0) > 0) as co_count,
+           (p_competitor_id is not null and p_competitor_id <> 'none' and exists (
+              select 1
+                from jsonb_array_elements(coalesce(m.competitor_mentions, '[]'::jsonb)) cm
+               where cm.value->>'competitor_id' = p_competitor_id
+                 and coalesce((cm.value->>'mention_count')::int, 0) > 0)) as with_competitor
+    from mention_rows m
+    join prompts_in pi on pi.id = m.prompt_id
   ),
   filtered as (
     select h.*,
