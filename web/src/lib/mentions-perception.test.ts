@@ -110,6 +110,24 @@ describe('biggestGap', () => {
     expect(biggestGap(p)).toMatchObject({ competitorShare: 80, brandShare: 10, brandRank: 2 });
   });
 
+  it('leaves out shares taken over fewer than 20 mentions', () => {
+    const p = parseMentionsPerception(raw)!;
+    const few = (brand: number, competitor: number): MentionsPerception => ({
+      ...p,
+      entities: [
+        { ...p.entities[0], mentions: brand },
+        { ...p.entities[1], mentions: competitor },
+      ],
+    });
+    // Crema Club's 30 "fast delivery" answers over 19 mentions; then the brand on 19.
+    expect(biggestGap(few(100, 19))).toBeNull();
+    expect(biggestGap(few(19, 50))).toBeNull();
+    expect(biggestGap(few(20, 50))).toMatchObject({
+      term: 'fast delivery',
+      competitor: 'Crema Club',
+    });
+  });
+
   it('is null when no competitor leads by 20 points', () => {
     const p: MentionsPerception = {
       ...parseMentionsPerception(raw)!,
