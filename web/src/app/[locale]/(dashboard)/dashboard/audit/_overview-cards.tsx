@@ -64,6 +64,19 @@ export function AuditOverviewCards({
   const domain = overview.primaryHost ?? t('yourDomain');
   const limited = quota !== null && quota.limit !== -1;
   const running = quota?.running ?? 0;
+  // What the auto-audit runs still to come keep out of what's left (SA-006).
+  const reserved = quota?.auto?.reserved ?? 0;
+  const usedSub = () => {
+    if (!quota) return '';
+    if (!limited) return t('unlimitedSub');
+    const used = quota.used;
+    if (running > 0) {
+      return reserved > 0
+        ? t('usedRunningReserved', { used, running, reserved })
+        : t('usedRunning', { used, running });
+    }
+    return reserved > 0 ? t('usedReserved', { used, reserved }) : t('used', { used });
+  };
   const gapsSub =
     overview.pages === 0 ? t('noPages') : overview.gaps.length > 0 ? t('gapsSub') : t('noGaps');
 
@@ -106,15 +119,7 @@ export function AuditOverviewCards({
             ? { text: t('ofLeft', { limit: formatNumber(quota.limit) }), tone: 'neutral' }
             : null
         }
-        sub={
-          !quota
-            ? ''
-            : !limited
-              ? t('unlimitedSub')
-              : running > 0
-                ? t('usedRunning', { used: quota.used, running })
-                : t('used', { used: quota.used })
-        }
+        sub={usedSub()}
         quota={
           limited
             ? {

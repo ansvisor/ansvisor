@@ -58,10 +58,71 @@ export interface AuditResult {
 export interface AuditQuota {
   used: number;
   limit: number;
-  /** What's left this month, the running audits already taken out. */
+  /**
+   * What's left this month for the user: the running audits and the
+   * auto-audit runs still to come already taken out.
+   */
   remaining: number;
   /** Audits started and not finished yet: they're charged when they complete. */
   running?: number;
+  /** Where auto-audit stands this billing period (SA-006). */
+  auto?: AuditAutoStatus;
+}
+
+/** Auto-audit this billing period (SA-006): 5% of the quota on days 1, 7, 14, 21 and 28. */
+export interface AuditAutoStatus {
+  enabled: boolean;
+  /** The org's own choice; null follows the plan (on with a monthly quota). */
+  setting: boolean | null;
+  emailAfterRun: boolean;
+  /** Pages one run audits. */
+  perRun: number;
+  /** Audits the runs still to come keep out of `remaining`. */
+  reserved: number;
+  /** Audits the runs used this period. */
+  used: number;
+  periodStart: string;
+  periodEnd: string;
+  runs: { day: number; at: string; done: boolean }[];
+  nextRun: { day: number; at: string } | null;
+}
+
+/** Site Audit settings (SA-006): the org's auto-audit, the brand's patterns and pins. */
+export interface AuditSettings {
+  autoAudit: {
+    enabled: boolean;
+    /** The org's own choice; null follows the plan. */
+    setting: boolean | null;
+    perRun: number;
+    /** The plan's monthly audits; -1 unlimited. */
+    limit: number;
+  };
+  emailAfterRun: boolean;
+  /** Paths such as /legal/*, kept out of Opportunities and the runs. */
+  excludePatterns: string[];
+  pinned: { key: string; url: string }[];
+}
+
+export interface AuditSettingsChanges {
+  /** null follows the plan's default again. */
+  autoAudit?: boolean | null;
+  emailAfterRun?: boolean;
+  excludePatterns?: string[];
+}
+
+/** The latest auto-audit run that audited the brand's pages, for the in-app notice. */
+export interface AutoAuditRun {
+  id: string;
+  day: number;
+  status: 'running' | 'completed';
+  startedAt: string;
+  finishedAt: string | null;
+  /** The brand's pages the run audited, how many completed, and still running. */
+  pages: number;
+  completed: number;
+  running: number;
+  /** Signals those audits failed. */
+  criticalIssues: number;
 }
 
 export interface AuditTrendPoint {
@@ -367,6 +428,65 @@ export async function setOpportunityPrefs(
     const body = await res.json().catch(() => ({}));
     throw new Error(body.message || `Server error: ${res.status}`);
   }
+}
+
+export async function getAuditSettings(brandId: string): Promise<AuditSettings> {
+  const session = await getSession();
+
+  const res = await fetch(
+    `${AEO_SERVER_URL}/api/audits/settings?brandId=${encodeURIComponent(brandId)}`,
+    { headers: { Authorization: `Bearer ${session.access_token}` } },
+  );
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || `Server error: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data.settings;
+}
+
+/** Save the settings sent; returns them all as saved. */
+export async function saveAuditSettings(
+  brandId: string,
+  changes: AuditSettingsChanges,
+): Promise<AuditSettings> {
+  const session = await getSession();
+
+  const res = await fetch(`${AEO_SERVER_URL}/api/audits/settings`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ brandId, ...changes }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || `Server error: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data.settings;
+}
+
+export async function getLatestAutoRun(brandId: string): Promise<AutoAuditRun | null> {
+  const session = await getSession();
+
+  const res = await fetch(
+    `${AEO_SERVER_URL}/api/audits/auto-runs/latest?brandId=${encodeURIComponent(brandId)}`,
+    { headers: { Authorization: `Bearer ${session.access_token}` } },
+  );
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || `Server error: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data.run ?? null;
 }
 
 export interface AuditedPages {

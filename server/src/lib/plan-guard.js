@@ -15,6 +15,13 @@ import {
 } from './improve-cost.js';
 import { RELEVANCE_BUDGET_SHARE } from './suggestion-relevance.js';
 import { AUDIT_RUN_TIMEOUT_MS } from './audit/history.js';
+import {
+  autoAuditEnabled,
+  dueRun,
+  pendingRuns,
+  perRunSlots,
+  runSchedule,
+} from './audit/auto-audit.js';
 
 export class PlanLimitError extends Error {
   constructor(message, statusCode = 403) {
@@ -218,8 +225,8 @@ export async function getVolumeQuotaStatus(userId) {
   return { used, limit: maxAnalyses, remaining: maxAnalyses - used };
 }
 
-function startOfCurrentMonth() {
-  const start = new Date();
+function startOfCurrentMonth(now = new Date()) {
+  const start = new Date(now);
   start.setUTCDate(1);
   start.setUTCHours(0, 0, 0, 0);
   return start;
@@ -237,7 +244,7 @@ function startOfCurrentMonth() {
  * in quota-period.js.
  */
 export async function quotaPeriodStart(orgId, now = new Date()) {
-  if (!isCloud() || !orgId) return startOfCurrentMonth();
+  if (!isCloud() || !orgId) return startOfCurrentMonth(now);
 
   const { data: org } = await supabaseAdmin
     .from('organizations')
@@ -247,7 +254,7 @@ export async function quotaPeriodStart(orgId, now = new Date()) {
 
   const endsAt = org?.subscription_ends_at ? new Date(org.subscription_ends_at) : null;
   if (!endsAt || Number.isNaN(endsAt.getTime()) || !isSubscriptionActive(org.subscription_status)) {
-    return startOfCurrentMonth();
+    return startOfCurrentMonth(now);
   }
 
   return anchoredPeriodStart(endsAt, now);
@@ -499,14 +506,22 @@ export async function getContentUsage(orgId) {
   };
 }
 
-async function countSiteAuditUsageThisMonth(orgId) {
-  const periodStart = await quotaPeriodStart(orgId);
-  const { count } = await supabaseAdmin
-    .from('site_audit_usage')
-    .select('*', { count: 'exact', head: true })
-    .eq('organization_id', orgId)
-    .gte('used_at', periodStart.toISOString());
-  return count || 0;
+/** Audits charged this period, and those of them auto-audit runs started. */
+async function countSiteAuditUsage(orgId, periodStart) {
+  const since = periodStart.toISOString();
+  const count = (source) => {
+    let query = supabaseAdmin
+      .from('site_audit_usage')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', orgId)
+      .gte('used_at', since);
+    if (source) query = query.eq('source', source);
+    return query;
+  };
+  const [all, auto] = await Promise.all([count(null), count('auto')]);
+  if (all.error) throw new Error(all.error.message);
+  if (auto.error) throw new Error(auto.error.message);
+  return { used: all.count || 0, autoUsed: auto.count || 0 };
 }
 
 // How long a running audit holds a quota slot (AUDIT_RUN_TIMEOUT_MS): one
@@ -530,32 +545,125 @@ async function countRunningSiteAudits(orgId) {
 }
 
 /**
+ * The org's Site Audit settings (SA-006). No row is the defaults: auto-audit
+ * as the plan has it (null), no e-mail.
+ */
+async function readSiteAuditSettings(orgId) {
+  const { data, error } = await supabaseAdmin
+    .from('site_audit_settings')
+    .select('auto_audit, email_after_run')
+    .eq('organization_id', orgId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return { autoAudit: data?.auto_audit ?? null, emailAfterRun: data?.email_after_run ?? false };
+}
+
+/**
+ * Where the org's auto-audit stands this period (SA-006): whether it runs,
+ * each run's share, the five runs and which are recorded, the share the runs
+ * still to come keep out of the user's pool, and the run whose turn it is.
+ */
+async function siteAuditAutoStatus(orgId, limit, periodStart, now) {
+  const [settings, { data: runRows, error }] = await Promise.all([
+    readSiteAuditSettings(orgId),
+    supabaseAdmin
+      .from('site_audit_auto_runs')
+      .select('run_day')
+      .eq('organization_id', orgId)
+      .eq('period_start', periodStart.toISOString()),
+  ]);
+  if (error) throw new Error(error.message);
+
+  const enabled = autoAuditEnabled(settings.autoAudit, limit);
+  const perRun = perRunSlots(limit);
+  const periodEnd = shiftMonthClamped(periodStart, 1);
+  const schedule = runSchedule(periodStart, periodEnd);
+  const recorded = (runRows ?? []).map((r) => r.run_day);
+  const pending = enabled ? pendingRuns(schedule, recorded, now) : [];
+  const due = enabled ? dueRun(schedule, now) : null;
+  const next = pending[0] ?? null;
+
+  return {
+    enabled,
+    // The org's own choice; null follows the plan.
+    setting: settings.autoAudit,
+    emailAfterRun: settings.emailAfterRun,
+    perRun,
+    // A plan without a monthly limit keeps nothing back.
+    reserved: limit === -1 ? 0 : perRun * pending.length,
+    periodStart: periodStart.toISOString(),
+    periodEnd: periodEnd.toISOString(),
+    runs: schedule.map((run) => ({
+      day: run.day,
+      at: run.at.toISOString(),
+      done: recorded.includes(run.day),
+    })),
+    nextRun: next
+      ? { day: next.day, at: new Date(Math.max(next.at.getTime(), now.getTime())).toISOString() }
+      : null,
+    // The run to start now: its turn, not recorded yet.
+    due: due && !recorded.includes(due.day) ? { day: due.day } : null,
+  };
+}
+
+/**
+ * The org's Site Audit quota this period: completed and running audits
+ * against plan.limits.maxSiteAudits (Starter 100, Growth 500,
+ * Enterprise/Self-hosted unlimited), and the auto-audit share.
+ */
+async function siteAuditQuota(orgId, now) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const limit = plan.limits.maxSiteAudits;
+  const periodStart = await quotaPeriodStart(orgId, now);
+  const [{ used, autoUsed }, running, auto] = await Promise.all([
+    limit === -1 ? { used: 0, autoUsed: 0 } : countSiteAuditUsage(orgId, periodStart),
+    limit === -1 ? 0 : countRunningSiteAudits(orgId),
+    siteAuditAutoStatus(orgId, limit, periodStart, now),
+  ]);
+  return { plan, limit, used, running, auto: { ...auto, used: autoUsed } };
+}
+
+/**
  * Enforce the monthly Site Audit quota for an organization before starting
  * `count` audits. Counts completed audits this billing period, plus the ones
  * still running, against plan.limits.maxSiteAudits (Starter 100, Growth 500,
- * Enterprise/Self-hosted unlimited). Throws PlanLimitError (429) when the
- * audits don't fit, starting none; returns { plan, remaining } otherwise.
+ * Enterprise/Self-hosted unlimited). A user's audits also leave the slots of
+ * the auto-audit runs still to come (SA-006); a run's own audits use them.
+ * Throws PlanLimitError (429) when the audits don't fit, starting none;
+ * returns { plan, remaining } otherwise.
+ *
+ * @param {string} orgId
+ * @param {number} [count]
+ * @param {{ source?: 'user'|'auto', now?: Date }} [options]
  */
-export async function enforceSiteAuditQuota(orgId, count = 1) {
-  const plan = await resolveOrgPlanByOrgId(orgId);
-  const max = plan.limits.maxSiteAudits;
-  if (max === -1) return { plan, remaining: -1 };
+export async function enforceSiteAuditQuota(
+  orgId,
+  count = 1,
+  { source = 'user', now = new Date() } = {},
+) {
+  const { plan, limit, used, running, auto } = await siteAuditQuota(orgId, now);
+  if (limit === -1) return { plan, remaining: -1 };
 
-  const [used, running] = await Promise.all([
-    countSiteAuditUsageThisMonth(orgId),
-    countRunningSiteAudits(orgId),
-  ]);
-  const remaining = max - used - running;
-  if (remaining <= 0) {
-    const inFlight = running > 0 ? `, ${running} still running` : '';
+  const reserved = source === 'auto' ? 0 : auto.reserved;
+  const remaining = limit - used - running - reserved;
+  const inFlight = running > 0 ? `, ${running} still running` : '';
+  if (remaining <= 0 && reserved > 0) {
+    // The spec's empty-pool message: the user's share is used, the runs' isn't.
     throw new PlanLimitError(
-      `Monthly Site Audit limit reached (${used + running}/${max}${inFlight}) on the ${plan.name} plan. Resets when your subscription renews — upgrade for more.`,
+      `You've used your ${limit - reserved} Site Audits this month on the ${plan.name} plan${running > 0 ? ` (${running} still running)` : ''}. ${reserved} auto audits are still scheduled. Turn off auto-audit in Site Audit settings to use them now, or upgrade.`,
+      429,
+    );
+  }
+  if (remaining <= 0) {
+    throw new PlanLimitError(
+      `Monthly Site Audit limit reached (${used + running}/${limit}${inFlight}) on the ${plan.name} plan. Resets when your subscription renews — upgrade for more.`,
       429,
     );
   }
   if (count > remaining) {
+    const kept = reserved > 0 ? ` (${reserved} more are kept for auto-audits)` : '';
     throw new PlanLimitError(
-      `These ${count} audits need more than the ${remaining} left this month on the ${plan.name} plan. Select up to ${remaining}.`,
+      `These ${count} audits need more than the ${remaining} left this month on the ${plan.name} plan${kept}. Select up to ${remaining}.`,
       429,
     );
   }
@@ -565,19 +673,21 @@ export async function enforceSiteAuditQuota(orgId, count = 1) {
 
 /**
  * Get current Site Audit quota status without enforcing.
- * Returns { used, running, limit, remaining }; running audits are already
- * taken out of what remains.
+ * Returns { used, running, limit, remaining, auto }: remaining is the user's
+ * pool, with running audits and the auto-audit runs still to come taken out;
+ * auto is where auto-audit stands (siteAuditAutoStatus, plus what its runs
+ * used this period).
  */
-export async function getSiteAuditQuotaStatus(orgId) {
-  const plan = await resolveOrgPlanByOrgId(orgId);
-  const max = plan.limits.maxSiteAudits;
-  if (max === -1) return { used: 0, running: 0, limit: -1, remaining: -1 };
-
-  const [used, running] = await Promise.all([
-    countSiteAuditUsageThisMonth(orgId),
-    countRunningSiteAudits(orgId),
-  ]);
-  return { used, running, limit: max, remaining: Math.max(0, max - used - running) };
+export async function getSiteAuditQuotaStatus(orgId, { now = new Date() } = {}) {
+  const { limit, used, running, auto } = await siteAuditQuota(orgId, now);
+  if (limit === -1) return { used: 0, running: 0, limit: -1, remaining: -1, auto };
+  return {
+    used,
+    running,
+    limit,
+    remaining: Math.max(0, limit - used - running - auto.reserved),
+    auto,
+  };
 }
 
 /**

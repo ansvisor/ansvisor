@@ -38,8 +38,12 @@ import {
   aiVisitsByPage,
   buildOpportunities,
   competitorGapPages,
+  EXCLUDE_PATTERN_MAX_LENGTH,
+  EXCLUDE_PATTERNS_MAX,
+  normalizeExcludePattern,
   opportunityKey,
 } from '../lib/audit/opportunities.js';
+import { AUTO_AUDIT } from '../lib/audit/auto-audit.js';
 import { rankOpportunities } from '../lib/audit/priority.js';
 import { ENGINE_THRESHOLDS } from '../config/action-engine.js';
 import { runSignals } from '../lib/audit/engine.js';
@@ -145,13 +149,16 @@ async function countIssues(auditIds) {
   return counts;
 }
 
+/** site_audits/site_audit_usage.source for a run's audits; a user's are the column default. */
+const sourceColumn = (source) => (source === 'auto' ? { source } : {});
+
 /**
  * Run the full audit (fetch → deterministic + LLM + Wikidata → score →
  * persist) for an already-created `running` row. Runs detached from the
  * request so the client gets an id immediately and polls GET /:id. Always
  * resolves — on failure it marks the row `failed` rather than throwing.
  */
-async function runAuditJob(auditId, brandId, url, orgId) {
+async function runAuditJob(auditId, brandId, url, orgId, source = 'user') {
   try {
     // The brand name is needed for the Wikidata brand-entity lookup. The page
     // is otherwise evaluated entirely on its own terms — the LLM infers the
@@ -212,11 +219,12 @@ async function runAuditJob(auditId, brandId, url, orgId) {
     // Don't let a failed completion update leave the row stuck in 'running'.
     if (completeErr) throw completeErr;
 
-    // Charge the monthly quota only for audits that actually completed.
+    // Charge the monthly quota only for audits that actually completed; an
+    // auto-audit run's audits are charged as its own (SA-006).
     if (orgId) {
       await supabaseAdmin
         .from('site_audit_usage')
-        .insert({ organization_id: orgId, audit_id: auditId });
+        .insert({ organization_id: orgId, audit_id: auditId, ...sourceColumn(source) });
     }
   } catch (err) {
     logger.error({ err, auditId, brandId }, 'audit run failed');
@@ -259,22 +267,67 @@ export const BULK_AUDIT_MAX = 50;
 /** Bulk audits run at once; the rest wait their turn, still `running`. */
 export const BULK_AUDIT_CONCURRENCY = 3;
 
-// One pool for every bulk request, so 50 re-audits don't fetch and score 50
-// pages at the same time.
-const bulkQueue = [];
-let bulkActive = 0;
+/** Auto-audit runs' audits at once: their own pool, so a run doesn't hold up a user's bulk audit. */
+export const AUTO_AUDIT_CONCURRENCY = 2;
 
-function drainBulkQueue() {
-  while (bulkActive < BULK_AUDIT_CONCURRENCY && bulkQueue.length > 0) {
-    const job = bulkQueue.shift();
-    bulkActive += 1;
-    job()
-      .catch((err) => logger.error({ err }, 'bulk audit job crashed'))
-      .finally(() => {
-        bulkActive -= 1;
-        drainBulkQueue();
-      });
+/**
+ * A pool running audit jobs a few at a time; the rest wait their turn. Each
+ * job's promise resolves when it has run (runAuditJob never rejects).
+ */
+function auditPool(concurrency, label) {
+  const queue = [];
+  let active = 0;
+  const drain = () => {
+    while (active < concurrency && queue.length > 0) {
+      const { job, resolve } = queue.shift();
+      active += 1;
+      job()
+        .catch((err) => logger.error({ err }, `${label} audit job crashed`))
+        .finally(() => {
+          active -= 1;
+          resolve();
+          drain();
+        });
+    }
+  };
+  return (job) =>
+    new Promise((resolve) => {
+      queue.push({ job, resolve });
+      drain();
+    });
+}
+
+// One pool for every bulk request, so 50 re-audits don't fetch and score 50
+// pages at the same time; another for the auto-audit runs.
+const runInBulkPool = auditPool(BULK_AUDIT_CONCURRENCY, 'bulk');
+const runInAutoPool = auditPool(AUTO_AUDIT_CONCURRENCY, 'auto');
+
+/** The `running` rows of a brand's audits, one per page. */
+async function insertRunningAudits(brandId, urls, source) {
+  const { data, error } = await supabaseAdmin
+    .from('site_audits')
+    .insert(
+      urls.map((url) => ({
+        brand_id: brandId,
+        url,
+        status: 'running',
+        rubric_version: RUBRIC_VERSION,
+        ...sourceColumn(source),
+      })),
+    )
+    .select('*');
+  if (error) throw error;
+  return data;
+}
+
+/** One URL per page: repeat spellings of a page are audited once. */
+function uniquePages(urls) {
+  const byPage = new Map();
+  for (const url of urls) {
+    const key = pageKey(url)?.key;
+    if (key && !byPage.has(key)) byPage.set(key, url);
   }
+  return [...byPage.values()];
 }
 
 /**
@@ -283,34 +336,31 @@ function drainBulkQueue() {
  * Repeat spellings of one page are audited once. Returns the running rows.
  */
 export async function createAndQueueAudits(brandId, urls, orgId) {
-  const byPage = new Map();
-  for (const url of urls) {
-    const key = pageKey(url)?.key;
-    if (key && !byPage.has(key)) byPage.set(key, url);
-  }
-  const unique = [...byPage.values()];
-
+  const unique = uniquePages(urls);
   await enforceSiteAuditQuota(orgId, unique.length);
 
-  const { data: created, error } = await supabaseAdmin
-    .from('site_audits')
-    .insert(
-      unique.map((url) => ({
-        brand_id: brandId,
-        url,
-        status: 'running',
-        rubric_version: RUBRIC_VERSION,
-      })),
-    )
-    .select('*');
-  if (error) throw error;
-
+  const created = await insertRunningAudits(brandId, unique, 'user');
   for (const row of created) {
-    bulkQueue.push(() => runAuditJob(row.id, brandId, row.url, orgId));
+    runInBulkPool(() => runAuditJob(row.id, brandId, row.url, orgId));
   }
-  drainBulkQueue();
-
   return created.map((row) => assembleAudit(row, []));
+}
+
+/**
+ * Start an auto-audit run's audits of a brand's pages (SA-006): checked
+ * against the whole quota, the run's reserved slots included, and charged
+ * as auto. Returns the running rows' ids, and `done`, which resolves once
+ * every one of them has completed or failed.
+ */
+export async function startAutoAudits(brandId, urls, orgId) {
+  const unique = uniquePages(urls);
+  await enforceSiteAuditQuota(orgId, unique.length, { source: 'auto' });
+
+  const created = await insertRunningAudits(brandId, unique, 'auto');
+  const done = Promise.all(
+    created.map((row) => runInAutoPool(() => runAuditJob(row.id, brandId, row.url, orgId, 'auto'))),
+  );
+  return { auditIds: created.map((row) => row.id), done };
 }
 
 const bulkSchema = z.object({
@@ -641,6 +691,76 @@ async function opportunityAiVisits(brandId, urls) {
   return aiVisitsByPage(data);
 }
 
+/** A brand's exclude patterns (SA-006 settings), as stored. */
+async function readExcludePatterns(brandId) {
+  const { data, error } = await supabaseAdmin
+    .from('site_audit_brand_settings')
+    .select('exclude_patterns')
+    .eq('brand_id', brandId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.exclude_patterns ?? [];
+}
+
+/**
+ * The Opportunities inbox of a brand (SA-004): its pages worth auditing,
+ * each with why, scored and ordered by priority (SA-005), plus the excluded
+ * pages to put back. The route shows it; auto-audit runs take their pages
+ * from it (SA-006).
+ */
+export async function readOpportunityInbox(brandId) {
+  const [primary, gaPages, sitePages, audits, prefs, excludePatterns] = await Promise.all([
+    primaryDomainOf(brandId),
+    // Up to 30% of GA's 5,000 pages a day: past PostgREST's 1000-row page.
+    readAllRpcRows('page_opportunities', (from, to) =>
+      supabaseAdmin
+        .from('page_opportunities')
+        .select('landing_page, value_signal, value_percentile, sessions, citation_state, citations')
+        .eq('brand_id', brandId)
+        .eq('kind', 'no_ai_traffic')
+        .is('resolved_at', null)
+        .order('landing_page', { ascending: true })
+        .range(from, to),
+    ),
+    supabaseAdmin
+      .from('site_pages')
+      .select('url, title, h1, description, ga_sessions, ai_citations')
+      .eq('brand_id', brandId),
+    readBrandAudits(brandId),
+    supabaseAdmin
+      .from('site_audit_page_prefs')
+      .select('page_key, url, state')
+      .eq('brand_id', brandId),
+    readExcludePatterns(brandId),
+  ]);
+  for (const read of [gaPages, sitePages, audits, prefs]) if (read.error) throw read.error;
+
+  const competitorPages = await competitorOpportunityPages(brandId, sitePages.data ?? []);
+  const { rows, excluded } = buildOpportunities({
+    primaryHost: normStoredDomain(primary),
+    gaPages: gaPages.data ?? [],
+    sitePages: sitePages.data ?? [],
+    auditPages: buildAuditPages(audits.data),
+    competitorPages,
+    prefs: prefs.data ?? [],
+    excludePatterns,
+    staleDays: ENGINE_THRESHOLDS.detection.auditMaxAgeDays,
+  });
+  const visits = await opportunityAiVisits(
+    brandId,
+    rows.map((r) => r.url),
+  );
+
+  return {
+    // Scored and ordered once each page has its AI visits (SA-005).
+    opportunities: rankOpportunities(
+      rows.map((r) => ({ ...r, aiVisits: visits === null ? null : (visits.get(r.url) ?? 0) })),
+      (sitePages.data ?? []).map((p) => p.ga_sessions),
+    ),
+    excluded,
+  };
+}
+
 // GET /api/audits/opportunities?brandId=… — the Opportunities inbox (SA-004):
 // the brand's pages worth auditing, each with why (Google Analytics pages
 // without AI traffic, pages never audited or audited long ago), pinned pages
@@ -655,56 +775,10 @@ router.get('/opportunities', async (req, res) => {
 
   try {
     await assertBrandAccess(brandId, userId);
-
-    const [primary, gaPages, sitePages, audits, prefs] = await Promise.all([
-      primaryDomainOf(brandId),
-      // Up to 30% of GA's 5,000 pages a day: past PostgREST's 1000-row page.
-      readAllRpcRows('page_opportunities', (from, to) =>
-        supabaseAdmin
-          .from('page_opportunities')
-          .select(
-            'landing_page, value_signal, value_percentile, sessions, citation_state, citations',
-          )
-          .eq('brand_id', brandId)
-          .eq('kind', 'no_ai_traffic')
-          .is('resolved_at', null)
-          .order('landing_page', { ascending: true })
-          .range(from, to),
-      ),
-      supabaseAdmin
-        .from('site_pages')
-        .select('url, title, h1, description, ga_sessions, ai_citations')
-        .eq('brand_id', brandId),
-      readBrandAudits(brandId),
-      supabaseAdmin
-        .from('site_audit_page_prefs')
-        .select('page_key, url, state')
-        .eq('brand_id', brandId),
-    ]);
-    for (const read of [gaPages, sitePages, audits, prefs]) if (read.error) throw read.error;
-
-    const competitorPages = await competitorOpportunityPages(brandId, sitePages.data ?? []);
-    const { rows, excluded } = buildOpportunities({
-      primaryHost: normStoredDomain(primary),
-      gaPages: gaPages.data ?? [],
-      sitePages: sitePages.data ?? [],
-      auditPages: buildAuditPages(audits.data),
-      competitorPages,
-      prefs: prefs.data ?? [],
-      staleDays: ENGINE_THRESHOLDS.detection.auditMaxAgeDays,
-    });
-    const visits = await opportunityAiVisits(
-      brandId,
-      rows.map((r) => r.url),
-    );
-
+    const { opportunities, excluded } = await readOpportunityInbox(brandId);
     return res.json({
       success: true,
-      // Scored and ordered once each page has its AI visits (SA-005).
-      opportunities: rankOpportunities(
-        rows.map((r) => ({ ...r, aiVisits: visits === null ? null : (visits.get(r.url) ?? 0) })),
-        (sitePages.data ?? []).map((p) => p.ga_sessions),
-      ),
+      opportunities,
       excluded,
       staleDays: ENGINE_THRESHOLDS.detection.auditMaxAgeDays,
     });
@@ -772,6 +846,221 @@ router.put('/opportunities/prefs', async (req, res) => {
     }
     req.log.error({ err }, 'audit opportunity prefs failed');
     return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/** Roles that may change Site Audit settings, as for Daily Pulse's. */
+const SETTINGS_ROLES = ['admin', 'manager'];
+
+async function canChangeSettings(userId) {
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .single();
+  if (error) throw error;
+  return SETTINGS_ROLES.includes(data?.role);
+}
+
+/**
+ * Site Audit settings as the Settings dialog shows them (SA-006): the org's
+ * auto-audit switch and e-mail, the brand's exclude patterns and pinned
+ * pages.
+ */
+async function readAuditSettings(brandId, orgId) {
+  const [quota, excludePatterns, { data: pinned, error }] = await Promise.all([
+    getSiteAuditQuotaStatus(orgId),
+    readExcludePatterns(brandId),
+    supabaseAdmin
+      .from('site_audit_page_prefs')
+      .select('page_key, url')
+      .eq('brand_id', brandId)
+      .eq('state', 'pinned')
+      .order('page_key', { ascending: true }),
+  ]);
+  if (error) throw error;
+  return {
+    autoAudit: {
+      enabled: quota.auto.enabled,
+      // The org's own choice; null follows the plan.
+      setting: quota.auto.setting,
+      perRun: quota.auto.perRun,
+      limit: quota.limit,
+    },
+    emailAfterRun: quota.auto.emailAfterRun,
+    excludePatterns,
+    pinned: (pinned ?? []).map((p) => ({ key: p.page_key, url: p.url })),
+  };
+}
+
+/** Express's reply for a failed settings or run read/write. */
+function sendAuditError(req, res, err, message) {
+  if (err instanceof PlanLimitError) {
+    return res.status(err.statusCode).json({ success: false, message: err.message });
+  }
+  if (err.status) return res.status(err.status).json({ success: false, message: err.message });
+  req.log.error({ err }, message);
+  return res.status(500).json({ success: false, message: err.message });
+}
+
+// GET /api/audits/settings?brandId=… — the Site Audit settings (SA-006).
+// Registered before /:id so "settings" isn't matched as an audit id.
+router.get('/settings', async (req, res) => {
+  const { brandId } = req.query;
+  if (!brandId) {
+    return res.status(400).json({ success: false, message: 'brandId is required' });
+  }
+  try {
+    const { orgId } = await assertBrandAccess(brandId, req.user?.id);
+    return res.json({ success: true, settings: await readAuditSettings(brandId, orgId) });
+  } catch (err) {
+    return sendAuditError(req, res, err, 'audit settings read failed');
+  }
+});
+
+const settingsSchema = z.object({
+  brandId: z.guid(),
+  // null follows the plan's default again.
+  autoAudit: z.boolean().nullable().optional(),
+  emailAfterRun: z.boolean().optional(),
+  excludePatterns: z
+    .array(z.string().max(EXCLUDE_PATTERN_MAX_LENGTH * 2))
+    .max(EXCLUDE_PATTERNS_MAX)
+    .optional(),
+});
+
+// PUT /api/audits/settings — change the org's auto-audit switch and e-mail,
+// and the brand's exclude patterns ({ brandId, autoAudit?, emailAfterRun?,
+// excludePatterns? }). Admins and managers only.
+router.put('/settings', async (req, res) => {
+  const userId = req.user?.id;
+  const parsed = settingsSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: parsed.error.issues[0]?.message ?? 'Invalid request',
+    });
+  }
+  const { brandId, autoAudit, emailAfterRun, excludePatterns } = parsed.data;
+
+  const patterns = [];
+  for (const raw of excludePatterns ?? []) {
+    const pattern = normalizeExcludePattern(raw);
+    if (!pattern) {
+      return res.status(400).json({
+        success: false,
+        message: `"${raw.trim()}" isn't a page path. Start it with /, as in /legal/*.`,
+      });
+    }
+    if (!patterns.includes(pattern)) patterns.push(pattern);
+  }
+
+  try {
+    const { orgId } = await assertBrandAccess(brandId, userId);
+    if (!(await canChangeSettings(userId))) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only admins and managers can change Site Audit settings.',
+      });
+    }
+
+    const now = new Date().toISOString();
+    if (autoAudit !== undefined || emailAfterRun !== undefined) {
+      const { error } = await supabaseAdmin.from('site_audit_settings').upsert(
+        {
+          organization_id: orgId,
+          ...(autoAudit !== undefined ? { auto_audit: autoAudit } : {}),
+          ...(emailAfterRun !== undefined ? { email_after_run: emailAfterRun } : {}),
+          updated_by: userId ?? null,
+          updated_at: now,
+        },
+        { onConflict: 'organization_id' },
+      );
+      if (error) throw error;
+    }
+    if (excludePatterns !== undefined) {
+      const { error } = await supabaseAdmin.from('site_audit_brand_settings').upsert(
+        {
+          brand_id: brandId,
+          exclude_patterns: patterns,
+          updated_by: userId ?? null,
+          updated_at: now,
+        },
+        { onConflict: 'brand_id' },
+      );
+      if (error) throw error;
+    }
+
+    return res.json({ success: true, settings: await readAuditSettings(brandId, orgId) });
+  } catch (err) {
+    return sendAuditError(req, res, err, 'audit settings update failed');
+  }
+});
+
+/** Runs the latest-run summary looks back over, newest first. */
+const LATEST_RUNS_READ = 5;
+
+// GET /api/audits/auto-runs/latest?brandId=… — the org's latest auto-audit
+// run that audited pages of this brand, in the last 30 days, with what it
+// found there (SA-006's in-app notice). run is null when there's none.
+router.get('/auto-runs/latest', async (req, res) => {
+  const { brandId } = req.query;
+  if (!brandId) {
+    return res.status(400).json({ success: false, message: 'brandId is required' });
+  }
+  try {
+    const { orgId } = await assertBrandAccess(brandId, req.user?.id);
+    const since = new Date(Date.now() - AUTO_AUDIT.freshDays * 24 * 60 * 60 * 1000);
+    const { data: runs, error } = await supabaseAdmin
+      .from('site_audit_auto_runs')
+      .select('id, run_day, status, audit_ids, started_at, finished_at')
+      .eq('organization_id', orgId)
+      .gte('started_at', since.toISOString())
+      .order('started_at', { ascending: false })
+      .limit(LATEST_RUNS_READ);
+    if (error) throw error;
+
+    const ids = [...new Set((runs ?? []).flatMap((r) => r.audit_ids ?? []))];
+    const audits = await readByAuditIds(ids, 100, (chunk) =>
+      supabaseAdmin
+        .from('site_audits')
+        .select('id, status')
+        .in('id', chunk)
+        .eq('brand_id', brandId),
+    );
+    const statusById = new Map(audits.map((a) => [a.id, a.status]));
+    const run = (runs ?? []).find((r) => (r.audit_ids ?? []).some((id) => statusById.has(id)));
+    if (!run) return res.json({ success: true, run: null });
+
+    const own = run.audit_ids.filter((id) => statusById.has(id));
+    const completed = own.filter((id) => statusById.get(id) === 'completed');
+    let criticalIssues = 0;
+    if (completed.length > 0) {
+      const { count, error: countErr } = await supabaseAdmin
+        .from('audit_signal_results')
+        .select('audit_id', { count: 'exact', head: true })
+        .in('audit_id', completed)
+        .eq('status', 'fail');
+      if (countErr) throw countErr;
+      criticalIssues = count ?? 0;
+    }
+
+    return res.json({
+      success: true,
+      run: {
+        id: run.id,
+        day: run.run_day,
+        status: run.status,
+        startedAt: run.started_at,
+        finishedAt: run.finished_at,
+        pages: own.length,
+        completed: completed.length,
+        running: own.filter((id) => statusById.get(id) === 'running').length,
+        criticalIssues,
+      },
+    });
+  } catch (err) {
+    return sendAuditError(req, res, err, 'auto-audit run read failed');
   }
 });
 
