@@ -14,7 +14,7 @@ const MAX_MARKERS = 3;
 
 export const OWN_BRAND_COLOR = '#22c55e';
 /** Competitor colors in line order: pin order, or rank without pins. */
-const COMPETITOR_PALETTE = ['#1e3a8a', '#a855f7', '#f97316', '#ef4444', '#0d9488'];
+export const COMPETITOR_PALETTE = ['#1e3a8a', '#a855f7', '#f97316', '#ef4444', '#0d9488'];
 
 interface Entity {
   key: string;
