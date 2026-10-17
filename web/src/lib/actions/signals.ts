@@ -215,23 +215,19 @@ export async function updateSignalStatus(
     .select('id, action_id');
   if (error) throw new Error(error.message);
 
-  // When a signal starts or stops supporting its action, the action's support
-  // and confidence follow at once, not the next night (AC-007). Acknowledging
-  // leaves it open, so nothing changes for the action. Copies of one finding
-  // move together and usually share their action: it is scored once.
+  // When one starts or stops supporting its action, the action's support and
+  // confidence follow at once, not the next night (AC-007). Acknowledging
+  // leaves it open, so nothing changes for the action.
   const isOpen = (value: unknown) => OPEN_SIGNAL_STATUSES.includes(value as SignalStatus);
-  const wasOpen = new Map((before ?? []).map((row) => [row.id, isOpen(row.status)]));
-  const byAction = new Map<string, string>();
-  for (const row of data ?? []) {
-    if (!row.action_id || wasOpen.get(row.id) === isOpen(status)) continue;
-    if (!byAction.has(row.action_id)) byAction.set(row.action_id, row.id);
-  }
-  if (byAction.size === 0) return;
+  const wasOpen = new Map((before ?? []).map((row) => [row.id as string, isOpen(row.status)]));
+  const moved = (data ?? []).filter(
+    (row) => row.action_id && wasOpen.get(row.id as string) !== isOpen(status),
+  );
+  if (moved.length === 0) return;
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  if (!session) return;
-  for (const signalId of byAction.values()) scheduleRescore(signalId, session.access_token);
+  if (session) for (const row of moved) scheduleRescore(row.id as string, session.access_token);
 }
 
 /**

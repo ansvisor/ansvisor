@@ -195,6 +195,8 @@ ON CONFLICT (id) DO NOTHING;
 -- won't have — so we seed them here. Without these rows the Prompts page volume
 -- view stays empty even with the backend running. Served read-only by
 -- GET /api/volumes/brand/:id (no provider keys required to read).
+-- total_google_volume is the median of the measured keyword volumes and
+-- est_ai_volume is that × 0.45, as summarizeVolumes computes them.
 
 INSERT INTO public.prompt_volumes (
   prompt_id, intent, keywords, google_volumes,
@@ -204,27 +206,27 @@ INSERT INTO public.prompt_volumes (
   ('88888888-8888-8888-8888-888888888801', 'best-top',
    '["best coffee subscription","coffee subscription","coffee subscription services","best coffee subscription 2026"]'::jsonb,
    '{"best coffee subscription":8100,"coffee subscription":22200,"coffee subscription services":5400,"best coffee subscription 2026":1300}'::jsonb,
-   37000, 0.150, 5550, 2840, 'en', now() - interval '2 days'),
+   6750, 0.450, 3038, 2840, 'en', now() - interval '2 days'),
   ('88888888-8888-8888-8888-888888888802', 'recommendation',
    '["international coffee subscription","specialty coffee subscription","coffee subscription worldwide shipping"]'::jsonb,
    '{"international coffee subscription":2400,"specialty coffee subscription":4400,"coffee subscription worldwide shipping":880}'::jsonb,
-   7680, 0.150, 1152, 2840, 'en', now() - interval '2 days'),
+   2400, 0.450, 1080, 2840, 'en', now() - interval '2 days'),
   ('88888888-8888-8888-8888-888888888803', 'best-top',
    '["office coffee subscription","monthly coffee bean subscription","coffee subscription for business"]'::jsonb,
    '{"office coffee subscription":3600,"monthly coffee bean subscription":1900,"coffee subscription for business":1600}'::jsonb,
-   7100, 0.150, 1065, 2840, 'en', now() - interval '2 days'),
+   1900, 0.450, 855, 2840, 'en', now() - interval '2 days'),
   ('88888888-8888-8888-8888-888888888804', 'best-top',
    '["best espresso machine","home espresso machine","best espresso machine under 500","espresso machine under $500"]'::jsonb,
    '{"best espresso machine":18100,"home espresso machine":9900,"best espresso machine under 500":6600,"espresso machine under $500":4400}'::jsonb,
-   39000, 0.150, 5850, 2840, 'en', now() - interval '2 days'),
+   8250, 0.450, 3713, 2840, 'en', now() - interval '2 days'),
   ('88888888-8888-8888-8888-888888888805', 'comparison',
    '["best espresso machine for beginners","beginner espresso machine","home espresso machine comparison"]'::jsonb,
    '{"best espresso machine for beginners":5400,"beginner espresso machine":2400,"home espresso machine comparison":720}'::jsonb,
-   8520, 0.150, 1278, 2840, 'en', now() - interval '2 days'),
+   2400, 0.450, 1080, 2840, 'en', now() - interval '2 days'),
   ('88888888-8888-8888-8888-888888888806', 'vs-review',
    '["manual vs automatic espresso machine","manual espresso machine","automatic espresso machine"]'::jsonb,
    '{"manual vs automatic espresso machine":1900,"manual espresso machine":3600,"automatic espresso machine":4400}'::jsonb,
-   9900, 0.150, 1485, 2840, 'en', now() - interval '2 days')
+   3600, 0.450, 1620, 2840, 'en', now() - interval '2 days')
 ON CONFLICT (prompt_id) DO NOTHING;
 
 -- ─── Competitors ─────────────────────────────────────────────────────────────
@@ -241,11 +243,19 @@ ON CONFLICT (id) DO NOTHING;
 -- prompt's `platforms` and `regions` arrays so we only emit rows that match
 -- how the tracker would actually have run them. UUIDs are deterministic
 -- (md5 of the row's identity), so re-running the seed is a no-op.
+--
+-- Each answer names Acme Coffee among some competitors, in one of four
+-- orders, and stores the position response-parser.js would compute from that
+-- text (the brand's rank among the tracked brands it names), so the Prompts
+-- table's Positions column and panel have something to show. Answers come
+-- four to a run, 20 minutes apart, one run a day: the panel counts a run per
+-- gap of more than 6 hours, as the nightly tracker's answers arrive.
 
 INSERT INTO public.prompt_results (
   id, prompt_id, brand_id, platform, model_used, region, response,
   citations, competitor_mentions, shopping_cards,
-  mention_count, citation_count, visibility_score, sentiment, created_at
+  mention_count, citation_count, visibility_score, sentiment,
+  mention_position, mentioned_entity_count, created_at
 )
 WITH platform_models AS (
   SELECT * FROM (VALUES
@@ -285,7 +295,12 @@ SELECT
   model_used,
   region,
   format(
-    'Acme Coffee is consistently highlighted in independent reviews for fresh roast quality and flexible subscription tiers. (Demo response, %s on %s)',
+    CASE n % 4
+      WHEN 0 THEN 'Acme Coffee leads the list, ahead of Demo Coffee Co and Fixture Roasters, for fresh roast quality and flexible subscription tiers. (Demo response, %s on %s)'
+      WHEN 1 THEN 'Demo Coffee Co is the usual pick, and Acme Coffee comes a close second for fresh roast quality. (Demo response, %s on %s)'
+      WHEN 2 THEN 'Fixture Roasters and Sample Beans rank well, with Acme Coffee close behind on flexible subscription tiers. (Demo response, %s on %s)'
+      ELSE 'Acme Coffee and Sample Beans both get strong reviews for fresh roast quality. (Demo response, %s on %s)'
+    END,
     platform, region
   ) AS response,
   jsonb_build_array(
@@ -330,7 +345,10 @@ SELECT
   (n % 4)                                              AS citation_count,
   round((30 + ((n * 7) % 60))::numeric, 2)             AS visibility_score,
   (ARRAY['positive','neutral','positive','neutral','negative'])[1 + (n % 5)::int] AS sentiment,
-  now() - (n * interval '6 hours')                     AS created_at
+  -- Where the response above names Acme Coffee, of how many tracked brands.
+  (ARRAY[1, 2, 3, 1])[1 + (n % 4)::int]                AS mention_position,
+  (ARRAY[3, 2, 3, 2])[1 + (n % 4)::int]                AS mentioned_entity_count,
+  now() - (((n - 1) / 4) * interval '1 day') - (((n - 1) % 4) * interval '20 minutes') AS created_at
 FROM combos
 ON CONFLICT (id) DO NOTHING;
 
@@ -628,12 +646,14 @@ WHERE prompt_id = '88888888-8888-8888-8888-888888888806' AND platform = 'copilot
 -- sub-query → prompt inversion alone could never produce, since a prompt with
 -- no observed sub-queries has nothing to hang a row on.
 --
--- The results themselves come from the generator above, which spreads
--- created_at at 6h intervals ordered by prompt id — so the last prompts in the
--- set land months back, outside every window the UI offers. Pull 807's rows
--- into the recent past so the zero-coverage row is actually visible.
+-- The results themselves come from the generator above, which spreads runs a
+-- day apart ordered by prompt id — so the last prompts in the set land months
+-- back, outside every window the UI offers. Pull 807's rows into the recent
+-- past, still a run a day (its two engines 20 minutes apart), so the
+-- zero-coverage row is actually visible.
 UPDATE public.prompt_results pr
-SET created_at = now() - (ordered.k * interval '5 hours')
+SET created_at = now() - (((ordered.k - 1) / 2) * interval '1 day')
+                       - (((ordered.k - 1) % 2) * interval '20 minutes')
 FROM (
   SELECT id, row_number() OVER (ORDER BY platform, model_used, region) AS k
   FROM public.prompt_results
