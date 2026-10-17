@@ -52,16 +52,16 @@ describe('refreshMentionsDaily', () => {
 });
 
 describe('refreshMentionHistory', () => {
-  it('recomputes the whole history in two-week chunks', async () => {
-    resultBounds('2026-09-01', '2026-10-17');
+  it('recomputes the whole history in three-day chunks', async () => {
+    resultBounds('2026-10-01', '2026-10-10');
     rpc.mockResolvedValue({ error: null });
 
     await expect(refreshMentionHistory('brand-1')).resolves.toBe(4);
     expect(rpc.mock.calls.map(([, args]) => [args.p_day_from, args.p_day_to])).toEqual([
-      ['2026-09-01', '2026-09-14'],
-      ['2026-09-15', '2026-09-28'],
-      ['2026-09-29', '2026-10-12'],
-      ['2026-10-13', '2026-10-17'],
+      ['2026-10-01', '2026-10-03'],
+      ['2026-10-04', '2026-10-06'],
+      ['2026-10-07', '2026-10-09'],
+      ['2026-10-10', '2026-10-10'],
     ]);
   });
 
@@ -75,7 +75,7 @@ describe('refreshMentionHistory', () => {
     resultBounds('2026-09-01', '2026-10-17');
     rpc.mockResolvedValueOnce({ error: null }).mockResolvedValueOnce({ error: { message: 'x' } });
     await expect(refreshMentionHistory('brand-1')).rejects.toThrow(
-      'mention rollup refresh failed for brand-1 2026-09-15..2026-09-28',
+      'mention rollup refresh failed for brand-1 2026-09-04..2026-09-06',
     );
   });
 });
