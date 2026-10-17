@@ -257,6 +257,19 @@ describe('actionEventText', () => {
     createdAt: '2026-10-16T00:00:00Z',
   });
 
+  it('names a task sent onward and where it went', () => {
+    expect(
+      actionEventText(
+        event('task_sent', { to: 'content', title: 'Add a table to /pricing' }),
+        tPage,
+        t,
+      ),
+    ).toBe('Sent to Content: Add a table to /pricing');
+    expect(actionEventText(event('task_sent', { to: 'webhook', title: 'x' }), tPage, t)).toBe(
+      'Sent to the webhook: x',
+    );
+  });
+
   it('reads the 30-day position result with its counts', () => {
     expect(
       actionEventText(event('position_outcome_recorded', { improved: 2, measurable: 3 }), tPage, t),
@@ -327,7 +340,7 @@ describe('History events', () => {
    *  checking nothing. */
   it('reads the events the server actions log', () => {
     expect(logged).toEqual(
-      expect.arrayContaining(['status_changed', 'task_added', 'task_renamed', 'task_deleted']),
+      expect.arrayContaining(['status_changed', 'task_added', 'task_edited', 'task_deleted']),
     );
   });
 

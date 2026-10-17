@@ -9,43 +9,24 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import type { ActionDetail, ActionItem } from '@/lib/actions/action-center';
 import { getOpportunity, getOpportunityBasket } from '@/lib/actions/content';
 import {
-  actionContextTags,
-  actionEventText,
-  actionGoal,
-  actionTexts,
-  taskText,
-} from '@/lib/action-center/display';
-import {
+  BYTE_ORDER_MARK,
   actionCsv,
   actionExportFileName,
   actionMarkdown,
   actionWorkbook,
-  buildActionExport,
   type ActionExport,
-  type ExportFact,
 } from '@/lib/action-center/export';
-import { opportunityLists } from '@/lib/content/opportunity-lists';
-import { isKpiKey } from '@/lib/kpis/registry';
-import { signalAffected, signalTexts } from '@/lib/signals/display';
-import { SIGNAL_KINDS } from '@/lib/signals/registry';
+import {
+  EXPORT_NAMESPACES,
+  labelActionExport,
+  sentFromOpportunityId,
+  type ExportTranslators,
+  type SentFromOpportunity,
+} from '@/lib/action-center/export-labels';
 import { viewerTimeZone } from '@/lib/time-zone';
-import { isSuperseded } from './signal-table';
-
-// Written out so Excel reads the CSV as UTF-8 and keeps Turkish characters.
-const BYTE_ORDER_MARK = String.fromCharCode(0xfeff);
-
-const IMPROVE_STATES = ['not_mentioned', 'mentioned_late', 'not_cited', 'doing_well', 'no_runs'];
-
-/** Saves a file the browser built, as the actions list's export does. */
-function save(blob: Blob, fileName: string) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  link.click();
-  // Revoked once the download has started; at once, some browsers drop it.
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+import { affectedCounts, type Affected } from '@/lib/action-center/affected';
+import type { ActionStory } from '@/lib/action-center/story';
+import { saveBlob } from '@/lib/download';
 
 /**
  * Copy all, Export CSV and Export Excel for one action (AC-005): what every
@@ -57,158 +38,73 @@ function save(blob: Blob, fileName: string) {
 export function ActionExportButtons({
   action,
   detail,
+  affected = null,
+  volumes = null,
+  story = null,
 }: {
   action: ActionItem;
   detail: ActionDetail | null;
+  /** The Affected tab's list and its prompts' demand, as the drawer shows them (AC-003). */
+  affected?: Affected | null;
+  volumes?: Map<string, number> | null;
+  /** Why and Goal as the drawer words them, from the action's data (AC-003). */
+  story?: ActionStory | null;
 }) {
-  const t = useTranslations('actionCenter.actionsPage');
   const tExport = useTranslations('actionCenter.actionsPage.export');
-  const tImprove = useTranslations('actionCenter.actionsPage.drawer.improve');
-  const tOpportunity = useTranslations('actionCenter.actionsPage.drawer.opportunity');
-  const tContent = useTranslations('content');
-  const tTexts = useTranslations('actionCenter.actionTexts');
-  const tCategories = useTranslations('actionCenter.actionCategories');
-  const tRegistry = useTranslations('actionCenter.registry');
-  const tTasks = useTranslations('actionCenter.actionTasks');
-  const tTaskStatus = useTranslations('actionCenter.taskStatus');
-  const tSignals = useTranslations('actionCenter.signalsPage');
-  const tSignalTexts = useTranslations('actionCenter.signalTexts');
-  const tSignalCategories = useTranslations('actionCenter.signalCategories');
+  // Every label the export reads, from the same namespaces the API uses.
+  const t: ExportTranslators = {
+    page: useTranslations(EXPORT_NAMESPACES.page),
+    export: tExport,
+    improve: useTranslations(EXPORT_NAMESPACES.improve),
+    opportunity: useTranslations(EXPORT_NAMESPACES.opportunity),
+    content: useTranslations(EXPORT_NAMESPACES.content),
+    texts: useTranslations(EXPORT_NAMESPACES.texts),
+    categories: useTranslations(EXPORT_NAMESPACES.categories),
+    registry: useTranslations(EXPORT_NAMESPACES.registry),
+    tasks: useTranslations(EXPORT_NAMESPACES.tasks),
+    taskStatus: useTranslations(EXPORT_NAMESPACES.taskStatus),
+    taskTypes: useTranslations(EXPORT_NAMESPACES.taskTypes),
+    signals: useTranslations(EXPORT_NAMESPACES.signals),
+    signalTexts: useTranslations(EXPORT_NAMESPACES.signalTexts),
+    signalCategories: useTranslations(EXPORT_NAMESPACES.signalCategories),
+    priority: useTranslations(EXPORT_NAMESPACES.priority),
+    affected: useTranslations(EXPORT_NAMESPACES.affected),
+  };
   const [isBusy, setIsBusy] = useState(false);
   // The Markdown Copy Data shows, and what to say once it is copied.
   const [preview, setPreview] = useState<{ text: string; copied: string } | null>(null);
   const [justCopied, setJustCopied] = useState(false);
   const previewRef = useRef<HTMLTextAreaElement>(null);
 
-  /** What the Overview tab shows of where a person sent the action from. */
-  const sentFrom = async (origin: string): Promise<ExportFact[]> => {
-    const p = action.payload ?? {};
-    if (action.kind === 'prompt_improve') {
-      const platforms = Array.isArray(p.platforms)
-        ? (p.platforms as { label?: unknown; state?: unknown }[]).filter(
-            (x): x is { label: string; state: string } =>
-              typeof x.label === 'string' &&
-              typeof x.state === 'string' &&
-              IMPROVE_STATES.includes(x.state),
-          )
-        : [];
-      const facts: ExportFact[] = [{ label: tImprove('source'), value: tImprove('sourceValue') }];
-      if (typeof p.promptText === 'string') {
-        facts.push({ label: tImprove('prompt'), value: p.promptText });
-      }
-      if (platforms.length) {
-        facts.push({
-          label: tImprove('platforms'),
-          value: platforms.map((x) => `${x.label} · ${tImprove(`states.${x.state}`)}`),
-        });
-      }
-      if (typeof p.panelLink === 'string') {
-        facts.push({ label: tImprove('openPanel'), value: `${origin}${p.panelLink}` });
-      }
-      return facts;
-    }
-    if (action.kind !== 'content_opportunity' || typeof p.opportunityId !== 'string') return [];
-
-    const pageUrls = Array.isArray(p.pages)
-      ? (p.pages as unknown[]).filter((u): u is string => typeof u === 'string')
-      : [];
+  /** A Content action's opportunity and basket, as the Overview tab reads them. */
+  const readSentFrom = async (): Promise<SentFromOpportunity | null> => {
+    const id = sentFromOpportunityId(action);
+    if (!id) return null;
     try {
       const [opportunity, basket] = await Promise.all([
-        getOpportunity(p.opportunityId),
-        getOpportunityBasket(p.opportunityId),
+        getOpportunity(id),
+        getOpportunityBasket(id),
       ]);
-      const { pages, prompts, queries } = opportunityLists(
-        opportunity,
-        basket,
-        p.assetKey ? pageUrls : undefined,
-      );
-      const brief = opportunity.brief;
-      const facts: ExportFact[] = [
-        { label: tOpportunity('title'), value: opportunity.title },
-        { label: tOpportunity('open'), value: `${origin}/dashboard/content/${opportunity.id}` },
-      ];
-      if (opportunity.decision) {
-        facts.push({
-          label: tExport('decision'),
-          value: tContent(`decision.${opportunity.decision}`),
-        });
-      }
-      if (pages.length) {
-        facts.push({ label: tExport('pages'), value: pages.map((page) => page.url) });
-      }
-      if (brief) {
-        facts.push({
-          label: tOpportunity('brief'),
-          value: [
-            `${brief.suggestedTitle} · ${brief.contentType.replace(/-/g, ' ')} · ${tOpportunity('words', { count: brief.targetWordCount })}`,
-            ...brief.outline.map(
-              (section, i) =>
-                `${i + 1}. ${section.heading}${section.keyPoints.length ? `: ${section.keyPoints.join('; ')}` : ''}`,
-            ),
-          ],
-        });
-      }
-      if (prompts.length) {
-        facts.push({
-          label: tOpportunity('prompts', { count: prompts.length }),
-          value: prompts.map((prompt) => prompt.text),
-        });
-      }
-      if (queries.length) {
-        facts.push({
-          label: tOpportunity('queries', { count: queries.length }),
-          value: queries.map((query) => query.query),
-        });
-      }
-      return facts;
+      return { opportunity, basket };
     } catch {
-      return [{ label: tOpportunity('title'), value: tOpportunity('unavailable') }];
+      return 'unavailable';
     }
   };
 
   const build = async (): Promise<ActionExport | null> => {
     if (!detail) return null;
-    const origin = window.location.origin;
-    const texts = actionTexts(action, tTexts);
-    const related: string[] = action.kpiKeys.filter(isKpiKey);
-    return buildActionExport(
-      action,
-      detail,
+    return labelActionExport(
       {
-        title: texts.title,
-        why: texts.description,
-        goal: actionGoal(action.kind, tTexts, action.payload),
-        category: tCategories(action.category),
-        impact: t(`impact.${action.impact}`),
-        status: t(`status.${action.status}`),
-        tags: actionContextTags(action, t),
-        kpis: detail.kpis
-          .filter((kpi) => related.includes(kpi.kpiKey) && isKpiKey(kpi.kpiKey))
-          .map(
-            (kpi) =>
-              `${tRegistry(`${kpi.kpiKey}.name`)} (${t('drawer.kpiTarget', { target: kpi.target })})`,
-          ),
-        context: await sentFrom(origin),
-        taskTitle: (task) => taskText(task, tTasks),
-        taskStatus: (status) => tTaskStatus(status),
-        signal: (signal) => {
-          const affected = signalAffected(signal, tSignals);
-          return {
-            ...signalTexts(signal, tSignalTexts),
-            type: `${tSignalCategories(signal.category)} · ${tSignals(`states.${SIGNAL_KINDS[signal.kind].stateKey}`)}`,
-            entity: affected.detail ?? affected.label,
-            category: tSignalCategories(signal.category),
-            status: isSuperseded(signal)
-              ? tSignals('superseded')
-              : tSignals(`status.${signal.status}`),
-            impact: tSignals(`impact.${signal.impact}`),
-          };
-        },
-        event: (event) => actionEventText(event, t, tTasks),
-        skipped: (reason) => tExport('skipped', { reason }),
-        answerSource: tExport('answerSource'),
+        action,
+        detail,
+        affected,
+        volumes,
+        story,
+        sentFrom: await readSentFrom(),
+        origin: window.location.origin,
+        timeZone: viewerTimeZone(),
       },
-      { origin, timeZone: viewerTimeZone() },
+      t,
     );
   };
 
@@ -225,13 +121,21 @@ export function ActionExportButtons({
     }
   };
 
-  /** Copy Data: the whole action, every tab, shown to copy in one click. */
+  /**
+   * Copy Data: the whole action, every tab, shown to copy in one click. Once
+   * copied it says what went: "7 prompts, 6 tasks, 87 signals", or the pages
+   * for an action about pages.
+   */
   const showData = (data: ActionExport) => {
+    const counts = affected ? affectedCounts(affected) : { prompts: 0, pages: 0 };
+    const entity = counts.prompts ? 'prompts' : counts.pages ? 'pages' : 'none';
     setJustCopied(false);
     setPreview({
       text: actionMarkdown(data, tExport),
       copied: tExport('copied', {
         ref: data.ref,
+        entity,
+        affected: entity === 'pages' ? counts.pages : counts.prompts,
         tasks: data.tasks.length,
         signals: data.signals.length,
       }),
@@ -267,7 +171,7 @@ export function ActionExportButtons({
   };
 
   const downloadCsv = (data: ActionExport) =>
-    save(
+    saveBlob(
       new Blob([BYTE_ORDER_MARK, actionCsv(data)], { type: 'text/csv;charset=utf-8;' }),
       actionExportFileName(data, 'csv'),
     );

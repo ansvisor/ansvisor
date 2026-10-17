@@ -4,6 +4,7 @@ import {
   computeMentionPosition,
   countBrandMentions,
   parseResponse,
+  mentionExcerpt,
 } from './response-parser.js';
 
 describe('response-parser', () => {
@@ -473,5 +474,37 @@ describe('brandMentionRanges', () => {
       [16, 24],
       [47, 51],
     ]);
+  });
+});
+
+describe('mentionExcerpt', () => {
+  const brand = { brandName: 'Acme Coffee', domains: ['acme-coffee.example.com'] };
+
+  it('quotes the answer around the first mention, without links or markdown marks', () => {
+    const text = `${'Intro words. '.repeat(20)}Our pick is **Acme Coffee** ([site](https://x.example)) for offices.`;
+    expect(mentionExcerpt(text, brand, 20)).toBe(
+      '…words. Our pick is Acme Coffee (site) for offices.',
+    );
+    // A cut inside a word moves to the next whole word.
+    expect(mentionExcerpt(text, brand, 22)).toBe(
+      '…words. Our pick is Acme Coffee (site) for offices.',
+    );
+    expect(mentionExcerpt(`Acme Coffee is a pick for remote offices`, brand, 5)).toBe(
+      'Acme Coffee is a…',
+    );
+  });
+
+  it('drops markdown marks but keeps a # or > inside a sentence', () => {
+    expect(mentionExcerpt('## Picks\n> Acme Coffee is the #1 pick, and A > B.', brand)).toBe(
+      'Picks Acme Coffee is the #1 pick, and A > B.',
+    );
+  });
+
+  it('finds the brand by its domain, and says nothing when it is not named', () => {
+    expect(mentionExcerpt('See acme-coffee.example.com today.', brand)).toBe(
+      'See acme-coffee.example.com today.',
+    );
+    expect(mentionExcerpt('No brand here.', brand)).toBeNull();
+    expect(mentionExcerpt(null, brand)).toBeNull();
   });
 });
