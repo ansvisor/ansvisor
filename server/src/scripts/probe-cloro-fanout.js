@@ -42,10 +42,11 @@ if (!taskType) {
 
 // The request production sends, plus the raw stream where the engine takes
 // it (Google's endpoints don't), to look for queries outside the documented
-// fields. On ChatGPT it shares the fan-out add-on's +2 credits.
+// fields, and the fan-out flag, which production no longer sends to ChatGPT
+// (#1119). On ChatGPT the two share one add-on's +2 credits.
 const payload = buildRequestBody(prompt, platform, country);
 if (!['google-aio', 'google-aimode'].includes(platform)) {
-  payload.include = { ...payload.include, rawResponse: true };
+  payload.include = { ...payload.include, rawResponse: true, searchQueries: true };
 }
 
 const headers = { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };

@@ -246,6 +246,7 @@
         "impact": "Impact",
         "status": "Status",
         "source": "Source",
+        "platform": "Platform",
         "all": "All",
         "search": "Search signals…",
         "clear": "Clear filters"
@@ -259,6 +260,10 @@
         "detected": "Detected",
         "status": "Status",
         "actions": "Actions"
+      },
+      "where": {
+        "platforms": "Tracked on {names}",
+        "locations": "Tracked in {names}"
       },
       "status": {
         "new": "New",
@@ -428,39 +433,39 @@
       },
       "topic_gap": {
         "title": "Partial coverage of {name}",
-        "description": "You appear on part of this topic’s prompts."
+        "description": "You appear on {to}% of its {prompts, plural, one {# prompt} other {# prompts}}."
       },
       "topic_uncovered": {
         "title": "Barely present in {name}",
-        "description": "You appear on few of this topic’s prompts."
+        "description": "You appear on {to}% of its {prompts, plural, one {# prompt} other {# prompts}}."
       },
       "topic_slipping": {
         "title": "Coverage slipping in {name}",
-        "description": "Your coverage of this topic is starting to fall."
+        "description": "You now appear on {to}% of its {prompts, plural, one {# prompt} other {# prompts}}, slipping from {from}%."
       },
       "topic_drop": {
         "title": "Coverage dropped in {name}",
-        "description": "Your coverage of this topic fell significantly."
+        "description": "You now appear on {to}% of its {prompts, plural, one {# prompt} other {# prompts}}, down from {from}%."
       },
       "platform_slipping": {
         "title": "Visibility slipping on {name}",
-        "description": "Your mention rate on this platform is starting to fall."
+        "description": "Your mention rate slipped from {from}% to {to}% against the week before."
       },
       "platform_drop": {
         "title": "Visibility dropped on {name}",
-        "description": "Your mention rate on this platform fell significantly."
+        "description": "Your mention rate fell from {from}% to {to}% against the week before."
       },
       "country_gap": {
         "title": "Weak in {name}",
-        "description": "You are far less visible here than in your strongest region."
+        "description": "You are mentioned in {to}% of answers here, against {from}% in {best}."
       },
       "competitor_leads": {
         "title": "{name} is mentioned far more than you",
-        "description": "This competitor is named a multiple of your count."
+        "description": "Mentioned {to, plural, one {# time} other {# times}} this week, against your {from}."
       },
       "competitor_momentum": {
         "title": "{name} is gaining fast",
-        "description": "This competitor’s mentions grew sharply against the week before."
+        "description": "Mentions rose from {from} to {to} against the week before."
       },
       "competitor_topic_lead": {
         "title": "A competitor leads {name}",
@@ -476,23 +481,23 @@
       },
       "authority_citation_gap": {
         "title": "Rarely beside {name}",
-        "description": "This source is cited widely, and rarely in answers that name you."
+        "description": "Cited in {answers, plural, one {# answer} other {# answers}} this week; you are named in only {withBrand} of them."
       },
       "third_party_citation_gap": {
         "title": "{name} could reference your pages",
-        "description": "This source is cited when answers discuss you, and does not reference your own pages."
+        "description": "Cited in {answers, plural, one {# answer} other {# answers}} this week, {withBrand} of them naming you."
       },
       "third_party_presence_gap": {
         "title": "Absent from answers citing {name}",
-        "description": "Answers citing this source never name your brand."
+        "description": "Cited in {answers, plural, one {# answer} other {# answers}} across {prompts, plural, one {# prompt} other {# prompts}} this week; none of them name you."
       },
       "competitor_cited_source": {
         "title": "{name} cites competitors, not you",
-        "description": "This source appears in answers naming competitors, and never in yours."
+        "description": "Cited in {answers, plural, one {# answer} other {# answers}} this week. Competitors alone are named in {competitorOnly} of them; you in none."
       },
       "competitor_winning_source": {
         "title": "Competitors win {name}",
-        "description": "Competitors appear across several prompts citing this source; you never do."
+        "description": "Cited in {answers, plural, one {# answer} other {# answers}} across {prompts, plural, one {# prompt} other {# prompts}} this week. Competitors alone are named in {competitorOnly} of them; you in none."
       },
       "page_citation_slipping": {
         "title": "Citations slipping on {targets}",
@@ -683,6 +688,57 @@
         "description": "Select a brand to view its actions."
       },
       "updateFailed": "Couldn't update the action.",
+      "export": {
+        "copyAll": "Copy Data",
+        "csv": "Export CSV",
+        "excel": "Export Excel",
+        "copied": "Action {ref} copied: {tasks, plural, one {# task} other {# tasks}}, {signals, plural, one {# signal} other {# signals}}",
+        "exportFailed": "Couldn't create the export.",
+        "preview": {
+          "copy": "Copy all",
+          "copied": "Copied",
+          "failed": "Couldn't copy. The text is selected: press ⌘C or Ctrl+C."
+        },
+        "skipped": "Skipped: {reason}",
+        "answerSource": "AI answer",
+        "tasksHeading": "Tasks ({count})",
+        "signalsHeading": "Signals ({count})",
+        "historyHeading": "History ({count})",
+        "sheets": {
+          "action": "Action",
+          "tasks": "Tasks",
+          "signals": "Signals",
+          "history": "History"
+        },
+        "action": "Action",
+        "title": "Title",
+        "category": "Category",
+        "impact": "Impact",
+        "status": "Status",
+        "assignee": "Assignee",
+        "dueDate": "Due",
+        "tags": "Tags",
+        "why": "Why",
+        "goal": "Goal",
+        "kpis": "KPIs",
+        "decision": "Decision",
+        "pages": "Pages",
+        "created": "Created",
+        "updated": "Updated",
+        "link": "Link",
+        "task": "Task",
+        "details": "Details",
+        "type": "Type",
+        "entity": "Affected",
+        "signal": "Signal",
+        "description": "Description",
+        "platforms": "Platforms",
+        "locations": "Locations",
+        "firstDetected": "First detected",
+        "lastDetected": "Last detected",
+        "date": "Date",
+        "event": "Event"
+      },
       "drawer": {
         "actionId": "Action ID",
         "tabs": {
@@ -717,7 +773,8 @@
           "task_ran": "{task} — carried out automatically ({tool})",
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
           "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
-          "position_outcome_recorded": "{measurable, plural, =0 {30-day result: not enough data to compare positions} other {30-day result: position improved on {improved} of # platforms}}"
+          "position_outcome_recorded": "{measurable, plural, =0 {30-day result: not enough data to compare positions} other {30-day result: position improved on {improved} of # platforms}}",
+          "outcome_measured": "{outcome, select, improved {Result: metrics improved after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}"
         },
         "taskText": "Task text",
         "renameTask": "Rename task",
@@ -1733,18 +1790,18 @@
       "rankOf": "#{rank} of {count} brands",
       "appearedIn": "appeared in {visible} of {active} prompts",
       "trackedPrompts": "Tracked prompts",
-      "trackedPromptsTip": "Prompts answered in this period. The bar is your plan's prompt locations, shared by all brands and counting only active prompts (paused ones don't count): {used} of {limit} used.",
+      "trackedPromptsTip": "Prompts answered in this period. The bar is your plan: {used} of {limit} prompt locations in use, shared by every brand in your workspace. A prompt counts once per location it tracks; paused prompts don't count.",
       "trackedPromptsTipUnlimited": "Prompts answered in this period. Your plan has no prompt location limit.",
-      "slotsLeft": "{count, plural, one {# slot left} other {# slots left}} · all brands",
-      "overLimit": "{count, plural, one {# location over your plan} other {# locations over your plan}} · all brands",
+      "slotsLeft": "{count, plural, other {# prompts/locations left to add}}",
+      "limitReached": "Plan limit reached",
+      "overLimit": "{count, plural, other {# over your plan limit}}",
       "unlimited": "{count, plural, one {# active location} other {# active locations}} · Unlimited",
       "quotaLabel": "{used} of {limit} active prompt locations used",
       "mentions": "Mentions",
-      "mentionsTip": "Times answers named your brand. With Same prompts, the change counts only prompts tracked in both periods.",
+      "mentionsTip": "Times answers named your brand. The change is against the previous period.",
       "citations": "Citations",
-      "citationsTip": "Times answers cited your pages. With Same prompts, the change counts only prompts tracked in both periods.",
-      "samePrompts": "{count, plural, one {same # prompt} other {same # prompts}}",
-      "allPrompts": "all prompts",
+      "citationsTip": "Times answers cited your pages. The change is against the previous period.",
+      "vsPrevious": "vs previous period",
       "netSentiment": "Net sentiment",
       "netSentimentTip": "Positive minus negative share of the answers that name or cite your brand.",
       "sentimentSplit": "{positive} pos · {negative} neg",
@@ -2415,8 +2472,8 @@
       "engineEmptyTitle": "No {engine} searches in the {range}",
       "engineEmptyBody": "{engine} usually shares the searches behind its answers. Try a longer date range.",
       "emptyTitle": "No fan-out captured yet",
-      "emptyBody": "ChatGPT, Copilot and Perplexity share the searches behind some of their answers; Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
-      "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. Only ChatGPT, Copilot and Perplexity share them."
+      "emptyBody": "Copilot and Perplexity share the searches behind their answers; ChatGPT, Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
+      "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. Only Copilot and Perplexity share them."
     },
     "bulkDelete": {
       "progress": "Deleting {done} of {total} prompts…",

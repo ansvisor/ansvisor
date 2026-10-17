@@ -18,6 +18,7 @@ import type {
   SignalStatus,
 } from '@/lib/signals/registry';
 import { SIGNAL_ROW_COLUMNS, mapSignalRows, type Signal, type SignalRow } from '@/lib/signals/map';
+import type { PromptPlace } from '@/lib/signals/where';
 
 export type { Signal } from '@/lib/signals/map';
 
@@ -37,6 +38,9 @@ export interface SignalFilters {
  * PostgREST 1000-row cap) rather than paged: per-brand signal counts are
  * tens — the detectors' own thresholds and dedup bound them — and search
  * plus pagination happen client-side over composed titles anyway.
+ *
+ * The brand's prompts are read alongside, so each signal can say which
+ * platforms and locations it is about (AC-002).
  */
 export async function getSignals(brandId: string, filters: SignalFilters): Promise<Signal[]> {
   const supabase = await createClient();
@@ -54,10 +58,44 @@ export async function getSignals(brandId: string, filters: SignalFilters): Promi
   if (filters.status) query = query.eq('status', filters.status);
   if (filters.source) query = query.contains('source', [filters.source]);
 
-  const { data, error } = await query;
+  const [{ data, error }, prompts] = await Promise.all([query, getPromptPlaces(supabase, brandId)]);
   if (error) throw new Error(error.message);
 
-  return mapSignalRows((data ?? []) as SignalRow[]);
+  return mapSignalRows((data ?? []) as SignalRow[], prompts);
+}
+
+/**
+ * Where each of the brand's prompts is tracked, by id. Paged, because a
+ * brand can hold more prompts than one PostgREST response carries. A failed
+ * read costs the Where line, not the page, so it is logged and the page
+ * shows signals without it.
+ */
+async function getPromptPlaces(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+): Promise<Map<string, PromptPlace>> {
+  const places = new Map<string, PromptPlace>();
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from('prompts')
+      .select('id, platforms, regions, topic_id, is_active, prompt_sets!inner(brand_id)')
+      .eq('prompt_sets.brand_id', brandId)
+      .order('id')
+      .range(from, from + 999);
+    if (error) {
+      console.error('[signals] prompt places read failed:', error.message);
+      return new Map();
+    }
+    for (const row of data ?? []) {
+      places.set(row.id, {
+        platforms: row.platforms ?? [],
+        regions: row.regions ?? [],
+        topicId: row.topic_id,
+        isActive: row.is_active,
+      });
+    }
+    if ((data ?? []).length < 1000) return places;
+  }
 }
 
 export interface SignalsSummary {
