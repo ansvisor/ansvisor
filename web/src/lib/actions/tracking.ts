@@ -3,6 +3,23 @@
 import { unstable_cache } from 'next/cache';
 import { dbClient, withDbClient } from '@/lib/supabase/scoped';
 import { expandDateToEndOfDay } from '@/lib/dates';
+import {
+  comparisonWindows,
+  dailyWindow,
+  deltaDayWindows,
+  visibilityChange,
+  windowBounds,
+  type ComparisonWindows,
+  type DayWindow,
+  type MetricWindow,
+} from '@/lib/insights-windows';
+import {
+  parseSamePromptComparison,
+  samePromptChanges,
+  withPromptComparison,
+  type PromptComparison,
+  type SamePromptComparison,
+} from '@/lib/insights-same-prompts';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import type {
   PromptResult,
@@ -24,10 +41,42 @@ import { normalizeCitationUrl } from '@/lib/citations/normalize';
 import { getTopicById } from '@/lib/actions/topic';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
 import { getOrgLocationUsage } from '@/lib/prompt-locations';
-import { getPromptVolumes } from '@/lib/actions/volumes';
 import { getPromptSuggestions } from '@/lib/actions/prompt-suggestions';
-import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
+import { nextScheduledRun } from '@/lib/tracking-schedule';
+import { numberFormat, type NumberFormat } from '@/lib/number-format';
+import { getContentUsage } from '@/lib/actions/content';
+import type { ContentUsage } from '@/lib/content-usage';
 import { percentageChange } from '@/lib/metrics';
+import { parseChangeDrivers, whyChanged, type WhyChanged } from '@/lib/insights-drivers';
+import { parseTrendMarkers, type TrendMarkerData } from '@/lib/insights-trend';
+import { parseTopicCompetitors, type TopicCompetitors } from '@/lib/insights-topics';
+import type { OpportunitySuggestion } from '@/lib/insights-opportunities';
+import {
+  parsePlatformRows,
+  platformChanges,
+  platformTable,
+  type PlatformChange,
+  type PlatformRow,
+  type PlatformTableRow,
+} from '@/lib/insights-summary';
+import {
+  coverage as coverageRate,
+  kpiRates,
+  parseKpiSeries,
+  rateChange,
+  type KpiRates,
+  type KpiSeriesDay,
+} from '@/lib/insights-kpis';
+import {
+  breakdownDelta,
+  buildBreakdownRows,
+  parseBreakdownGroups,
+  pickDriver,
+  type BreakdownFilters,
+  type BreakdownMetric,
+  type BreakdownRow,
+  type InsightsBreakdown,
+} from '@/lib/insights-breakdown';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import {
   aggregateHeadToHead,
@@ -167,6 +216,25 @@ export interface InsightsSummary {
   /** Raw previous-period count, used to distinguish a zero base from unavailable comparison data. */
   prevCitations: number | null;
   sentimentChange: number | null;
+  /**
+   * The v2 KPI cards (VIS-003, 00131). Null without the answers they need,
+   * and Net sentiment / Avg. position also while the rollups behind the
+   * window are not backfilled. Changes are in points (positions for Avg.
+   * position, where lower is better).
+   */
+  citationRate: number | null;
+  citationRateChange: number | null;
+  negativeSentimentPct: number | null;
+  netSentiment: number | null;
+  netSentimentChange: number | null;
+  avgPosition: number | null;
+  avgPositionChange: number | null;
+  /**
+   * The answers Net sentiment and Avg. position are taken over (VIS-005):
+   * those that name the brand, and those that place it.
+   */
+  mentioningResults: number;
+  positionedResults: number;
 }
 
 /**
@@ -184,74 +252,19 @@ function modelFilterArray(model: string | undefined): string[] | undefined {
   return list.length > 0 ? list : undefined;
 }
 
-// ── Daily-rollup routing (00066) ────────────────────────────────────────────
-//
-// The aggregate RPCs used to rescan a brand's whole history per page load;
-// past ~55k results that exceeds the authenticated role's 8s statement
-// timeout and the wide presets die. Every preset except 24h now describes its
-// window as whole UTC days, and calls that carry one are answered from the
-// pre-aggregated daily tables instead — cost scales with days in the window,
-// never with accumulated results.
-//
-// Topic-filtered calls are served from the rollups too (00139): with
-// p_topic_id the read functions answer from the prompt-grain tables, keyed
-// through the prompt's current topic, so reassigning a prompt still moves its
-// history. Every daily call must pass p_topic_id along — without it the
-// rollup answers for the whole brand.
-
-/**
- * Whole-day UTC window, 'YYYY-MM-DD' inclusive on both ends. Its presence in
- * an action's opts marks the call as servable from the daily rollups; either
- * bound may be absent (the All-time preset carries an empty window).
- */
-export interface DayWindow {
-  dayFrom?: string;
-  dayTo?: string;
-}
-
-interface WindowedOpts {
-  days?: DayWindow;
-}
-
-/** The day window to serve from rollups, or null when the raw path must answer. */
-function dailyWindow(opts?: WindowedOpts): DayWindow | null {
-  return opts?.days ?? null;
-}
-
-const DAY_MS = 86_400_000;
-
-function utcToday(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function addDays(day: string, n: number): string {
-  return new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
-}
-
-/**
- * Current + previous equal-length day windows for the ↑/↓ delta math. An
- * unbounded window anchors to the trailing 7 days, mirroring what the raw
- * path's `now() - 7d` default has always compared against. The previous
- * window ends the day BEFORE the current one starts — the raw path's
- * timestamp arithmetic let the two windows share their boundary instant.
- */
-function deltaDayWindows(days: DayWindow): {
-  cur: { dayFrom: string; dayTo: string };
-  prev: { dayFrom: string; dayTo: string };
-} {
-  const curTo = days.dayTo ?? utcToday();
-  const curFrom = days.dayFrom ?? addDays(curTo, -6);
-  const len = Math.round((Date.parse(curTo) - Date.parse(curFrom)) / DAY_MS) + 1;
-  const prevTo = addDays(curFrom, -1);
-  return {
-    cur: { dayFrom: curFrom, dayTo: curTo },
-    prev: { dayFrom: addDays(prevTo, -(len - 1)), dayTo: prevTo },
-  };
-}
+// Daily-rollup routing and the comparison windows live in
+// @/lib/insights-windows, shared with the breakdown panel (VIS-001).
+export type { DayWindow } from '@/lib/insights-windows';
 
 // ── RPC return shapes (mirror supabase/migrations/00031_insights_sentiment_denominator.sql) ─
 
 interface InsightsAggregates {
+  /** 00131: the KPI cards' components; kpi_complete is false before the backfill. */
+  citation_answers?: number;
+  negative_count?: number;
+  sum_position?: number | null;
+  position_count?: number;
+  kpi_complete?: boolean;
   total_results: number;
   sum_visibility: number;
   total_mentions: number;
@@ -503,7 +516,6 @@ export async function getVisibilityRateKpi(
         p_region: opts?.region ?? undefined,
         p_day_from: daily.dayFrom,
         p_day_to: daily.dayTo,
-        p_topic_id: opts?.topicId ?? undefined,
       })
     : await supabase.rpc('visible_prompt_stats', {
         p_brand_id: brandId,
@@ -577,7 +589,6 @@ export async function getTrackedPromptsKpi(
           p_region: opts?.region ?? undefined,
           p_day_from: daily.dayFrom,
           p_day_to: daily.dayTo,
-          p_topic_id: opts?.topicId ?? undefined,
         })
       : supabase.rpc('tracked_prompt_count', {
           p_brand_id: brandId,
@@ -629,60 +640,63 @@ async function getInsightsFilterOptions(brandId: string): Promise<InsightsFilter
   };
 }
 
-export interface TopicOpportunity {
-  keyword: string;
-  estimatedAiVolume: number;
-  promptCount: number;
+export interface InsightsOpportunities {
+  suggestions: OpportunitySuggestion[];
+  /** The suggestions' topics with at least one active tracked prompt; null when unknown. */
+  trackedTopicIds: string[] | null;
+  /** The month's content quota, for Suggest content (CONTENT-001); null when unread. */
+  contentUsage: ContentUsage | null;
 }
 
-export interface PromptOpportunity {
-  id: string;
-  text: string;
-  topicName?: string;
-  estVolume?: number;
-}
-
-export interface InsightsRecommendations {
-  topics: TopicOpportunity[];
-  prompts: PromptOpportunity[];
-}
-
-/** Items per Recommendations teaser card on the Insights page (#459). */
-const RECOMMENDATION_ITEM_LIMIT = 5;
+/** PostgREST's default row cap: a read that fills it may have been cut short. */
+const TRACKED_TOPIC_ROWS = 1000;
 
 /**
- * Teaser data for the Insights Recommendations row (#459): the top stored
- * similar-topic clusters and prompt suggestions. Both are bounded reads of
- * already-persisted data — generation only ever happens from the Prompts
- * page's explicit refresh actions, never from the Insights load path.
- * Each read degrades independently to an empty list on failure so a hiccup
- * here can never take the Insights page down with it.
+ * The Opportunities card's data (VIS-011): the stored prompt suggestions and
+ * which of their topics you already track. A bounded read of persisted data:
+ * suggestions are only ever generated by the Prompts page's explicit refresh,
+ * never from the Insights load path. A failure degrades to an empty card so
+ * it can never take the Insights page down with it.
  */
-async function getInsightsRecommendations(brandId: string): Promise<InsightsRecommendations> {
-  const [topics, prompts] = await Promise.all([
-    getPromptVolumes(brandId)
-      .then(({ volumes }) =>
-        aggregatePromptVolumeClusters(volumes)
-          .slice(0, RECOMMENDATION_ITEM_LIMIT)
-          .map((c) => ({
-            keyword: c.keyword,
-            estimatedAiVolume: c.estimatedAiVolume,
-            promptCount: c.prompts.length,
-          })),
-      )
-      .catch(() => [] as TopicOpportunity[]),
-    getPromptSuggestions(brandId)
-      .then(({ suggestions }) =>
-        suggestions.slice(0, RECOMMENDATION_ITEM_LIMIT).map((s) => ({
-          id: s.id,
-          text: s.suggestedText,
-          topicName: s.topicName ?? undefined,
-          estVolume: s.estVolume ?? undefined,
-        })),
-      )
-      .catch(() => [] as PromptOpportunity[]),
-  ]);
-  return { topics, prompts };
+async function getInsightsOpportunities(brandId: string): Promise<InsightsOpportunities> {
+  try {
+    const { suggestions } = await getPromptSuggestions(brandId);
+    const topicIds = [...new Set(suggestions.flatMap((s) => (s.topicId ? [s.topicId] : [])))];
+    const readTrackedTopics = async (): Promise<string[] | null> => {
+      if (topicIds.length === 0) return [];
+      const supabase = await dbClient();
+      const { data, error } = await supabase
+        .from('prompts')
+        .select('topic_id')
+        .in('topic_id', topicIds)
+        .eq('is_active', true)
+        .limit(TRACKED_TOPIC_ROWS);
+      // Unknown, not "none": a failed or cut-off read would call tracked topics untracked.
+      return error || (data?.length ?? 0) >= TRACKED_TOPIC_ROWS
+        ? null
+        : [...new Set((data ?? []).map((r) => r.topic_id as string))];
+    };
+    const [trackedTopicIds, contentUsage] = await Promise.all([
+      readTrackedTopics(),
+      // Only Suggest content uses it. The server still enforces the quota; an
+      // unread one only leaves the button enabled.
+      suggestions.length > 0 ? getContentUsage().catch(() => null) : Promise.resolve(null),
+    ]);
+    return {
+      suggestions: suggestions.map((s) => ({
+        id: s.id,
+        text: s.suggestedText,
+        topicId: s.topicId,
+        topicName: s.topicName,
+        estVolume: s.estVolume,
+        relevance: s.relevance,
+      })),
+      trackedTopicIds,
+      contentUsage,
+    };
+  } catch {
+    return { suggestions: [], trackedTopicIds: [], contentUsage: null };
+  }
 }
 
 /**
@@ -711,12 +725,49 @@ export interface InsightsData {
   competitors: CompetitorComparisonData;
   sov: ShareOfVoiceData;
   trackedPrompts: TrackedPromptsKpi;
-  visibilityRate: VisibilityRateKpi;
   filterOptions: InsightsFilterOptions;
-  recommendations: InsightsRecommendations;
+  opportunities: InsightsOpportunities;
   hasAnyData: boolean;
   /** The visibility-rate chart for the same window; null when its read failed. */
   trend: VisibilityRateTrendData | null;
+  /**
+   * Which prompts the changes on the page compare (VIS-002), with how many
+   * were added or dropped between the periods. Null without a previous
+   * window (All time) or before the rollups behind it are backfilled.
+   */
+  comparison: PromptComparison | null;
+  /** Coverage card (VIS-003); null when its read failed. */
+  coverage: CoverageKpi | null;
+  /**
+   * The KPI cards' sparklines, one point per day (VIS-003). Null for the 24h
+   * view (a single day), when the read failed, or before the backfill.
+   */
+  kpiSeries: KpiSeriesDay[] | null;
+  /**
+   * Each platform's Visibility change for the summary line (VIS-006),
+   * following Same prompts; biggest rise first. Null without a previous
+   * window, before the backfill, or when the read failed.
+   */
+  platformChanges: PlatformChange[] | null;
+  /** The "By AI platform" table (VIS-008); null under the same conditions. */
+  platforms: PlatformTableRow[] | null;
+  /**
+   * "Why it changed" (VIS-009): what moved the change and the prompts new this
+   * period. Null for All time, before the backfill, or when the read failed.
+   */
+  whyChanged: WhyChanged | null;
+  /**
+   * The trend's markers and goal (VIS-007): prompts added and actions sent per
+   * day, and the AI visibility KPI's target. Null on the 24h view, whose
+   * chart has no days to mark, or when the read failed.
+   */
+  trendMarkers: TrendMarkerData | null;
+  /**
+   * "Topics vs competitors" (VIS-010): per topic, your and each competitor's
+   * Visibility components. Null on the 24h view, with a topic selected,
+   * before the backfill, or when the read failed.
+   */
+  topicCompetitors: TopicCompetitors[] | null;
   /** The run ledger, when the 24h window was anchored to it (`anchor24h`). */
   trackingWindow: TrackingWindow | null;
 }
@@ -731,6 +782,10 @@ export interface TrackingWindow {
   anchored: { dateFrom: string; dateTo: string } | null;
   /** A full run currently in flight (cron or manual), for the progress banner. */
   activeRun: { startedAt: string; source: string } | null;
+  /** The brand's last completed full run, scheduled or Run All (VIS-012); null before its first. */
+  lastRunAt: string | null;
+  /** When the next scheduled run is due, from the last ones (VIS-012); null when not known. */
+  nextRunAt: string | null;
 }
 
 /**
@@ -749,7 +804,7 @@ export interface TrackingWindow {
 export async function getTrackingWindow(brandId: string): Promise<TrackingWindow> {
   const supabase = await dbClient();
 
-  const [completedResp, activeResp] = await Promise.all([
+  const [completedResp, activeResp, scheduledResp] = await Promise.all([
     supabase
       .from('tracking_runs')
       .select('completed_at')
@@ -767,6 +822,14 @@ export async function getTrackingWindow(brandId: string): Promise<TrackingWindow
       .gte('started_at', new Date(Date.now() - 2 * 3600_000).toISOString())
       .order('started_at', { ascending: false })
       .limit(1),
+    // The daily runs, for when the next one is due (the header's "next run in 13h").
+    supabase
+      .from('tracking_runs')
+      .select('started_at')
+      .eq('brand_id', brandId)
+      .eq('source', 'cron')
+      .order('started_at', { ascending: false })
+      .limit(2),
   ]);
 
   const completed = completedResp.data ?? [];
@@ -786,6 +849,8 @@ export async function getTrackingWindow(brandId: string): Promise<TrackingWindow
     activeRun: active
       ? { startedAt: active.started_at as string, source: (active.source as string) ?? 'manual' }
       : null,
+    lastRunAt: latest ?? null,
+    nextRunAt: nextScheduledRun((scheduledResp.data ?? []).map((r) => r.started_at as string)),
   };
 }
 
@@ -803,7 +868,19 @@ export async function getTrackingWindow(brandId: string): Promise<TrackingWindow
 /** The part of the Insights page that depends only on the brand and the window. */
 type WindowedInsights = Pick<
   InsightsData,
-  'summary' | 'competitors' | 'sov' | 'visibilityRate' | 'filterOptions' | 'trend'
+  | 'summary'
+  | 'competitors'
+  | 'sov'
+  | 'filterOptions'
+  | 'trend'
+  | 'comparison'
+  | 'coverage'
+  | 'kpiSeries'
+  | 'platformChanges'
+  | 'platforms'
+  | 'whyChanged'
+  | 'trendMarkers'
+  | 'topicCompetitors'
 >;
 
 type InsightsFilterArgs = {
@@ -813,6 +890,8 @@ type InsightsFilterArgs = {
   dateFrom?: string;
   dateTo?: string;
   days?: DayWindow;
+  /** "Compare: Same prompts" (VIS-002); on unless explicitly false. */
+  samePrompts?: boolean;
 };
 
 const EMPTY_COMPETITORS: CompetitorComparisonData = { brands: [], providerRows: [] };
@@ -843,7 +922,20 @@ async function loadWindowedInsights(
           return fallback;
         });
 
-  const [summary, competitors, sov, visibilityRate, filterOptions, trend] = await Promise.all([
+  const [
+    summary,
+    competitors,
+    sov,
+    filterOptions,
+    trend,
+    same,
+    coverage,
+    kpiSeries,
+    platformData,
+    drivers,
+    trendMarkers,
+    topicCompetitors,
+  ] = await Promise.all([
     getInsightsSummary(brandId, filterOpts),
     lenient(
       getCompetitorComparison(brandId, filterOpts),
@@ -851,7 +943,6 @@ async function loadWindowedInsights(
       'competitor comparison',
     ),
     lenient(getShareOfVoiceData(brandId, filterOpts), EMPTY_SOV, 'share of voice'),
-    getVisibilityRateKpi(brandId, filterOpts),
     getInsightsFilterOptions(brandId),
     // The chart follows the same window as every other number on the page.
     lenient<VisibilityRateTrendData | null>(
@@ -859,8 +950,334 @@ async function loadWindowedInsights(
       null,
       'visibility trend',
     ),
+    lenient(getSamePromptComparison(brandId, filterOpts), null, 'same-prompt comparison'),
+    lenient(getCoverageKpi(brandId, filterOpts), null, 'coverage'),
+    lenient(getKpiSeries(brandId, filterOpts), null, 'KPI sparklines'),
+    lenient(getPlatformData(brandId, filterOpts), null, 'platforms'),
+    lenient(getChangeDrivers(brandId, filterOpts), null, 'why it changed'),
+    lenient(getTrendMarkers(brandId, filterOpts), null, 'trend markers'),
+    lenient(getTopicCompetitors(brandId, filterOpts), null, 'topics vs competitors'),
   ]);
-  return { summary, competitors, sov, visibilityRate, filterOptions, trend };
+  const windowed = {
+    ...(comparisonWindows(filterOpts).prev ? { summary, sov } : withoutChanges(summary, sov)),
+    competitors,
+    filterOptions,
+    trend,
+    coverage,
+    kpiSeries,
+    platformChanges: platformData?.changes ?? null,
+    platforms: platformData
+      ? platformTable(
+          platformData.rows,
+          platformData.changes ?? [],
+          sov.byPlatform,
+          resolveProvider,
+        )
+      : null,
+    whyChanged:
+      drivers &&
+      whyChanged(drivers, resolveProvider, { samePrompts: filterOpts.samePrompts !== false }),
+    trendMarkers,
+    topicCompetitors,
+  };
+  return withPromptComparison(windowed, same, filterOpts.samePrompts !== false);
+}
+
+/** Coverage card (VIS-003): the answered prompts where the brand appeared. */
+export interface CoverageKpi {
+  visiblePrompts: number;
+  activePrompts: number;
+  /** %, one decimal; null without answered prompts. */
+  value: number | null;
+  /** Change in points vs the previous window; null without one. */
+  change: number | null;
+}
+
+/**
+ * Coverage over the card's windows: distinct prompts the brand appeared in
+ * (visible_prompt_stats) over distinct prompts answered (tracked_prompt_count),
+ * the same counts the Visibility card's "appeared in x/y" line shows.
+ */
+async function getCoverageKpi(brandId: string, opts?: InsightsFilterArgs): Promise<CoverageKpi> {
+  const supabase = await dbClient();
+  const windows = comparisonWindows(opts);
+  const base = {
+    p_brand_id: brandId,
+    p_platform: undefined as string | undefined,
+    p_models: modelFilterArray(opts?.model),
+    p_region: opts?.region ?? undefined,
+  };
+
+  const countsFor = async (win: MetricWindow) => {
+    let visible;
+    let active;
+    if (win.kind === 'days') {
+      const days = { ...base, p_day_from: win.days.dayFrom, p_day_to: win.days.dayTo };
+      [visible, active] = await Promise.all([
+        supabase.rpc('visible_prompt_stats_daily', days),
+        supabase.rpc('tracked_prompt_count_daily', days),
+      ]);
+    } else {
+      const range = {
+        ...base,
+        p_date_from: win.from,
+        p_date_to: win.to,
+        p_topic_id: opts?.topicId ?? undefined,
+      };
+      [visible, active] = await Promise.all([
+        supabase.rpc('visible_prompt_stats', range),
+        supabase.rpc('tracked_prompt_count', range),
+      ]);
+    }
+    if (visible.error) throw new Error(visible.error.message);
+    if (active.error) throw new Error(active.error.message);
+    return {
+      visible: Number((visible.data as { visible_prompts?: number } | null)?.visible_prompts ?? 0),
+      active: Number(active.data ?? 0),
+    };
+  };
+
+  const [cur, prev] = await Promise.all([
+    countsFor(windows.cur),
+    windows.prev ? countsFor(windows.prev) : Promise.resolve(null),
+  ]);
+  const value = coverageRate(cur.visible, cur.active);
+  return {
+    visiblePrompts: cur.visible,
+    activePrompts: cur.active,
+    value,
+    change: prev ? rateChange(value, coverageRate(prev.visible, prev.active)) : null,
+  };
+}
+
+/**
+ * The KPI cards' sparklines: one point per day of the window, from the
+ * prompt-grain rollups (00131), topic filter included. Whole days only — the
+ * 24h view is a single day, nothing to plot.
+ */
+async function getKpiSeries(
+  brandId: string,
+  opts?: InsightsFilterArgs,
+): Promise<KpiSeriesDay[] | null> {
+  if (!opts?.days) return null;
+  const supabase = await dbClient();
+  const { data, error } = await supabase.rpc('insights_kpi_series', {
+    p_brand_id: brandId,
+    p_day_from: opts.days.dayFrom,
+    p_day_to: opts.days.dayTo,
+    p_models: modelFilterArray(opts.model),
+    p_region: opts.region ?? undefined,
+    p_topic_id: opts.topicId ?? undefined,
+  });
+  if (error) throw new Error(error.message);
+  return parseKpiSeries(data);
+}
+
+/**
+ * "Topics vs competitors" (VIS-010): per active topic, the brand's and each
+ * competitor's Visibility components in the window, from the rollups. Null
+ * on the 24h view and when a topic is selected (one row isn't a map).
+ */
+async function getTopicCompetitors(
+  brandId: string,
+  opts?: InsightsFilterArgs,
+): Promise<TopicCompetitors[] | null> {
+  if (!opts?.days || opts.topicId) return null;
+  const supabase = await dbClient();
+  const { data, error } = await supabase.rpc('insights_topic_competitors_daily', {
+    p_brand_id: brandId,
+    p_day_from: opts.days.dayFrom,
+    p_day_to: opts.days.dayTo,
+    p_models: modelFilterArray(opts.model),
+    p_region: opts.region ?? undefined,
+  });
+  if (error) throw new Error(error.message);
+  return parseTopicCompetitors(data);
+}
+
+/**
+ * The trend's markers and goal (VIS-007): per UTC day in the charted range,
+ * the prompts added and the actions people sent, and the target of the
+ * brand's active AI visibility KPI. Null on the 24h view, charted by run
+ * rather than by day.
+ */
+async function getTrendMarkers(
+  brandId: string,
+  opts?: InsightsFilterArgs,
+): Promise<TrendMarkerData | null> {
+  if (!opts?.days) return null;
+  const supabase = await dbClient();
+  const { dayFrom, dayTo } = opts.days;
+  const [markers, kpi] = await Promise.all([
+    supabase.rpc('insights_trend_markers', {
+      p_brand_id: brandId,
+      p_from: dayFrom ? `${dayFrom}T00:00:00Z` : undefined,
+      p_to: dayTo ? `${dayTo}T23:59:59.999Z` : undefined,
+      p_topic_id: opts.topicId ?? undefined,
+    }),
+    supabase
+      .from('kpi_definitions')
+      .select('target')
+      .eq('brand_id', brandId)
+      .eq('kpi_key', 'ai_visibility')
+      .eq('is_active', true)
+      .maybeSingle(),
+  ]);
+  if (markers.error) throw new Error(markers.error.message);
+  return {
+    ...parseTrendMarkers(markers.data),
+    // A missing or unreadable KPI only means no goal line.
+    goal: kpi.data ? Number(kpi.data.target) : null,
+  };
+}
+
+/**
+ * The inputs of "Why it changed" (VIS-009): each prompt's and engine's
+ * Visibility components in both comparison windows, over the same prompts as
+ * the card's change, and the prompts new this period. Null for All time.
+ */
+async function getChangeDrivers(
+  brandId: string,
+  opts?: InsightsFilterArgs,
+): Promise<ReturnType<typeof parseChangeDrivers>> {
+  const windows = comparisonWindows(opts);
+  if (!windows.prev) return null;
+  const supabase = await dbClient();
+  const base = {
+    p_brand_id: brandId,
+    p_models: modelFilterArray(opts?.model),
+    p_region: opts?.region ?? undefined,
+    p_same_prompts: opts?.samePrompts !== false,
+  };
+
+  let res;
+  if (windows.cur.kind === 'days') {
+    const { cur, prev } = deltaDayWindows(windows.cur.days);
+    res = await supabase.rpc('insights_change_drivers_daily', {
+      ...base,
+      p_cur_from: cur.dayFrom,
+      p_cur_to: cur.dayTo,
+      p_prev_from: prev.dayFrom,
+      p_prev_to: prev.dayTo,
+    });
+  } else {
+    const cur = windowBounds(windows.cur);
+    const prev = windowBounds(windows.prev);
+    res = await supabase.rpc('insights_change_drivers', {
+      ...base,
+      p_cur_from: cur.from,
+      p_cur_to: cur.to,
+      p_prev_from: prev.from,
+      p_prev_to: prev.to,
+      p_topic_id: opts?.topicId ?? undefined,
+    });
+  }
+  if (res.error) throw new Error(res.error.message);
+  return parseChangeDrivers(res.data);
+}
+
+/**
+ * Each platform in the comparison windows (VIS-006, VIS-008): the rows over
+ * every prompt, for the "By AI platform" table's values, and each platform's
+ * Visibility change for the summary line's movers and the table's Change
+ * column. With Same prompts on (the default) the changes count only the
+ * prompts answered in both windows, like every other change. All time reads
+ * the current window alone and has no changes.
+ */
+async function getPlatformData(
+  brandId: string,
+  opts?: InsightsFilterArgs,
+): Promise<{ rows: PlatformRow[]; changes: PlatformChange[] | null } | null> {
+  const windows = comparisonWindows(opts);
+  const supabase = await dbClient();
+  const base = {
+    p_brand_id: brandId,
+    p_models: modelFilterArray(opts?.model),
+    p_region: opts?.region ?? undefined,
+  };
+
+  // An absent bound is open; without a previous window only the current one is read.
+  const prev = windows.prev && windowBounds(windows.prev);
+  const read = async (samePrompts: boolean) => {
+    const res =
+      windows.cur.kind === 'days'
+        ? await supabase.rpc('insights_platform_compare_daily', {
+            ...base,
+            p_same_prompts: samePrompts,
+            p_cur_from: windows.cur.days.dayFrom,
+            p_cur_to: windows.cur.days.dayTo,
+            p_prev_from: prev?.from,
+            p_prev_to: prev?.to,
+          })
+        : await supabase.rpc('insights_platform_compare', {
+            ...base,
+            p_same_prompts: samePrompts,
+            p_cur_from: windows.cur.from,
+            p_cur_to: windows.cur.to,
+            p_prev_from: prev?.from,
+            p_prev_to: prev?.to,
+            p_topic_id: opts?.topicId ?? undefined,
+          });
+    if (res.error) throw new Error(res.error.message);
+    return parsePlatformRows(res.data);
+  };
+
+  const samePrompts = prev !== null && opts?.samePrompts !== false;
+  const [all, same] = await Promise.all([
+    read(false),
+    samePrompts ? read(true) : Promise.resolve(null),
+  ]);
+  const changeRows = samePrompts ? same : all;
+  if (!all || !changeRows) return null;
+  return { rows: all, changes: prev ? platformChanges(changeRows, resolveProvider) : null };
+}
+
+/**
+ * The comparison windows' totals over the prompts answered in both
+ * (VIS-002): the daily rollups for whole days, the raw rows for the 24h and
+ * topic views. Null without a previous window, or while the rollups behind it
+ * are not yet backfilled (00130) — the page then compares all prompts, as it
+ * always did. A failed read throws, so strict mode keeps it out of the cache.
+ */
+async function getSamePromptComparison(
+  brandId: string,
+  opts?: InsightsFilterArgs,
+  windows: ComparisonWindows = comparisonWindows(opts),
+): Promise<SamePromptComparison | null> {
+  if (!windows.prev) return null;
+  const supabase = await dbClient();
+  const base = {
+    p_brand_id: brandId,
+    p_models: modelFilterArray(opts?.model),
+    p_region: opts?.region ?? undefined,
+  };
+
+  let res;
+  if (windows.cur.kind === 'days') {
+    // Explicit bounds for both windows: the same days the card compares.
+    const { cur, prev } = deltaDayWindows(windows.cur.days);
+    res = await supabase.rpc('insights_same_prompt_compare_daily', {
+      ...base,
+      p_cur_from: cur.dayFrom,
+      p_cur_to: cur.dayTo,
+      p_prev_from: prev.dayFrom,
+      p_prev_to: prev.dayTo,
+    });
+  } else {
+    const cur = windowBounds(windows.cur);
+    const prev = windowBounds(windows.prev);
+    res = await supabase.rpc('insights_same_prompt_compare', {
+      ...base,
+      p_cur_from: cur.from,
+      p_cur_to: cur.to,
+      p_prev_from: prev.from,
+      p_prev_to: prev.to,
+      p_topic_id: opts?.topicId ?? undefined,
+    });
+  }
+  const { data, error } = res;
+  if (error) throw new Error(error.message);
+  return parseSamePromptComparison(data);
 }
 
 /**
@@ -902,6 +1319,7 @@ async function cachedAnchoredInsights(
       filterOpts.model ?? '',
       filterOpts.region ?? '',
       filterOpts.topicId ?? '',
+      filterOpts.samePrompts === false ? 'all-prompts' : 'same-prompts',
     ],
     { revalidate: 2 * 24 * 60 * 60, tags: [`insights:${brandId}`] },
   );
@@ -917,6 +1335,8 @@ export async function getInsightsData(
     dateFrom?: string;
     dateTo?: string;
     days?: DayWindow;
+    /** "Compare: Same prompts" (VIS-002); on unless explicitly false. */
+    samePrompts?: boolean;
     /** When the current view is filtered, check unfiltered data existence too. */
     checkUnfiltered?: boolean;
     /**
@@ -937,6 +1357,7 @@ export async function getInsightsData(
     dateFrom: anchored?.dateFrom ?? opts.dateFrom,
     dateTo: anchored?.dateTo ?? opts.dateTo,
     days: opts.days,
+    samePrompts: opts.samePrompts,
   };
 
   // An anchored window is served from the cache; a failure there (including a
@@ -948,12 +1369,12 @@ export async function getInsightsData(
       })
     : loadWindowedInsights(brandId, filterOpts, { strict: false });
 
-  // Quota (tracked prompts), recommendations and the unfiltered check depend
+  // Quota (tracked prompts), opportunities and the unfiltered check depend
   // on the caller's org and session, so they are read live on every open.
-  const [windowed, trackedPrompts, recommendations, unfilteredHasData] = await Promise.all([
+  const [windowed, trackedPrompts, opportunities, unfilteredHasData] = await Promise.all([
     windowedRead,
     getTrackedPromptsKpi(brandId, filterOpts),
-    getInsightsRecommendations(brandId),
+    getInsightsOpportunities(brandId),
     opts.checkUnfiltered ? brandHasResults(brandId) : Promise.resolve(null),
   ]);
 
@@ -965,7 +1386,7 @@ export async function getInsightsData(
   return {
     ...windowed,
     trackedPrompts,
-    recommendations,
+    opportunities,
     hasAnyData,
     trackingWindow,
   };
@@ -1391,7 +1812,6 @@ export async function getInsightsSummary(
     p_platform: undefined as string | undefined,
     p_models,
     p_region: opts?.region ?? undefined,
-    p_topic_id: opts?.topicId ?? undefined,
   };
 
   const { data: curData, error } = daily
@@ -1424,6 +1844,15 @@ export async function getInsightsSummary(
       prevMentions: null,
       prevCitations: null,
       sentimentChange: null,
+      citationRate: null,
+      citationRateChange: null,
+      negativeSentimentPct: null,
+      netSentiment: null,
+      netSentimentChange: null,
+      avgPosition: null,
+      avgPositionChange: null,
+      mentioningResults: 0,
+      positionedResults: 0,
     };
   }
 
@@ -1459,6 +1888,10 @@ export async function getInsightsSummary(
   let prevMentions: number | null = null;
   let prevCitations: number | null = null;
   let sentimentChange: number | null = null;
+  let citationRateChange: number | null = null;
+  let netSentimentChange: number | null = null;
+  let avgPositionChange: number | null = null;
+  const curRates = aggregateRates(cur);
 
   {
     let currentFrom: Date;
@@ -1534,6 +1967,12 @@ export async function getInsightsSummary(
       mentionsChange = percentageChange(curMentions, prevMentions);
       citationsChange = percentageChange(curCitations, prevCitations);
       sentimentChange = curSentimentPct - prevSentimentPct;
+
+      const deltaCur = aggregateRates(curWin);
+      const deltaPrev = aggregateRates(prevWin);
+      citationRateChange = rateChange(deltaCur.citationRate, deltaPrev.citationRate);
+      netSentimentChange = rateChange(deltaCur.netSentiment, deltaPrev.netSentiment);
+      avgPositionChange = rateChange(deltaCur.avgPosition, deltaPrev.avgPosition);
     }
   }
 
@@ -1551,6 +1990,66 @@ export async function getInsightsSummary(
     prevMentions,
     prevCitations,
     sentimentChange,
+    citationRate: curRates.citationRate,
+    citationRateChange,
+    negativeSentimentPct: curRates.negativePct,
+    netSentiment: curRates.netSentiment,
+    netSentimentChange,
+    avgPosition: curRates.avgPosition,
+    avgPositionChange,
+    mentioningResults: Number(cur.mentioning_results ?? 0),
+    positionedResults: Number(cur.position_count ?? 0),
+  };
+}
+
+/**
+ * The KPI cards' rates from one insights_aggregates window (00131). Before
+ * the rollups behind it are backfilled, negatives and positions are missing:
+ * Net sentiment and Avg. position read null rather than a partial value. A
+ * payload without the 00131 fields at all (migration not run) reads the same
+ * way, and so does Citation rate, instead of counting what's missing as 0.
+ */
+function aggregateRates(a: InsightsAggregates): KpiRates {
+  const rates = kpiRates({
+    answers: Number(a.total_results ?? 0),
+    citationAnswers: Number(a.citation_answers ?? 0),
+    mentioning: Number(a.mentioning_results ?? 0),
+    positive: Number(a.positive_count ?? 0),
+    negative: Number(a.negative_count ?? 0),
+    sumPosition:
+      a.sum_position === null || a.sum_position === undefined ? null : Number(a.sum_position),
+    positionCount: Number(a.position_count ?? 0),
+  });
+  return {
+    ...rates,
+    citationRate: a.citation_answers === undefined ? null : rates.citationRate,
+    ...(a.kpi_complete === true
+      ? {}
+      : { negativePct: null, netSentiment: null, avgPosition: null }),
+  };
+}
+
+/**
+ * All time has no earlier period of the same length (VIS-001), so the cards
+ * show no change. getInsightsSummary and getShareOfVoiceData keep comparing
+ * the trailing 7 days there for their other callers (the topic page).
+ */
+function withoutChanges(
+  summary: InsightsSummary,
+  sov: ShareOfVoiceData,
+): { summary: InsightsSummary; sov: ShareOfVoiceData } {
+  return {
+    summary: {
+      ...summary,
+      visibilityChange: null,
+      mentionsChange: null,
+      citationsChange: null,
+      sentimentChange: null,
+      citationRateChange: null,
+      netSentimentChange: null,
+      avgPositionChange: null,
+    },
+    sov: { ...sov, overallSovChange: null },
   };
 }
 
@@ -1934,6 +2433,38 @@ function foldAiVisibility(raw: unknown): AiVisibilityWindow {
   };
 }
 
+/**
+ * ai_visibility_aggregates over one comparison window (VIS-001): the daily
+ * rollups for whole days, the raw rows for a timestamp range. The card, the
+ * breakdown panel and the leaderboard read their Visibility through this, so
+ * the same window always yields the same number.
+ */
+function aiVisibilityWindow(
+  supabase: Awaited<ReturnType<typeof dbClient>>,
+  brandId: string,
+  opts: { model?: string; region?: string; topicId?: string } | undefined,
+  win: MetricWindow,
+) {
+  const base = {
+    p_brand_id: brandId,
+    p_platform: undefined as string | undefined,
+    p_models: modelFilterArray(opts?.model),
+    p_region: opts?.region ?? undefined,
+  };
+  return win.kind === 'days'
+    ? supabase.rpc('ai_visibility_aggregates_daily', {
+        ...base,
+        p_day_from: win.days.dayFrom,
+        p_day_to: win.days.dayTo,
+      })
+    : supabase.rpc('ai_visibility_aggregates', {
+        ...base,
+        p_date_from: win.from,
+        p_date_to: win.to,
+        p_topic_id: opts?.topicId ?? undefined,
+      });
+}
+
 export interface CompetitorComparisonEntry {
   name: string;
   avgVisibilityScore: number;
@@ -2056,7 +2587,6 @@ export async function getCompetitorComparison(
     p_platform: undefined as string | undefined,
     p_models,
     p_region: opts?.region ?? undefined,
-    p_topic_id: opts?.topicId ?? undefined,
   };
 
   // The heaviest reads on the page: competitor_aggregates over the raw rows
@@ -2075,25 +2605,16 @@ export async function getCompetitorComparison(
           p_date_from: from,
           p_date_to: to,
         });
-  const visRpc = (win: { dayFrom?: string; dayTo?: string } | null, from?: string, to?: string) =>
-    win
-      ? supabase.rpc('ai_visibility_aggregates_daily', {
-          ...dailyArgs,
-          p_day_from: win.dayFrom,
-          p_day_to: win.dayTo,
-        })
-      : supabase.rpc('ai_visibility_aggregates', {
-          ...baseArgs,
-          p_date_from: from,
-          p_date_to: to,
-        });
+  // Scores and their change use the card's windows (VIS-001), so the
+  // brand's own row always matches the Visibility card.
+  const visWindows = comparisonWindows(opts);
 
   // Brand name + the displayed-period aggregates fire in parallel — all
   // are needed before we can shape the response.
   const [{ data: brand }, { data: aggDisplay, error: aggErr }, visDisplayRes] = await Promise.all([
     supabase.from('brands').select('name').eq('id', brandId).single(),
     compRpc(daily, opts?.dateFrom ?? undefined, expandDateToEndOfDay(opts?.dateTo) ?? undefined),
-    visRpc(daily, opts?.dateFrom ?? undefined, expandDateToEndOfDay(opts?.dateTo) ?? undefined),
+    aiVisibilityWindow(supabase, brandId, opts, visWindows.cur),
   ]);
   if (aggErr) throw new Error(aggErr.message);
   if (visDisplayRes.error) throw new Error(visDisplayRes.error.message);
@@ -2134,14 +2655,15 @@ export async function getCompetitorComparison(
     deltaDays
       ? compRpc(deltaDays.prev)
       : compRpc(null, prevFrom.toISOString(), currentFrom.toISOString()),
-    deltaDays
-      ? visRpc(deltaDays.prev)
-      : visRpc(null, prevFrom.toISOString(), currentFrom.toISOString()),
+    visWindows.prev
+      ? aiVisibilityWindow(supabase, brandId, opts, visWindows.prev)
+      : Promise.resolve({ data: null, error: new Error('no previous window') }),
   ]);
   if (curRes.error) throw new Error(curRes.error.message);
   if (prevRes.error) throw new Error(prevRes.error.message);
   // Score delta compares the displayed window against the one immediately
-  // before it; a previous-window failure only costs the delta, not the page.
+  // before it (none for All time); a previous-window failure only costs the
+  // delta, not the page.
   const visPrev = visPrevRes.error ? null : foldAiVisibility(visPrevRes.data);
   const scoreDiff = (cur: number | null, prev: number | null | undefined): number | null => {
     if (cur === null || prev === null || prev === undefined) return null;
@@ -2360,7 +2882,6 @@ export async function getShareOfVoiceData(
           p_region: opts?.region ?? undefined,
           p_day_from: win.dayFrom,
           p_day_to: win.dayTo,
-          p_topic_id: opts?.topicId ?? undefined,
         })
       : supabase.rpc('share_of_voice_aggregates', {
           ...baseArgs,
@@ -2495,6 +3016,8 @@ export interface VisibilityRateTrendEntity {
 export interface VisibilityRateTrendPoint {
   /** Short label for the X axis, e.g. "Jul 28". */
   date: string;
+  /** The UTC day it covers, 'YYYY-MM-DD' (VIS-007: markers are placed by day). */
+  day: string;
   /** Per-entity rate for the day, keyed by entity key. 0 = tracked but not visible. */
   values: Record<string, number>;
 }
@@ -2504,9 +3027,18 @@ export interface VisibilityRateTrendSummary {
   rate: number;
   /** Rate over the equal-length window immediately before; null without data. */
   prevRate: number | null;
-  /** rate − prevRate in points, one decimal; null when prevRate is null. */
+  /**
+   * rate − prevRate in points, one decimal; null when prevRate is null. With
+   * Same prompts on (VIS-002) the Insights page replaces it with the change
+   * on the prompts answered in both windows, so it no longer equals
+   * rate − prevRate there.
+   */
   change: number | null;
-  /** ISO bounds of the previous window, for the "vs <range>" label. */
+  /**
+   * Inclusive bounds of the previous window, for the "vs <range>" label:
+   * 'YYYY-MM-DD' UTC days for whole-day windows, ISO timestamps for the 24h
+   * and topic views. Empty when there is no previous window (All time).
+   */
   prevFrom: string;
   prevTo: string;
 }
@@ -2515,6 +3047,8 @@ export interface VisibilityRateTrendData {
   entities: VisibilityRateTrendEntity[];
   points: VisibilityRateTrendPoint[];
   summary: VisibilityRateTrendSummary;
+  /** Competitors pinned on the chart (VIS-007), in pin order; ids of deleted ones dropped. */
+  pinned: string[];
 }
 
 interface VisibilityRateTrendRow {
@@ -2556,6 +3090,9 @@ export async function getVisibilityRateTrend(
 ): Promise<VisibilityRateTrendData> {
   const supabase = await dbClient();
   const daily = dailyWindow(opts);
+  // The headline and its change: the same windows the breakdown panel and
+  // the leaderboard use (VIS-001).
+  const windows = comparisonWindows(opts);
   // No explicit lower bound = the "All time" preset: the summary covers
   // everything (matching the leaderboard) and the chart plots an expanding
   // cumulative window instead of a fixed-length rolling one.
@@ -2565,8 +3102,8 @@ export async function getVisibilityRateTrend(
   const boundedFrom = opts?.dateFrom ?? undefined;
   const dateTo = expandDateToEndOfDay(opts?.dateTo) ?? new Date().toISOString();
 
-  // Equal-length window immediately before, for the headline delta
-  // (undefined for all-time — there is no comparable previous window).
+  // On the raw path the chart reads one window further back, to warm up the
+  // rolling window of its earliest points (all-time needs none).
   const windowMs = boundedFrom
     ? new Date(dateTo).getTime() - new Date(boundedFrom).getTime()
     : null;
@@ -2574,7 +3111,6 @@ export async function getVisibilityRateTrend(
     boundedFrom && windowMs !== null
       ? new Date(new Date(boundedFrom).getTime() - windowMs).toISOString()
       : undefined;
-  const prevTo = boundedFrom;
 
   const rateArgs = (from: string | undefined, to: string) => ({
     p_brand_id: brandId,
@@ -2592,16 +3128,16 @@ export async function getVisibilityRateTrend(
     p_region: opts?.region ?? undefined,
     p_day_from: dayFrom,
     p_day_to: dayTo,
-    p_topic_id: opts?.topicId ?? undefined,
   });
-  // Day-window equivalents of the three timestamp windows above: display,
-  // warm-up-extended fetch range, and the previous window for the delta.
+  // The chart's warm-up range on the rollup path starts at the previous
+  // window's first day.
   const deltaDays = daily?.dayFrom ? deltaDayWindows(daily) : null;
 
   const [
     { data: brand },
     { data: brandDomains },
     { data: competitors },
+    { data: pins },
     rpcRes,
     visCurRes,
     visPrevRes,
@@ -2609,25 +3145,19 @@ export async function getVisibilityRateTrend(
     supabase.from('brands').select('name, logo_url').eq('id', brandId).single(),
     supabase.from('brand_domains').select('domain, is_primary').eq('brand_id', brandId),
     supabase.from('competitors').select('id, name, domain').eq('brand_id', brandId),
+    // Read on its own: without the pins (00136) the chart falls back to the
+    // strongest competitors, and the brand's name and logo still load.
+    supabase.from('brands').select('insights_pinned_competitors').eq('id', brandId).single(),
     // The chart plots a rolling window per day, so the earliest displayed
     // days need trailing data from before the display range (all-time needs
     // no warm-up — the window expands from the first row).
     daily
       ? supabase.rpc('visibility_rate_trend_daily', dayArgs(deltaDays?.prev.dayFrom, daily.dayTo))
       : supabase.rpc('visibility_rate_trend', rateArgs(prevFrom, dateTo)),
-    daily
-      ? supabase.rpc('ai_visibility_aggregates_daily', dayArgs(daily.dayFrom, daily.dayTo))
-      : supabase.rpc('ai_visibility_aggregates', rateArgs(boundedFrom, dateTo)),
-    daily
-      ? deltaDays
-        ? supabase.rpc(
-            'ai_visibility_aggregates_daily',
-            dayArgs(deltaDays.prev.dayFrom, deltaDays.prev.dayTo),
-          )
-        : Promise.resolve({ data: null, error: new Error('no previous window') })
-      : prevFrom && prevTo
-        ? supabase.rpc('ai_visibility_aggregates', rateArgs(prevFrom, prevTo))
-        : Promise.resolve({ data: null, error: new Error('no previous window') }),
+    aiVisibilityWindow(supabase, brandId, opts, windows.cur),
+    windows.prev
+      ? aiVisibilityWindow(supabase, brandId, opts, windows.prev)
+      : Promise.resolve({ data: null, error: new Error('no previous window') }),
   ]);
   if (rpcRes.error) throw new Error(rpcRes.error.message);
   if (visCurRes.error) throw new Error(visCurRes.error.message);
@@ -2659,7 +3189,9 @@ export async function getVisibilityRateTrend(
   // point equal the headline card exactly — the chart's inside and outside
   // can never disagree — and every earlier point answers "what would the
   // headline have shown that day".
-  const windowDays = windowMs !== null ? Math.max(1, Math.round(windowMs / 86_400_000)) : null;
+  // Whole-day windows count their days: rounding the elapsed time made the
+  // 30d chart's newest point cover 29 days before noon UTC.
+  const windowDays = windows.windowDays;
   const dayMs = (day: string) => new Date(day + 'T00:00:00Z').getTime();
   const displayFromMs = boundedFrom ? new Date(boundedFrom).getTime() : Number.NEGATIVE_INFINITY;
 
@@ -2743,6 +3275,7 @@ export async function getVisibilityRateTrend(
         month: 'short',
         day: 'numeric',
       }),
+      day: row.day,
       values,
     });
   }
@@ -2752,18 +3285,23 @@ export async function getVisibilityRateTrend(
   // equal-length window. Same RPC the leaderboard uses.
   const visCur = foldAiVisibility(visCurRes.data);
   const visPrev = visPrevRes.error ? null : foldAiVisibility(visPrevRes.data);
-  const headlineScore = visCur.brandScore ?? 0;
-  const prevScore = visPrev?.brandScore ?? null;
+  const headline = visibilityChange(visCur.brandScore, visPrev?.brandScore ?? null);
 
+  // The window the change was measured against: 'YYYY-MM-DD' days for the
+  // rollup presets, ISO timestamps for the 24h and topic views.
+  const prevWin = windows.prev;
   const summary: VisibilityRateTrendSummary = {
-    rate: headlineScore,
-    prevRate: prevScore,
-    change: prevScore === null ? null : Math.round((headlineScore - prevScore) * 10) / 10,
-    prevFrom: prevFrom ?? '',
-    prevTo: prevTo ?? '',
+    rate: headline.value,
+    prevRate: headline.prev,
+    change: headline.change,
+    prevFrom: prevWin ? windowBounds(prevWin).from : '',
+    prevTo: prevWin ? windowBounds(prevWin).to : '',
   };
 
-  return { entities, points, summary };
+  const competitorIds = new Set((competitors ?? []).map((c) => c.id));
+  const pinned = (pins?.insights_pinned_competitors ?? []).filter((id) => competitorIds.has(id));
+
+  return { entities, points, summary, pinned };
 }
 
 // ─── Head-to-Head Competitor Comparison ─────────────────────────────────────
@@ -2859,334 +3397,186 @@ export async function getHeadToHeadRuns(
 
 // ─── Insights Metric Breakdown (Root-Cause Drilldown) ─────────────────────────
 
-export type BreakdownMetric = 'mentions' | 'visibility';
+export type {
+  BreakdownFilters,
+  BreakdownMetric,
+  BreakdownRow,
+  InsightsBreakdown,
+} from '@/lib/insights-breakdown';
 
 function formatPlatformLabel(slug: string): string {
   return PLATFORM_LABELS[slug] ?? slug;
 }
 
-export interface BreakdownRow {
-  /** Unique identifier for the row: prompt_id / platform name / topic_id. */
-  id: string;
-  /** Display label: prompt text / platform name / topic name. */
-  label: string;
-  /** Optional secondary label (e.g. topic name for a prompt). */
-  sublabel?: string;
-  /** Metric value in the current window. */
-  cur: number;
-  /** Metric value in the previous window. */
-  prev: number;
-  /** Absolute change (cur - prev). */
-  delta: number;
-  /** Percentage change. Null when previous is zero (use delta instead). */
-  deltaPct: number | null;
-  /** Number of result rows that contributed in the current window. */
-  curRuns: number;
-  /** Number of result rows that contributed in the previous window. */
-  prevRuns: number;
-}
-
-export interface InsightsBreakdown {
-  metric: BreakdownMetric;
-  curTotal: number;
-  prevTotal: number;
-  delta: number;
-  deltaPct: number | null;
-  /** Number of full calendar days covered by each comparison window. */
-  windowDays: number;
-  byPrompt: BreakdownRow[];
-  byPlatform: BreakdownRow[];
-  byTopic: BreakdownRow[];
-  /** One-line rule-based root-cause summary for the drop/rise. */
-  rootCause: string;
-}
-
-/** Aggregate a metric over a set of raw prompt_results rows. */
-function aggregateMetric(
-  rows: Array<{
-    mention_count: number;
-    citation_count?: number;
-    visibility_score: number;
-    mention_position?: number | null;
-  }>,
-  metric: BreakdownMetric,
-): { value: number; runs: number } {
-  if (metric === 'visibility') {
-    if (rows.length === 0) return { value: 0, runs: 0 };
-    // AI Visibility Score over the group's answers — the drill-down explains
-    // the same number the KPI card shows, per prompt/platform/topic.
-    let mentionAnswers = 0;
-    let citationAnswers = 0;
-    let posSum = 0;
-    let posN = 0;
-    for (const r of rows) {
-      if ((r.mention_count ?? 0) > 0) mentionAnswers++;
-      if ((r.citation_count ?? 0) > 0) citationAnswers++;
-      const pos = r.mention_position;
-      if (pos !== null && pos !== undefined && pos > 0) {
-        posSum += 1 / pos;
-        posN++;
-      }
-    }
-    return {
-      value:
-        computeAiVisibilityScore({
-          answers: rows.length,
-          mentionAnswers,
-          citationAnswers,
-          positionFactor: posN > 0 ? posSum / posN : null,
-        }) ?? 0,
-      runs: rows.length,
-    };
-  }
-  const value = rows.reduce((s, r) => s + (r.mention_count ?? 0), 0);
-  return { value, runs: rows.length };
-}
-
-function computeDelta(
-  cur: number,
-  prev: number,
-  metric: BreakdownMetric,
-): { delta: number; deltaPct: number | null } {
-  if (metric === 'visibility') {
-    return {
-      delta: Math.round((cur - prev) * 10) / 10,
-      deltaPct: null,
-    };
-  }
-  const delta = cur - prev;
-  const deltaPct = prev > 0 ? Math.round((delta / prev) * 100) : null;
-  return { delta, deltaPct };
-}
-
 /**
- * Returns a per-prompt / per-platform / per-topic breakdown comparing the
- * current window with the previous window of equal duration.
+ * Per-prompt / per-platform / per-topic breakdown of the Visibility or
+ * Mentions card, comparing the window on screen with the one before it.
  *
  * Used by the Insights KPI drill-down Sheet to surface which entities drove a
  * metric change (e.g. "Mentions dropped 12% because prompt X lost 84 mentions
- * on ChatGPT"). Windows mirror `getInsightsSummary` — when `dateFrom` is
- * provided the current window spans [dateFrom, dateTo ?? now] and the previous
- * window has the same length immediately before; otherwise both are 7 days.
+ * on ChatGPT"). VIS-001: the windows are the card's own (comparisonWindows),
+ * the totals come from the card's own aggregates, and the slices are
+ * aggregated in Postgres (insights_breakdown_groups, 00129) — the rows used
+ * to be fetched raw, capped at 1,000 per window, which scored an arbitrary
+ * sample instead of the card's answers.
  */
 export async function getInsightsBreakdown(
   brandId: string,
   metric: BreakdownMetric,
-  opts?: {
-    model?: string;
-    region?: string;
-    dateFrom?: string;
-    dateTo?: string;
-    topicId?: string;
-  },
+  opts?: BreakdownFilters,
+  /** The UI's locale, for the numbers in the root-cause sentence (VIS-005). */
+  locale = 'en',
 ): Promise<InsightsBreakdown> {
+  const f = numberFormat(locale);
   const supabase = await dbClient();
+  const windows = comparisonWindows(opts);
+  const p_models = modelFilterArray(opts?.model);
+  const p_region = opts?.region ?? undefined;
 
-  let currentFrom: Date;
-  let currentTo: Date;
-
-  if (opts?.dateFrom) {
-    currentFrom = new Date(opts.dateFrom);
-    currentTo = opts.dateTo ? new Date(opts.dateTo) : new Date();
-  } else {
-    currentTo = new Date();
-    currentFrom = new Date();
-    currentFrom.setDate(currentFrom.getDate() - 7);
-  }
-
-  const duration = currentTo.getTime() - currentFrom.getTime();
-  const prevFrom = new Date(currentFrom.getTime() - duration);
-  const prevTo = currentFrom;
-  const windowDays = Math.max(1, Math.round(duration / (24 * 60 * 60 * 1000)));
-
-  const { query: curQuery } = await buildResultsQuery(brandId, {
-    ...opts,
-    dateFrom: currentFrom.toISOString(),
-    dateTo: currentTo.toISOString(),
-  });
-  const { query: prevQuery } = await buildResultsQuery(brandId, {
-    ...opts,
-    dateFrom: prevFrom.toISOString(),
-    dateTo: prevTo.toISOString(),
-  });
-
-  const [curRes, prevRes] = await Promise.all([curQuery, prevQuery]);
-  if (curRes.error) throw new Error(curRes.error.message);
-  if (prevRes.error) throw new Error(prevRes.error.message);
-
-  type Row = {
-    prompt_id: string;
-    platform: string;
-    mention_count: number;
-    citation_count: number;
-    visibility_score: number;
-    mention_position: number | null;
-  };
-  const curRows = (curRes.data ?? []) as unknown as Row[];
-  const prevRows = (prevRes.data ?? []) as unknown as Row[];
-
-  const allPromptIds = new Set<string>();
-  for (const r of curRows) allPromptIds.add(r.prompt_id);
-  for (const r of prevRows) allPromptIds.add(r.prompt_id);
-
-  // Resolve prompt text + topic for every participating prompt.
-  const { data: promptRowsRaw } =
-    allPromptIds.size > 0
-      ? await supabase
-          .from('prompts')
-          .select('id, text, topic_id')
-          .in('id', [...allPromptIds])
-      : { data: [] as unknown[] };
-
-  const promptInfo = new Map<string, { text: string; topicId: string | null }>();
-  const topicIds = new Set<string>();
-  for (const p of (promptRowsRaw ?? []) as Array<{
-    id: string;
-    text: string;
-    topic_id: string | null;
-  }>) {
-    promptInfo.set(p.id, { text: p.text, topicId: p.topic_id });
-    if (p.topic_id) topicIds.add(p.topic_id);
-  }
-
-  const { data: topicRowsRaw } =
-    topicIds.size > 0
-      ? await supabase
-          .from('topics')
-          .select('id, name')
-          .in('id', [...topicIds])
-      : { data: [] as unknown[] };
-
-  const topicNameById = new Map<string, string>();
-  for (const t of (topicRowsRaw ?? []) as Array<{ id: string; name: string }>) {
-    topicNameById.set(t.id, t.name);
-  }
-
-  // ─── Group rows by prompt / platform / topic ────────────────────────────────
-  function groupBy<K extends string>(rows: Row[], keyFn: (r: Row) => K) {
-    const m = new Map<K, Row[]>();
-    for (const r of rows) {
-      const k = keyFn(r);
-      const arr = m.get(k) ?? [];
-      arr.push(r);
-      m.set(k, arr);
-    }
-    return m;
-  }
-
-  function mergeKeys<K>(a: Map<K, unknown>, b: Map<K, unknown>): K[] {
-    const s = new Set<K>();
-    for (const k of a.keys()) s.add(k);
-    for (const k of b.keys()) s.add(k);
-    return [...s];
-  }
-
-  function buildRows(
-    curMap: Map<string, Row[]>,
-    prevMap: Map<string, Row[]>,
-    resolver: (key: string) => { id: string; label: string; sublabel?: string },
-  ): BreakdownRow[] {
-    const keys = mergeKeys(curMap, prevMap);
-    const rows: BreakdownRow[] = keys.map((key) => {
-      const curAgg = aggregateMetric(curMap.get(key) ?? [], metric);
-      const prevAgg = aggregateMetric(prevMap.get(key) ?? [], metric);
-      const { delta, deltaPct } = computeDelta(curAgg.value, prevAgg.value, metric);
-      const { id, label, sublabel } = resolver(key);
-      return {
-        id,
-        label,
-        sublabel,
-        cur: curAgg.value,
-        prev: prevAgg.value,
-        delta,
-        deltaPct,
-        curRuns: curAgg.runs,
-        prevRuns: prevAgg.runs,
-      };
+  const groupsFor = (win: MetricWindow) =>
+    supabase.rpc('insights_breakdown_groups', {
+      p_brand_id: brandId,
+      p_models,
+      p_region,
+      p_topic_id: opts?.topicId ?? undefined,
+      ...(win.kind === 'days'
+        ? { p_day_from: win.days.dayFrom, p_day_to: win.days.dayTo }
+        : { p_date_from: win.from, p_date_to: win.to }),
     });
-    // Sort: biggest drops first, then biggest gains, untouched rows last.
-    rows.sort((a, b) => a.delta - b.delta);
-    return rows;
-  }
+  // The headline numbers: exactly what the Visibility and Mentions cards read.
+  const totalFor = async (win: MetricWindow): Promise<number | null> => {
+    if (metric === 'visibility') {
+      const { data, error } = await aiVisibilityWindow(supabase, brandId, opts, win);
+      if (error) throw new Error(error.message);
+      return foldAiVisibility(data).brandScore;
+    }
+    const { data, error } =
+      win.kind === 'days'
+        ? await supabase.rpc('insights_aggregates_daily', {
+            p_brand_id: brandId,
+            p_platform: undefined,
+            p_models,
+            p_region,
+            p_day_from: win.days.dayFrom,
+            p_day_to: win.days.dayTo,
+          })
+        : await supabase.rpc('insights_aggregates', {
+            p_brand_id: brandId,
+            p_platform: undefined,
+            p_models,
+            p_region,
+            p_date_from: win.from,
+            p_date_to: win.to,
+            p_prompt_id: undefined,
+            p_topic_id: opts?.topicId ?? undefined,
+          });
+    if (error) throw new Error(error.message);
+    // Null for a window with no answers: the Mentions card shows no change
+    // unless both windows have some.
+    const agg = data as unknown as InsightsAggregates | null;
+    return agg && agg.total_results > 0 ? agg.total_mentions : null;
+  };
 
-  const curByPrompt = groupBy(curRows, (r) => r.prompt_id);
-  const prevByPrompt = groupBy(prevRows, (r) => r.prompt_id);
-  const byPrompt = buildRows(curByPrompt, prevByPrompt, (pid) => {
-    const info = promptInfo.get(pid);
-    const topicName = info?.topicId ? topicNameById.get(info.topicId) : undefined;
-    return {
-      id: pid,
-      label: info?.text ?? 'Unknown prompt',
-      sublabel: topicName,
-    };
-  });
+  const [curGroupsRes, prevGroupsRes, curScore, prevScore, same] = await Promise.all([
+    groupsFor(windows.cur),
+    windows.prev ? groupsFor(windows.prev) : Promise.resolve(null),
+    totalFor(windows.cur),
+    windows.prev ? totalFor(windows.prev) : Promise.resolve(null),
+    // Without it the panel compares all prompts, as the cards then do.
+    getSamePromptComparison(brandId, opts, windows).catch((err) => {
+      console.error('[insights] same-prompt comparison failed', err);
+      return null;
+    }),
+  ]);
+  if (curGroupsRes.error) throw new Error(curGroupsRes.error.message);
+  if (prevGroupsRes?.error) throw new Error(prevGroupsRes.error.message);
 
-  const curByPlatform = groupBy(curRows, (r) => r.platform);
-  const prevByPlatform = groupBy(prevRows, (r) => r.platform);
-  const byPlatform = buildRows(curByPlatform, prevByPlatform, (plat) => ({
-    id: plat,
-    label: formatPlatformLabel(plat),
-  }));
+  // "Same prompts" (VIS-002): the change and every row compare only the
+  // prompts answered in both windows, exactly as the cards do.
+  const useSame = opts?.samePrompts !== false && same !== null;
+  const comparison: PromptComparison | null = same && {
+    basis: useSame ? 'same' : 'all',
+    samePrompts: same.samePrompts,
+    newPrompts: same.newPrompts,
+    droppedPrompts: same.droppedPrompts,
+  };
 
-  const curByTopic = groupBy(curRows, (r) => {
-    const info = promptInfo.get(r.prompt_id);
-    return info?.topicId ?? '__uncategorized__';
-  });
-  const prevByTopic = groupBy(prevRows, (r) => {
-    const info = promptInfo.get(r.prompt_id);
-    return info?.topicId ?? '__uncategorized__';
-  });
-  const byTopic = buildRows(curByTopic, prevByTopic, (tid) => ({
-    id: tid,
-    label:
-      tid === '__uncategorized__' ? 'Uncategorized' : (topicNameById.get(tid) ?? 'Unknown topic'),
-  }));
-
-  // ─── Totals + root-cause summary ────────────────────────────────────────────
-  const curTotalAgg = aggregateMetric(curRows, metric);
-  const prevTotalAgg = aggregateMetric(prevRows, metric);
-  const { delta: totalDelta, deltaPct: totalDeltaPct } = computeDelta(
-    curTotalAgg.value,
-    prevTotalAgg.value,
+  const { byPrompt, byPlatform, byTopic } = buildBreakdownRows(
     metric,
+    parseBreakdownGroups(curGroupsRes.data),
+    prevGroupsRes ? parseBreakdownGroups(prevGroupsRes.data) : null,
+    formatPlatformLabel,
+    { samePrompts: useSame },
   );
 
-  const metricLabel =
-    metric === 'visibility' ? 'Visibility' : metric === 'mentions' ? 'Mentions' : 'Citations';
+  // Totals and their change, worked out the way each card does.
+  let curTotal: number;
+  let comparedCur: number;
+  let prevTotal: number | null;
+  let totalDelta: number | null;
+  let totalDeltaPct: number | null;
+  const changes = useSame && same ? samePromptChanges(same) : null;
+  if (metric === 'visibility') {
+    const v = visibilityChange(curScore, prevScore);
+    curTotal = v.value;
+    comparedCur = changes ? (changes.visibility.cur ?? 0) : v.value;
+    prevTotal = changes ? changes.visibility.prev : v.prev;
+    totalDelta = changes ? changes.visibility.change : v.change;
+    totalDeltaPct = null;
+  } else if (changes) {
+    curTotal = curScore ?? 0;
+    comparedCur = changes.mentions.cur;
+    prevTotal = changes.mentions.prev;
+    totalDeltaPct = changes.mentionsChange;
+    totalDelta = totalDeltaPct === null ? null : comparedCur - prevTotal;
+  } else {
+    curTotal = curScore ?? 0;
+    comparedCur = curTotal;
+    prevTotal = prevScore;
+    ({ delta: totalDelta, deltaPct: totalDeltaPct } =
+      curScore === null
+        ? { delta: null, deltaPct: null }
+        : breakdownDelta(curTotal, prevTotal, metric));
+  }
 
-  const isDrop = totalDelta < 0;
-  const isFlat = totalDelta === 0;
-
-  // Select the biggest contributor in the same direction as the overall change.
-  // `buildRows` sorts ascending by delta so byPrompt[0] is the largest drop and
-  // byPrompt[last] is the largest gain.
-  const topPrompt = isDrop ? byPrompt[0] : byPrompt[byPrompt.length - 1];
-  const topPlatform = isDrop ? byPlatform[0] : byPlatform[byPlatform.length - 1];
-
-  const promptContributes = !!topPrompt && (isDrop ? topPrompt.delta < 0 : topPrompt.delta > 0);
-  const platformContributes =
-    !!topPlatform && (isDrop ? topPlatform.delta < 0 : topPlatform.delta > 0);
+  // ─── Root-cause summary ─────────────────────────────────────────────────────
+  const metricLabel = metric === 'visibility' ? 'Visibility' : 'Mentions';
+  const windowDays = windows.windowDays;
+  const topPrompt = pickDriver(byPrompt, totalDelta);
+  const topPlatform = pickDriver(byPlatform, totalDelta);
 
   let rootCause: string;
-  if (isFlat) {
+  if (!windows.prev) {
+    rootCause = `${metricLabel} over all time; there is no earlier period of the same length to compare.`;
+  } else if (useSame && same?.samePrompts === 0) {
+    rootCause = `No prompt was answered in both ${windowDays}-day windows, so there is no like-for-like change yet.`;
+  } else if (totalDelta === null && useSame) {
+    // Shared prompts were answered in both windows, so the change is missing
+    // only because the previous count was 0 (no percentage from 0).
+    rootCause = `No ${metricLabel.toLowerCase()} on the shared prompts in the previous ${windowDays}-day window, so there is no percentage change.`;
+  } else if (totalDelta === null) {
+    rootCause = `No answers in one of the two ${windowDays}-day windows, so there is no change to explain yet.`;
+  } else if (totalDelta === 0) {
     rootCause = `${metricLabel} held steady vs the previous ${windowDays}-day window.`;
-  } else if (!promptContributes) {
+  } else if (!topPrompt) {
     const dir = totalDelta > 0 ? 'rose' : 'fell';
-    const magnitude = formatTotalMagnitude(totalDelta, totalDeltaPct, metric);
+    const magnitude = formatTotalMagnitude(totalDelta, totalDeltaPct, metric, f);
     rootCause = `${metricLabel} ${dir} ${magnitude} vs the previous ${windowDays}d — the change is spread evenly across prompts, no single driver.`;
   } else {
-    const headline = isDrop ? 'Biggest drop' : 'Biggest gain';
-    const promptClause = `"${truncate(topPrompt!.label, 60)}" ${formatContribution(topPrompt!, metric)}`;
-    const platformClause = platformContributes
-      ? ` Top platform ${isDrop ? 'drop' : 'gain'}: ${topPlatform!.label} ${formatContribution(topPlatform!, metric)}.`
+    const headline = totalDelta < 0 ? 'Biggest drop' : 'Biggest gain';
+    const promptClause = `"${truncate(topPrompt.label, 60)}" ${formatContribution(topPrompt, metric, f)}`;
+    const platformClause = topPlatform
+      ? ` Top platform ${totalDelta < 0 ? 'drop' : 'gain'}: ${topPlatform.label} ${formatContribution(topPlatform, metric, f)}.`
       : '';
     rootCause = `${headline}: ${promptClause}.${platformClause}`;
   }
 
   return {
     metric,
-    curTotal: curTotalAgg.value,
-    prevTotal: prevTotalAgg.value,
+    curTotal,
+    comparedCur,
+    prevTotal,
+    comparison,
     delta: totalDelta,
     deltaPct: totalDeltaPct,
     windowDays,
@@ -3204,39 +3594,39 @@ function truncate(s: string, max: number): string {
 /**
  * Format a single contributor's delta as a human sentence fragment, e.g.:
  *   - mentions:  "lost 84 mentions (−38%)"   or  "gained 12 mentions"
- *   - citations: "lost 7 citations (−15%)"
  *   - visibility: "dropped 2.1 pts"           or  "rose 2.1 pts"
  */
-function formatContribution(row: BreakdownRow, metric: BreakdownMetric): string {
-  const isLoss = row.delta < 0;
-  const abs = Math.abs(row.delta);
+function formatContribution(row: BreakdownRow, metric: BreakdownMetric, f: NumberFormat): string {
+  const delta = row.delta ?? 0;
+  const isLoss = delta < 0;
+  const abs = Math.abs(delta);
 
   if (metric === 'visibility') {
     const verb = isLoss ? 'dropped' : 'rose';
-    const value = Math.round(abs * 10) / 10;
-    return `${verb} ${value} pts`;
+    return `${verb} ${f.number(Math.round(abs * 10) / 10)} pts`;
   }
 
   const verb = isLoss ? 'lost' : 'gained';
-  const core = `${verb} ${abs.toLocaleString('en-US')} mentions`;
+  const core = `${verb} ${f.number(abs)} mentions`;
   if (row.deltaPct === null) return core;
   const sign = row.deltaPct < 0 ? '−' : '+';
-  return `${core} (${sign}${Math.abs(row.deltaPct)}%)`;
+  return `${core} (${sign}${f.percent(Math.abs(row.deltaPct))})`;
 }
 
 function formatTotalMagnitude(
   delta: number,
   deltaPct: number | null,
   metric: BreakdownMetric,
+  f: NumberFormat,
 ): string {
   const abs = Math.abs(delta);
   if (metric === 'visibility') {
-    return `${Math.round(abs * 10) / 10} pts`;
+    return `${f.number(Math.round(abs * 10) / 10)} pts`;
   }
-  const core = `${abs.toLocaleString('en-US')} mentions`;
+  const core = `${f.number(abs)} mentions`;
   if (deltaPct === null) return core;
   const sign = deltaPct < 0 ? '−' : '+';
-  return `${core} (${sign}${Math.abs(deltaPct)}%)`;
+  return `${core} (${sign}${f.percent(Math.abs(deltaPct))})`;
 }
 
 // ─── Topic detail bundle (#312) ───────────────────────────────────────────
@@ -3263,25 +3653,36 @@ export interface TopicDetailData {
  * Output is identical to the old per-call results — this is a perf refactor.
  */
 export async function getTopicDetail(brandId: string, topicId: string): Promise<TopicDetailData> {
-  // All time, as whole UTC days: the empty window routes every aggregate to
-  // the daily rollups (00139), whose cost follows days in the window rather
-  // than the topic's accumulated results. Raw, these reads ran 5-15s on a
-  // 91-prompt topic — past the authenticated role's 8s statement timeout.
-  // Everything runs on the caller's own client, so RLS scopes every read.
-  const allTime: DayWindow = {};
-  const [topic, summary, rateTrend, sov, competitors, results] = await Promise.all([
-    getTopicById(brandId, topicId),
-    getInsightsSummary(brandId, { topicId, days: allTime }),
-    // #685 — use the new-formula RPC so the trend sits on the same 0-100
-    // scale as the headline AI Visibility Score. getVisibilityTrend
-    // averaged raw visibility_score over all answers (incl. 0-scored
-    // absent-brand rows).
-    getVisibilityRateTrend(brandId, { topicId, days: allTime }),
-    getShareOfVoiceData(brandId, { topicId, days: allTime }),
-    getCompetitorComparison(brandId, { topicId, days: allTime }),
-    getPromptResults(brandId, { topicId, limit: 50 }),
-  ]);
+  // Access first, on the caller's own client: RLS answers whether this user
+  // may see the brand, and the query ties the topic to that brand.
+  const topic = await getTopicById(brandId, topicId);
   if (!topic) throw new Error('Topic not found');
+
+  // Topic-filtered reads cannot use the daily rollups, so they scan raw
+  // results over the topic's whole history. On a 91-prompt topic with 27k
+  // results the calls below ran 5-9s each when run together — past the
+  // authenticated role's 8s statement timeout, so the page never loaded.
+  // They run on the service-role client instead (120s, migration 00100).
+  // That skips RLS, which is safe only because the brand was checked above
+  // and every read in these loaders filters by brand_id.
+  // Imported here, not at module load: the admin client needs the service key
+  // the moment it is created, and most of this module never touches it.
+  const { supabaseAdmin } = await import('@/lib/supabase/admin');
+  const [summary, rateTrend, sov, competitors, results] = await withDbClient(
+    supabaseAdmin as unknown as Awaited<ReturnType<typeof dbClient>>,
+    () =>
+      Promise.all([
+        getInsightsSummary(brandId, { topicId }),
+        // #685 — use the new-formula RPC so the trend sits on the same 0-100
+        // scale as the headline AI Visibility Score. getVisibilityTrend
+        // averaged raw visibility_score over all answers (incl. 0-scored
+        // absent-brand rows).
+        getVisibilityRateTrend(brandId, { topicId }),
+        getShareOfVoiceData(brandId, { topicId }),
+        getCompetitorComparison(brandId, { topicId }),
+        getPromptResults(brandId, { topicId, limit: 50 }),
+      ]),
+  );
 
   // Adapt VisibilityRateTrendData → VisibilityTrendPoint[] so topic_charts.tsx
   // keeps its existing VisibilityTrendPoint shape without modification.

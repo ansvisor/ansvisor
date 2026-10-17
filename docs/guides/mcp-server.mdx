@@ -220,7 +220,7 @@ instead.
 
 ## Available tools
 
-The MCP server exposes **29 tools**. Descriptions below match
+The MCP server exposes **30 tools**. Descriptions below match
 [`web/src/lib/mcp/server.ts`](https://github.com/ansvisor/ansvisor/blob/main/web/src/lib/mcp/server.ts).
 Tools that change data are marked **writes** — only call them on explicit user
 intent, not during exploratory queries.
@@ -252,6 +252,7 @@ intent, not during exploratory queries.
 | `accept_topic_suggestion` | Accept one pending suggestion: creates a topic and marks the suggestion added. | **yes** |
 | `dismiss_topic_suggestion` | Dismiss one pending suggestion so it does not reappear in future batches. | **yes** |
 | `get_prompt_volumes` | Per-prompt Google and estimated AI search demand and competition for prompts that already have analysis. | |
+| `get_prompt_usage` | Tracked-prompt usage against the plan: the brand's active and paused prompts, and the account's active prompts, brands, prompt locations used and location limit. | |
 
 ### Content opportunities
 
@@ -266,7 +267,7 @@ intent, not during exploratory queries.
 
 | Tool | What it does | Writes |
 | --- | --- | --- |
-| `get_site_audit_quota` | Monthly Site Audit allowance (`used`, `limit`, `remaining`) before starting a run. | |
+| `get_site_audit_quota` | Monthly Site Audit allowance (`used`, `running`, `limit`, `remaining`) before starting a run. Audits still running are already taken out of `remaining`. | |
 | `list_site_audits` | Recent audits for a brand (id, url, status, score) to find a past run without the id. | |
 | `run_site_audit` | Start an AEO/GEO page audit for a URL (consumes a monthly credit; poll `get_site_audit` for results). | **yes** |
 | `get_site_audit` | Fetch one audit by id — status, scores, signals, and fix recommendations (read-only). | |
@@ -282,12 +283,27 @@ intent, not during exploratory queries.
 
 | Tool | What it does | Writes |
 | --- | --- | --- |
-| `list_actions` | Recommended actions for a brand with status, impact, assignee, due date, and task progress. | |
-| `get_action` | One action in full: payload, triggering signals, tasks (`mode`, `permission`), and event trail. | |
-| `list_signals` | Detected changes (visibility, citations, traffic) with before/after values and linked `action_id`. | |
+| `list_actions` | Recommended actions for a brand with priority (0–100 score, level and reasons), status, impact, assignee, due date, and task progress. Highest priority first; `sort: "updated"` lists the most recently updated first. | |
+| `get_action` | One action in full: priority, payload, triggering signals, tasks (`mode`, `permission`), and event trail. `format: "markdown"` or `"csv"` returns it as the dashboard's **Copy Data** and **Export CSV** write it instead. | |
+| `list_signals` | Detected changes (visibility, citations, traffic), each with `where` (prompt, topic, platforms, locations, domain, competitor), `change` (labelled figures with unit and period), `evidence` (detection dates, app links) and `used_by_actions`. | |
 | `list_action_history` | Closed actions with measured outcomes and before/after validation results. | |
 | `update_task_status` | Record progress on a task (`in_progress`, `completed`, `skipped`, `failed`); does not execute the task. | **yes** |
 | `create_improve_action` | Send a prompt's Improve suggestions to Action Center as a `prompt_improve` action (needs a generated suggestion set for the range and a plan with Improve; idempotent on `idempotency_key`). | **yes** |
+
+#### Export an action
+
+`get_action` takes an optional `format`:
+
+- `json` (default): the fields above.
+- `markdown`: everything the action's tabs show, ready to paste into a doc, a ticket or another agent. This is the same text as **Copy Data** in the dashboard.
+- `csv`: a row per affected item, task and signal, with a `section` column. This is the same file as **Export CSV**.
+
+Labels are in English and dates in UTC. The same export is available over REST with the same `ans_` key. The CSV comes as a download (`action-AC-52.csv`) that Excel opens as UTF-8.
+
+```bash
+curl "https://app.ansvisor.com/api/mcp/actions/<action_id>?format=markdown" \
+  -H "Authorization: Bearer ans_..."
+```
 
 New tools may ship between releases — see `server.ts` and the [project roadmap](https://github.com/ansvisor/ansvisor#whats-next).
 

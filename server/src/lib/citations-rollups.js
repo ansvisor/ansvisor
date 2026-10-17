@@ -58,7 +58,7 @@ export async function refreshCitationsDaily(brandId, dayFrom, dayTo) {
 }
 
 /** UTC day of a brand's first or last result, or null when it has none. */
-async function resultDayBound(brandId, ascending) {
+export async function resultDayBound(brandId, ascending) {
   const { data, error } = await supabaseAdmin
     .from('prompt_results')
     .select('created_at')

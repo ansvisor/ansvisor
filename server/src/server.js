@@ -23,6 +23,7 @@ import { runTrackingJob, recoverWaitingJobs } from './lib/job-runner.js';
 import { sweepInsightsRollups } from './lib/insights-rollups.js';
 import { rebuildQueuedCitationRollups, REBUILD_QUEUE_SCHEDULE } from './lib/citations-rollups.js';
 import { sweepActionValidation } from './lib/action-center/validate.js';
+import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
 import { parseScraperResponse } from './lib/cloro-scraper.js';
 import { handleScraperResult } from './lib/cloro-result-handler.js';
 import { verifyCloroWebhook } from './lib/cloro-webhook-verify.js';
@@ -40,7 +41,9 @@ import { runPageOpportunityDetection } from './lib/page-opportunities.js';
 import { runPulseCatchUp } from './lib/pulse/engine.js';
 import { runSignalCatchUp } from './lib/signals/pass.js';
 import { sweepTaskExecution } from './lib/action-center/execution/run.js';
+import { sweepActionTasks } from './lib/action-center/task-writer/index.js';
 import { sendHealthReport } from './lib/health/report.js';
+import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -138,6 +141,12 @@ async function runDailyTracking() {
     logger.error({ err }, '[signals] catch-up sweep crashed');
   });
 
+  // Check the Tracked Prompts usage counters against the prompts themselves
+  // and rebuild any that drifted (PROMPT-012). Non-blocking, like the above.
+  checkPromptUsageCounters().catch((err) => {
+    logger.error({ err }, '[prompt-usage] counter check crashed');
+  });
+
   // Carry out the tasks the engine can carry out itself (#818 phase 7). Runs
   // after the catch-up above so tonight's actions exist before anything tries
   // to work on them. Bounded by a nightly ceiling; every attempt is recorded
@@ -146,6 +155,13 @@ async function runDailyTracking() {
   // somebody does by hand, not a reason to hold up tracking.
   sweepTaskExecution().catch((err) => {
     logger.error({ err }, '[task-run] sweep crashed');
+  });
+
+  // Write the tasks of recent actions whose writing a pass missed (AC-004):
+  // the budget was spent, the model failed, or the process restarted.
+  // Bounded per sweep; a no-op unless ACTION_TASKS_AI is on.
+  sweepActionTasks().catch((err) => {
+    logger.error({ err }, '[task-writer] daily sweep crashed');
   });
 
   // Insights rollup backstop (00066). Re-refreshes the trailing days for
@@ -163,6 +179,12 @@ async function runDailyTracking() {
   // hold up tonight's tracking.
   sweepActionValidation().catch((err) => {
     logger.error({ err }, '[action-validation] daily sweep crashed');
+  });
+
+  // Today's 7-day positions for every Improve action still being tracked
+  // (PROMPT-008): the Outcome card, the Positions panel and History read them.
+  sweepImproveOutcomes().catch((err) => {
+    logger.error({ err }, '[improve-outcome] daily sweep crashed');
   });
 
   // Skip paused brands (is_active = false): the user has explicitly suspended

@@ -297,50 +297,54 @@ export const ENGINE_THRESHOLDS = Object.freeze({
   }),
 
   /**
-   * How the queue of waiting findings is ordered (#818 phase 6).
+   * An action's priority score (AC-006): how soon to work on it beside the
+   * others, 0–100 (lib/action-center/priority.js). Impact says how much an
+   * action could matter; priority weighs it with the evidence behind it.
    *
-   * Everything the engine finds becomes a candidate; only some become actions
-   * tonight, because a definition's slot may be busy, resting, or the brand
-   * may already have had its day's worth. These weights decide which of the
-   * ones that can be promoted goes first.
+   * Seven factors, each read as 0–1 and weighted to sum to 100. Two rules the
+   * numbers keep:
    *
-   * They reproduce the ordering the Action Center has always sorted by —
-   * impact, then weight of evidence — and add the one thing a queue needs
-   * that a sort does not: age. Without it a low-impact finding sitting behind
-   * a brand with a steady stream of urgent ones would never be worked on at
-   * all.
+   *   * **Quantity is not priority.** Demand counts the most demanded few
+   *     targets (`demandTopTargets`), on a logarithmic scale, and confidence
+   *     counts independent kinds and sources of evidence — never how many
+   *     signals repeat the same finding. Fifty low-demand prompts do not
+   *     outrank five high-demand commercial ones.
+   *   * **Impact is not the whole answer.** It is one factor of seven, so a
+   *     medium-impact loss on high-demand prompts can come before a
+   *     high-impact gap nobody searches for.
    *
-   * The numbers are chosen so two rules hold, and the arithmetic is the only
-   * thing enforcing them:
-   *
-   *   * **Nothing starves.** A full two-week wait is worth 42, and the gap
-   *     between low and medium is 35 — so a low-impact finding that has
-   *     waited out the cap outranks a medium one detected tonight with
-   *     comparable evidence. Patience is worth one grade.
-   *   * **A high-impact finding is never outranked.** It sits at 200, out of
-   *     reach of any wait and any amount of evidence (65 + 15 + 42 = 122 at
-   *     most). A brand losing ground right now is worked on before a queue of
-   *     older, milder findings, however patient — a queue that lets forty
-   *     pages of low-impact opportunity outrank a visibility collapse is not
-   *     a priority order, it is a vote.
+   * The same score orders the queue of waiting findings, plus a little for
+   * each day waited (`waitPerDay`, up to `waitCapDays`) so nothing starves:
+   * two weeks of patience is worth about one level.
    */
   priority: Object.freeze({
-    impactHigh: 200,
-    impactMedium: 65,
-    impactLow: 30,
+    weightImpact: 20,
+    weightDemand: 20,
+    weightSeverity: 20,
+    weightBusinessValue: 15,
+    weightConfidence: 10,
+    weightRecoverability: 10,
+    weightRecency: 5,
     /**
-     * Per doubling of the targets the action covers, up to `evidenceMax`.
-     * Targets rather than signals: the library folds a group of prompts into
-     * one signal and keeps at most five signals a kind, so counting signals
-     * scored nearly every candidate the same. Logarithmic, so fifty prompts
-     * outrank five and five outrank one, but breadth never buys a grade.
-     * 1 target → 2.5, 5 → 6.5, 11 → 9, 50 → 14.2.
+     * Monthly AI searches (or search impressions, or sessions) at which
+     * demand counts in full; logarithmic below — 10 → 0.26, 100 → 0.5,
+     * 1,000 → 0.75.
      */
-    evidencePerDoubling: 2.5,
-    evidenceMax: 15,
-    /** Per day waited, up to `ageCapDays` days: at most 42. */
-    agePerDay: 3,
-    ageCapDays: 14,
+    demandFullAt: 10000,
+    /** The most demanded targets that count toward demand. */
+    demandTopTargets: 5,
+    /** Demand and business value when nothing measures them: neither for nor against. */
+    demandUnknown: 0.4,
+    businessValueUnknown: 0.5,
+    /** Days for a finding's recency to halve. */
+    recencyHalfLifeDays: 10,
+    /** Levels: critical at 90 and above, high at 75, medium at 50, low below. */
+    levelCritical: 90,
+    levelHigh: 75,
+    levelMedium: 50,
+    /** In the queue of waiting findings, per day waited, up to `waitCapDays`. */
+    waitPerDay: 1,
+    waitCapDays: 14,
   }),
 
   /** How an action's effect is measured once it closes. */

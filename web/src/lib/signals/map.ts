@@ -6,6 +6,7 @@ import {
   type SignalSource,
   type SignalStatus,
 } from './registry';
+import { NO_WHERE, signalWhere, type PromptPlace, type SignalWhere } from './where';
 
 /**
  * Row → domain mapping for signals, shared by every server action that
@@ -30,6 +31,8 @@ export interface Signal {
   payload: Record<string, unknown>;
   kpiKeys: string[];
   actionId: string | null;
+  /** The platforms and locations the signal is about; empty when it has none. */
+  where: SignalWhere;
 }
 
 export interface SignalRow {
@@ -54,8 +57,12 @@ export const SIGNAL_ROW_COLUMNS =
   'id, category, kind, impact, status, source, detected_at, last_detected_at, resolved_at, previous_value, current_value, change_value, payload, kpi_keys, action_id';
 
 /** Maps rows, silently skipping unknown kinds (a detector removed from the
- *  registry must not take down a page). */
-export function mapSignalRows(rows: SignalRow[]): Signal[] {
+ *  registry must not take down a page). Without the brand's prompts, `where`
+ *  holds only what the payload itself names. */
+export function mapSignalRows(
+  rows: SignalRow[],
+  prompts: ReadonlyMap<string, PromptPlace> = new Map(),
+): Signal[] {
   return rows
     .filter((row) => isSignalKind(row.kind))
     .map((row) => ({
@@ -74,5 +81,6 @@ export function mapSignalRows(rows: SignalRow[]): Signal[] {
       payload: row.payload ?? {},
       kpiKeys: row.kpi_keys ?? [],
       actionId: row.action_id,
+      where: row.payload ? signalWhere(row.payload, prompts) : NO_WHERE,
     }));
 }

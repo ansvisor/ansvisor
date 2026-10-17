@@ -56,6 +56,39 @@ export type Database = {
           },
         ]
       }
+      action_signals: {
+        Row: {
+          action_id: string
+          linked_at: string
+          signal_id: string
+        }
+        Insert: {
+          action_id: string
+          linked_at?: string
+          signal_id: string
+        }
+        Update: {
+          action_id?: string
+          linked_at?: string
+          signal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_signals_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_signals_signal_id_fkey"
+            columns: ["signal_id"]
+            isOneToOne: false
+            referencedRelation: "signals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       action_tasks: {
         Row: {
           action_id: string
@@ -138,7 +171,14 @@ export type Database = {
           kpi_keys: string[]
           outcome: string
           payload: Json
+          position_outcome: Json | null
+          priority_level: string | null
+          priority_reason: Json | null
+          priority_score: number | null
+          priority_updated_at: string | null
           status: string
+          tasks_generated_at: string | null
+          tasks_writing_since: string | null
           updated_at: string
           validated_at: string | null
           validation: Json | null
@@ -159,7 +199,14 @@ export type Database = {
           kpi_keys?: string[]
           outcome?: string
           payload?: Json
+          position_outcome?: Json | null
+          priority_level?: string | null
+          priority_reason?: Json | null
+          priority_score?: number | null
+          priority_updated_at?: string | null
           status?: string
+          tasks_generated_at?: string | null
+          tasks_writing_since?: string | null
           updated_at?: string
           validated_at?: string | null
           validation?: Json | null
@@ -180,7 +227,14 @@ export type Database = {
           kpi_keys?: string[]
           outcome?: string
           payload?: Json
+          position_outcome?: Json | null
+          priority_level?: string | null
+          priority_reason?: Json | null
+          priority_score?: number | null
+          priority_updated_at?: string | null
           status?: string
+          tasks_generated_at?: string | null
+          tasks_writing_since?: string | null
           updated_at?: string
           validated_at?: string | null
           validation?: Json | null
@@ -549,7 +603,9 @@ export type Database = {
           gsc_property: string | null
           id: string
           industry: string | null
+          insights_pinned_competitors: string[]
           is_active: boolean
+          kpi_setup_at: string | null
           language: string | null
           logo_url: string | null
           name: string
@@ -568,7 +624,9 @@ export type Database = {
           gsc_property?: string | null
           id?: string
           industry?: string | null
+          insights_pinned_competitors?: string[]
           is_active?: boolean
+          kpi_setup_at?: string | null
           language?: string | null
           logo_url?: string | null
           name: string
@@ -587,7 +645,9 @@ export type Database = {
           gsc_property?: string | null
           id?: string
           industry?: string | null
+          insights_pinned_competitors?: string[]
           is_active?: boolean
+          kpi_setup_at?: string | null
           language?: string | null
           logo_url?: string | null
           name?: string
@@ -1199,51 +1259,30 @@ export type Database = {
       insights_competitor_prompt_daily: {
         Row: {
           brand_id: string
-          citation_answers: number | null
           competitor_id: string
           day: string
-          mention_answers: number | null
-          mention_count: number
           model_used: string | null
           platform: string | null
-          position_count: number | null
           prompt_id: string
           region: string | null
-          sum_inv_position: number | null
-          sum_visibility: number | null
-          total_citations: number | null
         }
         Insert: {
           brand_id: string
-          citation_answers?: number | null
           competitor_id: string
           day: string
-          mention_answers?: number | null
-          mention_count?: number
           model_used?: string | null
           platform?: string | null
-          position_count?: number | null
           prompt_id: string
           region?: string | null
-          sum_inv_position?: number | null
-          sum_visibility?: number | null
-          total_citations?: number | null
         }
         Update: {
           brand_id?: string
-          citation_answers?: number | null
           competitor_id?: string
           day?: string
-          mention_answers?: number | null
-          mention_count?: number
           model_used?: string | null
           platform?: string | null
-          position_count?: number | null
           prompt_id?: string
           region?: string | null
-          sum_inv_position?: number | null
-          sum_visibility?: number | null
-          total_citations?: number | null
         }
         Relationships: [
           {
@@ -1259,68 +1298,35 @@ export type Database = {
         Row: {
           answer_count: number
           brand_id: string
-          citation_answers: number | null
           day: string
           has_citation: boolean
           has_mention: boolean
-          max_created_at: string | null
-          mention_answers: number | null
-          mentioning_answers: number | null
           model_used: string | null
           platform: string | null
-          position_count: number | null
-          positive_count: number | null
           prompt_id: string
           region: string | null
-          sum_inv_position: number | null
-          sum_visibility: number | null
-          sum_visibility_visible: number | null
-          total_citations: number | null
-          total_mentions: number | null
         }
         Insert: {
           answer_count: number
           brand_id: string
-          citation_answers?: number | null
           day: string
           has_citation: boolean
           has_mention: boolean
-          max_created_at?: string | null
-          mention_answers?: number | null
-          mentioning_answers?: number | null
           model_used?: string | null
           platform?: string | null
-          position_count?: number | null
-          positive_count?: number | null
           prompt_id: string
           region?: string | null
-          sum_inv_position?: number | null
-          sum_visibility?: number | null
-          sum_visibility_visible?: number | null
-          total_citations?: number | null
-          total_mentions?: number | null
         }
         Update: {
           answer_count?: number
           brand_id?: string
-          citation_answers?: number | null
           day?: string
           has_citation?: boolean
           has_mention?: boolean
-          max_created_at?: string | null
-          mention_answers?: number | null
-          mentioning_answers?: number | null
           model_used?: string | null
           platform?: string | null
-          position_count?: number | null
-          positive_count?: number | null
           prompt_id?: string
           region?: string | null
-          sum_inv_position?: number | null
-          sum_visibility?: number | null
-          sum_visibility_visible?: number | null
-          total_citations?: number | null
-          total_mentions?: number | null
         }
         Relationships: [
           {
@@ -2371,6 +2377,64 @@ export type Database = {
           },
         ]
       }
+      sentiment_overrides: {
+        Row: {
+          brand_id: string
+          created_at: string
+          id: string
+          note: string | null
+          previous_sentiment: string
+          result_id: string
+          sentiment: string
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          previous_sentiment: string
+          result_id: string
+          sentiment: string
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          previous_sentiment?: string
+          result_id?: string
+          sentiment?: string
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sentiment_overrides_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sentiment_overrides_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "prompt_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sentiment_overrides_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       signals: {
         Row: {
           action_id: string | null
@@ -2779,7 +2843,6 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
-          p_topic_id?: string
         }
         Returns: Json
       }
@@ -2994,7 +3057,6 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
-          p_topic_id?: string
         }
         Returns: Json
       }
@@ -3127,7 +3189,46 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+        }
+        Returns: Json
+      }
+      insights_breakdown_groups: {
+        Args: {
+          p_brand_id: string
+          p_date_from?: string
+          p_date_to?: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_region?: string
           p_topic_id?: string
+        }
+        Returns: Json
+      }
+      insights_change_drivers: {
+        Args: {
+          p_brand_id: string
+          p_cur_from: string
+          p_cur_to: string
+          p_models?: string[]
+          p_prev_from: string
+          p_prev_to: string
+          p_region?: string
+          p_same_prompts?: boolean
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      insights_change_drivers_daily: {
+        Args: {
+          p_brand_id: string
+          p_cur_from: string
+          p_cur_to: string
+          p_models?: string[]
+          p_prev_from: string
+          p_prev_to: string
+          p_region?: string
+          p_same_prompts?: boolean
         }
         Returns: Json
       }
@@ -3137,6 +3238,122 @@ export type Database = {
           models: string[]
           regions: string[]
         }[]
+      }
+      insights_kpi_series: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_region?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      insights_platform_compare: {
+        Args: {
+          p_brand_id: string
+          p_cur_from?: string
+          p_cur_to?: string
+          p_models?: string[]
+          p_prev_from?: string
+          p_prev_to?: string
+          p_region?: string
+          p_same_prompts?: boolean
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      insights_platform_compare_daily: {
+        Args: {
+          p_brand_id: string
+          p_cur_from?: string
+          p_cur_to?: string
+          p_models?: string[]
+          p_prev_from?: string
+          p_prev_to?: string
+          p_region?: string
+          p_same_prompts?: boolean
+        }
+        Returns: Json
+      }
+      insights_same_prompt_compare: {
+        Args: {
+          p_brand_id: string
+          p_cur_from: string
+          p_cur_to: string
+          p_models?: string[]
+          p_prev_from: string
+          p_prev_to: string
+          p_region?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      insights_same_prompt_compare_daily: {
+        Args: {
+          p_brand_id: string
+          p_cur_from: string
+          p_cur_to: string
+          p_models?: string[]
+          p_prev_from: string
+          p_prev_to: string
+          p_region?: string
+        }
+        Returns: Json
+      }
+      insights_topic_competitors_daily: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_region?: string
+        }
+        Returns: Json
+      }
+      insights_trend_markers: {
+        Args: {
+          p_brand_id: string
+          p_from?: string
+          p_to?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      mentions_overview: {
+        Args: {
+          p_brand_id: string
+          p_date_from: string
+          p_date_to?: string
+          p_platform?: string
+          p_region?: string
+          p_search?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      mentions_list: {
+        Args: {
+          p_brand_id: string
+          p_competitor_id?: string
+          p_date_from: string
+          p_date_to?: string
+          p_group?: string
+          p_limit?: number
+          p_offset?: number
+          p_platform?: string
+          p_region?: string
+          p_search?: string
+          p_sentiment?: string
+          p_sort?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      override_mention_sentiment: {
+        Args: { p_note?: string; p_result_id: string; p_sentiment: string }
+        Returns: Json
       }
       normalize_page_path: { Args: { p_url: string }; Returns: string }
       import_prompts: {
@@ -3168,6 +3385,34 @@ export type Database = {
           p_topic_id?: string
         }
         Returns: Json
+      }
+      prompt_position_summaries: {
+        Args: {
+          p_brand_id: string
+          p_date_from?: string
+          p_date_to?: string
+          p_region?: string
+        }
+        Returns: {
+          entity_count: number
+          entity_sum: number
+          mention_answers: number
+          platform: string
+          position_count: number
+          position_sum: number
+          prompt_id: string
+          runs: number
+        }[]
+      }
+      prompt_usage_summary: {
+        Args: { p_brand_id: string }
+        Returns: {
+          brand_active: number
+          brand_paused: number
+          account_active: number
+          account_brands: number
+          account_locations: number
+        }[]
       }
       prompt_visibility_summaries: {
         Args: {
@@ -3271,6 +3516,10 @@ export type Database = {
           visible_runs: number
         }[]
       }
+      seed_kpi_presets: {
+        Args: { p_brand_id: string; p_kpis: Json }
+        Returns: boolean
+      }
       share_of_voice_aggregates: {
         Args: {
           p_brand_id: string
@@ -3292,7 +3541,6 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
-          p_topic_id?: string
         }
         Returns: Json
       }
@@ -3318,6 +3566,10 @@ export type Database = {
         Args: { p_brand_id: string; p_from: string; p_to: string }
         Returns: Json
       }
+      signals_new_count: {
+        Args: { p_brand_id: string }
+        Returns: number
+      }
       topics_overview_aggregates: {
         Args: { p_brand_id: string }
         Returns: {
@@ -3331,6 +3583,30 @@ export type Database = {
           cur_mention_answers: number
           cur_pos_n: number
           cur_pos_sum: number
+          daily: Json
+          last_run_at: string
+          mention_answers: number
+          pos_n: number
+          pos_sum: number
+          prev_answers: number
+          prev_citation_answers: number
+          prev_mention_answers: number
+          prev_pos_n: number
+          prev_pos_sum: number
+          topic_id: string
+          total_citations: number
+          total_mentions: number
+          visible_prompts: number
+        }[]
+      }
+      topics_overview_window: {
+        Args: { p_brand_id: string; p_date_from: string; p_date_to?: string }
+        Returns: {
+          active_prompts: number
+          answers: number
+          citation_answers: number
+          comp_mentions: number
+          competitors: Json
           daily: Json
           last_run_at: string
           mention_answers: number
@@ -3367,7 +3643,6 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
-          p_topic_id?: string
         }
         Returns: number
       }
@@ -3392,7 +3667,6 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
-          p_topic_id?: string
         }
         Returns: Json
       }
@@ -3428,7 +3702,6 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
-          p_topic_id?: string
         }
         Returns: Json
       }

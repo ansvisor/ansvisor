@@ -33,6 +33,8 @@ export interface AuditRecommendation {
   priority: 'high' | 'medium' | 'low';
   recommendation: string;
   draft: string | null;
+  /** JSON-LD or HTML to paste. Older audits keep markup in `draft` and lack this. */
+  code?: string | null;
 }
 
 export interface AuditResult {
@@ -56,7 +58,10 @@ export interface AuditResult {
 export interface AuditQuota {
   used: number;
   limit: number;
+  /** What's left this month, the running audits already taken out. */
   remaining: number;
+  /** Audits started and not finished yet: they're charged when they complete. */
+  running?: number;
 }
 
 export interface AuditTrendPoint {
@@ -71,14 +76,36 @@ export interface AuditTrend {
   points: AuditTrendPoint[];
 }
 
-export interface AuditSummary {
+/** One audit run of a page, in its history. */
+export interface AuditRun {
   id: string;
   url: string;
   status: 'running' | 'completed' | 'failed';
-  total_score: number | null;
-  signals_evaluated: number | null;
-  signals_total: number;
-  created_at: string;
+  totalScore: number | null;
+  createdAt: string;
+}
+
+export type AuditedPageStatus = 'good' | 'improving' | 'needs_work' | 'running' | 'failed';
+
+/** One audited page: its repeat audits share the row. */
+export interface AuditedPage {
+  key: string;
+  host: string | null;
+  path: string;
+  url: string;
+  /** The latest completed audit (else the latest run), which the row opens. */
+  auditId: string;
+  score: number | null;
+  previousScore: number | null;
+  status: AuditedPageStatus;
+  lastAuditedAt: string;
+  /** Latest completed scores, oldest first. */
+  trend: number[];
+  /** Failed and warning signals in the latest completed audit. */
+  issues: number | null;
+  /** Runs, newest first. */
+  runs: AuditRun[];
+  runCount: number;
 }
 
 async function getSession() {
@@ -181,14 +208,86 @@ export async function getAuditTrend(brandId: string): Promise<AuditTrend> {
   return { primaryDomain: data.primaryDomain ?? null, points: data.points ?? [] };
 }
 
-export interface AuditPage {
-  audits: AuditSummary[];
-  /** Total audits for the brand, across all pages. */
-  total: number;
+/**
+ * Re-audit several pages at once. Every page must fit the monthly quota, or
+ * none starts; the server runs them a few at a time.
+ */
+export async function runAuditsBulk(brandId: string, urls: string[]): Promise<{ started: number }> {
+  const session = await getSession();
+
+  const res = await fetch(`${AEO_SERVER_URL}/api/audits/bulk`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ brandId, urls }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || `Server error: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return { started: (data.audits ?? []).length };
 }
 
-/** List a page of a brand's audits, newest first (summaries, no signal detail). */
-export async function getAudits(brandId: string, offset = 0, limit = 50): Promise<AuditPage> {
+/** One of the most common Authority / E-E-A-T gaps across the audited pages. */
+export interface AuditGap {
+  key: string;
+  label: string;
+  category: string | null;
+  /** Pages whose latest audit fails or warns on it. */
+  pages: number;
+}
+
+/** The hub's KPI cards, over the latest audit of each page on the primary domain. */
+export interface AuditOverview {
+  primaryHost: string | null;
+  /** Audited pages on the primary domain. */
+  pages: number;
+  /** Audited pages on other sites, left out of the numbers. */
+  otherPages: number;
+  siteScore: number | null;
+  /** Points against each page's previous audit; null when none was audited twice. */
+  siteScoreChange: number | null;
+  authority: number | null;
+  eeat: number | null;
+  gaps: AuditGap[];
+}
+
+export async function getAuditOverview(brandId: string): Promise<AuditOverview> {
+  const session = await getSession();
+
+  const res = await fetch(
+    `${AEO_SERVER_URL}/api/audits/overview?brandId=${encodeURIComponent(brandId)}`,
+    { headers: { Authorization: `Bearer ${session.access_token}` } },
+  );
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || `Server error: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data.overview;
+}
+
+export interface AuditedPages {
+  pages: AuditedPage[];
+  /** Pages audited for the brand, across all pages of the list. */
+  total: number;
+  /** The brand's primary host, whose pages are listed by path alone. */
+  primaryHost: string | null;
+}
+
+/** List a page of the brand's audited pages, most recently audited first. */
+export async function getAuditPages(
+  brandId: string,
+  offset = 0,
+  limit = 50,
+): Promise<AuditedPages> {
   const session = await getSession();
 
   const params = new URLSearchParams({
@@ -196,7 +295,7 @@ export async function getAudits(brandId: string, offset = 0, limit = 50): Promis
     limit: String(limit),
     offset: String(offset),
   });
-  const res = await fetch(`${AEO_SERVER_URL}/api/audits?${params}`, {
+  const res = await fetch(`${AEO_SERVER_URL}/api/audits/pages?${params}`, {
     headers: { Authorization: `Bearer ${session.access_token}` },
   });
 
@@ -206,6 +305,6 @@ export async function getAudits(brandId: string, offset = 0, limit = 50): Promis
   }
 
   const data = await res.json();
-  const audits: AuditSummary[] = data.audits ?? [];
-  return { audits, total: data.total ?? audits.length };
+  const pages: AuditedPage[] = data.pages ?? [];
+  return { pages, total: data.total ?? pages.length, primaryHost: data.primaryHost ?? null };
 }

@@ -14,6 +14,7 @@ function chain(result) {
     eq: () => b,
     in: () => Promise.resolve(result),
     maybeSingle: () => Promise.resolve(result),
+    then: (resolve) => resolve(result),
   };
   return b;
 }
@@ -99,5 +100,17 @@ describe('basketScope', () => {
     tables.content_opportunities = () =>
       chain({ data: { cluster_id: null, related_cluster_ids: [], prompt_id: 'p9' } });
     expect((await basketScope({ payload: { opportunityId: 'o1' } })).promptIds).toEqual(['p9']);
+  });
+
+  it('takes the prompts a topic has now when none were tracked when it was sent', async () => {
+    tables.prompts = () => chain({ data: [{ id: 'p3' }, { id: 'p4' }], error: null });
+    expect(
+      (await basketScope({ brand_id: 'b1', payload: { topicId: 't1', promptIds: [] } })).promptIds,
+    ).toEqual(['p3', 'p4']);
+    // Prompt ids it was sent with are kept, so the basket doesn't move.
+    expect(
+      (await basketScope({ brand_id: 'b1', payload: { topicId: 't1', promptIds: ['p1'] } }))
+        .promptIds,
+    ).toEqual(['p1']);
   });
 });

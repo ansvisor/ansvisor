@@ -12,6 +12,7 @@
  */
 
 import { Router } from 'express';
+import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import logger from '../lib/logger.js';
 import { assertBrandAccess } from '../lib/access.js';
@@ -24,11 +25,19 @@ import {
 } from '../lib/plan-guard.js';
 import { buildAuditContext } from '../lib/audit/context.js';
 import { normStoredDomain } from '../lib/audit/host.js';
-import { buildTrendPoints, parseListPage, TREND_LIMIT } from '../lib/audit/history.js';
+import {
+  buildAuditPages,
+  buildTrendPoints,
+  pageKey,
+  parseListPage,
+  TREND_LIMIT,
+} from '../lib/audit/history.js';
+import { readAllRpcRows } from '../lib/rpc-pages.js';
+import { AUTHORITY_CATEGORIES, buildOverview, primaryPages } from '../lib/audit/overview.js';
 import { runSignals } from '../lib/audit/engine.js';
 import { evaluateLlmSignals } from '../lib/audit/llm-signals.js';
 import { evaluateBrandEntity } from '../lib/audit/external-signals.js';
-import { generateRecommendations } from '../lib/audit/recommendations.js';
+import { brandFactsFor, generateRecommendations } from '../lib/audit/recommendations.js';
 import { scoreAudit } from '../lib/audit/scorer.js';
 import { signalsByKey, TOTAL_SIGNALS, RUBRIC_VERSION } from '../lib/audit/rubric.js';
 
@@ -74,6 +83,60 @@ function assembleAudit(audit, signalRows) {
   };
 }
 
+/** The brand's primary domain as stored (else its first domain), or null. */
+async function primaryDomainOf(brandId) {
+  const { data: domainRows } = await supabaseAdmin
+    .from('brand_domains')
+    .select('domain, is_primary')
+    .eq('brand_id', brandId);
+  return (
+    (domainRows ?? []).find((d) => d.is_primary)?.domain ?? (domainRows ?? [])[0]?.domain ?? null
+  );
+}
+
+// 20 audits × 47 signals stays under PostgREST's 1000-row page.
+const ISSUE_COUNT_CHUNK = 20;
+
+/** Every audit of the brand, newest first, read past PostgREST's 1000-row page. */
+function readBrandAudits(brandId) {
+  return readAllRpcRows('site_audits', (from, to) =>
+    supabaseAdmin
+      .from('site_audits')
+      .select('id, url, final_url, status, total_score, created_at')
+      .eq('brand_id', brandId)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to),
+  );
+}
+
+/** Rows for the given audit ids, read a chunk of ids at a time by `query`. */
+async function readByAuditIds(ids, chunkSize, query) {
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += chunkSize) chunks.push(ids.slice(i, i + chunkSize));
+  const results = await Promise.all(chunks.map(query));
+  const rows = [];
+  for (const { data, error } of results) {
+    if (error) throw error;
+    rows.push(...(data ?? []));
+  }
+  return rows;
+}
+
+/** Failed and warning signals per audit id. */
+async function countIssues(auditIds) {
+  const rows = await readByAuditIds(auditIds, ISSUE_COUNT_CHUNK, (ids) =>
+    supabaseAdmin
+      .from('audit_signal_results')
+      .select('audit_id')
+      .in('audit_id', ids)
+      .in('status', ['fail', 'warn']),
+  );
+  const counts = new Map();
+  for (const row of rows) counts.set(row.audit_id, (counts.get(row.audit_id) ?? 0) + 1);
+  return counts;
+}
+
 /**
  * Run the full audit (fetch → deterministic + LLM + Wikidata → score →
  * persist) for an already-created `running` row. Runs detached from the
@@ -82,15 +145,14 @@ function assembleAudit(audit, signalRows) {
  */
 async function runAuditJob(auditId, brandId, url, orgId) {
   try {
-    // The brand name is only needed for the Wikidata brand-entity lookup. The
-    // page is otherwise evaluated entirely on its own terms — the LLM infers
-    // the page's own target topic from its content, so an arbitrary URL (a
+    // The brand name is needed for the Wikidata brand-entity lookup. The page
+    // is otherwise evaluated entirely on its own terms — the LLM infers the
+    // page's own target topic from its content, so an arbitrary URL (a
     // competitor blog, any page) is never judged against this brand's topics.
-    const { data: brandRow } = await supabaseAdmin
-      .from('brands')
-      .select('name')
-      .eq('id', brandId)
-      .single();
+    const [{ data: brandRow }, { data: domainRows }] = await Promise.all([
+      supabaseAdmin.from('brands').select('name, description').eq('id', brandId).single(),
+      supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', brandId),
+    ]);
 
     const ctx = await buildAuditContext(url);
 
@@ -118,8 +180,13 @@ async function runAuditJob(auditId, brandId, url, orgId) {
     if (sigErr) throw sigErr;
 
     // AI fix recommendations for the fixable failing signals (own LLM call;
-    // degrades to [] on failure so it never blocks completion).
-    const recommendations = await generateRecommendations(ctx, { results });
+    // degrades to [] on failure so it never blocks completion). Brand facts
+    // (name, description, domains) may be reused only on the brand's own pages.
+    const recommendations = await generateRecommendations(ctx, {
+      results,
+      brand: brandFactsFor(ctx.url, brandRow, domainRows),
+      auditId,
+    });
 
     const { error: completeErr } = await supabaseAdmin
       .from('site_audits')
@@ -178,6 +245,75 @@ export async function createAndRunAudit(brandId, url, orgId) {
   return assembleAudit(created, []);
 }
 
+/** Pages one bulk request may audit: the Pages list's own page size. */
+export const BULK_AUDIT_MAX = 50;
+
+/** Bulk audits run at once; the rest wait their turn, still `running`. */
+export const BULK_AUDIT_CONCURRENCY = 3;
+
+// One pool for every bulk request, so 50 re-audits don't fetch and score 50
+// pages at the same time.
+const bulkQueue = [];
+let bulkActive = 0;
+
+function drainBulkQueue() {
+  while (bulkActive < BULK_AUDIT_CONCURRENCY && bulkQueue.length > 0) {
+    const job = bulkQueue.shift();
+    bulkActive += 1;
+    job()
+      .catch((err) => logger.error({ err }, 'bulk audit job crashed'))
+      .finally(() => {
+        bulkActive -= 1;
+        drainBulkQueue();
+      });
+  }
+}
+
+/**
+ * Start audits of several pages of a brand. The quota is checked for all of
+ * them first, so either every page is queued or none is (PlanLimitError).
+ * Repeat spellings of one page are audited once. Returns the running rows.
+ */
+export async function createAndQueueAudits(brandId, urls, orgId) {
+  const byPage = new Map();
+  for (const url of urls) {
+    const key = pageKey(url)?.key;
+    if (key && !byPage.has(key)) byPage.set(key, url);
+  }
+  const unique = [...byPage.values()];
+
+  await enforceSiteAuditQuota(orgId, unique.length);
+
+  const { data: created, error } = await supabaseAdmin
+    .from('site_audits')
+    .insert(
+      unique.map((url) => ({
+        brand_id: brandId,
+        url,
+        status: 'running',
+        rubric_version: RUBRIC_VERSION,
+      })),
+    )
+    .select('*');
+  if (error) throw error;
+
+  for (const row of created) {
+    bulkQueue.push(() => runAuditJob(row.id, brandId, row.url, orgId));
+  }
+  drainBulkQueue();
+
+  return created.map((row) => assembleAudit(row, []));
+}
+
+const bulkSchema = z.object({
+  brandId: z.guid(),
+  urls: z
+    .array(z.string().trim().min(1).max(2048))
+    .min(1)
+    .max(BULK_AUDIT_MAX)
+    .refine((urls) => urls.every((url) => pageKey(url)), 'Every URL must be a full URL'),
+});
+
 /**
  * Internal/MCP entry point: start an audit addressed by brand id + url.
  * Org-ownership is verified upstream in the web MCP layer; here we resolve the
@@ -226,6 +362,38 @@ router.post('/', requireFeature('content_optimization'), async (req, res) => {
   }
 });
 
+// POST /api/audits/bulk — re-audit several pages at once ({ brandId, urls },
+// up to BULK_AUDIT_MAX). All of them must fit the monthly quota, or none
+// starts. Returns 202 with the running rows; they run a few at a time.
+router.post('/bulk', requireFeature('content_optimization'), async (req, res) => {
+  const userId = req.user?.id;
+  const parsed = bulkSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: parsed.error.issues[0]?.message ?? 'Invalid request',
+    });
+  }
+  const { brandId, urls } = parsed.data;
+
+  try {
+    const { orgId } = await assertBrandAccess(brandId, userId);
+    const audits = await createAndQueueAudits(brandId, urls, orgId);
+    return res.status(202).json({ success: true, audits });
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      return res
+        .status(err.statusCode)
+        .json({ success: false, error: 'quota_exceeded', message: err.message });
+    }
+    if (err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    req.log.error({ err }, 'bulk audit start failed');
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // GET /api/audits/quota — the org's monthly audit allowance (used/limit/remaining).
 // Registered before /:id so "quota" isn't matched as an audit id.
 router.get('/quota', async (req, res) => {
@@ -259,12 +427,7 @@ router.get('/trend', async (req, res) => {
   try {
     await assertBrandAccess(brandId, userId);
 
-    const { data: domainRows } = await supabaseAdmin
-      .from('brand_domains')
-      .select('domain, is_primary')
-      .eq('brand_id', brandId);
-    const primary =
-      (domainRows ?? []).find((d) => d.is_primary)?.domain ?? (domainRows ?? [])[0]?.domain ?? null;
+    const primary = await primaryDomainOf(brandId);
     const primaryHost = normStoredDomain(primary);
 
     const { data: rows } = await supabaseAdmin
@@ -283,6 +446,107 @@ router.get('/trend', async (req, res) => {
       return res.status(err.status).json({ success: false, message: err.message });
     }
     req.log.error({ err }, 'audit trend failed');
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/audits/pages?brandId=…&limit=50&offset=0 — one row per audited
+// page (repeat audits of a URL share it), most recently audited first, with
+// its latest score, the previous one, a status, its trend, its open issues
+// and its runs. `total` is the number of pages, for paging.
+// Registered before /:id so "pages" isn't matched as an audit id.
+router.get('/pages', async (req, res) => {
+  const userId = req.user?.id;
+  const { brandId } = req.query;
+  const { limit, offset } = parseListPage(req.query);
+  if (!brandId) {
+    return res.status(400).json({ success: false, message: 'brandId is required' });
+  }
+
+  try {
+    await assertBrandAccess(brandId, userId);
+
+    const [primary, { data: rows, error }] = await Promise.all([
+      primaryDomainOf(brandId),
+      readBrandAudits(brandId),
+    ]);
+    if (error) throw error;
+
+    const all = buildAuditPages(rows);
+    const pages = all.slice(offset, offset + limit);
+    const issues = await countIssues(pages.filter((p) => p.score !== null).map((p) => p.auditId));
+
+    return res.json({
+      success: true,
+      pages: pages.map((p) => ({
+        ...p,
+        issues: p.score === null ? null : (issues.get(p.auditId) ?? 0),
+      })),
+      total: all.length,
+      primaryHost: normStoredDomain(primary),
+    });
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    req.log.error({ err }, 'audit pages failed');
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/audits/overview?brandId=… — the hub's KPI cards: site score and
+// its change, pages audited, and the Authority / E-E-A-T scores with their
+// biggest gaps, over the latest audit of each page on the primary domain.
+// Registered before /:id so "overview" isn't matched as an audit id.
+router.get('/overview', async (req, res) => {
+  const userId = req.user?.id;
+  const { brandId } = req.query;
+  if (!brandId) {
+    return res.status(400).json({ success: false, message: 'brandId is required' });
+  }
+
+  try {
+    await assertBrandAccess(brandId, userId);
+
+    const [primary, { data: rows, error }] = await Promise.all([
+      primaryDomainOf(brandId),
+      readBrandAudits(brandId),
+    ]);
+    if (error) throw error;
+
+    const primaryHost = normStoredDomain(primary);
+    const { own, otherPages } = primaryPages(buildAuditPages(rows), primaryHost);
+    const ids = own.map((p) => p.auditId);
+
+    const [scoreRows, failingRows] = await Promise.all([
+      readByAuditIds(ids, 100, (chunk) =>
+        supabaseAdmin.from('site_audits').select('id, category_scores').in('id', chunk),
+      ),
+      // 50 audits × 16 Authority and E-E-A-T signals stays under 1000 rows.
+      readByAuditIds(ids, 50, (chunk) =>
+        supabaseAdmin
+          .from('audit_signal_results')
+          .select('audit_id, signal_key')
+          .in('audit_id', chunk)
+          .in('category', AUTHORITY_CATEGORIES)
+          .in('status', ['fail', 'warn']),
+      ),
+    ]);
+    const categoryScoresById = new Map(scoreRows.map((r) => [r.id, r.category_scores ?? {}]));
+
+    return res.json({
+      success: true,
+      overview: {
+        primaryHost,
+        otherPages,
+        ...buildOverview(own, categoryScoresById, failingRows),
+      },
+    });
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    req.log.error({ err }, 'audit overview failed');
     return res.status(500).json({ success: false, message: err.message });
   }
 });

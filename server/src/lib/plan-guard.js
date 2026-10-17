@@ -13,6 +13,8 @@ import {
   medianCost,
   typicalCostUsd,
 } from './improve-cost.js';
+import { RELEVANCE_BUDGET_SHARE } from './suggestion-relevance.js';
+import { AUDIT_RUN_TIMEOUT_MS } from './audit/history.js';
 
 export class PlanLimitError extends Error {
   constructor(message, statusCode = 403) {
@@ -29,7 +31,9 @@ export class PlanLimitError extends Error {
  * `contractMonthlyUsd` is the contract's monthly value, entered when the deal
  * is signed. It sets the Improve budget to the same 1% share of the contract
  * the other plans get of their price (never below the plan default), unless
- * `improveMonthlyBudgetUsd` is set explicitly, which wins.
+ * `improveMonthlyBudgetUsd` is set explicitly, which wins. The relevance
+ * budget (VIS-011) follows the same rule at 0.1%, rounded down so it never
+ * passes the share.
  */
 export function applyPlanOverrides(plan, org) {
   if (
@@ -45,6 +49,12 @@ export function applyPlanOverrides(plan, org) {
       limits.improveMonthlyBudgetUsd = Math.max(
         plan.limits.improveMonthlyBudgetUsd ?? 0,
         Math.round(usd * IMPROVE_BUDGET_SHARE * 100) / 100,
+      );
+    }
+    if (overrides.relevanceMonthlyBudgetUsd === undefined && Number.isFinite(usd) && usd > 0) {
+      limits.relevanceMonthlyBudgetUsd = Math.max(
+        plan.limits.relevanceMonthlyBudgetUsd ?? 0,
+        Math.floor(usd * RELEVANCE_BUDGET_SHARE * 1e6) / 1e6,
       );
     }
     return { ...plan, limits };
@@ -336,6 +346,50 @@ export async function enforceImproveQuota(orgId, modelId) {
   return quota;
 }
 
+/**
+ * Suggestion-relevance allowance (VIS-011): a monthly USD budget per
+ * organization, 0.1% of the plan price (plan.limits.relevanceMonthlyBudgetUsd),
+ * separate from Improve's. Reserves a refresh's worst case (`costUsd`)
+ * before it rates, atomically per organization
+ * (reserve_suggestion_relevance), so concurrent refreshes can't overshoot.
+ * Returns { unlimited, id }: id is the usage row to settle once the model
+ * answers (settleRelevanceUsage), or null when what's left can't cover it.
+ */
+export async function reserveRelevanceAllowance(orgId, { brandId, modelId, costUsd }) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const budget = plan.limits.relevanceMonthlyBudgetUsd ?? -1;
+  if (budget === -1) return { unlimited: true, id: null };
+
+  const { data, error } = await supabaseAdmin.rpc('reserve_suggestion_relevance', {
+    p_organization_id: orgId,
+    p_brand_id: brandId,
+    p_model: modelId,
+    p_since: (await quotaPeriodStart(orgId)).toISOString(),
+    p_budget: budget,
+    p_cost: costUsd,
+  });
+  if (error) throw new Error(error.message);
+  return { unlimited: false, id: data ?? null };
+}
+
+/**
+ * Lowers a reservation to what the refresh's attempts cost, with the call's
+ * own tokens to check the estimate against. A failed update leaves the
+ * worst case charged: the budget errs high, never low.
+ */
+export async function settleRelevanceUsage(id, { attempts, costUsd, usage }) {
+  const { error } = await supabaseAdmin
+    .from('suggestion_relevance_usage')
+    .update({
+      attempts,
+      cost_usd: costUsd,
+      input_tokens: usage?.inputTokens ?? null,
+      output_tokens: usage?.outputTokens ?? null,
+    })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
 async function countOpportunityUsage(orgId, since) {
   const { count } = await supabaseAdmin
     .from('opportunity_usage')
@@ -455,39 +509,75 @@ async function countSiteAuditUsageThisMonth(orgId) {
   return count || 0;
 }
 
+// How long a running audit holds a quota slot (AUDIT_RUN_TIMEOUT_MS): one
+// older than that was cut short by a restart and will never complete.
+const SITE_AUDIT_IN_FLIGHT_MS = AUDIT_RUN_TIMEOUT_MS;
+
 /**
- * Enforce the monthly Site Audit quota for an organization. Counts completed
- * audits this calendar month against plan.limits.maxSiteAudits (Starter 100,
- * Growth 500, Enterprise/Self-hosted unlimited). Throws PlanLimitError (429)
- * when exhausted; returns { plan, remaining } otherwise.
+ * Audits of the org's brands still running. They're charged when they
+ * complete, so each holds a slot until then: otherwise a run started while
+ * others are in flight could take the quota past its limit.
  */
-export async function enforceSiteAuditQuota(orgId) {
+async function countRunningSiteAudits(orgId) {
+  const since = new Date(Date.now() - SITE_AUDIT_IN_FLIGHT_MS).toISOString();
+  const { count } = await supabaseAdmin
+    .from('site_audits')
+    .select('id, brands!inner(organization_id)', { count: 'exact', head: true })
+    .eq('status', 'running')
+    .eq('brands.organization_id', orgId)
+    .gte('created_at', since);
+  return count || 0;
+}
+
+/**
+ * Enforce the monthly Site Audit quota for an organization before starting
+ * `count` audits. Counts completed audits this billing period, plus the ones
+ * still running, against plan.limits.maxSiteAudits (Starter 100, Growth 500,
+ * Enterprise/Self-hosted unlimited). Throws PlanLimitError (429) when the
+ * audits don't fit, starting none; returns { plan, remaining } otherwise.
+ */
+export async function enforceSiteAuditQuota(orgId, count = 1) {
   const plan = await resolveOrgPlanByOrgId(orgId);
   const max = plan.limits.maxSiteAudits;
   if (max === -1) return { plan, remaining: -1 };
 
-  const used = await countSiteAuditUsageThisMonth(orgId);
-  if (used >= max) {
+  const [used, running] = await Promise.all([
+    countSiteAuditUsageThisMonth(orgId),
+    countRunningSiteAudits(orgId),
+  ]);
+  const remaining = max - used - running;
+  if (remaining <= 0) {
+    const inFlight = running > 0 ? `, ${running} still running` : '';
     throw new PlanLimitError(
-      `Monthly Site Audit limit reached (${used}/${max}) on the ${plan.name} plan. Resets when your subscription renews — upgrade for more.`,
+      `Monthly Site Audit limit reached (${used + running}/${max}${inFlight}) on the ${plan.name} plan. Resets when your subscription renews — upgrade for more.`,
+      429,
+    );
+  }
+  if (count > remaining) {
+    throw new PlanLimitError(
+      `These ${count} audits need more than the ${remaining} left this month on the ${plan.name} plan. Select up to ${remaining}.`,
       429,
     );
   }
 
-  return { plan, remaining: max - used };
+  return { plan, remaining };
 }
 
 /**
  * Get current Site Audit quota status without enforcing.
- * Returns { used, limit, remaining }.
+ * Returns { used, running, limit, remaining }; running audits are already
+ * taken out of what remains.
  */
 export async function getSiteAuditQuotaStatus(orgId) {
   const plan = await resolveOrgPlanByOrgId(orgId);
   const max = plan.limits.maxSiteAudits;
-  if (max === -1) return { used: 0, limit: -1, remaining: -1 };
+  if (max === -1) return { used: 0, running: 0, limit: -1, remaining: -1 };
 
-  const used = await countSiteAuditUsageThisMonth(orgId);
-  return { used, limit: max, remaining: Math.max(0, max - used) };
+  const [used, running] = await Promise.all([
+    countSiteAuditUsageThisMonth(orgId),
+    countRunningSiteAudits(orgId),
+  ]);
+  return { used, running, limit: max, remaining: Math.max(0, max - used - running) };
 }
 
 /**

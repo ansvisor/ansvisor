@@ -1,5 +1,6 @@
-import type { ActionItem } from '@/lib/actions/action-center';
+import type { ActionEvent, ActionItem } from '@/lib/actions/action-center';
 import { isActionKind } from '@/lib/action-center/registry';
+import { formatCompactNumber } from '@/lib/format';
 
 /**
  * Composes what an action row shows from `kind` + `payload`, mirroring the
@@ -78,6 +79,56 @@ export function actionTexts(
       description: typeof p.why === 'string' && p.why ? p.why : t(`${action.kind}.description`),
     };
   }
+  // A topic gap sent from Insights (VIS-010) names the topic, the competitor
+  // and the gap it was sent with.
+  if (
+    action.kind === 'topic_competitor_gap' &&
+    typeof p.topicName === 'string' &&
+    typeof p.competitorName === 'string' &&
+    typeof p.gap === 'number'
+  ) {
+    return {
+      title: t(`${action.kind}.title`, {
+        gap: p.gap.toFixed(1),
+        competitor: p.competitorName,
+        topic: p.topicName,
+      }),
+      description: t(`${action.kind}.description`),
+    };
+  }
+  // An Opportunities topic sent from Insights (VIS-011) names the topic and
+  // the demand it was sent with.
+  if (
+    action.kind === 'topic_opportunity' &&
+    typeof p.topicName === 'string' &&
+    typeof p.demand === 'number'
+  ) {
+    return {
+      title: t(`${action.kind}.title`, {
+        demand: formatCompactNumber(p.demand),
+        topic: p.topicName,
+      }),
+      description: t(`${action.kind}.description`),
+    };
+  }
+  // Answers sent from Mentions (MS-08) name their prompt, or how many prompts.
+  if (
+    action.kind === 'mention_review' &&
+    typeof p.mentionCount === 'number' &&
+    typeof p.promptCount === 'number'
+  ) {
+    const negative = typeof p.negativeCount === 'number' ? p.negativeCount : 0;
+    return {
+      title:
+        p.promptCount === 1 && typeof p.promptText === 'string' && p.promptText
+          ? t(`${action.kind}.title`, { prompt: p.promptText })
+          : t(`${action.kind}.titleMany`, { count: p.promptCount }),
+      description:
+        negative > 0
+          ? t(`${action.kind}.descriptionNegative`, { count: p.mentionCount, negative })
+          : t(`${action.kind}.descriptionCounts`, { count: p.mentionCount }),
+    };
+  }
   const targets = targetLabel(p, t);
   return {
     title: targets ? t(`${action.kind}.title`, { targets }) : t(`${action.kind}.titleGeneric`),
@@ -102,6 +153,31 @@ export function eventTaskText(
   return t(key);
 }
 
+/** A History entry as a sentence: what happened, to what, by which tool. */
+export function actionEventText(
+  event: ActionEvent,
+  t: Translator,
+  tTasks: Translator & { has?: (key: string) => boolean },
+): string {
+  return t(`drawer.events.${event.event}`, {
+    to: String(event.data.to ?? ''),
+    count: Number(event.data.count ?? 0),
+    // Work the product did itself names the task in the reader's language
+    // and the tool as it is recorded — the tool id is the audit fact, so it
+    // is not translated.
+    task: eventTaskText(event.data.task, tTasks),
+    tool: String(event.data.tool ?? ''),
+    improved: Number(event.data.improved ?? 0),
+    measurable: Number(event.data.measurable ?? 0),
+    // A task someone added, renamed or sent is named in its own words, as it
+    // was typed (AC-004).
+    title: String(event.data.title ?? ''),
+    // The validation sweep's verdict once the action closed: improved,
+    // declined, and so on.
+    outcome: String(event.data.outcome ?? ''),
+  });
+}
+
 /**
  * What the drawer shows under "Goal".
  *
@@ -121,31 +197,28 @@ export function actionGoal(
   return isActionKind(kind) ? t(`${kind}.goal`) : t('unknown.goal');
 }
 
+/** Kinds a person sends rather than a definition raises. */
+const PERSON_SENT_KINDS: string[] = [
+  'content_opportunity',
+  'prompt_improve',
+  'topic_competitor_gap',
+  'topic_opportunity',
+  'mention_review',
+];
+
 /** Compact evidence chips under the title: signal count plus the kind's own
  *  count (pages, prompts, competitors). */
 export function actionContextTags(action: ActionItem, t: Translator): string[] {
-  // Actions a person sent (a content opportunity, an Improve set) have no
-  // detection signals by design; "0 signals" would read as missing evidence.
-  const tags =
-    action.kind === 'content_opportunity' || action.kind === 'prompt_improve'
-      ? []
-      : [t('tags.signals', { count: action.signalCount })];
+  // Actions a person sent (a content opportunity, an Improve set, a topic
+  // gap or opportunity) have no detection signals by design; "0 signals" would read as
+  // missing evidence.
+  const tags = PERSON_SENT_KINDS.includes(action.kind)
+    ? []
+    : [t('tags.signals', { count: action.signalCount })];
   const count = num(action.payload ?? {}, 'targetCount');
   const entity = str(action.payload ?? {}, 'targetEntity');
   if (count > 0 && entity) tags.push(t(`tags.${entity}`, { count }));
   return tags;
-}
-
-const IMPACT_RANK: Record<ActionItem['impact'], number> = { high: 3, medium: 2, low: 1 };
-
-/** Priority: impact first, then weight of evidence, then recency. The
- *  scoring formula stays out of the UI per the brief — this order IS it. */
-export function comparePriority(a: ActionItem, b: ActionItem): number {
-  return (
-    IMPACT_RANK[b.impact] - IMPACT_RANK[a.impact] ||
-    b.signalCount - a.signalCount ||
-    b.updatedAt.localeCompare(a.updatedAt)
-  );
 }
 
 /**
