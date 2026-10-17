@@ -18631,6 +18631,70 @@ comment on function public.insights_topic_competitors_daily(uuid, date, date, te
   'Insights "Topics vs competitors" (VIS-010, 00137; planned with its arguments, security definer, 00152): per active topic, the brand''s Visibility components over the topic''s prompts and each live competitor''s components over the same answers, from the prompt-grain rollups. complete=false until they are backfilled (00130). Null when the caller is not a member of the brand''s organization.';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00154_prompt_volume_median.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- A prompt's volume is the median of its keywords' Google volumes, not their
+-- sum.
+--
+-- Volume analysis gives each prompt five head terms for its category
+-- (server/src/lib/intent-extraction.js) and looked up their Google volumes.
+-- Their sum stood for the prompt, but the five overlap, so the same searchers
+-- were counted several times over, and one very broad term ("google gemini",
+-- 5M a month) could set the whole figure: a single prompt read ~755k
+-- estimated AI searches a month, and the Insights total ran to millions.
+-- summarizeVolumes (server/src/lib/volume-analysis.js) now takes the median of
+-- the keywords that have any volume; this applies the same rule to the rows
+-- already stored, from the per-keyword volumes they keep, so no keyword is
+-- looked up again. A row with no measured keyword stays at 0.
+--
+-- total_google_volume keeps its name; it now holds that median.
+
+update public.prompt_volumes pv
+set total_google_volume = m.google_volume,
+    est_ai_volume = round(m.google_volume * pv.ai_volume_multiplier)::integer
+from (
+  select p.id,
+         coalesce(round(percentile_cont(0.5) within group (order by k.volume)), 0)::integer
+           as google_volume
+  from public.prompt_volumes p
+  left join lateral (
+    select e.value::numeric as volume
+    from jsonb_each_text(p.google_volumes) e
+    -- Only numbers are cast; the case keeps the cast behind the check.
+    where case when e.value ~ '^[0-9]+(\.[0-9]+)?$' then e.value::numeric > 0 else false end
+  ) k on true
+  group by p.id
+) m
+where m.id = pv.id
+  and (pv.total_google_volume is distinct from m.google_volume
+       or pv.est_ai_volume is distinct from round(m.google_volume * pv.ai_volume_multiplier)::integer);
+
+comment on column public.prompt_volumes.total_google_volume is
+  'The prompt''s Google volume: the median of google_volumes'' measured keywords (named before the median replaced their sum).';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00155_ai_volume_multiplier_45.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- The AI adoption rate's default goes from 15% to 45% of a prompt's Google
+-- volume.
+--
+-- est_ai_volume is the prompt's Google volume (the median of its keywords',
+-- 00154) times the AI adoption rate, AI_VOLUME_MULTIPLIER on the server.
+-- Its default was 15%, about the share of Google searches that showed an AI
+-- Overview a year ago; they now appear on roughly 43–48%
+-- (server/src/lib/intent-extraction.js). This moves the rows stored at the
+-- old default to the new one. Rows saved under any other rate were set on
+-- purpose by the install, and are left alone.
+--
+-- An install that sets AI_VOLUME_MULTIPLIER=0.15 itself (server/.env.example
+-- did) keeps analyzing at 15% until it is changed to 0.45 or removed.
+
+update public.prompt_volumes
+set ai_volume_multiplier = 0.450,
+    est_ai_volume = round(total_google_volume * 0.450)::integer
+where ai_volume_multiplier = 0.150;
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00157_mentions_daily.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- Mentions & Sentiment (MS-04): where AI names the brand, the tone of those
