@@ -12,9 +12,14 @@ function escape(value: unknown): string {
   return s;
 }
 
+/** One line of values, each escaped as toCsv escapes a cell. */
+export function csvLine(values: unknown[]): string {
+  return values.map(escape).join(',');
+}
+
 export function toCsv(rows: Record<string, unknown>[], headers: string[]): string {
   const headerLine = headers.join(',');
-  const dataLines = rows.map((row) => headers.map((header) => escape(row[header])).join(','));
+  const dataLines = rows.map((row) => csvLine(headers.map((header) => row[header])));
 
   return [headerLine, ...dataLines].join('\n');
 }

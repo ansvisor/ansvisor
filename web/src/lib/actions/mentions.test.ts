@@ -29,6 +29,7 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/config/api', () => ({ API_BASE_URL: 'http://api.test' }));
 
 import {
+  exportMentions,
   getMentionResponse,
   getMentionsOverview,
   getMentionsPerception,
@@ -39,7 +40,8 @@ import {
 import { DEFAULT_MENTIONS_TABLE } from '@/lib/mentions-list';
 
 beforeEach(() => {
-  rpc.mockClear();
+  rpc.mockReset();
+  rpc.mockImplementation(async () => result);
   from.mockClear();
   tableCalls.length = 0;
   result = { data: null, error: null };
@@ -181,6 +183,71 @@ describe('listMentions', () => {
     await expect(listMentions('b1', { from: 'f' }, DEFAULT_MENTIONS_TABLE, 0)).resolves.toBeNull();
     result = { data: null, error: { code: '57014', message: 'statement timeout' } };
     await expect(listMentions('b1', { from: 'f' }, DEFAULT_MENTIONS_TABLE, 0)).rejects.toThrow(
+      'statement timeout',
+    );
+  });
+});
+
+describe('exportMentions', () => {
+  // A page of the list for an offset: `total` mentions, ids m0…, 100 a page; with
+  // `overlap`, the pages after the first start that many rows early.
+  const pages = (total: number, overlap = 0) =>
+    rpc.mockImplementation((async (_fn: string, args: { p_offset: number }) => {
+      const start = Math.max(0, args.p_offset - (args.p_offset > 0 ? overlap : 0));
+      const ids = Array.from({ length: Math.max(0, Math.min(100, total - start)) }, (_, i) => i);
+      return {
+        data: {
+          total,
+          prompts: 3,
+          rows: ids.map((i) => ({ id: `m${start + i}`, response: 'Acme Coffee is good.' })),
+        },
+        error: null,
+      };
+    }) as never);
+
+  it('reads every page under the filters, ungrouped, and cuts each answer to its excerpt', async () => {
+    pages(250);
+    tableResult = { data: { name: 'Acme Coffee', brand_domains: [] }, error: null };
+    const list = await exportMentions(
+      'b1',
+      { from: '2026-10-10T00:00:00.000Z' },
+      { ...DEFAULT_MENTIONS_TABLE, sentiment: 'negative', group: 'prompt' },
+    );
+    expect(rpc.mock.calls.map((c) => (c as unknown[])[1])).toEqual(
+      [0, 100, 200].map((offset) =>
+        expect.objectContaining({
+          p_sentiment: 'negative',
+          p_group: undefined,
+          p_limit: 100,
+          p_offset: offset,
+        }),
+      ),
+    );
+    expect(list).toMatchObject({ total: 250, prompts: 3, brandTerms: ['Acme Coffee'] });
+    expect(list?.rows).toHaveLength(250);
+    expect(list?.rows[249]).toMatchObject({ id: 'm249', excerpt: 'Acme Coffee is good.' });
+    expect(list?.rows[0]).not.toHaveProperty('response');
+  });
+
+  it('stops at 5,000 mentions, and keeps each answer once when the pages shift', async () => {
+    pages(12_345, 1);
+    const list = await exportMentions('b1', { from: 'f' }, DEFAULT_MENTIONS_TABLE);
+    expect(rpc).toHaveBeenCalledTimes(50);
+    expect(list?.total).toBe(12_345);
+    // An answer stored after the first page shifts the rest by one: its repeat is dropped.
+    expect(list?.rows).toHaveLength(4999);
+    expect(new Set(list?.rows.map((r) => r.id)).size).toBe(list?.rows.length);
+  });
+
+  it('is null before the migration has run, and throws when a later page fails', async () => {
+    result = { data: null, error: { code: 'PGRST202', message: 'not found' } };
+    await expect(exportMentions('b1', { from: 'f' }, DEFAULT_MENTIONS_TABLE)).resolves.toBeNull();
+
+    rpc.mockImplementation((async (_fn: string, args: { p_offset: number }) =>
+      args.p_offset === 0
+        ? { data: { total: 150, prompts: 1, rows: [] }, error: null }
+        : { data: null, error: { code: '57014', message: 'statement timeout' } }) as never);
+    await expect(exportMentions('b1', { from: 'f' }, DEFAULT_MENTIONS_TABLE)).rejects.toThrow(
       'statement timeout',
     );
   });

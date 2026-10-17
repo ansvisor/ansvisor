@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { TablePager, usePagination } from '@/components/table-pager';
-import { Send } from 'lucide-react';
+import { Download, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -29,6 +29,7 @@ import type { MentionNames } from './_mention-parts';
 import { MentionsTable } from './_mentions-table';
 import { ResponseDrawer } from './_response-drawer';
 import { useMentionActions } from './_use-mention-actions';
+import type { useMentionsExport } from './_use-mentions-export';
 
 /** Typing in the search box reads once it pauses, not on every key. */
 const READ_DELAY_MS = 250;
@@ -53,7 +54,7 @@ function Message({ children }: { children: React.ReactNode }) {
  * a time, under the page's filters and the table's own (sentiment, a
  * competitor named in the same answer, grouping, sort), which live in the
  * URL too. A row opens the response drawer; ticked rows go to the Action
- * Center together.
+ * Center together, or into a CSV.
  */
 export function MentionsListTab({
   brandId,
@@ -61,15 +62,18 @@ export function MentionsListTab({
   competitors,
   brandDomains,
   showCountry,
+  exporter,
 }: {
   brandId: string;
   filters: MentionsFilters;
   competitors: Competitor[];
   brandDomains: string[];
   showCountry: boolean;
+  exporter: ReturnType<typeof useMentionsExport>;
 }) {
   const t = useTranslations('mentions.table');
   const tActions = useTranslations('mentions.actions');
+  const tExport = useTranslations('mentions.export');
   const tSentiment = useTranslations('mentions.overview.sentiment');
   const query = useMemo(() => mentionsQuery(filters), [filters]);
 
@@ -164,6 +168,14 @@ export function MentionsListTab({
   const selectedRows = shownRows.filter((r) => selected.has(r.id));
   const sendSelected = async () => {
     if (await actions.send(selectedRows)) setSelected(new Set());
+  };
+  const exportSelected = () => {
+    if (loaded?.status !== 'ok' || !loaded.list) return;
+    void exporter.exportCsv(table, {
+      total: loaded.list.total,
+      prompts: loaded.list.prompts,
+      rows: selectedRows,
+    });
   };
 
   // A new page starts at its first row: the table scrolls inside its own box.
@@ -295,6 +307,15 @@ export function MentionsListTab({
           <Button size="sm" onClick={sendSelected} disabled={actions.sending}>
             <Send className="h-3.5 w-3.5" />
             {tActions('sendToActionCenter')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportSelected}
+            disabled={exporter.busy !== null}
+          >
+            <Download className="h-3.5 w-3.5" />
+            {tExport('exportSelected')}
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
             {tActions('clearSelection')}

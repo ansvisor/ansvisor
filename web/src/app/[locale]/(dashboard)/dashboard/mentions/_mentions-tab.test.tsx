@@ -4,7 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import { DEFAULT_MENTIONS_FILTERS } from '@/lib/mentions-filters';
-import type { MentionRow, MentionsList } from '@/lib/mentions-list';
+import { DEFAULT_MENTIONS_TABLE, type MentionRow, type MentionsList } from '@/lib/mentions-list';
 import type { Competitor } from '@/types';
 import { MentionsListTab } from './_mentions-tab';
 
@@ -102,6 +102,9 @@ async function settle() {
   });
 }
 
+// Export CSV itself is covered in _header-actions.test.tsx; the table hands it the ticked rows.
+const exporter = { ready: true, busy: null, exportCsv: vi.fn(), copySummary: vi.fn() };
+
 const tab = (props: Partial<React.ComponentProps<typeof MentionsListTab>> = {}) => (
   <MentionsListTab
     brandId="b1"
@@ -109,6 +112,7 @@ const tab = (props: Partial<React.ComponentProps<typeof MentionsListTab>> = {}) 
     competitors={competitors}
     brandDomains={['acme.com']}
     showCountry={false}
+    exporter={exporter}
     {...props}
   />
 );
@@ -128,6 +132,7 @@ afterEach(() => {
   getMentionResponse.mockReset();
   sendMentionsToActionCenter.mockReset();
   overrideMentionSentiment.mockReset();
+  exporter.exportCsv.mockReset();
   canManage = true;
   suggestContentForPrompt.mockReset();
   push.mockReset();
@@ -269,6 +274,24 @@ describe('MentionsListTab', () => {
     expect(push).toHaveBeenCalledWith('/dashboard/action-center/actions?action=a1');
     // Sent: the selection is cleared.
     expect(container.textContent).not.toContain('selected');
+  });
+
+  it("exports the ticked answers under the table's controls", async () => {
+    window.history.replaceState(null, '', '/dashboard/mentions?tab=mentions&sentiment=negative');
+    listMentions.mockResolvedValue(list());
+    render(tab());
+    await settle();
+    const boxes = [...container.querySelectorAll('button[role="checkbox"]')] as HTMLElement[];
+    act(() => boxes[2].click());
+
+    const exportButton = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Export',
+    ) as HTMLElement;
+    act(() => exportButton.click());
+    expect(exporter.exportCsv).toHaveBeenCalledWith(
+      { ...DEFAULT_MENTIONS_TABLE, sentiment: 'negative' },
+      { total: 2, prompts: 1, rows: [expect.objectContaining({ id: 'r2' })] },
+    );
   });
 
   it('sends one answer, and suggests content for its prompt, from the drawer', async () => {

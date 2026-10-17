@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { toCsv } from './csv.js';
+import { csvLine, toCsv } from './csv.js';
 
 test('plain values pass through unquoted', () => {
   const result = toCsv([{ name: 'hello', value: 'world' }], ['name', 'value']);
@@ -80,4 +80,8 @@ test('string with leading formula trigger and comma is prefixed and quoted', () 
 test('negative numbers remain untouched as numeric values', () => {
   const result = toCsv([{ score: -3.2, rank: -5 }], ['score', 'rank']);
   expect(result).toBe('score,rank\n-3.2,-5');
+});
+
+test('csvLine escapes each value as a cell', () => {
+  expect(csvLine(['Search', 'a, "b"', '=1+1', null])).toBe(`Search,"a, ""b""",'=1+1,`);
 });
