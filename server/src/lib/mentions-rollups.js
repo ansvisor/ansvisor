@@ -35,6 +35,14 @@ export async function refreshMentionsDaily(brandId, dayFrom, dayTo) {
 }
 
 /**
+ * Days per history refresh call. Shorter than the citation rollups' two
+ * weeks: the refresh also reads each answer's text for its terms (00161),
+ * about a millisecond per answer and entity named, so a large brand's
+ * fortnight would near the service role's statement timeout.
+ */
+export const MENTION_HISTORY_CHUNK_DAYS = 3;
+
+/**
  * Recompute a brand's whole mention history, a chunk at a time so no call
  * nears the service role's statement timeout. Resolves to the number of
  * chunks written; throws when a chunk fails, so the caller can retry later.
@@ -44,7 +52,7 @@ export async function refreshMentionHistory(brandId, { pauseMs = 0 } = {}) {
   if (!firstDay) return 0;
   const lastDay = await resultDayBound(brandId, false);
 
-  const chunks = dayChunks(firstDay, lastDay);
+  const chunks = dayChunks(firstDay, lastDay, MENTION_HISTORY_CHUNK_DAYS);
   for (const [from, to] of chunks) {
     const ok = await refreshMentionsDaily(brandId, from, to);
     if (!ok) throw new Error(`mention rollup refresh failed for ${brandId} ${from}..${to}`);

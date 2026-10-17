@@ -15,6 +15,7 @@ import {
   type SentimentOverride,
 } from '@/lib/mentions-list';
 import { parseMentionsOverview, type MentionsOverview } from '@/lib/mentions-overview';
+import { parseMentionsPerception, type MentionsPerception } from '@/lib/mentions-perception';
 import type { Citation } from '@/types';
 
 /**
@@ -274,4 +275,30 @@ export async function sendMentionsToActionCenter(
     return { error: body.details || body.error || `Server error: ${res.status}` };
   }
   return res.json();
+}
+
+/**
+ * The Perception tab's figures (MS-09) for a window and the window before it,
+ * from the per-answer terms (00161): the brand's terms, the attributes that
+ * tell it and its competitors apart, and the competitors named beside it.
+ *
+ * Null as getMentionsOverview: no function yet (PGRST202), or no access.
+ */
+export async function getMentionsPerception(
+  brandId: string,
+  query: MentionsQuery,
+): Promise<MentionsPerception | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('mentions_perception', {
+    p_brand_id: brandId,
+    p_date_from: query.from,
+    p_date_to: query.to,
+    p_platform: query.platform,
+    p_region: query.region,
+    p_topic_id: query.topicId,
+    p_search: query.search,
+  });
+  if (error?.code === 'PGRST202') return null;
+  if (error) throw new Error(error.message);
+  return parseMentionsPerception(data);
 }
