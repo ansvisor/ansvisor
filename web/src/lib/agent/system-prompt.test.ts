@@ -28,4 +28,19 @@ describe('buildAgentSystemPrompt', () => {
       "If there is no default brand and the user doesn't name one, call list_brands.",
     );
   });
+
+  it('lists the Mentions & Sentiment tools and how to read net sentiment', () => {
+    const prompt = buildAgentSystemPrompt(now);
+
+    for (const name of [
+      'get_mentions_summary',
+      'list_mentions',
+      'get_mention',
+      'get_mention_competitors',
+      'get_mentions_perception',
+    ]) {
+      expect(prompt).toContain(`- **${name}** —`);
+    }
+    expect(prompt).toContain('Under 20 mentions a figure is a low sample (`lowSample: true`)');
+  });
 });
