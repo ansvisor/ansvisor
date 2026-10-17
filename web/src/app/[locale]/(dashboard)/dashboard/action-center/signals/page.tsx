@@ -8,6 +8,7 @@ import {
   AlertCircle,
   Download,
   Info,
+  Minus,
   Radar,
   Search,
   TrendingDown,
@@ -55,6 +56,7 @@ import { cn } from '@/lib/utils';
 import { toCsv } from '@/lib/csv';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import type { KpiTrendPoint } from '@/lib/actions/kpis';
+import { signalChangeTone, signedPercent, type SignalMetric } from '@/lib/signals/metrics';
 
 const SIGNAL_EXPORT_HEADERS = [
   'title',
@@ -428,7 +430,9 @@ function SignalsContent({ brand }: { brand: Brand }) {
       {summary && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <SummaryCard
+            metric="total"
             label={t('cards.total')}
+            population={t('cards.totalPopulation', { days: windowDays })}
             value={summary.total}
             prev={summary.prevTotal}
             rangeLabel={prevRangeLabel}
@@ -436,7 +440,9 @@ function SignalsContent({ brand }: { brand: Brand }) {
             note={countsNote}
           />
           <SummaryCard
+            metric="important"
             label={t('cards.important')}
+            population={t('cards.importantPopulation', { days: windowDays })}
             value={summary.important}
             prev={summary.prevImportant}
             rangeLabel={prevRangeLabel}
@@ -444,7 +450,9 @@ function SignalsContent({ brand }: { brand: Brand }) {
             note={countsNote}
           />
           <SummaryCard
+            metric="new"
             label={t('cards.new')}
+            population={t('cards.newPopulation', { days: windowDays })}
             value={summary.newCount}
             prev={summary.prevNew}
             rangeLabel={prevRangeLabel}
@@ -452,7 +460,9 @@ function SignalsContent({ brand }: { brand: Brand }) {
             note={countsNote}
           />
           <SummaryCard
+            metric="resolved"
             label={t('cards.resolved')}
+            population={t('cards.resolvedPopulation', { days: windowDays })}
             value={summary.resolved}
             prev={summary.prevResolved}
             rangeLabel={prevRangeLabel}
@@ -599,14 +609,19 @@ function SignalsContent({ brand }: { brand: Brand }) {
 }
 
 function SummaryCard({
+  metric,
   label,
+  population,
   value,
   prev,
   rangeLabel,
   spark,
   note,
 }: {
+  metric: SignalMetric;
   label: string;
+  /** What the count counts, in the selected range (AC-008). */
+  population: string;
   value: number;
   prev: number;
   rangeLabel: string;
@@ -636,21 +651,26 @@ function SummaryCard({
             </span>
           )}
         </div>
+        <p className="mt-0.5 text-xs text-muted-foreground">{population}</p>
         <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
           {change !== null ? (
             <>
               <span
                 className={cn(
                   'flex items-center gap-0.5 font-medium',
-                  change >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500',
+                  signalChangeTone(metric, change) === 'positive'
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-foreground/80',
                 )}
               >
-                {change >= 0 ? (
-                  <TrendingUp className="h-3 w-3" />
+                {change > 0 ? (
+                  <TrendingUp className="h-3 w-3" aria-hidden="true" />
+                ) : change < 0 ? (
+                  <TrendingDown className="h-3 w-3" aria-hidden="true" />
                 ) : (
-                  <TrendingDown className="h-3 w-3" />
+                  <Minus className="h-3 w-3" aria-hidden="true" />
                 )}
-                {Math.abs(change)}%
+                {signedPercent(change)}
               </span>
               {t('cards.vsRange', { range: rangeLabel })}
             </>
@@ -685,6 +705,9 @@ function AvgImpactCard({ summary, days }: { summary: SignalsSummary; days: numbe
       <CardContent className="p-4">
         <p className="text-xs font-medium text-muted-foreground">{t('cards.avgImpact')}</p>
         <p className="mt-1 text-2xl font-bold">{t(`impact.${level}`)}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {t('cards.avgImpactPopulation', { days })}
+        </p>
         <div className="mt-1.5 flex gap-0.5" aria-hidden="true">
           {Array.from({ length: 12 }, (_, i) => (
             <span
