@@ -100,3 +100,41 @@ describe('opportunityToMarkdown', () => {
     expect(md).not.toContain('Decision:');
   });
 });
+
+describe('an opportunity sent from an action task (AC-004)', () => {
+  it("copies the task's where, why, steps and check", () => {
+    const md = opportunityToMarkdown(
+      {
+        ...base,
+        sourceData: {
+          fromAction: {
+            actionId: 'a1',
+            actionNo: 29,
+            taskId: 't1',
+            task: {
+              where: 'acme.example/pricing',
+              why: 'Cited #2 until Oct 12.',
+              how: ['Add a table.', 'Update the title.'],
+              doneWhen: 'Cited again within 14 days.',
+              effort: '~2h',
+              role: 'Content writer',
+            },
+          },
+        },
+      },
+      null,
+    );
+    expect(md).toContain(
+      [
+        '## From a task in AC-29',
+        '',
+        '- Where: acme.example/pricing',
+        '- Why: Cited #2 until Oct 12.',
+        '1. Add a table.',
+        '2. Update the title.',
+        '- Done when: Cited again within 14 days.',
+        '- Effort: ~2h · Content writer',
+      ].join('\n'),
+    );
+  });
+});

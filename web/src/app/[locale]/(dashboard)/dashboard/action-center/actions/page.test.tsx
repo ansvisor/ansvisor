@@ -1,0 +1,149 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Brand } from '@/types';
+import type { ActionItem } from '@/lib/actions/action-center';
+
+/**
+ * The actions list's Export CSV (AC-005): it reads what each listed action's
+ * Affected tab names, then downloads the list with it, as UTF-8 Excel reads.
+ */
+
+(
+  globalThis as typeof globalThis & {
+    IS_REACT_ACT_ENVIRONMENT: boolean;
+  }
+).IS_REACT_ACT_ENVIRONMENT = true;
+
+const brand: Brand = {
+  id: 'brand-id',
+  organizationId: 'organization-id',
+  name: 'Acme',
+  slug: 'acme',
+  industry: 'Technology',
+  region: 'US',
+  shoppingModeEnabled: false,
+  isActive: true,
+  domains: [],
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
+
+const action: ActionItem = {
+  id: 'a1',
+  actionNo: 35,
+  category: 'recover',
+  kind: 'recover_lost_citations',
+  impact: 'high',
+  status: 'new',
+  payload: {},
+  kpiKeys: [],
+  assignee: null,
+  dueDate: null,
+  createdAt: '2026-10-16T09:05:31Z',
+  updatedAt: '2026-10-16T09:05:31Z',
+  taskTotal: 8,
+  taskCompleted: 0,
+  signalCount: 3,
+  priorityScore: 90,
+  priorityLevel: 'critical',
+  priorityReason: null,
+};
+
+const { getActionsAffected, saveBlob, toast } = vi.hoisted(() => ({
+  getActionsAffected: vi.fn(),
+  saveBlob: vi.fn(),
+  toast: { error: vi.fn(), success: vi.fn() },
+}));
+
+vi.mock('next-intl', () => ({
+  useTranslations: () => (key: string) => key,
+}));
+vi.mock('@/stores/use-brand-store', () => ({
+  useBrandStore: (selector: (state: { getActiveBrand: () => Brand }) => unknown) =>
+    selector({ getActiveBrand: () => brand }),
+}));
+vi.mock('@/lib/actions/action-center', () => ({
+  getActions: vi.fn(async () => [action]),
+  getActionsAffected,
+}));
+vi.mock('@/lib/actions/team', () => ({ listMembers: vi.fn(async () => []) }));
+vi.mock('@/lib/download', () => ({ saveBlob }));
+vi.mock('sonner', () => ({ toast }));
+vi.mock('@/components/action-center/action-center-tabs', () => ({ ActionCenterTabs: () => null }));
+vi.mock('@/components/action-center/action-table', () => ({ ActionTable: () => null }));
+vi.mock('@/components/action-center/action-drawer', () => ({ ActionDrawer: () => null }));
+
+const { default: ActionCenterActionsPage } = await import('./page');
+
+let container: HTMLDivElement;
+let root: Root;
+
+const exportButton = () =>
+  [...container.querySelectorAll('button')].find((b) => b.textContent === 'exportCsv')!;
+
+async function render() {
+  await act(async () => root.render(<ActionCenterActionsPage />));
+}
+
+beforeEach(() => {
+  container = document.createElement('div');
+  document.body.append(container);
+  root = createRoot(container);
+  getActionsAffected.mockReset();
+  saveBlob.mockReset();
+  toast.error.mockReset();
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+});
+
+describe('the actions list Export CSV', () => {
+  it("adds each action's affected count and names, in a file Excel reads as UTF-8", async () => {
+    getActionsAffected.mockResolvedValue({
+      a1: { count: 3, items: ['Best coffee subscription?', 'Coffee delivery'] },
+    });
+    await render();
+    await act(async () => exportButton().click());
+
+    expect(getActionsAffected).toHaveBeenCalledWith('brand-id', ['a1']);
+    const [blob, fileName] = saveBlob.mock.calls[0] as [Blob, string];
+    expect(fileName).toMatch(/^ansvisor_acme_actions_\d{4}-\d{2}-\d{2}\.csv$/);
+    const bytes = await new Promise<Uint8Array>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+      reader.readAsArrayBuffer(blob);
+    });
+    expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    const [header, row] = new TextDecoder().decode(bytes.slice(3)).split('\n');
+    expect(header).toContain(',signal_count,affected_count,affected_items,created');
+    expect(row).toContain(',3,3,Best coffee subscription?; Coffee delivery,');
+    expect(exportButton().disabled).toBe(false);
+  });
+
+  it('says so when the affected items cannot be read, and downloads nothing', async () => {
+    getActionsAffected.mockRejectedValue(new Error('offline'));
+    await render();
+    await act(async () => exportButton().click());
+
+    expect(toast.error).toHaveBeenCalledWith('export.exportFailed');
+    expect(saveBlob).not.toHaveBeenCalled();
+    expect(exportButton().disabled).toBe(false);
+  });
+
+  it("holds the button while it reads, and drops the file once the brand's view is gone", async () => {
+    let answer: (value: unknown) => void = () => {};
+    getActionsAffected.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    await render();
+    await act(async () => exportButton().click());
+    expect(exportButton().disabled).toBe(true);
+
+    act(() => root.unmount());
+    await act(async () => answer({}));
+    expect(saveBlob).not.toHaveBeenCalled();
+    // Mounted again for afterEach's unmount.
+    root = createRoot(container);
+  });
+});

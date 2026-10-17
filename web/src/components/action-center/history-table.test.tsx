@@ -15,6 +15,12 @@ vi.mock('@/i18n/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
+// The drawer reads the action's signals for its goal (AC-003); none here.
+vi.mock('@/lib/actions/action-center', () => ({
+  getActionSignals: vi.fn(async () => []),
+  getPromptDemand: vi.fn(async () => ({})),
+}));
+
 import { HistoryTable } from './history-table';
 import { HistoryDrawer } from './history-drawer';
 
@@ -23,7 +29,8 @@ const item = (overrides: Partial<ActionHistoryItem> = {}): ActionHistoryItem => 
   actionNo: 1,
   kind: 'recover_visibility',
   type: 'recover',
-  impact: 'high',
+  priorityScore: 72,
+  priorityLevel: 'high',
   status: 'completed',
   outcome: 'pending_measurement',
   payload: {},
@@ -35,6 +42,7 @@ const item = (overrides: Partial<ActionHistoryItem> = {}): ActionHistoryItem => 
   positionOutcome: null,
   tasks: [],
   assignee: null,
+  dueDate: null,
   createdAt: '2026-01-01T00:00:00.000Z',
   completedAt: '2026-01-05T00:00:00.000Z',
   timeToCloseDays: 4,
@@ -110,6 +118,7 @@ describe('HistoryDrawer', () => {
   ])('shows %i affected signal(s) as "%s"', async (count, text) => {
     const root = await render(
       <HistoryDrawer
+        brandId="b1"
         item={item({ affected: [counted('citation', count)] })}
         onOpenChange={() => {}}
       />,
@@ -123,7 +132,7 @@ describe('HistoryDrawer', () => {
     [4, '4 days'],
   ])('shows a time to close of %i as "%s"', async (days, text) => {
     const root = await render(
-      <HistoryDrawer item={item({ timeToCloseDays: days })} onOpenChange={() => {}} />,
+      <HistoryDrawer brandId="b1" item={item({ timeToCloseDays: days })} onOpenChange={() => {}} />,
     );
     expect(textAfterLabel('Time to Close')).toBe(text);
     await act(async () => root.unmount());

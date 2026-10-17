@@ -19,6 +19,7 @@ export async function GET(req: Request) {
   const statusRaw = url.searchParams.get('status');
   const categoryRaw = url.searchParams.get('category');
   const limitRaw = url.searchParams.get('limit');
+  const sortRaw = url.searchParams.get('sort');
   const limit = limitRaw ? Number.parseInt(limitRaw, 10) : undefined;
 
   try {
@@ -27,6 +28,7 @@ export async function GET(req: Request) {
       status: statusRaw && STATUSES.includes(statusRaw) ? statusRaw : undefined,
       category: categoryRaw && CATEGORIES.includes(categoryRaw) ? categoryRaw : undefined,
       limit: Number.isFinite(limit) ? limit : undefined,
+      sort: sortRaw === 'priority' || sortRaw === 'updated' ? sortRaw : undefined,
     });
     if (actions === null) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
