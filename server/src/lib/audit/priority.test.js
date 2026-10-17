@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { PRIORITY_WEIGHTS, rankOpportunities, scorePriority, sessionsRanker } from './priority.js';
+import {
+  PRIORITY_WEIGHTS,
+  rankOpportunities,
+  scorePriority,
+  scoreTemplate,
+  sessionsRanker,
+} from './priority.js';
 
 const row = (over = {}) => ({
   path: '/page',
@@ -101,6 +107,63 @@ describe('scorePriority', () => {
     expect(ease(0.5)).toBe(0.75);
     expect(ease(0.2)).toBe(0.55);
     expect(ease(null)).toBe(0.8);
+  });
+
+  it('makes a page whose template shares its gaps easier, up to 1 (SA-007)', () => {
+    const shared = new Set(['/blog/*']);
+    const ease = (path, score) =>
+      scorePriority(row({ path, lastAudit: score === null ? null : { score } }), noRank, shared)
+        .ease;
+    expect(ease('/blog/milk-drinks', null)).toBe(0.9);
+    expect(ease('/blog/milk-drinks', 0.5)).toBe(0.85);
+    expect(ease('/blog/milk-drinks', 0.65)).toBe(1);
+    expect(ease('/guides/espresso', null)).toBe(0.8);
+    expect(ease('/pricing', null)).toBe(0.8);
+  });
+});
+
+describe('scoreTemplate', () => {
+  const template = (over = {}) => ({
+    path: '/blog/*',
+    pinned: false,
+    reasons: [{ type: 'template_gaps', gaps: [{ key: 'author-byline' }] }],
+    sessions: 900,
+    aiVisits: 112,
+    template: { pages: 38, audited: 12, toAudit: [] },
+    ...over,
+  });
+
+  it('scores a template from its sessions, shared gaps, unaudited share and the template fix', () => {
+    // Above every site page: the top of the sessions value.
+    const rank = sessionsRanker([10, 40, 90]);
+    expect(scoreTemplate(template(), rank)).toEqual({
+      priority: 65,
+      value: 0.6,
+      // 0.3 for the gap + 0.3 × 26 of 38 not audited.
+      opportunity: 0.51,
+      ease: 0.9,
+    });
+    const more = scoreTemplate(
+      template({
+        aiVisits: 0,
+        reasons: [
+          {
+            type: 'template_gaps',
+            gaps: [{ key: 'a' }, { key: 'b' }, { key: 'c' }, { key: 'd' }, { key: 'e' }],
+          },
+        ],
+        template: { pages: 10, audited: 10, toAudit: [] },
+      }),
+      rank,
+    );
+    // Gaps capped at 0.45, plus no AI visits; all audited.
+    expect(more.opportunity).toBe(0.55);
+  });
+
+  it('ranks template rows with the pages', () => {
+    const ranked = rankOpportunities([row({ path: '/pricing' }), template()], [10, 40, 90]);
+    expect(ranked.map((r) => r.path)).toEqual(['/blog/*', '/pricing']);
+    expect(ranked[0].priorityParts.ease).toBe(0.9);
   });
 });
 

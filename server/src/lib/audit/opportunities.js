@@ -13,7 +13,8 @@
  *   to it (the prompt's target URL, else the best site_pages match).
  *
  * Pinned pages always show. Excluded pages are left out of the rows and
- * listed apart, so they can be put back. The order is the priority score's
+ * listed apart, so they can be put back; pages under the brand's exclude
+ * patterns (SA-006 settings) are left out. The order is the priority score's
  * (priority.js rankOpportunities); here rows come pinned first, then by path.
  */
 
@@ -34,6 +35,34 @@ export function opportunityKey(url) {
 }
 
 const pathOf = (url) => pageKey(url)?.path ?? '/';
+
+/** Longest exclude pattern kept, and how many a brand may have. */
+export const EXCLUDE_PATTERN_MAX_LENGTH = 200;
+export const EXCLUDE_PATTERNS_MAX = 50;
+
+/**
+ * A brand's exclude pattern as stored (SA-006): a path such as "/legal/*",
+ * lowercased, without a trailing slash. `*` stands for any characters,
+ * slashes included. Null for something that isn't a path.
+ */
+export function normalizeExcludePattern(raw) {
+  const pattern = String(raw ?? '')
+    .trim()
+    .toLowerCase();
+  if (!pattern.startsWith('/') || pattern.length > EXCLUDE_PATTERN_MAX_LENGTH) return null;
+  if (/\s/.test(pattern)) return null;
+  return pattern.replace(/\/+$/, '') || '/';
+}
+
+const escapeRegExp = (s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+
+/** A test of a page path against the brand's exclude patterns. */
+export function excludePatternMatcher(patterns = []) {
+  const regexes = patterns.map(
+    (pattern) => new RegExp(`^${pattern.split('*').map(escapeRegExp).join('.*')}$`),
+  );
+  return (path) => regexes.some((re) => re.test(path.toLowerCase()));
+}
 
 /**
  * The brand pages closest to the prompts a competitor is cited on and the
@@ -95,6 +124,7 @@ export function competitorGapPages({
  * @param {Array<{ url: string, prompts: number, competitors: string[] }>} [input.competitorPages]
  *   competitorGapPages output
  * @param {Array<{ page_key: string, url: string, state: 'pinned'|'excluded' }>} input.prefs
+ * @param {string[]} [input.excludePatterns]  the brand's stored patterns (normalizeExcludePattern)
  * @param {number} input.staleDays   an audit older than this no longer counts
  * @param {number} [input.now]
  */
@@ -105,9 +135,11 @@ export function buildOpportunities({
   auditPages = [],
   competitorPages = [],
   prefs = [],
+  excludePatterns = [],
   staleDays,
   now = Date.now(),
 }) {
+  const excludedByPattern = excludePatternMatcher(excludePatterns);
   const audits = new Map(auditPages.map((p) => [p.key.toLowerCase(), p]));
   // A page listed for another reason still takes its title and traffic from site_pages.
   const sitePagesByKey = new Map(sitePages.map((p) => [opportunityKey(p.url), p]));
@@ -191,8 +223,9 @@ export function buildOpportunities({
       excluded.push({ key: page.key, url: page.url, path: page.path, title: page.title });
       continue;
     }
-    // Checkout, login, legal and the like carry no opportunity, unless a team pinned one.
-    if (!page.pinned && isExcludedPath(page.path)) continue;
+    // Checkout, login, legal and the like carry no opportunity, nor do the
+    // brand's exclude patterns, unless a team pinned the page.
+    if (!page.pinned && (isExcludedPath(page.path) || excludedByPattern(page.path))) continue;
     if (!page.pinned && page.reasons.length === 0) continue;
 
     const audit = audits.get(page.key);

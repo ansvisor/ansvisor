@@ -4,7 +4,11 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import type { AuditOpportunity, ExcludedPage } from '@/lib/actions/audits';
-import { OPPORTUNITIES_STEP, OpportunitiesTable } from './_opportunities-table';
+import {
+  OPPORTUNITIES_STEP,
+  OpportunitiesTable,
+  opportunityAuditUrls,
+} from './_opportunities-table';
 
 (
   globalThis as typeof globalThis & {
@@ -150,6 +154,42 @@ describe('OpportunitiesTable', () => {
     ]);
   });
 
+  it("shows a template's row: its pages, the gaps they share and how many are audited (SA-007)", () => {
+    const template = opportunity({
+      key: 'template:/blog/*',
+      url: null,
+      path: '/blog/*',
+      title: null,
+      reasons: [
+        {
+          type: 'template_gaps',
+          gaps: [
+            { key: 'author-byline', label: 'Author byline' },
+            { key: 'faq-schema', label: 'FAQ schema' },
+          ],
+        },
+      ],
+      aiVisits: 112,
+      lastAudit: null,
+      priority: 69,
+      template: { pages: 38, audited: 12, toAudit: ['https://acme.com/blog/x'] },
+    });
+    render([template]);
+    expect(cells(rows()[0])).toEqual([
+      '',
+      '69',
+      '/blog/* · 38 pages',
+      'Author bylineFAQ schema',
+      '112',
+      '12 of 38',
+    ]);
+    // Not a link: a template has no one page to open.
+    expect(rows()[0].querySelectorAll('td')[2].querySelector('a')).toBeNull();
+    expect(
+      rows()[0].querySelectorAll('td')[2].querySelector('[title]')?.getAttribute('title'),
+    ).toBe('Fix once, applies to 38 pages');
+  });
+
   it('shows the priority, dark from 80, with its parts on hover', () => {
     render([opportunity(), blog]);
     const pill = (row: Element) => row.querySelectorAll('td')[1].querySelector('span')!;
@@ -208,5 +248,25 @@ describe('OpportunitiesTable', () => {
     expect(container.textContent).toContain('No pages to audit right now.');
     expect(container.textContent).toContain('not in 90 days');
     expect(container.querySelector('table')).toBeNull();
+  });
+});
+
+describe('opportunityAuditUrls', () => {
+  it("audits each page, and a template's pages not audited yet, once each", () => {
+    expect(
+      opportunityAuditUrls([
+        opportunity(),
+        opportunity({
+          key: 'template:/blog/*',
+          url: null,
+          path: '/blog/*',
+          template: {
+            pages: 3,
+            audited: 1,
+            toAudit: ['https://acme.com/blog/b', 'https://acme.com/pricing'],
+          },
+        }),
+      ]),
+    ).toEqual(['https://acme.com/pricing', 'https://acme.com/blog/b']);
   });
 });

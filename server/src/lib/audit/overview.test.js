@@ -48,6 +48,28 @@ describe('buildOverview', () => {
     // Pages without a category score are left out of its average.
     expect(overview.authority).toBeCloseTo(0.38);
     expect(overview.eeat).toBeCloseTo(0.3);
+    // The summary strip's weakest category (SA-019).
+    expect(overview.lowestCategory).toEqual({ key: 'eeat', score: 0.3 });
+  });
+
+  it('finds the lowest category among all five, a tie going to the rubric order', () => {
+    const all = new Map([
+      [
+        'a',
+        {
+          structure: { score: 0.8 },
+          content: { score: 0.5 },
+          authority: { score: 0.5 },
+          eeat: { score: 0.6 },
+          trust: { score: 0.9 },
+        },
+      ],
+    ]);
+    // The rubric lists authority before content.
+    expect(buildOverview([page('a', 0.6)], all, []).lowestCategory).toEqual({
+      key: 'authority',
+      score: 0.5,
+    });
   });
 
   it('has no change when no page was audited twice, and nothing without pages', () => {
@@ -58,6 +80,7 @@ describe('buildOverview', () => {
       siteScoreChange: null,
       authority: null,
       eeat: null,
+      lowestCategory: null,
       gaps: [],
     });
   });

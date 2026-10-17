@@ -12,8 +12,11 @@
  *   cited on the page's prompts, a target page not cited, never or long ago
  *   audited, no AI visits.
  * - Ease: how close the page is to passing. Its last score; unknown when
- *   never audited. (A template-level fix, SA-007, will add to it.)
+ *   never audited. A page whose template shares its gaps (SA-007) is easier:
+ *   one fix covers every page of it.
  */
+
+import { templateOf } from './templates.js';
 
 export const PRIORITY_WEIGHTS = Object.freeze({
   value: Object.freeze({
@@ -31,6 +34,10 @@ export const PRIORITY_WEIGHTS = Object.freeze({
     neverAudited: 0.3,
     staleAudit: 0.2,
     zeroAiVisits: 0.1,
+    /** A template whose pages share gaps (SA-007): its first gap, each more, the cap. */
+    templateGaps: 0.3,
+    perExtraGap: 0.05,
+    templateGapsMax: 0.45,
     min: 0.1,
   }),
   ease: Object.freeze({
@@ -41,6 +48,8 @@ export const PRIORITY_WEIGHTS = Object.freeze({
     middle: 0.75,
     low: 0.55,
     unaudited: 0.8,
+    /** Added for a page whose template shares its gaps (SA-007). */
+    templateFix: 0.1,
   }),
 });
 
@@ -66,11 +75,12 @@ export function sessionsRanker(siteSessions) {
 }
 
 /**
- * @param {{ reasons: Array<object>, sessions: number|null, aiVisits?: number|null, lastAudit: { score: number }|null }} row
+ * @param {{ path?: string, reasons: Array<object>, sessions: number|null, aiVisits?: number|null, lastAudit: { score: number }|null }} row
  * @param {(sessions: number|null) => number|null} rankSessions
+ * @param {Set<string>} [sharedTemplates]  templates whose pages share gaps (templates.js)
  * @returns {{ priority: number, value: number, opportunity: number, ease: number }}
  */
-export function scorePriority(row, rankSessions) {
+export function scorePriority(row, rankSessions, sharedTemplates = new Set()) {
   const w = PRIORITY_WEIGHTS;
   const reason = (type) => row.reasons.find((r) => r.type === type);
 
@@ -104,7 +114,7 @@ export function scorePriority(row, rankSessions) {
 
   const e = w.ease;
   const score = row.lastAudit?.score ?? null;
-  const ease =
+  const byScore =
     score === null
       ? e.unaudited
       : score >= e.nearPassingScore
@@ -112,6 +122,10 @@ export function scorePriority(row, rankSessions) {
         : score >= e.middleScore
           ? e.middle
           : e.low;
+  const ease = Math.min(
+    1,
+    byScore + (sharedTemplates.has(templateOf(row.path)) ? e.templateFix : 0),
+  );
 
   return {
     priority: Math.round(100 * Math.cbrt(value * opportunity * ease)),
@@ -122,19 +136,53 @@ export function scorePriority(row, rankSessions) {
 }
 
 /**
+ * A template row's score (SA-007): value from its pages' summed sessions;
+ * opportunity from the gaps they share, its pages not audited yet and no AI
+ * visits; ease as a never-audited page's plus the template fix, since one
+ * fix covers them all.
+ *
+ * @param {{ reasons: Array<object>, sessions: number|null, aiVisits?: number|null, template: { pages: number, audited: number } }} row
+ * @param {(sessions: number|null) => number|null} rankSessions
+ */
+export function scoreTemplate(row, rankSessions) {
+  const w = PRIORITY_WEIGHTS;
+  const o = w.opportunity;
+  const value = clamp((rankSessions(row.sessions) ?? 0) * w.value.sessions, w.value.min, 1);
+  const gaps = row.reasons.find((r) => r.type === 'template_gaps')?.gaps.length ?? 0;
+  const unaudited = row.template.pages > 0 ? 1 - row.template.audited / row.template.pages : 0;
+  let opportunity = 0;
+  if (gaps > 0) {
+    opportunity += Math.min(o.templateGapsMax, o.templateGaps + o.perExtraGap * (gaps - 1));
+  }
+  opportunity += o.neverAudited * unaudited;
+  if (row.aiVisits === 0) opportunity += o.zeroAiVisits;
+  opportunity = clamp(opportunity, o.min, 1);
+  const ease = Math.min(1, w.ease.unaudited + w.ease.templateFix);
+  return {
+    priority: Math.round(100 * Math.cbrt(value * opportunity * ease)),
+    value: round2(value),
+    opportunity: round2(opportunity),
+    ease: round2(ease),
+  };
+}
+
+/**
  * Scores every row and orders the inbox: pinned pages first, then by
- * priority, then by path.
+ * priority, then by path. A template row (SA-007) scores as a template.
  *
  * @template {{ path: string, pinned: boolean, reasons: Array<object>, sessions: number|null, aiVisits?: number|null, lastAudit: object|null }} R
  * @param {R[]} rows
  * @param {Array<number|null>} siteSessions  the site pages' 30-day sessions
+ * @param {Set<string>} [sharedTemplates]  templates whose pages share gaps (SA-007)
  * @returns {Array<R & { priority: number, priorityParts: { value: number, opportunity: number, ease: number } }>}
  */
-export function rankOpportunities(rows, siteSessions) {
+export function rankOpportunities(rows, siteSessions, sharedTemplates = new Set()) {
   const rankSessions = sessionsRanker(siteSessions);
   return rows
     .map((row) => {
-      const { priority, ...priorityParts } = scorePriority(row, rankSessions);
+      const { priority, ...priorityParts } = row.template
+        ? scoreTemplate(row, rankSessions)
+        : scorePriority(row, rankSessions, sharedTemplates);
       return { ...row, priority, priorityParts };
     })
     .sort(

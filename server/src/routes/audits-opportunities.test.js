@@ -200,6 +200,12 @@ describe('GET /api/audits/opportunities', () => {
     expect(args.p_pages).toEqual(['https://acme.com/pricing']);
   });
 
+  it("leaves out pages under the brand's exclude patterns (SA-006)", async () => {
+    tables.site_audit_brand_settings = [{ brand_id: brandId, exclude_patterns: ['/pri*'] }];
+    const body = await (await fetch(`${baseUrl}/opportunities?brandId=${brandId}`)).json();
+    expect(body.opportunities).toEqual([]);
+  });
+
   it('reads every GA page past the first 1000', async () => {
     tables.page_opportunities = Array.from({ length: 1200 }, (_, i) => ({
       brand_id: brandId,
@@ -283,6 +289,80 @@ describe('GET /api/audits/opportunities', () => {
   it('asks for no citations without competitor domains', async () => {
     await fetch(`${baseUrl}/opportunities?brandId=${brandId}`);
     expect(rpcCalls.map((c) => c.name)).not.toContain('audit_competitor_cited_prompts');
+  });
+
+  describe('templates (SA-007)', () => {
+    const recent = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const blogAudit = (id, path, score) => ({
+      id,
+      brand_id: brandId,
+      url: `https://acme.com${path}`,
+      final_url: `https://acme.com${path}`,
+      status: 'completed',
+      total_score: score,
+      created_at: recent,
+    });
+    beforeEach(() => {
+      tables.site_pages.push(
+        ...['/blog/a', '/blog/b', '/blog/c'].map((path) => ({
+          brand_id: brandId,
+          url: `https://acme.com${path}`,
+          title: null,
+          ga_sessions: 10,
+          ai_citations: 0,
+        })),
+      );
+      tables.site_audits = [blogAudit('a1', '/blog/a', '0.5'), blogAudit('b1', '/blog/b', '0.6')];
+      tables.audit_signal_results = [
+        { audit_id: 'a1', signal_key: 'author-byline', status: 'fail' },
+        { audit_id: 'b1', signal_key: 'author-byline', status: 'warn' },
+      ];
+    });
+
+    it('lists a template whose pages share gaps as a row, and eases its pages', async () => {
+      const body = await (await fetch(`${baseUrl}/opportunities?brandId=${brandId}`)).json();
+      const template = body.opportunities.find((o) => o.key === 'template:/blog/*');
+      expect(template).toMatchObject({
+        url: null,
+        path: '/blog/*',
+        reasons: [
+          { type: 'template_gaps', gaps: [{ key: 'author-byline', label: 'Author byline' }] },
+        ],
+        sessions: 30,
+        // The AI visits of its pages added up (the stub gives /blog/c 7).
+        aiVisits: 7,
+        template: { pages: 3, audited: 2, toAudit: ['https://acme.com/blog/c'] },
+        priority: expect.any(Number),
+      });
+      // /blog/c, never audited, gets the template fix on its ease.
+      const page = body.opportunities.find((o) => o.path === '/blog/c');
+      expect(page.priorityParts.ease).toBe(0.9);
+      // The AI visits were asked for the template's pages too, once each.
+      const { args } = rpcCalls.find((c) => c.name === 'ae_page_traffic_evidence');
+      expect(new Set(args.p_pages).size).toBe(args.p_pages.length);
+      expect(args.p_pages).toEqual(expect.arrayContaining(['https://acme.com/blog/a']));
+    });
+
+    it('leaves the template row out under an exclude pattern', async () => {
+      tables.site_audit_brand_settings = [{ brand_id: brandId, exclude_patterns: ['/blog/*'] }];
+      const body = await (await fetch(`${baseUrl}/opportunities?brandId=${brandId}`)).json();
+      expect(body.opportunities.map((o) => o.path)).toEqual(['/pricing']);
+    });
+
+    it('GET /templates lists the templates with their shared gaps', async () => {
+      const res = await fetch(`${baseUrl}/templates?brandId=${brandId}`);
+      expect(res.status).toBe(200);
+      expect((await res.json()).templates).toEqual([
+        expect.objectContaining({
+          template: '/blog/*',
+          pages: 3,
+          audited: 2,
+          sharedGaps: [
+            { key: 'author-byline', label: 'Author byline', category: 'authority', pages: 2 },
+          ],
+        }),
+      ]);
+    });
   });
 
   it('needs a brand', async () => {
