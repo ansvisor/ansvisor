@@ -171,6 +171,11 @@ import { formatCompactNumber, formatNumber } from '@/lib/format';
 import { usePagination, TablePager } from '@/components/table-pager';
 import { PromptPositionsSheet } from '@/components/prompts/prompt-positions-sheet';
 import {
+  ClampedText,
+  ClampedTextTooltip,
+  createClampedTextHandle,
+} from '@/components/prompts/clamped-text';
+import {
   panelRangeFromTable,
   parsePositionsRange,
   positionsUrlParams,
@@ -2609,6 +2614,8 @@ function AllPromptsTab({
   const format = useFormatter();
   const tDelete = useTranslations('prompts.bulkDelete');
   const tLate = useTranslations('prompts.lateFilter');
+  // One tooltip for every prompt and topic the table cuts short.
+  const fullText = useMemo(() => createClampedTextHandle(), []);
   // Rows deleted from the row menu or the bulk bar, hidden at once and
   // deleted for real after the Undo window (PROMPT-006). There is no soft
   // delete for prompts — a delete drops their history — so the delay is the
@@ -3458,18 +3465,32 @@ function AllPromptsTab({
                           aria-label={`Select ${p.text}`}
                         />
                       )}
-                      <Link
-                        href={`/dashboard/prompts/${p.id}`}
-                        className="line-clamp-2 transition-colors hover:text-primary hover:underline"
-                      >
-                        {p.text}
-                      </Link>
+                      <ClampedText
+                        handle={fullText}
+                        text={p.text}
+                        render={
+                          <Link
+                            href={`/dashboard/prompts/${p.id}`}
+                            className="line-clamp-2 transition-colors hover:text-primary hover:underline"
+                          />
+                        }
+                      />
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className="text-xs text-muted-foreground truncate inline-block max-w-[140px] align-middle">
-                      {p.category?.trim() ? p.category : '—'}
-                    </span>
+                    {p.category?.trim() ? (
+                      <ClampedText
+                        handle={fullText}
+                        text={p.category}
+                        render={
+                          <span className="text-xs text-muted-foreground truncate inline-block max-w-[140px] align-middle" />
+                        }
+                      />
+                    ) : (
+                      <span className="text-xs text-muted-foreground inline-block align-middle">
+                        —
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge
@@ -3624,6 +3645,7 @@ function AllPromptsTab({
             })}
           </TableBody>
         </Table>
+        <ClampedTextTooltip handle={fullText} />
         <TablePager
           page={promptsPager.page}
           totalPages={promptsPager.totalPages}
