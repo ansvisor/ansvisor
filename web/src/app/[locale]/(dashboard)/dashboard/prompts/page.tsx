@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useFormatter, useNow, useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { PROMPTS_BASE, sectionFor, sectionFromPath } from '@/lib/prompts-routes';
@@ -14,12 +14,21 @@ const PlatformVolumeChart = dynamic(() => import('./_charts').then((m) => m.Plat
   loading: () => <Skeleton className="h-64 w-full" />,
 });
 import { QueryFanoutTab } from './_fanout-tab';
+// The Topics tab loads as its own chunk, only when it is shown, so it
+// adds nothing to the other tabs' first load.
+const TopicsTab = dynamic(() => import('./_topics-tab').then((m) => m.TopicsTab), {
+  ssr: false,
+  loading: () => <Skeleton className="h-64 w-full" />,
+});
 import {
   PromptUsageCards,
   countByStatus,
   locationQuotaFromUsage,
   matchesStatusFilter,
+  newFirst,
+  promptStatus,
   usePromptUsage,
+  type PromptStatus,
   type PromptStatusFilter,
 } from './_usage-cards';
 import { INTENT_LABELS, INTENT_COLORS } from '@/config/intent-labels';
@@ -99,6 +108,7 @@ import {
   positionCellKind,
   type PlatformDot,
   type PlatformDotState,
+  type PromptPerformance,
   type PromptPositionCell,
 } from '@/lib/prompt-position-summary';
 import { mentionRateLabel } from '@/lib/prompt-improve';
@@ -170,9 +180,15 @@ import {
 } from '@/lib/prompt-bulk-actions';
 import { toCsv } from '@/lib/csv';
 import { formatRelative } from '@/lib/format-relative';
-import { compareNullsLast, type SortDir } from './prompt-sort';
+import {
+  compareNullsLast,
+  isAllPromptsSortKey,
+  promptSortValue,
+  type AllPromptsSortKey,
+  type SortDir,
+} from './prompt-sort';
 import { BulkActionBar } from './_bulk-action-bar';
-import { formatCompactNumber, formatNumber } from '@/lib/format';
+import { formatCompactNumber, formatDate, formatNumber } from '@/lib/format';
 import { usePagination, TablePager } from '@/components/table-pager';
 import { PromptPositionsSheet } from '@/components/prompts/prompt-positions-sheet';
 import {
@@ -243,29 +259,6 @@ function ColHead({
 }
 
 // ─── Sortable column header (All Prompts) ─────────────────────────────────────
-
-type AllPromptsSortKey =
-  | 'visibility'
-  | 'mentions'
-  | 'citations'
-  | 'position'
-  | 'volume'
-  | 'runs'
-  | 'lastRun';
-
-const ALL_PROMPTS_SORT_KEYS: AllPromptsSortKey[] = [
-  'visibility',
-  'mentions',
-  'citations',
-  'position',
-  'volume',
-  'runs',
-  'lastRun',
-];
-
-function isAllPromptsSortKey(value: string | null): value is AllPromptsSortKey {
-  return value !== null && (ALL_PROMPTS_SORT_KEYS as string[]).includes(value);
-}
 
 /**
  * Clickable header that toggles asc⇄desc for its column and marks the active
@@ -352,7 +345,7 @@ const PROMPT_EXPORT_HINT = 'No prompts yet - add prompts first.';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const VALID_TABS = ['all', 'fanout', 'insights'] as const;
+const VALID_TABS = ['all', 'topics', 'fanout', 'insights'] as const;
 
 /**
  * The window a tab opens on. Query Fan-out opens on 7 days: one day of
@@ -1286,6 +1279,7 @@ export default function PromptsPage() {
 
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const tCommon = useTranslations('common');
+  const tNav = useTranslations('nav');
   const activeBrand = useBrandStore(
     (s) => s.brands.find((brand) => brand.id === s.activeBrandId) ?? null,
   );
@@ -1296,9 +1290,9 @@ export default function PromptsPage() {
   const { state: usageState, retry: retryUsage } = usePromptUsage(activeBrandId, usageVersion);
   const usage = usageState.status === 'ready' ? usageState.usage : null;
   const locationQuota = useMemo(() => (usage ? locationQuotaFromUsage(usage) : null), [usage]);
-  const [statusFilter, setStatusFilter] = useState<PromptStatusFilter>('active');
+  const [statusFilter, setStatusFilter] = useState<PromptStatusFilter>('tracked');
   const searchParams = useSearchParams();
-  // On /dashboard/prompts/{tracked,suggestions,fan-outs,insights} the route
+  // On /dashboard/prompts/{tracked,suggestions,topics,fan-outs,insights} the route
   // names the view (PROMPT-001); ?tab= / ?view= are the older links' shape.
   const section = sectionFromPath(usePathname());
 
@@ -1309,6 +1303,11 @@ export default function PromptsPage() {
     return 'all';
   })();
   const [tab, setTab] = useState<TabId>(initialTab);
+  // Opened on Topics, the page holds back what only the other tabs show (the
+  // table, its locations, the volume run's status) until the topics are in or
+  // another tab is opened: server actions queue one behind another, and the
+  // table's read would otherwise make the topics wait. Once wanted, it stays.
+  const [promptDataWanted, setPromptDataWanted] = useState(initialTab !== 'topics');
 
   // The Prompts tab holds two views of the same roster: what is tracked, and
   // what could be. A sub-tab rather than a fourth top-level tab, because the
@@ -1368,35 +1367,80 @@ export default function PromptsPage() {
   // the URL with no server request; Next's router syncs with the History API.
   //
   // The tab and view live in the path (PROMPT-001): /dashboard/prompts/tracked,
-  // /suggestions, /fan-outs, /insights — the routes the sidebar's Prompts
-  // submenu links to, so the sidebar and these tabs always agree. The path is
-  // rewritten in place under any locale prefix.
+  // /suggestions, /topics, /fan-outs, /insights — the routes the sidebar's
+  // Prompts submenu links to, so the sidebar and these tabs always agree. The
+  // path is rewritten in place under any locale prefix.
+  const writeUrl = useCallback(
+    (next: {
+      tab: TabId;
+      view: PromptsView;
+      rangePreset: PromptRangePreset;
+      customFrom: string;
+      customTo: string;
+      regionFilter: string;
+    }) => {
+      // The default range stays out of the URL so shared links keep their
+      // existing shape unless the user actually picked a different window.
+      const want: Record<string, string | null> = {
+        range: next.rangePreset === defaultRangeFor(next.tab) ? null : next.rangePreset,
+        from: next.rangePreset === 'custom' && next.customFrom ? next.customFrom : null,
+        to: next.rangePreset === 'custom' && next.customTo ? next.customTo : null,
+        region: next.regionFilter || null,
+        tab: null,
+        view: null,
+      };
+      const { pathname, search, hash } = window.location;
+      const at = pathname.indexOf(PROMPTS_BASE);
+      const wantPath = `${at > 0 ? pathname.slice(0, at) : ''}${sectionFor(next.tab, next.view).href}`;
+      const params = new URLSearchParams(search);
+      if (pathname === wantPath && Object.entries(want).every(([k, v]) => params.get(k) === v)) {
+        return;
+      }
+      for (const [k, v] of Object.entries(want)) {
+        if (v) params.set(k, v);
+        else params.delete(k);
+      }
+      const query = params.toString();
+      // Keep the hash: deep links like #prompt-opportunities must keep their anchor.
+      window.history.replaceState(null, '', `${wantPath}${query ? `?${query}` : ''}${hash}`);
+    },
+    [],
+  );
   useEffect(() => {
-    // The default range stays out of the URL so shared links keep their
-    // existing shape unless the user actually picked a different window.
-    const want: Record<string, string | null> = {
-      range: rangePreset === defaultRangeFor(tab) ? null : rangePreset,
-      from: rangePreset === 'custom' && customFrom ? customFrom : null,
-      to: rangePreset === 'custom' && customTo ? customTo : null,
-      region: regionFilter || null,
-      tab: null,
-      view: null,
-    };
-    const { pathname, search, hash } = window.location;
-    const at = pathname.indexOf(PROMPTS_BASE);
-    const wantPath = `${at > 0 ? pathname.slice(0, at) : ''}${sectionFor(tab, view).href}`;
-    const params = new URLSearchParams(search);
-    if (pathname === wantPath && Object.entries(want).every(([k, v]) => params.get(k) === v)) {
-      return;
-    }
-    for (const [k, v] of Object.entries(want)) {
-      if (v) params.set(k, v);
-      else params.delete(k);
-    }
-    const query = params.toString();
-    // Keep the hash: deep links like #prompt-opportunities must keep their anchor.
-    window.history.replaceState(null, '', `${wantPath}${query ? `?${query}` : ''}${hash}`);
-  }, [tab, view, rangePreset, customFrom, customTo, regionFilter, searchParams]);
+    writeUrl({ tab, view, rangePreset, customFrom, customTo, regionFilter });
+  }, [tab, view, rangePreset, customFrom, customTo, regionFilter, searchParams, writeUrl]);
+
+  /**
+   * Move to another tab or list view, writing its route first.
+   *
+   * Next routes a replaceState through its action queue (a "restore"), and in
+   * Next 16 a restore that lands while a server action is in flight leaves
+   * the queue pointing at the discarded action: actions queued after it never
+   * run, and the table spins forever. The tab about to show fires its own
+   * server actions as it mounts, before the effect above would rewrite the
+   * route, so the route is written here, on an idle queue, ahead of them.
+   */
+  const showSection = useCallback(
+    (nextTab: TabId, nextView: PromptsView) => {
+      // A window still on this tab's default wasn't picked by the user, so it
+      // follows the next tab's own (Query Fan-out opens on 7 days).
+      const nextRange =
+        rangePreset === defaultRangeFor(tab) ? defaultRangeFor(nextTab) : rangePreset;
+      writeUrl({
+        tab: nextTab,
+        view: nextView,
+        rangePreset: nextRange,
+        customFrom,
+        customTo,
+        regionFilter,
+      });
+      setRangePreset(nextRange);
+      setView(nextView);
+      setTab(nextTab);
+      if (nextTab !== 'topics') setPromptDataWanted(true);
+    },
+    [tab, rangePreset, customFrom, customTo, regionFilter, writeUrl],
+  );
 
   // Deep link from the Insights Recommendations row (#459): the target card
   // only exists once the Insights tab's volume data has rendered, so a bare
@@ -1453,12 +1497,13 @@ export default function PromptsPage() {
   );
 
   useEffect(() => {
+    if (!promptDataWanted) return undefined;
     let cancelled = false;
     loadData(() => cancelled);
     return () => {
       cancelled = true;
     };
-  }, [loadData]);
+  }, [loadData, promptDataWanted]);
 
   // After prompts are added, paused, resumed, deleted or retargeted: reload
   // the table and the usage cards together.
@@ -1476,6 +1521,7 @@ export default function PromptsPage() {
       setAvailableRegions([]);
       return;
     }
+    if (!promptDataWanted) return;
     let cancelled = false;
     getBrandFilterOptions(activeBrandId)
       .then((options) => {
@@ -1486,7 +1532,7 @@ export default function PromptsPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId]);
+  }, [activeBrandId, promptDataWanted]);
 
   // A location that stops producing results must not keep filtering the
   // table to nothing — fall back to the blended view.
@@ -1548,7 +1594,7 @@ export default function PromptsPage() {
    * page's narration of it stops.
    */
   useEffect(() => {
-    if (!activeBrandId) return undefined;
+    if (!activeBrandId || !promptDataWanted) return undefined;
 
     const brandId = activeBrandId;
     const gen = ++analysisGenRef.current;
@@ -1576,7 +1622,7 @@ export default function PromptsPage() {
       setAnalyzing(false);
       setAnalysisProgress(null);
     };
-  }, [activeBrandId, watchVolumeAnalysis]);
+  }, [activeBrandId, promptDataWanted, watchVolumeAnalysis]);
 
   /**
    * Start a run, then follow it to the end.
@@ -1789,19 +1835,11 @@ export default function PromptsPage() {
         </div>
       </div>
 
-      <Tabs
-        value={tab}
-        onValueChange={(v) => {
-          const next = v as TabId;
-          // A window still on this tab's default wasn't picked by the user,
-          // so it follows the next tab's own (Query Fan-out opens on 7 days).
-          if (rangePreset === defaultRangeFor(tab)) setRangePreset(defaultRangeFor(next));
-          setTab(next);
-        }}
-      >
+      <Tabs value={tab} onValueChange={(v) => showSection(v as TabId, view)}>
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <TabsList>
             <TabsTrigger value="all">Prompts</TabsTrigger>
+            <TabsTrigger value="topics">{tNav('topics')}</TabsTrigger>
             <TabsTrigger value="fanout">Query Fan-out</TabsTrigger>
             <TabsTrigger value="insights">Insights</TabsTrigger>
           </TabsList>
@@ -1865,7 +1903,7 @@ export default function PromptsPage() {
                 type="button"
                 role="tab"
                 aria-selected={view === id}
-                onClick={() => setView(id)}
+                onClick={() => showSection(tab, id)}
                 className={cn(
                   'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
                   view === id
@@ -1882,7 +1920,8 @@ export default function PromptsPage() {
 
         {/* Filter bar — same shape and position as Visibility and Citations
             (#713). It sits outside the tab panels because the range governs
-            both All Prompts and Query Fan-out.
+            All Prompts, Topics and Query Fan-out. Location doesn't apply to
+            Topics, so it is left off there.
             Hidden on Insights: that tab shows keyword volume estimates, which
             carry no date dimension, so a range there would be a control that
             changes nothing. */}
@@ -1898,7 +1937,7 @@ export default function PromptsPage() {
               onToChange={setCustomTo}
             />
 
-            {availableRegions.length > 1 && (
+            {availableRegions.length > 1 && tab !== 'topics' && (
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
                   Location
@@ -1945,6 +1984,7 @@ export default function PromptsPage() {
                   state={usageState}
                   brandName={activeBrand?.name}
                   readOnly={!canManage}
+                  prompts={allPrompts}
                   filter={statusFilter}
                   onFilter={setStatusFilter}
                   onRetry={retryUsage}
@@ -2004,6 +2044,19 @@ export default function PromptsPage() {
                 onChanged={reloadAfterChange}
               />
             </>
+          )}
+        </TabsContent>
+
+        {/* ─── Topics tab ───────────────────────────────────────────────── */}
+        <TabsContent value="topics" className="mt-4">
+          {tab === 'topics' && (
+            <TopicsTab
+              range={range}
+              rangePreset={rangePreset}
+              customFrom={customFrom}
+              customTo={customTo}
+              onLoaded={() => setPromptDataWanted(true)}
+            />
           )}
         </TabsContent>
 
@@ -2394,7 +2447,7 @@ export default function PromptsPage() {
 
 /**
  * Average position with its trend against the previous period; hovering it
- * lists each platform, which is what the "Late or missing" filter reads. A
+ * lists each platform, the detail behind the Performance filter. A
  * prompt that was tracked but never named reads "Not mentioned", not the "—"
  * of a prompt with no answers.
  */
@@ -2565,6 +2618,22 @@ function RowActionsMenu({
 
 // ─── All Prompts Tab ──────────────────────────────────────────────────────────
 
+/** The Status badge: New is amber, so a prompt added today stands out. */
+const STATUS_BADGE: Record<PromptStatus, string> = {
+  active: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  new: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  paused: 'border-muted-foreground/20 text-muted-foreground',
+};
+
+const STATUS_FILTERS: PromptStatusFilter[] = ['tracked', 'active', 'new', 'paused', 'all'];
+
+type PerformanceFilter = 'all' | PromptPerformance;
+
+const PERFORMANCE_FILTERS: PerformanceFilter[] = ['all', 'best', 'good', 'late', 'missing'];
+
+/** Late and Missing order the table furthest behind first (see compareLateness). */
+const isBehind = (filter: PerformanceFilter) => filter === 'late' || filter === 'missing';
+
 const WORK_FILTER_LABELS: Record<string, string> = {
   all: 'All work',
   todo: 'To do',
@@ -2604,7 +2673,7 @@ function AllPromptsTab({
   positionsPreset: PromptRangePreset;
   /** Selected location; empty means every location. */
   regionFilter: string;
-  /** Which rows show, set by the usage cards above (PROMPT-012). */
+  /** Which rows show, set by the usage cards above (PROMPT-012) or the Status filter. */
   statusFilter: PromptStatusFilter;
   onStatusFilterChange: (filter: PromptStatusFilter) => void;
   /** Opens the Add Prompt dialog; undefined when the user can't write (member role). */
@@ -2620,7 +2689,11 @@ function AllPromptsTab({
   const tUsage = useTranslations('prompts.usage');
   const format = useFormatter();
   const tDelete = useTranslations('prompts.bulkDelete');
-  const tLate = useTranslations('prompts.lateFilter');
+  const tPerformance = useTranslations('prompts.performance');
+  const tStatus = useTranslations('prompts.status');
+  const tColumns = useTranslations('prompts.columns');
+  const tTips = useTranslations('prompts.columns.tips');
+  const now = useNow({ updateInterval: 60_000 }).getTime();
   // Rows deleted from the row menu or the bulk bar, hidden at once and
   // deleted for real after the Undo window (PROMPT-006). There is no soft
   // delete for prompts — a delete drops their history — so the delay is the
@@ -2981,8 +3054,8 @@ function AllPromptsTab({
   );
   const [search, setSearch] = useState('');
   const [workFilter, setWorkFilter] = useState<'all' | 'none' | PromptWorkStatus>('all');
-  // Quick filter: prompts late or missing on at least one engine.
-  const [lateOnly, setLateOnly] = useState(false);
+  // Where the brand stands in each prompt's answers: Best, Good, Late, Missing.
+  const [performanceFilter, setPerformanceFilter] = useState<PerformanceFilter>('all');
   // Optimistic per-row status overrides — the prompts prop belongs to the
   // parent's load cycle; a full reload for a one-column change would flash
   // the whole table.
@@ -3063,10 +3136,9 @@ function AllPromptsTab({
   const rawSort = searchParams.get('sort');
   const activeSort: AllPromptsSortKey = isAllPromptsSortKey(rawSort) ? rawSort : 'visibility';
   const dir: SortDir = searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
-  // With "Late or missing" on and no column picked, the furthest behind come
-  // first: nearly every tracked prompt is late or missing somewhere, so the
-  // filter alone left the first page as it was (see compareLateness).
-  const latenessOrder = lateOnly && !isAllPromptsSortKey(rawSort);
+  // With Late or Missing picked and no column, the furthest behind come first
+  // (see compareLateness).
+  const latenessOrder = isBehind(performanceFilter) && !isAllPromptsSortKey(rawSort);
 
   // Click a header to sort: a new column starts at desc ("show me the extremes");
   // re-clicking the active column toggles desc⇄asc. Persisted to the URL so the
@@ -3077,7 +3149,7 @@ function AllPromptsTab({
     (key: AllPromptsSortKey) => {
       const params = new URLSearchParams(Array.from(searchParams.entries()));
       // Position is best when lowest, so it starts at asc (#1 first). Under the
-      // "Late or missing" order no column is active, so any header starts afresh.
+      // furthest-behind order no column is active, so any header starts afresh.
       const nextDir: SortDir =
         activeSort === key && !latenessOrder
           ? dir === 'desc'
@@ -3094,15 +3166,18 @@ function AllPromptsTab({
     [searchParams, activeSort, dir, latenessOrder],
   );
 
-  // Turning "Late or missing" on sets a picked column aside, so the furthest
-  // behind lead; turning it off brings that column back, unless a header was
-  // clicked in between, which then stays.
+  // Picking Late or Missing sets a picked column aside, so the furthest behind
+  // lead; leaving them brings that column back, unless a header was clicked
+  // in between, which then stays.
   const setAsideSort = useRef<{ sort: string; dir: string | null } | null>(null);
-  // Read and flipped at click time, so a quick second click sees the first.
-  const lateOnlyNow = useRef(lateOnly);
-  const toggleLateOnly = useCallback(() => {
-    const turningOn = !lateOnlyNow.current;
-    lateOnlyNow.current = turningOn;
+  // Read and set at pick time, so a quick second pick sees the first.
+  const performanceNow = useRef(performanceFilter);
+  const changePerformance = useCallback((next: PerformanceFilter) => {
+    const wasBehind = isBehind(performanceNow.current);
+    performanceNow.current = next;
+    setPerformanceFilter(next);
+    if (wasBehind === isBehind(next)) return;
+    const turningOn = isBehind(next);
     const params = new URLSearchParams(window.location.search);
     const sort = params.get('sort');
     if (turningOn && sort) {
@@ -3116,11 +3191,10 @@ function AllPromptsTab({
       window.history.replaceState(null, '', `?${params.toString()}`);
     }
     if (!turningOn) setAsideSort.current = null;
-    setLateOnly(turningOn);
   }, []);
 
-  // Search, prompt status and work status first: the "Late or missing" count
-  // is out of these.
+  // Search, prompt status and work status first: the Performance counts are
+  // out of these.
   const searched = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = [...prompts];
@@ -3129,22 +3203,46 @@ function AllPromptsTab({
         (p) => p.text.toLowerCase().includes(q) || (p.category ?? '').toLowerCase().includes(q),
       );
     }
-    list = list.filter((p) => matchesStatusFilter(p, statusFilter));
+    list = list.filter((p) => matchesStatusFilter(p, statusFilter, now));
     if (workFilter !== 'all') {
       list = list.filter((p) =>
         workFilter === 'none' ? statusOf(p) === null : statusOf(p) === workFilter,
       );
     }
     return list;
-  }, [prompts, search, statusFilter, workFilter, statusOf]);
+  }, [prompts, search, statusFilter, workFilter, statusOf, now]);
 
-  const lateCount = useMemo(
-    () => searched.filter((p) => positions[p.id]?.lateOrMissing).length,
-    [searched, positions],
-  );
+  const performanceCounts = useMemo(() => {
+    const counts: Record<PerformanceFilter, number> = {
+      all: searched.length,
+      best: 0,
+      good: 0,
+      late: 0,
+      missing: 0,
+    };
+    for (const p of searched) {
+      const performance = positions[p.id]?.performance;
+      if (performance) counts[performance] += 1;
+    }
+    return counts;
+  }, [searched, positions]);
+  // The menu's options, each with its count, as the old "Late or missing · N" read.
+  const performanceItems = PERFORMANCE_FILTERS.map((value) => ({
+    value,
+    label:
+      value === 'all'
+        ? tPerformance('all')
+        : tPerformance('option', {
+            label: tPerformance(value),
+            count: format.number(performanceCounts[value]),
+          }),
+  }));
 
   const filtered = useMemo(() => {
-    const list = lateOnly ? searched.filter((p) => positions[p.id]?.lateOrMissing) : [...searched];
+    const list =
+      performanceFilter === 'all'
+        ? [...searched]
+        : searched.filter((p) => positions[p.id]?.performance === performanceFilter);
     if (latenessOrder) {
       // Equally far behind: the more visible prompt first, as the table opens.
       const score = (p: Prompt) => visibility[p.id]?.score ?? 0;
@@ -3155,38 +3253,39 @@ function AllPromptsTab({
       );
     }
 
-    const valueOf = (p: Prompt): number | null => {
-      const vis = visibility[p.id];
-      const vol = volumeByPromptId.get(p.id);
-      switch (activeSort) {
-        case 'visibility':
-          return vis ? (vis.score ?? 0) : null;
-        case 'mentions':
-          return vis ? vis.totalMentions : null;
-        case 'citations':
-          return vis ? vis.totalCitations : null;
-        case 'position':
-          return positions[p.id]?.avg ?? null;
-        case 'volume':
-          return vol ? vol.estAiVolume : null;
-        case 'runs':
-          return vis ? vis.runs : null;
-        case 'lastRun':
-          return vis?.lastRunAt ? new Date(vis.lastRunAt).getTime() : null;
-      }
-    };
+    const valueOf = (p: Prompt): number | null =>
+      promptSortValue(activeSort, {
+        createdAt: p.createdAt,
+        visibility: visibility[p.id],
+        position: positions[p.id],
+        volume: volumeByPromptId.get(p.id),
+      });
 
-    return list.sort((a, b) => compareNullsLast(valueOf(a), valueOf(b), dir));
-  }, [searched, lateOnly, latenessOrder, activeSort, dir, visibility, positions, volumeByPromptId]);
+    const sorted = list.sort((a, b) => compareNullsLast(valueOf(a), valueOf(b), dir));
+    // Until a column is picked, prompts added within the last day lead: Track
+    // on Insights opens this table to show them.
+    return isAllPromptsSortKey(rawSort) ? sorted : newFirst(sorted, now);
+  }, [
+    searched,
+    performanceFilter,
+    latenessOrder,
+    rawSort,
+    activeSort,
+    dir,
+    visibility,
+    positions,
+    volumeByPromptId,
+    now,
+  ]);
 
   // Pagination for the main prompt list.  resetKey encodes every variable that
   // changes the visible row set (search text, sort column, sort direction, work
   // status filter) so usePagination jumps back to page 0 automatically when
   // any filter or sort changes — satisfying the issue's acceptance criteria.
-  const promptsResetKey = `${search}::${statusFilter}::${workFilter}::${lateOnly}::${activeSort}::${dir}`;
+  const promptsResetKey = `${search}::${statusFilter}::${workFilter}::${performanceFilter}::${activeSort}::${dir}`;
   // From every row, pending deletes included, so the title agrees with the
   // usage cards until a delete actually lands after its Undo window.
-  const statusCounts = useMemo(() => countByStatus(allRows), [allRows]);
+  const statusCounts = useMemo(() => countByStatus(allRows, now), [allRows, now]);
   const promptsPager = usePagination(filtered.length, promptsResetKey);
 
   // Rows ticked for the bulk action bar. Only rows on screen can be ticked,
@@ -3283,6 +3382,22 @@ function AllPromptsTab({
           </div>
           <div className="flex items-center gap-2">
             <Select
+              value={statusFilter}
+              onValueChange={(v) => onStatusFilterChange((v as PromptStatusFilter | null) ?? 'all')}
+              items={STATUS_FILTERS.map((value) => ({ value, label: tStatus(value) }))}
+            >
+              <SelectTrigger className="h-8 w-32 text-xs" aria-label={tStatus('label')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_FILTERS.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {tStatus(value)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
               value={workFilter}
               onValueChange={(v) => setWorkFilter((v as typeof workFilter) ?? 'all')}
             >
@@ -3299,17 +3414,26 @@ function AllPromptsTab({
                 <SelectItem value="none">No status</SelectItem>
               </SelectContent>
             </Select>
-            <Button
-              type="button"
-              size="sm"
-              variant={lateOnly ? 'default' : 'outline'}
-              className="h-8 text-xs"
-              aria-pressed={lateOnly}
-              title={tLate('title')}
-              onClick={toggleLateOnly}
+            <Select
+              value={performanceFilter}
+              onValueChange={(v) => changePerformance((v as PerformanceFilter | null) ?? 'all')}
+              items={performanceItems}
             >
-              {tLate('label', { count: lateCount })}
-            </Button>
+              <SelectTrigger
+                className="h-8 w-36 text-xs"
+                aria-label={tPerformance('label')}
+                title={tPerformance('title')}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {performanceItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <div className="relative w-60">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
@@ -3346,7 +3470,9 @@ function AllPromptsTab({
           />
         )}
         <Table stickyHeader stickyFirstColumn>
-          {latenessOrder && <TableCaption className="sr-only">{tLate('order')}</TableCaption>}
+          {latenessOrder && (
+            <TableCaption className="sr-only">{tPerformance('order')}</TableCaption>
+          )}
           <TableHeader>
             <TableRow>
               <TableHead className="pl-6">
@@ -3364,16 +3490,15 @@ function AllPromptsTab({
                 )}
               </TableHead>
               <TableHead>Topic</TableHead>
-              <TableHead className="text-center">Status</TableHead>
-              <ColHead
-                className="text-center"
-                tooltip="Your workflow state for this prompt — has content work been done for it yet?"
-              >
+              <ColHead className="text-center" tooltip={tTips('status')}>
+                Status
+              </ColHead>
+              <ColHead className="text-center" tooltip={tTips('work')}>
                 Work
               </ColHead>
               <SortableHead
                 className="text-right"
-                tooltip={`AI Visibility Score (0-100) for this prompt over the ${rangeLabel}: how often answers mention the brand (60%), cite its site (25%) and how early it's named (15%). Hover a value for the components.`}
+                tooltip={tTips('visibility', { range: rangeLabel })}
                 sortKey="visibility"
                 activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
@@ -3383,7 +3508,7 @@ function AllPromptsTab({
               </SortableHead>
               <SortableHead
                 className="text-right"
-                tooltip={`Total times the brand was mentioned across AI answers for this prompt over the ${rangeLabel}.`}
+                tooltip={tTips('mentions', { range: rangeLabel })}
                 sortKey="mentions"
                 activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
@@ -3393,7 +3518,7 @@ function AllPromptsTab({
               </SortableHead>
               <SortableHead
                 className="text-right"
-                tooltip={`Total times your pages were cited in AI answers for this prompt over the ${rangeLabel}.`}
+                tooltip={tTips('citations', { range: rangeLabel })}
                 sortKey="citations"
                 activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
@@ -3403,7 +3528,7 @@ function AllPromptsTab({
               </SortableHead>
               <SortableHead
                 className="pl-8"
-                tooltip={`Average position the brand is named at in AI answers over the ${rangeLabel}, with the change against the previous period of the same length. Hover a value for each platform; the chart button opens the details.`}
+                tooltip={tTips('positions', { range: rangeLabel })}
                 sortKey="position"
                 activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
@@ -3413,7 +3538,7 @@ function AllPromptsTab({
               </SortableHead>
               <SortableHead
                 className="text-right"
-                tooltip="Estimated monthly AI prompt volume, from keyword analysis. Empty until analysed."
+                tooltip={tTips('volume')}
                 sortKey="volume"
                 activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
@@ -3421,15 +3546,12 @@ function AllPromptsTab({
               >
                 Volume
               </SortableHead>
-              <ColHead
-                className="text-center"
-                tooltip="Based on Google Ads competition for related keywords (LOW / MEDIUM / HIGH). A proxy for topic difficulty."
-              >
+              <ColHead className="text-center" tooltip={tTips('competition')}>
                 Competition
               </ColHead>
               <SortableHead
                 className="text-right"
-                tooltip={`Number of tracking runs for this prompt over the ${rangeLabel} (one per platform per day).`}
+                tooltip={tTips('runs', { range: rangeLabel })}
                 sortKey="runs"
                 activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
@@ -3439,7 +3561,17 @@ function AllPromptsTab({
               </SortableHead>
               <SortableHead
                 className="text-right"
-                tooltip="Most recent tracking run for this prompt."
+                tooltip={tTips('added')}
+                sortKey="added"
+                activeSort={latenessOrder ? null : activeSort}
+                dir={dir}
+                onSort={handleSort}
+              >
+                {tColumns('added')}
+              </SortableHead>
+              <SortableHead
+                className="text-right"
+                tooltip={tTips('lastRun')}
                 sortKey="lastRun"
                 activeSort={latenessOrder ? null : activeSort}
                 dir={dir}
@@ -3458,6 +3590,7 @@ function AllPromptsTab({
             {pageRows.map((p) => {
               const vol = volumeByPromptId.get(p.id);
               const vis = visibility[p.id];
+              const status = promptStatus(p, now);
               return (
                 <TableRow key={p.id} className="hover:bg-muted/50">
                   <TableCell className="pl-6 font-medium text-sm max-w-[320px]">
@@ -3500,14 +3633,10 @@ function AllPromptsTab({
                   <TableCell className="text-center">
                     <Badge
                       variant="outline"
-                      className={cn(
-                        'text-xs',
-                        p.isActive
-                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                          : 'border-muted-foreground/20 text-muted-foreground',
-                      )}
+                      className={cn('text-xs', STATUS_BADGE[status])}
+                      title={status === 'new' ? tStatus('newHint') : undefined}
                     >
-                      {p.isActive ? 'Active' : 'Paused'}
+                      {tStatus(status)}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
@@ -3624,6 +3753,15 @@ function AllPromptsTab({
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </TableCell>
+                  <TableCell
+                    className="text-right text-xs whitespace-nowrap text-muted-foreground"
+                    title={new Date(p.createdAt).toLocaleString('en-US', {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    })}
+                  >
+                    {formatDate(p.createdAt)}
+                  </TableCell>
                   <TableCell className="text-right text-xs text-muted-foreground">
                     {formatRelative(vis?.lastRunAt, tCommon)}
                   </TableCell>
@@ -3660,15 +3798,27 @@ function AllPromptsTab({
           onPage={promptsPager.setPage}
         />
         {filtered.length === 0 &&
-          (statusFilter === 'all' ? (
+          (performanceFilter !== 'all' && searched.length > 0 ? (
+            // Rows are there, just none in this group: lead back to them.
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              {tPerformance('none', { label: tPerformance(performanceFilter) })}{' '}
+              <button
+                type="button"
+                onClick={() => changePerformance('all')}
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                {tPerformance('showAll')}
+              </button>
+            </div>
+          ) : statusFilter === 'all' ? (
             <div className="py-10 text-center text-sm text-muted-foreground">
               No prompts match your search.
             </div>
           ) : (
-            // The table opens on Active: a brand whose prompts are all paused
+            // The table opens on Tracked: a brand whose prompts are all paused
             // must not look empty with no way back.
             <div className="py-10 text-center text-sm text-muted-foreground">
-              {tUsage(statusFilter === 'active' ? 'table.noneActive' : 'table.nonePaused')}{' '}
+              {tUsage(`table.none.${statusFilter}`)}{' '}
               <button
                 type="button"
                 onClick={() => onStatusFilterChange('all')}
