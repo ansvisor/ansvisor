@@ -63,6 +63,9 @@ export interface MentionsOverview {
     days: number;
     /** Under two days the answers were read directly; longer windows read whole UTC days. */
     source: 'answers' | 'days';
+    /** The UTC days the window covers, `YYYY-MM-DD`. */
+    dayFrom: string;
+    dayTo: string;
   };
   current: MentionTotals;
   previous: MentionTotals;
@@ -118,6 +121,8 @@ export function parseMentionsOverview(raw: unknown): MentionsOverview | null {
       to: String(w.to ?? ''),
       days: num(w, 'days'),
       source: w.source === 'answers' ? 'answers' : 'days',
+      dayFrom: String(w.day_from ?? ''),
+      dayTo: String(w.day_to ?? ''),
     },
     current: totals(r.current as Raw | null),
     previous: totals(r.previous as Raw | null),
@@ -193,4 +198,46 @@ export function isLowSample(t: Pick<Counts, 'mentions'>): boolean {
 /** The brand's average position when named (1 = first); null when never placed. */
 export function averagePosition(t: Pick<MentionTotals, 'positionSum' | 'positionCount'>) {
   return t.positionCount > 0 ? t.positionSum / t.positionCount : null;
+}
+
+/** A count's change against the window before, in percent; null when there was nothing before. */
+export function relativeChange(current: number, previous: number): number | null {
+  return previous > 0 ? ((current - previous) * 100) / previous : null;
+}
+
+/** One day of the trend: the mentions, and the rates when the day has answers to take them over. */
+export interface MentionTrendDay {
+  day: string;
+  answers: number;
+  mentions: number;
+  /** Null on a day without answers. */
+  rate: number | null;
+  /** Null on a day without mentions. */
+  net: number | null;
+}
+
+/**
+ * The window's days in order, a day without answers included as zero (the
+ * function returns only days that have some), so the trend's axis is even.
+ */
+export function mentionTrend(o: Pick<MentionsOverview, 'window' | 'daily'>): MentionTrendDay[] {
+  const byDay = new Map(o.daily.map((d) => [d.day, d]));
+  const days: string[] = [];
+  const from = Date.parse(`${o.window.dayFrom}T00:00:00Z`);
+  const to = Date.parse(`${o.window.dayTo}T00:00:00Z`);
+  if (Number.isFinite(from) && Number.isFinite(to)) {
+    for (let t = from; t <= to; t += 86_400_000) days.push(new Date(t).toISOString().slice(0, 10));
+  } else {
+    days.push(...byDay.keys());
+  }
+  return days.map((day) => {
+    const d = byDay.get(day) ?? { day, answers: 0, mentions: 0, positive: 0, negative: 0 };
+    return {
+      day,
+      answers: d.answers,
+      mentions: d.mentions,
+      rate: mentionRate(d),
+      net: netSentiment(d),
+    };
+  });
 }

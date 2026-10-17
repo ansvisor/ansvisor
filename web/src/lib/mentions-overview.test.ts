@@ -3,13 +3,22 @@ import {
   averagePosition,
   isLowSample,
   mentionRate,
+  mentionTrend,
   netSentiment,
   parseMentionsOverview,
+  relativeChange,
   sentimentSplit,
 } from './mentions-overview';
 
 const raw = {
-  window: { from: '2026-09-17T06:00:00Z', to: '2026-10-17T06:00:00Z', days: 30, source: 'days' },
+  window: {
+    from: '2026-09-17T06:00:00Z',
+    to: '2026-10-17T06:00:00Z',
+    days: 30,
+    source: 'days',
+    day_from: '2026-09-18',
+    day_to: '2026-10-17',
+  },
   current: {
     answers: 107,
     mentions: 107,
@@ -56,6 +65,8 @@ describe('parseMentionsOverview', () => {
       to: '2026-10-17T06:00:00Z',
       days: 30,
       source: 'days',
+      dayFrom: '2026-09-18',
+      dayTo: '2026-10-17',
     });
     expect(o.current).toMatchObject({
       answers: 107,
@@ -128,5 +139,37 @@ describe('the Overview metrics', () => {
   it('averages the position over the answers that placed the brand', () => {
     expect(averagePosition({ positionSum: 188, positionCount: 107 })).toBeCloseTo(1.757, 3);
     expect(averagePosition({ positionSum: 0, positionCount: 0 })).toBeNull();
+  });
+});
+
+describe('relativeChange', () => {
+  it('is the change in percent, and null with nothing before', () => {
+    expect(relativeChange(112, 100)).toBe(12);
+    expect(relativeChange(90, 120)).toBe(-25);
+    expect(relativeChange(5, 0)).toBeNull();
+  });
+});
+
+describe('mentionTrend', () => {
+  it('lists every day of the window, a day without answers as zero', () => {
+    const trend = mentionTrend({
+      window: {
+        from: '',
+        to: '',
+        days: 3,
+        source: 'days',
+        dayFrom: '2026-10-15',
+        dayTo: '2026-10-17',
+      },
+      daily: [
+        { day: '2026-10-15', answers: 10, mentions: 4, positive: 2, negative: 1 },
+        { day: '2026-10-17', answers: 5, mentions: 0, positive: 0, negative: 0 },
+      ],
+    });
+    expect(trend).toEqual([
+      { day: '2026-10-15', answers: 10, mentions: 4, rate: 40, net: 25 },
+      { day: '2026-10-16', answers: 0, mentions: 0, rate: null, net: null },
+      { day: '2026-10-17', answers: 5, mentions: 0, rate: 0, net: null },
+    ]);
   });
 });

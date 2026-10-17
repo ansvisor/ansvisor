@@ -19,6 +19,7 @@ import { writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Topic } from '@/types';
 import { MentionsFilterBar } from './_filter-bar';
+import { MentionsOverviewTab } from './_overview';
 
 /**
  * Mentions & Sentiment (MS-05): where AI mentions the brand, how it describes
@@ -31,6 +32,9 @@ import { MentionsFilterBar } from './_filter-bar';
 export default function MentionsPage() {
   const t = useTranslations('mentions');
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
+  const brandName = useBrandStore(
+    (s) => s.brands.find((b) => b.id === s.activeBrandId)?.name ?? '',
+  );
 
   const [tab, setTab] = useState<MentionsTab>(DEFAULT_MENTIONS_TAB);
   const [filters, setFilters] = useState<MentionsFilters>(DEFAULT_MENTIONS_FILTERS);
@@ -101,7 +105,13 @@ export default function MentionsPage() {
           />
         </div>
 
-        {MENTIONS_TABS.map((id) => (
+        <TabsContent value="overview" className="mt-4">
+          {/* Read once the URL's filters are in, so the first read is the right one. */}
+          {urlRead && (
+            <MentionsOverviewTab brandId={activeBrandId} brand={brandName} filters={filters} />
+          )}
+        </TabsContent>
+        {MENTIONS_TABS.filter((id) => id !== 'overview').map((id) => (
           <TabsContent key={id} value={id} className="mt-4">
             <Card>
               <CardContent className="py-10 text-center text-sm text-muted-foreground">

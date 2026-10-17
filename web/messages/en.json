@@ -2460,7 +2460,87 @@
       "search": "Search",
       "searchPlaceholder": "Search prompts, brands, phrases…"
     },
-    "comingSoon": "This view is on its way: its figures and charts arrive with the next updates."
+    "comingSoon": "This view is on its way: its figures and charts arrive with the next updates.",
+    "overview": {
+      "sectionLabel": "Mentions overview",
+      "loadError": "Couldn't load the overview. Try again in a moment.",
+      "unavailable": "Mention figures aren't available yet. They appear once the mentions data has been prepared.",
+      "pickDates": "Choose a start or end date to see the overview.",
+      "empty": "No tracked responses in this period. Try a longer range or clear the filters.",
+      "headline": {
+        "label": "Summary",
+        "net": "Net sentiment is <b>{net}</b>.",
+        "netChange": "Net sentiment is <b>{net}</b> (<tone>{change}</tone> vs the previous {period}).",
+        "netLowSample": "Net sentiment is <b>{net}</b> (low sample: {count, plural, one {# mention} other {# mentions}}).",
+        "noMentions": "AI didn't name {brand} in the tracked responses of this period.",
+        "moverDown": "Most of the drop is on <b>{platform} ({change})</b>.",
+        "moverUp": "Most of the rise is on <b>{platform} ({change})</b>.",
+        "companionsOne": "AI usually names {brand} next to <b>{first}</b>.",
+        "companionsTwo": "AI usually names {brand} next to <b>{first}</b> and <b>{second}</b>.",
+        "period": "{days, plural, one {day} other {# days}}",
+        "period24h": "24 hours",
+        "basis": "Built from aggregates with a fixed template, no LLM call · {range} · {answers, plural, one {# tracked response} other {# tracked responses}} · {mentions, plural, one {# mention} other {# mentions}}"
+      },
+      "kpi": {
+        "totalMentions": "Total mentions",
+        "totalMentionsTip": "Responses that name {brand} at least once. A response naming you twice counts once.",
+        "totalMentionsSub": "responses naming {brand}",
+        "mentionRate": "Mention rate",
+        "mentionRateTip": "The share of tracked responses that name {brand}.",
+        "mentionRateSub": "of {count} tracked responses",
+        "promptsWithMentions": "Prompts with mentions",
+        "promptsWithMentionsTip": "Prompts with at least one response naming {brand} in this period.",
+        "promptsWithMentionsSub": "of {count} tracked prompts",
+        "netSentiment": "Net sentiment",
+        "netSentimentTip": "Positive minus negative share of the responses naming {brand}, from −100 to +100. Neutral mentions count in the total.",
+        "sampleTip": "{count, plural, one {Based on # tracked response} other {Based on # tracked responses}} in this period.",
+        "sampleTipNamed": "{count, plural, one {Based on # response naming {brand}} other {Based on # responses naming {brand}}} in this period.",
+        "splitLabel": "{positive} positive, {neutral} neutral, {negative} negative",
+        "lowSample": "{count, plural, one {Low sample · # response} other {Low sample · # responses}}"
+      },
+      "sentiment": {
+        "positive": "Positive",
+        "neutral": "Neutral",
+        "negative": "Negative"
+      },
+      "trend": {
+        "title": "Mentions & sentiment over time",
+        "metricLabel": "Trend metric",
+        "mentions": "Mentions",
+        "rate": "Mention rate",
+        "net": "Net sentiment",
+        "tooltipResponses": "{count, plural, one {# response} other {# responses}}",
+        "tooltipMentions": "{count, plural, one {# mention} other {# mentions}}",
+        "lowSample": "Low sample",
+        "tooShort": "The trend needs a range of at least two days."
+      },
+      "platforms": {
+        "title": "By AI platform",
+        "tableLabel": "Mentions and sentiment by AI platform",
+        "platform": "Platform",
+        "mentions": "Mentions",
+        "rate": "Rate",
+        "sentiment": "Sentiment",
+        "net": "Net",
+        "lowSample": "Low sample",
+        "negativeNet": "negative net sentiment",
+        "disagree": "Platforms disagree: {high} is {highNet} but {low} is {lowNet}."
+      },
+      "competitors": {
+        "title": "Competitor framing",
+        "description": "How often AI names each brand, and how often in the same responses as you.",
+        "tableLabel": "Mentions of your brand and competitors",
+        "brand": "Brand",
+        "mentions": "Mentions",
+        "rate": "Rate",
+        "sentiment": "Sentiment",
+        "net": "Net",
+        "sameAnswer": "Same answer as you",
+        "you": "You",
+        "ownSentimentOnly": "Sentiment is measured for your brand only.",
+        "none": "No competitors yet. Add them on the Competitors page to compare."
+      }
+    }
   },
   "competitors": {
     "title": "Competitors",
