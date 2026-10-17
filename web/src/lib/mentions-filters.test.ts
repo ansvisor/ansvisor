@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_MENTIONS_FILTERS,
+  mentionsQuery,
   mentionsStateParams,
   readMentionsState,
   type MentionsFilters,
@@ -83,5 +84,45 @@ describe('mentionsStateParams', () => {
         q: '  pricing ',
       }),
     ).toMatchObject({ range: '7d', from: null, q: 'pricing' });
+  });
+});
+
+describe('mentionsQuery', () => {
+  const at = (iso: string) => {
+    const real = Date.now;
+    return <T>(fn: () => T): T => {
+      Date.now = () => Date.parse(iso);
+      try {
+        return fn();
+      } finally {
+        Date.now = real;
+      }
+    };
+  };
+
+  it('turns a preset into its window and leaves empty filters out', () => {
+    const q = at('2026-10-17T12:00:00.000Z')(() =>
+      mentionsQuery({ ...DEFAULT_MENTIONS_FILTERS, range: '7d', platform: 'claude', q: ' faq ' }),
+    );
+    expect(q).toEqual({
+      from: '2026-10-10T12:00:00.000Z',
+      platform: 'claude',
+      search: 'faq',
+    });
+  });
+
+  it('reads a custom range as whole days in the given time zone', () => {
+    const q = at('2026-10-17T12:00:00.000Z')(() =>
+      mentionsQuery(
+        { ...DEFAULT_MENTIONS_FILTERS, range: 'custom', from: '2026-10-01', to: '2026-10-14' },
+        'UTC',
+      ),
+    );
+    expect(q?.from).toBe('2026-10-01T00:00:00.000Z');
+    expect(q?.to).toBe('2026-10-14T23:59:59.999Z');
+  });
+
+  it('is null for a custom range with no dates yet', () => {
+    expect(mentionsQuery({ ...DEFAULT_MENTIONS_FILTERS, range: 'custom' })).toBeNull();
   });
 });

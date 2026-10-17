@@ -1,4 +1,8 @@
-import { PROMPT_RANGE_PRESETS, type PromptRangePreset } from '@/config/prompt-options';
+import {
+  PROMPT_RANGE_PRESETS,
+  resolvePromptRange,
+  type PromptRangePreset,
+} from '@/config/prompt-options';
 
 /**
  * The Mentions & Sentiment page's tab and filters (MS-05). One filter shape is
@@ -80,4 +84,31 @@ export function mentionsStateParams(
     topic: orNull(filters.topic),
     q: orNull(filters.q.trim()),
   };
+}
+
+/** What the page's reads take: the window's bounds and the filters. */
+export interface MentionsQuery {
+  from: string;
+  to?: string;
+  platform?: string;
+  region?: string;
+  topicId?: string;
+  search?: string;
+}
+
+/**
+ * The filters as a read: the range resolved to bounds in the viewer's time
+ * zone, as on the Prompts page, and empty filters left out. Null for a custom
+ * range with no dates yet, which is not a window to read.
+ */
+export function mentionsQuery(filters: MentionsFilters, timeZone?: string): MentionsQuery | null {
+  if (filters.range === 'custom' && !filters.from && !filters.to) return null;
+  const range = resolvePromptRange(filters.range, { from: filters.from, to: filters.to }, timeZone);
+  const query: MentionsQuery = { from: range.from };
+  if (range.to) query.to = range.to;
+  if (filters.platform) query.platform = filters.platform;
+  if (filters.region) query.region = filters.region;
+  if (filters.topic) query.topicId = filters.topic;
+  if (filters.q.trim()) query.search = filters.q.trim();
+  return query;
 }
