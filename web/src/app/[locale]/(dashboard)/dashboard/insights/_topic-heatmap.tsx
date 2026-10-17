@@ -82,7 +82,10 @@ export function TopicHeatmap({
             {shown.map((row) => (
               <tr key={row.topicId} className="border-b last:border-b-0">
                 <td className="truncate py-1.5 pr-3 font-medium" title={row.name}>
-                  <Link href={`/dashboard/topics/${row.topicId}`} className="hover:underline">
+                  <Link
+                    href={`/dashboard/prompts/topics/${row.topicId}`}
+                    className="hover:underline"
+                  >
                     {row.name}
                   </Link>
                 </td>
@@ -90,7 +93,7 @@ export function TopicHeatmap({
                   <td key={columns[i].key} className="px-1 py-1.5">
                     {/* The topic name is the keyboard stop; cells are a mouse shortcut to it. */}
                     <Link
-                      href={`/dashboard/topics/${row.topicId}`}
+                      href={`/dashboard/prompts/topics/${row.topicId}`}
                       tabIndex={-1}
                       title={t('openTopic', { topic: row.name })}
                       className={cn(

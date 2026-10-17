@@ -158,7 +158,7 @@ export function MobileNav() {
                           <span
                             className={cn(
                               'block rounded-md px-3 py-1.5 text-sm transition-colors',
-                              pathname === child.href
+                              pathname === child.href || pathname.startsWith(`${child.href}/`)
                                 ? 'font-medium text-primary'
                                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                             )}

@@ -20,22 +20,68 @@ import { cn } from '@/lib/utils';
  * table never waits for them.
  */
 
-/** Which rows the table shows; set by the This brand cards. */
-export type PromptStatusFilter = 'active' | 'paused' | 'all';
+/** How long a tracked prompt reads as New after it is added. */
+export const NEW_PROMPT_MS = 24 * 60 * 60 * 1000;
+
+/** A row's Status: paused, new (tracked and added within the last day) or active. */
+export type PromptStatus = 'active' | 'new' | 'paused';
+
+/**
+ * Which rows the table shows; set by the This brand cards or the Status
+ * filter. It opens on Tracked: every prompt being tracked, Active and New.
+ */
+export type PromptStatusFilter = 'tracked' | PromptStatus | 'all';
+
+export function promptStatus(
+  prompt: { isActive: boolean; createdAt: string },
+  now: number,
+): PromptStatus {
+  if (!prompt.isActive) return 'paused';
+  return now - Date.parse(prompt.createdAt) < NEW_PROMPT_MS ? 'new' : 'active';
+}
 
 export function matchesStatusFilter(
-  prompt: { isActive: boolean },
+  prompt: { isActive: boolean; createdAt: string },
   filter: PromptStatusFilter,
+  now: number,
 ): boolean {
-  return filter === 'all' || prompt.isActive === (filter === 'active');
+  if (filter === 'all') return true;
+  const status = promptStatus(prompt, now);
+  return filter === 'tracked' ? status !== 'paused' : status === filter;
+}
+
+/**
+ * The table's default order: prompts added within the last day lead, newest
+ * first, then the rest as sorted. New prompts have no answers yet, so a
+ * performance sort alone would sink them to the bottom.
+ */
+export function newFirst<T extends { isActive: boolean; createdAt: string }>(
+  sorted: T[],
+  now: number,
+): T[] {
+  const isNew = (p: T) => promptStatus(p, now) === 'new';
+  const added = (p: T) => Date.parse(p.createdAt);
+  return [
+    ...sorted.filter(isNew).sort((a, b) => added(b) - added(a)),
+    ...sorted.filter((p) => !isNew(p)),
+  ];
 }
 
 /** How many rows each filter shows, for the table's title. */
 export function countByStatus(
-  prompts: { isActive: boolean }[],
+  prompts: { isActive: boolean; createdAt: string }[],
+  now: number,
 ): Record<PromptStatusFilter, number> {
-  const active = prompts.filter((p) => p.isActive).length;
-  return { active, paused: prompts.length - active, all: prompts.length };
+  const counts: Record<PromptStatusFilter, number> = {
+    tracked: 0,
+    active: 0,
+    new: 0,
+    paused: 0,
+    all: prompts.length,
+  };
+  for (const p of prompts) counts[promptStatus(p, now)] += 1;
+  counts.tracked = counts.active + counts.new;
+  return counts;
 }
 
 /** Plan keys this bundle has labels for; any other shows the server's name. */
@@ -126,6 +172,7 @@ export function PromptUsageCards({
   state,
   brandName,
   readOnly,
+  prompts,
   filter,
   onFilter,
   onRetry,
@@ -134,6 +181,8 @@ export function PromptUsageCards({
   brandName: string | undefined;
   /** Member role: the subtitle says the table is read-only. */
   readOnly: boolean;
+  /** The brand's prompts, for the New ones the Active card also counts. */
+  prompts: { isActive: boolean; createdAt: string }[];
   filter: PromptStatusFilter;
   onFilter: (filter: PromptStatusFilter) => void;
   onRetry: () => void;
@@ -142,6 +191,7 @@ export function PromptUsageCards({
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
   const n = (value: number) => format.number(value);
+  const newCount = countByStatus(prompts, now.getTime()).new;
 
   const usage = state.status === 'ready' ? state.usage : null;
   const plan = usage?.plan;
@@ -237,13 +287,30 @@ export function PromptUsageCards({
           <div className="grid auto-cols-fr grid-flow-col">
             <UsageCard
               label={t('activePrompts')}
-              selected={filter === 'active'}
-              onSelect={() => onFilter('active')}
+              selected={filter === 'tracked'}
+              onSelect={() => onFilter('tracked')}
             >
               {value(usage && n(usage.brand.active))}
               {sub(
                 usage && (
                   <>
+                    {newCount > 0 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onFilter('new')}
+                          title={t('showNew')}
+                          aria-pressed={filter === 'new'}
+                          className={cn(
+                            'relative z-10 underline-offset-2 hover:underline',
+                            filter === 'new' && 'font-medium text-foreground underline',
+                          )}
+                        >
+                          {t('new', { count: n(newCount) })}
+                        </button>{' '}
+                        ·{' '}
+                      </>
+                    )}
                     <button
                       type="button"
                       onClick={() => onFilter('paused')}
