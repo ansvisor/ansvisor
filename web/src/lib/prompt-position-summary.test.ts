@@ -2,7 +2,8 @@
  * prompt-position-summary.test.ts  (PROMPT-007)
  *
  * Tests the Tracked Prompts Positions cell: the average the panel shows, the
- * trend against the previous period, and the per-platform dots.
+ * trend against the previous period, the per-platform dots, and the prompt's
+ * performance for the Performance filter.
  */
 
 import { describe, expect, test } from 'vitest';
@@ -95,7 +96,8 @@ describe('buildPositionCell', () => {
       ['google-aio', 'missing'],
       ['copilot-web', 'no_runs'],
     ]);
-    expect(cell.lateOrMissing).toBe(true);
+    // Across them: named at #3 of 5 on average, in the middle third.
+    expect(cell.performance).toBe('good');
   });
 
   test('mentioned in under half the runs is missing, like the Improve tab, however high it ranked', () => {
@@ -124,7 +126,7 @@ describe('buildPositionCell', () => {
         mentionedRuns: 8,
       },
     ]);
-    expect(cell.lateOrMissing).toBe(true);
+    expect(cell.performance).toBe('missing');
     // The average stays the Positions panel's.
     expect(cell.avg).toBe(1);
   });
@@ -136,16 +138,50 @@ describe('buildPositionCell', () => {
       platforms.slice(0, 1),
     );
     expect(cell.dots[0].state).toBe('early');
-    expect(cell.lateOrMissing).toBe(false);
+    expect(cell.performance).toBe('best');
   });
+});
 
-  test('not late or missing when every tracked platform is early or has no runs', () => {
-    const cell = buildPositionCell(
-      [row('chatgpt-web', { positionSum: 1, positionCount: 1 })],
+describe('the prompt performance', () => {
+  // Five brands listed per answer, so #1 is the first third and #5 the last.
+  const at = (rank: number) =>
+    buildPositionCell(
+      [row('chatgpt-web', { positionSum: rank * 4, positionCount: 4 })],
       [],
       platforms.slice(0, 2),
+    ).performance;
+
+  test('reads where the brand is named among the brands listed', () => {
+    expect(at(1)).toBe('best');
+    expect(at(2)).toBe('best');
+    expect(at(3)).toBe('good');
+    expect(at(4)).toBe('late');
+    expect(at(5)).toBe('late');
+  });
+
+  test('pools every platform: early on one and missing on another can still be good', () => {
+    const cell = buildPositionCell(
+      [
+        row('chatgpt-web', { positionSum: 4, positionCount: 4 }),
+        row('perplexity-web', { positionSum: 20, positionCount: 4 }),
+        row('gemini-web', { mentionAnswers: 0, positionSum: 0, positionCount: 0 }),
+      ],
+      [],
+      platforms,
     );
-    expect(cell.lateOrMissing).toBe(false);
+    expect(cell.dots.map((d) => d.state)).toEqual(['early', 'late', 'missing', 'no_runs']);
+    expect(cell.performance).toBe('good');
+  });
+
+  test('named with no stored position is good', () => {
+    expect(
+      buildPositionCell([row('chatgpt-web', { positionSum: 0, positionCount: 0 })], [], platforms)
+        .performance,
+    ).toBe('good');
+  });
+
+  test('none without runs in the window, as for a prompt just added', () => {
+    expect(buildPositionCell([], [], platforms).performance).toBeNull();
   });
 });
 
@@ -161,7 +197,7 @@ describe('compareLateness', () => {
       runs: 4,
       mentionedRuns: 0,
     })),
-    lateOrMissing: states.some((s) => s === 'late' || s === 'missing'),
+    performance: null,
   });
   const order = (cells: Record<string, PromptPositionCell | undefined>) =>
     Object.keys(cells).sort((a, b) => compareLateness(cells[a], cells[b]));

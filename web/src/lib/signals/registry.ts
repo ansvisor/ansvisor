@@ -61,6 +61,9 @@ export const SIGNAL_STATUSES: readonly SignalStatus[] = [
   'dismissed',
 ];
 
+/** A signal that still supports its action: resolved and dismissed ones don't (AC-007). */
+export const OPEN_SIGNAL_STATUSES: readonly SignalStatus[] = ['new', 'acknowledged'];
+
 export const SIGNAL_IMPACTS: readonly SignalImpact[] = ['high', 'medium', 'low'];
 
 /** Data sources a signal row can carry (the `source` array's vocabulary). */

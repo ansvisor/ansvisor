@@ -4,7 +4,9 @@ import type { ActionDetail, ActionItem } from '@/lib/actions/action-center';
 import type { Signal } from '@/lib/signals/map';
 import {
   ACTION_CSV_HEADERS,
+  ACTION_LIST_CSV_HEADERS,
   actionCsv,
+  actionListCsv,
   actionExportFileName,
   actionMarkdown,
   actionWorkbook,
@@ -28,6 +30,9 @@ const action = {
   taskTotal: 2,
   taskCompleted: 1,
   signalCount: 1,
+  priorityScore: 94,
+  priorityLevel: 'critical',
+  priorityReason: null,
 } as ActionItem;
 
 const signal: Signal = {
@@ -47,7 +52,7 @@ const signal: Signal = {
   payload: {},
   kpiKeys: [],
   actionId: 'a1',
-  where: { platforms: ['chatgpt-web', 'gemini-web'], regions: ['US'] },
+  where: { platforms: ['chatgpt-web', 'gemini-web'], regions: ['US'], topics: [] },
 };
 
 const detail = {
@@ -92,16 +97,28 @@ const detail = {
 
 const texts: ExportTexts = {
   title: 'Recover lost citations on 7 prompts',
+  priority: { label: '94 (Critical)', why: 'Lost ground on 7 high-demand prompts 2 days ago.' },
   why: '7 prompts lost their citations.',
   goal: 'Citations back on 5 of 7 prompts',
   category: 'Recover',
-  impact: 'High',
   status: 'In progress',
   tags: ['Recover', '1 platform'],
   kpis: ['AI Visibility (target 40)'],
   context: [
     { label: 'Prompt', value: 'Which tools track AI search?' },
     { label: 'Platforms at send time', value: ['Gemini · No runs', 'ChatGPT · Not cited'] },
+  ],
+  affected: [
+    {
+      entity: 'Prompt',
+      label: 'Which tools track AI search?',
+      volume: '~25.1k',
+      platforms: ['ChatGPT', 'Gemini'],
+      lostPages: ['https://acme.example/blog/best-tools'],
+      citedInstead: ['https://profound.com/features'],
+      details: '',
+      link: 'https://app.example/dashboard/prompts/p1',
+    },
   ],
   taskTitle: (task) => task.title ?? '',
   taskStatus: (status) => ({ completed: 'Completed', skipped: 'Skipped' })[status] ?? status,
@@ -116,6 +133,8 @@ const texts: ExportTexts = {
   }),
   event: () => 'Action created',
   skipped: (reason) => `Skipped: ${reason}`,
+  taskType: (type) => ({ content: 'Content', outreach: 'Outreach' })[type] ?? type,
+  taskSent: (to) => (to === 'content' ? 'Sent to Content' : 'Sent to the webhook'),
   answerSource: 'AI answer',
 };
 
@@ -165,9 +184,10 @@ describe('actionMarkdown', () => {
     expect(actionMarkdown(exported, label)).toBe(
       [
         '# Recover lost citations on 7 prompts (AC-52)',
-        'category: Recover · impact: High · status: In progress',
+        'priority: 94 (Critical) · category: Recover · status: In progress',
         'assignee: Ada Lovelace · dueDate: 2026-11-09',
         'tags: Recover, 1 platform',
+        'priorityWhy: Lost ground on 7 high-demand prompts 2 days ago.',
         'why: 7 prompts lost their citations.',
         'goal: Citations back on 5 of 7 prompts',
         'kpis: AI Visibility (target 40)',
@@ -176,6 +196,9 @@ describe('actionMarkdown', () => {
         '- Gemini · No runs',
         '- ChatGPT · Not cited',
         'link: https://app.example/dashboard/action-center/actions?action=a1',
+        '',
+        '## affectedHeading(1)',
+        '- Which tools track AI search? · ~25.1k · ChatGPT, Gemini · lostPage: https://acme.example/blog/best-tools · citedInstead: https://profound.com/features',
         '',
         '## tasksHeading(2)',
         '1. Add a 2026 comparison table to /blog/best-tools (Completed)',
@@ -195,56 +218,117 @@ describe('actionMarkdown', () => {
   it('leaves out what an action has none of', () => {
     const bare = {
       ...exported,
+      priority: null,
       assignee: '',
       dueDate: '',
       tags: [],
       kpis: [],
       context: [],
+      affected: [],
       tasks: [],
       signals: [],
       events: [],
     };
     const md = actionMarkdown(bare, label);
-    expect(md).not.toMatch(/assignee|tags|kpis|historyHeading/);
+    expect(md).not.toMatch(/priority|assignee|tags|kpis|affectedHeading|historyHeading/);
     expect(md).toContain('## tasksHeading(0)');
   });
 });
 
 describe('actionCsv', () => {
-  it('gives each task and signal a row, marked by section and the action', () => {
+  it('gives each affected item, task and signal a row, marked by section and the action', () => {
     const [head, ...rows] = actionCsv(exported).split('\n');
     expect(head).toBe(ACTION_CSV_HEADERS.join(','));
     expect(rows.map((row) => row.split(',').slice(0, 2).join(','))).toEqual([
+      'affected,AC-52',
       'task,AC-52',
       'task,AC-52',
       'signal,AC-52',
     ]);
+    expect(rows[0]).toContain(
+      '~25.1k,https://acme.example/blog/best-tools,https://profound.com/features,ChatGPT; Gemini',
+    );
     // A cell a spreadsheet would run as a formula is kept as text.
-    expect(rows[1]).toContain(`"'=HYPERLINK(""x"")"`);
-    expect(rows[2]).toContain('Citation · Lost,Which tools track AI search?');
-    expect(rows[2]).toContain('ChatGPT; Gemini,United States,2026-10-09');
+    expect(rows[2]).toContain(`"'=HYPERLINK(""x"")"`);
+    expect(rows[3]).toContain('Citation · Lost,Which tools track AI search?');
+    expect(rows[3]).toContain('ChatGPT; Gemini,United States,2026-10-09');
+  });
+});
+
+describe('actionListCsv', () => {
+  const listRow = {
+    number: 52,
+    priorityScore: 84,
+    priorityLevel: 'High',
+    title: 'Recover lost citations on 3 prompts',
+    category: 'Recover',
+    status: 'New',
+    assignee: '',
+    dueDate: '',
+    tasksDone: 1,
+    tasksTotal: 6,
+    signalCount: 3,
+    created: '2026-10-15T00:00:00Z',
+  };
+
+  it("adds each action's affected count and names to the list's columns (AC-005)", () => {
+    const [header, row] = actionListCsv([
+      {
+        ...listRow,
+        affected: { count: 7, items: ['Best coffee subscription?', 'Coffee, delivered'] },
+      },
+    ]).split('\n');
+    expect(header).toBe(ACTION_LIST_CSV_HEADERS.join(','));
+    expect(header).toContain('priority_score,priority_level,');
+    expect(header).toContain(',signal_count,affected_count,affected_items,created');
+    expect(row).toBe(
+      '52,84,High,Recover lost citations on 3 prompts,Recover,New,,,1 / 6,3,7,"Best coffee subscription?; Coffee, delivered",2026-10-15T00:00:00Z',
+    );
+  });
+
+  it('writes none for an action whose affected items were not read, and no score before one', () => {
+    const [, row] = actionListCsv([{ ...listRow, priorityScore: null, priorityLevel: '' }]).split(
+      '\n',
+    );
+    expect(row).toBe(
+      '52,,,Recover lost citations on 3 prompts,Recover,New,,,1 / 6,3,0,,2026-10-15T00:00:00Z',
+    );
   });
 });
 
 describe('actionWorkbook', () => {
-  it('gives the action, its tasks, signals and history a sheet each', () => {
+  it('gives the action, its affected items, tasks, signals and history a sheet each', () => {
     const sheets = actionWorkbook(exported, label);
     expect(sheets.map((s) => s.sheet)).toEqual([
       'sheets.action',
+      'sheets.affected',
       'sheets.tasks',
       'sheets.signals',
       'sheets.history',
     ]);
     expect(sheets[0].data).toContainEqual([
+      { value: 'priority', fontWeight: 'bold' },
+      '94 (Critical)',
+    ]);
+    expect(sheets[0].data.map((row) => (row[0] as { value: string }).value)).not.toContain(
+      'impact',
+    );
+    expect(sheets[0].data).toContainEqual([
       { value: 'Platforms at send time', fontWeight: 'bold' },
       'Gemini · No runs; ChatGPT · Not cited',
     ]);
-    expect(sheets[1].data[0][1]).toEqual({ value: 'task', fontWeight: 'bold' });
-    expect(sheets[2].data[1].slice(0, 2)).toEqual([
+    expect(sheets[1].data[1].slice(0, 4)).toEqual([
+      'Prompt',
+      'Which tools track AI search?',
+      '~25.1k',
+      'ChatGPT, Gemini',
+    ]);
+    expect(sheets[2].data[0][1]).toEqual({ value: 'task', fontWeight: 'bold' });
+    expect(sheets[3].data[1].slice(0, 2)).toEqual([
       'Citation · Lost',
       'Which tools track AI search?',
     ]);
-    expect(sheets[3].data[1]).toEqual(['2026-10-08', 'Action created']);
+    expect(sheets[4].data[1]).toEqual(['2026-10-08', 'Action created']);
   });
 });
 
@@ -262,11 +346,91 @@ describe('the Excel file', () => {
     const sheets = await readXlsxFile(blob);
     expect(sheets.map((s) => s.sheet)).toEqual([
       'sheets.action',
+      'sheets.affected',
       'sheets.tasks',
       'sheets.signals',
       'sheets.history',
     ]);
-    expect(sheets[1].data[2]).toEqual([2, '=HYPERLINK("x")', 'Skipped', 'Skipped: Done by hand']);
-    expect(sheets[2].data[1][6]).toBe('ChatGPT, Gemini');
+    expect(sheets[2].data[2]).toEqual([
+      2,
+      '=HYPERLINK("x")',
+      null,
+      'Skipped',
+      null,
+      null,
+      null,
+      null,
+      null,
+      'Skipped: Done by hand',
+    ]);
+    expect(sheets[3].data[1][6]).toBe('ChatGPT, Gemini');
+  });
+});
+
+describe('a task with AC-004 fields', () => {
+  const concrete = buildActionExport(
+    action,
+    {
+      ...detail,
+      tasks: [
+        {
+          ...detail.tasks[0],
+          status: 'todo',
+          details: {
+            body: null,
+            platform: null,
+            platformLabel: null,
+            sources: [],
+            where: 'acme.example/blog/best-tools · 3 prompts on ChatGPT',
+            why: 'Cited #2 until Oct 8.\nThe pages cited now have a dated table.',
+            how: ['Add a feature table.', 'Put "2026" in the title.'],
+            doneWhen: 'Cited again on 2 of 3 platforms within 14 days.',
+            type: 'content',
+            effort: '~2h',
+            role: 'Content writer',
+            sent: { content: null, webhook: null },
+          },
+        },
+      ],
+    },
+    texts,
+    { origin: 'https://app.example', timeZone: 'Europe/Istanbul' },
+  );
+
+  it('writes each field on its own line in Copy Data', () => {
+    expect(actionMarkdown(concrete, label)).toContain(
+      [
+        '1. Add a 2026 comparison table to /blog/best-tools (todo) · Content',
+        '   taskWhere: acme.example/blog/best-tools · 3 prompts on ChatGPT',
+        '   taskWhy: Cited #2 until Oct 8. The pages cited now have a dated table.',
+        '   taskHow: 1) Add a feature table. 2) Put "2026" in the title.',
+        '   taskDoneWhen: Cited again on 2 of 3 platforms within 14 days.',
+        '   taskEffort: ~2h · Content writer',
+      ].join('\n'),
+    );
+  });
+
+  it('gives each field its own column in the CSV and the workbook', () => {
+    const [head, , task] = actionCsv(concrete).split('\n');
+    const cells = Object.fromEntries(
+      head.split(',').map((name, i) => [name, task.match(/("([^"]|"")*"|[^,]*)(,|$)/g)?.[i]]),
+    );
+    expect(cells.type).toBe('Content,');
+    expect(cells.how).toBe('"1) Add a feature table. 2) Put ""2026"" in the title.",');
+    expect(cells.done_when).toBe('Cited again on 2 of 3 platforms within 14 days.,');
+
+    const sheet = actionWorkbook(concrete, label)[2];
+    expect(sheet.data[1]).toEqual([
+      1,
+      'Add a 2026 comparison table to /blog/best-tools',
+      'Content',
+      'todo',
+      'acme.example/blog/best-tools · 3 prompts on ChatGPT',
+      'Cited #2 until Oct 8. The pages cited now have a dated table.',
+      '1) Add a feature table. 2) Put "2026" in the title.',
+      'Cited again on 2 of 3 platforms within 14 days.',
+      '~2h · Content writer',
+      '',
+    ]);
   });
 });
