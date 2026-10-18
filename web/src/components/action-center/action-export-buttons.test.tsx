@@ -57,6 +57,18 @@ function render(node: React.ReactNode) {
 const button = (name: string) =>
   [...container.querySelectorAll('button')].find((b) => b.textContent === name)!;
 
+/** Opens the Export menu and picks one of its items. */
+async function exportAs(name: string) {
+  const trigger = button('Export');
+  await act(async () => {
+    trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    trigger.click();
+  });
+  const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+  expect(items.map((item) => item.textContent)).toEqual(['Export CSV', 'Export Excel']);
+  await act(async () => items.find((item) => item.textContent === name)!.click());
+}
+
 const action = {
   id: 'a1',
   actionNo: 52,
@@ -148,9 +160,7 @@ afterEach(() => {
 describe('ActionExportButtons', () => {
   it('waits for the action to load', () => {
     render(<ActionExportButtons action={action} detail={null} />);
-    expect(
-      ['Copy Data', 'Export CSV', 'Export Excel'].map((name) => button(name).disabled),
-    ).toEqual([true, true, true]);
+    expect(['Copy Data', 'Export'].map((name) => button(name).disabled)).toEqual([true, true]);
   });
 
   const copyButton = () =>
@@ -318,7 +328,7 @@ describe('ActionExportButtons', () => {
       saved[saved.length - 1].name = this.download;
     });
     render(<ActionExportButtons action={action} detail={detail} />);
-    await act(async () => button('Export CSV').click());
+    await exportAs('Export CSV');
     click.mockRestore();
     expect(saved[0].name).toBe('action-AC-52.csv');
     const bytes = await new Promise<Uint8Array>((resolve) => {
@@ -334,7 +344,7 @@ describe('ActionExportButtons', () => {
 
   it('writes an Excel workbook with a sheet per tab', async () => {
     render(<ActionExportButtons action={action} detail={detail} />);
-    await act(async () => button('Export Excel').click());
+    await exportAs('Export Excel');
     expect(written).toHaveLength(1);
     expect(written[0].sheets.map((s) => s.sheet)).toEqual([
       'Action',

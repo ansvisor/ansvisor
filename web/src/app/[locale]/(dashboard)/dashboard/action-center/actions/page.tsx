@@ -17,8 +17,15 @@ import {
   X,
 } from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useUserRole } from '@/hooks/use-user-role';
 import type { Brand } from '@/types';
-import { getActions, getActionsAffected, type ActionItem } from '@/lib/actions/action-center';
+import {
+  deleteAction,
+  getActions,
+  getActionsAffected,
+  updateActionStatus,
+  type ActionItem,
+} from '@/lib/actions/action-center';
 import { listMembers, type TeamMember } from '@/lib/actions/team';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import {
@@ -30,7 +37,12 @@ import {
   type ActionSort,
   type ActionStatus,
 } from '@/lib/action-center/registry';
-import { actionContextTags, actionTexts, memberLabel } from '@/lib/action-center/display';
+import {
+  actionContextTags,
+  actionTexts,
+  assigneeLabel,
+  memberLabel,
+} from '@/lib/action-center/display';
 import {
   PRIORITY_LEVELS,
   comparePriority,
@@ -118,6 +130,9 @@ function ActionsContent({ brand }: { brand: Brand }) {
   const [sort, setSort] = useState<ActionSort>('priority');
   const [search, setSearch] = useState('');
   const [isExporting, setIsExporting] = useState(false);
+  const { canManage } = useUserRole();
+  // Rows with a menu change in flight.
+  const [busyIds, setBusyIds] = useState<Set<string>>(() => new Set());
   // False once this brand's view is gone, so an export still reading doesn't
   // download the previous brand's file after a switch.
   const mounted = useRef(true);
@@ -185,6 +200,14 @@ function ActionsContent({ brand }: { brand: Brand }) {
     }
   }, [brand.id]);
 
+  // A change made in the drawer, shown in its row at once: reading the whole
+  // list again after each one held the drawer for seconds.
+  const patchAction = useCallback((id: string, patch: Partial<ActionItem>) => {
+    setActions((prev) =>
+      prev ? prev.map((action) => (action.id === id ? { ...action, ...patch } : action)) : prev,
+    );
+  }, []);
+
   useEffect(() => {
     void load();
     listMembers()
@@ -204,6 +227,35 @@ function ActionsContent({ brand }: { brand: Brand }) {
     const id = new URLSearchParams(window.location.search).get('action');
     if (id && actions.some((action) => action.id === id)) setSelectedId(id);
   }, [actions]);
+
+  // The row menu: set a status or delete, without the drawer, then read the
+  // list again.
+  const runRowChange = async (action: ActionItem, change: () => Promise<void>, done: string) => {
+    setBusyIds((prev) => new Set(prev).add(action.id));
+    try {
+      await change();
+      toast.success(done);
+    } catch {
+      toast.error(t('updateFailed'));
+    } finally {
+      await load();
+      setBusyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(action.id);
+        return next;
+      });
+    }
+  };
+  const changeStatus = (action: ActionItem, next: ActionStatus) =>
+    void runRowChange(
+      action,
+      () => updateActionStatus(brand.id, action.id, next),
+      t('rowMenu.statusChanged', { status: t(`status.${next}`) }),
+    );
+  const removeAction = (action: ActionItem) => {
+    if (selectedId === action.id) selectAction(null);
+    void runRowChange(action, () => deleteAction(action.id), t('rowMenu.deleted'));
+  };
 
   const selected = useMemo(
     () => (actions ?? []).find((action) => action.id === selectedId) ?? null,
@@ -274,7 +326,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
         title: actionTexts(action, tTexts).title,
         category: tCategories(action.category),
         status: t(`status.${action.status}`),
-        assignee: action.assignee?.fullName ?? '',
+        assignee: action.assignee ? (assigneeLabel(action.assignee) ?? '') : '',
         dueDate: action.dueDate ?? '',
         tasksDone: action.taskCompleted,
         tasksTotal: action.taskTotal,
@@ -518,7 +570,14 @@ function ActionsContent({ brand }: { brand: Brand }) {
       </div>
 
       {visible.length > 0 ? (
-        <ActionTable actions={visible} onSelect={(action) => selectAction(action.id)} />
+        <ActionTable
+          actions={visible}
+          onSelect={(action) => selectAction(action.id)}
+          onStatusChange={changeStatus}
+          onDelete={removeAction}
+          canDelete={canManage}
+          busyIds={busyIds}
+        />
       ) : (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
           <p className="text-sm text-muted-foreground">{t('noResults')}</p>
@@ -536,6 +595,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
           if (!open) selectAction(null);
         }}
         onChanged={() => void load()}
+        onPatched={patchAction}
       />
     </div>
   );

@@ -853,6 +853,19 @@
       "menu": {
         "label": "Actions for this item"
       },
+      "rowMenu": {
+        "label": "Actions for {title}",
+        "in_progress": "In Progress",
+        "completed": "Completed",
+        "dismissed": "Dismiss",
+        "delete": "Delete",
+        "deleteNotAllowed": "Only admins and managers can delete actions",
+        "deleteTitle": "Delete this action?",
+        "deleteConfirm": "It leaves the Action Center for everyone and won't come back on its own tomorrow.",
+        "cancel": "Cancel",
+        "statusChanged": "Moved to {status}",
+        "deleted": "Action deleted"
+      },
       "empty": {
         "title": "No actions yet",
         "description": "Actions are generated from your signals after daily tracking runs. When meaningful work emerges, it will appear here — quality over quantity."
@@ -929,6 +942,7 @@
       },
       "export": {
         "copyAll": "Copy Data",
+        "menu": "Export",
         "csv": "Export CSV",
         "excel": "Export Excel",
         "copied": "Action {ref} copied: {entity, select, prompts {{affected, plural, one {# prompt} other {# prompts}}, } pages {{affected, plural, one {# page} other {# pages}}, } other {}}{tasks, plural, one {# task} other {# tasks}}, {signals, plural, one {# signal} other {# signals}}",
@@ -2451,6 +2465,7 @@
       "viewBreakdown": "{metric}: view breakdown",
       "openPrompts": "Tracked prompts: open Prompts",
       "openCitations": "Citations: open Citations",
+      "openMentions": "Mentions: open Mentions",
       "visibility": "Visibility",
       "visibilityTip": "AI Visibility Score (0–100) from how often answers name you, cite your site and how early you're named. See Formulas.",
       "rankOf": "#{rank} of {count} brands",
@@ -3302,11 +3317,9 @@
         "brand": "Brand",
         "mentions": "Mentions",
         "rate": "Rate",
-        "sentiment": "Sentiment",
-        "net": "Net",
-        "sameAnswer": "Same answer as you",
+        "alsoNamesYou": "Also names you",
+        "alsoNamesYouTip": "Of the responses naming this competitor, how many name {brand} too, and what share of its mentions that is.",
         "you": "You",
-        "ownSentimentOnly": "Sentiment is measured for your brand only.",
         "none": "No competitors yet. Add them on the Competitors page to compare."
       }
     },

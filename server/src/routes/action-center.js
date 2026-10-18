@@ -112,6 +112,75 @@ router.post('/actions/:id/tasks/regenerate', async (req, res) => {
   }
 });
 
+/** Roles that may delete an action, as for other destructive changes. */
+const DELETE_ROLES = ['admin', 'manager'];
+
+/**
+ * Deletes an action from its row menu: hidden, not removed. It becomes
+ * dismissed and gets deleted_at (00168), so the lists, the API and the
+ * exports leave it out, while the nightly generator still reads a dismissed
+ * action and keeps its rest window: a condition that is still firing
+ * doesn't bring it back the next night. Admins and managers only.
+ *
+ * @returns {Promise<{ deleted: true }>}
+ */
+export async function deleteAction(actionId, userId) {
+  const { data: action } = await supabaseAdmin
+    .from('actions')
+    .select('id, brand_id, status, deleted_at')
+    .eq('id', actionId)
+    .maybeSingle();
+  if (!action || action.deleted_at) {
+    const err = new Error('Action not found');
+    err.status = 404;
+    throw err;
+  }
+  await assertBrandAccess(action.brand_id, userId);
+
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle();
+  if (!DELETE_ROLES.includes(profile?.role)) {
+    const err = new Error('Only admins and managers can delete actions.');
+    err.status = 403;
+    throw err;
+  }
+
+  const now = new Date().toISOString();
+  const { error } = await supabaseAdmin
+    .from('actions')
+    .update({ status: 'dismissed', deleted_at: now, completed_at: null, updated_at: now })
+    .eq('id', actionId)
+    .is('deleted_at', null);
+  if (error) throw new Error(error.message);
+
+  // The trail keeps who deleted it and from where, though nobody reads it now.
+  const { error: eventErr } = await supabaseAdmin.from('action_events').insert({
+    action_id: actionId,
+    event: 'deleted',
+    data: { from: action.status },
+    actor_id: userId,
+  });
+  if (eventErr) throw new Error(eventErr.message);
+  return { deleted: true };
+}
+
+/** DELETE /api/action-center/actions/:id */
+router.delete('/actions/:id', async (req, res) => {
+  const id = signalIdSchema.safeParse(req.params.id);
+  if (!id.success) return res.status(400).json({ error: 'Invalid action id' });
+  try {
+    return res.json(await deleteAction(id.data, req.user.id));
+  } catch (error) {
+    if (!error.status) req.log.error({ err: error }, 'delete action error');
+    return res.status(error.status || 500).json({
+      error: error.status ? error.message : 'Failed to delete the action.',
+    });
+  }
+});
+
 /**
  * Sends a task onward (AC-004): to Content as an opportunity, or to the
  * brand's webhook. `title` is the task's text as the dashboard shows it, for
