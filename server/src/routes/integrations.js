@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import {
   PROVIDERS,
@@ -12,6 +13,7 @@ import {
 } from '../lib/composio.js';
 import { runGscSync } from '../lib/gsc-sync.js';
 import { runGaSync } from '../lib/ga-sync.js';
+import { detectPageOpportunitiesInWindow } from '../lib/page-opportunities.js';
 import { assertBrandAccess } from '../lib/access.js';
 
 const router = Router();
@@ -372,6 +374,38 @@ router.post('/google-analytics/sync', async (req, res) => {
     return res.json(result);
   } catch (err) {
     req.log.error({ err }, 'integrations GA sync error');
+    return res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+const pageOpportunitiesQuery = z.object({
+  brandId: z.guid(),
+  // Inclusive days; either may be left open ("all time" sends neither).
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+});
+
+/**
+ * GET /api/integrations/google-analytics/page-opportunities?brandId=…&from=…&to=…
+ * The AI Traffic page's "Pages AI engines aren't sending traffic to" for the
+ * range the page shows (AT-002): valuable pages with no AI visit from
+ * Analytics or the tracking snippet in it. Reads synced data only, so it
+ * needs no Composio call, and any member of the brand's org may read it.
+ */
+router.get('/google-analytics/page-opportunities', async (req, res) => {
+  const parsed = pageOpportunitiesQuery.safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid request' });
+  const { brandId, from, to } = parsed.data;
+
+  try {
+    await assertBrandAccess(brandId, req.user.id);
+    const result = await detectPageOpportunitiesInWindow(brandId, {
+      since: from ?? null,
+      until: to ?? null,
+    });
+    return res.json(result);
+  } catch (err) {
+    if (!err.status) req.log.error({ err }, 'integrations GA page opportunities error');
     return res.status(err.status || 500).json({ error: err.message });
   }
 });

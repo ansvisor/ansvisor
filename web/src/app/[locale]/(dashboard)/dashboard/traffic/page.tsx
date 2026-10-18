@@ -809,12 +809,17 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
             </Card>
           </div>
 
-          {/* Findings from the Analytics connection (#719). Renders nothing
-              for brands without a mapped property, so the page is unchanged
-              for everyone who has not connected one. Kept visually distinct
-              from the tables above, which count the tracking snippet's own
-              visits — the two origins are never summed. */}
-          <PageOpportunitiesCard brandId={brand.id} />
+          {/* Findings from the Analytics connection (#719), for the page's
+              range (AT-002). Renders nothing for brands without Analytics
+              data in it, so the page is unchanged for everyone who has not
+              connected one. Kept visually distinct from the tables above,
+              which count the tracking snippet's own visits — the two origins
+              are never summed; a page the snippet saw is just never listed. */}
+          <PageOpportunitiesCard
+            brandId={brand.id}
+            dateWindow={dateWindow}
+            rangeLabel={rangeSubLabel}
+          />
 
           {/* Recent Visit Log with filtering and pagination*/}
           <Card>

@@ -220,7 +220,7 @@ instead.
 
 ## Available tools
 
-The MCP server exposes **33 tools**. Descriptions below match
+The MCP server exposes **36 tools**. Descriptions below match
 [`web/src/lib/mcp/server.ts`](https://github.com/ansvisor/ansvisor/blob/main/web/src/lib/mcp/server.ts).
 Tools that change data are marked **writes** — only call them on explicit user
 intent, not during exploratory queries.
@@ -230,6 +230,7 @@ intent, not during exploratory queries.
 | Tool | What it does | Writes |
 | --- | --- | --- |
 | `list_brands` | List the brands the authenticated user can access (id, name, slug, industry, region). Call first to resolve a `brand_id`. | |
+| `list_competitors` | Configured competitors for a brand (id, name, domain); this is not a performance ranking. | |
 
 ### Visibility & analytics
 
@@ -241,6 +242,13 @@ intent, not during exploratory queries.
 | `list_citations` | URLs and domains AI engines cite alongside a brand, by source type, with top domains/URLs and usage stats. | |
 | `get_ai_traffic` | AI-referral traffic (visits by engine, landing pages, countries) for an optional date range. | |
 | `get_prompt_performance` | Per-prompt performance (visibility, mentions, citations, appearances) over a date range for ranking prompts. | |
+
+### Saved reports
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `list_reports` | Saved report snapshots for a brand, newest first; returns metadata without the full payload (default 50, max 100 per call). | |
+| `get_report` | Full immutable snapshot for one saved report, including its stored payload; does not regenerate it. | |
 
 ### Topics & prompts
 
