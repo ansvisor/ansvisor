@@ -2580,7 +2580,9 @@ export async function listActionsFor(
     .select(
       'id, action_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason',
     )
-    .eq('brand_id', params.brandId);
+    .eq('brand_id', params.brandId)
+    // A deleted action (00168) is gone for everyone but the nightly generator.
+    .is('deleted_at', null);
   query =
     params.sort === 'updated'
       ? query.order('updated_at', { ascending: false })
@@ -2705,6 +2707,7 @@ export async function getActionFor(
     )
     .eq('id', actionId)
     .eq('brands.organization_id', auth.organizationId)
+    .is('deleted_at', null)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!action) return null;
@@ -2814,6 +2817,7 @@ async function signalActionRefs(
         .select('signal_id, actions!inner(id, action_no, kind, status)')
         .in('signal_id', ids)
         .eq('actions.brand_id', brandId)
+        .is('actions.deleted_at', null)
         .order('linked_at', { ascending: false }),
     ),
   );
@@ -2920,6 +2924,7 @@ export async function listActionHistoryFor(
     )
     .eq('brand_id', params.brandId)
     .in('status', ['completed', 'dismissed'])
+    .is('deleted_at', null)
     .order('completed_at', { ascending: false, nullsFirst: false })
     .limit(limit);
   if (error) throw new Error(error.message);
@@ -2981,6 +2986,7 @@ export async function updateTaskStatusFor(
     .select('id, action_id, actions!inner(brand_id, brands!inner(organization_id))')
     .eq('id', taskId)
     .eq('actions.brands.organization_id', auth.organizationId)
+    .is('actions.deleted_at', null)
     .maybeSingle();
   if (!owned) return null;
 

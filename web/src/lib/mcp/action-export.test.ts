@@ -45,6 +45,7 @@ function table(name: string) {
       return chain;
     },
     order: () => chain,
+    is: () => chain,
     range: (from: number, to: number) => {
       range = [from, to];
       return chain;

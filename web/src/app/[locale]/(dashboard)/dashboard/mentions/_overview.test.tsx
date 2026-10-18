@@ -206,18 +206,23 @@ describe('PlatformTable', () => {
 });
 
 describe('CompetitorTable', () => {
-  it('puts you first, then competitors by mentions, with sentiment only for you', () => {
+  it('puts you first, then competitors by mentions and how often they name you too', () => {
     render(<CompetitorTable overview={overview} brand="Ansvisor" />);
+    const headers = [...container.querySelectorAll('th')].map((th) => th.textContent);
+    expect(headers).toEqual(['Brand', 'Mentions', 'Rate', 'Also names you']);
     const rows = [...container.querySelectorAll('tbody tr')].map((r) =>
       [...r.querySelectorAll('td')].map((td) => td.textContent),
     );
-    expect(rows[0]).toEqual(['AnsvisorYou', '100', '25.0%', '', '+34', '—']);
+    // The last column asks about competitors: empty for you, not "—".
+    expect(rows[0]).toEqual(['AnsvisorYou', '100', '25.0%', '']);
+    // Each competitor's mentions that name you too, and their share.
     expect(rows.slice(1)).toEqual([
-      ['Profound', '260', '65.0%', '—', '—', '41'],
-      ['Otterly AI', '120', '30.0%', '—', '—', '31'],
-      ['Peec AI', '90', '22.5%', '—', '—', '36'],
+      ['Profound', '260', '65.0%', '41 · 16%'],
+      ['Otterly AI', '120', '30.0%', '31 · 26%'],
+      ['Peec AI', '90', '22.5%', '36 · 40%'],
     ]);
-    expect(container.textContent).toContain('Sentiment is measured for your brand only.');
+    // Sentiment is measured toward your brand alone, and shown in the KPI cards.
+    expect(container.textContent).not.toMatch(/Sentiment|—/);
   });
 });
 

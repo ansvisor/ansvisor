@@ -18,6 +18,7 @@ function builder(table: string) {
   const chain = {
     select: () => chain,
     eq: () => chain,
+    is: () => chain,
     order: () => chain,
     limit: () => chain,
     in: (_column: string, values: string[]) => {
