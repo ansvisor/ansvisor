@@ -22,6 +22,7 @@ import { getShoppingKpis } from '@/lib/actions/shopping';
 import { type SourceCategory } from '@/lib/citations/classify';
 import { stripEntityMarkup } from '@/lib/entity-markup';
 import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
+import { LOW_SAMPLE_VISITS } from '@/lib/traffic-change';
 import {
   getReportTemplate,
   ALL_REPORT_SECTIONS,
@@ -129,8 +130,17 @@ export interface ReportTopicPerf {
 
 export interface ReportAiTraffic {
   totalVisits: number;
-  /** Percent change vs the previous window; null when the previous window had no visits. */
+  /**
+   * Percent change vs the previous window, or null: no visits before, or too
+   * few on either side for a % to mean anything (see changeNote).
+   */
   change: number | null;
+  /**
+   * Why there's no %, as the AI Traffic page says it (AT-003): 'new' — visits
+   * now and none before; 'lowSample' — fewer than 30 visits in this period
+   * or the one before. Absent on reports created before it.
+   */
+  changeNote?: 'new' | 'lowSample';
   platformBreakdown: { platform: string; visits: number }[];
   topPages: { url: string; visits: number }[];
 }
@@ -503,9 +513,18 @@ async function getTrafficSnapshot(
     if (u) byPage.set(u, (byPage.get(u) ?? 0) + 1);
   }
 
+  // A % on a handful of visits says more about chance than about a trend:
+  // 1,250 visits against 2 the week before read "+62400%". As on the AI
+  // Traffic page, a % only when both periods have LOW_SAMPLE_VISITS.
+  const lowSample = totalVisits < LOW_SAMPLE_VISITS || prevVisits < LOW_SAMPLE_VISITS;
+  const changeNote: ReportAiTraffic['changeNote'] =
+    prevVisits === 0 ? (totalVisits > 0 ? 'new' : undefined) : lowSample ? 'lowSample' : undefined;
+
   return {
     totalVisits,
-    change: prevVisits > 0 ? round1(((totalVisits - prevVisits) / prevVisits) * 100) : null,
+    change:
+      prevVisits > 0 && !lowSample ? round1(((totalVisits - prevVisits) / prevVisits) * 100) : null,
+    ...(changeNote ? { changeNote } : {}),
     platformBreakdown: [...byPlatform.entries()]
       .map(([platform, visits]) => ({ platform, visits }))
       .sort((a, b) => b.visits - a.visits)
