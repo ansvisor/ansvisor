@@ -24,7 +24,11 @@
       "hosts": ["gemini.google.com", "bard.google.com"],
       "aliases": ["gemini", "bard"]
     },
-    { "key": "copilot.microsoft.com", "hosts": ["copilot.microsoft.com"], "aliases": ["copilot"] },
+    {
+      "key": "copilot.microsoft.com",
+      "hosts": ["copilot.microsoft.com", "copilot.com"],
+      "aliases": ["copilot"]
+    },
     { "key": "grok.com", "hosts": ["grok.com"], "aliases": ["grok"] },
     { "key": "deepseek.com", "hosts": ["deepseek.com"], "aliases": ["deepseek"] },
     { "key": "meta.ai", "hosts": ["meta.ai"], "aliases": [] },

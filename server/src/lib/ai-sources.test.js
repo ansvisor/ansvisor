@@ -24,6 +24,8 @@ describe('classifyAiSource', () => {
     expect(classifyAiSource(' Gemini ')).toBe('gemini.google.com');
     expect(classifyAiSource('bard.google.com')).toBe('gemini.google.com');
     expect(classifyAiSource('grok.com')).toBe('grok.com');
+    // Copilot tags its links utm_source=copilot.com, often with no referrer.
+    expect(classifyAiSource('copilot.com', { origin: 'utm' })).toBe('copilot.microsoft.com');
   });
 
   it("doesn't match an engine's name inside another host", () => {
