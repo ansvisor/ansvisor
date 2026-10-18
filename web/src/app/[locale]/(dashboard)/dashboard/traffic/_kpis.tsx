@@ -34,6 +34,7 @@ import {
 import { getPlatformName } from '@/lib/traffic-platforms';
 import { googleSourceStatus, TRAFFIC_SECTION_SOURCES } from '@/lib/traffic-sources';
 import { MetricCard } from '../insights/_kpi-cards';
+import { SummaryLine } from './_summary-line';
 import type { Change } from '../insights/kpi-format';
 import { SourceKpiCard } from './_source-gate';
 
@@ -97,6 +98,7 @@ export function TrafficKpis({
   canConnect,
   onConnected,
   onRangeChange,
+  rangeLabel,
 }: {
   brandId: string;
   dateWindow: TrafficDateWindow;
@@ -112,6 +114,8 @@ export function TrafficKpis({
   onConnected: () => void;
   /** Switches the page's range, for "see 30d". */
   onRangeChange: (preset: DateRangePreset) => void;
+  /** The page's own words for the range, for the summary line (AT-007). */
+  rangeLabel: string;
 }) {
   const t = useTranslations('traffic.kpis');
   const tVisits = useTranslations('traffic.visits');
@@ -216,130 +220,149 @@ export function TrafficKpis({
     };
   };
 
+  // Analytics' sessions for the summary line: undefined while they load,
+  // null without Analytics, so the line never states a fact from a source
+  // that isn't connected (§3.8b rule 5).
+  const gaSessions = !gaReady
+    ? null
+    : loaded?.key === key
+      ? (loaded.totals?.ga?.sessions ?? null)
+      : undefined;
+
   return (
-    <div className={TRAFFIC_KPI_GRID}>
-      {/* One visit per session; the sub-line gives the pageviews and the
-          previous period's visits (AT-003). Google Analytics reports no
-          pageviews, so when it filled any day (AT-004) the line says how
-          many instead of a pageview count that would cover only part of
-          the range. */}
-      <MetricCard
-        label={t('visits')}
-        tooltip={t('visitsTip')}
-        icon={Users}
-        value={formatNumber(totalVisits)}
-        delta={delta(visitChange(totalVisits, totalVisitsPrev, { comparable }))}
-        sub={
-          analyticsDays > 0
-            ? comparable
-              ? tVisits('kpiSubAnalytics', { previous: totalVisitsPrev, days: analyticsDays })
-              : tVisits('kpiSubAnalyticsNoPrevious', { days: analyticsDays })
-            : comparable
-              ? tVisits('kpiSub', { pageviews: totalPageviews, previous: totalVisitsPrev })
-              : tVisits('kpiSubNoPrevious', { pageviews: totalPageviews })
-        }
+    <div className="space-y-3">
+      <SummaryLine
+        brandId={brandId}
+        dateWindow={dateWindow}
+        rangeLabel={rangeLabel}
+        summary={summary}
+        summaryLoading={summaryLoading}
+        gaSessions={gaSessions}
       />
-      <MetricCard
-        label={t('topPlatform')}
-        tooltip={t('topPlatformTip')}
-        icon={Globe}
-        value={topPlatform ? getPlatformName(topPlatform.platform) : '—'}
-        sub={topPlatform ? t('topPlatformSub', { visits: topPlatform.visits }) : t('noData')}
-      />
-      <MetricCard
-        label={t('platforms')}
-        tooltip={t('platformsTip')}
-        icon={LayoutGrid}
-        value={formatNumber(summary?.platformBreakdown.length ?? 0)}
-        sub={t('platformsSub')}
-      />
-      {gate('aiShare', aiShare) ?? (
+      <div className={TRAFFIC_KPI_GRID}>
+        {/* One visit per session; the sub-line gives the pageviews and the
+            previous period's visits (AT-003). Google Analytics reports no
+            pageviews, so when it filled any day (AT-004) the line says how
+            many instead of a pageview count that would cover only part of
+            the range. */}
         <MetricCard
-          {...aiShare}
-          {...(summaryLoading
-            ? // The visits and the sessions must be the same range's.
-              PENDING
-            : fromGa(({ sessions }) => ({
-                value: formatShare(totalVisits, sessions) ?? '—',
-                sub: t('aiShareSub', { visits: totalVisits, sessions }),
-              })))}
+          label={t('visits')}
+          tooltip={t('visitsTip')}
+          icon={Users}
+          value={formatNumber(totalVisits)}
+          delta={delta(visitChange(totalVisits, totalVisitsPrev, { comparable }))}
+          sub={
+            analyticsDays > 0
+              ? comparable
+                ? tVisits('kpiSubAnalytics', { previous: totalVisitsPrev, days: analyticsDays })
+                : tVisits('kpiSubAnalyticsNoPrevious', { days: analyticsDays })
+              : comparable
+                ? tVisits('kpiSub', { pageviews: totalPageviews, previous: totalVisitsPrev })
+                : tVisits('kpiSubNoPrevious', { pageviews: totalPageviews })
+          }
         />
-      )}
-      {/* Row 2: what AI visitors do, and Google's own clicks. */}
-      {gate('engagedVisits', engaged) ?? (
         <MetricCard
-          {...engaged}
-          {...fromGa(({ aiSessions, aiEngagedSessions, organic }) =>
-            aiSessions === 0
-              ? { value: '—', sub: t('noAiSessions') }
-              : {
-                  value: formatShare(aiEngagedSessions, aiSessions) ?? '—',
-                  // A rate on a handful of sessions says more about chance (§5.4).
-                  delta: aiSessions < LOW_SAMPLE_VISITS ? delta({ kind: 'low' }) : null,
-                  // Beside Google organic's, as the mockup draws it (AT-005).
-                  sub:
-                    organic.sessions > 0
-                      ? t('engagedVsOrganic', {
-                          rate: formatShare(organic.engagedSessions, organic.sessions)!,
-                        })
-                      : t('engagedSub', { engaged: aiEngagedSessions, sessions: aiSessions }),
+          label={t('topPlatform')}
+          tooltip={t('topPlatformTip')}
+          icon={Globe}
+          value={topPlatform ? getPlatformName(topPlatform.platform) : '—'}
+          sub={topPlatform ? t('topPlatformSub', { visits: topPlatform.visits }) : t('noData')}
+        />
+        <MetricCard
+          label={t('platforms')}
+          tooltip={t('platformsTip')}
+          icon={LayoutGrid}
+          value={formatNumber(summary?.platformBreakdown.length ?? 0)}
+          sub={t('platformsSub')}
+        />
+        {gate('aiShare', aiShare) ?? (
+          <MetricCard
+            {...aiShare}
+            {...(summaryLoading
+              ? // The visits and the sessions must be the same range's.
+                PENDING
+              : fromGa(({ sessions }) => ({
+                  value: formatShare(totalVisits, sessions) ?? '—',
+                  sub: t('aiShareSub', { visits: totalVisits, sessions }),
+                })))}
+          />
+        )}
+        {/* Row 2: what AI visitors do, and Google's own clicks. */}
+        {gate('engagedVisits', engaged) ?? (
+          <MetricCard
+            {...engaged}
+            {...fromGa(({ aiSessions, aiEngagedSessions, organic }) =>
+              aiSessions === 0
+                ? { value: '—', sub: t('noAiSessions') }
+                : {
+                    value: formatShare(aiEngagedSessions, aiSessions) ?? '—',
+                    // A rate on a handful of sessions says more about chance (§5.4).
+                    delta: aiSessions < LOW_SAMPLE_VISITS ? delta({ kind: 'low' }) : null,
+                    // Beside Google organic's, as the mockup draws it (AT-005).
+                    sub:
+                      organic.sessions > 0
+                        ? t('engagedVsOrganic', {
+                            rate: formatShare(organic.engagedSessions, organic.sessions)!,
+                          })
+                        : t('engagedSub', { engaged: aiEngagedSessions, sessions: aiSessions }),
+                  },
+            )}
+          />
+        )}
+        {gate('keyEvents', keyEvents) ?? (
+          <MetricCard
+            {...keyEvents}
+            {...fromGa((totals) => {
+              const { aiSessions, aiKeyEvents, aiKeyEventSessions, aiRevenue, organic } = totals;
+              // Rows synced before the session key event rate have key events
+              // but no count of the sessions holding them: no rate until the
+              // history is re-read.
+              const rateKnown = aiKeyEventSessions > 0 || aiKeyEvents === 0;
+              const rate = rateKnown ? formatShare(aiKeyEventSessions, aiSessions) : null;
+              const ratio = organicRatio(
+                {
+                  sessions: aiSessions,
+                  keyEvents: aiKeyEvents,
+                  keyEventSessions: aiKeyEventSessions,
                 },
-          )}
-        />
-      )}
-      {gate('keyEvents', keyEvents) ?? (
-        <MetricCard
-          {...keyEvents}
-          {...fromGa((totals) => {
-            const { aiSessions, aiKeyEvents, aiKeyEventSessions, aiRevenue, organic } = totals;
-            // Rows synced before the session key event rate have key events
-            // but no count of the sessions holding them: no rate until the
-            // history is re-read.
-            const rateKnown = aiKeyEventSessions > 0 || aiKeyEvents === 0;
-            const rate = rateKnown ? formatShare(aiKeyEventSessions, aiSessions) : null;
-            const ratio = organicRatio(
-              {
-                sessions: aiSessions,
-                keyEvents: aiKeyEvents,
-                keyEventSessions: aiKeyEventSessions,
-              },
-              organic,
-            );
-            // None in a short range is usual: the card offers the month (spec §3.2).
-            const noneYet = aiKeyEvents === 0 && isShortRange(preset);
-            return {
-              value: formatNumber(aiKeyEvents),
-              // With a rate on show — few sessions: it's chance (§5.4); enough
-              // on both sides: against Google organic's (AT-005).
-              delta:
-                noneYet || rate === null
-                  ? null
-                  : aiSessions < LOW_SAMPLE_VISITS
-                    ? delta({ kind: 'low' })
-                    : ratio === null
-                      ? null
-                      : {
-                          text: t('vsOrganic', { ratio: formatRatio(ratio) }),
-                          tone: ratio > 1.05 ? 'good' : ratio < 0.95 ? 'bad' : 'neutral',
-                        },
-              sub: noneYet ? (
-                <>
-                  {t('keyEventsNone', { range: preset })} ·{' '}
-                  <SubAction onClick={() => onRangeChange('30d')}>{t('see30d')}</SubAction>
-                </>
-              ) : rate === null ? (
-                t('keyEventsSub', { sessions: aiSessions })
-              ) : aiRevenue > 0 ? (
-                // Purchase revenue, when the property reports it (AT-005).
-                t('keyEventRateRevenue', { rate, revenue: formatNumber(Math.round(aiRevenue)) })
-              ) : (
-                t('keyEventRate', { rate })
-              ),
-            };
-          })}
-        />
-      )}
-      {gate('googleClicks', clicks) ?? <MetricCard {...clicks} {...clicksBody()} />}
+                organic,
+              );
+              // None in a short range is usual: the card offers the month (spec §3.2).
+              const noneYet = aiKeyEvents === 0 && isShortRange(preset);
+              return {
+                value: formatNumber(aiKeyEvents),
+                // With a rate on show — few sessions: it's chance (§5.4); enough
+                // on both sides: against Google organic's (AT-005).
+                delta:
+                  noneYet || rate === null
+                    ? null
+                    : aiSessions < LOW_SAMPLE_VISITS
+                      ? delta({ kind: 'low' })
+                      : ratio === null
+                        ? null
+                        : {
+                            text: t('vsOrganic', { ratio: formatRatio(ratio) }),
+                            tone: ratio > 1.05 ? 'good' : ratio < 0.95 ? 'bad' : 'neutral',
+                          },
+                sub: noneYet ? (
+                  <>
+                    {t('keyEventsNone', { range: preset })} ·{' '}
+                    <SubAction onClick={() => onRangeChange('30d')}>{t('see30d')}</SubAction>
+                  </>
+                ) : rate === null ? (
+                  t('keyEventsSub', { sessions: aiSessions })
+                ) : aiRevenue > 0 ? (
+                  // Purchase revenue, when the property reports it (AT-005).
+                  t('keyEventRateRevenue', { rate, revenue: formatNumber(Math.round(aiRevenue)) })
+                ) : (
+                  t('keyEventRate', { rate })
+                ),
+              };
+            })}
+          />
+        )}
+        {gate('googleClicks', clicks) ?? <MetricCard {...clicks} {...clicksBody()} />}
+      </div>
     </div>
   );
 }

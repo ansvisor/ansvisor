@@ -19,8 +19,14 @@ import type { SourceState } from '@/lib/actions/integrations';
  */
 
 const getTrafficGoogleTotals = vi.fn();
+// The summary line above the cards (AT-007) counts the Cited, not clicked pages.
+const getTrafficPages = vi.fn(async () => ({
+  counts: { noAiTraffic: 0, citedNotClicked: 0, trafficNoPrompt: 0, all: 0 },
+  rows: [],
+}));
 vi.mock('@/lib/actions/traffic', () => ({
   getTrafficGoogleTotals: (...args: unknown[]) => getTrafficGoogleTotals(...args),
+  getTrafficPages: (...args: unknown[]) => getTrafficPages(...(args as [])),
 }));
 const connect = vi.fn();
 vi.mock('@/hooks/use-integration-connect', () => ({
@@ -138,6 +144,7 @@ async function render({
           canConnect={canConnect}
           onConnected={onConnected}
           onRangeChange={onRangeChange}
+          rangeLabel="last 7 days"
         />
       </NextIntlClientProvider>,
     );

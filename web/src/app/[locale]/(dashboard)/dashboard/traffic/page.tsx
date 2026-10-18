@@ -681,6 +681,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
           {/* KPI cards: two rows of four (AT-017, spec §3.2). */}
           <TrafficKpis
             brandId={brand.id}
+            rangeLabel={rangeSubLabel}
             dateWindow={dateWindow}
             preset={datePreset}
             summary={summary}

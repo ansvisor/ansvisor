@@ -3323,6 +3323,17 @@
         "pageValue": "which valuable pages get no AI traffic"
       }
     },
+    "summaryLine": {
+      "none": "{range}: no AI-referred visits yet.",
+      "visits": "{range}: {count, plural, one {# AI-referred visit} other {# AI-referred visits}}",
+      "share": "{share} of all traffic",
+      "up": "up {pct}% on the previous period",
+      "down": "down {pct}% on the previous period",
+      "top": "{platform} sent the most ({count})",
+      "best": "{platform} visitors convert best ({rate} of their visits had a key event)",
+      "topAndBest": "{platform} sent the most ({count}), and its visitors convert best ({rate} of their visits had a key event).",
+      "cited": "{count, plural, one {# page is cited in AI answers but gets no clicks.} other {# pages are cited in AI answers but get no clicks.}}"
+    },
     "conversions": {
       "title": "Where AI visitors convert",
       "rankedByKeyEvents": "Ranked by key events from AI visits",
