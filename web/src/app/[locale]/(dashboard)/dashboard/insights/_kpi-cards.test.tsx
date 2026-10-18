@@ -35,6 +35,8 @@ const summary = (over: Partial<InsightsSummary> = {}) =>
 
 let container: HTMLDivElement;
 let root: Root;
+const onBreakdown = vi.fn();
+const onNavigate = vi.fn();
 
 function render(trackedPrompts: TrackedPromptsKpi, over: Partial<InsightsSummary> = {}) {
   act(() => {
@@ -49,8 +51,8 @@ function render(trackedPrompts: TrackedPromptsKpi, over: Partial<InsightsSummary
           competitors={null}
           comparison={null}
           series={null}
-          onBreakdown={vi.fn()}
-          onNavigate={vi.fn()}
+          onBreakdown={onBreakdown}
+          onNavigate={onNavigate}
         />
       </NextIntlClientProvider>,
     );
@@ -64,6 +66,7 @@ const plan = (quotaUsed: number, quotaLimit: number): TrackedPromptsKpi => ({
 });
 
 beforeEach(() => {
+  vi.clearAllMocks();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -102,6 +105,17 @@ describe('the Mentions and Citations cards', () => {
     render(plan(47, 50));
     expect(container.textContent?.match(/vs previous period/g)).toHaveLength(2);
     expect(container.textContent).not.toMatch(/same \d+ prompts?/);
+  });
+
+  it('open their own pages', () => {
+    render(plan(47, 50));
+    const card = (label: string) =>
+      container.querySelector(`[role=button][aria-label="${label}"]`) as HTMLElement;
+    act(() => card('Mentions: open Mentions').click());
+    expect(onNavigate).toHaveBeenLastCalledWith('/dashboard/mentions');
+    act(() => card('Citations: open Citations').click());
+    expect(onNavigate).toHaveBeenLastCalledWith('/dashboard/citations');
+    expect(onBreakdown).not.toHaveBeenCalled();
   });
 
   it('say nothing of a change they do not have', () => {

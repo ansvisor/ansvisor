@@ -258,7 +258,8 @@ interface KpiRowsProps {
   competitors: CompetitorComparisonData | null;
   comparison: PromptComparison | null;
   series: KpiSeriesDay[] | null;
-  onBreakdown: (metric: 'visibility' | 'mentions') => void;
+  /** Visibility's breakdown; Mentions opens its own page. */
+  onBreakdown: (metric: 'visibility') => void;
   onNavigate: (path: string) => void;
 }
 
@@ -390,8 +391,8 @@ export function KpiRows({
           delta={upIsGood(summary.mentionsChange, { percent: true, locale })}
           sub={vsPrevious(summary.mentionsChange)}
           spark={daily('mentions')}
-          onClick={() => onBreakdown('mentions')}
-          clickLabel={t('viewBreakdown', { metric: t('mentions') })}
+          onClick={() => onNavigate('/dashboard/mentions')}
+          clickLabel={t('openMentions')}
         />
         <MetricCard
           label={t('citations')}

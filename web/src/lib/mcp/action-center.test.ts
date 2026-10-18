@@ -12,6 +12,7 @@ type Op = { table: string; op: 'select' | 'update' | 'insert'; payload?: unknown
 
 let ops: Op[] = [];
 let taskOwned = true;
+let isFilters: [string, unknown][] = [];
 
 function builder(table: string) {
   let current: Op = { table, op: 'select' };
@@ -30,6 +31,10 @@ function builder(table: string) {
       return { error: null };
     },
     eq: () => chain,
+    is: (column: string, value: unknown) => {
+      isFilters.push([column, value]);
+      return chain;
+    },
     maybeSingle: async () => ({
       data: taskOwned ? { id: 'task-1', action_id: 'action-1' } : null,
       error: null,
@@ -68,6 +73,12 @@ describe('updateTaskStatusFor', () => {
   beforeEach(() => {
     ops = [];
     taskOwned = true;
+    isFilters = [];
+  });
+
+  it("checks the task's action isn't deleted (00168)", async () => {
+    await updateTaskStatusFor(auth, 'task-1', 'completed');
+    expect(isFilters).toContainEqual(['actions.deleted_at', null]);
   });
 
   it('returns null and writes nothing for a task outside the caller org', async () => {
