@@ -177,8 +177,8 @@ describe('GET /api/traffic/export', () => {
     expect(csv.bom).toBe(true);
     expect(csv.text).toBe(
       [
-        'Platform,Visits,"Visits, previous period",Change (%),Share (%),Note',
-        'Gemini,2,1,,100,Low sample: fewer than 30 visits in this period or the one before',
+        'Platform,Visits,"Visits, previous period",Change (%),Share (%),Engaged (%),Key events,Note',
+        'Gemini,2,1,,100,,,Low sample: fewer than 30 visits in this period or the one before',
       ].join('\n'),
     );
     expect(loaders.getTrafficTrend).not.toHaveBeenCalled();

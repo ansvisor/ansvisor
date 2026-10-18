@@ -3096,6 +3096,8 @@
         "setting": "Setting",
         "metric": "Metric",
         "value": "Value",
+        "engaged": "Engaged (%)",
+        "keyEvents": "Key events",
         "note": "Note",
         "day": "Day",
         "hour": "Hour (UTC)",
@@ -3197,6 +3199,12 @@
     "trend": {
       "fromAnalytics": "from Google Analytics"
     },
+    "platforms": {
+      "engaged": "Engaged",
+      "keyEvents": "Key events",
+      "lowSample": "Low sample: {sessions, plural, one {# session} other {# sessions}} in Google Analytics",
+      "needsAnalytics": "Engaged and key events need Google Analytics."
+    },
     "kpis": {
       "visits": "AI-referred visits",
       "visitsTip": "Visits from AI assistants, one per session: from the tracking snippet on days it sent any, and from Google Analytics on the other days, never added together. Below 30 visits in this period or the one before, the change shows Low sample.",
@@ -3211,11 +3219,15 @@
       "aiShareTip": "AI-referred visits as a share of all the sessions Google Analytics recorded on the range's days. Analytics counts whole days, so the last 24 hours are compared with yesterday and today.",
       "aiShareSub": "{visits, number} of {sessions, plural, one {# session} other {# sessions}}",
       "engaged": "Engaged visits",
-      "engagedTip": "The share of AI sessions Google Analytics counts as engaged: 10 seconds or longer, with a key event, or with two or more page views. Below 30 AI sessions the rate shows Low sample.",
+      "engagedTip": "The share of AI sessions Google Analytics counts as engaged — 10 seconds or longer, with a key event, or with two or more page views — beside the same share for Google organic. Below 30 AI sessions the rate shows Low sample.",
       "engagedSub": "{engaged, number} of {sessions, plural, one {# AI session} other {# AI sessions}}",
+      "engagedVsOrganic": "vs {rate} Google organic",
       "keyEvents": "Key events from AI",
-      "keyEventsTip": "Key events (conversions) Google Analytics recorded in sessions from AI assistants.",
+      "keyEventsTip": "Key events (conversions) Google Analytics recorded in sessions from AI assistants. The rate is the share of AI sessions with a key event, as Google Analytics reports it, compared with Google organic once both have 30 sessions and 5 key events. Revenue shows when the property reports purchases.",
       "keyEventsSub": "in {sessions, plural, one {# AI session} other {# AI sessions}}",
+      "keyEventRate": "{rate} of AI sessions",
+      "keyEventRateRevenue": "{rate} of AI sessions · {revenue} revenue",
+      "vsOrganic": "{ratio} organic",
       "keyEventsNone": "none in {range}",
       "see30d": "see 30d",
       "googleClicks": "Google clicks",

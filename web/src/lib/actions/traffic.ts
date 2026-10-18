@@ -44,7 +44,13 @@ export interface TrafficSummary {
   analyticsDays: string[];
   /** False for all time, which has no previous period to compare with. */
   hasPreviousPeriod: boolean;
-  platformBreakdown: { platform: string; visits: number; visitsPrev: number }[];
+  platformBreakdown: {
+    platform: string;
+    visits: number;
+    visitsPrev: number;
+    /** Google Analytics' engagement for the platform over the range's days; null without any (AT-005). */
+    analytics: TrafficEngagement | null;
+  }[];
   topPages: { url: string; visits: number; visitsPrev: number }[];
   hasAnyData: boolean;
 }
@@ -211,7 +217,7 @@ export async function getTrafficSummary(
 
   // Visits, platforms and pages from the snippet and Google Analytics, day
   // by day (AT-004), summed in the database: no row cap applies.
-  const [current, previous, lifetime] = await Promise.all([
+  const [current, previous, lifetime, value] = await Promise.all([
     readMergedTraffic(supabase, brandId, { from, to, toInclusive: true }),
     hasPrev
       ? readMergedTraffic(supabase, brandId, { from: prevFrom, to: prevTo, toInclusive: false })
@@ -228,8 +234,28 @@ export async function getTrafficSummary(
             .limit(1),
         ])
       : null,
+    // What each platform's visitors did, from Analytics over the range's
+    // days (AT-005): engagement and key events are rates of its sessions,
+    // so they read Analytics alone, whichever origin counted the visits.
+    supabase.rpc('ga_platform_value', {
+      p_brand_id: brandId,
+      p_since: utcDay(from) ?? null,
+      p_until: utcDay(to) ?? new Date().toISOString().slice(0, 10),
+    }),
   ]);
   if (lifetime?.[1].error) throw new Error(lifetime[1].error.message);
+  if (value.error) throw new Error(value.error.message);
+  const valueByPlatform = new Map(
+    (value.data ?? []).map((row) => [
+      row.platform,
+      {
+        sessions: Number(row.sessions) || 0,
+        engagedSessions: Number(row.engaged_sessions) || 0,
+        keyEvents: Number(row.key_events) || 0,
+        keyEventSessions: Number(row.key_event_sessions) || 0,
+      },
+    ]),
+  );
   const hasAnyData = lifetime
     ? lifetime[0] > 0 || (lifetime[1].data ?? []).length > 0
     : current.visits > 0;
@@ -245,7 +271,11 @@ export async function getTrafficSummary(
     hasPreviousPeriod: hasPrev,
     platformBreakdown: current.platforms
       .filter((p) => p.visits > 0)
-      .map((p) => ({ ...p, visitsPrev: previousByPlatform.get(p.platform) ?? 0 })),
+      .map((p) => ({
+        ...p,
+        visitsPrev: previousByPlatform.get(p.platform) ?? 0,
+        analytics: valueByPlatform.get(p.platform) ?? null,
+      })),
     topPages: current.pages.slice(0, opts?.topPages ?? 10).map((p) => ({
       url: p.page,
       visits: p.visits,
@@ -556,12 +586,26 @@ export async function getPageOpportunities(
  * and key events; from Search Console, clicks against the period before.
  * Each is asked for only when its source has data for the brand.
  */
+/** Analytics' engagement figures for one group of sessions (AT-005). */
+export interface TrafficEngagement {
+  sessions: number;
+  engagedSessions: number;
+  keyEvents: number;
+  /** Sessions with at least one key event: the key event rate is this over sessions. */
+  keyEventSessions: number;
+}
+
 export interface TrafficGoogleTotals {
   ga: {
     sessions: number;
     aiSessions: number;
     aiEngagedSessions: number;
     aiKeyEvents: number;
+    aiKeyEventSessions: number;
+    /** AI sessions' purchase revenue, in the property's currency; 0 without e-commerce. */
+    aiRevenue: number;
+    /** Google organic (the Organic Search channel), the page's comparison (AT-005). */
+    organic: TrafficEngagement;
   } | null;
   gsc: {
     /** The days the clicks cover; no first day for all time. */
@@ -623,6 +667,14 @@ export async function getTrafficGoogleTotals(
           aiSessions: Number(gaRow.ai_sessions) || 0,
           aiEngagedSessions: Number(gaRow.ai_engaged_sessions) || 0,
           aiKeyEvents: Number(gaRow.ai_key_events) || 0,
+          aiKeyEventSessions: Number(gaRow.ai_key_event_sessions) || 0,
+          aiRevenue: Number(gaRow.ai_revenue) || 0,
+          organic: {
+            sessions: Number(gaRow.organic_sessions) || 0,
+            engagedSessions: Number(gaRow.organic_engaged_sessions) || 0,
+            keyEvents: Number(gaRow.organic_key_events) || 0,
+            keyEventSessions: Number(gaRow.organic_key_event_sessions) || 0,
+          },
         }
       : null,
     gsc: gscRow

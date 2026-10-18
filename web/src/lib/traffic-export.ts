@@ -143,16 +143,22 @@ function platforms(data: TrafficExportData, label: ExportLabel): ExportTable {
       label('columns.previousVisits'),
       label('columns.change'),
       label('columns.share'),
+      // From Google Analytics, as the table shows them (AT-005).
+      label('columns.engaged'),
+      label('columns.keyEvents'),
       label('columns.note'),
     ],
     rows: (s?.platformBreakdown ?? []).map((row) => {
       const delta = change(row.visits, row.visitsPrev, s!.hasPreviousPeriod, label);
+      const ga = row.analytics;
       return [
         getPlatformName(row.platform),
         row.visits,
         s!.hasPreviousPeriod ? row.visitsPrev : null,
         delta.pct,
         total > 0 ? Math.round((row.visits / total) * 1000) / 10 : null,
+        ga && ga.sessions > 0 ? Math.round((ga.engagedSessions / ga.sessions) * 1000) / 10 : null,
+        ga ? ga.keyEvents : null,
         delta.note || null,
       ];
     }),

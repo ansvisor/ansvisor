@@ -3113,12 +3113,28 @@ export type Database = {
           transactions: number
         }[]
       }
+      ga_platform_value: {
+        Args: { p_brand_id: string; p_since: string | null; p_until: string }
+        Returns: {
+          engaged_sessions: number
+          key_event_sessions: number
+          key_events: number
+          platform: string
+          sessions: number
+        }[]
+      }
       ga_traffic_totals: {
         Args: { p_brand_id: string; p_since: string | null; p_until: string }
         Returns: {
           ai_engaged_sessions: number
+          ai_key_event_sessions: number
           ai_key_events: number
+          ai_revenue: number
           ai_sessions: number
+          organic_engaged_sessions: number
+          organic_key_event_sessions: number
+          organic_key_events: number
+          organic_sessions: number
           sessions: number
         }[]
       }

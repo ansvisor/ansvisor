@@ -48,9 +48,14 @@ const data = (over: Partial<TrafficExportData> = {}): TrafficExportData => ({
     analyticsDays: [],
     hasPreviousPeriod: true,
     platformBreakdown: [
-      { platform: 'chatgpt.com', visits: 40, visitsPrev: 33 },
-      { platform: 'gemini.google.com', visits: 12, visitsPrev: 5 },
-      { platform: 'claude.ai', visits: 3, visitsPrev: 0 },
+      {
+        platform: 'chatgpt.com',
+        visits: 40,
+        visitsPrev: 33,
+        analytics: { sessions: 44, engagedSessions: 33, keyEvents: 6, keyEventSessions: 5 },
+      },
+      { platform: 'gemini.google.com', visits: 12, visitsPrev: 5, analytics: null },
+      { platform: 'claude.ai', visits: 3, visitsPrev: 0, analytics: null },
     ],
     topPages: [{ url: '/pricing', visits: 35, visitsPrev: 30 }],
     hasAnyData: true,
@@ -121,9 +126,23 @@ describe('trafficTable', () => {
   it('leaves a change the page would not show empty, and says why (F4)', () => {
     const table = trafficTable('platforms', data(), label);
     expect(table.rows).toEqual([
-      ['ChatGPT', 40, 33, 21, 72.7, null],
-      ['Gemini', 12, 5, null, 21.8, expect.stringContaining('Low sample')],
-      ['Claude', 3, 0, null, 5.5, expect.stringContaining('New')],
+      ['ChatGPT', 40, 33, 21, 72.7, 75, 6, null],
+      ['Gemini', 12, 5, null, 21.8, null, null, expect.stringContaining('Low sample')],
+      ['Claude', 3, 0, null, 5.5, null, null, expect.stringContaining('New')],
+    ]);
+  });
+
+  it("adds Google Analytics' engaged share and key events per platform, as the table does (AT-005)", () => {
+    const table = trafficTable('platforms', data(), label);
+    expect(table.headers).toEqual([
+      'Platform',
+      'Visits',
+      'Visits, previous period',
+      'Change (%)',
+      'Share (%)',
+      'Engaged (%)',
+      'Key events',
+      'Note',
     ]);
   });
 
@@ -246,7 +265,7 @@ describe('trafficWorkbook', () => {
     ]);
     // A bold header row, then the rows with their numbers as numbers.
     expect(sheets[3].data[0][0]).toEqual({ value: 'Platform', fontWeight: 'bold' });
-    expect(sheets[3].data[1]).toEqual(['ChatGPT', 40, 33, 21, 72.7, null]);
+    expect(sheets[3].data[1]).toEqual(['ChatGPT', 40, 33, 21, 72.7, 75, 6, null]);
   });
 
   it('holds only the table for a single table', () => {

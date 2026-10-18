@@ -2,9 +2,10 @@
  * Daily Google Analytics sync (#704).
  *
  * For every active brand mapped to a GA4 property (#694) whose org connection
- * is live, pulls three reports through Composio and upserts them:
+ * is live, pulls four reports through Composio and upserts them:
  *
  *   ga_ai_traffic_stats  AI-sourced sessions per landing page
+ *   ga_channel_stats     sessions per default channel group (AT-005)
  *   ga_page_stats        landing-page totals across every source
  *   ga_item_stats        product rows, when the property has ecommerce
  *
@@ -74,6 +75,9 @@ const TRAFFIC_METRICS = [
   'sessions',
   'engagedSessions',
   'keyEvents',
+  // The share of sessions with a key event (AT-005): key events alone can't
+  // give a rate, as one session can hold several.
+  'sessionKeyEventRate',
   'totalUsers',
   'transactions',
   'purchaseRevenue',
@@ -128,10 +132,14 @@ export function readReportRows(report) {
 }
 
 function trafficMetricColumns(row) {
+  const sessions = toInt(row.sessions);
   return {
-    sessions: toInt(row.sessions),
+    sessions,
     engaged_sessions: toInt(row.engagedSessions),
     key_events: toInt(row.keyEvents),
+    // A count rather than GA4's rate, so rows can be summed and a rate taken
+    // over any range: sessions with a key event ÷ sessions.
+    key_event_sessions: Math.round(toFloat(row.sessionKeyEventRate) * sessions),
     total_users: toInt(row.totalUsers),
     transactions: toInt(row.transactions),
     purchase_revenue: toFloat(row.purchaseRevenue),
@@ -143,6 +151,7 @@ const SUMMED_COLUMNS = [
   'sessions',
   'engaged_sessions',
   'key_events',
+  'key_event_sessions',
   'total_users',
   'transactions',
   'purchase_revenue',
@@ -200,6 +209,25 @@ export function mapPageRows(brandId, report) {
       brand_id: brandId,
       date,
       landing_page: row.landingPage ?? '',
+      ...trafficMetricColumns(row),
+    });
+  }
+  return mapped;
+}
+
+/**
+ * Sessions per day and default channel group → ga_channel_stats (AT-005):
+ * Organic Search is what the AI Traffic page compares AI visitors with.
+ */
+export function mapChannelRows(brandId, report) {
+  const mapped = [];
+  for (const row of readReportRows(report)) {
+    const date = gaDateToIso(row.date);
+    if (!date) continue;
+    mapped.push({
+      brand_id: brandId,
+      date,
+      channel: row.sessionDefaultChannelGroup || '(not set)',
       ...trafficMetricColumns(row),
     });
   }
@@ -403,6 +431,20 @@ async function syncBrand(brand, { aiHistory = false } = {}) {
   }
   const aiRows = aiMapped.length;
 
+  // Every channel's sessions over the same days (AT-005): a dozen rows a
+  // day, so one call. Organic Search is the AI Traffic page's comparison.
+  const channelReport = await runGaReport(entityId, brand.ga_property_id, {
+    dateRanges: [{ startDate: aiDays[aiDays.length - 1], endDate: aiDays[0] }],
+    dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGroup' }],
+    metrics,
+    limit: 100_000,
+  });
+  const channelMapped = mapChannelRows(brand.id, channelReport);
+  if (channelMapped.length) {
+    await upsertAll('ga_channel_stats', channelMapped, 'brand_id,date,channel');
+  }
+  const channelRows = channelMapped.length;
+
   const pageRows = await syncDays({
     brand,
     entityId,
@@ -466,7 +508,7 @@ async function syncBrand(brand, { aiHistory = false } = {}) {
     logger.debug({ brandId: brand.id, err: err.message }, '[ga-sync] source discovery failed');
   }
 
-  return { first, aiRows, pageRows, itemRows };
+  return { first, aiRows, channelRows, pageRows, itemRows };
 }
 
 async function prune(table) {
@@ -527,7 +569,12 @@ export async function runGaSync({ organizationId, brandId, aiHistory = false } =
 
   // Retention is table-wide, so a single-brand sync leaves it to the daily run.
   if (!brandId) {
-    for (const table of ['ga_ai_traffic_stats', 'ga_page_stats', 'ga_item_stats']) {
+    for (const table of [
+      'ga_ai_traffic_stats',
+      'ga_channel_stats',
+      'ga_page_stats',
+      'ga_item_stats',
+    ]) {
       await prune(table);
     }
   }

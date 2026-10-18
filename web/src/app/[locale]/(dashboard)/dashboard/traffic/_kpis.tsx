@@ -25,9 +25,11 @@ import { LOW_SAMPLE_VISITS, visitChange, type VisitChange } from '@/lib/traffic-
 import {
   formatGoogleDays,
   formatPctChange,
+  formatRatio,
   formatShare,
   gscLatestDays,
   isShortRange,
+  organicRatio,
 } from '@/lib/traffic-kpis';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import { googleSourceStatus, TRAFFIC_SECTION_SOURCES } from '@/lib/traffic-sources';
@@ -267,14 +269,20 @@ export function TrafficKpis({
       {gate('engagedVisits', engaged) ?? (
         <MetricCard
           {...engaged}
-          {...fromGa(({ aiSessions, aiEngagedSessions }) =>
+          {...fromGa(({ aiSessions, aiEngagedSessions, organic }) =>
             aiSessions === 0
               ? { value: '—', sub: t('noAiSessions') }
               : {
                   value: formatShare(aiEngagedSessions, aiSessions) ?? '—',
                   // A rate on a handful of sessions says more about chance (§5.4).
                   delta: aiSessions < LOW_SAMPLE_VISITS ? delta({ kind: 'low' }) : null,
-                  sub: t('engagedSub', { engaged: aiEngagedSessions, sessions: aiSessions }),
+                  // Beside Google organic's, as the mockup draws it (AT-005).
+                  sub:
+                    organic.sessions > 0
+                      ? t('engagedVsOrganic', {
+                          rate: formatShare(organic.engagedSessions, organic.sessions)!,
+                        })
+                      : t('engagedSub', { engaged: aiEngagedSessions, sessions: aiSessions }),
                 },
           )}
         />
@@ -282,19 +290,53 @@ export function TrafficKpis({
       {gate('keyEvents', keyEvents) ?? (
         <MetricCard
           {...keyEvents}
-          {...fromGa(({ aiSessions, aiKeyEvents }) => ({
-            value: formatNumber(aiKeyEvents),
-            sub:
-              // None in a short range is usual: offer the month (spec §3.2).
-              aiKeyEvents === 0 && isShortRange(preset) ? (
+          {...fromGa((totals) => {
+            const { aiSessions, aiKeyEvents, aiKeyEventSessions, aiRevenue, organic } = totals;
+            // Rows synced before the session key event rate have key events
+            // but no count of the sessions holding them: no rate until the
+            // history is re-read.
+            const rateKnown = aiKeyEventSessions > 0 || aiKeyEvents === 0;
+            const rate = rateKnown ? formatShare(aiKeyEventSessions, aiSessions) : null;
+            const ratio = organicRatio(
+              {
+                sessions: aiSessions,
+                keyEvents: aiKeyEvents,
+                keyEventSessions: aiKeyEventSessions,
+              },
+              organic,
+            );
+            // None in a short range is usual: the card offers the month (spec §3.2).
+            const noneYet = aiKeyEvents === 0 && isShortRange(preset);
+            return {
+              value: formatNumber(aiKeyEvents),
+              // With a rate on show — few sessions: it's chance (§5.4); enough
+              // on both sides: against Google organic's (AT-005).
+              delta:
+                noneYet || rate === null
+                  ? null
+                  : aiSessions < LOW_SAMPLE_VISITS
+                    ? delta({ kind: 'low' })
+                    : ratio === null
+                      ? null
+                      : {
+                          text: t('vsOrganic', { ratio: formatRatio(ratio) }),
+                          tone: ratio > 1.05 ? 'good' : ratio < 0.95 ? 'bad' : 'neutral',
+                        },
+              sub: noneYet ? (
                 <>
                   {t('keyEventsNone', { range: preset })} ·{' '}
                   <SubAction onClick={() => onRangeChange('30d')}>{t('see30d')}</SubAction>
                 </>
-              ) : (
+              ) : rate === null ? (
                 t('keyEventsSub', { sessions: aiSessions })
+              ) : aiRevenue > 0 ? (
+                // Purchase revenue, when the property reports it (AT-005).
+                t('keyEventRateRevenue', { rate, revenue: formatNumber(Math.round(aiRevenue)) })
+              ) : (
+                t('keyEventRate', { rate })
               ),
-          }))}
+            };
+          })}
         />
       )}
       {gate('googleClicks', clicks) ?? <MetricCard {...clicks} {...clicksBody()} />}

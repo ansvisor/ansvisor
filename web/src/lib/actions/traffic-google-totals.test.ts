@@ -16,7 +16,18 @@ vi.mock('@/config/api', () => ({ API_BASE_URL: 'http://api.test' }));
 
 import { getTrafficGoogleTotals } from './traffic';
 
-const GA_ROW = { sessions: 812, ai_sessions: 4, ai_engaged_sessions: 3, ai_key_events: 1 };
+const GA_ROW = {
+  sessions: 812,
+  ai_sessions: 4,
+  ai_engaged_sessions: 3,
+  ai_key_events: 1,
+  ai_key_event_sessions: 1,
+  ai_revenue: 149.9,
+  organic_sessions: 1000,
+  organic_engaged_sessions: 580,
+  organic_key_events: 60,
+  organic_key_event_sessions: 50,
+};
 const GSC_ROW = {
   since: '2026-10-16',
   until: '2026-10-16',
@@ -61,7 +72,16 @@ describe('getTrafficGoogleTotals', () => {
       p_latest: true,
     });
     expect(totals).toEqual({
-      ga: { sessions: 812, aiSessions: 4, aiEngagedSessions: 3, aiKeyEvents: 1 },
+      ga: {
+        sessions: 812,
+        aiSessions: 4,
+        aiEngagedSessions: 3,
+        aiKeyEvents: 1,
+        aiKeyEventSessions: 1,
+        aiRevenue: 149.9,
+        // Google organic, the page's comparison (AT-005).
+        organic: { sessions: 1000, engagedSessions: 580, keyEvents: 60, keyEventSessions: 50 },
+      },
       gsc: {
         since: '2026-10-16',
         until: '2026-10-16',

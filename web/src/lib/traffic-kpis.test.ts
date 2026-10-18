@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   formatGoogleDays,
   formatPctChange,
+  formatRatio,
   formatShare,
   gscLatestDays,
   isShortRange,
+  organicRatio,
 } from './traffic-kpis';
 
 /** AT-017 (spec §3.2): the rules behind the AI Traffic KPI cards. */
@@ -58,5 +60,30 @@ describe('formatGoogleDays', () => {
 
   it('names the last day alone for all time', () => {
     expect(formatGoogleDays(null, '2026-10-16')).toBe('Oct 16');
+  });
+});
+
+describe('organicRatio', () => {
+  const side = (sessions: number, keyEvents: number, keyEventSessions: number) => ({
+    sessions,
+    keyEvents,
+    keyEventSessions,
+  });
+
+  it("compares AI visitors' key event rate with Google organic's", () => {
+    // 10% of AI sessions against 5% of organic ones.
+    expect(organicRatio(side(100, 12, 10), side(1000, 60, 50))).toBeCloseTo(2);
+    expect(formatRatio(2)).toBe('2×');
+    expect(formatRatio(0.5833)).toBe('0.6×');
+  });
+
+  it('compares nothing below 30 sessions or 5 key events on either side (§5.4)', () => {
+    expect(organicRatio(side(29, 12, 10), side(1000, 60, 50))).toBeNull();
+    expect(organicRatio(side(100, 4, 4), side(1000, 60, 50))).toBeNull();
+    expect(organicRatio(side(100, 12, 10), side(1000, 4, 4))).toBeNull();
+  });
+
+  it('compares nothing while a rate is unknown (rows synced before it)', () => {
+    expect(organicRatio(side(100, 12, 0), side(1000, 60, 50))).toBeNull();
   });
 });

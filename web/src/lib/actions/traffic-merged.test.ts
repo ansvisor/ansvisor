@@ -42,7 +42,25 @@ const PREVIOUS: Merged = {
   days: [],
 };
 
+// Google Analytics' engagement per platform (AT-005).
+const PLATFORM_VALUE = [
+  {
+    platform: 'chatgpt.com',
+    sessions: 120,
+    engaged_sessions: 80,
+    key_events: 9,
+    key_event_sessions: 7,
+  },
+];
+
 const rpc = vi.fn();
+
+/** The merged read answers `merged`; the platform figures stay as above. */
+const answerMerged = (merged: Merged) =>
+  rpc.mockImplementation(async (fn: string) => ({
+    data: fn === 'ga_platform_value' ? PLATFORM_VALUE : merged,
+    error: null,
+  }));
 let snippetCount = 0;
 let analyticsRows: { id: string }[] = [];
 
@@ -71,8 +89,8 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-10-18T12:30:00.000Z'));
   rpc.mockReset();
-  rpc.mockImplementation(async (_fn: string, args: { p_to_inclusive: boolean }) => ({
-    data: args.p_to_inclusive ? CURRENT : PREVIOUS,
+  rpc.mockImplementation(async (fn: string, args: { p_to_inclusive: boolean }) => ({
+    data: fn === 'ga_platform_value' ? PLATFORM_VALUE : args.p_to_inclusive ? CURRENT : PREVIOUS,
     error: null,
   }));
   snippetCount = 6;
@@ -116,16 +134,28 @@ describe('getTrafficSummary', () => {
       hasAnyData: true,
     });
     expect(summary.platformBreakdown).toEqual([
-      { platform: 'chatgpt.com', visits: 116, visitsPrev: 40 },
-      { platform: 'perplexity.ai', visits: 47, visitsPrev: 0 },
-      { platform: 'gemini.google.com', visits: 4, visitsPrev: 0 },
+      {
+        platform: 'chatgpt.com',
+        visits: 116,
+        visitsPrev: 40,
+        analytics: { sessions: 120, engagedSessions: 80, keyEvents: 9, keyEventSessions: 7 },
+      },
+      // Platforms Analytics never saw have no engagement figures.
+      { platform: 'perplexity.ai', visits: 47, visitsPrev: 0, analytics: null },
+      { platform: 'gemini.google.com', visits: 4, visitsPrev: 0, analytics: null },
     ]);
+    // Over the range's days, as the KPI cards read Analytics.
+    expect(rpc).toHaveBeenCalledWith('ga_platform_value', {
+      p_brand_id: 'b1',
+      p_since: '2026-10-11',
+      p_until: '2026-10-18',
+    });
     expect(summary.topPages[0]).toEqual({ url: '/menu', visits: 115, visitsPrev: 40 });
   });
 
   it('keeps the top 10 pages for the page, and all of them for an export', async () => {
     const pages = Array.from({ length: 12 }, (_, i) => ({ page: `/p${i}`, visits: 12 - i }));
-    rpc.mockResolvedValue({ data: { ...CURRENT, pages }, error: null });
+    answerMerged({ ...CURRENT, pages });
     const window = { dateFrom: '2026-10-11T12:30:00.000Z' };
     expect((await getTrafficSummary('b1', window)).topPages).toHaveLength(10);
     expect(
@@ -135,12 +165,14 @@ describe('getTrafficSummary', () => {
 
   it('reads the last 24 hours from the snippet alone: Google Analytics has no hours', async () => {
     await getTrafficSummary('b1', { dateFrom: '2026-10-17T12:30:00.000Z' });
-    for (const [, args] of rpc.mock.calls) expect(args.p_analytics).toBe(false);
+    for (const [fn, args] of rpc.mock.calls) {
+      if (fn === 'ai_traffic_merged') expect(args.p_analytics).toBe(false);
+    }
   });
 
   it('reads all time from the start, with no period before', async () => {
     const summary = await getTrafficSummary('b1', {});
-    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc.mock.calls.filter(([fn]) => fn === 'ai_traffic_merged')).toHaveLength(1);
     expect(rpc).toHaveBeenCalledWith(
       'ai_traffic_merged',
       expect.objectContaining({ p_from: null, p_to: null }),
@@ -151,10 +183,7 @@ describe('getTrafficSummary', () => {
   });
 
   it('counts a brand with only Google Analytics history as having data', async () => {
-    rpc.mockResolvedValue({
-      data: { ...CURRENT, visits: 0, platforms: [], pages: [] },
-      error: null,
-    });
+    answerMerged({ ...CURRENT, visits: 0, platforms: [], pages: [] });
     snippetCount = 0;
     analyticsRows = [{ id: 'ga1' }];
     const window = { dateFrom: '2026-10-17T12:30:00.000Z' };
@@ -166,6 +195,7 @@ describe('getTrafficSummary', () => {
 
   it('fails loudly when the read fails', async () => {
     rpc.mockResolvedValue({ data: null, error: { message: 'permission denied' } });
+    // (Both the merged read and the platform figures fail; either one is enough.)
     await expect(getTrafficSummary('b1', { dateFrom: '2026-10-11T12:30:00.000Z' })).rejects.toThrow(
       'permission denied',
     );

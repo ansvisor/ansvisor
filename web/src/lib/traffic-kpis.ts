@@ -55,3 +55,30 @@ export function formatGoogleDays(since: string | null, until: string): string {
     });
   return !since || since === until ? day(until) : `${day(since)} – ${day(until)}`;
 }
+
+/** The sample a conversion comparison needs on each side (spec §5.4). */
+export const COMPARISON_MIN_SESSIONS = 30;
+export const COMPARISON_MIN_KEY_EVENTS = 5;
+
+/**
+ * AI visitors' key event rate against Google organic's, as a multiple
+ * ("2x organic"), or null when either side is too small to compare (§5.4:
+ * at least 30 sessions and 5 key events each) or a rate is unknown. The rate
+ * is sessions with a key event over sessions, as GA4 reports it.
+ */
+export function organicRatio(
+  ai: { sessions: number; keyEvents: number; keyEventSessions: number },
+  organic: { sessions: number; keyEvents: number; keyEventSessions: number },
+): number | null {
+  const enough = (side: typeof ai) =>
+    side.sessions >= COMPARISON_MIN_SESSIONS &&
+    side.keyEvents >= COMPARISON_MIN_KEY_EVENTS &&
+    side.keyEventSessions > 0;
+  if (!enough(ai) || !enough(organic)) return null;
+  return ai.keyEventSessions / ai.sessions / (organic.keyEventSessions / organic.sessions);
+}
+
+/** A multiple as the cards write it: "1.8×", "0.6×". */
+export function formatRatio(ratio: number): string {
+  return `${formatNumber(Math.round(ratio * 10) / 10)}×`;
+}

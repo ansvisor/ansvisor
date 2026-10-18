@@ -12,6 +12,7 @@ import {
   dayRange,
   gaDateToIso,
   mapAiTrafficRows,
+  mapChannelRows,
   mapItemRows,
   mapPageRows,
   readReportRows,
@@ -195,6 +196,8 @@ describe('mapAiTrafficRows', () => {
         sessions: 10,
         engaged_sessions: 3,
         key_events: 1,
+        // No session key event rate in this report: none counted.
+        key_event_sessions: 0,
         total_users: 9,
         transactions: 2,
         purchase_revenue: 149.9,
@@ -336,11 +339,74 @@ describe('mapPageRows', () => {
         sessions: 29,
         engaged_sessions: 21,
         key_events: 2,
+        key_event_sessions: 0,
         total_users: 23,
         transactions: 1,
         purchase_revenue: 80,
         engagement_duration_seconds: 3407,
       },
+    ]);
+  });
+});
+
+describe('sessions with a key event (AT-005)', () => {
+  const withRate = (rows) =>
+    report({
+      dims: ['date', 'sessionDefaultChannelGroup'],
+      metrics: ['sessions', 'keyEvents', 'sessionKeyEventRate'],
+      rows,
+    });
+
+  it("counts them from GA4's session key event rate, so a rate can be taken over any range", () => {
+    // 40 sessions, 12 key events, but only a quarter of the sessions had one.
+    const [row] = mapChannelRows(
+      'brand-1',
+      withRate([['20260721', 'Organic Search', '40', '12', '0.25']]),
+    );
+    expect(row).toMatchObject({ sessions: 40, key_events: 12, key_event_sessions: 10 });
+  });
+
+  it('rounds to whole sessions, and reads a missing rate as none', () => {
+    const rows = mapChannelRows(
+      'brand-1',
+      withRate([
+        ['20260721', 'Direct', '3', '1', '0.3333333'],
+        ['20260721', 'Referral', '5', '0', ''],
+      ]),
+    );
+    expect(rows.map((r) => r.key_event_sessions)).toEqual([1, 0]);
+  });
+});
+
+describe('mapChannelRows', () => {
+  it('stores sessions per day and default channel group', () => {
+    const rows = mapChannelRows(
+      'brand-1',
+      report({
+        dims: ['date', 'sessionDefaultChannelGroup'],
+        metrics: TRAFFIC_METRICS,
+        rows: [
+          ['20260721', 'Organic Search', '500', '300', '20', '450', '3', '99.5', '9000'],
+          ['20260721', '', '7', '1', '0', '7', '0', '0', '30'],
+          ['(other)', 'Direct', '9', '1', '0', '9', '0', '0', '30'],
+        ],
+      }),
+    );
+    expect(rows).toEqual([
+      {
+        brand_id: 'brand-1',
+        date: '2026-07-21',
+        channel: 'Organic Search',
+        sessions: 500,
+        engaged_sessions: 300,
+        key_events: 20,
+        key_event_sessions: 0,
+        total_users: 450,
+        transactions: 3,
+        purchase_revenue: 99.5,
+        engagement_duration_seconds: 9000,
+      },
+      expect.objectContaining({ channel: '(not set)', sessions: 7 }),
     ]);
   });
 });

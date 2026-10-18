@@ -39,10 +39,11 @@ import {
 import { PageOpportunitiesCard } from './_opportunities-card';
 import { TRAFFIC_KPI_GRID, TrafficKpis } from './_kpis';
 import { VisitListSourceNote } from './_visit-list-note';
+import { EngagedCell, KeyEventsCell, PlatformValueNote } from './_platform-value';
 import { ExportMenu, TableExport, useTrafficExport } from './_export';
 import { SourcesStrip } from './_sources-strip';
 import { SnippetBanner, SnippetDialog } from './_snippet-code';
-import { snippetDetected } from '@/lib/traffic-sources';
+import { googleSourceStatus, snippetDetected } from '@/lib/traffic-sources';
 import { useUserRole } from '@/hooks/use-user-role';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -569,6 +570,11 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   // From the summary, not the selected range: while a new range loads, the
   // numbers on screen are still the previous range's.
   const comparable = summary?.hasPreviousPeriod ?? false;
+  // Analytics isn't ready for this brand: the platform table's engagement
+  // columns show "—", as the KPI cards do, and say what they need (AT-005,
+  // §3.8b's partial note) — even with rows left from an earlier connection.
+  const gaMissing =
+    !sourcesFailed && sources !== null && googleSourceStatus(sources.ga) !== 'connected';
 
   const isEmpty = totalVisits === 0 && logs.length === 0;
   const hasAnyData = summary?.hasAnyData ?? false;
@@ -692,8 +698,10 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
             </Card>
           </div>
 
-          {/* Tables row */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Tables row: side by side from 1,280px. The platform table's five
+              columns (AT-005) need more than half the page below that, and
+              numeric cells never wrap (spec §3.2). */}
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {/* Platform table */}
             <Card>
               <CardHeader className="pb-2">
@@ -708,7 +716,10 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                     <TableRow>
                       <TableHead className="pl-6">Platform</TableHead>
                       <TableHead className="text-right">Visits</TableHead>
-                      <TableHead className="text-right pr-6">Change</TableHead>
+                      <TableHead className="text-right">Change</TableHead>
+                      {/* From Google Analytics (AT-005). */}
+                      <TableHead className="text-right">{t('platforms.engaged')}</TableHead>
+                      <TableHead className="text-right pr-6">{t('platforms.keyEvents')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -722,7 +733,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                         <TableCell className="text-right font-semibold tabular-nums">
                           {formatNumber(row.visits)}
                         </TableCell>
-                        <TableCell className="text-right pr-6">
+                        <TableCell className="text-right">
                           <div className="flex justify-end">
                             <DeltaBadge
                               current={row.visits}
@@ -731,10 +742,17 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                             />
                           </div>
                         </TableCell>
+                        <TableCell className="text-right">
+                          <EngagedCell analytics={gaMissing ? null : row.analytics} />
+                        </TableCell>
+                        <TableCell className="text-right pr-6">
+                          <KeyEventsCell analytics={gaMissing ? null : row.analytics} />
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
+                {gaMissing && <PlatformValueNote />}
               </CardContent>
             </Card>
 

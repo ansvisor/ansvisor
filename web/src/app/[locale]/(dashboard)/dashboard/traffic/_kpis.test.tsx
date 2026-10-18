@@ -59,9 +59,9 @@ const summary = (over: Partial<TrafficSummary> = {}): TrafficSummary => ({
   analyticsDays: [],
   hasPreviousPeriod: true,
   platformBreakdown: [
-    { platform: 'gemini.google.com', visits: 2, visitsPrev: 1 },
-    { platform: 'chatgpt.com', visits: 1, visitsPrev: 1 },
-    { platform: 'perplexity.ai', visits: 1, visitsPrev: 1 },
+    { platform: 'gemini.google.com', visits: 2, visitsPrev: 1, analytics: null },
+    { platform: 'chatgpt.com', visits: 1, visitsPrev: 1, analytics: null },
+    { platform: 'perplexity.ai', visits: 1, visitsPrev: 1, analytics: null },
   ],
   topPages: [],
   hasAnyData: true,
@@ -69,7 +69,16 @@ const summary = (over: Partial<TrafficSummary> = {}): TrafficSummary => ({
 });
 
 const TOTALS: TrafficGoogleTotals = {
-  ga: { sessions: 812, aiSessions: 4, aiEngagedSessions: 3, aiKeyEvents: 1 },
+  ga: {
+    sessions: 812,
+    aiSessions: 4,
+    aiEngagedSessions: 3,
+    aiKeyEvents: 1,
+    aiKeyEventSessions: 1,
+    aiRevenue: 0,
+    // Google organic: 58% engaged, as in the mockup.
+    organic: { sessions: 1000, engagedSessions: 580, keyEvents: 60, keyEventSessions: 50 },
+  },
   gsc: {
     since: '2026-10-16',
     until: '2026-10-16',
@@ -210,8 +219,9 @@ describe('TrafficKpis', () => {
     await render();
     expect(card('AI share of traffic')).toContain('0.5%4 of 812 sessions');
     // 4 AI sessions: a rate, marked Low sample (§5.4).
-    expect(card('Engaged visits')).toContain('75%Low sample3 of 4 AI sessions');
-    expect(card('Key events from AI')).toContain('1in 4 AI sessions');
+    expect(card('Engaged visits')).toContain('75%Low samplevs 58% Google organic');
+    // 1 of 4 AI sessions had a key event: a rate, on too few sessions to compare.
+    expect(card('Key events from AI')).toContain('1Low sample25% of AI sessions');
     expect(card('Google clicks')).toContain('412−6%');
     expect(card('Google clicks')).toContain('Oct 16 · latest reported day');
   });
@@ -234,6 +244,48 @@ describe('TrafficKpis', () => {
     expect(card('Google clicks')).toContain('438 in the previous period');
   });
 
+  it('compares the key event rate with Google organic once both sides are big enough (AT-005)', async () => {
+    getTrafficGoogleTotals.mockResolvedValue({
+      ...TOTALS,
+      // 10% of 100 AI sessions against 5% of organic's.
+      ga: { ...TOTALS.ga!, aiSessions: 100, aiKeyEvents: 12, aiKeyEventSessions: 10 },
+    });
+    await render({ preset: '30d', dateWindow: { dateFrom: '2026-09-18T12:30:00.000Z' } });
+    expect(card('Key events from AI')).toContain('122× organic10% of AI sessions');
+  });
+
+  it('adds purchase revenue when the property reports it', async () => {
+    getTrafficGoogleTotals.mockResolvedValue({
+      ...TOTALS,
+      ga: {
+        ...TOTALS.ga!,
+        aiSessions: 100,
+        aiKeyEvents: 3,
+        aiKeyEventSessions: 3,
+        aiRevenue: 1240.4,
+      },
+    });
+    await render({ preset: '30d', dateWindow: { dateFrom: '2026-09-18T12:30:00.000Z' } });
+    // 3 key events: too few to compare with organic (§5.4).
+    expect(card('Key events from AI')).toBe('Key events from AI33% of AI sessions · 1,240 revenue');
+  });
+
+  it('keeps the plain line while a rate is unknown, and without organic data', async () => {
+    getTrafficGoogleTotals.mockResolvedValue({
+      ...TOTALS,
+      // Synced before the session key event rate: key events, no sessions holding them.
+      ga: {
+        ...TOTALS.ga!,
+        aiKeyEvents: 2,
+        aiKeyEventSessions: 0,
+        organic: { sessions: 0, engagedSessions: 0, keyEvents: 0, keyEventSessions: 0 },
+      },
+    });
+    await render({ preset: '30d', dateWindow: { dateFrom: '2026-09-18T12:30:00.000Z' } });
+    expect(card('Key events from AI')).toBe('Key events from AI2in 4 AI sessions');
+    expect(card('Engaged visits')).toContain('3 of 4 AI sessions');
+  });
+
   it('offers 30 days when a short range has no key events', async () => {
     getTrafficGoogleTotals.mockResolvedValue({
       ...TOTALS,
@@ -252,7 +304,7 @@ describe('TrafficKpis', () => {
   it('says when Analytics has nothing for the days, or no AI sessions', async () => {
     getTrafficGoogleTotals.mockResolvedValue({
       ...TOTALS,
-      ga: { sessions: 0, aiSessions: 0, aiEngagedSessions: 0, aiKeyEvents: 0 },
+      ga: { ...TOTALS.ga!, sessions: 0, aiSessions: 0, aiEngagedSessions: 0, aiKeyEvents: 0 },
     });
     await render({ preset: '30d' });
     expect(card('AI share of traffic')).toContain('—No data in this range');
@@ -260,7 +312,7 @@ describe('TrafficKpis', () => {
 
     getTrafficGoogleTotals.mockResolvedValue({
       ...TOTALS,
-      ga: { sessions: 812, aiSessions: 0, aiEngagedSessions: 0, aiKeyEvents: 0 },
+      ga: { ...TOTALS.ga!, aiSessions: 0, aiEngagedSessions: 0, aiKeyEvents: 0 },
     });
     await render({ preset: '90d', dateWindow: { dateFrom: '2026-07-20T12:30:00.000Z' } });
     expect(card('Engaged visits')).toContain('—No AI sessions in this range');
