@@ -9,6 +9,10 @@
  * hundreds of thousands of rows. It now receives one summary per (prompt,
  * engine, model, region) and loads a group's individual runs only when the
  * user opens it.
+ *
+ * The summaries come from the daily rollups (head_to_head_daily, 00169), so
+ * every answer counts: a read of the raw answers stopped at PostgREST's
+ * 1,000-row page and compared large brands on their newest answers only.
  */
 
 import type { Sentiment } from '@/types';
@@ -57,15 +61,37 @@ export interface HeadToHeadData {
   strengths: HeadToHeadGroup[];
 }
 
-/** The `prompt_results` columns the aggregation reads. */
-export interface HeadToHeadResultRow {
-  prompt_id: string | null;
+/** One (prompt, engine, model, region) as head_to_head_daily sums it. */
+export interface HeadToHeadRollupGroup {
+  prompt_id: string;
   platform: string | null;
   model_used: string | null;
   region: string | null;
-  visibility_score: number | null;
-  competitor_mentions: unknown;
-  created_at: string;
+  runs: number;
+  /** The brand's visibility summed over the group's answers. */
+  brand_total: number;
+  /** The competitor's, an answer that doesn't list it counting 0. */
+  comp_total: number;
+  latest_at: string;
+}
+
+/** One (platform, model) over every answer, for the averages. */
+export interface HeadToHeadRollupEngine {
+  platform: string | null;
+  model_used: string | null;
+  /** Answers, those without a prompt included. */
+  brand_count: number;
+  brand_total: number;
+  /** Answers that list the competitor, and its visibility over them. */
+  comp_count: number;
+  comp_total: number;
+}
+
+/** head_to_head_daily's payload (00169). */
+export interface HeadToHeadRollups {
+  groups: HeadToHeadRollupGroup[];
+  engines: HeadToHeadRollupEngine[];
+  prompts: { id: string; text: string | null; category: string | null }[];
 }
 
 interface CompetitorMention {
@@ -86,75 +112,62 @@ export function competitorScoreIn(mentions: unknown, competitorId: string): numb
   return hit ? (hit.visibility_score ?? 0) : null;
 }
 
-export function aggregateHeadToHead(
-  rows: HeadToHeadResultRow[],
-  competitorId: string,
-  prompts: Map<string, { text: string; category?: string }>,
+/**
+ * The page's summaries from head_to_head_daily (00169). Each group is
+ * averaged over its runs, a missing competitor counting 0, as the page always
+ * did. The averages per display provider and overall are over every answer
+ * for the brand (those without a prompt included) and over the answers that
+ * list the competitor for it: an answer from before the competitor was added
+ * says nothing about it. Groups come most recently run first, the order the
+ * page lists prompts in.
+ */
+export function headToHeadFromRollups(
+  rollups: HeadToHeadRollups,
   resolveProvider: (modelUsed: string | null, platform: string | null) => string,
 ): HeadToHeadData {
-  type GroupAcc = Omit<HeadToHeadGroup, 'brandScore' | 'competitorScore' | 'diff'> & {
-    brandTotal: number;
-    compTotal: number;
-  };
   type Totals = { brandTotal: number; brandCount: number; compTotal: number; compCount: number };
   const newTotals = (): Totals => ({ brandTotal: 0, brandCount: 0, compTotal: 0, compCount: 0 });
 
-  const groups = new Map<string, GroupAcc>();
+  const prompts = new Map(rollups.prompts.map((p) => [p.id, p]));
   const byProvider = new Map<string, Totals>();
   const overall = newTotals();
 
-  for (const row of rows) {
-    const brandScore = row.visibility_score ?? 0;
-    const compScore = competitorScoreIn(row.competitor_mentions, competitorId);
-    const provider = resolveProvider(row.model_used, row.platform);
-
-    // Averages over answers that list the competitor, as before: an answer
-    // from before the competitor was added says nothing about it.
+  for (const engine of rollups.engines) {
+    const provider = resolveProvider(engine.model_used, engine.platform);
     const providerTotals = byProvider.get(provider) ?? newTotals();
     byProvider.set(provider, providerTotals);
     for (const totals of [overall, providerTotals]) {
-      totals.brandTotal += brandScore;
-      totals.brandCount += 1;
-      if (compScore !== null) {
-        totals.compTotal += compScore;
-        totals.compCount += 1;
-      }
+      totals.brandTotal += Number(engine.brand_total);
+      totals.brandCount += Number(engine.brand_count);
+      totals.compTotal += Number(engine.comp_total);
+      totals.compCount += Number(engine.comp_count);
     }
-
-    // Results without a prompt still count towards the averages above.
-    if (!row.prompt_id) continue;
-    const key = [row.prompt_id, row.platform ?? '', row.model_used ?? '', row.region ?? ''].join(
-      '\u0000',
-    );
-    const group = groups.get(key) ?? {
-      promptId: row.prompt_id,
-      promptText: prompts.get(row.prompt_id)?.text ?? '',
-      promptCategory: prompts.get(row.prompt_id)?.category,
-      platform: provider,
-      rawPlatform: row.platform,
-      modelUsed: row.model_used ?? '',
-      rawModelUsed: row.model_used,
-      region: row.region ?? undefined,
-      runs: 0,
-      latestAt: row.created_at,
-      brandTotal: 0,
-      compTotal: 0,
-    };
-    // Group averages count a missing competitor as 0, as the page always did.
-    group.runs += 1;
-    group.brandTotal += brandScore;
-    group.compTotal += compScore ?? 0;
-    if (row.created_at > group.latestAt) group.latestAt = row.created_at;
-    groups.set(key, group);
   }
 
-  const groupList: HeadToHeadGroup[] = [...groups.values()].map(
-    ({ brandTotal, compTotal, ...g }) => {
-      const brandScore = brandTotal / g.runs;
-      const competitorScore = compTotal / g.runs;
-      return { ...g, brandScore, competitorScore, diff: brandScore - competitorScore };
-    },
-  );
+  const groupList: HeadToHeadGroup[] = rollups.groups
+    .filter((g) => Number(g.runs) > 0)
+    .map((g) => {
+      const runs = Number(g.runs);
+      const brandScore = Number(g.brand_total) / runs;
+      const competitorScore = Number(g.comp_total) / runs;
+      const prompt = prompts.get(g.prompt_id);
+      return {
+        promptId: g.prompt_id,
+        promptText: prompt?.text ?? '',
+        promptCategory: prompt?.category ?? undefined,
+        platform: resolveProvider(g.model_used, g.platform),
+        rawPlatform: g.platform,
+        modelUsed: g.model_used ?? '',
+        rawModelUsed: g.model_used,
+        region: g.region ?? undefined,
+        runs,
+        brandScore,
+        competitorScore,
+        diff: brandScore - competitorScore,
+        latestAt: g.latest_at,
+      };
+    })
+    .sort((a, b) => (a.latestAt < b.latestAt ? 1 : a.latestAt > b.latestAt ? -1 : 0));
 
   const avg = (total: number, count: number) => (count > 0 ? Math.round(total / count) : 0);
   const platformRows = [...byProvider.entries()]

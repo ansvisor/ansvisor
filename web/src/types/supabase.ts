@@ -3170,6 +3170,10 @@ export type Database = {
           query: string
         }[]
       }
+      head_to_head_daily: {
+        Args: { p_brand_id: string; p_competitor_id: string }
+        Returns: Json
+      }
       insights_aggregates: {
         Args: {
           p_brand_id: string
