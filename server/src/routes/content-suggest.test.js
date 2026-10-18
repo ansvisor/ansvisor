@@ -20,6 +20,7 @@ class PlanLimitError extends Error {
 }
 
 const assertPromptAccess = vi.fn();
+const assertBrandAccess = vi.fn();
 const getOpportunityRequestAllowance = vi.fn();
 const createJob = vi.fn();
 const runContentJob = vi.fn();
@@ -42,7 +43,7 @@ async function startApp() {
     getOrgIdForUser: vi.fn(),
   }));
   vi.doMock('../lib/access.js', () => ({
-    assertBrandAccess: vi.fn(),
+    assertBrandAccess,
     assertOpportunitiesAccess: vi.fn(),
     assertOpportunityAccess: vi.fn(),
     assertPromptAccess,
@@ -104,6 +105,7 @@ beforeEach(async () => {
   assertPromptAccess.mockResolvedValue([
     { id: 'p1', prompt_sets: { brand_id: 'b1', brands: { organization_id: 'org1' } } },
   ]);
+  assertBrandAccess.mockResolvedValue({ orgId: 'org1' });
   runningSuggestionJob.mockResolvedValue(null);
   openOpportunityForPrompt.mockResolvedValue(null);
   getOpportunityRequestAllowance.mockResolvedValue(allowance(3));
@@ -200,5 +202,36 @@ describe('GET /prompts/:promptId/suggestion', () => {
 
     expect(await res.json()).toEqual({ existingId: 'opp-1' });
     expect(openOpportunityForPrompt).toHaveBeenCalledWith('b1', 'p1');
+  });
+});
+
+describe('POST /opportunities/generate for one page (AT-006 part B3)', () => {
+  const BRAND = '33333333-3333-3333-3333-333333333333';
+  const generate = (body) =>
+    fetch(`${baseUrl}/opportunities/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandId: BRAND, idempotencyKey: 'key-page-1', ...body }),
+    });
+
+  it("starts one opportunity for the page, whatever count it's sent with", async () => {
+    const res = await generate({ count: 3, pagePath: '/gifts' });
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ jobId: 'job-new', count: 1 });
+    expect(createJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        brandId: BRAND,
+        data: expect.objectContaining({
+          request: expect.objectContaining({ count: 1, pagePath: '/gifts' }),
+        }),
+      }),
+    );
+  });
+
+  it('takes a path, not a URL, and spends nothing when the month is used up', async () => {
+    expect((await generate({ count: 1, pagePath: 'https://acme.example/gifts' })).status).toBe(400);
+    getOpportunityRequestAllowance.mockResolvedValue(allowance(0));
+    expect((await generate({ count: 1, pagePath: '/gifts' })).status).toBe(429);
+    expect(createJob).not.toHaveBeenCalled();
   });
 });

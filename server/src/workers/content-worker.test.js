@@ -42,9 +42,16 @@ describe('processContentJob', () => {
     expect(refreshPromptClusters).toHaveBeenCalledWith('b1');
   });
 
+  it("asks for one page's content from AI Traffic, as manual (AT-006 part B3)", async () => {
+    await processContentJob({ brandId: 'b1', job, request: { count: 1, pagePath: '/gifts' } });
+    expect(optsOf()).toMatchObject({ count: 1, pagePath: '/gifts', source: 'manual' });
+    // A page's prompts tracked a moment ago are only grouped by the refresh.
+    expect(refreshPromptClusters).toHaveBeenCalledWith('b1');
+  });
+
   it('marks "+ New" as manual, with no special request', async () => {
     await processContentJob({ brandId: 'b1', job, request: { count: 3, promptId: null } });
-    expect(optsOf()).toMatchObject({ count: 3, explicit: false, source: 'manual' });
+    expect(optsOf()).toMatchObject({ count: 3, explicit: false, pagePath: null, source: 'manual' });
   });
 
   it('never lets a request pick its own tag', async () => {

@@ -5,7 +5,12 @@
  * server.
  */
 
-import type { GenerationJobStatus, PromptSuggestionResult } from '@/lib/actions/content';
+import type {
+  GenerationJobStatus,
+  OnDemandRequest,
+  OnDemandResult,
+  PromptSuggestionResult,
+} from '@/lib/actions/content';
 
 export type ContentJobOutcome =
   | { kind: 'completed'; result: NonNullable<GenerationJobStatus['result']> }
@@ -94,6 +99,58 @@ export async function suggestForPrompt(
     if (opportunityIds?.[0]) return { kind: 'created', opportunityId: opportunityIds[0] };
     // Covered while the job ran, e.g. once the prompt was regrouped.
     if (existingId) return { kind: 'existing', opportunityId: existingId };
+    return limited ? { kind: 'limited' } : { kind: 'nothing' };
+  } catch (err) {
+    return { kind: 'failed', message: err instanceof Error ? err.message : null };
+  }
+}
+
+/** How one page's "Suggest content" ended (AT-006 part B3). */
+export type PageSuggestionOutcome =
+  | Exclude<PromptSuggestionOutcome, { kind: 'nothing' }>
+  /** No tracked prompt is about the page: nothing to write from. */
+  | { kind: 'noMatch' }
+  /** The page's prompts have nothing to write from yet, e.g. no answers. */
+  | { kind: 'nothing' };
+
+/**
+ * Asks for one page's content suggestion and follows it to its end, as
+ * suggestForPrompt does for a prompt. Never throws: whatever goes wrong on
+ * the way comes back as `failed`.
+ */
+export async function suggestForPage(
+  brandId: string,
+  pagePath: string,
+  {
+    start,
+    getStatus,
+    newKey = () => crypto.randomUUID(),
+    ...waiting
+  }: {
+    start: (request: OnDemandRequest) => Promise<OnDemandResult>;
+    getStatus: (jobId: string) => Promise<GenerationJobStatus>;
+    newKey?: () => string;
+    intervalMs?: number;
+    timeoutMs?: number;
+    sleep?: (ms: number) => Promise<void>;
+    now?: () => number;
+  },
+): Promise<PageSuggestionOutcome> {
+  try {
+    const started = await start({ brandId, count: 1, pagePath, idempotencyKey: newKey() });
+    if (!started.ok) {
+      return started.quotaExhausted
+        ? { kind: 'limited' }
+        : { kind: 'failed', message: started.error };
+    }
+
+    const outcome = await waitForContentJob(started.jobId, { getStatus, ...waiting });
+    if (outcome.kind === 'failed') return { kind: 'failed', message: outcome.reason };
+    if (outcome.kind === 'timeout') return { kind: 'timeout' };
+    const { opportunityIds, existingId, limited, noMatch } = outcome.result;
+    if (opportunityIds?.[0]) return { kind: 'created', opportunityId: opportunityIds[0] };
+    if (existingId) return { kind: 'existing', opportunityId: existingId };
+    if (noMatch) return { kind: 'noMatch' };
     return limited ? { kind: 'limited' } : { kind: 'nothing' };
   } catch (err) {
     return { kind: 'failed', message: err instanceof Error ? err.message : null };

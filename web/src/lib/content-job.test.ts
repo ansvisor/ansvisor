@@ -5,8 +5,8 @@
  */
 
 import { describe, expect, test } from 'vitest';
-import type { GenerationJobStatus } from '@/lib/actions/content';
-import { suggestForPrompt, waitForContentJob } from './content-job';
+import type { GenerationJobStatus, OnDemandRequest } from '@/lib/actions/content';
+import { suggestForPage, suggestForPrompt, waitForContentJob } from './content-job';
 
 const status = (s: Partial<GenerationJobStatus>): GenerationJobStatus => ({
   status: 'active',
@@ -136,5 +136,59 @@ describe('suggestForPrompt', () => {
         throw new Error('crypto.randomUUID is not a function');
       }),
     ).toEqual({ kind: 'failed', message: 'crypto.randomUUID is not a function' });
+  });
+});
+
+describe('suggestForPage (AT-006 part B3)', () => {
+  const run = (
+    start: (
+      r: OnDemandRequest,
+    ) => Promise<
+      | { ok: true; jobId: string; count: number }
+      | { ok: false; error: string; quotaExhausted?: boolean }
+    >,
+    result: GenerationJobStatus['result'],
+  ) =>
+    suggestForPage('b1', '/gifts', {
+      start,
+      getStatus: async () => status({ status: 'completed', result }),
+      newKey: () => 'key-1',
+      ...fakeClock(),
+    });
+  const started = async () => ({ ok: true as const, jobId: 'j1', count: 1 });
+
+  test('asks for one opportunity for the page and opens what it made', async () => {
+    const requests: OnDemandRequest[] = [];
+    const outcome = await run(
+      async (r) => {
+        requests.push(r);
+        return started();
+      },
+      { generated: 1, opportunityIds: ['o1'] },
+    );
+    expect(requests).toEqual([
+      { brandId: 'b1', count: 1, pagePath: '/gifts', idempotencyKey: 'key-1' },
+    ]);
+    expect(outcome).toEqual({ kind: 'created', opportunityId: 'o1' });
+  });
+
+  test('points at the open suggestion, or says no tracked prompt is about the page', async () => {
+    expect(await run(started, { generated: 0, existingId: 'o9' })).toEqual({
+      kind: 'existing',
+      opportunityId: 'o9',
+    });
+    expect(await run(started, { generated: 0, noMatch: true })).toEqual({ kind: 'noMatch' });
+    expect(await run(started, { generated: 0 })).toEqual({ kind: 'nothing' });
+  });
+
+  test("says when the month's suggestions are used up, before or during the run", async () => {
+    expect(
+      await run(async () => ({ ok: false, error: 'used up', quotaExhausted: true }), null),
+    ).toEqual({ kind: 'limited' });
+    expect(await run(started, { generated: 0, limited: true })).toEqual({ kind: 'limited' });
+    expect(await run(async () => ({ ok: false, error: 'nope' }), null)).toEqual({
+      kind: 'failed',
+      message: 'nope',
+    });
   });
 });

@@ -3415,7 +3415,22 @@
         "openAudit": "Open Site Audit",
         "auditsFailed": "Couldn't start the audits",
         "noneLeft": "No audits left this month",
-        "overQuota": "{count, plural, one {# audit} other {# audits}}, {remaining} left this month"
+        "overQuota": "{count, plural, one {# audit} other {# audits}}, {remaining} left this month",
+        "suggestContent": "Suggest content",
+        "suggesting": "Writing a content suggestion for {page}…",
+        "suggested": "Content suggestion created",
+        "suggestedDescription": "For {page}, from the tracked prompts about it. It used one of this month's content suggestions.",
+        "suggestionExists": "This page already has a content suggestion",
+        "openExisting": "Open existing",
+        "suggestNoPrompts": "No tracked prompts are about {page} yet",
+        "suggestNoPromptsDescription": "Content suggestions are written from tracked prompts' answers. Add prompts for this page first; nothing was used from this month's content suggestions.",
+        "addPrompts": "Add prompts",
+        "suggestLimited": "Monthly content limit reached.",
+        "suggestNothing": "Couldn't write a suggestion for this page yet",
+        "suggestNothingDescription": "Its prompts need tracked answers first; they come with the next tracking run.",
+        "suggestFailed": "Couldn't write a content suggestion",
+        "suggestTimeout": "Still writing the content suggestion",
+        "suggestTimeoutDescription": "It will appear in Content when it is done."
       },
       "prompts": {
         "title": "Suggested prompts",

@@ -41,6 +41,7 @@ export async function processContentJob({ brandId, model, job, request = null })
           idea: request.idea ?? null,
           alternativeOf: request.alternativeOf ?? null,
           explicit: !!request.explicit,
+          pagePath: request.pagePath ?? null,
           // "+ New" and "Another angle" are manual; "Suggest content" from
           // the prompts table is tagged prompt.
           source: request.source === 'prompt' ? 'prompt' : 'manual',

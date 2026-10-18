@@ -30,6 +30,12 @@ import { loadClusterOpportunities, loadOpportunityBaskets } from './open-opportu
 import { basket, duplicateThreshold, findDuplicate, storedBasket } from './opportunity-dedup.js';
 import { loadClusters } from './prompt-clusters.js';
 import { cleanOpportunityText } from './opportunity-text.js';
+import {
+  focusClusters,
+  loadPageFocus,
+  pageFocusInstruction,
+  pickPageCluster,
+} from './opportunity-page-focus.js';
 import { reopenStrengthened } from './opportunity-reopen.js';
 import {
   claimOpportunitySlots,
@@ -263,6 +269,7 @@ export const IDEA_MAX_LENGTH = 500;
  *   source?: 'system' | 'manual' | 'prompt',
  *   alternativeOf?: { id: string, title: string, description?: string|null, decision?: string|null, clusterId: string } | null,
  *   explicit?: boolean,
+ *   pagePath?: string | null,
  * }} [opts] - `count`, the focus (`topicId` / `promptId`) and `idea` come from
  *   an on-demand request (CONTENT-003); the nightly run passes none of them.
  *   `alternativeOf` asks for one more opportunity on that opportunity's
@@ -273,7 +280,11 @@ export const IDEA_MAX_LENGTH = 500;
  *   "Suggest content"): it is written even if the cluster was covered by a
  *   dismissed or finished opportunity, never when an open one covers it, and
  *   never merged away.
- * @returns {Promise<{ generated: number, merged: number, reopened?: number, duplicates?: number, limited?: boolean, opportunityIds?: string[], existingId?: string }>}
+ *   `pagePath` asks for one page's content (AT-006 part B3): it is written
+ *   from the clusters about that page (opportunity-page-focus.js), like an
+ *   explicit request, with the page first among the candidate pages; with no
+ *   such cluster nothing is written and `noMatch` says so.
+ * @returns {Promise<{ generated: number, merged: number, reopened?: number, duplicates?: number, limited?: boolean, noMatch?: boolean, opportunityIds?: string[], existingId?: string }>}
  */
 export async function generateContentOpportunities(
   brandId,
@@ -287,11 +298,13 @@ export async function generateContentOpportunities(
     source = 'system',
     alternativeOf = null,
     explicit = false,
+    pagePath = null,
   } = {},
 ) {
-  // The user asked for this cluster by name: the duplicate check, merging
-  // into another opportunity and reopening finished ones don't apply.
-  const targeted = !!alternativeOf || explicit;
+  // The user asked for this cluster, or this page, by name: the duplicate
+  // check, merging into another opportunity and reopening finished ones
+  // don't apply.
+  const targeted = !!alternativeOf || explicit || !!pagePath;
   onProgress?.({ phase: 'collecting_data', message: 'Fetching clusters and metrics...' });
 
   const { data: brand } = await supabaseAdmin
@@ -357,6 +370,14 @@ export async function generateContentOpportunities(
     ]),
   );
 
+  // One page's content (AT-006 part B3) comes from the clusters about it;
+  // without one there is nothing to write from, and no slot is claimed.
+  const focus = pagePath ? await loadPageFocus(brandId, pagePath, memberIds) : null;
+  const focusIds = focus
+    ? focusClusters([...clusterById.values()], focus.page, focus.targetedPromptIds)
+    : null;
+  if (focusIds && !focusIds.length) return { generated: 0, merged: 0, noMatch: true };
+
   const measure = (clusterIds) => {
     const metrics = clusterMetrics(
       clusterIds.flatMap((id) => clusterById.get(id)?.prompt_ids || []),
@@ -382,15 +403,26 @@ export async function generateContentOpportunities(
   const candidates = clusters.map((c) => ({ id: c.id, topicId: c.topic_id, ...measure([c.id]) }));
   // A prompt's own request may revisit a cluster whose opportunity was
   // dismissed or finished, never one with an open opportunity.
-  const covered = explicit ? openlyCoveredClusterIds(existing) : coveredClusterIds(existing);
+  const covered =
+    explicit || focusIds ? openlyCoveredClusterIds(existing) : coveredClusterIds(existing);
 
   // The fan-out baskets of every cluster still open for an opportunity: the
   // duplicate check compares them, and the prompt shows the picked ones'.
   // A focused request only considers its topic's clusters or its prompt's.
   const inFocus = (c) =>
     (!topicId || c.topicId === topicId) &&
-    (!promptId || clusterById.get(c.id).prompt_ids.includes(promptId));
+    (!promptId || clusterById.get(c.id).prompt_ids.includes(promptId)) &&
+    (!focusIds || focusIds.includes(c.id));
   const open = openCandidates(candidates, { covered, inFocus, alternativeOf });
+  // A page's request goes to its best-matching cluster that has an open
+  // opportunity, which it points at, or answers, which it writes from.
+  if (focusIds) {
+    const pick = pickPageCluster(focusIds, { openIds: new Set(open.map((c) => c.id)), covered });
+    if (pick && 'existing' in pick) {
+      return { generated: 0, merged: 0, existingId: openOpportunityOn(existing, pick.existing) };
+    }
+    open.splice(0, open.length, ...open.filter((c) => c.id === pick?.write));
+  }
   const { data: basketRows, error: basketErr } = await selectInChunks(
     open.map((c) => c.id),
     (chunk) =>
@@ -465,7 +497,12 @@ export async function generateContentOpportunities(
       const c = clusterById.get(cand.id);
       const basket = basketSummary([c.id], basketRows || []);
       const need = [c.label, c.primary_intent, ...c.promptTexts, ...basket.top.map((q) => q.query)];
-      return [cand.id, candidatePages(need.join(' '), pagesRes.data || [])];
+      const pages = candidatePages(need.join(' '), pagesRes.data || []);
+      // The page asked about leads, so the model can work on it ([P0]).
+      return [
+        cand.id,
+        focus ? [focus.page, ...pages.filter((p) => p.url !== focus.page.url)] : pages,
+      ];
     }),
   );
   const pageLine = (p, i) =>
@@ -500,6 +537,8 @@ Existing opportunities in other topics:
 ${shown.map((o, i) => `[E${i}] ${o.title} (topic: ${topicName(clusterById.get(o.cluster_id)) || 'none'})`).join('\n') || 'none'}
 
 ${alternativeOf ? `${alternativeInstruction(alternativeOf)}\n\n` : ''}${
+    focus ? `${pageFocusInstruction(focus.page)}\n\n` : ''
+  }${
     idea
       ? `The user asked for ideas around: "${idea.slice(0, IDEA_MAX_LENGTH)}". Shape the opportunities toward it wherever the clusters' prompts allow; never invent a need the data doesn't show.\n\n`
       : ''
@@ -617,6 +656,8 @@ ${alternativeOf ? `${alternativeInstruction(alternativeOf)}\n\n` : ''}${
         ...(alternativeOf
           ? { alternativeOf: { id: alternativeOf.id, title: alternativeOf.title } }
           : {}),
+        // Asked for from AI Traffic's Pages section, for this page.
+        ...(focus ? { forPage: { path: pagePath, url: focus.page.url } } : {}),
       },
     });
   }

@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { FileSearch, ListPlus, Loader2, MoreHorizontal, Send } from 'lucide-react';
+import { FileSearch, Lightbulb, ListPlus, Loader2, MoreHorizontal, Send } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -208,8 +208,9 @@ export function PagesCard({
     row.aiPlatforms.length ? row.aiPlatforms.map(getPlatformName).join(', ') : '—';
 
   /**
-   * A row's next step, with its menu: send the page to the Action Center, and
-   * suggest prompts for it when that isn't already its next step.
+   * A row's next step, with its menu: send the page to the Action Center,
+   * suggest prompts for it when that isn't already its next step, and suggest
+   * content for it (part B3).
    */
   const rowActions = (
     row: TrafficPageRow,
@@ -241,6 +242,14 @@ export function PagesCard({
               {t('addPrompts')}
             </DropdownMenuItem>
           )}
+          <DropdownMenuItem
+            className="gap-2"
+            disabled={pageActions.suggesting !== null}
+            onClick={() => void pageActions.suggestContent(row.page, openPrompts)}
+          >
+            <Lightbulb className="h-3.5 w-3.5" />
+            {t('actions.suggestContent')}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

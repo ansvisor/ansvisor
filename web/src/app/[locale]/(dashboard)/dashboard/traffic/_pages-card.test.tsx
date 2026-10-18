@@ -40,6 +40,14 @@ vi.mock('@/i18n/navigation', () => ({
   useRouter: () => ({ push }),
 }));
 vi.mock('sonner', () => ({ toast }));
+const suggestForPage = vi.fn();
+vi.mock('@/lib/actions/content', () => ({
+  generateOpportunitiesOnDemand: vi.fn(),
+  getGenerationJobStatus: vi.fn(),
+}));
+vi.mock('@/lib/content-job', () => ({
+  suggestForPage: (...args: unknown[]) => suggestForPage(...args),
+}));
 // The suggested-prompts dialog (part B2) is tested on its own: here, which
 // page it opens for, and that tracking reads the list again.
 vi.mock('./_page-prompts-dialog', () => ({
@@ -97,6 +105,7 @@ beforeEach(() => {
   getAuditQuota.mockReset().mockResolvedValue({ used: 3, limit: -1, remaining: -1 });
   push.mockReset();
   for (const fn of Object.values(toast)) fn.mockClear();
+  suggestForPage.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -456,5 +465,65 @@ describe('PagesCard actions (AT-006 part B)', () => {
     expect(getTrafficPages).toHaveBeenCalledTimes(1);
     await act(async () => button('tracked').click());
     expect(getTrafficPages).toHaveBeenCalledTimes(2);
+  });
+
+  const suggestFromMenu = async (pagePath: string) => {
+    const trigger = container.querySelector<HTMLElement>(
+      `[aria-label="More actions for ${pagePath}"]`,
+    )!;
+    await act(async () => trigger.click());
+    const item = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (el) => el.textContent === 'Suggest content',
+    )!;
+    await act(async () => item.click());
+  };
+
+  it("suggests content for a row's page and opens it (part B3)", async () => {
+    getTrafficPages.mockResolvedValue(pages([page({ citations: 6 })]));
+    suggestForPage.mockResolvedValue({ kind: 'created', opportunityId: 'o1' });
+    await render();
+    await suggestFromMenu('/gifts');
+
+    expect(suggestForPage).toHaveBeenCalledWith(BRAND, '/gifts', expect.anything());
+    expect(toast.loading).toHaveBeenCalledWith('Writing a content suggestion for /gifts…');
+    expect(toast.success).toHaveBeenCalledWith(
+      'Content suggestion created',
+      expect.objectContaining({ id: 'toast-1' }),
+    );
+    const { action } = toast.success.mock.calls[0][1] as { action: { onClick: () => void } };
+    action.onClick();
+    expect(push).toHaveBeenCalledWith('/dashboard/content?opportunity=o1');
+  });
+
+  it('offers to add prompts when no tracked prompt is about the page', async () => {
+    getTrafficPages.mockResolvedValue(pages([page({ citations: 6 })]));
+    suggestForPage.mockResolvedValue({ kind: 'noMatch' });
+    await render();
+    await suggestFromMenu('/gifts');
+
+    expect(toast.info).toHaveBeenCalledWith(
+      'No tracked prompts are about /gifts yet',
+      expect.objectContaining({
+        description: expect.stringContaining('Add prompts for this page'),
+      }),
+    );
+    const { action } = toast.info.mock.calls[0][1] as { action: { onClick: () => void } };
+    await act(async () => action.onClick());
+    expect(dialog()).toBe('prompts for /gifts');
+  });
+
+  it("says when the month's content suggestions are used up, or one exists", async () => {
+    getTrafficPages.mockResolvedValue(pages([page({ citations: 6 })]));
+    suggestForPage.mockResolvedValue({ kind: 'limited' });
+    await render();
+    await suggestFromMenu('/gifts');
+    expect(toast.error).toHaveBeenCalledWith('Monthly content limit reached.', { id: 'toast-1' });
+
+    suggestForPage.mockResolvedValue({ kind: 'existing', opportunityId: 'o9' });
+    await suggestFromMenu('/gifts');
+    expect(toast.info).toHaveBeenCalledWith(
+      'This page already has a content suggestion',
+      expect.objectContaining({ action: expect.objectContaining({ label: 'Open existing' }) }),
+    );
   });
 });

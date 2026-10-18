@@ -164,6 +164,8 @@ const onDemandSchema = z.object({
   topicId: z.guid().nullish(),
   promptId: z.guid().nullish(),
   idea: z.string().trim().max(IDEA_MAX_LENGTH).nullish(),
+  // One page of the AI Traffic page's Pages section (AT-006 part B3), as a path.
+  pagePath: z.string().min(1).max(2048).startsWith('/').nullish(),
   idempotencyKey: z.string().min(8).max(100),
 });
 
@@ -173,8 +175,10 @@ const IDEMPOTENCY_WINDOW_MS = 10 * 60 * 1000;
 /**
  * POST /api/content/opportunities/generate
  * "+ New" (CONTENT-003): generate opportunities now instead of waiting for
- * the nightly run, optionally around a topic, a prompt or a free-text idea.
- * Body: { brandId, count, topicId?, promptId?, idea?, idempotencyKey }.
+ * the nightly run, optionally around a topic, a prompt or a free-text idea,
+ * or for one page ("Suggest content" on AI Traffic's Pages, AT-006 part B3:
+ * one opportunity, from the clusters about the page).
+ * Body: { brandId, count, topicId?, promptId?, idea?, pagePath?, idempotencyKey }.
  *
  * The count is capped by the plan (Starter 3, Growth 5 per request) and by
  * what is left of the month; the generation claims its quota slots
@@ -188,7 +192,7 @@ router.post('/opportunities/generate', requireFeature('content_optimization'), a
   if (!parsed.success) {
     return res.status(400).json({ error: 'Invalid request', details: parsed.error.issues });
   }
-  const { brandId, count, topicId, promptId, idea, idempotencyKey } = parsed.data;
+  const { brandId, count, topicId, promptId, idea, pagePath, idempotencyKey } = parsed.data;
 
   try {
     const { orgId } = await assertBrandAccess(brandId, req.user.id);
@@ -202,10 +206,12 @@ router.post('/opportunities/generate', requireFeature('content_optimization'), a
     if (allowance.max <= 0) return quotaExhausted(res, allowance);
 
     const request = {
-      count: Math.min(count, allowance.max),
+      // A page gets one opportunity.
+      count: pagePath ? 1 : Math.min(count, allowance.max),
       topicId: topicId ?? null,
       promptId: promptId ?? null,
       idea: idea || null,
+      pagePath: pagePath ?? null,
       idempotencyKey,
     };
     const job = await createJob({

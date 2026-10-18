@@ -23,6 +23,8 @@ export interface OnDemandRequest {
   topicId?: string | null;
   promptId?: string | null;
   idea?: string | null;
+  /** One page of AI Traffic's Pages section (AT-006 part B3), as a path: one opportunity. */
+  pagePath?: string | null;
   /** One per submit, so a double click or a retried request starts one job. */
   idempotencyKey: string;
 }
@@ -71,6 +73,8 @@ export interface GenerationJobStatus {
     opportunityIds?: string[];
     /** A run for one prompt wrote nothing: the open opportunity that answers it. */
     existingId?: string;
+    /** A run for one page found no tracked prompts about it (AT-006 part B3). */
+    noMatch?: boolean;
   } | null;
   failedReason: string | null;
 }

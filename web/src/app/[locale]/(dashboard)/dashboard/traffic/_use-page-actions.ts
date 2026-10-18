@@ -5,6 +5,8 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useRouter } from '@/i18n/navigation';
 import { getAuditQuota, runAuditsBulk, type AuditQuota } from '@/lib/actions/audits';
+import { generateOpportunitiesOnDemand, getGenerationJobStatus } from '@/lib/actions/content';
+import { suggestForPage } from '@/lib/content-job';
 import {
   sendTrafficPagesToActionCenter,
   type TrafficDateWindow,
@@ -14,17 +16,23 @@ import {
 /** The most pages one action, or one bulk audit, takes. */
 export const PAGE_ACTION_MAX = 50;
 
+/** The server calls behind a page's "Suggest content" (part B3). */
+const SUGGEST_CALLS = { start: generateOpportunitiesOnDemand, getStatus: getGenerationJobStatus };
+
 /**
  * The Pages section's actions (AT-006 part B), shared by its rows and its
- * footer: send pages to the Action Center as one action, and audit several
- * pages at once within the month's audits. Each reports how it went in a
- * toast that opens what it made.
+ * footer: send pages to the Action Center as one action, audit several
+ * pages at once within the month's audits, and suggest content for a page
+ * (part B3, one of the month's content suggestions). Each reports how it went
+ * in a toast that opens what it made.
  */
 export function usePageActions(brandId: string, dateWindow: TrafficDateWindow) {
   const t = useTranslations('traffic.pageList.actions');
   const router = useRouter();
   const [sending, setSending] = useState(false);
   const [auditing, setAuditing] = useState(false);
+  // The page whose content suggestion is being written.
+  const [suggesting, setSuggesting] = useState<string | null>(null);
   // The organization's audits this month, for the bulk audit's limit.
   const [quota, setQuota] = useState<AuditQuota | null>(null);
 
@@ -106,7 +114,73 @@ export function usePageActions(brandId: string, dateWindow: TrafficDateWindow) {
     [brandId, loadQuota, router, t],
   );
 
-  return { send, sending, auditMany, auditing, quota };
+  /**
+   * Writes a content suggestion for one page, from the tracked prompts about
+   * it. With none, it offers to add prompts for the page (`onAddPrompts`).
+   */
+  const suggestContent = useCallback(
+    async (page: string, onAddPrompts: (page: string) => void): Promise<void> => {
+      setSuggesting(page);
+      const toastId = toast.loading(t('suggesting', { page }));
+      const openOpportunity = (id: string, label: string) => ({
+        label,
+        onClick: () => router.push(`/dashboard/content?opportunity=${id}`),
+      });
+      try {
+        const outcome = await suggestForPage(brandId, page, SUGGEST_CALLS);
+        switch (outcome.kind) {
+          case 'created':
+            toast.success(t('suggested'), {
+              id: toastId,
+              description: t('suggestedDescription', { page }),
+              duration: 10_000,
+              action: openOpportunity(outcome.opportunityId, t('open')),
+            });
+            break;
+          case 'existing':
+            toast.info(t('suggestionExists'), {
+              id: toastId,
+              duration: 10_000,
+              action: openOpportunity(outcome.opportunityId, t('openExisting')),
+            });
+            break;
+          case 'noMatch':
+            toast.info(t('suggestNoPrompts', { page }), {
+              id: toastId,
+              description: t('suggestNoPromptsDescription'),
+              duration: 10_000,
+              action: { label: t('addPrompts'), onClick: () => onAddPrompts(page) },
+            });
+            break;
+          case 'limited':
+            toast.error(t('suggestLimited'), { id: toastId });
+            break;
+          case 'nothing':
+            toast.info(t('suggestNothing'), {
+              id: toastId,
+              description: t('suggestNothingDescription'),
+            });
+            break;
+          case 'timeout':
+            toast.info(t('suggestTimeout'), {
+              id: toastId,
+              description: t('suggestTimeoutDescription'),
+            });
+            break;
+          default:
+            toast.error(t('suggestFailed'), {
+              id: toastId,
+              description: outcome.message ?? undefined,
+            });
+        }
+      } finally {
+        setSuggesting(null);
+      }
+    },
+    [brandId, router, t],
+  );
+
+  return { send, sending, auditMany, auditing, quota, suggestContent, suggesting };
 }
 
 /**
