@@ -3116,3 +3116,128 @@ export async function createImproveActionFor(
     taskCount: body.taskCount,
   };
 }
+
+
+// ── Read-only competitor and report tools (#918) ────────────────────────────
+
+export interface McpCompetitorRow {
+  id: string;
+  name: string;
+  domain: string;
+}
+
+/**
+ * List a brand's competitors only after confirming the brand belongs to the
+ * authenticated organization. Do not rely on a caller-supplied brand id alone.
+ */
+export async function listCompetitorsFor(
+  auth: McpAuthContext,
+  brandId: string,
+): Promise<McpCompetitorRow[] | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: brand, error: brandError } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('id', brandId)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  if (brandError) throw new Error(brandError.message);
+  if (!brand) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from('competitors')
+    .select('id, name, domain')
+    .eq('brand_id', brandId)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    name: row.name as string,
+    domain: (row.domain as string | null) ?? '',
+  }));
+}
+
+export interface McpReportListItem {
+  id: string;
+  brand_id: string;
+  title: string;
+  template: string;
+  date_from: string;
+  date_to: string;
+  created_at: string;
+}
+
+/**
+ * List saved immutable report snapshots for an organization-owned brand.
+ */
+export async function listReportsFor(
+  auth: McpAuthContext,
+  brandId: string,
+): Promise<McpReportListItem[] | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: brand, error: brandError } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('id', brandId)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  if (brandError) throw new Error(brandError.message);
+  if (!brand) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from('reports')
+    .select('id, brand_id, title, template, date_from, date_to, created_at')
+    .eq('brand_id', brandId)
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    brand_id: row.brand_id as string,
+    title: row.title as string,
+    template: row.template as string,
+    date_from: row.date_from as string,
+    date_to: row.date_to as string,
+    created_at: row.created_at as string,
+  }));
+}
+
+export interface McpReportDetail extends McpReportListItem {
+  payload: unknown;
+}
+
+/**
+ * Read a saved report only if its parent brand belongs to the authenticated
+ * organization. The joined ownership predicate is applied in the database.
+ */
+export async function getReportFor(
+  auth: McpAuthContext,
+  reportId: string,
+): Promise<McpReportDetail | null> {
+  if (!auth.organizationId) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from('reports')
+    .select(
+      'id, brand_id, title, template, date_from, date_to, created_at, payload, brands!inner(organization_id)',
+    )
+    .eq('id', reportId)
+    .eq('brands.organization_id', auth.organizationId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+
+  return {
+    id: data.id as string,
+    brand_id: data.brand_id as string,
+    title: data.title as string,
+    template: data.template as string,
+    date_from: data.date_from as string,
+    date_to: data.date_to as string,
+    created_at: data.created_at as string,
+    payload: data.payload,
+  };
+}
