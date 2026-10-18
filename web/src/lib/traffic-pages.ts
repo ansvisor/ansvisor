@@ -36,3 +36,15 @@ export function citationState(
   if (row.targetingPrompts > 0) return 'targeted_not_cited';
   return 'not_targeted';
 }
+
+/**
+ * A listed page's full URL on the brand's domain, for auditing it. The
+ * domain may be stored with its scheme or a trailing slash.
+ */
+export function pageUrl(domain: string, page: string): string {
+  const host = domain
+    .trim()
+    .replace(/^https?:\/\//i, '')
+    .replace(/\/+$/, '');
+  return `https://${host}${page}`;
+}

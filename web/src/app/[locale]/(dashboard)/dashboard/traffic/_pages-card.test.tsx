@@ -8,23 +8,38 @@ import type { TrafficDateWindow, TrafficPageRow, TrafficPages } from '@/lib/acti
 /**
  * The Pages section (AT-006): three work lists and the full list, each with
  * its count, read for the page's range; a row's next step is an audit or
- * prompts that point to the page.
+ * prompts that point to the page, and its menu sends it to the Action
+ * Center. Under the two lists Action Center works from, the pages shown go
+ * as one action and their cited pages are audited at once, within the
+ * month's audits (part B).
  */
 
 const getTrafficPages = vi.fn();
+const sendTrafficPagesToActionCenter = vi.fn();
 const runAudit = vi.fn();
+const runAuditsBulk = vi.fn();
+const getAuditQuota = vi.fn();
 const push = vi.fn();
+const toast = vi.hoisted(() => ({
+  error: vi.fn(),
+  loading: vi.fn(() => 'toast-1'),
+  success: vi.fn(),
+  info: vi.fn(),
+}));
 vi.mock('@/lib/actions/traffic', () => ({
   getTrafficPages: (...args: unknown[]) => getTrafficPages(...args),
+  sendTrafficPagesToActionCenter: (...args: unknown[]) => sendTrafficPagesToActionCenter(...args),
 }));
 vi.mock('@/lib/actions/audits', () => ({
   runAudit: (...args: unknown[]) => runAudit(...args),
+  runAuditsBulk: (...args: unknown[]) => runAuditsBulk(...args),
+  getAuditQuota: (...args: unknown[]) => getAuditQuota(...args),
 }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, ...props }: { href: string }) => <a href={href} {...props} />,
   useRouter: () => ({ push }),
 }));
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
+vi.mock('sonner', () => ({ toast }));
 
 const { PagesCard } = await import('./_pages-card');
 
@@ -62,8 +77,13 @@ let root: Root;
 
 beforeEach(() => {
   getTrafficPages.mockReset();
+  sendTrafficPagesToActionCenter.mockReset();
   runAudit.mockReset();
+  runAuditsBulk.mockReset();
+  // Unlimited unless a test says otherwise.
+  getAuditQuota.mockReset().mockResolvedValue({ used: 3, limit: -1, remaining: -1 });
   push.mockReset();
+  for (const fn of Object.values(toast)) fn.mockClear();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -232,5 +252,171 @@ describe('PagesCard', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await act(async () => tab('Cited, not clicked').click());
     expect(text()).toContain("The pages couldn't be loaded.");
+  });
+
+  it('audits a page on a domain stored with its scheme', async () => {
+    getTrafficPages.mockResolvedValue(pages([page({ citations: 6 })]));
+    runAudit.mockResolvedValue({ id: 'audit-2' });
+    await render({ domain: 'https://acme-coffee.example.com/' });
+    await act(async () => button('Audit page').click());
+    expect(runAudit).toHaveBeenCalledWith(BRAND, 'https://acme-coffee.example.com/gifts');
+  });
+});
+
+describe('PagesCard actions (AT-006 part B)', () => {
+  it('sends the No AI traffic pages shown as one action', async () => {
+    getTrafficPages.mockResolvedValue(
+      pages([page({ citations: 6 }), page({ page: '/about', valueRank: 2 })]),
+    );
+    sendTrafficPagesToActionCenter.mockResolvedValue({
+      actionId: 'act-1',
+      actionNo: 71,
+      created: true,
+    });
+    await render();
+
+    await act(async () => button('Send to Action Center').click());
+    expect(sendTrafficPagesToActionCenter).toHaveBeenCalledWith(
+      BRAND,
+      WEEK,
+      ['/gifts', '/about'],
+      'no_ai_traffic',
+    );
+    expect(toast.success).toHaveBeenCalledWith(
+      'Sent to the Action Center',
+      expect.objectContaining({ description: 'AC-71 · 2 pages' }),
+    );
+    // Its Open goes to the action.
+    const { action } = toast.success.mock.calls[0][1] as { action: { onClick: () => void } };
+    action.onClick();
+    expect(push).toHaveBeenCalledWith('/dashboard/action-center/actions?action=act-1');
+  });
+
+  it('says when the pages are already in the Action Center, or why they could not go', async () => {
+    getTrafficPages.mockResolvedValue(pages([page()]));
+    sendTrafficPagesToActionCenter.mockResolvedValue({
+      actionId: 'act-1',
+      actionNo: 71,
+      created: false,
+    });
+    await render();
+    await act(async () => button('Send to Action Center').click());
+    expect(toast.info).toHaveBeenCalledWith(
+      'Already in the Action Center',
+      expect.objectContaining({ description: 'AC-71 is open with these pages.' }),
+    );
+
+    sendTrafficPagesToActionCenter.mockResolvedValue({
+      error: 'None of these pages are on the list for this range',
+    });
+    await act(async () => button('Send to Action Center').click());
+    expect(toast.error).toHaveBeenCalledWith("Couldn't send to the Action Center", {
+      id: 'toast-1',
+      description: 'None of these pages are on the list for this range',
+    });
+  });
+
+  it('sends one page from its row menu', async () => {
+    getTrafficPages.mockResolvedValue(pages([page({ citations: 6 })]));
+    sendTrafficPagesToActionCenter.mockResolvedValue({
+      actionId: 'act-2',
+      actionNo: 72,
+      created: true,
+    });
+    await render();
+
+    const trigger = container.querySelector<HTMLElement>('[aria-label="More actions for /gifts"]')!;
+    await act(async () => trigger.click());
+    const item = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (el) => el.textContent === 'Send to Action Center',
+    )!;
+    await act(async () => item.click());
+    expect(sendTrafficPagesToActionCenter).toHaveBeenCalledWith(
+      BRAND,
+      WEEK,
+      ['/gifts'],
+      'no_ai_traffic',
+    );
+  });
+
+  it('audits the cited pages of No AI traffic at once', async () => {
+    getTrafficPages.mockResolvedValue(
+      pages([
+        page({ citations: 6 }),
+        page({ page: '/menu', citations: 2, valueRank: 2 }),
+        page({ page: '/about', valueRank: 3 }),
+      ]),
+    );
+    runAuditsBulk.mockResolvedValue({ started: 2 });
+    await render();
+
+    await act(async () => button('Audit 2 cited pages').click());
+    expect(runAuditsBulk).toHaveBeenCalledWith(BRAND, [
+      'https://acme-coffee.example.com/gifts',
+      'https://acme-coffee.example.com/menu',
+    ]);
+    expect(toast.success).toHaveBeenCalledWith(
+      '2 audits started',
+      expect.objectContaining({ description: expect.stringContaining('Site Audit') }),
+    );
+    // The month's audits are read again after.
+    expect(getAuditQuota).toHaveBeenCalledTimes(2);
+  });
+
+  it('sends and audits Cited, not clicked as its own list', async () => {
+    getTrafficPages.mockResolvedValue(pages([]));
+    await render();
+    getTrafficPages.mockResolvedValue(
+      pages([
+        page({ page: '/guides/espresso', citations: 80, sessions: 0 }),
+        page({ page: '/shop/beans', citations: 22 }),
+      ]),
+    );
+    await act(async () => tab('Cited, not clicked').click());
+    sendTrafficPagesToActionCenter.mockResolvedValue({
+      actionId: 'act-3',
+      actionNo: 73,
+      created: true,
+    });
+    runAuditsBulk.mockResolvedValue({ started: 2 });
+
+    await act(async () => button('Send to Action Center').click());
+    expect(sendTrafficPagesToActionCenter).toHaveBeenCalledWith(
+      BRAND,
+      WEEK,
+      ['/guides/espresso', '/shop/beans'],
+      'cited_not_clicked',
+    );
+    await act(async () => button('Audit 2 pages').click());
+    expect(runAuditsBulk).toHaveBeenCalledWith(BRAND, [
+      'https://acme-coffee.example.com/guides/espresso',
+      'https://acme-coffee.example.com/shop/beans',
+    ]);
+  });
+
+  it("won't start more audits than the month has left", async () => {
+    getAuditQuota.mockResolvedValue({ used: 99, limit: 100, remaining: 1 });
+    getTrafficPages.mockResolvedValue(
+      pages([page({ citations: 6 }), page({ page: '/menu', citations: 2, valueRank: 2 })]),
+    );
+    await render();
+    expect(text()).toContain('2 audits, 1 left this month');
+    expect(button('Audit 2 cited pages').hasAttribute('disabled')).toBe(true);
+
+    getAuditQuota.mockResolvedValue({ used: 100, limit: 100, remaining: 0 });
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    expect(text()).toContain('No audits left this month');
+  });
+
+  it('offers no footer actions on Traffic, no prompt or All pages', async () => {
+    getTrafficPages.mockResolvedValue(pages([page({ aiVisits: 3, citations: 0 })]));
+    await render();
+    await act(async () => tab('Traffic, no prompt').click());
+    expect(button('Send to Action Center')).toBeUndefined();
+    await act(async () => tab('All pages').click());
+    expect(button('Send to Action Center')).toBeUndefined();
+    expect(container.querySelector('[aria-label^="More actions"]')).toBeNull();
   });
 });

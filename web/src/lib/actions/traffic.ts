@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { API_BASE_URL } from '@/config/api';
 import { TRAFFIC_PAGE_SIZE, countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { expandDateToEndOfDay, utcDay } from '@/lib/dates';
 import { isHourlyWindow, listUtcHours, utcHourKey } from '@/lib/traffic-buckets';
@@ -596,6 +597,45 @@ export async function getTrafficPages(
         row.value_rank === null || row.value_rank === undefined ? null : Number(row.value_rank),
     })),
   };
+}
+
+/** A list a page can be sent to the Action Center from (AT-006). */
+export type TrafficPagesReason = 'cited_not_clicked' | 'no_ai_traffic';
+
+/**
+ * "Send to Action Center" on the Pages section (AT-006): pages from the
+ * Cited, not clicked or No AI traffic list as one action. The server reads
+ * the list again over the same range and keeps the pages still on it; the
+ * same pages sent again return the open action.
+ */
+export async function sendTrafficPagesToActionCenter(
+  brandId: string,
+  window: TrafficDateWindow | undefined,
+  pages: string[],
+  reason: TrafficPagesReason,
+): Promise<{ actionId: string; actionNo: number; created: boolean } | { error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'Not authenticated' };
+
+  const { from, to } = resolveTrafficWindow(window);
+  const res = await fetch(`${API_BASE_URL}/api/action-center/pages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ brandId, pages, reason, from, to }),
+  });
+
+  // Returned, not thrown: a thrown error's message is masked in production.
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return { error: body.details || body.error || `Server error: ${res.status}` };
+  }
+  return res.json();
 }
 
 /** Analytics' engagement figures for one group of sessions (AT-005). */

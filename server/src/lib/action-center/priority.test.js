@@ -306,6 +306,47 @@ describe('scorePriority', () => {
     expect(content.score).toBeGreaterThan(0);
   });
 
+  it('scores pages sent from AI Traffic on their list, sessions and value (AT-006)', () => {
+    const sent = (reason, payload = {}) =>
+      scorePriority(
+        {
+          action: action({
+            kind: 'traffic_pages',
+            category: reason === 'cited_not_clicked' ? 'fix' : 'growth',
+            impact: 'medium',
+            created_at: daysAgo(0),
+            payload: {
+              source: 'traffic_pages',
+              reason,
+              targetEntity: 'pages',
+              targetCount: 2,
+              targets: [
+                { id: '/shop/beans', sessions: 240 },
+                { id: '/guides/espresso', sessions: 0 },
+              ],
+              ...payload,
+            },
+          }),
+        },
+        NOW,
+      );
+    const cited = sent('cited_not_clicked');
+    expect(cited.reason).toMatchObject({
+      change: 'gap',
+      subject: { entity: 'pages', count: 2 },
+      // The pages' sessions are its demand.
+      demand: expect.any(String),
+    });
+    expect(cited.reason.factors.severity).toBe(0.55);
+    // Answers already cite it: more certain, and closer to done, than a page AI skips.
+    const skipped = sent('no_ai_traffic');
+    expect(skipped.reason.factors.severity).toBe(0.45);
+    expect(cited.score).toBeGreaterThan(skipped.score);
+    // Pages that make money are worth more.
+    expect(sent('no_ai_traffic', { valueSignal: 'revenue' }).score).toBeGreaterThan(skipped.score);
+    expect(sent('no_ai_traffic', { valueSignal: 'revenue' }).reason.commercial).toBe(true);
+  });
+
   it('stays within 0–100 and returns whole numbers', () => {
     for (const impact of ['high', 'medium', 'low', 'unknown']) {
       const { score } = scorePriority({ action: action({ impact }), signals: [] }, NOW);

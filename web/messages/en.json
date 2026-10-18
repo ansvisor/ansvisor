@@ -1314,6 +1314,7 @@
         },
         "noSignalsTopicOpportunity": "This action was sent from Insights' Opportunities, so it has no detection signals. Its evidence is the topic and suggested prompts on the Overview tab.",
         "noSignalsMentionReview": "This action was sent from Mentions, so it has no detection signals. Its evidence is the answers quoted on the Overview tab.",
+        "noSignalsTrafficPages": "This action was sent from AI Traffic Analytics, so it has no detection signals. Its evidence is the pages and figures on the Overview tab.",
         "topicOpportunity": {
           "source": "Source",
           "sourceValue": "Insights › Opportunities",
@@ -1339,6 +1340,19 @@
             "neutral": "Neutral",
             "negative": "Negative"
           }
+        },
+        "trafficPages": {
+          "source": "Source",
+          "sourceValue": "AI Traffic Analytics › Pages · {list}",
+          "lists": {
+            "cited_not_clicked": "Cited, not clicked",
+            "no_ai_traffic": "No AI traffic"
+          },
+          "openTraffic": "Open AI Traffic",
+          "range": "Range when sent",
+          "rangeAll": "All time",
+          "pages": "Pages when sent",
+          "figures": "{citations, plural, one {# citation} other {# citations}} · {sessions, plural, one {# session} other {# sessions}} · {aiVisits, plural, one {# AI visit} other {# AI visits}}"
         }
       }
     },
@@ -1761,6 +1775,18 @@
         "descriptionCounts": "Sent from Mentions: {count, plural, one {# answer} other {# answers}} naming your brand.",
         "descriptionNegative": "Sent from Mentions: {count, plural, one {# answer} other {# answers}} naming your brand, {negative} of them negative.",
         "goal": "Get AI to describe the brand accurately and favourably in these answers."
+      },
+      "traffic_pages": {
+        "title": "Earn AI visits for {targets}",
+        "titleGeneric": "Earn AI visits for your pages",
+        "citedTitle": "Turn AI answers citing {page} into visits",
+        "citedTitleMany": "Turn AI answers citing {count, plural, one {# page} other {# pages}} into visits",
+        "noAiTitle": "Capture AI traffic for {page}",
+        "noAiTitleMany": "Capture AI traffic for {count, plural, one {# page} other {# pages}}",
+        "description": "Sent from AI Traffic Analytics: pages from the Pages section.",
+        "citedDescription": "Sent from AI Traffic Analytics: AI answers cited {count, plural, one {this page} other {these pages}} {citations, plural, one {# time} other {# times}} in the range, and none sent a visit.",
+        "noAiDescription": "Sent from AI Traffic Analytics: {count, plural, one {a page} other {# pages}} with visitors or in your sitemap that got no AI visit in the range.",
+        "goal": "Earn AI-referred visits to these pages."
       }
     },
     "actionTasks": {
@@ -3370,7 +3396,27 @@
       "failed": "The pages couldn't be loaded.",
       "shown": "{shown, number} of {total, plural, one {# page} other {# pages}}",
       "sameWindow": "same range as the rest of the page",
-      "showMore": "Show more"
+      "showMore": "Show more",
+      "actions": {
+        "menu": "More actions for {page}",
+        "sendToActionCenter": "Send to Action Center",
+        "sending": "Sending to the Action Center…",
+        "sent": "Sent to the Action Center",
+        "sentDescription": "AC-{number} · {count, plural, one {# page} other {# pages}}",
+        "alreadySent": "Already in the Action Center",
+        "alreadySentDescription": "AC-{number} is open with these pages.",
+        "open": "Open",
+        "sendFailed": "Couldn't send to the Action Center",
+        "auditCited": "Audit {count, plural, one {# cited page} other {# cited pages}}",
+        "auditPages": "Audit {count, plural, one {# page} other {# pages}}",
+        "auditing": "Starting the audits…",
+        "auditsStarted": "{count, plural, one {# audit started} other {# audits started}}",
+        "auditsStartedDescription": "They run a few at a time; results appear in Site Audit.",
+        "openAudit": "Open Site Audit",
+        "auditsFailed": "Couldn't start the audits",
+        "noneLeft": "No audits left this month",
+        "overQuota": "{count, plural, one {# audit} other {# audits}}, {remaining} left this month"
+      }
     }
   },
   "prompts": {

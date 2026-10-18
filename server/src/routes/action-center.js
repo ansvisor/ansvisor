@@ -15,6 +15,11 @@ import {
   isTaskWriterEnabled,
   writeTasksForAction,
 } from '../lib/action-center/task-writer/index.js';
+import {
+  MAX_TRAFFIC_PAGES,
+  TRAFFIC_PAGE_REASONS,
+  sendTrafficPagesToActionCenter,
+} from '../lib/action-center/from-traffic-pages.js';
 
 const router = Router();
 
@@ -212,6 +217,54 @@ router.post('/tasks/:id/send', async (req, res) => {
     return res.status(status || 500).json({
       error: status ? error.message : 'Failed to send the task.',
       code: error instanceof TaskSendError ? error.code : null,
+    });
+  }
+});
+
+const trafficPagesSchema = z.object({
+  // guid, not uuid: seeded ids aren't RFC 4122 versions.
+  brandId: z.guid(),
+  // Paths, as the Pages section lists them.
+  pages: z.array(z.string().min(1).max(2048).startsWith('/')).min(1).max(MAX_TRAFFIC_PAGES),
+  reason: z.enum(TRAFFIC_PAGE_REASONS),
+  // The page's range, as its loaders take it: a timestamp, or a day from a
+  // custom range; absent for all time.
+  from: z.union([z.iso.datetime({ offset: true }), z.iso.date()]).optional(),
+  to: z.union([z.iso.datetime({ offset: true }), z.iso.date()]).optional(),
+});
+
+/**
+ * POST /api/action-center/pages
+ * Body: { brandId, pages, reason, from?, to? }
+ *
+ * "Send to Action Center" on the AI Traffic page's Pages section (AT-006):
+ * pages from the Cited, not clicked or No AI traffic list as one action.
+ * Sending the same pages from the same list again returns the action
+ * already open.
+ */
+router.post('/pages', async (req, res) => {
+  try {
+    const parsed = trafficPagesSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
+    }
+    const { brandId, pages, reason, from, to } = parsed.data;
+    await assertBrandAccess(brandId, req.user.id);
+
+    const result = await sendTrafficPagesToActionCenter(brandId, {
+      pages,
+      reason,
+      from,
+      to,
+      userId: req.user.id,
+    });
+    return res.status(result.created ? 201 : 200).json(result);
+  } catch (error) {
+    const status = error.status || 500;
+    req.log.error({ err: error }, 'traffic pages action error');
+    return res.status(status).json({
+      error: 'Failed to send to the Action Center',
+      details: error.message,
     });
   }
 });

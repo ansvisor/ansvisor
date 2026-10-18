@@ -129,6 +129,26 @@ export function actionTexts(
           : t(`${action.kind}.descriptionCounts`, { count: p.mentionCount }),
     };
   }
+  // Pages sent from AI Traffic (AT-006) name their list and the page, or how many.
+  if (
+    action.kind === 'traffic_pages' &&
+    (p.reason === 'cited_not_clicked' || p.reason === 'no_ai_traffic') &&
+    typeof p.pageCount === 'number' &&
+    Array.isArray(p.targets)
+  ) {
+    const list = p.reason === 'cited_not_clicked' ? 'cited' : 'noAi';
+    const first = (p.targets[0] as { label?: unknown } | undefined)?.label;
+    return {
+      title:
+        p.pageCount === 1 && typeof first === 'string' && first
+          ? t(`${action.kind}.${list}Title`, { page: first })
+          : t(`${action.kind}.${list}TitleMany`, { count: p.pageCount }),
+      description: t(`${action.kind}.${list}Description`, {
+        count: p.pageCount,
+        citations: typeof p.citations === 'number' ? p.citations : 0,
+      }),
+    };
+  }
   const targets = targetLabel(p, t);
   return {
     title: targets ? t(`${action.kind}.title`, { targets }) : t(`${action.kind}.titleGeneric`),
@@ -204,6 +224,7 @@ const PERSON_SENT_KINDS: string[] = [
   'topic_competitor_gap',
   'topic_opportunity',
   'mention_review',
+  'traffic_pages',
 ];
 
 /** Compact evidence chips under the title: signal count plus the kind's own

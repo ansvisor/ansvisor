@@ -3,10 +3,16 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { FileSearch, Loader2 } from 'lucide-react';
+import { FileSearch, Loader2, MoreHorizontal, Send } from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -22,15 +28,17 @@ import {
 import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
 import { getPlatformName } from '@/lib/traffic-platforms';
-import { citationState, pageStatuses } from '@/lib/traffic-pages';
+import { citationState, pageStatuses, pageUrl } from '@/lib/traffic-pages';
 import {
   getTrafficPages,
   type TrafficDateWindow,
   type TrafficPageRow,
   type TrafficPages,
+  type TrafficPagesReason,
   type TrafficPagesTab,
 } from '@/lib/actions/traffic';
 import { runAudit } from '@/lib/actions/audits';
+import { PAGE_ACTION_MAX, auditBlock, usePageActions } from './_use-page-actions';
 
 /**
  * Pages: which answers send visitors (AT-006, spec §3.5, "the
@@ -46,8 +54,9 @@ import { runAudit } from '@/lib/actions/audits';
  *     prompt's answer covers.
  *
  * A row's action is the next step for it: audit the page, or track prompts
- * that point to it. Sending pages to Action Center and suggested prompts
- * come with AT-006 part B.
+ * that point to it; its menu sends it to the Action Center. Under the two
+ * lists Action Center works from, the pages shown go as one action, and
+ * their cited pages can be audited at once (AT-006 part B).
  */
 
 const TABS: TrafficPagesTab[] = ['noAiTraffic', 'citedNotClicked', 'trafficNoPrompt', 'all'];
@@ -108,6 +117,7 @@ export function PagesCard({
   const [tab, setTab] = useState<TrafficPagesTab>('noAiTraffic');
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [auditing, setAuditing] = useState<string | null>(null);
+  const pageActions = usePageActions(brandId, dateWindow);
 
   const key = `${brandId}|${dateWindow.dateFrom ?? ''}|${dateWindow.dateTo ?? ''}|${tab}|${limit}`;
   // The loaded result carries the request it answers, as the KPI cards do:
@@ -153,7 +163,7 @@ export function PagesCard({
     setAuditing(page);
     try {
       // A running audit opens on its own page, which follows it to the end.
-      const started = await runAudit(brandId, `https://${domain}${page}`);
+      const started = await runAudit(brandId, pageUrl(domain, page));
       router.push(`/dashboard/audit/${started.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('auditFailed'));
@@ -189,6 +199,48 @@ export function PagesCard({
 
   const platforms = (row: TrafficPageRow) =>
     row.aiPlatforms.length ? row.aiPlatforms.map(getPlatformName).join(', ') : '—';
+
+  /** A row's next step, with its menu: send the page to the Action Center. */
+  const rowActions = (row: TrafficPageRow, next: ReactNode, reason: TrafficPagesReason) => (
+    <div className="flex items-center justify-end gap-1">
+      {next}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          aria-label={t('actions.menu', { page: row.page })}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuItem
+            className="gap-2"
+            disabled={pageActions.sending}
+            onClick={() => void pageActions.send([row.page], reason)}
+          >
+            <Send className="h-3.5 w-3.5" />
+            {t('actions.sendToActionCenter')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+
+  // The footer's actions, under the lists Action Center works from: the
+  // pages shown as one action, and their cited pages audited at once.
+  const listReason: TrafficPagesReason | null =
+    tab === 'noAiTraffic'
+      ? 'no_ai_traffic'
+      : tab === 'citedNotClicked'
+        ? 'cited_not_clicked'
+        : null;
+  const auditUrls =
+    domain && listReason
+      ? rows
+          .filter((row) => tab === 'citedNotClicked' || citationState(row) === 'cited')
+          .slice(0, PAGE_ACTION_MAX)
+          .map((row) => pageUrl(domain, row.page))
+      : [];
+  const block = auditBlock(pageActions.quota, auditUrls.length);
 
   return (
     <Card aria-busy={stale} className={cn('transition-opacity', stale && 'opacity-60')}>
@@ -334,7 +386,9 @@ export function PagesCard({
                       <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
                         {row.valueRank === null ? '—' : `#${row.valueRank}`}
                       </TableCell>
-                      <TableCell className="pr-6 text-right">{reasonAction(row)}</TableCell>
+                      <TableCell className="pr-6 text-right">
+                        {rowActions(row, reasonAction(row), 'no_ai_traffic')}
+                      </TableCell>
                     </>
                   )}
                   {tab === 'citedNotClicked' && (
@@ -346,7 +400,9 @@ export function PagesCard({
                         {num(row.targetingPrompts)}
                       </TableCell>
                       <TableCell className="text-right text-sm">{num(row.sessions)}</TableCell>
-                      <TableCell className="pr-6 text-right">{auditButton(row.page)}</TableCell>
+                      <TableCell className="pr-6 text-right">
+                        {rowActions(row, auditButton(row.page), 'cited_not_clicked')}
+                      </TableCell>
                     </>
                   )}
                   {tab === 'trafficNoPrompt' && (
@@ -394,18 +450,63 @@ export function PagesCard({
 
         {!loading && result && (
           <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-3 text-xs text-muted-foreground">
-            <span>
-              {t('shown', { shown: rows.length, total })} · {t('sameWindow')}
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span>
+                {t('shown', { shown: rows.length, total })} · {t('sameWindow')}
+              </span>
+              {rows.length < total && (
+                <button
+                  type="button"
+                  disabled={stale}
+                  onClick={() => setLimit((n) => n + PAGE_SIZE)}
+                  className="font-medium text-foreground underline-offset-4 hover:underline disabled:opacity-50"
+                >
+                  {t('showMore')}
+                </button>
+              )}
             </span>
-            {rows.length < total && (
-              <button
-                type="button"
-                disabled={stale}
-                onClick={() => setLimit((n) => n + PAGE_SIZE)}
-                className="font-medium text-foreground underline-offset-4 hover:underline disabled:opacity-50"
-              >
-                {t('showMore')}
-              </button>
+            {listReason && rows.length > 0 && (
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {auditUrls.length > 0 && block && (
+                  <span>
+                    {block.reason === 'noneLeft'
+                      ? t('actions.noneLeft')
+                      : t('actions.overQuota', {
+                          count: auditUrls.length,
+                          remaining: block.remaining,
+                        })}
+                  </span>
+                )}
+                {auditUrls.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1.5 text-xs"
+                    disabled={stale || pageActions.auditing || block !== null}
+                    onClick={() => void pageActions.auditMany(auditUrls)}
+                  >
+                    {pageActions.auditing && <Loader2 className="h-3 w-3 animate-spin" />}
+                    {tab === 'noAiTraffic'
+                      ? t('actions.auditCited', { count: auditUrls.length })
+                      : t('actions.auditPages', { count: auditUrls.length })}
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1.5 text-xs"
+                  disabled={stale || pageActions.sending}
+                  onClick={() =>
+                    void pageActions.send(
+                      rows.map((row) => row.page),
+                      listReason,
+                    )
+                  }
+                >
+                  {pageActions.sending && <Loader2 className="h-3 w-3 animate-spin" />}
+                  {t('actions.sendToActionCenter')}
+                </Button>
+              </div>
             )}
           </div>
         )}

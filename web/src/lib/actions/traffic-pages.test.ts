@@ -7,11 +7,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const rpc = vi.fn();
+let session: { access_token: string } | null = { access_token: 'tok' };
 vi.mock('@/lib/supabase/server', () => ({
-  createClient: async () => ({ rpc }),
+  createClient: async () => ({
+    rpc,
+    auth: { getSession: async () => ({ data: { session } }) },
+  }),
 }));
+vi.mock('@/config/api', () => ({ API_BASE_URL: 'http://api.test' }));
 
-import { getTrafficPages } from './traffic';
+import { getTrafficPages, sendTrafficPagesToActionCenter } from './traffic';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -21,6 +26,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
+  session = { access_token: 'tok' };
 });
 
 describe('getTrafficPages', () => {
@@ -130,5 +137,59 @@ describe('getTrafficPages', () => {
   it('fails loudly when the read fails', async () => {
     rpc.mockResolvedValue({ data: null, error: { message: 'unknown tab' } });
     await expect(getTrafficPages('b1', undefined, { tab: 'all' })).rejects.toThrow('unknown tab');
+  });
+});
+
+describe('sendTrafficPagesToActionCenter (part B)', () => {
+  it('posts the pages, their list and the page range for the signed-in member', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ actionId: 'a1', actionNo: 71, created: true }), {
+          status: 201,
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await sendTrafficPagesToActionCenter(
+      'b1',
+      { dateFrom: '2026-10-11T12:30:00.000Z' },
+      ['/gifts', '/menu'],
+      'no_ai_traffic',
+    );
+    expect(result).toEqual({ actionId: 'a1', actionNo: 71, created: true });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('http://api.test/api/action-center/pages');
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer tok' });
+    expect(JSON.parse(init.body as string)).toEqual({
+      brandId: 'b1',
+      pages: ['/gifts', '/menu'],
+      reason: 'no_ai_traffic',
+      from: '2026-10-11T12:30:00.000Z',
+      to: '2026-10-18T12:30:00.000Z',
+    });
+  });
+
+  it("returns the server's reason rather than throwing it", async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              error: 'Failed to send to the Action Center',
+              details: 'None of these pages are on the list for this range',
+            }),
+            { status: 404 },
+          ),
+      ),
+    );
+    expect(
+      await sendTrafficPagesToActionCenter('b1', undefined, ['/menu'], 'cited_not_clicked'),
+    ).toEqual({ error: 'None of these pages are on the list for this range' });
+
+    session = null;
+    expect(
+      await sendTrafficPagesToActionCenter('b1', undefined, ['/menu'], 'cited_not_clicked'),
+    ).toEqual({ error: 'Not authenticated' });
   });
 });

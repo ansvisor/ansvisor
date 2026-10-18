@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CITED_NOT_CLICKED_MIN, citationState, pageStatuses } from './traffic-pages';
+import { CITED_NOT_CLICKED_MIN, citationState, pageStatuses, pageUrl } from './traffic-pages';
 
 /** The Pages section's lists, as 00178 sorts pages into them (AT-006). */
 
@@ -39,5 +39,13 @@ describe('citationState', () => {
     expect(citationState({ citations: 2, targetingPrompts: 1 })).toBe('cited');
     expect(citationState({ citations: 0, targetingPrompts: 1 })).toBe('targeted_not_cited');
     expect(citationState({ citations: 0, targetingPrompts: 0 })).toBe('not_targeted');
+  });
+});
+
+describe('pageUrl', () => {
+  it("builds a page's URL on the brand's domain, however the domain is stored", () => {
+    expect(pageUrl('acme.example', '/gifts')).toBe('https://acme.example/gifts');
+    expect(pageUrl('https://www.acme.example/', '/gifts')).toBe('https://www.acme.example/gifts');
+    expect(pageUrl(' http://acme.example ', '/')).toBe('https://acme.example/');
   });
 });

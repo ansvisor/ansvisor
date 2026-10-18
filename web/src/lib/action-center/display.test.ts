@@ -53,8 +53,50 @@ describe('actionTexts', () => {
     expect(() => actionGoal(kind, t)).not.toThrow();
   });
 
-  it('holds copy for all sixty-two definitions and the five person-sent kinds', () => {
-    expect(ACTION_KINDS).toHaveLength(67);
+  it('holds copy for all sixty-two definitions and the six person-sent kinds', () => {
+    expect(ACTION_KINDS).toHaveLength(68);
+  });
+
+  it('names pages sent from AI Traffic after their list and page, or how many (AT-006)', () => {
+    const cited = {
+      reason: 'cited_not_clicked',
+      pageCount: 1,
+      citations: 80,
+      targetEntity: 'pages',
+      targetCount: 1,
+      targets: [{ id: '/guides/espresso', label: '/guides/espresso' }],
+    };
+    const texts = actionTexts(action({ kind: 'traffic_pages', payload: cited }), t);
+    expect(texts.title).toBe('Turn AI answers citing /guides/espresso into visits');
+    // Plurals read as their `other` branch here (see `t` above).
+    expect(texts.description).toBe(
+      'Sent from AI Traffic Analytics: AI answers cited these pages 80 times in the range, and none sent a visit.',
+    );
+    const skipped = {
+      reason: 'no_ai_traffic',
+      pageCount: 10,
+      citations: 6,
+      targetEntity: 'pages',
+      targetCount: 10,
+      targets: [{ id: '/gifts', label: '/gifts' }],
+    };
+    const many = actionTexts(action({ kind: 'traffic_pages', payload: skipped }), t);
+    expect(many.title).toBe('Capture AI traffic for 10 pages');
+    expect(many.description).toBe(
+      'Sent from AI Traffic Analytics: 10 pages with visitors or in your sitemap that got no AI visit in the range.',
+    );
+    // An action without the list it came from still reads, from its targets.
+    expect(
+      actionTexts(
+        action({ kind: 'traffic_pages', payload: { targetEntity: 'pages', targetCount: 2 } }),
+        t,
+      ).title,
+    ).toBe('Earn AI visits for 2 pages');
+    const tags = actionContextTags(
+      action({ kind: 'traffic_pages', payload: skipped, signalCount: 0 }),
+      (key: string) => key,
+    );
+    expect(tags).not.toContain('tags.signals');
   });
 
   it('names answers sent from Mentions after their prompt, or how many (MS-08)', () => {

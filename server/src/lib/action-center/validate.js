@@ -239,13 +239,15 @@ export async function validateAction(action, { now = new Date() } = {}) {
   // and pages; the brand-wide numbers would bury a single piece of content.
   // An Improve action (PROMPT-004) likewise, on its one prompt, and a topic
   // gap (VIS-010) or opportunity (VIS-011) sent from Insights on the topic's
-  // prompts, and answers sent from Mentions (MS-08) on their prompts.
+  // prompts, answers sent from Mentions (MS-08) on their prompts, and pages
+  // sent from AI Traffic (AT-006) on those pages.
   if (
     action.kind === 'content_opportunity' ||
     action.kind === 'prompt_improve' ||
     action.kind === 'topic_competitor_gap' ||
     action.kind === 'topic_opportunity' ||
-    action.kind === 'mention_review'
+    action.kind === 'mention_review' ||
+    action.kind === 'traffic_pages'
   ) {
     const scope = await basketScope(action);
     const [before, after] = await Promise.all([

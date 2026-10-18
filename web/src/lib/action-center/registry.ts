@@ -110,7 +110,9 @@ export type ActionKind =
   // Sent by a person from an Insights Opportunities topic (VIS-011).
   | 'topic_opportunity'
   // Sent by a person from answers on the Mentions tab (MS-08).
-  | 'mention_review';
+  | 'mention_review'
+  // Sent by a person from AI Traffic's Pages section (AT-006).
+  | 'traffic_pages';
 
 export type TaskStatus =
   | 'todo'
@@ -245,6 +247,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'topic_competitor_gap',
   'topic_opportunity',
   'mention_review',
+  'traffic_pages',
 ];
 
 /**

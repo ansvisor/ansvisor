@@ -249,6 +249,12 @@ function demandAndValue(payloads, signals, prompts) {
     if (typeof p?.valueSignal === 'string' && PAGE_VALUE[p.valueSignal]) {
       pageValue = Math.max(pageValue ?? 0, PAGE_VALUE[p.valueSignal]);
     }
+    // Pages sent from AI Traffic (AT-006) carry their sessions over the range.
+    if (p?.source === 'traffic_pages') {
+      for (const t of targetsOf(p)) {
+        if (Number.isFinite(t.sessions) && t.sessions > 0) pageSessions.push(t.sessions);
+      }
+    }
   }
   for (const s of signals) {
     // Sessions only from the AI-traffic kinds: other page targets carry
@@ -343,6 +349,19 @@ function sentByHand(action) {
       confidence: 0.6,
       recoverability: 0.5,
       subject: { entity: p.targetEntity ?? 'prompts', count: p.targetCount ?? null },
+    };
+  }
+  // Pages sent from AI Traffic (AT-006). Answers citing a page nobody clicks
+  // rest on two sources, citations and traffic, and the page already earns
+  // the answer; a page AI skips rests on traffic alone.
+  if (action.kind === 'traffic_pages') {
+    const cited = p.reason === 'cited_not_clicked';
+    return {
+      change: 'gap',
+      severity: cited ? 0.55 : 0.45,
+      confidence: cited ? 0.6 : 0.45,
+      recoverability: cited ? 0.7 : 0.5,
+      subject: { entity: 'pages', count: p.targetCount ?? null },
     };
   }
   return null;
