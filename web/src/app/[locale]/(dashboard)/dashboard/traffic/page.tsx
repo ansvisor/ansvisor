@@ -5,7 +5,6 @@ import { getPlatformFilterItems } from './_charts';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getPublicApiBaseUrl } from '@/config/api';
 const ReferralTrendChart = dynamic(() => import('./_charts').then((m) => m.ReferralTrendChart), {
   ssr: false,
   loading: () => <Skeleton className="h-64 w-full" />,
@@ -22,9 +21,11 @@ import { useTranslations } from 'next-intl';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
 import {
+  getTrafficSources,
   getTrafficSummary,
   getTrafficTrend,
   getTrafficLogs,
+  type TrafficSources,
   type TrafficSummary,
   type TrafficTrendPoint,
   type TrafficLog,
@@ -36,6 +37,10 @@ import {
   type DateRangePreset,
 } from '@/components/filters/date-range-filter';
 import { PageOpportunitiesCard } from './_opportunities-card';
+import { SourcesStrip } from './_sources-strip';
+import { SnippetBanner, SnippetDialog } from './_snippet-code';
+import { snippetDetected } from '@/lib/traffic-sources';
+import { useUserRole } from '@/hooks/use-user-role';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -52,9 +57,6 @@ import {
   TrendingDown,
   Users,
   LayoutList,
-  Code,
-  Copy,
-  Check,
   Search,
   X,
   Loader2,
@@ -153,56 +155,6 @@ function DeltaBadge({ current, previous }: { current: number; previous: number }
       {pos ? '+' : ''}
       {delta}%
     </span>
-  );
-}
-
-function SnippetBanner({ trackingCode }: { trackingCode?: string }) {
-  const t = useTranslations('traffic');
-  const [copied, setCopied] = useState(false);
-  const apiUrl = getPublicApiBaseUrl();
-  const snippet = `<script src="${apiUrl}/t.js" data-t="${trackingCode || 'YOUR_TRACKING_CODE'}" defer></script>`;
-
-  if (!trackingCode || !apiUrl) return null;
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(snippet);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <Card className="border-blue-500/20 bg-blue-500/5">
-      <CardContent className="py-3 px-4 flex items-start gap-3">
-        <Code className="h-4 w-4 mt-0.5 shrink-0 text-blue-500" />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium">{t('snippetTitle')}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {t.rich('snippetDescription', {
-              tag: '</head>',
-              code: (chunks) => <code className="text-[11px]">{chunks}</code>,
-            })}
-          </p>
-          <div className="mt-2 relative">
-            <pre className="text-[11px] bg-muted/50 rounded-md px-3 py-2 overflow-x-auto font-mono">
-              {snippet}
-            </pre>
-          </div>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="shrink-0 h-8 w-8"
-          onClick={handleCopy}
-          aria-label={t('copySnippet')}
-        >
-          {copied ? (
-            <Check className="h-3.5 w-3.5 text-green-500" />
-          ) : (
-            <Copy className="h-3.5 w-3.5" />
-          )}
-        </Button>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -476,6 +428,26 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  // What feeds the page (AT-001); null while it loads.
+  const [sources, setSources] = useState<TrafficSources | null>(null);
+  // A failed read hides the strip and leaves the snippet code open, as before it.
+  const [sourcesFailed, setSourcesFailed] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);
+  const { canManage } = useUserRole();
+
+  const loadSources = useCallback(async () => {
+    try {
+      setSources(await getTrafficSources(brand.id));
+      setSourcesFailed(false);
+    } catch (err) {
+      console.error('Failed to load traffic sources:', err);
+      setSourcesFailed(true);
+    }
+  }, [brand.id]);
+
+  useEffect(() => {
+    void loadSources();
+  }, [loadSources]);
 
   const [filters, setFilters] = useState<TrafficFilters>({ platform: '', search: '' });
   const [searchInput, setSearchInput] = useState(filters.search);
@@ -669,8 +641,21 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
         </div>
       </div>
 
-      {/* Snippet Banner */}
-      <SnippetBanner trackingCode={brand.trackingCode} />
+      {!sourcesFailed && (
+        <SourcesStrip
+          sources={sources}
+          domain={primaryDomain}
+          hasTrackingCode={Boolean(brand.trackingCode)}
+          canConnect={canManage}
+          onShowCode={() => setCodeOpen(true)}
+          onConnected={() => void loadSources()}
+        />
+      )}
+      {/* The code stays open only while the snippet sends nothing (F3). */}
+      {(sourcesFailed || (sources && !snippetDetected(sources.snippetLastVisitAt))) && (
+        <SnippetBanner trackingCode={brand.trackingCode} />
+      )}
+      <SnippetDialog trackingCode={brand.trackingCode} open={codeOpen} onOpenChange={setCodeOpen} />
 
       {trulyEmpty ? (
         <Card>

@@ -27,7 +27,6 @@ import { BarChart3, Loader2, Search, Unplug } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
   getIntegrationStatus,
-  connectIntegration,
   disconnectIntegration,
   getGscProperties,
   getGscBrandMappings,
@@ -39,6 +38,7 @@ import {
   type IntegrationStatus,
 } from '@/lib/actions/integrations';
 import { matchProperty } from '@/lib/property-match';
+import { useIntegrationConnect } from '@/hooks/use-integration-connect';
 
 /**
  * Settings → Integrations (#577, Google Analytics added in #658).
@@ -102,9 +102,12 @@ function IntegrationCard({
 }) {
   const t = useTranslations('settings');
   const [status, setStatus] = useState<IntegrationStatus | null>(null);
-  const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
-  const pollGen = useRef(0);
+  const { connecting, connect: handleConnect } = useIntegrationConnect(provider, {
+    label,
+    callbackUrl: () => `${window.location.origin}/dashboard/settings?tab=integrations`,
+    onStatus: setStatus,
+  });
 
   const load = useCallback(async () => {
     try {
@@ -119,63 +122,7 @@ function IntegrationCard({
 
   useEffect(() => {
     load();
-    // Stop any in-flight poll when the card unmounts.
-    const gen = pollGen.current;
-    return () => {
-      if (pollGen.current === gen) pollGen.current++;
-    };
   }, [load]);
-
-  const handleConnect = async () => {
-    setConnecting(true);
-    const gen = ++pollGen.current;
-    try {
-      const callbackUrl = `${window.location.origin}/dashboard/settings?tab=integrations`;
-      const { redirectUrl } = await connectIntegration(provider, callbackUrl);
-
-      const popup = window.open(redirectUrl, `${provider}-oauth`, 'width=560,height=720');
-      if (!popup) {
-        // Popup blocked — same-tab fallback; status resolves on return.
-        window.location.href = redirectUrl;
-        return;
-      }
-
-      // Poll until Composio reports the account ACTIVE (or ~2 min pass).
-      const deadline = Date.now() + 120_000;
-      while (Date.now() < deadline && pollGen.current === gen) {
-        await new Promise((r) => setTimeout(r, 3000));
-        if (pollGen.current !== gen) return;
-        try {
-          const result = await getIntegrationStatus(provider);
-          if (result.status === 'connected') {
-            setStatus('connected');
-            toast.success(`${label} connected`);
-            popup.close();
-            return;
-          }
-        } catch {
-          // transient — keep polling until the deadline
-        }
-        if (popup.closed) {
-          // User closed the window — one final check, then give up quietly.
-          const result = await getIntegrationStatus(provider).catch(() => null);
-          if (pollGen.current !== gen) return;
-          setStatus(result?.status ?? 'not_connected');
-          if (result?.status === 'connected') {
-            toast.success(`${label} connected`);
-          }
-          return;
-        }
-      }
-      if (pollGen.current === gen) {
-        toast.error('Connection timed out — try again.');
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to start connection');
-    } finally {
-      if (pollGen.current === gen) setConnecting(false);
-    }
-  };
 
   const handleDisconnect = async () => {
     setDisconnecting(true);

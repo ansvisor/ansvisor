@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { expandDateToEndOfDay } from '@/lib/dates';
+import { getSuggestionSourceStates, type SourceState } from '@/lib/actions/integrations';
 
 export interface TrafficDateWindow {
   dateFrom?: string;
@@ -31,6 +32,39 @@ export interface TrafficSummary {
 export interface TrafficTrendPoint {
   date: string;
   [platform: string]: string | number;
+}
+
+/** What feeds the page, for the data sources strip (AT-001). */
+export interface TrafficSources {
+  /** The snippet's newest visit, or null when it has never sent one. */
+  snippetLastVisitAt: string | null;
+  ga: SourceState;
+  gsc: SourceState;
+}
+
+/**
+ * The tracking snippet, Google Analytics and Google Search Console as the
+ * strip shows them, in one call: the snippet's last visit beside each
+ * Google source's connection, the brand's property and its last sync.
+ */
+export async function getTrafficSources(brandId: string): Promise<TrafficSources> {
+  const supabase = await createClient();
+  const [states, lastVisit] = await Promise.all([
+    getSuggestionSourceStates(brandId),
+    supabase
+      .from('ai_traffic_logs')
+      .select('created_at')
+      .eq('brand_id', brandId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  if (lastVisit.error) throw new Error(lastVisit.error.message);
+  return {
+    snippetLastVisitAt: (lastVisit.data?.created_at as string | undefined) ?? null,
+    ga: states.ga,
+    gsc: states.gsc,
+  };
 }
 
 function mapLogRow(row: Record<string, unknown>): TrafficLog {

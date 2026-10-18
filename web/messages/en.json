@@ -3072,7 +3072,31 @@
     "snippetTitle": "Add this snippet to your website",
     "snippetDescription": "Paste this before the closing <code>{tag}</code> tag to track AI-referred visits.",
     "copySnippet": "Copy tracking script",
-    "exportError": "Failed to export CSV"
+    "exportError": "Failed to export CSV",
+    "sources": {
+      "label": "Data sources",
+      "snippet": "Tracking snippet",
+      "snippetActive": "Active · last visit {when}",
+      "snippetNotDetected": "Not detected",
+      "code": "Code",
+      "install": "Install",
+      "ga": "Google Analytics",
+      "gsc": "Google Search Console",
+      "bots": "AI bots",
+      "property": "{host} ({source})",
+      "synced": "{property} · synced {when}",
+      "syncingGa": "Syncing · first data in ~15 min",
+      "syncingGsc": "Syncing · first data in up to 48 h",
+      "notConnectedGa": "Not connected · see which AI visits convert",
+      "notConnectedGsc": "Not connected · see if AI is taking Google clicks",
+      "unmapped": "Connected · choose a property for this brand",
+      "notConfigured": "Not set up on this server",
+      "botsSoon": "Cloudflare / Vercel · coming soon",
+      "connect": "Connect",
+      "connecting": "Connecting…",
+      "manage": "Manage",
+      "connectNotAllowed": "Only admins and managers can connect a source."
+    }
   },
   "prompts": {
     "positions": {
