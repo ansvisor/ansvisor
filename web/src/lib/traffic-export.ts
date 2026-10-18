@@ -10,6 +10,7 @@
 
 import type { Sheet } from 'write-excel-file/node';
 import type {
+  TrafficConversions,
   TrafficLog,
   TrafficPages,
   TrafficSources,
@@ -19,6 +20,7 @@ import type {
 import { csvLine } from '@/lib/csv';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import { pageStatuses } from '@/lib/traffic-pages';
+import { conversionRate } from '@/lib/traffic-conversions';
 import { visitChange } from '@/lib/traffic-change';
 import {
   googleSourceStatus,
@@ -32,6 +34,8 @@ export const TRAFFIC_EXPORT_SECTIONS = [
   'trend',
   'platforms',
   'pages',
+  'convertingPages',
+  'buyerAnswers',
   'pageStatus',
   'visits',
 ] as const;
@@ -39,7 +43,14 @@ export const TRAFFIC_EXPORT_SECTIONS = [
 export type TrafficExportSection = (typeof TRAFFIC_EXPORT_SECTIONS)[number];
 
 /** The tables that carry their own Excel / CSV buttons, as in the mockup. */
-export const TRAFFIC_TABLE_SECTIONS = ['platforms', 'pages', 'pageStatus', 'visits'] as const;
+export const TRAFFIC_TABLE_SECTIONS = [
+  'platforms',
+  'pages',
+  'convertingPages',
+  'buyerAnswers',
+  'pageStatus',
+  'visits',
+] as const;
 
 /** Beyond this many visits an export would take too long to build on request. */
 export const TRAFFIC_EXPORT_MAX_ROWS = 100_000;
@@ -62,6 +73,8 @@ export interface TrafficExportData {
   visits?: TrafficLog[];
   /** Every page of the Pages section, with the lists it is on (AT-006). */
   pageStatus?: TrafficPages | null;
+  /** Where AI visitors convert, every row (AT-014). */
+  conversions?: TrafficConversions | null;
   sources?: TrafficSources | null;
 }
 
@@ -229,6 +242,89 @@ function pageStatus(data: TrafficExportData, label: ExportLabel): ExportTable {
   };
 }
 
+/** A row's rate as a number, or why the page shows none (§5.4). */
+function rateCells(
+  figures: { aiVisits: number; keyEvents: number; keyEventSessions: number },
+  label: ExportLabel,
+): { pct: number | null; note: string | null } {
+  const rate = conversionRate(figures);
+  if (rate.kind === 'rate') return { pct: rate.pct, note: null };
+  return { pct: null, note: rate.kind === 'low' ? label('notes.conversionLowSample') : null };
+}
+
+/**
+ * Where AI visitors convert (AT-014): its two tables, every row, with a row
+ * saying when a thin range read the last 30 days, as the page says.
+ */
+function conversionsTable(
+  data: TrafficExportData,
+  label: ExportLabel,
+  build: (c: TrafficConversions) => ExportTable,
+): ExportTable {
+  const c = data.conversions;
+  const table = c ? build(c) : null;
+  if (!c || !table || table.rows.length === 0) {
+    return { headers: [label('columns.note')], rows: [[label('notes.noConversions')]] };
+  }
+  if (!c.widened) return table;
+  const filler = table.headers.slice(1).map(() => null);
+  return { ...table, rows: [...table.rows, [label('notes.lastThirtyDays'), ...filler]] };
+}
+
+function convertingPages(data: TrafficExportData, label: ExportLabel): ExportTable {
+  return conversionsTable(data, label, (c) => ({
+    headers: [
+      label('columns.page'),
+      label('columns.aiVisits'),
+      label('columns.keyEvents'),
+      label('columns.revenue'),
+      label('columns.conversionRate'),
+      label('columns.bestPlatform'),
+      label('columns.note'),
+    ],
+    rows: c.pages.map((row) => {
+      const rate = rateCells(row, label);
+      return [
+        row.page,
+        row.aiVisits,
+        row.keyEvents,
+        c.hasRevenue ? row.revenue : null,
+        rate.pct,
+        row.bestPlatform ? getPlatformName(row.bestPlatform) : null,
+        rate.note,
+      ];
+    }),
+  }));
+}
+
+function buyerAnswers(data: TrafficExportData, label: ExportLabel): ExportTable {
+  return conversionsTable(data, label, (c) => ({
+    headers: [
+      label('columns.platform'),
+      label('columns.topic'),
+      label('columns.citedPages'),
+      label('columns.aiVisits'),
+      label('columns.keyEvents'),
+      label('columns.revenue'),
+      label('columns.conversionRate'),
+      label('columns.note'),
+    ],
+    rows: c.answers.map((row) => {
+      const rate = rateCells(row, label);
+      return [
+        getPlatformName(row.platform),
+        row.topic,
+        row.pages,
+        row.aiVisits,
+        row.keyEvents,
+        c.hasRevenue ? row.revenue : null,
+        rate.pct,
+        rate.note,
+      ];
+    }),
+  }));
+}
+
 function visits(data: TrafficExportData, label: ExportLabel): ExportTable {
   return {
     headers: [
@@ -267,6 +363,10 @@ export function trafficTable(
       return platforms(data, label);
     case 'pages':
       return pages(data, label);
+    case 'convertingPages':
+      return convertingPages(data, label);
+    case 'buyerAnswers':
+      return buyerAnswers(data, label);
     case 'pageStatus':
       return pageStatus(data, label);
     case 'visits':

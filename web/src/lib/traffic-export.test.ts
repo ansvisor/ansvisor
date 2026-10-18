@@ -2,6 +2,7 @@ import { createTranslator } from 'next-intl';
 import { describe, expect, it } from 'vitest';
 import messages from '../../messages/en.json';
 import type { SourceState } from '@/lib/actions/integrations';
+import type { TrafficConversions } from '@/lib/actions/traffic';
 import {
   BYTE_ORDER_MARK,
   TRAFFIC_EXPORT_SECTIONS,
@@ -247,6 +248,114 @@ describe('trafficTable', () => {
   });
 });
 
+describe('where AI visitors convert (AT-014)', () => {
+  const conversions = (over: Partial<TrafficConversions> = {}): TrafficConversions => ({
+    aiVisits: 64,
+    hasRevenue: false,
+    widened: false,
+    pageCount: 2,
+    answerCount: 1,
+    pages: [
+      {
+        page: '/gifts',
+        aiVisits: 50,
+        keyEvents: 5,
+        keyEventSessions: 4,
+        transactions: 1,
+        revenue: 120.5,
+        bestPlatform: 'chatgpt.com',
+      },
+      {
+        page: '/pricing',
+        aiVisits: 5,
+        keyEvents: 2,
+        keyEventSessions: 2,
+        transactions: 0,
+        revenue: 0,
+        bestPlatform: null,
+      },
+    ],
+    answers: [
+      {
+        platform: 'perplexity.ai',
+        topicId: 't1',
+        topic: 'Coffee gifts',
+        pages: 2,
+        aiVisits: 40,
+        keyEvents: 4,
+        keyEventSessions: 3,
+        revenue: 0,
+      },
+    ],
+    ...over,
+  });
+
+  it('gives every converting page with its rate, or why there is none', () => {
+    const table = trafficTable('convertingPages', data({ conversions: conversions() }), label);
+    expect(table.headers).toEqual([
+      'Page',
+      'AI visits',
+      'Key events',
+      'Revenue',
+      'Rate (%)',
+      'Best platform',
+      'Note',
+    ]);
+    expect(table.rows).toEqual([
+      ['/gifts', 50, 5, null, 8, 'ChatGPT', null],
+      ['/pricing', 5, 2, null, null, null, 'Low sample: fewer than 30 AI visits'],
+    ]);
+    // Revenue only when the property reports purchases.
+    const sold = trafficTable(
+      'convertingPages',
+      data({ conversions: conversions({ hasRevenue: true }) }),
+      label,
+    );
+    expect(sold.rows[0][3]).toBe(120.5);
+  });
+
+  it('gives each platform × topic, and says when the last 30 days were read', () => {
+    const table = trafficTable(
+      'buyerAnswers',
+      data({ conversions: conversions({ widened: true }) }),
+      label,
+    );
+    expect(table.headers).toEqual([
+      'Platform',
+      'Topic',
+      'Cited pages',
+      'AI visits',
+      'Key events',
+      'Revenue',
+      'Rate (%)',
+      'Note',
+    ]);
+    expect(table.rows).toEqual([
+      ['Perplexity', 'Coffee gifts', 2, 40, 4, null, 7.5, null],
+      [
+        'Last 30 days: the selected range has fewer than 30 AI visits',
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+      ],
+    ]);
+  });
+
+  it('says there are no conversions, never an empty sheet', () => {
+    const none = conversions({ pages: [], answers: [] });
+    expect(trafficTable('convertingPages', data({ conversions: none }), label).rows).toEqual([
+      ['No key events from AI visitors in this range'],
+    ]);
+    expect(trafficTable('buyerAnswers', data({ conversions: null }), label).rows).toEqual([
+      ['No key events from AI visitors in this range'],
+    ]);
+  });
+});
+
 describe('filtersTable', () => {
   it('records the range, the filters, the sources and when', () => {
     const table = filtersTable(
@@ -277,6 +386,8 @@ describe('trafficWorkbook', () => {
       'Trend',
       'Platforms',
       'Top landing pages',
+      'Top converting pages',
+      'Answers that bring buyers',
       'Pages by status',
       'Visits',
     ]);

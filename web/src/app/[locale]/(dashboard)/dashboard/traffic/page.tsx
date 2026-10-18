@@ -37,6 +37,7 @@ import {
   type DateRangePreset,
 } from '@/components/filters/date-range-filter';
 import { PagesCard } from './_pages-card';
+import { ConversionsSection } from './_conversions';
 import { TRAFFIC_KPI_GRID, TrafficKpis } from './_kpis';
 import { VisitListSourceNote } from './_visit-list-note';
 import { EngagedCell, KeyEventsCell, PlatformValueNote } from './_platform-value';
@@ -585,6 +586,23 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   // whose list is now its No AI traffic tab, and reads the snippet,
   // Analytics, citations and the sitemap; without Analytics it says what's
   // partial rather than hiding.
+  // Where AI visitors convert (AT-014, spec §3.4b): Google Analytics' own
+  // sessions, so it shows even when the snippet saw no visit in the range; a
+  // thin range reads the last 30 days.
+  const conversionsSection = (
+    <ConversionsSection
+      brandId={brand.id}
+      dateWindow={dateWindow}
+      rangeLabel={rangeSubLabel}
+      source={sourcesFailed ? null : (sources?.ga ?? null)}
+      domain={primaryDomain}
+      canConnect={canManage}
+      onConnected={() => void loadSources()}
+      pagesActions={<TableExport exporter={exporter} section="convertingPages" />}
+      answersActions={<TableExport exporter={exporter} section="buyerAnswers" />}
+    />
+  );
+
   const pagesCard = (
     <PagesCard
       brandId={brand.id}
@@ -656,6 +674,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
           onShowWeek={datePreset === '24h' ? () => handleDatePresetChange('7d') : undefined}
         />
       ) : null}
+      {isEmpty && conversionsSection}
       {isEmpty && pagesCard}
       {!isEmpty && (
         <>
@@ -803,6 +822,8 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
               </CardContent>
             </Card>
           </div>
+
+          {conversionsSection}
 
           {pagesCard}
 

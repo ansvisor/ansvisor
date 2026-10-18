@@ -3115,6 +3115,8 @@
         "trend": "Trend",
         "platforms": "Platforms",
         "pages": "Top landing pages",
+        "convertingPages": "Top converting pages",
+        "buyerAnswers": "Answers that bring buyers",
         "pageStatus": "Pages by status",
         "visits": "Visits"
       },
@@ -3149,7 +3151,12 @@
         "aiKeyEvents": "Key events from AI",
         "topPlatforms": "Top platforms",
         "inSitemap": "In sitemap",
-        "status": "Status"
+        "status": "Status",
+        "revenue": "Revenue",
+        "conversionRate": "Rate (%)",
+        "bestPlatform": "Best platform",
+        "topic": "Topic",
+        "citedPages": "Cited pages"
       },
       "metrics": {
         "visits": "AI-referred visits",
@@ -3164,7 +3171,10 @@
         "lowSample": "Low sample: fewer than 30 visits in this period or the one before",
         "new": "New: no visits in the previous period",
         "noPreviousPeriod": "No previous period for all time",
-        "noPages": "No pages in this range"
+        "noPages": "No pages in this range",
+        "noConversions": "No key events from AI visitors in this range",
+        "lastThirtyDays": "Last 30 days: the selected range has fewer than 30 AI visits",
+        "conversionLowSample": "Low sample: fewer than 30 AI visits"
       },
       "sourceStates": {
         "active": "Active",
@@ -3309,7 +3319,38 @@
         "engagedVisits": "engaged visits",
         "keyEvents": "key events from AI",
         "googleClicks": "Google clicks",
+        "conversions": "where AI visitors convert",
         "pageValue": "which valuable pages get no AI traffic"
+      }
+    },
+    "conversions": {
+      "title": "Where AI visitors convert",
+      "rankedByKeyEvents": "Ranked by key events from AI visits",
+      "rankedByRevenue": "Ranked by revenue from AI visits",
+      "widened": "fewer than 30 AI visits in the selected range, so this uses the last 30 days",
+      "last30Days": "Last 30 days",
+      "lowSample": "Low sample",
+      "lowSampleHint": "{visits, plural, one {# AI visit} other {# AI visits}}: fewer than 30, so a rate would mislead.",
+      "rateUnknown": "Google Analytics hasn't reported the rate for these sessions yet.",
+      "failed": "Couldn't load where AI visitors convert.",
+      "empty": "No key events from AI visitors in this range.",
+      "pages": {
+        "title": "Top converting pages from AI",
+        "legend": "AI visits are Google Analytics sessions from AI assistants. The rate is the share with a key event, shown from 30 visits."
+      },
+      "answers": {
+        "title": "Which answers bring buyers",
+        "legend": "Topics of the tracked prompts whose answers cite the converting pages, by the AI platform the visitors came from. Shows which topics bring buyers, not just visits."
+      },
+      "columns": {
+        "page": "Landing page",
+        "aiVisits": "AI visits",
+        "keyEvents": "Key events",
+        "revenue": "Revenue",
+        "rate": "Rate",
+        "bestPlatform": "Best platform",
+        "platform": "Platform",
+        "topic": "Topic"
       }
     },
     "pageOpportunities": {

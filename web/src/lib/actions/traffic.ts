@@ -5,6 +5,7 @@ import { API_BASE_URL } from '@/config/api';
 import { TRAFFIC_PAGE_SIZE, countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { expandDateToEndOfDay, utcDay } from '@/lib/dates';
 import { isHourlyWindow, listUtcHours, utcHourKey } from '@/lib/traffic-buckets';
+import { CONVERSIONS_FALLBACK_DAYS, widensToLast30Days } from '@/lib/traffic-conversions';
 import { getSuggestionSourceStates, type SourceState } from '@/lib/actions/integrations';
 
 export interface TrafficDateWindow {
@@ -691,6 +692,123 @@ export async function suggestPagePrompts(
     return { error: body.message || body.error || `Server error: ${res.status}` };
   }
   return res.json();
+}
+
+/** A landing page AI visitors converted on (AT-014). */
+export interface ConvertingPage {
+  page: string;
+  /** Analytics' AI-referred sessions on the page. */
+  aiVisits: number;
+  keyEvents: number;
+  /** Sessions with at least one key event: the rate is this over aiVisits. */
+  keyEventSessions: number;
+  transactions: number;
+  revenue: number;
+  /** The platform whose visitors converted most on the page. */
+  bestPlatform: string | null;
+}
+
+/** An AI platform × topic, over the pages the topic's tracked answers cite (AT-014). */
+export interface BuyerAnswer {
+  platform: string;
+  topicId: string;
+  topic: string;
+  pages: number;
+  aiVisits: number;
+  keyEvents: number;
+  keyEventSessions: number;
+  revenue: number;
+}
+
+export interface TrafficConversions {
+  /** All AI sessions Analytics counted in the window read. */
+  aiVisits: number;
+  /** The property reports purchases: the cards rank by revenue. */
+  hasRevenue: boolean;
+  /** The range had fewer than 30 AI visits, so the last 30 days were read instead. */
+  widened: boolean;
+  pageCount: number;
+  answerCount: number;
+  pages: ConvertingPage[];
+  answers: BuyerAnswer[];
+}
+
+async function readConversions(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  since: string | null,
+  until: string | null,
+  limit: number,
+): Promise<Omit<TrafficConversions, 'widened'>> {
+  const { data, error } = await supabase.rpc('ai_traffic_conversions', {
+    p_brand_id: brandId,
+    p_since: since,
+    p_until: until,
+    p_limit: limit,
+  });
+  if (error) throw new Error(error.message);
+  const raw = (data ?? {}) as Record<string, unknown>;
+  const n = (v: unknown) => Number(v) || 0;
+  const list = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]) : []);
+  return {
+    aiVisits: n(raw.sessions),
+    hasRevenue: raw.has_revenue === true,
+    pageCount: n(raw.page_count),
+    answerCount: n(raw.answer_count),
+    pages: list(raw.pages).map((r) => ({
+      page: String(r.page),
+      aiVisits: n(r.sessions),
+      keyEvents: n(r.key_events),
+      keyEventSessions: n(r.key_event_sessions),
+      transactions: n(r.transactions),
+      revenue: n(r.revenue),
+      bestPlatform: typeof r.best_platform === 'string' ? r.best_platform : null,
+    })),
+    answers: list(raw.answers).map((r) => ({
+      platform: String(r.platform),
+      topicId: String(r.topic_id),
+      topic: String(r.topic),
+      pages: n(r.pages),
+      aiVisits: n(r.sessions),
+      keyEvents: n(r.key_events),
+      keyEventSessions: n(r.key_event_sessions),
+      revenue: n(r.revenue),
+    })),
+  };
+}
+
+/**
+ * Where AI visitors convert (AT-014, spec §3.4b; 00179): the landing pages
+ * whose AI-referred sessions convert, and AI platform × topic of the tracked
+ * answers citing them, from Analytics' days in the page's range. A short
+ * range with fewer than 30 AI visits reads the last 30 days instead and says
+ * so (spec §3.01).
+ */
+export async function getTrafficConversions(
+  brandId: string,
+  window: TrafficDateWindow | undefined,
+  { limit = 10 }: { limit?: number } = {},
+): Promise<TrafficConversions> {
+  const supabase = await createClient();
+  const { from, to } = resolveTrafficWindow(window);
+  const inRange = await readConversions(
+    supabase,
+    brandId,
+    utcDay(from) ?? null,
+    utcDay(to) ?? null,
+    limit,
+  );
+  if (!widensToLast30Days({ from, to }, inRange.aiVisits)) return { ...inRange, widened: false };
+
+  const now = Date.now();
+  const last30 = await readConversions(
+    supabase,
+    brandId,
+    new Date(now - CONVERSIONS_FALLBACK_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    new Date(now).toISOString().slice(0, 10),
+    limit,
+  );
+  return { ...last30, widened: true };
 }
 
 /** Analytics' engagement figures for one group of sessions (AT-005). */

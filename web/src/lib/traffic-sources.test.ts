@@ -64,6 +64,7 @@ describe('sectionsNeeding', () => {
       'aiShare',
       'engagedVisits',
       'keyEvents',
+      'conversions',
       'pageValue',
     ]);
     expect(sectionsNeeding('google-search-console')).toEqual(['googleClicks']);

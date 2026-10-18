@@ -5,6 +5,7 @@ import { z } from 'zod';
 import messages from '../../../../../messages/en.json';
 import { createClient } from '@/lib/supabase/server';
 import {
+  getTrafficConversions,
   getTrafficPages,
   getTrafficSources,
   getTrafficSummary,
@@ -90,7 +91,7 @@ export async function GET(req: Request) {
   const wholePage = !q.section;
 
   try {
-    const [summary, trend, visits, sources, pageStatus] = await Promise.all([
+    const [summary, trend, visits, sources, pageStatus, conversions] = await Promise.all([
       needs('kpis', 'platforms', 'pages')
         ? getTrafficSummary(q.brandId, window, { topPages: Number.MAX_SAFE_INTEGER })
         : undefined,
@@ -108,6 +109,10 @@ export async function GET(req: Request) {
       // Every page of the Pages section, with its lists (AT-006).
       needs('pageStatus')
         ? getTrafficPages(q.brandId, window, { tab: 'all', limit: TRAFFIC_EXPORT_MAX_ROWS })
+        : undefined,
+      // Every row of where AI visitors convert, over the window the page reads (AT-014).
+      needs('convertingPages', 'buyerAnswers')
+        ? getTrafficConversions(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS })
         : undefined,
     ]);
     // Larger than an export built on request should be (spec §3.9).
@@ -128,6 +133,7 @@ export async function GET(req: Request) {
       trend,
       visits: visits ?? undefined,
       pageStatus,
+      conversions,
       sources,
     };
 

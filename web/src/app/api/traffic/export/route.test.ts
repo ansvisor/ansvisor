@@ -32,6 +32,7 @@ const loaders = vi.hoisted(() => ({
   getTrafficVisitsForExport: vi.fn(),
   getTrafficSources: vi.fn(),
   getTrafficPages: vi.fn(),
+  getTrafficConversions: vi.fn(),
 }));
 vi.mock('@/lib/actions/traffic', () => loaders);
 
@@ -86,6 +87,15 @@ beforeEach(() => {
     ga: ga(),
     gsc: ga({ connected: false }),
   });
+  loaders.getTrafficConversions.mockResolvedValue({
+    aiVisits: 0,
+    hasRevenue: false,
+    widened: false,
+    pageCount: 0,
+    answerCount: 0,
+    pages: [],
+    answers: [],
+  });
   loaders.getTrafficPages.mockResolvedValue({
     counts: { noAiTraffic: 0, citedNotClicked: 0, trafficNoPrompt: 0, all: 0 },
     rows: [],
@@ -123,6 +133,8 @@ describe('GET /api/traffic/export', () => {
       'Trend',
       'Platforms',
       'Top landing pages',
+      'Top converting pages',
+      'Answers that bring buyers',
       'Pages by status',
       'Visits',
     ]);
@@ -157,6 +169,8 @@ describe('GET /api/traffic/export', () => {
       'trend.csv',
       'platforms.csv',
       'top-landing-pages.csv',
+      'top-converting-pages.csv',
+      'answers-that-bring-buyers.csv',
       'pages-by-status.csv',
       'visits.csv',
     ]);
@@ -200,6 +214,19 @@ describe('GET /api/traffic/export', () => {
     );
     expect(loaders.getTrafficSummary).not.toHaveBeenCalled();
     expect(loaders.getTrafficSources).not.toHaveBeenCalled();
+  });
+
+  it('reads every row of where AI visitors convert for its tables (AT-014)', async () => {
+    const res = await get({ format: 'csv', section: 'buyerAnswers' });
+
+    const csv = await csvOf(res);
+    expect(csv).toEqual({ bom: true, text: 'Note\nNo key events from AI visitors in this range' });
+    expect(loaders.getTrafficConversions).toHaveBeenCalledWith(
+      BRAND,
+      { dateFrom: undefined, dateTo: undefined },
+      { limit: TRAFFIC_EXPORT_MAX_ROWS },
+    );
+    expect(loaders.getTrafficPages).not.toHaveBeenCalled();
   });
 
   it('refuses more visits than an export built on request should hold', async () => {
