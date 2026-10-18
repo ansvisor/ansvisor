@@ -3191,7 +3191,9 @@ export async function listReportsFor(
   if (brandError) throw new Error(brandError.message);
   if (!brand) return null;
 
-  const limit = Math.min(Math.max(Math.trunc(requestedLimit), 1), 100);
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
+    : 50;
   const { data, error } = await supabaseAdmin
     .from('reports')
     .select(
