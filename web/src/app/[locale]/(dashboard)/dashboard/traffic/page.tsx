@@ -37,6 +37,7 @@ import {
   type DateRangePreset,
 } from '@/components/filters/date-range-filter';
 import { PageOpportunitiesCard } from './_opportunities-card';
+import { TRAFFIC_KPI_GRID, TrafficKpis } from './_kpis';
 import { ExportMenu, TableExport, useTrafficExport } from './_export';
 import { SourcesStrip } from './_sources-strip';
 import { SnippetBanner, SnippetDialog } from './_snippet-code';
@@ -56,7 +57,6 @@ import {
   Globe,
   TrendingUp,
   TrendingDown,
-  Users,
   LayoutList,
   Search,
   X,
@@ -81,39 +81,6 @@ import {
 const PAGE_SIZE = 10;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-function KpiCard({
-  title,
-  icon: Icon,
-  value,
-  sub,
-}: {
-  title: string;
-  icon: React.ElementType;
-  value: React.ReactNode;
-  sub: React.ReactNode;
-}) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
-        <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          {title}
-        </CardTitle>
-        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-3xl font-bold">{value}</div>
-        {/* One line, as in the approved mockup; the full text on hover. */}
-        <p
-          className="mt-1 truncate text-xs text-muted-foreground"
-          title={typeof sub === 'string' ? sub : undefined}
-        >
-          {sub}
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
 
 /**
  * A visit count against the previous period: a %, "new", "—", or "Low sample"
@@ -583,9 +550,10 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-4 w-96 mt-2" />
         </div>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-24" />
+        <div className={TRAFFIC_KPI_GRID}>
+          {Array.from({ length: 7 }, (_, i) => (
+            // The cards' own height, so nothing shifts when they arrive.
+            <Skeleton key={i} className="h-[133px] rounded-xl" />
           ))}
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -597,12 +565,9 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   }
 
   const totalVisits = summary?.totalVisits ?? 0;
-  const totalVisitsPrev = summary?.totalVisitsPrev ?? 0;
-  const totalPageviews = summary?.totalPageviews ?? 0;
   // From the summary, not the selected range: while a new range loads, the
   // numbers on screen are still the previous range's.
   const comparable = summary?.hasPreviousPeriod ?? false;
-  const topPlatform = summary?.platformBreakdown[0];
 
   const isEmpty = totalVisits === 0 && logs.length === 0;
   const hasAnyData = summary?.hasAnyData ?? false;
@@ -691,45 +656,19 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
       {isEmpty && opportunitiesCard}
       {!isEmpty && (
         <>
-          {/* KPI Cards */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            {/* One visit per session; the sub-line gives the pageviews and
-                the previous period's visits (AT-003). */}
-            <KpiCard
-              title="AI-Referred Visits"
-              icon={Users}
-              value={
-                <span className="flex items-center gap-2">
-                  {formatNumber(totalVisits)}
-                  {/* The tables show "—" for no change; the card shows nothing. */}
-                  {visitChange(totalVisits, totalVisitsPrev, { comparable }).kind !== 'none' && (
-                    <DeltaBadge
-                      current={totalVisits}
-                      previous={totalVisitsPrev}
-                      comparable={comparable}
-                    />
-                  )}
-                </span>
-              }
-              sub={
-                comparable
-                  ? tVisits('kpiSub', { pageviews: totalPageviews, previous: totalVisitsPrev })
-                  : tVisits('kpiSubNoPrevious', { pageviews: totalPageviews })
-              }
-            />
-            <KpiCard
-              title="Top Platform"
-              icon={Globe}
-              value={topPlatform ? getPlatformName(topPlatform.platform) : '—'}
-              sub={topPlatform ? `${formatNumber(topPlatform.visits)} visits` : 'no data'}
-            />
-            <KpiCard
-              title="Platforms"
-              icon={Globe}
-              value={summary?.platformBreakdown.length ?? 0}
-              sub="unique AI sources"
-            />
-          </div>
+          {/* KPI cards: two rows of four (AT-017, spec §3.2). */}
+          <TrafficKpis
+            brandId={brand.id}
+            dateWindow={dateWindow}
+            preset={datePreset}
+            summary={summary}
+            summaryLoading={isLoadingSummary}
+            sources={sources}
+            sourcesFailed={sourcesFailed}
+            canConnect={canManage}
+            onConnected={() => void loadSources()}
+            onRangeChange={handleDatePresetChange}
+          />
 
           {/* Charts row */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

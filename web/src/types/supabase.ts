@@ -3103,6 +3103,15 @@ export type Database = {
           transactions: number
         }[]
       }
+      ga_traffic_totals: {
+        Args: { p_brand_id: string; p_since: string | null; p_until: string }
+        Returns: {
+          ai_engaged_sessions: number
+          ai_key_events: number
+          ai_sessions: number
+          sessions: number
+        }[]
+      }
       get_latest_prompt_results:
         | {
             Args: { p_brand_id: string; p_platform?: string }
@@ -3178,6 +3187,21 @@ export type Database = {
           clicks: number
           impressions: number
           query: string
+        }[]
+      }
+      gsc_click_totals: {
+        Args: {
+          p_brand_id: string
+          p_latest?: boolean
+          p_since: string | null
+          p_until: string
+        }
+        Returns: {
+          clicks: number
+          last_date: string | null
+          prev_clicks: number | null
+          since: string | null
+          until: string | null
         }[]
       }
       head_to_head_daily: {

@@ -217,7 +217,10 @@ export function MetricCard({
       )}
     >
       <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-        <span className="truncate">{label}</span>
+        {/* One line, cut with an ellipsis on narrow cards; the full text on hover. */}
+        <span className="truncate" title={label}>
+          {label}
+        </span>
         <InfoTip content={tooltip} />
         <span className="flex-1" />
         <span className="relative flex h-4 w-4 items-center justify-center">
@@ -245,7 +248,12 @@ export function MetricCard({
           </span>
         )}
       </div>
-      <div className="truncate text-xs text-muted-foreground">{sub}</div>
+      <div
+        className="truncate text-xs text-muted-foreground"
+        title={typeof sub === 'string' ? sub : undefined}
+      >
+        {sub}
+      </div>
       {footer ? (
         footer
       ) : quota ? (

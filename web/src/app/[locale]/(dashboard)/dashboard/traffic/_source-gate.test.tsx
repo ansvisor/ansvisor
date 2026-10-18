@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
+import { Timer } from 'lucide-react';
 import type { IntegrationProvider, SourceState } from '@/lib/actions/integrations';
 
 /**
@@ -24,7 +25,7 @@ vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, ...props }: { href: string }) => <a href={href} {...props} />,
 }));
 
-const { NeedsTag, SourceNoData, SourceUnavailable } = await import('./_source-gate');
+const { NeedsTag, SourceKpiCard, SourceNoData, SourceUnavailable } = await import('./_source-gate');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -91,7 +92,10 @@ describe('SourceUnavailable', () => {
     renderState(source());
     expect(text()).toContain('Connect Google Analytics to see this');
     expect(text()).toContain('Read-only access, takes about a minute.');
-    expect(text()).toContain("Needed for: pages AI engines aren't sending traffic to");
+    expect(text()).toContain(
+      'Needed for: AI share of traffic, engaged visits, key events from AI, and pages AI engines ' +
+        "aren't sending traffic to",
+    );
 
     act(() => button()!.click());
     expect(hook.connect).toHaveBeenCalled();
@@ -139,10 +143,10 @@ describe('SourceUnavailable', () => {
     expect(container.querySelector('a')).toBeNull();
   });
 
-  it('lists nothing it unlocks for a source no section needs yet', () => {
+  it('lists what Search Console unlocks', () => {
     renderState(source(), { provider: 'google-search-console' });
     expect(text()).toContain('Connect Google Search Console to see this');
-    expect(text()).not.toContain('Needed for');
+    expect(text()).toContain('Needed for: Google clicks');
   });
 
   it('renders nothing once the source has data', () => {
@@ -165,5 +169,68 @@ describe('SourceNoData', () => {
     expect(text()).toContain('No data for this range in Google Analytics');
     act(() => button()!.click());
     expect(onShowAllTime).toHaveBeenCalled();
+  });
+});
+
+describe('SourceKpiCard', () => {
+  function renderCard(
+    state: SourceState,
+    { provider = 'google-analytics', canConnect = true } = {} as {
+      provider?: IntegrationProvider;
+      canConnect?: boolean;
+    },
+  ) {
+    render(
+      <SourceKpiCard
+        label="Engaged visits"
+        tooltip="Engaged AI sessions."
+        icon={Timer}
+        provider={provider}
+        state={state}
+        canConnect={canConnect}
+        onConnected={onConnected}
+      />,
+    );
+  }
+
+  it('keeps the label, shows "—", and offers Connect in place (AT-017)', () => {
+    renderCard(source());
+    expect(text()).toBe('Engaged visits—Needs Google AnalyticsConnect');
+    act(() => button()!.click());
+    expect(hook.connect).toHaveBeenCalled();
+    act(() => hook.options!.onStatus('connected'));
+    expect(onConnected).toHaveBeenCalled();
+  });
+
+  it("keeps Connect off, with a reason, for members who can't connect", () => {
+    renderCard(source(), { canConnect: false });
+    expect(button()!.disabled).toBe(true);
+    expect(button()!.parentElement!.title).toBe('Only admins and managers can connect a source.');
+  });
+
+  it("gives each source's wait while it syncs", () => {
+    renderCard(source({ connected: true, mapped: true }));
+    expect(text()).toContain('Syncing… · about 15 min');
+    renderCard(source({ connected: true, mapped: true }), { provider: 'google-search-console' });
+    expect(text()).not.toContain('Needs');
+    expect(text()).toContain('Syncing… · up to 48 h');
+  });
+
+  it('sends a connection without a property to Manage, and offers nothing on a server without keys', () => {
+    renderCard(source({ connected: true }));
+    expect(text()).toContain('Choose a property for this brand');
+    expect(container.querySelector('a')!.getAttribute('href')).toBe(
+      '/dashboard/settings?tab=integrations',
+    );
+
+    renderCard(source({ configured: false }));
+    expect(text()).toContain('Not set up on this server');
+    expect(button()).toBeNull();
+    expect(container.querySelector('a')).toBeNull();
+  });
+
+  it('renders nothing once the source has data', () => {
+    renderCard(source({ connected: true, mapped: true, lastDataAt: '2026-10-18T06:00:00Z' }));
+    expect(container.innerHTML).toBe('');
   });
 });

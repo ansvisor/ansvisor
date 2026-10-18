@@ -590,3 +590,89 @@ export async function getPageOpportunities(
     })),
   };
 }
+
+/**
+ * The Google side of the AI Traffic KPI cards (AT-017, spec §3.2): from
+ * Analytics, all sessions and the AI channel's sessions, engaged sessions
+ * and key events; from Search Console, clicks against the period before.
+ * Each is asked for only when its source has data for the brand.
+ */
+export interface TrafficGoogleTotals {
+  ga: {
+    sessions: number;
+    aiSessions: number;
+    aiEngagedSessions: number;
+    aiKeyEvents: number;
+  } | null;
+  gsc: {
+    /** The days the clicks cover; no first day for all time. */
+    since: string | null;
+    until: string;
+    clicks: number;
+    /** The same-length period before; null for all time. */
+    prevClicks: number | null;
+  } | null;
+}
+
+export async function getTrafficGoogleTotals(
+  brandId: string,
+  window: TrafficDateWindow,
+  opts: {
+    ga: boolean;
+    gsc: boolean;
+    /**
+     * Short ranges read Search Console's latest reported day(s) — 1 for the
+     * 24-hour range, 7 for the week — because Google reports about two days
+     * late (spec §3.01). Null reads the range as it is.
+     */
+    gscLatestDays: number | null;
+  },
+): Promise<TrafficGoogleTotals> {
+  const supabase = await createClient();
+  // Both sources store whole days, so the range goes as its first and last.
+  const since = utcDay(window.dateFrom) ?? null;
+  const until = utcDay(window.dateTo) ?? new Date().toISOString().slice(0, 10);
+  const shift = (day: string, days: number) =>
+    new Date(Date.parse(`${day}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+
+  const [ga, gsc] = await Promise.all([
+    opts.ga
+      ? supabase
+          .rpc('ga_traffic_totals', { p_brand_id: brandId, p_since: since, p_until: until })
+          .single()
+      : null,
+    opts.gsc
+      ? supabase
+          .rpc('gsc_click_totals', {
+            p_brand_id: brandId,
+            p_since: opts.gscLatestDays ? shift(until, 1 - opts.gscLatestDays) : since,
+            p_until: until,
+            p_latest: Boolean(opts.gscLatestDays),
+          })
+          .single()
+      : null,
+  ]);
+  if (ga?.error) throw new Error(ga.error.message);
+  if (gsc?.error) throw new Error(gsc.error.message);
+
+  const gaRow = ga?.data;
+  const gscRow = gsc?.data;
+  return {
+    ga: gaRow
+      ? {
+          sessions: Number(gaRow.sessions) || 0,
+          aiSessions: Number(gaRow.ai_sessions) || 0,
+          aiEngagedSessions: Number(gaRow.ai_engaged_sessions) || 0,
+          aiKeyEvents: Number(gaRow.ai_key_events) || 0,
+        }
+      : null,
+    gsc: gscRow
+      ? {
+          since: gscRow.since,
+          until: gscRow.until ?? until,
+          clicks: Number(gscRow.clicks) || 0,
+          prevClicks: gscRow.prev_clicks === null ? null : Number(gscRow.prev_clicks) || 0,
+        }
+      : null,
+  };
+}
