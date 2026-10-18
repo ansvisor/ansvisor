@@ -67,6 +67,8 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { toCsv } from '@/lib/csv';
 import { formatRelative } from '@/lib/format-relative';
+import { formatNumber } from '@/lib/format';
+import { visitChange } from '@/lib/traffic-change';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -87,7 +89,7 @@ const PAGE_SIZE = 10;
  */
 const TRAFFIC_EXPORT_LIMIT = 1000;
 
-const TRAFFIC_EXPORT_HEADERS = ['timestamp', 'platform', 'page_url', 'referrer'];
+const TRAFFIC_EXPORT_HEADERS = ['timestamp', 'platform', 'page_url', 'referrer', 'pageviews'];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -96,13 +98,11 @@ function KpiCard({
   icon: Icon,
   value,
   sub,
-  subPositive,
 }: {
   title: string;
   icon: React.ElementType;
   value: React.ReactNode;
   sub: React.ReactNode;
-  subPositive?: boolean;
 }) {
   return (
     <Card>
@@ -114,15 +114,10 @@ function KpiCard({
       </CardHeader>
       <CardContent>
         <div className="text-3xl font-bold">{value}</div>
+        {/* One line, as in the approved mockup; the full text on hover. */}
         <p
-          className={cn(
-            'text-xs mt-1 flex items-center gap-0.5',
-            subPositive === true
-              ? 'text-green-600 dark:text-green-400'
-              : subPositive === false
-                ? 'text-red-500'
-                : 'text-muted-foreground',
-          )}
+          className="mt-1 truncate text-xs text-muted-foreground"
+          title={typeof sub === 'string' ? sub : undefined}
         >
           {sub}
         </p>
@@ -131,29 +126,52 @@ function KpiCard({
   );
 }
 
-function DeltaBadge({ current, previous }: { current: number; previous: number }) {
-  if (previous === 0 && current === 0)
-    return <span className="text-xs text-muted-foreground">—</span>;
-  if (previous === 0)
+/**
+ * A visit count against the previous period: a %, "new", "—", or "Low sample"
+ * when either period is too small for a % to mean anything (AT-003, F4).
+ * `comparable` is false when the range has no previous period (all time).
+ */
+function DeltaBadge({
+  current,
+  previous,
+  comparable = true,
+}: {
+  current: number;
+  previous: number;
+  comparable?: boolean;
+}) {
+  const t = useTranslations('traffic.change');
+  const change = visitChange(current, previous, { comparable });
+  if (change.kind === 'none') return <span className="text-xs text-muted-foreground">—</span>;
+  if (change.kind === 'low') {
+    return (
+      <span
+        title={t('lowSampleHint')}
+        className="whitespace-nowrap rounded-md border border-dashed px-1.5 text-[11px] font-medium leading-4 text-muted-foreground"
+      >
+        {t('lowSample')}
+      </span>
+    );
+  }
+  if (change.kind === 'new') {
     return (
       <span className="flex items-center gap-0.5 text-xs font-medium text-green-600 dark:text-green-400">
         <TrendingUp className="h-3 w-3" />
-        new
+        {t('new')}
       </span>
     );
-  const delta = Math.round(((current - previous) / previous) * 100);
-  if (delta === 0) return <span className="text-xs text-muted-foreground">—</span>;
-  const pos = delta > 0;
+  }
+  const pos = change.pct > 0;
   return (
     <span
       className={cn(
-        'flex items-center gap-0.5 text-xs font-medium',
+        'flex items-center gap-0.5 whitespace-nowrap text-xs font-medium',
         pos ? 'text-green-600 dark:text-green-400' : 'text-red-500',
       )}
     >
       {pos ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
       {pos ? '+' : ''}
-      {delta}%
+      {formatNumber(change.pct)}%
     </span>
   );
 }
@@ -412,6 +430,7 @@ export default function TrafficPage() {
 function TrafficPageContent({ brand }: { brand: Brand }) {
   const t = useTranslations('traffic');
   const tCommon = useTranslations('common');
+  const tVisits = useTranslations('traffic.visits');
   const [datePreset, setDatePreset] = useState<DatePreset>('7d');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
@@ -425,6 +444,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   const [trend, setTrend] = useState<TrafficTrendPoint[]>([]);
   const [logs, setLogs] = useState<TrafficLog[]>([]);
   const [logsTotal, setLogsTotal] = useState(0);
+  const [logsPageviews, setLogsPageviews] = useState(0);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -499,6 +519,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
       });
       setLogs(result.logs);
       setLogsTotal(result.total);
+      setLogsPageviews(result.pageviews);
     } catch (err) {
       console.error('Failed to load traffic logs:', err);
     } finally {
@@ -522,6 +543,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
         platform: log.sourcePlatform ? getPlatformName(log.sourcePlatform) : '',
         page_url: log.url,
         referrer: log.referrer ?? '',
+        pageviews: log.pageviews,
       }));
 
       const csv = toCsv(rows, TRAFFIC_EXPORT_HEADERS);
@@ -594,8 +616,10 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
 
   const totalVisits = summary?.totalVisits ?? 0;
   const totalVisitsPrev = summary?.totalVisitsPrev ?? 0;
-  const visitsDelta =
-    totalVisitsPrev > 0 ? Math.round(((totalVisits - totalVisitsPrev) / totalVisitsPrev) * 100) : 0;
+  const totalPageviews = summary?.totalPageviews ?? 0;
+  // From the summary, not the selected range: while a new range loads, the
+  // numbers on screen are still the previous range's.
+  const comparable = summary?.hasPreviousPeriod ?? false;
   const topPlatform = summary?.platformBreakdown[0];
 
   const isEmpty = totalVisits === 0 && logs.length === 0;
@@ -676,32 +700,35 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
         <>
           {/* KPI Cards */}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {/* One visit per session; the sub-line gives the pageviews and
+                the previous period's visits (AT-003). */}
             <KpiCard
               title="AI-Referred Visits"
               icon={Users}
-              value={totalVisits.toLocaleString()}
-              sub={
-                totalVisitsPrev > 0 ? (
-                  <>
-                    {visitsDelta >= 0 ? (
-                      <TrendingUp className="h-3 w-3" />
-                    ) : (
-                      <TrendingDown className="h-3 w-3" />
-                    )}
-                    {visitsDelta >= 0 ? '+' : ''}
-                    {visitsDelta}% vs previous period
-                  </>
-                ) : (
-                  rangeSubLabel
-                )
+              value={
+                <span className="flex items-center gap-2">
+                  {formatNumber(totalVisits)}
+                  {/* The tables show "—" for no change; the card shows nothing. */}
+                  {visitChange(totalVisits, totalVisitsPrev, { comparable }).kind !== 'none' && (
+                    <DeltaBadge
+                      current={totalVisits}
+                      previous={totalVisitsPrev}
+                      comparable={comparable}
+                    />
+                  )}
+                </span>
               }
-              subPositive={visitsDelta > 0 ? true : visitsDelta < 0 ? false : undefined}
+              sub={
+                comparable
+                  ? tVisits('kpiSub', { pageviews: totalPageviews, previous: totalVisitsPrev })
+                  : tVisits('kpiSubNoPrevious', { pageviews: totalPageviews })
+              }
             />
             <KpiCard
               title="Top Platform"
               icon={Globe}
               value={topPlatform ? getPlatformName(topPlatform.platform) : '—'}
-              sub={topPlatform ? `${topPlatform.visits} visits` : 'no data'}
+              sub={topPlatform ? `${formatNumber(topPlatform.visits)} visits` : 'no data'}
             />
             <KpiCard
               title="Platforms"
@@ -757,11 +784,15 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                           </span>
                         </TableCell>
                         <TableCell className="text-right font-semibold tabular-nums">
-                          {row.visits.toLocaleString()}
+                          {formatNumber(row.visits)}
                         </TableCell>
                         <TableCell className="text-right pr-6">
                           <div className="flex justify-end">
-                            <DeltaBadge current={row.visits} previous={row.visitsPrev} />
+                            <DeltaBadge
+                              current={row.visits}
+                              previous={row.visitsPrev}
+                              comparable={comparable}
+                            />
                           </div>
                         </TableCell>
                       </TableRow>
@@ -794,11 +825,15 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                           </span>
                         </TableCell>
                         <TableCell className="text-right font-semibold tabular-nums text-sm">
-                          {row.visits.toLocaleString()}
+                          {formatNumber(row.visits)}
                         </TableCell>
                         <TableCell className="text-right pr-6">
                           <div className="flex justify-end">
-                            <DeltaBadge current={row.visits} previous={row.visitsPrev} />
+                            <DeltaBadge
+                              current={row.visits}
+                              previous={row.visitsPrev}
+                              comparable={comparable}
+                            />
                           </div>
                         </TableCell>
                       </TableRow>
@@ -832,7 +867,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                   </div>
                   {logsTotal > 0 && (
                     <Badge variant="secondary" className="text-xs">
-                      {logsTotal} total
+                      {tVisits('listTotal', { visits: logsTotal, pageviews: logsPageviews })}
                     </Badge>
                   )}
                 </div>
@@ -878,15 +913,23 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                             </span>
                           </TableCell>
                           <TableCell>
-                            <span className="font-mono text-xs text-muted-foreground line-clamp-1">
-                              {(() => {
-                                try {
-                                  return new URL(row.url).pathname;
-                                } catch {
-                                  return row.url;
-                                }
-                              })()}
-                            </span>
+                            <div className="flex min-w-0 items-center gap-1.5">
+                              <span className="font-mono text-xs text-muted-foreground line-clamp-1">
+                                {(() => {
+                                  try {
+                                    return new URL(row.url).pathname;
+                                  } catch {
+                                    return row.url;
+                                  }
+                                })()}
+                              </span>
+                              {/* A reload or a further link in the same visit (AT-003). */}
+                              {row.pageviews > 1 && (
+                                <span className="shrink-0 whitespace-nowrap rounded-full bg-muted px-1.5 text-[11px] font-medium leading-4 text-muted-foreground">
+                                  {tVisits('rowPageviews', { count: row.pageviews })}
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right pr-6">
                             <span className="text-xs text-muted-foreground">
@@ -914,6 +957,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                       />
                     );
                   })()}
+                  <p className="px-6 pb-4 text-xs text-muted-foreground">{tVisits('listNote')}</p>
                 </>
               )}
             </CardContent>

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import supabaseAdmin from '../config/supabase.js';
 import { trafficLimiter } from '../middleware/rate-limiter.js';
 import logger from '../lib/logger.js';
+import { findVisitOf } from '../lib/traffic-visits.js';
 
 const router = Router();
 
@@ -120,16 +121,30 @@ router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res)
       return res.status(204).end();
     }
 
+    const userAgent = (body.a || '').slice(0, 512) || null;
+    const ipAddress = ip || null;
+
+    // A reload or a second link from the same answer continues the visit
+    // rather than counting as another (AT-003). If the lookup fails the
+    // pageview is still stored, as a visit of its own.
+    let visitOf = null;
+    try {
+      visitOf = await findVisitOf({ brandId: brand.id, sourcePlatform, ipAddress, userAgent });
+    } catch (err) {
+      logger.warn({ err }, 'traffic visit lookup failed; stored as a new visit');
+    }
+
     await supabaseAdmin.from('ai_traffic_logs').insert({
       brand_id: brand.id,
       url: (body.u || '').slice(0, 2048),
       referrer: (body.r || '').slice(0, 2048) || null,
       source_platform: sourcePlatform,
-      user_agent: (body.a || '').slice(0, 512) || null,
-      ip_address: ip || null,
+      user_agent: userAgent,
+      ip_address: ipAddress,
       country,
       language: (body.l || '').slice(0, 16) || null,
       screen: (body.d || '').slice(0, 16) || null,
+      visit_of: visitOf,
     });
 
     return res.status(204).end();

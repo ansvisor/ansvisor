@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect } from 'react';
 import { getPlatformName } from '@/lib/traffic-platforms';
+import { formatNumber } from '@/lib/format';
 import {
   AreaChart,
   Area,
@@ -92,10 +93,12 @@ export function getPlatformFilterItems(
   ];
 }
 
-function formatTrafficBucketDate(value: string): string {
-  const d = new Date(value);
-
-  return d.toLocaleDateString(undefined, {
+/**
+ * A trend bucket's day ("Oct 12"). English like the rest of the UI, not the
+ * browser's language (F7), and in UTC because the buckets are UTC days.
+ */
+export function formatTrafficBucketDate(value: string): string {
+  return new Date(value).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     timeZone: 'UTC',
@@ -126,7 +129,7 @@ function AreaTooltip({
             style={{ backgroundColor: entry.color }}
           />
           <span className="text-muted-foreground">{getPlatformName(entry.name)}:</span>
-          <span className="font-medium text-foreground">{entry.value.toLocaleString()}</span>
+          <span className="font-medium text-foreground">{formatNumber(entry.value)}</span>
         </div>
       ))}
     </div>

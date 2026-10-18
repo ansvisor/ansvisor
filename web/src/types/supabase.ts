@@ -405,6 +405,7 @@ export type Database = {
           source_platform: string | null
           url: string
           user_agent: string | null
+          visit_of: string | null
         }
         Insert: {
           brand_id: string
@@ -418,6 +419,7 @@ export type Database = {
           source_platform?: string | null
           url: string
           user_agent?: string | null
+          visit_of?: string | null
         }
         Update: {
           brand_id?: string
@@ -431,6 +433,7 @@ export type Database = {
           source_platform?: string | null
           url?: string
           user_agent?: string | null
+          visit_of?: string | null
         }
         Relationships: [
           {
@@ -438,6 +441,13 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_traffic_logs_visit_of_fkey"
+            columns: ["visit_of"]
+            isOneToOne: false
+            referencedRelation: "ai_traffic_logs"
             referencedColumns: ["id"]
           },
         ]

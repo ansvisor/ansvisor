@@ -20,11 +20,22 @@ export interface TrafficLog {
   language: string | null;
   screen: string | null;
   createdAt: string;
+  /** Pageviews in this visit: 1, plus each reload or further link (AT-003). */
+  pageviews: number;
 }
 
+/**
+ * Every count here is of visits, one per session (AT-003): a row whose
+ * `visit_of` is null starts a visit, and the rows pointing at it are its
+ * further pageviews. Pageviews are counted on their own.
+ */
 export interface TrafficSummary {
   totalVisits: number;
   totalVisitsPrev: number;
+  /** Every pageview in the window, the visits' first ones included. */
+  totalPageviews: number;
+  /** False for all time, which has no previous period to compare with. */
+  hasPreviousPeriod: boolean;
   platformBreakdown: { platform: string; visits: number; visitsPrev: number }[];
   topPages: { url: string; visits: number; visitsPrev: number }[];
   hasAnyData: boolean;
@@ -79,6 +90,7 @@ function mapLogRow(row: Record<string, unknown>): TrafficLog {
     language: row.language as string | null,
     screen: row.screen as string | null,
     createdAt: row.created_at as string,
+    pageviews: 1,
   };
 }
 
@@ -136,6 +148,9 @@ function listUtcDays(from: string, to: string): string[] {
  * Totals come from exact count queries; the breakdown/trend scans page
  * through the window with deterministic ordering and a hard ceiling so a
  * pathological brand can't pin the server action.
+ *
+ * The scans read the rows that start a visit only, so the breakdowns and the
+ * trend count visits, not pageviews (AT-003).
  */
 const TRAFFIC_PAGE_SIZE = 1000;
 const TRAFFIC_MAX_ROWS = 50_000;
@@ -151,6 +166,7 @@ async function scanTrafficLogs(
       .from('ai_traffic_logs')
       .select(window.columns)
       .eq('brand_id', brandId)
+      .is('visit_of', null)
       // Deterministic order so .range() pages don't shuffle between requests.
       .order('created_at', { ascending: true })
       .order('id', { ascending: true })
@@ -179,11 +195,17 @@ export async function getTrafficSummary(
   const { from, to, prevFrom, prevTo } = resolveTrafficWindow(window);
 
   // Exact totals — count queries transfer no rows and are immune to the cap.
-  const countVisits = async (fromTs?: string, toTs?: string, toInclusive = false) => {
+  const countRows = async (
+    fromTs?: string,
+    toTs?: string,
+    toInclusive = false,
+    { visits = true } = {},
+  ) => {
     let query = supabase
       .from('ai_traffic_logs')
       .select('id', { count: 'exact', head: true })
       .eq('brand_id', brandId);
+    if (visits) query = query.is('visit_of', null);
     if (fromTs) query = query.gte('created_at', fromTs);
     if (toTs) {
       query = toInclusive ? query.lte('created_at', toTs) : query.lt('created_at', toTs);
@@ -221,9 +243,10 @@ export async function getTrafficSummary(
   // totalVisits doubles as the lifetime check — only worth a second cheap
   // count query when the window actually narrows the result.
   const hasWindow = Boolean(from || to);
-  const [totalVisits, totalVisitsPrev, , , lifetimeVisits] = await Promise.all([
-    countVisits(from, to, true),
-    hasPrev ? countVisits(prevFrom, prevTo) : Promise.resolve(0),
+  const [totalVisits, totalVisitsPrev, totalPageviews, , , lifetimeVisits] = await Promise.all([
+    countRows(from, to, true),
+    hasPrev ? countRows(prevFrom, prevTo) : Promise.resolve(0),
+    countRows(from, to, true, { visits: false }),
     scanTrafficLogs(
       supabase,
       brandId,
@@ -238,7 +261,7 @@ export async function getTrafficSummary(
           aggregate(platformMapPrev, pageMapPrev),
         )
       : Promise.resolve(),
-    hasWindow ? countVisits() : Promise.resolve(null),
+    hasWindow ? countRows() : Promise.resolve(null),
   ]);
 
   const hasAnyData = hasWindow ? (lifetimeVisits as number) > 0 : totalVisits > 0;
@@ -265,6 +288,8 @@ export async function getTrafficSummary(
   return {
     totalVisits,
     totalVisitsPrev,
+    totalPageviews,
+    hasPreviousPeriod: hasPrev,
     platformBreakdown,
     topPages,
     hasAnyData,
@@ -318,6 +343,11 @@ export async function getTrafficTrend(
   });
 }
 
+/**
+ * The window's visits, newest first, one row per visit with its pageviews
+ * (AT-003). `total` counts the visits that match; `pageviews` counts every
+ * pageview that does, so the list can say "4 visits (7 pageviews)".
+ */
 export async function getTrafficLogs(
   brandId: string,
   opts?: {
@@ -328,7 +358,7 @@ export async function getTrafficLogs(
     dateFrom?: string;
     dateTo?: string;
   },
-): Promise<{ logs: TrafficLog[]; total: number }> {
+): Promise<{ logs: TrafficLog[]; total: number; pageviews: number }> {
   const supabase = await createClient();
   const limit = opts?.limit ?? 20;
   const offset = opts?.offset ?? 0;
@@ -339,35 +369,55 @@ export async function getTrafficLogs(
     dateTo: opts?.dateTo,
   });
 
-  let query = supabase
-    .from('ai_traffic_logs')
-    .select('*', { count: 'exact' })
-    .eq('brand_id', brandId);
-
-  // Apply filters
-  if (platform) {
-    query = query.eq('source_platform', platform);
-  }
-
-  if (search) {
-    // Escape \, % and _ for ILIKE to treat them as literals, not wildcards
-    const escaped = search.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
-    query = query.ilike('url', `%${escaped}%`);
-  }
-
-  if (from) query = query.gte('created_at', from);
-  if (to) query = query.lte('created_at', to);
-
-  const { data, error, count } = await query
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1);
-
-  if (error) throw new Error(error.message);
-
-  return {
-    logs: (data ?? []).map((r) => mapLogRow(r as Record<string, unknown>)),
-    total: count ?? 0,
+  // One set of filters for the visits and for the pageview count.
+  const matching = (columns: string, head: boolean) => {
+    let query = supabase
+      .from('ai_traffic_logs')
+      .select(columns, { count: 'exact', head })
+      .eq('brand_id', brandId);
+    if (platform) query = query.eq('source_platform', platform);
+    if (search) {
+      // Escape \, % and _ for ILIKE to treat them as literals, not wildcards
+      const escaped = search.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+      query = query.ilike('url', `%${escaped}%`);
+    }
+    if (from) query = query.gte('created_at', from);
+    if (to) query = query.lte('created_at', to);
+    return query;
   };
+
+  const [visits, pageviews] = await Promise.all([
+    matching('*', false)
+      .is('visit_of', null)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1),
+    matching('id', true),
+  ]);
+  if (visits.error) throw new Error(visits.error.message);
+  if (pageviews.error) throw new Error(pageviews.error.message);
+
+  const logs = ((visits.data ?? []) as unknown as Record<string, unknown>[]).map(mapLogRow);
+
+  // Each listed visit's further pageviews, counted from the rows pointing
+  // at it. The repeats of one page of visits are few, so one read does it.
+  if (logs.length > 0) {
+    const { data: repeats, error } = await supabase
+      .from('ai_traffic_logs')
+      .select('visit_of')
+      .in(
+        'visit_of',
+        logs.map((log) => log.id),
+      );
+    if (error) throw new Error(error.message);
+    const extra = new Map<string, number>();
+    for (const row of repeats ?? []) {
+      const id = row.visit_of as string;
+      extra.set(id, (extra.get(id) ?? 0) + 1);
+    }
+    for (const log of logs) log.pageviews += extra.get(log.id) ?? 0;
+  }
+
+  return { logs, total: visits.count ?? 0, pageviews: pageviews.count ?? 0 };
 }
 
 /**

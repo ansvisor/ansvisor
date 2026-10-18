@@ -3073,6 +3073,18 @@
     "snippetDescription": "Paste this before the closing <code>{tag}</code> tag to track AI-referred visits.",
     "copySnippet": "Copy tracking script",
     "exportError": "Failed to export CSV",
+    "change": {
+      "new": "new",
+      "lowSample": "Low sample",
+      "lowSampleHint": "Fewer than 30 visits in this period or the one before, so a % change would mislead."
+    },
+    "visits": {
+      "kpiSub": "{pageviews, plural, one {# pageview} other {# pageviews}} · {previous, number} in the previous period",
+      "kpiSubNoPrevious": "{pageviews, plural, one {# pageview} other {# pageviews}}",
+      "listTotal": "{visits, plural, one {# visit} other {# visits}} ({pageviews, plural, one {# pageview} other {# pageviews}})",
+      "rowPageviews": "{count, plural, one {# pageview} other {# pageviews}}",
+      "listNote": "One row per visit (session). Repeated pageviews in the same visit are grouped."
+    },
     "sources": {
       "label": "Data sources",
       "snippet": "Tracking snippet",

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/table';
 import { Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatNumber } from '@/lib/format';
 import {
   getPageOpportunities,
   type PageOpportunities,
@@ -51,10 +52,10 @@ import {
 
 /** The ranked page's figure on the signal that ranked it. */
 function signalValue(row: PageOpportunity, inMinutes: (minutes: string) => string): string {
-  if (row.valueSignal === 'revenue') return row.revenue.toLocaleString();
-  if (row.valueSignal === 'transactions') return row.transactions.toLocaleString();
-  if (row.valueSignal === 'key_events') return row.keyEvents.toLocaleString();
-  return inMinutes(Math.round(row.engagementSeconds / 60).toLocaleString());
+  if (row.valueSignal === 'revenue') return formatNumber(row.revenue);
+  if (row.valueSignal === 'transactions') return formatNumber(row.transactions);
+  if (row.valueSignal === 'key_events') return formatNumber(row.keyEvents);
+  return inMinutes(formatNumber(Math.round(row.engagementSeconds / 60)));
 }
 
 /** The count a citation state's detail line names. */
@@ -173,7 +174,7 @@ export function PageOpportunitiesCard({
                     </div>
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-sm">
-                    {row.sessions.toLocaleString()}
+                    {formatNumber(row.sessions)}
                   </TableCell>
                   <TableCell className="text-right font-semibold tabular-nums text-sm">
                     {signalValue(row, (minutes) => t('minutes', { minutes }))}
