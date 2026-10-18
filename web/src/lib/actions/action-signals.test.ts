@@ -33,6 +33,12 @@ vi.mock('@/lib/supabase/server', () => ({
 
 // The admin client reads prompt_volumes; nothing here reaches it.
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
+const readAssignees = vi.fn<(...args: unknown[]) => Promise<Map<string, unknown>>>(
+  async () => new Map(),
+);
+vi.mock('@/lib/action-center/assignees', () => ({
+  readAssignees: (...args: unknown[]) => readAssignees(...args),
+}));
 
 const { getActionDetail, getActions } = await import('./action-center');
 const { getSignalActions } = await import('./signals');
@@ -72,6 +78,19 @@ describe('getActions', () => {
 
     expect(action.signalCount).toBe(2);
     expect(signalsQuery().calls).toContainEqual(['in', 'status', ['new', 'acknowledged']]);
+  });
+
+  it("names an assignee who isn't the user, whose profile the user can't read", async () => {
+    rows.actions = [{ ...(rows.actions[0] as Record<string, unknown>), assignee_id: 'u2' }];
+    const member = { id: 'u2', fullName: null, avatarUrl: null, email: 'cg@acme.example' };
+    readAssignees.mockResolvedValueOnce(new Map([['u2', member]]));
+
+    const [action] = await getActions('b1');
+
+    expect(readAssignees).toHaveBeenCalledWith(expect.anything(), 'b1', ['u2']);
+    expect(action.assignee).toEqual(member);
+    // Not through the user's client, which returns only their own profile.
+    expect(queries.some((q) => q.table === 'profiles')).toBe(false);
   });
 });
 

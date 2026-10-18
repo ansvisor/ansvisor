@@ -4,7 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import type { InsightsSummary, TrackedPromptsKpi } from '@/lib/actions/tracking';
-import { KpiRows } from './_kpi-cards';
+import { InfoTip, KpiRows } from './_kpi-cards';
 
 (
   globalThis as typeof globalThis & {
@@ -35,6 +35,8 @@ const summary = (over: Partial<InsightsSummary> = {}) =>
 
 let container: HTMLDivElement;
 let root: Root;
+const onBreakdown = vi.fn();
+const onNavigate = vi.fn();
 
 function render(trackedPrompts: TrackedPromptsKpi, over: Partial<InsightsSummary> = {}) {
   act(() => {
@@ -49,8 +51,8 @@ function render(trackedPrompts: TrackedPromptsKpi, over: Partial<InsightsSummary
           competitors={null}
           comparison={null}
           series={null}
-          onBreakdown={vi.fn()}
-          onNavigate={vi.fn()}
+          onBreakdown={onBreakdown}
+          onNavigate={onNavigate}
         />
       </NextIntlClientProvider>,
     );
@@ -64,6 +66,7 @@ const plan = (quotaUsed: number, quotaLimit: number): TrackedPromptsKpi => ({
 });
 
 beforeEach(() => {
+  vi.clearAllMocks();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -104,8 +107,46 @@ describe('the Mentions and Citations cards', () => {
     expect(container.textContent).not.toMatch(/same \d+ prompts?/);
   });
 
+  it('open their own pages', () => {
+    render(plan(47, 50));
+    const card = (label: string) =>
+      container.querySelector(`[role=button][aria-label="${label}"]`) as HTMLElement;
+    act(() => card('Mentions: open Mentions').click());
+    expect(onNavigate).toHaveBeenLastCalledWith('/dashboard/mentions');
+    act(() => card('Citations: open Citations').click());
+    expect(onNavigate).toHaveBeenLastCalledWith('/dashboard/citations');
+    expect(onBreakdown).not.toHaveBeenCalled();
+  });
+
   it('say nothing of a change they do not have', () => {
     render(plan(47, 50), { mentionsChange: null, citationsChange: null });
     expect(container.textContent).not.toContain('vs previous period');
+  });
+});
+
+describe('InfoTip', () => {
+  /** Hovers an icon whose box starts at `left`, and returns where the tooltip is centred. */
+  function tooltipCentreFor(left: number) {
+    act(() => {
+      root.render(<InfoTip content="What this counts" />);
+    });
+    const icon = container.querySelector<HTMLElement>('[aria-label="More information"]')!;
+    icon.getBoundingClientRect = () => ({ left, width: 12, bottom: 100 }) as DOMRect;
+    act(() => {
+      icon.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    });
+    const tooltip = document.querySelector<HTMLElement>('[role="tooltip"]')!;
+    expect(tooltip.textContent).toBe('What this counts');
+    return parseFloat(tooltip.style.left);
+  }
+
+  it('centres on its icon', () => {
+    expect(tooltipCentreFor(500)).toBe(506);
+  });
+
+  it("stays on screen beside the window's edges", () => {
+    // 224px wide, 8px from either edge.
+    expect(tooltipCentreFor(window.innerWidth - 20)).toBe(window.innerWidth - 120);
+    expect(tooltipCentreFor(2)).toBe(120);
   });
 });

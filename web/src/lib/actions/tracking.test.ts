@@ -29,17 +29,31 @@ let promptResultRead: { data: unknown; error: { message: string } | null } = {
   error: null,
 };
 
+// List reads: the rows each table answers (none by default), and every
+// query's calls in order.
+let listRows: Record<string, unknown[]> = {};
+let listQueries: { table: string; calls: unknown[][] }[] = [];
+
 function fakeQueryBuilder(table: string) {
+  const query = { table, calls: [] as unknown[][] };
+  listQueries.push(query);
+  const record =
+    (method: string) =>
+    (...args: unknown[]) => {
+      query.calls.push([method, ...args]);
+      return builder;
+    };
   const builder = {
-    select: () => builder,
-    eq: () => builder,
-    neq: () => builder,
+    select: record('select'),
+    eq: record('eq'),
+    neq: record('neq'),
     maybeSingle: async () => promptResultRead,
-    in: () => builder,
-    order: () => builder,
-    range: () => builder,
-    // Awaiting a list query yields no rows.
-    then: (resolve: (v: unknown) => unknown) => resolve({ data: [], error: null, count: 0 }),
+    in: record('in'),
+    order: record('order'),
+    range: record('range'),
+    limit: record('limit'),
+    then: (resolve: (v: unknown) => unknown) =>
+      resolve({ data: listRows[table] ?? [], error: null, count: 0 }),
     single: async () => {
       if (table === 'prompt_results') return { data: promptResultRow, error: null };
       if (table === 'prompts') {
@@ -220,9 +234,44 @@ describe('getInsightsSummary', () => {
 describe('topic-filtered reads (00164)', () => {
   beforeEach(() => {
     rpcCalls = [];
+    listQueries = [];
   });
   afterEach(() => {
     rpcByName = false;
+    listRows = {};
+  });
+
+  it("reads the topic's latest runs lean: each run's prompt and visibility, no count", async () => {
+    rpcByName = true;
+    listRows = {
+      prompts: [
+        { id: 'p1', text: 'Best espresso machine under $500?' },
+        { id: 'p2', text: 'Cheapest burr grinder?' },
+      ],
+      prompt_results: [
+        { prompt_id: 'p2', visibility_score: 40 },
+        { prompt_id: 'p1', visibility_score: 80 },
+      ],
+    };
+    const { getTopicDetail } = await import('./tracking');
+
+    const detail = await getTopicDetail('brand-id', 'topic-1');
+
+    expect(detail.results).toEqual([
+      { promptId: 'p2', promptText: 'Cheapest burr grinder?', visibilityScore: 40 },
+      { promptId: 'p1', promptText: 'Best espresso machine under $500?', visibilityScore: 80 },
+    ]);
+    // Not every column, and no count of every answer the topic ever had.
+    const runs = listQueries.filter((q) => q.table === 'prompt_results');
+    expect(runs).toHaveLength(1);
+    expect(runs[0].calls).toEqual([
+      ['select', 'prompt_id, visibility_score'],
+      ['eq', 'brand_id', 'brand-id'],
+      ['neq', 'platform', 'chatgpt-shopping'],
+      ['in', 'prompt_id', ['p1', 'p2']],
+      ['order', 'created_at', { ascending: false }],
+      ['limit', 50],
+    ]);
   });
 
   it('serves the topic detail page from the daily rollups, every call scoped to the topic', async () => {

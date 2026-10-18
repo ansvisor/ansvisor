@@ -120,6 +120,78 @@ export async function rescoreAction(action, now = new Date()) {
 }
 
 /**
+ * A brand's actions scored again in one go, as the nightly pass's generator
+ * does: their open signals and the prompts' demand are read once, not per
+ * action. For the nights the generator doesn't run (a signal pass skipped
+ * for no fresh results) and for the one-off backfill of actions opened
+ * before scores existed (scripts/rescore-actions.js).
+ *
+ * @param {string} brandId
+ * @param {{ now?: Date, statuses?: string[] | null, unscored?: boolean }} [options]
+ *   statuses: the actions' statuses, null for all. unscored: only actions with no score yet.
+ * @returns {Promise<number>} how many actions were scored
+ */
+export async function rescoreBrandActions(
+  brandId,
+  { now = new Date(), statuses = ACTIVE_STATUSES, unscored = false } = {},
+) {
+  let query = supabaseAdmin
+    .from('actions')
+    .select('id, kind, category, impact, payload, created_at')
+    .eq('brand_id', brandId);
+  if (statuses) query = query.in('status', statuses);
+  if (unscored) query = query.is('priority_score', null);
+  const { data: actions, error } = await query.limit(1000);
+  if (error) throw new Error(error.message);
+  if ((actions ?? []).length === 0) return 0;
+
+  const { data: signals, error: signalsErr } = await supabaseAdmin
+    .from('signals')
+    .select('id, kind, impact, payload, current_value, source, detected_at, action_id')
+    .eq('brand_id', brandId)
+    .in('status', OPEN_SIGNAL_STATUSES)
+    .not('action_id', 'is', null)
+    .limit(1000);
+  if (signalsErr) throw new Error(signalsErr.message);
+
+  let prompts = new Map();
+  try {
+    prompts = await loadPromptDemand(
+      promptIdsOf([
+        ...actions.map((action) => action.payload),
+        ...(signals ?? []).map((signal) => signal.payload),
+      ]),
+    );
+  } catch (err) {
+    logger.warn({ brandId, err: err.message }, '[actions] prompt demand unavailable');
+  }
+
+  const evidence = new Map();
+  for (const signal of signals ?? []) {
+    if (!evidence.has(signal.action_id)) evidence.set(signal.action_id, []);
+    evidence.get(signal.action_id).push(signal);
+  }
+
+  let scored = 0;
+  for (const action of actions) {
+    const priority = scorePriority(
+      { action, signals: evidence.get(action.id) ?? [], prompts },
+      now,
+    );
+    const { error: saveErr } = await supabaseAdmin
+      .from('actions')
+      .update(priorityColumns(priority, now))
+      .eq('id', action.id);
+    if (saveErr) {
+      logger.warn({ actionId: action.id, err: saveErr.message }, '[actions] priority not saved');
+      continue;
+    }
+    scored += 1;
+  }
+  return scored;
+}
+
+/**
  * Every active action a signal supports, scored again (AC-007): resolving,
  * dismissing or reopening a signal changes its actions' support and
  * confidence at once, not the next night.

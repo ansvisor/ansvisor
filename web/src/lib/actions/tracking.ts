@@ -3653,7 +3653,56 @@ export interface TopicDetailData {
   trend: VisibilityTrendPoint[];
   sov: ShareOfVoiceData;
   competitors: CompetitorComparisonData;
-  results: PromptResultWithText[];
+  results: TopicRecentRun[];
+}
+
+/** One of a topic's latest runs, as its best and worst prompts read them. */
+export interface TopicRecentRun {
+  promptId: string;
+  promptText: string;
+  visibilityScore: number;
+}
+
+/**
+ * A topic's latest runs for the topic page's best and worst prompts: each
+ * run's prompt and visibility, nothing else. It went through
+ * getPromptResults, which read every column of the 50 rows — answers,
+ * citations, competitors, searches — and counted every answer the topic has
+ * ever had (`count: 'exact'`, under RLS) for a total the page never showed:
+ * the one raw read over prompt_results left once the rest moved to the
+ * rollups (00164). Here: the topic's prompts with their text, then the runs.
+ */
+async function getTopicRecentRuns(
+  brandId: string,
+  topicId: string,
+  limit: number,
+): Promise<TopicRecentRun[]> {
+  const supabase = await dbClient();
+  const { data: prompts, error: promptsError } = await supabase
+    .from('prompts')
+    .select('id, text')
+    .eq('topic_id', topicId);
+  if (promptsError) throw new Error(promptsError.message);
+  const texts = new Map(
+    ((prompts ?? []) as { id: string; text: string }[]).map((p) => [p.id, p.text]),
+  );
+  if (texts.size === 0) return [];
+
+  // #155 — as every Insights read: chatgpt-shopping answers aren't comparable.
+  const { data: runs, error } = await supabase
+    .from('prompt_results')
+    .select('prompt_id, visibility_score')
+    .eq('brand_id', brandId)
+    .neq('platform', 'chatgpt-shopping')
+    .in('prompt_id', [...texts.keys()])
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return ((runs ?? []) as { prompt_id: string; visibility_score: number }[]).map((run) => ({
+    promptId: run.prompt_id,
+    promptText: texts.get(run.prompt_id) ?? '',
+    visibilityScore: Number(run.visibility_score ?? 0),
+  }));
 }
 
 /**
@@ -3686,7 +3735,7 @@ export async function getTopicDetail(brandId: string, topicId: string): Promise<
     getVisibilityRateTrend(brandId, { topicId, days: allTime }),
     getShareOfVoiceData(brandId, { topicId, days: allTime }),
     getCompetitorComparison(brandId, { topicId, days: allTime }),
-    getPromptResults(brandId, { topicId, limit: 50 }),
+    getTopicRecentRuns(brandId, topicId, 50),
   ]);
   if (!topic) throw new Error('Topic not found');
 
@@ -3707,5 +3756,5 @@ export async function getTopicDetail(brandId: string, topicId: string): Promise<
     };
   });
 
-  return { topic, summary, trend, sov, competitors, results: results.results };
+  return { topic, summary, trend, sov, competitors, results };
 }
