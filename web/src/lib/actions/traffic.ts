@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { API_BASE_URL } from '@/config/api';
 import { expandDateToEndOfDay, utcDay } from '@/lib/dates';
+import { isHourlyWindow, listUtcHours, utcHourKey } from '@/lib/traffic-buckets';
 import { getSuggestionSourceStates, type SourceState } from '@/lib/actions/integrations';
 
 export interface TrafficDateWindow {
@@ -42,6 +43,7 @@ export interface TrafficSummary {
 }
 
 export interface TrafficTrendPoint {
+  /** The bucket: a UTC day ("2026-10-17"), or an hour ("2026-10-17T13:00:00.000Z") in a 24-hour window. */
   date: string;
   [platform: string]: string | number;
 }
@@ -304,8 +306,10 @@ export async function getTrafficTrend(
 ): Promise<TrafficTrendPoint[]> {
   const supabase = await createClient();
   const { from, to } = resolveTrafficWindow(window);
+  // A day or less reads hour by hour (AT-017); longer windows by day.
+  const hourly = Boolean(from && to && isHourlyWindow(from, to));
 
-  // Group by day + platform, aggregated per batch (#450).
+  // Group by day (or hour) + platform, aggregated per batch (#450).
   const dayMap = new Map<string, Map<string, number>>();
   const allPlatforms = new Set<string>();
 
@@ -314,7 +318,8 @@ export async function getTrafficTrend(
     brandId,
     { columns: 'source_platform, created_at, id', from, to, toInclusive: true },
     (r) => {
-      const day = (r.created_at as string).slice(0, 10);
+      const created = r.created_at as string;
+      const day = hourly ? utcHourKey(created) : created.slice(0, 10);
       const platform = (r.source_platform as string) || 'unknown';
       allPlatforms.add(platform);
 
@@ -326,7 +331,7 @@ export async function getTrafficTrend(
 
   let days: string[];
   if (from && to) {
-    days = listUtcDays(from, to);
+    days = hourly ? listUtcHours(from, to) : listUtcDays(from, to);
   } else {
     days = [...dayMap.keys()].sort();
     if (days.length > TRAFFIC_TREND_MAX_DAYS) {

@@ -94,15 +94,27 @@ export function getPlatformFilterItems(
 }
 
 /**
- * A trend bucket's day ("Oct 12"). English like the rest of the UI, not the
- * browser's language (F7), and in UTC because the buckets are UTC days.
+ * A trend bucket's label. A day reads "Oct 12", in UTC because the day
+ * buckets are UTC days. An hour (the 24-hour range, AT-017) reads "13:00" on
+ * the axis and "Oct 17, 13:00" in the tooltip, in the member's own time zone.
+ * English like the rest of the UI, not the browser's language (F7).
  */
-export function formatTrafficBucketDate(value: string): string {
-  return new Date(value).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
+export function formatTrafficBucketDate(
+  value: string,
+  { withDay = false, timeZone }: { withDay?: boolean; timeZone?: string } = {},
+): string {
+  const date = new Date(value);
+  if (!value.includes('T')) {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  }
+  const hour = date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone,
   });
+  if (!withDay) return hour;
+  return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone })}, ${hour}`;
 }
 
 // ─── Custom Tooltips ──────────────────────────────────────────────────────────
@@ -120,7 +132,7 @@ function AreaTooltip({
   return (
     <div className="rounded-lg border bg-background px-3 py-2 shadow-md text-xs">
       <p className="font-medium text-foreground mb-1">
-        {label ? formatTrafficBucketDate(label) : ''}
+        {label ? formatTrafficBucketDate(label, { withDay: true }) : ''}
       </p>
       {payload.map((entry) => (
         <div key={entry.name} className="flex items-center gap-2">

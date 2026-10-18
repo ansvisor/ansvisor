@@ -3098,6 +3098,7 @@
         "value": "Value",
         "note": "Note",
         "day": "Day",
+        "hour": "Hour (UTC)",
         "platform": "Platform",
         "visits": "Visits",
         "previousVisits": "Visits, previous period",
@@ -3186,7 +3187,9 @@
       "kpiSubNoPrevious": "{pageviews, plural, one {# pageview} other {# pageviews}}",
       "listTotal": "{visits, plural, one {# visit} other {# visits}} ({pageviews, plural, one {# pageview} other {# pageviews}})",
       "rowPageviews": "{count, plural, one {# pageview} other {# pageviews}}",
-      "listNote": "One row per visit (session). Repeated pageviews in the same visit are grouped."
+      "listNote": "One row per visit (session). Repeated pageviews in the same visit are grouped.",
+      "listRange": "{visits, plural, one {# visit} other {# visits}} ({pageviews, plural, one {# pageview} other {# pageviews}}) {preset, select, last {in the {range}} other {· {range}}}",
+      "showLast7Days": "Show last 7 days"
     },
     "sources": {
       "label": "Data sources",

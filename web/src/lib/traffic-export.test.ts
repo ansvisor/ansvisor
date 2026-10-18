@@ -154,6 +154,20 @@ describe('trafficTable', () => {
     });
   });
 
+  it('names the hours of a 24-hour trend in UTC', () => {
+    const trend = [
+      { date: '2026-10-17T13:00:00.000Z', 'chatgpt.com': 1 },
+      { date: '2026-10-17T14:00:00.000Z', 'chatgpt.com': 0 },
+    ];
+    expect(trafficTable('trend', data({ trend }), label)).toEqual({
+      headers: ['Hour (UTC)', 'ChatGPT'],
+      rows: [
+        ['2026-10-17 13:00', 1],
+        ['2026-10-17 14:00', 0],
+      ],
+    });
+  });
+
   it('gives each visit with its page, full URL and pageviews', () => {
     expect(trafficTable('visits', data(), label)).toEqual({
       headers: ['Time (UTC)', 'Platform', 'Page', 'URL', 'Referrer', 'Country', 'Pageviews'],
