@@ -3096,6 +3096,53 @@
       "connecting": "Connecting…",
       "manage": "Manage",
       "connectNotAllowed": "Only admins and managers can connect a source."
+    },
+    "pageOpportunities": {
+      "title": "Pages AI engines aren't sending traffic to",
+      "badge": "Google Analytics · {range}",
+      "explain": "{ranking} None of these got a visit from an AI assistant in this range, in Google Analytics or through the tracking snippet, and <b>AI visibility</b> says why: whether answers already cite the page, whether a prompt you track points at it, or whether nothing does.",
+      "empty": "No high-value pages without AI traffic in this range.",
+      "page": "Page",
+      "aiVisibility": "AI visibility",
+      "sessions": "Sessions",
+      "rank": "Rank {by}",
+      "minutes": "{minutes} min",
+      "signals": {
+        "revenue": {
+          "by": "by revenue",
+          "column": "Revenue",
+          "explain": "Ranked by the revenue these pages produced."
+        },
+        "transactions": {
+          "by": "by orders",
+          "column": "Orders",
+          "explain": "Ranked by how many orders started on these pages."
+        },
+        "key_events": {
+          "by": "by conversions",
+          "column": "Conversions",
+          "explain": "Ranked by the conversions Analytics records on these pages."
+        },
+        "engagement": {
+          "by": "by engagement",
+          "column": "Engagement",
+          "explain": "Ranked by time on page, because this property reports no revenue or conversions. Set up key events in Analytics to rank these by what they earn instead."
+        }
+      },
+      "citation": {
+        "cited": {
+          "label": "Cited",
+          "detail": "{count, plural, one {# citation} other {# citations}} in answers"
+        },
+        "targeted_not_cited": {
+          "label": "Not cited",
+          "detail": "{count, plural, one {# prompt targets} other {# prompts target}} this page"
+        },
+        "not_targeted": {
+          "label": "No prompt",
+          "detail": "nothing you track points here"
+        }
+      }
     }
   },
   "prompts": {

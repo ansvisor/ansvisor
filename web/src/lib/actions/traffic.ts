@@ -1,7 +1,8 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { expandDateToEndOfDay } from '@/lib/dates';
+import { API_BASE_URL } from '@/config/api';
+import { expandDateToEndOfDay, utcDay } from '@/lib/dates';
 import { getSuggestionSourceStates, type SourceState } from '@/lib/actions/integrations';
 
 export interface TrafficDateWindow {
@@ -370,15 +371,13 @@ export async function getTrafficLogs(
 }
 
 /**
- * Pages that carry commercial weight and get nothing from AI engines (#719).
+ * Pages that carry commercial weight and got no AI visit in the page's range
+ * (#719, AT-002), from Analytics' AI channel or the tracking snippet.
  *
- * Read straight from the detection engine's table — the ranking, the signal
- * and the evidence were all decided server-side during the nightly run, so
- * this reads them rather than recomputing anything.
- *
- * Deliberately unfiltered by the page's date range: the findings describe the
- * engine's own 28-day window, and re-scoping them to an arbitrary range would
- * mean showing a ranking that was never computed for it.
+ * The server ranks the range the page shows when asked, with the nightly
+ * engine's signal, floors and exclusions. The page used to read the nightly
+ * findings, always the last 28 days, so the list could contradict the
+ * snippet visits beside it.
  */
 export interface PageOpportunity {
   landingPage: string;
@@ -392,52 +391,66 @@ export interface PageOpportunity {
   transactions: number;
   revenue: number;
   engagementSeconds: number;
-  windowDays: number;
-  firstDetectedAt: string;
   /**
    * Why this page gets nothing from AI engines — cited anyway, targeted by a
-   * prompt and not cited, or not targeted at all. Null on findings raised
-   * before the classification existed; the next nightly run fills them.
+   * prompt and not cited, or not targeted at all.
    */
-  citationState: 'cited' | 'targeted_not_cited' | 'not_targeted' | null;
+  citationState: 'cited' | 'targeted_not_cited' | 'not_targeted';
   citations: number;
   citingPrompts: number;
   targetingPrompts: number;
 }
 
+export interface PageOpportunities {
+  /** Pages Analytics reported in the range; 0 when it has no data there. */
+  pages: number;
+  /** The best ten, best first. */
+  rows: PageOpportunity[];
+}
+
 export async function getPageOpportunities(
   brandId: string,
-  opts?: { limit?: number },
-): Promise<PageOpportunity[]> {
+  window?: TrafficDateWindow,
+): Promise<PageOpportunities> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('page_opportunities')
-    .select(
-      'landing_page, value_signal, value_percentile, value_rank, sessions, engaged_sessions, key_events, transactions, revenue, engagement_seconds, window_days, first_detected_at, citation_state, citations, citing_prompts, targeting_prompts',
-    )
-    .eq('brand_id', brandId)
-    .is('resolved_at', null)
-    .order('value_percentile', { ascending: false })
-    .limit(opts?.limit ?? 10);
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
 
-  if (error) throw new Error(error.message);
+  // Analytics stores whole days, so the range goes as its first and last
+  // day; an open end stays open.
+  const params = new URLSearchParams({ brandId });
+  const from = utcDay(window?.dateFrom);
+  const to = utcDay(window?.dateTo);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
 
-  return (data ?? []).map((row) => ({
-    landingPage: row.landing_page as string,
-    valueSignal: row.value_signal as PageOpportunity['valueSignal'],
-    valuePercentile: Number(row.value_percentile) || 0,
-    valueRank: Number(row.value_rank) || 0,
-    sessions: Number(row.sessions) || 0,
-    engagedSessions: Number(row.engaged_sessions) || 0,
-    keyEvents: Number(row.key_events) || 0,
-    transactions: Number(row.transactions) || 0,
-    revenue: Number(row.revenue) || 0,
-    engagementSeconds: Number(row.engagement_seconds) || 0,
-    windowDays: Number(row.window_days) || 0,
-    firstDetectedAt: row.first_detected_at as string,
-    citationState: row.citation_state as PageOpportunity['citationState'],
-    citations: Number(row.citations) || 0,
-    citingPrompts: Number(row.citing_prompts) || 0,
-    targetingPrompts: Number(row.targeting_prompts) || 0,
-  }));
+  const res = await fetch(
+    `${API_BASE_URL}/api/integrations/google-analytics/page-opportunities?${params}`,
+    { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store' },
+  );
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `Server error: ${res.status}`);
+
+  const findings = (body.findings ?? []) as Record<string, unknown>[];
+  return {
+    pages: Number(body.pages) || 0,
+    rows: findings.map((row) => ({
+      landingPage: row.landing_page as string,
+      valueSignal: row.value_signal as PageOpportunity['valueSignal'],
+      valuePercentile: Number(row.value_percentile) || 0,
+      valueRank: Number(row.value_rank) || 0,
+      sessions: Number(row.sessions) || 0,
+      engagedSessions: Number(row.engaged_sessions) || 0,
+      keyEvents: Number(row.key_events) || 0,
+      transactions: Number(row.transactions) || 0,
+      revenue: Number(row.revenue) || 0,
+      engagementSeconds: Number(row.engagement_seconds) || 0,
+      citationState: row.citation_state as PageOpportunity['citationState'],
+      citations: Number(row.citations) || 0,
+      citingPrompts: Number(row.citing_prompts) || 0,
+      targetingPrompts: Number(row.targeting_prompts) || 0,
+    })),
+  };
 }

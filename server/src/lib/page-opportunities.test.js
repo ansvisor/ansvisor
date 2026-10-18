@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 // The module imports the supabase admin client, whose config hard-exits when
 // SUPABASE_* env is absent (as in CI) — stub it before the import chain.
-vi.mock('../config/supabase.js', () => ({ default: {} }));
+const db = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
+vi.mock('../config/supabase.js', () => ({ default: db }));
 
 import {
   classifyCitationState,
   detectPageOpportunities,
+  detectPageOpportunitiesInWindow,
   mapVisibilityRows,
   pickValueSignal,
   scorePages,
@@ -159,6 +161,28 @@ describe('detectPageOpportunities', () => {
     expect(found.map((f) => f.landing_page)).not.toContain(top.landingPage);
   });
 
+  it('does not raise a page the tracking snippet saw AI visitors on', () => {
+    // AT-002: Analytics' AI channel missed visits the snippet recorded, and
+    // the page listed them beside a finding that said there were none.
+    const pages = many();
+    const top = pages[pages.length - 1];
+    top.snippetVisits = 3;
+    const found = detectPageOpportunities({ pages });
+    expect(found.length).toBeGreaterThan(0);
+    expect(found.map((f) => f.landing_page)).not.toContain(top.landingPage);
+  });
+
+  it('keeps a page the snippet saw in the ranking, so the others keep their percentiles', () => {
+    // Excluded from the findings, not from the population: dropping it before
+    // scoring would move every other page up a place.
+    const pages = many();
+    const withVisits = detectPageOpportunities({
+      pages: pages.map((p) => (p.landingPage === '/p9' ? { ...p, snippetVisits: 1 } : p)),
+    });
+    const without = detectPageOpportunities({ pages }).filter((f) => f.landing_page !== '/p9');
+    expect(withVisits).toEqual(without);
+  });
+
   it('ignores a page with too little traffic to argue from', () => {
     // The absolute floor. A page can rank first on its site and still be one
     // visit; raising it would be a finding about nothing.
@@ -305,6 +329,11 @@ describe('mapVisibilityRows', () => {
     expect(a.targetingPrompts).toBe(4);
   });
 
+  it('reads the snippet visits the RPC counted for the page', () => {
+    expect(mapVisibilityRows([row({ snippet_visits: '3' })])[0].snippetVisits).toBe(3);
+    expect(mapVisibilityRows([row()])[0].snippetVisits).toBe(0);
+  });
+
   it('reads a count that arrived as a string, which bigint columns do', () => {
     const [a] = mapVisibilityRows([row({ sessions: '4200', citations: '104' })]);
     expect(a.sessions).toBe(4200);
@@ -342,5 +371,75 @@ describe('mapVisibilityRows', () => {
   it('handles no rows at all', () => {
     expect(mapVisibilityRows(null)).toEqual([]);
     expect(mapVisibilityRows([])).toEqual([]);
+  });
+});
+
+describe('detectPageOpportunitiesInWindow', () => {
+  // The RPC's rows for the window, answered a thousand at a time.
+  const rpcRows = (rows) => {
+    const calls = [];
+    db.rpc.mockImplementation((name, args) => {
+      calls.push({ name, args });
+      return {
+        order: () => ({
+          range: async (from, to) => ({ data: rows.slice(from, to + 1), error: null }),
+        }),
+      };
+    });
+    return calls;
+  };
+  const row = (i, over = {}) => ({
+    landing_page: `/p${i}`,
+    sessions: 100,
+    revenue: i + 1,
+    ...over,
+  });
+
+  it("ranks the page's own range, both bounds passed through", async () => {
+    const calls = rpcRows(Array.from({ length: 10 }, (_, i) => row(i)));
+    const result = await detectPageOpportunitiesInWindow('b1', {
+      since: '2026-10-11',
+      until: '2026-10-17',
+    });
+    expect(calls[0]).toEqual({
+      name: 'ga_page_ai_visibility',
+      args: { p_brand_id: 'b1', p_since: '2026-10-11', p_until: '2026-10-17' },
+    });
+    expect(result.pages).toBe(10);
+    expect(result.findings[0].landing_page).toBe('/p9');
+  });
+
+  it('leaves out a page with snippet visits in the range', async () => {
+    rpcRows(Array.from({ length: 10 }, (_, i) => row(i, i === 9 ? { snippet_visits: 2 } : {})));
+    const { findings } = await detectPageOpportunitiesInWindow('b1', { since: '2026-10-11' });
+    expect(findings.map((f) => f.landing_page)).not.toContain('/p9');
+  });
+
+  it('leaves both ends open when the page shows all time', async () => {
+    const calls = rpcRows([]);
+    const result = await detectPageOpportunitiesInWindow('b1');
+    expect(calls[0].args).toEqual({ p_brand_id: 'b1', p_since: null, p_until: null });
+    // No Analytics pages in the range: the page hides the card rather than
+    // saying nothing qualifies.
+    expect(result).toEqual({ pages: 0, findings: [] });
+  });
+
+  it('returns the best pages first, up to the limit', async () => {
+    rpcRows(Array.from({ length: 40 }, (_, i) => row(i)));
+    const { findings } = await detectPageOpportunitiesInWindow('b1', { limit: 3 });
+    expect(findings.map((f) => f.landing_page)).toEqual(['/p39', '/p38', '/p37']);
+  });
+
+  it('writes nothing: the nightly findings stay the record', async () => {
+    rpcRows(Array.from({ length: 10 }, (_, i) => row(i)));
+    await detectPageOpportunitiesInWindow('b1', { since: '2026-10-11' });
+    expect(db.from).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed read rather than an empty range', async () => {
+    db.rpc.mockReturnValue({
+      order: () => ({ range: async () => ({ data: null, error: { message: 'timeout' } }) }),
+    });
+    await expect(detectPageOpportunitiesInWindow('b1')).rejects.toThrow('timeout');
   });
 });
