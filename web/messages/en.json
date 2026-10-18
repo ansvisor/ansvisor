@@ -3109,9 +3109,30 @@
       "manage": "Manage",
       "connectNotAllowed": "Only admins and managers can connect a source."
     },
+    "gate": {
+      "needs": "Needs {source}",
+      "notConnectedTitle": "Connect {source} to see this",
+      "notConnectedGa": "Shows which AI visits engage, convert and earn revenue. Read-only access, takes about a minute.",
+      "notConnectedGsc": "Shows Google clicks and AI Overviews / AI Mode impressions per page. Read-only access.",
+      "connect": "Connect {source}",
+      "neededFor": "Needed for: {sections}",
+      "syncingTitleGa": "Importing your Google Analytics data",
+      "syncingTitleGsc": "Google Search Console data is on its way",
+      "syncingGa": "First numbers in about 15 minutes. Up to 14 months of history can take up to 24 hours.",
+      "syncingGsc": "Google reports with about a 2-day delay, so the first numbers can take up to 48 hours.",
+      "connectedTo": "Connected to {property}",
+      "unmappedTitle": "Choose a property for this brand",
+      "unmapped": "{source} is connected, but no property is chosen for this brand yet.",
+      "notConfiguredTitle": "Not set up on this server",
+      "notConfigured": "{source} needs its connection keys on this Ansvisor server before anyone can connect it.",
+      "noData": "No data for this range in {source}",
+      "showAllTime": "Show all time",
+      "sections": {
+        "pageOpportunities": "pages AI engines aren't sending traffic to"
+      }
+    },
     "pageOpportunities": {
       "title": "Pages AI engines aren't sending traffic to",
-      "badge": "Google Analytics · {range}",
       "explain": "{ranking} None of these got a visit from an AI assistant in this range, in Google Analytics or through the tracking snippet, and <b>AI visibility</b> says why: whether answers already cite the page, whether a prompt you track points at it, or whether nothing does.",
       "empty": "No high-value pages without AI traffic in this range.",
       "page": "Page",

@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
@@ -21,6 +22,9 @@ import {
   type PageOpportunity,
   type TrafficDateWindow,
 } from '@/lib/actions/traffic';
+import type { SourceState } from '@/lib/actions/integrations';
+import { TRAFFIC_SECTION_SOURCES, googleSourceStatus } from '@/lib/traffic-sources';
+import { NeedsTag, SourceNoData, SourceUnavailable } from './_source-gate';
 
 /**
  * Pages that carry weight and get nothing from AI engines (#719), for the
@@ -30,11 +34,14 @@ import {
  * so no section of the page has its own hidden window, and a page the
  * tracking snippet saw AI visitors on is never listed here.
  *
- * Renders nothing when Analytics has no data for the range — a brand
- * without a mapped Analytics property should not meet an empty card
- * explaining a feature it has not connected. With data but no finding, it
- * says so, so the card doesn't vanish as the range changes.
+ * It needs Google Analytics, and says so beside its title (AT-016). Until
+ * Analytics has data it shows the source's state in place of the list — not
+ * connected, syncing, or no property for this brand — and with no Analytics
+ * data for the range it says that. With data but no finding it says so too,
+ * so the card never vanishes or stands blank.
  */
+
+const PROVIDER = TRAFFIC_SECTION_SOURCES.pageOpportunities;
 
 /**
  * The ranking is described in the words of the metric that produced it
@@ -69,13 +76,31 @@ export function PageOpportunitiesCard({
   brandId,
   dateWindow,
   rangeLabel,
+  source,
+  sourceUnknown = false,
+  domain,
+  canConnect,
+  onConnected,
+  onShowAllTime,
 }: {
   brandId: string;
   dateWindow: TrafficDateWindow;
   /** The page's own words for the range, e.g. "last 7 days". */
   rangeLabel: string;
+  /** Google Analytics' state for the brand; null while it loads. */
+  source: SourceState | null;
+  /** The state couldn't be read: show what the range has, as before AT-016. */
+  sourceUnknown?: boolean;
+  /** The brand's primary domain, for the property line. */
+  domain: string | undefined;
+  canConnect: boolean;
+  onConnected: () => void;
+  /** Widens the page's range; absent when it is already all time. */
+  onShowAllTime?: () => void;
 }) {
   const t = useTranslations('traffic.pageOpportunities');
+  const status = source ? googleSourceStatus(source) : sourceUnknown ? 'connected' : null;
+  const connected = status === 'connected';
   const windowKey = `${brandId}|${dateWindow.dateFrom ?? ''}|${dateWindow.dateTo ?? ''}`;
   // The loaded result carries the brand and range it belongs to, rather than
   // a separate loading flag reset inside the effect: resetting state
@@ -86,10 +111,13 @@ export function PageOpportunitiesCard({
     windowKey: string;
     /** The range the rows were ranked for, which a faded card still names. */
     rangeLabel: string;
-    result: PageOpportunities;
+    /** Null when the read failed. */
+    result: PageOpportunities | null;
   } | null>(null);
 
   useEffect(() => {
+    // Nothing to rank until Analytics has data for this brand.
+    if (!connected) return;
     let cancelled = false;
     getPageOpportunities(brandId, dateWindow)
       .then((result) => {
@@ -99,22 +127,24 @@ export function PageOpportunitiesCard({
         // Best effort: this card is an addition to the page, and a failure
         // here must not take the traffic analytics down with it.
         console.error('Failed to load page opportunities:', err);
-        if (!cancelled) {
-          setLoaded({ brandId, windowKey, rangeLabel, result: { pages: 0, rows: [] } });
-        }
+        if (!cancelled) setLoaded({ brandId, windowKey, rangeLabel, result: null });
       });
     return () => {
       cancelled = true;
     };
-  }, [brandId, dateWindow, windowKey, rangeLabel]);
+  }, [connected, brandId, dateWindow, windowKey, rangeLabel]);
+
+  // The state is still loading: a moment, not worth a placeholder. A failed
+  // read hides the card rather than claim Analytics has no data.
+  if (!status) return null;
+  if (connected && loaded?.brandId === brandId && loaded.result === null) return null;
 
   // Another brand's findings must never render under this brand's name. A
   // new range keeps the previous one's card, faded, until it loads, as the
   // rest of the page does.
-  if (loaded?.brandId !== brandId || loaded.result.pages === 0) return null;
-  const stale = loaded.windowKey !== windowKey;
-
-  const { rows } = loaded.result;
+  const shown = connected && loaded?.brandId === brandId ? loaded : null;
+  const stale = shown !== null && shown.windowKey !== windowKey;
+  const rows = shown?.result?.rows ?? [];
   const signal = rows[0]?.valueSignal;
 
   return (
@@ -124,20 +154,44 @@ export function PageOpportunitiesCard({
           <CardTitle className="flex items-center gap-2 text-sm font-medium">
             <Target className="h-4 w-4 text-muted-foreground" />
             {t('title')}
+            <NeedsTag provider={PROVIDER} />
           </CardTitle>
-          <Badge variant="outline" className="text-xs">
-            {t('badge', { range: loaded.rangeLabel })}
-          </Badge>
+          {shown && (
+            <Badge variant="outline" className="text-xs">
+              {shown.rangeLabel}
+            </Badge>
+          )}
         </div>
-        <p className="text-xs text-muted-foreground">
-          {signal
-            ? t.rich('explain', {
-                ranking: t(`signals.${signal}.explain`),
-                b: (chunks) => <span className="font-medium">{chunks}</span>,
-              })
-            : t('empty')}
-        </p>
+        {shown?.result && shown.result.pages > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {signal
+              ? t.rich('explain', {
+                  ranking: t(`signals.${signal}.explain`),
+                  b: (chunks) => <span className="font-medium">{chunks}</span>,
+                })
+              : t('empty')}
+          </p>
+        )}
       </CardHeader>
+      {!connected && source && (
+        <CardContent className="p-0">
+          <SourceUnavailable
+            provider={PROVIDER}
+            state={source}
+            domain={domain}
+            canConnect={canConnect}
+            onConnected={onConnected}
+          />
+        </CardContent>
+      )}
+      {connected && !shown && (
+        <CardContent className="pb-4">
+          <Skeleton className="h-4 w-64" />
+        </CardContent>
+      )}
+      {shown?.result?.pages === 0 && (
+        <SourceNoData provider={PROVIDER} onShowAllTime={onShowAllTime} />
+      )}
       {signal && (
         <CardContent className="p-0">
           <Table>

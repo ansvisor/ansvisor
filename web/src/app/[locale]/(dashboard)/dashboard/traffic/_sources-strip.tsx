@@ -12,7 +12,12 @@ import { formatRelative } from '@/lib/format-relative';
 import { useIntegrationConnect } from '@/hooks/use-integration-connect';
 import type { IntegrationProvider, SourceState } from '@/lib/actions/integrations';
 import type { TrafficSources } from '@/lib/actions/traffic';
-import { googleSourceStatus, gscPropertyHost, snippetDetected } from '@/lib/traffic-sources';
+import {
+  INTEGRATIONS_SETTINGS_PATH,
+  googleSourceStatus,
+  snippetDetected,
+  sourceHost,
+} from '@/lib/traffic-sources';
 
 type Tone = 'on' | 'sync' | 'off';
 
@@ -21,8 +26,6 @@ const DOT: Record<Tone, string> = {
   sync: 'bg-amber-500',
   off: 'bg-muted-foreground/30',
 };
-
-const SETTINGS_INTEGRATIONS = '/dashboard/settings?tab=integrations';
 
 /** One source: a status dot by the title, a sub-line, and its button. */
 function SourceCard({
@@ -82,7 +85,7 @@ function GoogleSource({
 
   const manage = (
     <Link
-      href={SETTINGS_INTEGRATIONS}
+      href={INTEGRATIONS_SETTINGS_PATH}
       className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'h-7 text-xs')}
     >
       {t('manage')}
@@ -91,8 +94,7 @@ function GoogleSource({
 
   const status = googleSourceStatus(state);
   if (status === 'connected' || status === 'syncing') {
-    const host =
-      (!isGa && state.property ? gscPropertyHost(state.property) : domain) ?? state.property;
+    const host = sourceHost(provider, state.property, domain);
     return (
       <SourceCard
         tone={status === 'connected' ? 'on' : 'sync'}
@@ -100,7 +102,7 @@ function GoogleSource({
         line={
           status === 'connected'
             ? t('synced', {
-                property: t('property', { host: host ?? '', source: isGa ? 'GA4' : 'GSC' }),
+                property: t('property', { host, source: isGa ? 'GA4' : 'GSC' }),
                 when: formatRelative(state.lastDataAt, tCommon),
               })
             : isGa

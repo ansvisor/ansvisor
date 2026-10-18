@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { googleSourceStatus, gscPropertyHost, snippetDetected } from './traffic-sources';
+import {
+  TRAFFIC_SECTION_SOURCES,
+  googleSourceStatus,
+  gscPropertyHost,
+  sectionsNeeding,
+  snippetDetected,
+  sourceHost,
+} from './traffic-sources';
 
 const NOW = Date.parse('2026-10-18T12:00:00Z');
 const daysAgo = (d: number) => new Date(NOW - d * 86_400_000).toISOString();
@@ -47,5 +54,33 @@ describe('gscPropertyHost', () => {
 
   it('leaves anything else as it is', () => {
     expect(gscPropertyHost('ansvisor.com')).toBe('ansvisor.com');
+  });
+});
+
+describe('sectionsNeeding', () => {
+  it('lists the sections a source unlocks (AT-016)', () => {
+    expect(TRAFFIC_SECTION_SOURCES.pageOpportunities).toBe('google-analytics');
+    expect(sectionsNeeding('google-analytics')).toEqual(['pageOpportunities']);
+  });
+
+  it('lists nothing for a source no section needs yet', () => {
+    expect(sectionsNeeding('google-search-console')).toEqual([]);
+  });
+});
+
+describe('sourceHost', () => {
+  it('names a Search Console property by its own host', () => {
+    expect(sourceHost('google-search-console', 'sc-domain:acme.example', 'other.example')).toBe(
+      'acme.example',
+    );
+    expect(sourceHost('google-search-console', 'https://blog.acme.example/', undefined)).toBe(
+      'blog.acme.example',
+    );
+  });
+
+  it("names Google Analytics by the brand's domain, its property id names no site", () => {
+    expect(sourceHost('google-analytics', '123456789', 'acme.example')).toBe('acme.example');
+    expect(sourceHost('google-analytics', '123456789', undefined)).toBe('123456789');
+    expect(sourceHost('google-analytics', null, undefined)).toBe('');
   });
 });

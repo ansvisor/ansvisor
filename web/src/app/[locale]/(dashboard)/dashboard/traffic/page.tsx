@@ -626,6 +626,25 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   const hasAnyData = summary?.hasAnyData ?? false;
   const trulyEmpty = isEmpty && !hasAnyData;
 
+  // Findings from the Analytics connection (#719), for the page's range
+  // (AT-002). They need Google Analytics, not the snippet, so the card shows
+  // whatever the snippet has sent, with Analytics' own state until there is
+  // data from it (AT-016). Kept apart from the snippet's tables: the two
+  // origins are never summed; a page the snippet saw is just never listed.
+  const opportunitiesCard = (
+    <PageOpportunitiesCard
+      brandId={brand.id}
+      dateWindow={dateWindow}
+      rangeLabel={rangeSubLabel}
+      source={sources?.ga ?? null}
+      sourceUnknown={sourcesFailed}
+      domain={primaryDomain}
+      canConnect={canManage}
+      onConnected={() => void loadSources()}
+      onShowAllTime={datePreset === 'all' ? undefined : () => handleDatePresetChange('all')}
+    />
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -696,7 +715,9 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
           rangeLabel={rangeSubLabel}
           onReset={() => handleDatePresetChange('all')}
         />
-      ) : (
+      ) : null}
+      {isEmpty && opportunitiesCard}
+      {!isEmpty && (
         <>
           {/* KPI Cards */}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -844,17 +865,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
             </Card>
           </div>
 
-          {/* Findings from the Analytics connection (#719), for the page's
-              range (AT-002). Renders nothing for brands without Analytics
-              data in it, so the page is unchanged for everyone who has not
-              connected one. Kept visually distinct from the tables above,
-              which count the tracking snippet's own visits — the two origins
-              are never summed; a page the snippet saw is just never listed. */}
-          <PageOpportunitiesCard
-            brandId={brand.id}
-            dateWindow={dateWindow}
-            rangeLabel={rangeSubLabel}
-          />
+          {opportunitiesCard}
 
           {/* Recent Visit Log with filtering and pagination*/}
           <Card>

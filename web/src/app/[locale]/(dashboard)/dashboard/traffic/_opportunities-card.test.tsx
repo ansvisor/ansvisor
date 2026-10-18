@@ -4,16 +4,23 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import type { PageOpportunities, PageOpportunity, TrafficDateWindow } from '@/lib/actions/traffic';
+import type { SourceState } from '@/lib/actions/integrations';
 
 /**
- * AT-002: "Pages AI engines aren't sending traffic to" reads the range the
- * page shows, says which range in its badge, and stays put with a note when
- * nothing in that range qualifies.
+ * "Pages AI engines aren't sending traffic to" reads the range the page
+ * shows and names it (AT-002), says it needs Google Analytics, and shows
+ * Analytics' own state until there is data from it (AT-016).
  */
 
 const getPageOpportunities = vi.fn();
 vi.mock('@/lib/actions/traffic', () => ({
   getPageOpportunities: (...args: unknown[]) => getPageOpportunities(...args),
+}));
+vi.mock('@/hooks/use-integration-connect', () => ({
+  useIntegrationConnect: () => ({ connecting: false, connect: vi.fn() }),
+}));
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, ...props }: { href: string }) => <a href={href} {...props} />,
 }));
 
 const { PageOpportunitiesCard } = await import('./_opportunities-card');
@@ -39,14 +46,26 @@ const finding = (over: Partial<PageOpportunity> = {}): PageOpportunity => ({
   ...over,
 });
 
+const ga = (over: Partial<SourceState> = {}): SourceState => ({
+  configured: true,
+  connected: true,
+  mapped: true,
+  firstDataAt: '2026-09-01T06:00:00.000Z',
+  lastDataAt: '2026-10-18T06:00:00.000Z',
+  property: '123456789',
+  ...over,
+});
+
 const WEEK: TrafficDateWindow = { dateFrom: '2026-10-11T09:00:00.000Z' };
 const MONTH: TrafficDateWindow = { dateFrom: '2026-09-18T09:00:00.000Z' };
 
 let container: HTMLDivElement;
 let root: Root;
+const onShowAllTime = vi.fn();
 
 beforeEach(() => {
   getPageOpportunities.mockReset();
+  onShowAllTime.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -57,27 +76,47 @@ afterEach(() => {
   container.remove();
 });
 
-async function render(dateWindow: TrafficDateWindow, rangeLabel: string) {
+async function render(
+  dateWindow: TrafficDateWindow,
+  rangeLabel: string,
+  {
+    source = ga(),
+    sourceUnknown = false,
+    showAll = true,
+  }: { source?: SourceState | null; sourceUnknown?: boolean; showAll?: boolean } = {},
+) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <PageOpportunitiesCard brandId="b1" dateWindow={dateWindow} rangeLabel={rangeLabel} />
+        <PageOpportunitiesCard
+          brandId="b1"
+          dateWindow={dateWindow}
+          rangeLabel={rangeLabel}
+          source={source}
+          sourceUnknown={sourceUnknown}
+          domain="acme.example"
+          canConnect
+          onConnected={() => {}}
+          onShowAllTime={showAll ? onShowAllTime : undefined}
+        />
       </NextIntlClientProvider>,
     );
   });
 }
 
 const resolveWith = (result: PageOpportunities) => getPageOpportunities.mockResolvedValue(result);
+const text = () => container.textContent ?? '';
 
 describe('PageOpportunitiesCard', () => {
-  it("asks for the page's range and names it in the badge", async () => {
+  it("asks for the page's range, names it, and says it needs Google Analytics", async () => {
     resolveWith({ pages: 30, rows: [finding()] });
     await render(WEEK, 'last 7 days');
 
     expect(getPageOpportunities).toHaveBeenCalledWith('b1', WEEK);
-    expect(container.textContent).toContain('Google Analytics · last 7 days');
-    expect(container.textContent).not.toContain('28 days');
-    expect(container.textContent).toContain('in this range');
+    expect(text()).toContain('Needs Google Analytics');
+    expect(text()).toContain('last 7 days');
+    expect(text()).not.toContain('28 days');
+    expect(text()).toContain('in this range');
   });
 
   it('reads the new range when the page changes it', async () => {
@@ -87,9 +126,9 @@ describe('PageOpportunitiesCard', () => {
     await render(MONTH, 'last 30 days');
 
     expect(getPageOpportunities).toHaveBeenLastCalledWith('b1', MONTH);
-    expect(container.textContent).toContain('Google Analytics · last 30 days');
-    expect(container.textContent).toContain('/demo');
-    expect(container.textContent).not.toContain('/pricing');
+    expect(text()).toContain('last 30 days');
+    expect(text()).toContain('/demo');
+    expect(text()).not.toContain('/pricing');
   });
 
   it('keeps the previous range on screen, faded, while the new one loads', async () => {
@@ -102,7 +141,7 @@ describe('PageOpportunitiesCard', () => {
     expect(card).not.toBeNull();
     expect(card!.textContent).toContain('/pricing');
     // The faded rows still name the range they were ranked for.
-    expect(card!.textContent).toContain('Google Analytics · last 7 days');
+    expect(card!.textContent).toContain('last 7 days');
     expect(card!.textContent).not.toContain('last 30 days');
   });
 
@@ -116,33 +155,71 @@ describe('PageOpportunitiesCard', () => {
     });
     await render(WEEK, 'last 7 days');
 
-    const text = container.textContent ?? '';
-    expect(text).toContain('Ranked by the conversions Analytics records on these pages.');
-    expect(text).toContain('Conversions');
-    expect(text).toContain('Rank by conversions');
-    expect(text).toContain('Not cited');
-    expect(text).toContain('1 prompt targets this page');
-    expect(text).toContain('3 citations in answers');
+    expect(text()).toContain('Ranked by the conversions Analytics records on these pages.');
+    expect(text()).toContain('Conversions');
+    expect(text()).toContain('Rank by conversions');
+    expect(text()).toContain('Not cited');
+    expect(text()).toContain('1 prompt targets this page');
+    expect(text()).toContain('3 citations in answers');
   });
 
   it('says nothing qualifies when Analytics has data for the range', async () => {
     resolveWith({ pages: 30, rows: [] });
     await render(WEEK, 'last 24 hours');
 
-    expect(container.textContent).toContain('Google Analytics · last 24 hours');
-    expect(container.textContent).toContain(
-      'No high-value pages without AI traffic in this range.',
-    );
+    expect(text()).toContain('No high-value pages without AI traffic in this range.');
     expect(container.querySelector('table')).toBeNull();
   });
 
-  it('renders nothing when Analytics has no data for the range', async () => {
+  it('says Analytics has no data for the range, with a way to widen it', async () => {
     resolveWith({ pages: 0, rows: [] });
     await render(WEEK, 'last 7 days');
-    expect(container.innerHTML).toBe('');
+
+    expect(text()).toContain('No data for this range in Google Analytics');
+    const showAll = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Show all time',
+    );
+    await act(async () => showAll!.click());
+    expect(onShowAllTime).toHaveBeenCalled();
   });
 
-  it('renders nothing when the read fails, and leaves the page alone', async () => {
+  it('offers no wider range when it already shows all time', async () => {
+    resolveWith({ pages: 0, rows: [] });
+    await render({}, 'all time', { showAll: false });
+    expect(text()).toContain('No data for this range in Google Analytics');
+    expect(text()).not.toContain('Show all time');
+  });
+
+  it("shows Analytics' state, and reads nothing, until Analytics has data", async () => {
+    await render(WEEK, 'last 7 days', { source: ga({ connected: false, mapped: false }) });
+    expect(text()).toContain('Needs Google Analytics');
+    expect(text()).toContain('Connect Google Analytics to see this');
+
+    await render(WEEK, 'last 7 days', { source: ga({ lastDataAt: null }) });
+    expect(text()).toContain('Importing your Google Analytics data');
+
+    await render(WEEK, 'last 7 days', { source: ga({ mapped: false }) });
+    expect(text()).toContain('Choose a property for this brand');
+
+    expect(getPageOpportunities).not.toHaveBeenCalled();
+    // The range belongs to the data, so it shows only with data.
+    expect(text()).not.toContain('last 7 days');
+  });
+
+  it('waits for the state before showing anything', async () => {
+    await render(WEEK, 'last 7 days', { source: null });
+    expect(container.innerHTML).toBe('');
+    expect(getPageOpportunities).not.toHaveBeenCalled();
+  });
+
+  it('reads the range anyway when the state could not be read', async () => {
+    resolveWith({ pages: 30, rows: [finding()] });
+    await render(WEEK, 'last 7 days', { source: null, sourceUnknown: true });
+    expect(getPageOpportunities).toHaveBeenCalledWith('b1', WEEK);
+    expect(text()).toContain('/pricing');
+  });
+
+  it('hides itself when the read fails, rather than claim there is no data', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     getPageOpportunities.mockRejectedValue(new Error('Server error: 500'));
     await render(WEEK, 'last 7 days');

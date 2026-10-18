@@ -1,7 +1,10 @@
 /**
- * The AI Traffic page's data sources strip (AT-001): which state each source
- * is in, and how a Google property is named on it.
+ * The AI Traffic page's data sources (AT-001, AT-016): which state each
+ * source is in, how a Google property is named, and which sections need
+ * which source.
  */
+
+import type { IntegrationProvider } from '@/lib/actions/integrations';
 
 /** A snippet with no visit for this long reads as not detected, and its code box opens. */
 export const SNIPPET_ACTIVE_DAYS = 7;
@@ -39,6 +42,9 @@ export function googleSourceStatus(source: {
   return source.lastDataAt ? 'connected' : 'syncing';
 }
 
+/** Where a Google source's connection and property are managed. */
+export const INTEGRATIONS_SETTINGS_PATH = '/dashboard/settings?tab=integrations';
+
 /**
  * A Search Console property as the strip names it: the plain domain, never
  * "sc-domain:", and a URL-prefix property by its host.
@@ -50,4 +56,38 @@ export function gscPropertyHost(property: string): string {
   } catch {
     return property;
   }
+}
+
+/**
+ * The host a connected source's property line names: the Search Console
+ * property's own host, or the brand's domain for Google Analytics, whose
+ * property id names no site. The property itself when nothing better is known.
+ */
+export function sourceHost(
+  provider: IntegrationProvider,
+  property: string | null,
+  domain: string | undefined,
+): string {
+  if (provider === 'google-search-console' && property) return gscPropertyHost(property);
+  return domain ?? property ?? '';
+}
+
+/**
+ * The AI Traffic sections that need a Google source, and which one: the
+ * spec's dependency matrix (§3.8b). A section shows its source's state when
+ * it isn't connected, and the not-connected state lists every section the
+ * source unlocks. Sections that read only the snippet aren't listed; each
+ * later section adds its own entry.
+ */
+export const TRAFFIC_SECTION_SOURCES = {
+  pageOpportunities: 'google-analytics',
+} as const satisfies Record<string, IntegrationProvider>;
+
+export type TrafficSection = keyof typeof TRAFFIC_SECTION_SOURCES;
+
+/** The sections a source unlocks, in the page's order. */
+export function sectionsNeeding(provider: IntegrationProvider): TrafficSection[] {
+  return (Object.keys(TRAFFIC_SECTION_SOURCES) as TrafficSection[]).filter(
+    (section) => TRAFFIC_SECTION_SOURCES[section] === provider,
+  );
 }
