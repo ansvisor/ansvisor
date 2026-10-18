@@ -57,6 +57,19 @@ describe('GET /google-analytics/page-opportunities', () => {
     expect(detect).toHaveBeenCalledWith(BRAND, { since: '2026-10-11', until: '2026-10-17' });
   });
 
+  it('passes a limit through, for an export of every finding', async () => {
+    await get({ brandId: BRAND, from: '2026-10-11', limit: '1000' });
+    expect(detect).toHaveBeenCalledWith(BRAND, { since: '2026-10-11', until: null, limit: 1000 });
+  });
+
+  it('refuses a limit outside 1–1000', async () => {
+    for (const limit of ['0', '1001', 'many']) {
+      const res = await get({ brandId: BRAND, limit });
+      expect(res.status).toBe(400);
+    }
+    expect(detect).not.toHaveBeenCalled();
+  });
+
   it('leaves an end open when the page sends no bound for it', async () => {
     await get({ brandId: BRAND });
     expect(detect).toHaveBeenCalledWith(BRAND, { since: null, until: null });

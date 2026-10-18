@@ -190,6 +190,8 @@ async function scanTrafficLogs(
 export async function getTrafficSummary(
   brandId: string,
   window?: TrafficDateWindow,
+  /** The page shows the top 10 landing pages; an export takes them all. */
+  opts?: { topPages?: number },
 ): Promise<TrafficSummary> {
   const supabase = await createClient();
   const { from, to, prevFrom, prevTo } = resolveTrafficWindow(window);
@@ -283,7 +285,7 @@ export async function getTrafficSummary(
       visitsPrev: pageMapPrev.get(url) ?? 0,
     }))
     .sort((a, b) => b.visits - a.visits)
-    .slice(0, 10);
+    .slice(0, opts?.topPages ?? 10);
 
   return {
     totalVisits,
@@ -344,6 +346,33 @@ export async function getTrafficTrend(
 }
 
 /**
+ * The visit list's filters over ai_traffic_logs: platform, a URL search and
+ * the window. Shared by the list and its export, so the file holds the rows
+ * the list shows.
+ */
+function visitListQuery(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  filters: { platform?: string; search?: string; from?: string; to?: string },
+  columns: string,
+  head: boolean,
+) {
+  let query = supabase
+    .from('ai_traffic_logs')
+    .select(columns, { count: 'exact', head })
+    .eq('brand_id', brandId);
+  if (filters.platform) query = query.eq('source_platform', filters.platform);
+  if (filters.search) {
+    // Escape \, % and _ for ILIKE to treat them as literals, not wildcards
+    const escaped = filters.search.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+    query = query.ilike('url', `%${escaped}%`);
+  }
+  if (filters.from) query = query.gte('created_at', filters.from);
+  if (filters.to) query = query.lte('created_at', filters.to);
+  return query;
+}
+
+/**
  * The window's visits, newest first, one row per visit with its pageviews
  * (AT-003). `total` counts the visits that match; `pageviews` counts every
  * pageview that does, so the list can say "4 visits (7 pageviews)".
@@ -370,21 +399,9 @@ export async function getTrafficLogs(
   });
 
   // One set of filters for the visits and for the pageview count.
-  const matching = (columns: string, head: boolean) => {
-    let query = supabase
-      .from('ai_traffic_logs')
-      .select(columns, { count: 'exact', head })
-      .eq('brand_id', brandId);
-    if (platform) query = query.eq('source_platform', platform);
-    if (search) {
-      // Escape \, % and _ for ILIKE to treat them as literals, not wildcards
-      const escaped = search.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
-      query = query.ilike('url', `%${escaped}%`);
-    }
-    if (from) query = query.gte('created_at', from);
-    if (to) query = query.lte('created_at', to);
-    return query;
-  };
+  const filters = { platform, search, from, to };
+  const matching = (columns: string, head: boolean) =>
+    visitListQuery(supabase, brandId, filters, columns, head);
 
   const [visits, pageviews] = await Promise.all([
     matching('*', false)
@@ -418,6 +435,67 @@ export async function getTrafficLogs(
   }
 
   return { logs, total: visits.count ?? 0, pageviews: pageviews.count ?? 0 };
+}
+
+/**
+ * Every visit the list would show, for an export (AT-015): the list's
+ * filters, all of its pages, each visit with its pageviews. Null when there
+ * are more than `max`, which the export refuses rather than build slowly.
+ *
+ * The pageviews come from one scan of the window's repeat rows rather than
+ * an id list per page of visits: a thousand ids don't fit in a request URL.
+ * A visit's repeats follow it, so the scan starts with the window and has
+ * no end, as the list counts them.
+ */
+export async function getTrafficVisitsForExport(
+  brandId: string,
+  opts: { platform?: string; search?: string; dateFrom?: string; dateTo?: string; max: number },
+): Promise<TrafficLog[] | null> {
+  const supabase = await createClient();
+  const { from, to } = resolveTrafficWindow({ dateFrom: opts.dateFrom, dateTo: opts.dateTo });
+  const filters = { platform: opts.platform, search: opts.search, from, to };
+
+  const counted = await visitListQuery(supabase, brandId, filters, 'id', true).is('visit_of', null);
+  if (counted.error) throw new Error(counted.error.message);
+  const total = counted.count ?? 0;
+  if (total > opts.max) return null;
+
+  const visits: TrafficLog[] = [];
+  for (let start = 0; start < total; start += TRAFFIC_PAGE_SIZE) {
+    const { data, error } = await visitListQuery(supabase, brandId, filters, '*', false)
+      .is('visit_of', null)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(start, start + TRAFFIC_PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as unknown as Record<string, unknown>[];
+    visits.push(...batch.map(mapLogRow));
+    if (batch.length < TRAFFIC_PAGE_SIZE) break;
+  }
+  if (visits.length === 0) return visits;
+
+  const extra = new Map<string, number>();
+  for (let start = 0; ; start += TRAFFIC_PAGE_SIZE) {
+    let query = supabase
+      .from('ai_traffic_logs')
+      .select('id, visit_of')
+      .eq('brand_id', brandId)
+      .not('visit_of', 'is', null)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(start, start + TRAFFIC_PAGE_SIZE - 1);
+    if (from) query = query.gte('created_at', from);
+    if (opts.platform) query = query.eq('source_platform', opts.platform);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    for (const row of data ?? []) {
+      const id = row.visit_of as string;
+      extra.set(id, (extra.get(id) ?? 0) + 1);
+    }
+    if ((data ?? []).length < TRAFFIC_PAGE_SIZE) break;
+  }
+  for (const visit of visits) visit.pageviews += extra.get(visit.id) ?? 0;
+  return visits;
 }
 
 /**
@@ -461,6 +539,8 @@ export interface PageOpportunities {
 export async function getPageOpportunities(
   brandId: string,
   window?: TrafficDateWindow,
+  /** The card shows the best ten; an export asks for more. */
+  opts?: { limit?: number },
 ): Promise<PageOpportunities> {
   const supabase = await createClient();
   const {
@@ -475,6 +555,7 @@ export async function getPageOpportunities(
   const to = utcDay(window?.dateTo);
   if (from) params.set('from', from);
   if (to) params.set('to', to);
+  if (opts?.limit) params.set('limit', String(opts.limit));
 
   const res = await fetch(
     `${API_BASE_URL}/api/integrations/google-analytics/page-opportunities?${params}`,

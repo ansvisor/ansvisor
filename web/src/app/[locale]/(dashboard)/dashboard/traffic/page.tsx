@@ -37,6 +37,7 @@ import {
   type DateRangePreset,
 } from '@/components/filters/date-range-filter';
 import { PageOpportunitiesCard } from './_opportunities-card';
+import { ExportMenu, TableExport, useTrafficExport } from './_export';
 import { SourcesStrip } from './_sources-strip';
 import { SnippetBanner, SnippetDialog } from './_snippet-code';
 import { snippetDetected } from '@/lib/traffic-sources';
@@ -60,12 +61,9 @@ import {
   Search,
   X,
   Loader2,
-  Download,
   CalendarX2,
 } from 'lucide-react';
-import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { toCsv } from '@/lib/csv';
 import { formatRelative } from '@/lib/format-relative';
 import { formatNumber } from '@/lib/format';
 import { visitChange } from '@/lib/traffic-change';
@@ -80,16 +78,6 @@ import {
 } from '@/components/ui/select';
 
 const PAGE_SIZE = 10;
-
-/**
- * PostgREST silently caps un-paginated selects at 1000 rows (see the citations
- * export's note on the same limit) — fetch up to that ceiling in one request
- * for the export rather than scanning further pages, matching the "high limit"
- * scope in #607.
- */
-const TRAFFIC_EXPORT_LIMIT = 1000;
-
-const TRAFFIC_EXPORT_HEADERS = ['timestamp', 'platform', 'page_url', 'referrer', 'pageviews'];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -447,7 +435,6 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   const [logsPageviews, setLogsPageviews] = useState(0);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
   // What feeds the page (AT-001); null while it loads.
   const [sources, setSources] = useState<TrafficSources | null>(null);
   // A failed read hides the strip and leaves the snippet code open, as before it.
@@ -472,6 +459,14 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   const [filters, setFilters] = useState<TrafficFilters>({ platform: '', search: '' });
   const [searchInput, setSearchInput] = useState(filters.search);
   const [page, setPage] = useState(0);
+  // The page as files (AT-015): the same range, and the visit list's filters.
+  const exporter = useTrafficExport({
+    brandId: brand.id,
+    dateWindow,
+    rangeLabel: rangeSubLabel,
+    platform: filters.platform,
+    search: filters.search,
+  });
 
   useEffect(() => {
     const id = window.setTimeout(() => {
@@ -526,43 +521,6 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
       setIsLoadingLogs(false);
     }
   }, [brand.id, page, filters.platform, filters.search, dateWindow]);
-
-  const handleExportCsv = useCallback(async () => {
-    setIsExporting(true);
-    try {
-      const result = await getTrafficLogs(brand.id, {
-        limit: TRAFFIC_EXPORT_LIMIT,
-        platform: filters.platform || undefined,
-        search: filters.search || undefined,
-        dateFrom: dateWindow.dateFrom,
-        dateTo: dateWindow.dateTo,
-      });
-
-      const rows = result.logs.map((log) => ({
-        timestamp: log.createdAt,
-        platform: log.sourcePlatform ? getPlatformName(log.sourcePlatform) : '',
-        page_url: log.url,
-        referrer: log.referrer ?? '',
-        pageviews: log.pageviews,
-      }));
-
-      const csv = toCsv(rows, TRAFFIC_EXPORT_HEADERS);
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      const date = new Date().toISOString().slice(0, 10);
-
-      link.href = url;
-      link.download = `ansvisor_${brand.slug}_traffic_${date}.csv`;
-      link.click();
-
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('exportError'));
-    } finally {
-      setIsExporting(false);
-    }
-  }, [brand.id, brand.slug, filters.platform, filters.search, dateWindow, t]);
 
   const handleFiltersChange = useCallback((patch: Partial<TrafficFilters>) => {
     setPage(0);
@@ -642,6 +600,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
       canConnect={canManage}
       onConnected={() => void loadSources()}
       onShowAllTime={datePreset === 'all' ? undefined : () => handleDatePresetChange('all')}
+      actions={<TableExport exporter={exporter} section="opportunities" />}
     />
   );
 
@@ -668,19 +627,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
             onFromChange={handleCustomFromChange}
             onToChange={handleCustomToChange}
           />
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => void handleExportCsv()}
-            disabled={isExporting || isEmpty}
-          >
-            {isExporting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4" />
-            )}
-            {isExporting ? tCommon('exporting') : tCommon('exportCsv')}
-          </Button>
+          <ExportMenu exporter={exporter} />
         </div>
       </div>
 
@@ -785,7 +732,10 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
             {/* Platform table */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Referrals by Platform</CardTitle>
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="text-sm font-medium">Referrals by Platform</CardTitle>
+                  <TableExport exporter={exporter} section="platforms" />
+                </div>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
@@ -826,7 +776,10 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
             {/* Top Pages */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Top Landing Pages</CardTitle>
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="text-sm font-medium">Top Landing Pages</CardTitle>
+                  <TableExport exporter={exporter} section="pages" />
+                </div>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
@@ -876,11 +829,14 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                     <LayoutList className="h-4 w-4 text-muted-foreground" />
                     <CardTitle className="text-sm font-medium">Recent AI Referral Visits</CardTitle>
                   </div>
-                  {logsTotal > 0 && (
-                    <Badge variant="secondary" className="text-xs">
-                      {tVisits('listTotal', { visits: logsTotal, pageviews: logsPageviews })}
-                    </Badge>
-                  )}
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {logsTotal > 0 && (
+                      <Badge variant="secondary" className="text-xs">
+                        {tVisits('listTotal', { visits: logsTotal, pageviews: logsPageviews })}
+                      </Badge>
+                    )}
+                    <TableExport exporter={exporter} section="visits" />
+                  </div>
                 </div>
                 <TrafficFilterBar
                   filters={filters}

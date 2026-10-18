@@ -3072,7 +3072,110 @@
     "snippetTitle": "Add this snippet to your website",
     "snippetDescription": "Paste this before the closing <code>{tag}</code> tag to track AI-referred visits.",
     "copySnippet": "Copy tracking script",
-    "exportError": "Failed to export CSV",
+    "export": {
+      "button": "Export",
+      "exporting": "Exporting…",
+      "excel": "Excel (.xlsx)",
+      "excelHint": "Whole page, one sheet per section",
+      "csv": "CSV (.zip)",
+      "csvHint": "One CSV per section",
+      "tableExcel": "Excel",
+      "tableCsv": "CSV",
+      "failed": "The export failed. Please try again.",
+      "tooLarge": "This range has more than {max} visits, too many to export at once. Choose a shorter range.",
+      "sheets": {
+        "filters": "Filters",
+        "kpis": "KPIs",
+        "trend": "Trend",
+        "platforms": "Platforms",
+        "pages": "Top landing pages",
+        "opportunities": "Pages without AI traffic",
+        "visits": "Visits"
+      },
+      "columns": {
+        "setting": "Setting",
+        "metric": "Metric",
+        "value": "Value",
+        "note": "Note",
+        "day": "Day",
+        "platform": "Platform",
+        "visits": "Visits",
+        "previousVisits": "Visits, previous period",
+        "change": "Change (%)",
+        "share": "Share (%)",
+        "page": "Page",
+        "url": "URL",
+        "aiVisibility": "AI visibility",
+        "citations": "Citations",
+        "targetingPrompts": "Prompts targeting",
+        "sessions": "Sessions",
+        "rankedBy": "Ranked by",
+        "rank": "Rank",
+        "percentile": "Percentile",
+        "time": "Time (UTC)",
+        "referrer": "Referrer",
+        "country": "Country",
+        "pageviews": "Pageviews"
+      },
+      "metrics": {
+        "visits": "AI-referred visits",
+        "pageviews": "Pageviews",
+        "previousVisits": "Visits, previous period",
+        "change": "Change vs previous period (%)",
+        "topPlatform": "Top platform",
+        "topPlatformVisits": "Top platform visits",
+        "platforms": "Platforms"
+      },
+      "notes": {
+        "lowSample": "Low sample: fewer than 30 visits in this period or the one before",
+        "new": "New: no visits in the previous period",
+        "noPreviousPeriod": "No previous period for all time",
+        "analytics": {
+          "not_configured": "Google Analytics isn't set up on this server",
+          "not_connected": "Needs Google Analytics: not connected",
+          "unmapped": "Needs Google Analytics: no property chosen for this brand",
+          "syncing": "Google Analytics is importing its first data",
+          "noData": "No data for this range in Google Analytics",
+          "noFinding": "No high-value pages without AI traffic in this range",
+          "failed": "Google Analytics findings couldn't be read; try the export again"
+        }
+      },
+      "citationStates": {
+        "cited": "Cited",
+        "targeted_not_cited": "Not cited",
+        "not_targeted": "No prompt"
+      },
+      "signals": {
+        "revenue": "Revenue",
+        "transactions": "Orders",
+        "key_events": "Conversions",
+        "engagement": "Engagement (min)"
+      },
+      "sourceStates": {
+        "active": "Active",
+        "notDetected": "Not detected",
+        "connected": "Connected",
+        "syncing": "Syncing",
+        "unmapped": "Connected, no property for this brand",
+        "not_connected": "Not connected",
+        "not_configured": "Not set up on this server"
+      },
+      "filters": {
+        "brand": "Brand",
+        "range": "Range",
+        "from": "From",
+        "to": "To",
+        "start": "Start",
+        "platform": "Platform",
+        "allPlatforms": "All platforms",
+        "search": "Search",
+        "none": "None",
+        "snippet": "Tracking snippet",
+        "ga": "Google Analytics",
+        "gsc": "Google Search Console",
+        "exportedAt": "Exported at"
+      }
+    },
     "change": {
       "new": "new",
       "lowSample": "Low sample",

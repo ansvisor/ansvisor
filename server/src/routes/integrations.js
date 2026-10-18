@@ -383,6 +383,8 @@ const pageOpportunitiesQuery = z.object({
   // Inclusive days; either may be left open ("all time" sends neither).
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),
+  // The card shows the best ten; an export asks for every finding (AT-015).
+  limit: z.coerce.number().int().min(1).max(1000).optional(),
 });
 
 /**
@@ -395,13 +397,14 @@ const pageOpportunitiesQuery = z.object({
 router.get('/google-analytics/page-opportunities', async (req, res) => {
   const parsed = pageOpportunitiesQuery.safeParse(req.query);
   if (!parsed.success) return res.status(400).json({ error: 'Invalid request' });
-  const { brandId, from, to } = parsed.data;
+  const { brandId, from, to, limit } = parsed.data;
 
   try {
     await assertBrandAccess(brandId, req.user.id);
     const result = await detectPageOpportunitiesInWindow(brandId, {
       since: from ?? null,
       until: to ?? null,
+      ...(limit ? { limit } : {}),
     });
     return res.json(result);
   } catch (err) {

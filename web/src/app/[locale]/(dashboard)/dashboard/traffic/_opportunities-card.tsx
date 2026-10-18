@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -82,6 +82,7 @@ export function PageOpportunitiesCard({
   canConnect,
   onConnected,
   onShowAllTime,
+  actions,
 }: {
   brandId: string;
   dateWindow: TrafficDateWindow;
@@ -97,6 +98,8 @@ export function PageOpportunitiesCard({
   onConnected: () => void;
   /** Widens the page's range; absent when it is already all time. */
   onShowAllTime?: () => void;
+  /** The table's own Excel / CSV buttons (AT-015), shown once it has data. */
+  actions?: ReactNode;
 }) {
   const t = useTranslations('traffic.pageOpportunities');
   const status = source ? googleSourceStatus(source) : sourceUnknown ? 'connected' : null;
@@ -157,9 +160,12 @@ export function PageOpportunitiesCard({
             <NeedsTag provider={PROVIDER} />
           </CardTitle>
           {shown && (
-            <Badge variant="outline" className="text-xs">
-              {shown.rangeLabel}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs">
+                {shown.rangeLabel}
+              </Badge>
+              {shown.result && shown.result.pages > 0 && actions}
+            </div>
           )}
         </div>
         {shown?.result && shown.result.pages > 0 && (
