@@ -3089,7 +3089,7 @@
         "trend": "Trend",
         "platforms": "Platforms",
         "pages": "Top landing pages",
-        "opportunities": "Pages without AI traffic",
+        "pageStatus": "Pages by status",
         "visits": "Visits"
       },
       "columns": {
@@ -3118,7 +3118,12 @@
         "time": "Time (UTC)",
         "referrer": "Referrer",
         "country": "Country",
-        "pageviews": "Pageviews"
+        "pageviews": "Pageviews",
+        "aiVisits": "AI visits",
+        "aiKeyEvents": "Key events from AI",
+        "topPlatforms": "Top platforms",
+        "inSitemap": "In sitemap",
+        "status": "Status"
       },
       "metrics": {
         "visits": "AI-referred visits",
@@ -3133,26 +3138,7 @@
         "lowSample": "Low sample: fewer than 30 visits in this period or the one before",
         "new": "New: no visits in the previous period",
         "noPreviousPeriod": "No previous period for all time",
-        "analytics": {
-          "not_configured": "Google Analytics isn't set up on this server",
-          "not_connected": "Needs Google Analytics: not connected",
-          "unmapped": "Needs Google Analytics: no property chosen for this brand",
-          "syncing": "Google Analytics is importing its first data",
-          "noData": "No data for this range in Google Analytics",
-          "noFinding": "No high-value pages without AI traffic in this range",
-          "failed": "Google Analytics findings couldn't be read; try the export again"
-        }
-      },
-      "citationStates": {
-        "cited": "Cited",
-        "targeted_not_cited": "Not cited",
-        "not_targeted": "No prompt"
-      },
-      "signals": {
-        "revenue": "Revenue",
-        "transactions": "Orders",
-        "key_events": "Conversions",
-        "engagement": "Engagement (min)"
+        "noPages": "No pages in this range"
       },
       "sourceStates": {
         "active": "Active",
@@ -3177,7 +3163,14 @@
         "ga": "Google Analytics",
         "gsc": "Google Search Console",
         "exportedAt": "Exported at"
-      }
+      },
+      "pageStatuses": {
+        "noAiTraffic": "No AI traffic",
+        "citedNotClicked": "Cited, not clicked",
+        "trafficNoPrompt": "Traffic, no prompt"
+      },
+      "yes": "Yes",
+      "no": "No"
     },
     "change": {
       "new": "new",
@@ -3290,16 +3283,10 @@
         "engagedVisits": "engaged visits",
         "keyEvents": "key events from AI",
         "googleClicks": "Google clicks",
-        "pageOpportunities": "pages AI engines aren't sending traffic to"
+        "pageValue": "which valuable pages get no AI traffic"
       }
     },
     "pageOpportunities": {
-      "title": "Pages AI engines aren't sending traffic to",
-      "explain": "{ranking} None of these got a visit from an AI assistant in this range, in Google Analytics or through the tracking snippet, and <b>AI visibility</b> says why: whether answers already cite the page, whether a prompt you track points at it, or whether nothing does.",
-      "empty": "No high-value pages without AI traffic in this range.",
-      "page": "Page",
-      "aiVisibility": "AI visibility",
-      "sessions": "Sessions",
       "rank": "Rank {by}",
       "minutes": "{minutes} min",
       "signals": {
@@ -3338,6 +3325,52 @@
           "detail": "nothing you track points here"
         }
       }
+    },
+    "pageList": {
+      "title": "Pages",
+      "subtitle": "Which pages get AI visits, which don't, and why",
+      "needsAnalytics": "Key events and the No AI traffic list need Google Analytics; without it they show what the snippet and your sitemap know.",
+      "tabs": {
+        "noAiTraffic": {
+          "label": "No AI traffic",
+          "explain": "Pages with traffic in Google Analytics or in your sitemap that got no AI visit in this range, most valuable first. AI visibility says why.",
+          "empty": "Every page with traffic or in your sitemap got AI visits in this range."
+        },
+        "citedNotClicked": {
+          "label": "Cited, not clicked",
+          "explain": "Pages AI answers cited at least 20 times in this range that got no AI visit: answers show them, nobody clicks through.",
+          "empty": "No page was cited 20 times or more without an AI visit in this range."
+        },
+        "trafficNoPrompt": {
+          "label": "Traffic, no prompt",
+          "explain": "Pages AI assistants sent visitors to that no tracked prompt's answer cited in this range: the visits come from questions you don't track.",
+          "empty": "Every page with AI visits is cited by a prompt you track in this range."
+        },
+        "all": {
+          "label": "All pages",
+          "explain": "Every page with AI visits, citations, traffic or a sitemap entry in this range.",
+          "empty": "No pages in this range."
+        }
+      },
+      "columns": {
+        "page": "Page",
+        "aiVisibility": "AI visibility",
+        "sessions": "Sessions",
+        "citations": "Cited in answers",
+        "prompts": "Prompts pointing here",
+        "aiVisits": "AI visits",
+        "platforms": "Top platforms",
+        "keyEvents": "Key events",
+        "status": "Status",
+        "citedInAnswers": "Cited in answers"
+      },
+      "auditPage": "Audit page",
+      "addPrompts": "Add prompts",
+      "auditFailed": "The audit couldn't start.",
+      "failed": "The pages couldn't be loaded.",
+      "shown": "{shown, number} of {total, plural, one {# page} other {# pages}}",
+      "sameWindow": "same range as the rest of the page",
+      "showMore": "Show more"
     }
   },
   "prompts": {

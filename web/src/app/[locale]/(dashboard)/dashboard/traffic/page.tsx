@@ -36,7 +36,7 @@ import {
   DateRangeFilter,
   type DateRangePreset,
 } from '@/components/filters/date-range-filter';
-import { PageOpportunitiesCard } from './_opportunities-card';
+import { PagesCard } from './_pages-card';
 import { TRAFFIC_KPI_GRID, TrafficKpis } from './_kpis';
 import { VisitListSourceNote } from './_visit-list-note';
 import { EngagedCell, KeyEventsCell, PlatformValueNote } from './_platform-value';
@@ -580,23 +580,19 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   const hasAnyData = summary?.hasAnyData ?? false;
   const trulyEmpty = isEmpty && !hasAnyData;
 
-  // Findings from the Analytics connection (#719), for the page's range
-  // (AT-002). They need Google Analytics, not the snippet, so the card shows
-  // whatever the snippet has sent, with Analytics' own state until there is
-  // data from it (AT-016). Kept apart from the snippet's tables: the two
-  // origins are never summed; a page the snippet saw is just never listed.
-  const opportunitiesCard = (
-    <PageOpportunitiesCard
+  // Pages: which answers send visitors (AT-006), in the page's range. It
+  // replaces "Pages AI engines aren't sending traffic to" (#719, AT-002),
+  // whose list is now its No AI traffic tab, and reads the snippet,
+  // Analytics, citations and the sitemap; without Analytics it says what's
+  // partial rather than hiding.
+  const pagesCard = (
+    <PagesCard
       brandId={brand.id}
       dateWindow={dateWindow}
       rangeLabel={rangeSubLabel}
-      source={sources?.ga ?? null}
-      sourceUnknown={sourcesFailed}
       domain={primaryDomain}
-      canConnect={canManage}
-      onConnected={() => void loadSources()}
-      onShowAllTime={datePreset === 'all' ? undefined : () => handleDatePresetChange('all')}
-      actions={<TableExport exporter={exporter} section="opportunities" />}
+      analyticsMissing={gaMissing}
+      actions={<TableExport exporter={exporter} section="pageStatus" />}
     />
   );
 
@@ -660,7 +656,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
           onShowWeek={datePreset === '24h' ? () => handleDatePresetChange('7d') : undefined}
         />
       ) : null}
-      {isEmpty && opportunitiesCard}
+      {isEmpty && pagesCard}
       {!isEmpty && (
         <>
           {/* KPI cards: two rows of four (AT-017, spec §3.2). */}
@@ -770,7 +766,11 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                     <TableRow>
                       <TableHead className="pl-6">Page</TableHead>
                       <TableHead className="text-right">Visits</TableHead>
-                      <TableHead className="text-right pr-6">Change</TableHead>
+                      <TableHead className="text-right">Change</TableHead>
+                      {/* How often tracked AI answers cite the page (AT-006). */}
+                      <TableHead className="text-right pr-6">
+                        {t('pageList.columns.citedInAnswers')}
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -784,7 +784,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                         <TableCell className="text-right font-semibold tabular-nums text-sm">
                           {formatNumber(row.visits)}
                         </TableCell>
-                        <TableCell className="text-right pr-6">
+                        <TableCell className="text-right">
                           <div className="flex justify-end">
                             <DeltaBadge
                               current={row.visits}
@@ -792,6 +792,9 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                               comparable={comparable}
                             />
                           </div>
+                        </TableCell>
+                        <TableCell className="text-right pr-6 tabular-nums text-sm">
+                          {formatNumber(row.citations)}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -801,7 +804,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
             </Card>
           </div>
 
-          {opportunitiesCard}
+          {pagesCard}
 
           {/* Recent Visit Log with filtering and pagination*/}
           <Card>

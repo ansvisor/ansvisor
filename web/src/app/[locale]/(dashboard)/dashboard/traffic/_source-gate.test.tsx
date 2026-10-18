@@ -93,8 +93,8 @@ describe('SourceUnavailable', () => {
     expect(text()).toContain('Connect Google Analytics to see this');
     expect(text()).toContain('Read-only access, takes about a minute.');
     expect(text()).toContain(
-      'Needed for: AI share of traffic, engaged visits, key events from AI, and pages AI engines ' +
-        "aren't sending traffic to",
+      'Needed for: AI share of traffic, engaged visits, key events from AI, and which valuable ' +
+        'pages get no AI traffic',
     );
 
     act(() => button()!.click());

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { strFromU8, unzipSync } from 'fflate';
 import type { SourceState } from '@/lib/actions/integrations';
+import { TRAFFIC_EXPORT_MAX_ROWS } from '@/lib/traffic-export';
 
 /**
  * GET /api/traffic/export (AT-015): the page as a file, built on the server
@@ -30,7 +31,7 @@ const loaders = vi.hoisted(() => ({
   getTrafficTrend: vi.fn(),
   getTrafficVisitsForExport: vi.fn(),
   getTrafficSources: vi.fn(),
-  getPageOpportunities: vi.fn(),
+  getTrafficPages: vi.fn(),
 }));
 vi.mock('@/lib/actions/traffic', () => loaders);
 
@@ -85,7 +86,10 @@ beforeEach(() => {
     ga: ga(),
     gsc: ga({ connected: false }),
   });
-  loaders.getPageOpportunities.mockResolvedValue({ pages: 8, rows: [] });
+  loaders.getTrafficPages.mockResolvedValue({
+    counts: { noAiTraffic: 0, citedNotClicked: 0, trafficNoPrompt: 0, all: 0 },
+    rows: [],
+  });
 });
 
 const WINDOW = { dateFrom: '2026-10-11T09:00:00.000Z' };
@@ -119,7 +123,7 @@ describe('GET /api/traffic/export', () => {
       'Trend',
       'Platforms',
       'Top landing pages',
-      'Pages without AI traffic',
+      'Pages by status',
       'Visits',
     ]);
 
@@ -134,12 +138,10 @@ describe('GET /api/traffic/export', () => {
       search: undefined,
       max: 100_000,
     });
-    expect(loaders.getPageOpportunities).toHaveBeenCalledWith(
+    expect(loaders.getTrafficPages).toHaveBeenCalledWith(
       BRAND,
       { ...WINDOW, dateTo: undefined },
-      {
-        limit: 1000,
-      },
+      { tab: 'all', limit: TRAFFIC_EXPORT_MAX_ROWS },
     );
   });
 
@@ -155,7 +157,7 @@ describe('GET /api/traffic/export', () => {
       'trend.csv',
       'platforms.csv',
       'top-landing-pages.csv',
-      'pages-without-ai-traffic.csv',
+      'pages-by-status.csv',
       'visits.csv',
     ]);
     for (const file of Object.values(files)) expect(startsWithBom(file)).toBe(true);
@@ -186,25 +188,18 @@ describe('GET /api/traffic/export', () => {
     expect(loaders.getTrafficSources).not.toHaveBeenCalled();
   });
 
-  it('says why Analytics has no rows instead of reading them', async () => {
-    loaders.getTrafficSources.mockResolvedValue({
-      snippetLastVisitAt: null,
-      ga: ga({ connected: false, mapped: false }),
-      gsc: ga({ connected: false }),
-    });
-    const res = await get({ format: 'csv', section: 'opportunities' });
+  it('reads every page of the Pages section, whatever tab the page shows (AT-006)', async () => {
+    const res = await get({ format: 'csv', section: 'pageStatus' });
 
     const csv = await csvOf(res);
-    expect(csv).toEqual({ bom: true, text: 'Note\nNeeds Google Analytics: not connected' });
-    expect(loaders.getPageOpportunities).not.toHaveBeenCalled();
-  });
-
-  it("notes Analytics findings it couldn't read, rather than failing the export", async () => {
-    loaders.getPageOpportunities.mockRejectedValue(new Error('Server error: 500'));
-    const res = await get({ format: 'csv', section: 'opportunities' });
-
-    expect(res.status).toBe(200);
-    expect(await res.text()).toContain("couldn't be read");
+    expect(csv).toEqual({ bom: true, text: 'Note\nNo pages in this range' });
+    expect(loaders.getTrafficPages).toHaveBeenCalledWith(
+      BRAND,
+      { dateFrom: undefined, dateTo: undefined },
+      { tab: 'all', limit: TRAFFIC_EXPORT_MAX_ROWS },
+    );
+    expect(loaders.getTrafficSummary).not.toHaveBeenCalled();
+    expect(loaders.getTrafficSources).not.toHaveBeenCalled();
   });
 
   it('refuses more visits than an export built on request should hold', async () => {

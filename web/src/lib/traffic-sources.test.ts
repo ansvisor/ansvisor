@@ -59,12 +59,12 @@ describe('gscPropertyHost', () => {
 
 describe('sectionsNeeding', () => {
   it('lists the sections a source unlocks, in the page order (AT-016, AT-017)', () => {
-    expect(TRAFFIC_SECTION_SOURCES.pageOpportunities).toBe('google-analytics');
+    expect(TRAFFIC_SECTION_SOURCES.pageValue).toBe('google-analytics');
     expect(sectionsNeeding('google-analytics')).toEqual([
       'aiShare',
       'engagedVisits',
       'keyEvents',
-      'pageOpportunities',
+      'pageValue',
     ]);
     expect(sectionsNeeding('google-search-console')).toEqual(['googleClicks']);
   });

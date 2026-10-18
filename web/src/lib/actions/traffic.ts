@@ -1,7 +1,6 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { API_BASE_URL } from '@/config/api';
 import { TRAFFIC_PAGE_SIZE, countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { expandDateToEndOfDay, utcDay } from '@/lib/dates';
 import { isHourlyWindow, listUtcHours, utcHourKey } from '@/lib/traffic-buckets';
@@ -51,7 +50,13 @@ export interface TrafficSummary {
     /** Google Analytics' engagement for the platform over the range's days; null without any (AT-005). */
     analytics: TrafficEngagement | null;
   }[];
-  topPages: { url: string; visits: number; visitsPrev: number }[];
+  topPages: {
+    url: string;
+    visits: number;
+    visitsPrev: number;
+    /** Times tracked AI answers cited the page in the range (AT-006). */
+    citations: number;
+  }[];
   hasAnyData: boolean;
 }
 
@@ -217,7 +222,7 @@ export async function getTrafficSummary(
 
   // Visits, platforms and pages from the snippet and Google Analytics, day
   // by day (AT-004), summed in the database: no row cap applies.
-  const [current, previous, lifetime, value] = await Promise.all([
+  const [current, previous, lifetime, value, cited] = await Promise.all([
     readMergedTraffic(supabase, brandId, { from, to, toInclusive: true }),
     hasPrev
       ? readMergedTraffic(supabase, brandId, { from: prevFrom, to: prevTo, toInclusive: false })
@@ -242,7 +247,17 @@ export async function getTrafficSummary(
       p_since: utcDay(from) ?? null,
       p_until: utcDay(to) ?? new Date().toISOString().slice(0, 10),
     }),
+    // How often tracked answers cite each page, for Top Landing Pages (AT-006).
+    supabase.rpc('ai_traffic_page_citations', {
+      p_brand_id: brandId,
+      p_since: utcDay(from) ?? null,
+      p_until: utcDay(to) ?? null,
+    }),
   ]);
+  if (cited.error) throw new Error(cited.error.message);
+  const citationsByPage = new Map(
+    (cited.data ?? []).map((row) => [row.page_key, Number(row.citations) || 0]),
+  );
   if (lifetime?.[1].error) throw new Error(lifetime[1].error.message);
   if (value.error) throw new Error(value.error.message);
   const valueByPlatform = new Map(
@@ -280,6 +295,7 @@ export async function getTrafficSummary(
       url: p.page,
       visits: p.visits,
       visitsPrev: previousByPage.get(p.page) ?? 0,
+      citations: citationsByPage.get(p.page.toLowerCase()) ?? 0,
     })),
     hasAnyData,
   };
@@ -493,99 +509,95 @@ export async function getTrafficVisitsForExport(
 }
 
 /**
- * Pages that carry commercial weight and got no AI visit in the page's range
- * (#719, AT-002), from Analytics' AI channel or the tracking snippet.
- *
- * The server ranks the range the page shows when asked, with the nightly
- * engine's signal, floors and exclusions. The page used to read the nightly
- * findings, always the last 28 days, so the list could contradict the
- * snippet visits beside it.
+ * The Pages section (AT-006, spec §3.5; 00178): the brand's pages in the
+ * page's range with their AI visits (the snippet or Analytics, day by day),
+ * how often tracked answers cite them, the prompts pointing to them and
+ * their traffic from every channel, sorted into three work lists.
  */
-export interface PageOpportunity {
-  landingPage: string;
-  /** Which metric ranked this page — never present it as anything else. */
-  valueSignal: 'revenue' | 'transactions' | 'key_events' | 'engagement';
-  valuePercentile: number;
-  valueRank: number;
+export type TrafficPagesTab = 'noAiTraffic' | 'citedNotClicked' | 'trafficNoPrompt' | 'all';
+
+const TAB_PARAM: Record<TrafficPagesTab, string> = {
+  noAiTraffic: 'no_ai_traffic',
+  citedNotClicked: 'cited_not_clicked',
+  trafficNoPrompt: 'traffic_no_prompt',
+  all: 'all',
+};
+
+export interface TrafficPageRow {
+  /** The path, as normalize_page_path writes it. */
+  page: string;
+  aiVisits: number;
+  /** Key events in AI sessions, from Analytics. */
+  aiKeyEvents: number;
+  /** The assistants that sent the most visits, most first (up to three). */
+  aiPlatforms: string[];
+  /** Times tracked AI answers cited the page in the range. */
+  citations: number;
+  /** Active prompts with the page as a target URL. */
+  targetingPrompts: number;
+  /** Every channel's traffic, from Analytics. */
   sessions: number;
   engagedSessions: number;
   keyEvents: number;
   transactions: number;
   revenue: number;
   engagementSeconds: number;
-  /**
-   * Why this page gets nothing from AI engines — cited anyway, targeted by a
-   * prompt and not cited, or not targeted at all.
-   */
-  citationState: 'cited' | 'targeted_not_cited' | 'not_targeted';
-  citations: number;
-  citingPrompts: number;
-  targetingPrompts: number;
+  inSitemap: boolean;
+  /** The page's place on the site by value, among pages with traffic. */
+  valueRank: number | null;
 }
 
-export interface PageOpportunities {
-  /** Pages Analytics reported in the range; 0 when it has no data there. */
-  pages: number;
-  /** The best ten, best first. */
-  rows: PageOpportunity[];
+export interface TrafficPages {
+  counts: Record<TrafficPagesTab, number>;
+  rows: TrafficPageRow[];
 }
 
-export async function getPageOpportunities(
+export async function getTrafficPages(
   brandId: string,
-  window?: TrafficDateWindow,
-  /** The card shows the best ten; an export asks for more. */
-  opts?: { limit?: number },
-): Promise<PageOpportunities> {
+  window: TrafficDateWindow | undefined,
+  opts: { tab: TrafficPagesTab; limit?: number; offset?: number },
+): Promise<TrafficPages> {
   const supabase = await createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) throw new Error('Not authenticated');
+  const { from, to } = resolveTrafficWindow(window);
+  const { data, error } = await supabase.rpc('ai_traffic_pages', {
+    p_brand_id: brandId,
+    p_from: from ?? null,
+    p_to: to ?? null,
+    p_tab: TAB_PARAM[opts.tab],
+    p_limit: opts.limit ?? 10,
+    p_offset: opts.offset ?? 0,
+  });
+  if (error) throw new Error(error.message);
 
-  // Analytics stores whole days, so the range goes as its first and last
-  // day; an open end stays open.
-  const params = new URLSearchParams({ brandId });
-  const from = utcDay(window?.dateFrom);
-  const to = utcDay(window?.dateTo);
-  if (from) params.set('from', from);
-  if (to) params.set('to', to);
-  if (opts?.limit) params.set('limit', String(opts.limit));
-
-  const res = await fetch(
-    `${API_BASE_URL}/api/integrations/google-analytics/page-opportunities?${params}`,
-    { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store' },
-  );
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || `Server error: ${res.status}`);
-
-  const findings = (body.findings ?? []) as Record<string, unknown>[];
+  const raw = (data ?? {}) as { counts?: Record<string, number>; rows?: Record<string, unknown>[] };
+  const counts = raw.counts ?? {};
   return {
-    pages: Number(body.pages) || 0,
-    rows: findings.map((row) => ({
-      landingPage: row.landing_page as string,
-      valueSignal: row.value_signal as PageOpportunity['valueSignal'],
-      valuePercentile: Number(row.value_percentile) || 0,
-      valueRank: Number(row.value_rank) || 0,
+    counts: {
+      noAiTraffic: Number(counts.no_ai_traffic) || 0,
+      citedNotClicked: Number(counts.cited_not_clicked) || 0,
+      trafficNoPrompt: Number(counts.traffic_no_prompt) || 0,
+      all: Number(counts.all) || 0,
+    },
+    rows: (raw.rows ?? []).map((row) => ({
+      page: row.page as string,
+      aiVisits: Number(row.ai_visits) || 0,
+      aiKeyEvents: Number(row.ai_key_events) || 0,
+      aiPlatforms: (row.ai_platforms as string[] | null) ?? [],
+      citations: Number(row.citations) || 0,
+      targetingPrompts: Number(row.targeting_prompts) || 0,
       sessions: Number(row.sessions) || 0,
       engagedSessions: Number(row.engaged_sessions) || 0,
       keyEvents: Number(row.key_events) || 0,
       transactions: Number(row.transactions) || 0,
       revenue: Number(row.revenue) || 0,
       engagementSeconds: Number(row.engagement_seconds) || 0,
-      citationState: row.citation_state as PageOpportunity['citationState'],
-      citations: Number(row.citations) || 0,
-      citingPrompts: Number(row.citing_prompts) || 0,
-      targetingPrompts: Number(row.targeting_prompts) || 0,
+      inSitemap: Boolean(row.in_sitemap),
+      valueRank:
+        row.value_rank === null || row.value_rank === undefined ? null : Number(row.value_rank),
     })),
   };
 }
 
-/**
- * The Google side of the AI Traffic KPI cards (AT-017, spec §3.2): from
- * Analytics, all sessions and the AI channel's sessions, engaged sessions
- * and key events; from Search Console, clicks against the period before.
- * Each is asked for only when its source has data for the brand.
- */
 /** Analytics' engagement figures for one group of sessions (AT-005). */
 export interface TrafficEngagement {
   sessions: number;
@@ -594,6 +606,13 @@ export interface TrafficEngagement {
   /** Sessions with at least one key event: the key event rate is this over sessions. */
   keyEventSessions: number;
 }
+
+/**
+ * The Google side of the AI Traffic KPI cards (AT-017, spec §3.2): from
+ * Analytics, all sessions and the AI channel's sessions, engaged sessions
+ * and key events; from Search Console, clicks against the period before.
+ * Each is asked for only when its source has data for the brand.
+ */
 
 export interface TrafficGoogleTotals {
   ga: {

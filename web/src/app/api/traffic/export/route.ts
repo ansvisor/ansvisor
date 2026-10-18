@@ -5,14 +5,13 @@ import { z } from 'zod';
 import messages from '../../../../../messages/en.json';
 import { createClient } from '@/lib/supabase/server';
 import {
-  getPageOpportunities,
+  getTrafficPages,
   getTrafficSources,
   getTrafficSummary,
   getTrafficTrend,
   getTrafficVisitsForExport,
 } from '@/lib/actions/traffic';
 import { utcDay } from '@/lib/dates';
-import { googleSourceStatus } from '@/lib/traffic-sources';
 import {
   TRAFFIC_EXPORT_MAX_ROWS,
   TRAFFIC_EXPORT_SECTIONS,
@@ -91,7 +90,7 @@ export async function GET(req: Request) {
   const wholePage = !q.section;
 
   try {
-    const [summary, trend, visits, sources] = await Promise.all([
+    const [summary, trend, visits, sources, pageStatus] = await Promise.all([
       needs('kpis', 'platforms', 'pages')
         ? getTrafficSummary(q.brandId, window, { topPages: Number.MAX_SAFE_INTEGER })
         : undefined,
@@ -104,26 +103,15 @@ export async function GET(req: Request) {
             max: TRAFFIC_EXPORT_MAX_ROWS,
           })
         : undefined,
-      // For the Filters sheet, and to know whether Analytics has findings.
-      needs('opportunities') || wholePage
-        ? getTrafficSources(q.brandId).catch(() => null)
+      // For the Filters sheet.
+      wholePage ? getTrafficSources(q.brandId).catch(() => null) : undefined,
+      // Every page of the Pages section, with its lists (AT-006).
+      needs('pageStatus')
+        ? getTrafficPages(q.brandId, window, { tab: 'all', limit: TRAFFIC_EXPORT_MAX_ROWS })
         : undefined,
     ]);
     // Larger than an export built on request should be (spec §3.9).
     if (visits === null) return Response.json({ error: 'too_large' }, { status: 413 });
-
-    let opportunitiesStatus: TrafficExportData['opportunitiesStatus'];
-    let opportunities: TrafficExportData['opportunities'];
-    if (needs('opportunities')) {
-      // An unreadable state reads the findings anyway, as the page does.
-      opportunitiesStatus = sources ? googleSourceStatus(sources.ga) : 'connected';
-      if (opportunitiesStatus === 'connected') {
-        opportunities = await getPageOpportunities(q.brandId, window, { limit: 1000 }).catch(() => {
-          opportunitiesStatus = 'failed';
-          return null;
-        });
-      }
-    }
 
     const label = exportLabels();
     const from = utcDay(q.from) ?? null;
@@ -139,8 +127,7 @@ export async function GET(req: Request) {
       summary,
       trend,
       visits: visits ?? undefined,
-      opportunities,
-      opportunitiesStatus,
+      pageStatus,
       sources,
     };
 

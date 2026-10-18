@@ -57,7 +57,7 @@ const data = (over: Partial<TrafficExportData> = {}): TrafficExportData => ({
       { platform: 'gemini.google.com', visits: 12, visitsPrev: 5, analytics: null },
       { platform: 'claude.ai', visits: 3, visitsPrev: 0, analytics: null },
     ],
-    topPages: [{ url: '/pricing', visits: 35, visitsPrev: 30 }],
+    topPages: [{ url: '/pricing', visits: 35, visitsPrev: 30, citations: 4 }],
     hasAnyData: true,
   },
   trend: [
@@ -78,25 +78,40 @@ const data = (over: Partial<TrafficExportData> = {}): TrafficExportData => ({
       pageviews: 3,
     },
   ],
-  opportunitiesStatus: 'connected',
-  opportunities: {
-    pages: 30,
+  pageStatus: {
+    counts: { noAiTraffic: 1, citedNotClicked: 1, trafficNoPrompt: 1, all: 3 },
     rows: [
       {
-        landingPage: '/shop/beans',
-        valueSignal: 'key_events',
-        valuePercentile: 90.9,
-        valueRank: 3,
+        page: '/shop/beans',
+        aiVisits: 0,
+        aiKeyEvents: 0,
+        aiPlatforms: [],
+        citations: 25,
+        targetingPrompts: 2,
         sessions: 440,
         engagedSessions: 220,
         keyEvents: 70,
         transactions: 0,
         revenue: 0,
         engagementSeconds: 0,
-        citationState: 'targeted_not_cited',
+        inSitemap: true,
+        valueRank: 3,
+      },
+      {
+        page: '/menu',
+        aiVisits: 12,
+        aiKeyEvents: 2,
+        aiPlatforms: ['chatgpt.com', 'gemini.google.com'],
         citations: 0,
-        citingPrompts: 0,
-        targetingPrompts: 2,
+        targetingPrompts: 0,
+        sessions: 0,
+        engagedSessions: 0,
+        keyEvents: 0,
+        transactions: 0,
+        revenue: 0,
+        engagementSeconds: 0,
+        inSitemap: false,
+        valueRank: null,
       },
     ],
   },
@@ -160,6 +175,7 @@ describe('trafficTable', () => {
       35,
       null,
       null,
+      4,
       'No previous period for all time',
     ]);
   });
@@ -205,28 +221,29 @@ describe('trafficTable', () => {
     });
   });
 
-  it('gives the pages without AI traffic with the value that ranked them', () => {
-    const table = trafficTable('opportunities', data(), label);
+  it('lists every page with the lists it is on, so each tab can be filtered (AT-006)', () => {
+    const table = trafficTable('pageStatus', data(), label);
+    expect(table.headers).toEqual([
+      'Page',
+      'AI visits',
+      'Key events from AI',
+      'Citations',
+      'Top platforms',
+      'Prompts targeting',
+      'Sessions',
+      'Rank',
+      'In sitemap',
+      'Status',
+    ]);
     expect(table.rows).toEqual([
-      ['/shop/beans', 'Not cited', 0, 2, 440, 'Conversions', 70, 3, 90.9],
+      ['/shop/beans', 0, 0, 25, null, 2, 440, 3, 'Yes', 'No AI traffic; Cited, not clicked'],
+      ['/menu', 12, 2, 0, 'ChatGPT, Gemini', 0, 0, null, 'No', 'Traffic, no prompt'],
     ]);
   });
 
-  it('says why there are no pages without AI traffic, never an empty sheet', () => {
-    const note = (over: Partial<TrafficExportData>) =>
-      trafficTable('opportunities', data(over), label);
-    expect(note({ opportunitiesStatus: 'not_connected' }).rows).toEqual([
-      ['Needs Google Analytics: not connected'],
-    ]);
-    expect(note({ opportunities: { pages: 0, rows: [] } }).rows).toEqual([
-      ['No data for this range in Google Analytics'],
-    ]);
-    expect(note({ opportunities: { pages: 30, rows: [] } }).rows).toEqual([
-      ['No high-value pages without AI traffic in this range'],
-    ]);
-    expect(note({ opportunitiesStatus: 'failed', opportunities: null }).rows[0][0]).toContain(
-      "couldn't be read",
-    );
+  it('says there are no pages, never an empty sheet', () => {
+    const table = trafficTable('pageStatus', data({ pageStatus: null }), label);
+    expect(table.rows).toEqual([['No pages in this range']]);
   });
 });
 
@@ -260,7 +277,7 @@ describe('trafficWorkbook', () => {
       'Trend',
       'Platforms',
       'Top landing pages',
-      'Pages without AI traffic',
+      'Pages by status',
       'Visits',
     ]);
     // A bold header row, then the rows with their numbers as numbers.

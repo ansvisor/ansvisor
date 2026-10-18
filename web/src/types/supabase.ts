@@ -2842,6 +2842,25 @@ export type Database = {
         }
         Returns: Json
       }
+      ai_traffic_page_citations: {
+        Args: { p_brand_id: string; p_since: string | null; p_until: string | null }
+        Returns: {
+          citations: number
+          page: string
+          page_key: string
+        }[]
+      }
+      ai_traffic_pages: {
+        Args: {
+          p_brand_id: string
+          p_from: string | null
+          p_limit?: number
+          p_offset?: number
+          p_tab?: string
+          p_to: string | null
+        }
+        Returns: Json
+      }
       ai_visibility_aggregates: {
         Args: {
           p_brand_id: string

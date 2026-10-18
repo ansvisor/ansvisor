@@ -84,7 +84,7 @@ export const TRAFFIC_SECTION_SOURCES = {
   engagedVisits: 'google-analytics',
   keyEvents: 'google-analytics',
   googleClicks: 'google-search-console',
-  pageOpportunities: 'google-analytics',
+  pageValue: 'google-analytics',
 } as const satisfies Record<string, IntegrationProvider>;
 
 export type TrafficSection = keyof typeof TRAFFIC_SECTION_SOURCES;

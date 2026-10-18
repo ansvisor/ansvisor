@@ -10,14 +10,15 @@
 
 import type { Sheet } from 'write-excel-file/node';
 import type {
-  PageOpportunities,
   TrafficLog,
+  TrafficPages,
   TrafficSources,
   TrafficSummary,
   TrafficTrendPoint,
 } from '@/lib/actions/traffic';
 import { csvLine } from '@/lib/csv';
 import { getPlatformName } from '@/lib/traffic-platforms';
+import { pageStatuses } from '@/lib/traffic-pages';
 import { visitChange } from '@/lib/traffic-change';
 import {
   googleSourceStatus,
@@ -31,14 +32,14 @@ export const TRAFFIC_EXPORT_SECTIONS = [
   'trend',
   'platforms',
   'pages',
-  'opportunities',
+  'pageStatus',
   'visits',
 ] as const;
 
 export type TrafficExportSection = (typeof TRAFFIC_EXPORT_SECTIONS)[number];
 
 /** The tables that carry their own Excel / CSV buttons, as in the mockup. */
-export const TRAFFIC_TABLE_SECTIONS = ['platforms', 'pages', 'opportunities', 'visits'] as const;
+export const TRAFFIC_TABLE_SECTIONS = ['platforms', 'pages', 'pageStatus', 'visits'] as const;
 
 /** Beyond this many visits an export would take too long to build on request. */
 export const TRAFFIC_EXPORT_MAX_ROWS = 100_000;
@@ -59,10 +60,8 @@ export interface TrafficExportData {
   summary?: TrafficSummary;
   trend?: TrafficTrendPoint[];
   visits?: TrafficLog[];
-  /** Null when Google Analytics has nothing to rank: see `opportunitiesStatus`. */
-  opportunities?: PageOpportunities | null;
-  /** The source's state, or 'failed' when its findings couldn't be read. */
-  opportunitiesStatus?: GoogleSourceStatus | 'failed';
+  /** Every page of the Pages section, with the lists it is on (AT-006). */
+  pageStatus?: TrafficPages | null;
   sources?: TrafficSources | null;
 }
 
@@ -173,6 +172,8 @@ function pages(data: TrafficExportData, label: ExportLabel): ExportTable {
       label('columns.visits'),
       label('columns.previousVisits'),
       label('columns.change'),
+      // How often tracked AI answers cite the page (AT-006).
+      label('columns.citations'),
       label('columns.note'),
     ],
     rows: (s?.topPages ?? []).map((row) => {
@@ -182,51 +183,48 @@ function pages(data: TrafficExportData, label: ExportLabel): ExportTable {
         row.visits,
         s!.hasPreviousPeriod ? row.visitsPrev : null,
         delta.pct,
+        row.citations,
         delta.note || null,
       ];
     }),
   };
 }
 
-function opportunities(data: TrafficExportData, label: ExportLabel): ExportTable {
-  const status = data.opportunitiesStatus ?? 'connected';
-  const result = data.opportunities;
+/**
+ * The Pages section (AT-006): every page, with the work lists it is on in a
+ * Status column, so a spreadsheet can filter each tab (spec §3.9).
+ */
+function pageStatus(data: TrafficExportData, label: ExportLabel): ExportTable {
+  const rows = data.pageStatus?.rows ?? [];
   // Never an empty sheet: say why there are no rows (spec §3.8b).
-  const note = (text: string): ExportTable => ({
-    headers: [label('columns.note')],
-    rows: [[text]],
-  });
-  if (status !== 'connected') return note(label(`notes.analytics.${status}`));
-  if (!result || result.pages === 0) return note(label('notes.analytics.noData'));
-  if (result.rows.length === 0) return note(label('notes.analytics.noFinding'));
+  if (rows.length === 0)
+    return { headers: [label('columns.note')], rows: [[label('notes.noPages')]] };
   return {
     headers: [
       label('columns.page'),
-      label('columns.aiVisibility'),
+      label('columns.aiVisits'),
+      label('columns.aiKeyEvents'),
       label('columns.citations'),
+      label('columns.topPlatforms'),
       label('columns.targetingPrompts'),
       label('columns.sessions'),
-      label('columns.rankedBy'),
-      label('columns.value'),
       label('columns.rank'),
-      label('columns.percentile'),
+      label('columns.inSitemap'),
+      label('columns.status'),
     ],
-    rows: result.rows.map((row) => [
-      row.landingPage,
-      label(`citationStates.${row.citationState}`),
+    rows: rows.map((row) => [
+      row.page,
+      row.aiVisits,
+      row.aiKeyEvents,
       row.citations,
+      row.aiPlatforms.map(getPlatformName).join(', ') || null,
       row.targetingPrompts,
       row.sessions,
-      label(`signals.${row.valueSignal}`),
-      row.valueSignal === 'revenue'
-        ? row.revenue
-        : row.valueSignal === 'transactions'
-          ? row.transactions
-          : row.valueSignal === 'key_events'
-            ? row.keyEvents
-            : Math.round(row.engagementSeconds / 60),
       row.valueRank,
-      row.valuePercentile,
+      row.inSitemap ? label('yes') : label('no'),
+      pageStatuses(row)
+        .map((status) => label(`pageStatuses.${status}`))
+        .join('; ') || null,
     ]),
   };
 }
@@ -269,8 +267,8 @@ export function trafficTable(
       return platforms(data, label);
     case 'pages':
       return pages(data, label);
-    case 'opportunities':
-      return opportunities(data, label);
+    case 'pageStatus':
+      return pageStatus(data, label);
     case 'visits':
       return visits(data, label);
   }

@@ -53,12 +53,21 @@ const PLATFORM_VALUE = [
   },
 ];
 
+// How often tracked answers cite each page, by its lower-cased path (AT-006).
+const CITATIONS = [{ page_key: '/menu', page: '/Menu', citations: 9 }];
+
+/** The reads beside the merged one, which answer the same whatever the range. */
+const OTHER_READS: Record<string, unknown> = {
+  ga_platform_value: PLATFORM_VALUE,
+  ai_traffic_page_citations: CITATIONS,
+};
+
 const rpc = vi.fn();
 
-/** The merged read answers `merged`; the platform figures stay as above. */
+/** The merged read answers `merged`; the other reads stay as above. */
 const answerMerged = (merged: Merged) =>
   rpc.mockImplementation(async (fn: string) => ({
-    data: fn === 'ga_platform_value' ? PLATFORM_VALUE : merged,
+    data: OTHER_READS[fn] ?? merged,
     error: null,
   }));
 let snippetCount = 0;
@@ -90,7 +99,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-10-18T12:30:00.000Z'));
   rpc.mockReset();
   rpc.mockImplementation(async (fn: string, args: { p_to_inclusive: boolean }) => ({
-    data: fn === 'ga_platform_value' ? PLATFORM_VALUE : args.p_to_inclusive ? CURRENT : PREVIOUS,
+    data: OTHER_READS[fn] ?? (args.p_to_inclusive ? CURRENT : PREVIOUS),
     error: null,
   }));
   snippetCount = 6;
@@ -150,7 +159,19 @@ describe('getTrafficSummary', () => {
       p_since: '2026-10-11',
       p_until: '2026-10-18',
     });
-    expect(summary.topPages[0]).toEqual({ url: '/menu', visits: 115, visitsPrev: 40 });
+    // Answers cite /menu whatever the case of its path (AT-006).
+    expect(summary.topPages[0]).toEqual({
+      url: '/menu',
+      visits: 115,
+      visitsPrev: 40,
+      citations: 9,
+    });
+    expect(summary.topPages[1].citations).toBe(0);
+    expect(rpc).toHaveBeenCalledWith('ai_traffic_page_citations', {
+      p_brand_id: 'b1',
+      p_since: '2026-10-11',
+      p_until: '2026-10-18',
+    });
   });
 
   it('keeps the top 10 pages for the page, and all of them for an export', async () => {
