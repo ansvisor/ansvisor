@@ -220,7 +220,7 @@ instead.
 
 ## Available tools
 
-The MCP server exposes **30 tools**. Descriptions below match
+The MCP server exposes **33 tools**. Descriptions below match
 [`web/src/lib/mcp/server.ts`](https://github.com/ansvisor/ansvisor/blob/main/web/src/lib/mcp/server.ts).
 Tools that change data are marked **writes** — only call them on explicit user
 intent, not during exploratory queries.
@@ -251,6 +251,9 @@ intent, not during exploratory queries.
 | `list_topic_suggestions` | Pending AI-generated topic suggestions awaiting accept or dismiss. | |
 | `accept_topic_suggestion` | Accept one pending suggestion: creates a topic and marks the suggestion added. | **yes** |
 | `dismiss_topic_suggestion` | Dismiss one pending suggestion so it does not reappear in future batches. | **yes** |
+| `list_prompt_suggestions` | Pending AI-generated prompt suggestions with source details, expiry and a stale flag. Does not generate new suggestions. | |
+| `accept_prompt_suggestion` | Create a tracked prompt from one pending suggestion using the brand's default engines and plan/location checks. | **yes** |
+| `dismiss_prompt_suggestion` | Dismiss one pending prompt suggestion so it no longer appears in future lists. | **yes** |
 | `get_prompt_volumes` | Per-prompt Google and estimated AI search demand and competition for prompts that already have analysis. | |
 | `get_prompt_usage` | Tracked-prompt usage against the plan: the brand's active and paused prompts, and the account's active prompts, brands, prompt locations used and location limit. | |
 
