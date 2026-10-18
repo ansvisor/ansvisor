@@ -79,11 +79,11 @@ import {
 } from '@/lib/insights-breakdown';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import {
-  aggregateHeadToHead,
   competitorScoreIn,
   emptyHeadToHead,
+  headToHeadFromRollups,
   type HeadToHeadData,
-  type HeadToHeadResultRow,
+  type HeadToHeadRollups,
   type HeadToHeadRun,
 } from '@/lib/head-to-head';
 
@@ -3333,38 +3333,18 @@ export async function getHeadToHeadComparison(
 ): Promise<HeadToHeadData> {
   const supabase = await dbClient();
 
-  // #155 — head-to-head comparisons are a Competitors-tab feature, which
-  // also lives under Insights — same isolation rule applies here.
-  // Still a single page of raw results (PostgREST caps it at 1,000), so
-  // large brands are summarised from their newest answers only; #923 moves
-  // this onto the daily rollups.
-  const { data: results, error } = await supabase
-    .from('prompt_results')
-    .select(
-      'prompt_id, platform, model_used, region, visibility_score, competitor_mentions, created_at',
-    )
-    .eq('brand_id', brandId)
-    .neq('platform', 'chatgpt-shopping')
-    .order('created_at', { ascending: false })
-    .order('id', { ascending: false });
-
+  // Every answer, from the daily rollups (00169, #923): a read of the raw
+  // answers stopped at PostgREST's 1,000-row page. The rollups leave out
+  // chatgpt-shopping (#155), as the Competitors tab always did.
+  const { data, error } = await supabase.rpc('head_to_head_daily', {
+    p_brand_id: brandId,
+    p_competitor_id: competitorId,
+  });
   if (error) throw new Error(error.message);
-  const rows = (results ?? []) as HeadToHeadResultRow[];
-  if (rows.length === 0) return emptyHeadToHead();
+  const rollups = data as unknown as HeadToHeadRollups | null;
+  if (!rollups || rollups.groups.length === 0) return emptyHeadToHead();
 
-  const promptIds = [...new Set(rows.map((r) => r.prompt_id).filter((id): id is string => !!id))];
-  const { data: promptData } =
-    promptIds.length > 0
-      ? await supabase.from('prompts').select('id, text, category').in('id', promptIds)
-      : { data: [] };
-  const prompts = new Map(
-    (promptData ?? []).map((p) => [
-      p.id as string,
-      { text: p.text as string, category: (p.category as string | null) ?? undefined },
-    ]),
-  );
-
-  return aggregateHeadToHead(rows, competitorId, prompts, resolveProvider);
+  return headToHeadFromRollups(rollups, resolveProvider);
 }
 
 /**
