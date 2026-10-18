@@ -11,10 +11,11 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { API_BASE_URL } from '@/config/api';
 import {
   type ActionCategory,
   type ActionImpact,
-  UNCOUNTED_TASK_STATUSES,
+  taskProgress,
   type ActionStatus,
   type TaskStatus,
 } from '@/lib/action-center/registry';
@@ -108,29 +109,26 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
   if (tasksRes.error) throw new Error(tasksRes.error.message);
   if (signalsRes.error) throw new Error(signalsRes.error.message);
 
-  // Skipped and failed tasks leave the denominator: neither is outstanding
-  // work, so neither should hold an action below 100% for good.
-  const taskTotals = new Map<string, { total: number; completed: number }>();
+  const taskStatuses = new Map<string, string[]>();
   for (const task of tasksRes.data ?? []) {
-    if ((UNCOUNTED_TASK_STATUSES as readonly string[]).includes(task.status)) continue;
-    const acc = taskTotals.get(task.action_id) ?? { total: 0, completed: 0 };
-    acc.total += 1;
-    if (task.status === 'completed') acc.completed += 1;
-    taskTotals.set(task.action_id, acc);
+    const statuses = taskStatuses.get(task.action_id) ?? [];
+    statuses.push(task.status);
+    taskStatuses.set(task.action_id, statuses);
   }
   const signalCounts = new Map<string, number>();
   for (const signal of signalsRes.data ?? []) {
     if (!signal.action_id) continue;
     signalCounts.set(signal.action_id, (signalCounts.get(signal.action_id) ?? 0) + 1);
   }
-  return rows.map((row) =>
-    actionItemFromRow(row, {
+  return rows.map((row) => {
+    const progress = taskProgress(taskStatuses.get(row.id) ?? []);
+    return actionItemFromRow(row, {
       assignee: row.assignee_id ? (profiles.get(row.assignee_id) ?? null) : null,
-      taskTotal: taskTotals.get(row.id)?.total ?? 0,
-      taskCompleted: taskTotals.get(row.id)?.completed ?? 0,
+      taskTotal: progress.total,
+      taskCompleted: progress.completed,
       signalCount: signalCounts.get(row.id) ?? 0,
-    }),
-  );
+    });
+  });
 }
 
 export interface ActionTask {
@@ -297,6 +295,29 @@ export async function updateActionStatus(
     .eq('id', actionId);
   if (error) throw new Error(error.message);
   await logEvent(supabase, actionId, 'status_changed', { to: status });
+}
+
+/**
+ * Delete an action from its row menu (admins and managers). The server hides
+ * it rather than removing it: dismissed, with deleted_at (00168), so it
+ * leaves every list while the nightly generator keeps its rest window.
+ */
+export async function deleteAction(actionId: string): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  const res = await fetch(`${API_BASE_URL}/api/action-center/actions/${actionId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error: ${res.status}`);
+  }
 }
 
 export async function assignAction(

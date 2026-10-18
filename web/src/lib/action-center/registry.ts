@@ -162,6 +162,21 @@ export const TASK_STATUSES: readonly TaskStatus[] = [
 /** Statuses that leave the progress denominator — the work is not outstanding. */
 export const UNCOUNTED_TASK_STATUSES: readonly TaskStatus[] = ['skipped', 'failed'];
 
+/**
+ * An action's task progress, as the list's "n/m tasks" and the drawer's
+ * Tasks tab show it. Skipped and failed tasks leave the denominator: neither
+ * is outstanding work, so neither should hold an action below 100% for good.
+ */
+export function taskProgress(statuses: readonly string[]): { total: number; completed: number } {
+  const counted = statuses.filter(
+    (status) => !(UNCOUNTED_TASK_STATUSES as readonly string[]).includes(status),
+  );
+  return {
+    total: counted.length,
+    completed: counted.filter((status) => status === 'completed').length,
+  };
+}
+
 export const ACTION_KINDS: readonly ActionKind[] = [
   'capture_ai_traffic',
   'convert_mentions',

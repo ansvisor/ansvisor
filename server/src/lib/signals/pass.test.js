@@ -12,6 +12,10 @@ vi.mock('./record.js', () => ({ recordSignalsForBrand: (...a) => recordSignalsFo
 vi.mock('../action-center/generate.js', () => ({
   generateActionsForBrand: (...a) => generateActionsForBrand(...a),
 }));
+const rescoreBrandActions = vi.fn();
+vi.mock('../action-center/priority-data.js', () => ({
+  rescoreBrandActions: (...a) => rescoreBrandActions(...a),
+}));
 
 import { runFirstSignalPass, runSignalCatchUp, runSignalPass } from './pass.js';
 
@@ -55,6 +59,8 @@ beforeEach(() => {
   from.mockReset();
   recordSignalsForBrand.mockReset();
   generateActionsForBrand.mockReset();
+  rescoreBrandActions.mockReset();
+  rescoreBrandActions.mockResolvedValue(3);
   recordSignalsForBrand.mockResolvedValue({ inserted: 2, refreshed: 1 });
   generateActionsForBrand.mockResolvedValue({ created: 1, refreshed: 0 });
 });
@@ -109,6 +115,38 @@ describe('runSignalPass', () => {
 
     expect(generateActionsForBrand).not.toHaveBeenCalled();
     expect(writes[0].row.outcome).toBe('skipped');
+  });
+
+  /**
+   * The generator is what scores the active actions again each night; with
+   * no generator, the pass scores them itself.
+   */
+  it("still scores the brand's active actions on a skipped night", async () => {
+    const writes = mockDb({ runs: [{ completed_at: RUN_AT }] });
+    recordSignalsForBrand.mockResolvedValue({ skipped: 'no_fresh_results' });
+
+    await runSignalPass(BRAND, { now: NOW });
+
+    expect(rescoreBrandActions).toHaveBeenCalledWith(BRAND, { now: NOW });
+    expect(writes[0].row.detail.actions).toEqual({ rescored: 3 });
+  });
+
+  it('logs a skipped night even when its scores fail', async () => {
+    const writes = mockDb({ runs: [{ completed_at: RUN_AT }] });
+    recordSignalsForBrand.mockResolvedValue({ skipped: 'no_fresh_results' });
+    rescoreBrandActions.mockRejectedValue(new Error('timeout'));
+
+    await runSignalPass(BRAND, { now: NOW });
+
+    expect(writes[0].row).toMatchObject({ outcome: 'skipped', detail: { actions: null } });
+  });
+
+  it('leaves the scores to the generator on a recorded night', async () => {
+    mockDb({ runs: [{ completed_at: RUN_AT }] });
+
+    await runSignalPass(BRAND, { now: NOW });
+
+    expect(rescoreBrandActions).not.toHaveBeenCalled();
   });
 
   it('does nothing for a brand whose nightly run has never stamped', async () => {
