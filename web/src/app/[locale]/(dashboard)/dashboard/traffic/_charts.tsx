@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import { formatNumber } from '@/lib/format';
 import {
@@ -121,20 +122,27 @@ export function formatTrafficBucketDate(
 
 // ─── Custom Tooltips ──────────────────────────────────────────────────────────
 
-function AreaTooltip({
+export function AreaTooltip({
   active,
   payload,
   label,
+  analyticsDays,
 }: {
   active?: boolean;
   payload?: { name: string; value: number; color: string }[];
   label?: string;
+  /** Days whose visits came from Google Analytics rather than the snippet (AT-004). */
+  analyticsDays?: Set<string>;
 }) {
+  const t = useTranslations('traffic.trend');
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-lg border bg-background px-3 py-2 shadow-md text-xs">
       <p className="font-medium text-foreground mb-1">
         {label ? formatTrafficBucketDate(label, { withDay: true }) : ''}
+        {label && analyticsDays?.has(label) && (
+          <span className="font-normal text-muted-foreground"> · {t('fromAnalytics')}</span>
+        )}
       </p>
       {payload.map((entry) => (
         <div key={entry.name} className="flex items-center gap-2">
@@ -202,8 +210,16 @@ function BarList({ data }: { data: { name: string; value: number; color: string 
 
 // ─── Exported Charts ──────────────────────────────────────────────────────────
 
-export function ReferralTrendChart({ data }: { data: TrafficTrendPoint[] }) {
+export function ReferralTrendChart({
+  data,
+  analyticsDays,
+}: {
+  data: TrafficTrendPoint[];
+  /** Days filled from Google Analytics, named in the tooltip (AT-004). */
+  analyticsDays?: string[];
+}) {
   if (!data.length) return null;
+  const fromAnalytics = new Set(analyticsDays);
 
   // Extract platform keys (everything except 'date')
   const platformKeys = Object.keys(data[0]).filter((k) => k !== 'date');
@@ -241,7 +257,7 @@ export function ReferralTrendChart({ data }: { data: TrafficTrendPoint[] }) {
             className="fill-muted-foreground"
             allowDecimals={false}
           />
-          <Tooltip content={<AreaTooltip />} />
+          <Tooltip content={<AreaTooltip analyticsDays={fromAnalytics} />} />
           <Legend
             iconType="circle"
             iconSize={8}

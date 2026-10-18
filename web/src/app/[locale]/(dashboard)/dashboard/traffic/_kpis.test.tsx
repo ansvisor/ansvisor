@@ -56,6 +56,7 @@ const summary = (over: Partial<TrafficSummary> = {}): TrafficSummary => ({
   totalVisits: 4,
   totalVisitsPrev: 3,
   totalPageviews: 7,
+  analyticsDays: [],
   hasPreviousPeriod: true,
   platformBreakdown: [
     { platform: 'gemini.google.com', visits: 2, visitsPrev: 1 },
@@ -170,6 +171,25 @@ describe('TrafficKpis', () => {
     expect(card('Top platform')).toContain('Gemini');
     expect(card('Top platform')).toContain('2 visits');
     expect(card('Platforms')).toContain('3unique AI sources');
+  });
+
+  it('says how many days came from Google Analytics instead of a partial pageview count (AT-004)', async () => {
+    await render({
+      preset: '30d',
+      dateWindow: { dateFrom: '2026-09-18T12:30:00.000Z' },
+      sum: summary({ analyticsDays: ['2026-10-01', '2026-10-02', '2026-10-03'] }),
+    });
+    expect(card('AI-referred visits')).toContain(
+      '3 in the previous period · 3 days from Google Analytics',
+    );
+    expect(card('AI-referred visits')).not.toContain('pageviews');
+
+    await render({
+      preset: 'all',
+      dateWindow: {},
+      sum: summary({ analyticsDays: ['2026-10-01'], hasPreviousPeriod: false }),
+    });
+    expect(card('AI-referred visits')).toContain('1 day from Google Analytics');
   });
 
   it('shows a % change once both periods have 30 visits', async () => {

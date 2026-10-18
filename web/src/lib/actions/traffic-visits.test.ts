@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * AT-003: the AI Traffic page counts visits, one per session, and pageviews
- * on their own (F5). A row starts a visit when its `visit_of` is null.
+ * on their own (F5). A row starts a visit when its `visit_of` is null. The
+ * summary counts them in the database since AT-004 (traffic-merged.test.ts).
  */
 
 type Call = [string, ...unknown[]];
@@ -42,7 +43,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 vi.mock('@/config/api', () => ({ API_BASE_URL: 'http://api.test' }));
 
-import { getTrafficLogs, getTrafficSummary } from './traffic';
+import { getTrafficLogs } from './traffic';
 
 const has = (calls: Call[], method: string, ...args: unknown[]) =>
   calls.some(([m, ...rest]) => m === method && args.every((a, i) => Object.is(rest[i], a)));
@@ -121,38 +122,5 @@ describe('getTrafficLogs', () => {
     const result = await getTrafficLogs('b1');
     expect(result).toEqual({ logs: [], total: 0, pageviews: 0 });
     expect(queries).toHaveLength(2);
-  });
-});
-
-describe('getTrafficSummary', () => {
-  it('counts visits for the totals, breakdowns and pages, and pageviews on their own', async () => {
-    answer = (calls) => {
-      if (head(calls)) return { count: visitsOnly(calls) ? 2 : 5, error: null };
-      return {
-        data: [
-          row('v1', 'https://acme.example/menu/'),
-          row('v2', 'https://acme.example/menu/', 'chatgpt.com'),
-        ],
-        error: null,
-      };
-    };
-
-    const summary = await getTrafficSummary('b1', { dateFrom: '2026-10-11T00:00:00Z' });
-
-    expect(summary.totalVisits).toBe(2);
-    expect(summary.totalPageviews).toBe(5);
-    expect(summary.hasPreviousPeriod).toBe(true);
-    expect(summary.topPages).toEqual([{ url: '/menu/', visits: 2, visitsPrev: 2 }]);
-    // Every scan behind the breakdowns reads the visits only.
-    for (const calls of queries.filter((c) => !head(c))) {
-      expect(visitsOnly(calls)).toBe(true);
-    }
-  });
-
-  it('has no previous period for all time', async () => {
-    answer = (calls) => (head(calls) ? { count: 3, error: null } : { data: [], error: null });
-    const summary = await getTrafficSummary('b1', {});
-    expect(summary.hasPreviousPeriod).toBe(false);
-    expect(summary.totalVisitsPrev).toBe(0);
   });
 });

@@ -45,6 +45,7 @@ const data = (over: Partial<TrafficExportData> = {}): TrafficExportData => ({
     totalVisits: 55,
     totalVisitsPrev: 39,
     totalPageviews: 59,
+    analyticsDays: [],
     hasPreviousPeriod: true,
     platformBreakdown: [
       { platform: 'chatgpt.com', visits: 40, visitsPrev: 33 },

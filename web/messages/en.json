@@ -3185,15 +3185,21 @@
     "visits": {
       "kpiSub": "{pageviews, plural, one {# pageview} other {# pageviews}} · {previous, number} in the previous period",
       "kpiSubNoPrevious": "{pageviews, plural, one {# pageview} other {# pageviews}}",
+      "kpiSubAnalytics": "{previous, number} in the previous period · {days, plural, one {# day} other {# days}} from Google Analytics",
+      "kpiSubAnalyticsNoPrevious": "{days, plural, one {# day} other {# days}} from Google Analytics",
       "listTotal": "{visits, plural, one {# visit} other {# visits}} ({pageviews, plural, one {# pageview} other {# pageviews}})",
       "rowPageviews": "{count, plural, one {# pageview} other {# pageviews}}",
       "listNote": "One row per visit (session). Repeated pageviews in the same visit are grouped.",
+      "listAnalyticsNote": "Google Analytics doesn't report single visits: this list shows the tracking snippet's, while the totals above also count {days, plural, one {# day} other {# days}} from Google Analytics.",
       "listRange": "{visits, plural, one {# visit} other {# visits}} ({pageviews, plural, one {# pageview} other {# pageviews}}) {preset, select, last {in the {range}} other {· {range}}}",
       "showLast7Days": "Show last 7 days"
     },
+    "trend": {
+      "fromAnalytics": "from Google Analytics"
+    },
     "kpis": {
       "visits": "AI-referred visits",
-      "visitsTip": "Visits from AI assistants, counted once per session by the tracking snippet. Below 30 visits in this period or the one before, the change shows Low sample.",
+      "visitsTip": "Visits from AI assistants, one per session: from the tracking snippet on days it sent any, and from Google Analytics on the other days, never added together. Below 30 visits in this period or the one before, the change shows Low sample.",
       "topPlatform": "Top platform",
       "topPlatformTip": "The AI platform that sent the most visits in this range.",
       "topPlatformSub": "{visits, plural, one {# visit} other {# visits}}",

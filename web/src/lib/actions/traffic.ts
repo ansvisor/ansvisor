@@ -34,8 +34,14 @@ export interface TrafficLog {
 export interface TrafficSummary {
   totalVisits: number;
   totalVisitsPrev: number;
-  /** Every pageview in the window, the visits' first ones included. */
+  /**
+   * The snippet's pageviews in the window, the visits' first ones included.
+   * Google Analytics reports none, so on days it filled (AT-004) there are
+   * visits without pageviews.
+   */
   totalPageviews: number;
+  /** The UTC days in the window whose visits came from Google Analytics (AT-004). */
+  analyticsDays: string[];
   /** False for all time, which has no previous period to compare with. */
   hasPreviousPeriod: boolean;
   platformBreakdown: { platform: string; visits: number; visitsPrev: number }[];
@@ -145,6 +151,54 @@ function listUtcDays(from: string, to: string): string[] {
   return days;
 }
 
+/**
+ * AI-referred visits in a window from the snippet and Google Analytics, day
+ * by day (AT-004, spec §5.2; 00176): a UTC day with a snippet visit is the
+ * snippet's, any other whole day in the window is Analytics'. Never summed.
+ */
+interface MergedTraffic {
+  visits: number;
+  pageviews: number;
+  analyticsDays: string[];
+  platforms: { platform: string; visits: number }[];
+  pages: { page: string; visits: number }[];
+  days: { day: string; platform: string; visits: number }[];
+}
+
+async function readMergedTraffic(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  window: { from?: string; to?: string; toInclusive?: boolean },
+): Promise<MergedTraffic> {
+  // The 24-hour range trends hour by hour, which Analytics can't fill: it
+  // reads the snippet alone (AT-004).
+  const hourly = Boolean(window.from && window.to && isHourlyWindow(window.from, window.to));
+  const { data, error } = await supabase.rpc('ai_traffic_merged', {
+    p_brand_id: brandId,
+    p_from: window.from ?? null,
+    p_to: window.to ?? null,
+    p_to_inclusive: window.toInclusive ?? true,
+    p_analytics: !hourly,
+  });
+  if (error) throw new Error(error.message);
+  const raw = (data ?? {}) as {
+    visits?: number;
+    pageviews?: number;
+    analytics_days?: string[];
+    platforms?: { platform: string; visits: number }[];
+    pages?: { page: string; visits: number }[];
+    days?: { day: string; platform: string; visits: number }[];
+  };
+  return {
+    visits: Number(raw.visits) || 0,
+    pageviews: Number(raw.pageviews) || 0,
+    analyticsDays: raw.analytics_days ?? [],
+    platforms: (raw.platforms ?? []).map((p) => ({ ...p, visits: Number(p.visits) || 0 })),
+    pages: (raw.pages ?? []).map((p) => ({ ...p, visits: Number(p.visits) || 0 })),
+    days: (raw.days ?? []).map((d) => ({ ...d, visits: Number(d.visits) || 0 })),
+  };
+}
+
 export async function getTrafficSummary(
   brandId: string,
   window?: TrafficDateWindow,
@@ -153,92 +207,50 @@ export async function getTrafficSummary(
 ): Promise<TrafficSummary> {
   const supabase = await createClient();
   const { from, to, prevFrom, prevTo } = resolveTrafficWindow(window);
-
-  // Exact totals — count queries transfer no rows and are immune to the cap.
-  const countRows = (
-    fromTs?: string,
-    toTs?: string,
-    toInclusive = false,
-    opts?: { visits?: boolean },
-  ) => countTrafficLogs(supabase, brandId, { from: fromTs, to: toTs, toInclusive }, opts);
-
-  // Platform breakdown + top pages, aggregated per batch.
-  const platformMap = new Map<string, number>();
-  const platformMapPrev = new Map<string, number>();
-  const pageMap = new Map<string, number>();
-  const pageMapPrev = new Map<string, number>();
-
-  const aggregate = (platforms: Map<string, number>, pages: Map<string, number>) => {
-    return (r: Record<string, unknown>) => {
-      const p = (r.source_platform as string) || 'unknown';
-      platforms.set(p, (platforms.get(p) ?? 0) + 1);
-
-      const url = r.url as string;
-      let key = url;
-      try {
-        key = new URL(url).pathname;
-      } catch {
-        // Not a parseable URL — bucket by the raw value.
-      }
-      pages.set(key, (pages.get(key) ?? 0) + 1);
-    };
-  };
-
-  const columns = 'source_platform, url, created_at, id';
   const hasPrev = Boolean(prevFrom && prevTo);
-  // The window is already the full lifetime when neither bound is set, so
-  // totalVisits doubles as the lifetime check — only worth a second cheap
-  // count query when the window actually narrows the result.
-  const hasWindow = Boolean(from || to);
-  const [totalVisits, totalVisitsPrev, totalPageviews, , , lifetimeVisits] = await Promise.all([
-    countRows(from, to, true),
-    hasPrev ? countRows(prevFrom, prevTo) : Promise.resolve(0),
-    countRows(from, to, true, { visits: false }),
-    scanTrafficLogs(
-      supabase,
-      brandId,
-      { columns, from, to, toInclusive: true },
-      aggregate(platformMap, pageMap),
-    ),
+
+  // Visits, platforms and pages from the snippet and Google Analytics, day
+  // by day (AT-004), summed in the database: no row cap applies.
+  const [current, previous, lifetime] = await Promise.all([
+    readMergedTraffic(supabase, brandId, { from, to, toInclusive: true }),
     hasPrev
-      ? scanTrafficLogs(
-          supabase,
-          brandId,
-          { columns, from: prevFrom, to: prevTo },
-          aggregate(platformMapPrev, pageMapPrev),
-        )
-      : Promise.resolve(),
-    hasWindow ? countRows() : Promise.resolve(null),
+      ? readMergedTraffic(supabase, brandId, { from: prevFrom, to: prevTo, toInclusive: false })
+      : null,
+    // Whether the brand has any AI traffic at all, from either origin.
+    from || to
+      ? Promise.all([
+          countTrafficLogs(supabase, brandId, {}),
+          supabase
+            .from('ga_ai_traffic_stats')
+            .select('id')
+            .eq('brand_id', brandId)
+            .gt('sessions', 0)
+            .limit(1),
+        ])
+      : null,
   ]);
+  if (lifetime?.[1].error) throw new Error(lifetime[1].error.message);
+  const hasAnyData = lifetime
+    ? lifetime[0] > 0 || (lifetime[1].data ?? []).length > 0
+    : current.visits > 0;
 
-  const hasAnyData = hasWindow ? (lifetimeVisits as number) > 0 : totalVisits > 0;
-
-  const allPlatforms = new Set([...platformMap.keys(), ...platformMapPrev.keys()]);
-  const platformBreakdown = Array.from(allPlatforms)
-    .map((platform) => ({
-      platform,
-      visits: platformMap.get(platform) ?? 0,
-      visitsPrev: platformMapPrev.get(platform) ?? 0,
-    }))
-    .filter((p) => p.visits > 0)
-    .sort((a, b) => b.visits - a.visits);
-
-  const topPages = Array.from(pageMap.entries())
-    .map(([url, visits]) => ({
-      url,
-      visits,
-      visitsPrev: pageMapPrev.get(url) ?? 0,
-    }))
-    .sort((a, b) => b.visits - a.visits)
-    .slice(0, opts?.topPages ?? 10);
+  const previousByPlatform = new Map(previous?.platforms.map((p) => [p.platform, p.visits]));
+  const previousByPage = new Map(previous?.pages.map((p) => [p.page, p.visits]));
 
   return {
-    totalVisits,
-    totalVisitsPrev,
-    totalPageviews,
+    totalVisits: current.visits,
+    totalVisitsPrev: previous?.visits ?? 0,
+    totalPageviews: current.pageviews,
+    analyticsDays: current.analyticsDays,
     hasPreviousPeriod: hasPrev,
-    platformBreakdown,
-    topPages,
+    platformBreakdown: current.platforms
+      .filter((p) => p.visits > 0)
+      .map((p) => ({ ...p, visitsPrev: previousByPlatform.get(p.platform) ?? 0 })),
+    topPages: current.pages.slice(0, opts?.topPages ?? 10).map((p) => ({
+      url: p.page,
+      visits: p.visits,
+      visitsPrev: previousByPage.get(p.page) ?? 0,
+    })),
     hasAnyData,
   };
 }
@@ -252,25 +264,29 @@ export async function getTrafficTrend(
   // A day or less reads hour by hour (AT-017); longer windows by day.
   const hourly = Boolean(from && to && isHourlyWindow(from, to));
 
-  // Group by day (or hour) + platform, aggregated per batch (#450).
+  // Group by day (or hour) + platform.
   const dayMap = new Map<string, Map<string, number>>();
   const allPlatforms = new Set<string>();
+  const add = (day: string, platform: string, visits: number) => {
+    allPlatforms.add(platform);
+    if (!dayMap.has(day)) dayMap.set(day, new Map());
+    const dm = dayMap.get(day)!;
+    dm.set(platform, (dm.get(platform) ?? 0) + visits);
+  };
 
-  await scanTrafficLogs(
-    supabase,
-    brandId,
-    { columns: 'source_platform, created_at, id', from, to, toInclusive: true },
-    (r) => {
-      const created = r.created_at as string;
-      const day = hourly ? utcHourKey(created) : created.slice(0, 10);
-      const platform = (r.source_platform as string) || 'unknown';
-      allPlatforms.add(platform);
-
-      if (!dayMap.has(day)) dayMap.set(day, new Map());
-      const dm = dayMap.get(day)!;
-      dm.set(platform, (dm.get(platform) ?? 0) + 1);
-    },
-  );
+  if (hourly) {
+    // The snippet alone: Analytics has no hours (AT-004).
+    await scanTrafficLogs(
+      supabase,
+      brandId,
+      { columns: 'source_platform, created_at, id', from, to, toInclusive: true },
+      (r) => add(utcHourKey(r.created_at as string), (r.source_platform as string) || 'unknown', 1),
+    );
+  } else {
+    // Day by day from the snippet or Google Analytics (AT-004).
+    const merged = await readMergedTraffic(supabase, brandId, { from, to, toInclusive: true });
+    for (const d of merged.days) add(d.day, d.platform, d.visits);
+  }
 
   let days: string[];
   if (from && to) {

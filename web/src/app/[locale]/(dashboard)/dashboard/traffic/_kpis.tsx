@@ -156,6 +156,7 @@ export function TrafficKpis({
   const totalVisits = summary?.totalVisits ?? 0;
   const totalVisitsPrev = summary?.totalVisitsPrev ?? 0;
   const totalPageviews = summary?.totalPageviews ?? 0;
+  const analyticsDays = summary?.analyticsDays.length ?? 0;
   // From the summary, not the selected range: while a new range loads, the
   // numbers on screen are still the previous range's.
   const comparable = summary?.hasPreviousPeriod ?? false;
@@ -216,7 +217,10 @@ export function TrafficKpis({
   return (
     <div className={TRAFFIC_KPI_GRID}>
       {/* One visit per session; the sub-line gives the pageviews and the
-          previous period's visits (AT-003). */}
+          previous period's visits (AT-003). Google Analytics reports no
+          pageviews, so when it filled any day (AT-004) the line says how
+          many instead of a pageview count that would cover only part of
+          the range. */}
       <MetricCard
         label={t('visits')}
         tooltip={t('visitsTip')}
@@ -224,9 +228,13 @@ export function TrafficKpis({
         value={formatNumber(totalVisits)}
         delta={delta(visitChange(totalVisits, totalVisitsPrev, { comparable }))}
         sub={
-          comparable
-            ? tVisits('kpiSub', { pageviews: totalPageviews, previous: totalVisitsPrev })
-            : tVisits('kpiSubNoPrevious', { pageviews: totalPageviews })
+          analyticsDays > 0
+            ? comparable
+              ? tVisits('kpiSubAnalytics', { previous: totalVisitsPrev, days: analyticsDays })
+              : tVisits('kpiSubAnalyticsNoPrevious', { days: analyticsDays })
+            : comparable
+              ? tVisits('kpiSub', { pageviews: totalPageviews, previous: totalVisitsPrev })
+              : tVisits('kpiSubNoPrevious', { pageviews: totalPageviews })
         }
       />
       <MetricCard

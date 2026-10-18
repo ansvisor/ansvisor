@@ -38,6 +38,7 @@ import {
 } from '@/components/filters/date-range-filter';
 import { PageOpportunitiesCard } from './_opportunities-card';
 import { TRAFFIC_KPI_GRID, TrafficKpis } from './_kpis';
+import { VisitListSourceNote } from './_visit-list-note';
 import { ExportMenu, TableExport, useTrafficExport } from './_export';
 import { SourcesStrip } from './_sources-strip';
 import { SnippetBanner, SnippetDialog } from './_snippet-code';
@@ -677,7 +678,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                 <CardTitle className="font-medium text-sm">{trendTitle}</CardTitle>
               </CardHeader>
               <CardContent>
-                <ReferralTrendChart data={trend} />
+                <ReferralTrendChart data={trend} analyticsDays={summary?.analyticsDays} />
               </CardContent>
             </Card>
 
@@ -909,6 +910,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                       </button>
                     )}
                   </div>
+                  <VisitListSourceNote analyticsDays={summary?.analyticsDays.length ?? 0} />
                   <p className="px-6 pb-4 text-xs text-muted-foreground">{tVisits('listNote')}</p>
                 </>
               )}

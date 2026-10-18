@@ -2832,6 +2832,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ai_traffic_merged: {
+        Args: {
+          p_analytics?: boolean
+          p_brand_id: string
+          p_from: string | null
+          p_to: string | null
+          p_to_inclusive?: boolean
+        }
+        Returns: Json
+      }
       ai_visibility_aggregates: {
         Args: {
           p_brand_id: string
