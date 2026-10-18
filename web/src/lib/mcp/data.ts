@@ -2200,10 +2200,13 @@ export async function getAiTrafficFor(
     .maybeSingle();
   if (!brand) return null;
 
+  // Visits, not pageviews: a row whose visit_of is null starts one (00172),
+  // as the AI Traffic page counts them.
   let query = supabaseAdmin
     .from('ai_traffic_logs')
     .select('source_platform, url, country')
-    .eq('brand_id', params.brandId);
+    .eq('brand_id', params.brandId)
+    .is('visit_of', null);
 
   if (params.dateFrom) query = query.gte('created_at', params.dateFrom);
   const expandedDateTo = expandDateToEndOfDay(params.dateTo);

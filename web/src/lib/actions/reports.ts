@@ -479,17 +479,21 @@ async function getTrafficSnapshot(
   const supabase = await createClient();
   const prev = previousWindow(dateFrom, dateTo);
 
+  // Visits, not pageviews: a row whose visit_of is null starts one (00172),
+  // as the AI Traffic page counts them.
   const [{ data: cur, error }, { data: prevRows }] = await Promise.all([
     supabase
       .from('ai_traffic_logs')
       .select('source_platform, url')
       .eq('brand_id', brandId)
+      .is('visit_of', null)
       .gte('created_at', dateFrom)
       .lte('created_at', dateTo),
     supabase
       .from('ai_traffic_logs')
       .select('id')
       .eq('brand_id', brandId)
+      .is('visit_of', null)
       .gte('created_at', prev.from)
       .lt('created_at', prev.to),
   ]);

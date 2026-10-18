@@ -843,8 +843,9 @@ export async function getCitationUrlDetail(
       )
       .eq('prompts.prompt_sets.brand_id', brandId);
 
-    // (b) AI-referred visits to this page. The ilike narrows server-side; the
-    // exact match happens on the loose key below.
+    // (b) AI-referred visits that landed on this page: the rows that start a
+    // visit (00172), so a reload isn't another visit. The ilike narrows
+    // server-side; the exact match happens on the loose key below.
     const pathForSearch = (() => {
       try {
         return new URL(targetUrl).pathname.replace(/\/+$/, '');
@@ -856,6 +857,7 @@ export async function getCitationUrlDetail(
       .from('ai_traffic_logs')
       .select('url, source_platform, created_at')
       .eq('brand_id', brandId)
+      .is('visit_of', null)
       .order('created_at', { ascending: false })
       .range(0, URL_DETAIL_TRAFFIC_MAX_ROWS - 1);
     if (pathForSearch) trafficQuery = trafficQuery.ilike('url', `%${escapeIlike(pathForSearch)}%`);

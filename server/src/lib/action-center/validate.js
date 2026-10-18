@@ -161,16 +161,17 @@ export async function measureKpis(brandId, kpiKeys, from, to) {
 /**
  * AI-referred visits over a window.
  *
- * Two sources exist and they measure different things: the tracking snippet
- * logs each referred visit, while the analytics integration reports sessions.
- * Whichever the brand actually has is used — and when it has neither, the
- * metric is unmeasured, not zero.
+ * Two sources exist: the tracking snippet, counted one row per visit (a row
+ * whose visit_of is null starts a visit, 00172; reloads are further rows of
+ * it), and the analytics integration's sessions. Whichever the brand actually
+ * has is used — and when it has neither, the metric is unmeasured, not zero.
  */
 async function measureTraffic(brandId, from, to) {
   const { count, error } = await supabaseAdmin
     .from('ai_traffic_logs')
     .select('id', { count: 'exact', head: true })
     .eq('brand_id', brandId)
+    .is('visit_of', null)
     .gte('created_at', `${from}T00:00:00Z`)
     .lte('created_at', `${to}T23:59:59Z`);
   if (error) throw new Error(`ai_traffic_logs: ${error.message}`);

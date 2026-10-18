@@ -410,10 +410,12 @@ export async function getBrandsCardSummary(
       .select('id, prompt_sets!inner(brand_id)')
       .in('prompt_sets.brand_id', brandIds)
       .eq('is_active', true),
+    // Visits, not pageviews (00172), as the AI Traffic page counts them.
     supabase
       .from('ai_traffic_logs')
       .select('brand_id, created_at')
       .in('brand_id', brandIds)
+      .is('visit_of', null)
       .gte('created_at', new Date(now - 7 * 86400000).toISOString()),
   ]);
 
