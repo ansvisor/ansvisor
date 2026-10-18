@@ -3,8 +3,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { FileSearch, Loader2, MoreHorizontal, Send } from 'lucide-react';
-import { Link, useRouter } from '@/i18n/navigation';
+import { FileSearch, ListPlus, Loader2, MoreHorizontal, Send } from 'lucide-react';
+import { useRouter } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -14,7 +14,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { buttonVariants } from '@/components/ui/button-variants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -39,6 +38,7 @@ import {
 } from '@/lib/actions/traffic';
 import { runAudit } from '@/lib/actions/audits';
 import { PAGE_ACTION_MAX, auditBlock, usePageActions } from './_use-page-actions';
+import { PagePromptsDialog } from './_page-prompts-dialog';
 
 /**
  * Pages: which answers send visitors (AT-006, spec §3.5, "the
@@ -54,7 +54,7 @@ import { PAGE_ACTION_MAX, auditBlock, usePageActions } from './_use-page-actions
  *     prompt's answer covers.
  *
  * A row's action is the next step for it: audit the page, or track prompts
- * that point to it; its menu sends it to the Action Center. Under the two
+ * suggested for it that point to it; its menu sends it to the Action Center. Under the two
  * lists Action Center works from, the pages shown go as one action, and
  * their cited pages can be audited at once (AT-006 part B).
  */
@@ -118,8 +118,13 @@ export function PagesCard({
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [auditing, setAuditing] = useState<string | null>(null);
   const pageActions = usePageActions(brandId, dateWindow);
+  // The page whose suggested prompts are open (part B2); each opening starts
+  // afresh, and tracking some reads the list again for its prompt counts.
+  const [promptsFor, setPromptsFor] = useState<string | null>(null);
+  const [promptsOpened, setPromptsOpened] = useState(0);
+  const [reloads, setReloads] = useState(0);
 
-  const key = `${brandId}|${dateWindow.dateFrom ?? ''}|${dateWindow.dateTo ?? ''}|${tab}|${limit}`;
+  const key = `${brandId}|${dateWindow.dateFrom ?? ''}|${dateWindow.dateTo ?? ''}|${tab}|${limit}|${reloads}`;
   // The loaded result carries the request it answers, as the KPI cards do:
   // no loading flag reset inside the effect, and the last list stays on
   // screen, faded, while another loads.
@@ -184,24 +189,34 @@ export function PagesCard({
     </Button>
   );
 
-  const addPromptsLink = (
-    <Link
-      href="/dashboard/prompts"
-      className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'h-7 text-xs')}
-    >
+  const openPrompts = (page: string) => {
+    setPromptsFor(page);
+    setPromptsOpened((n) => n + 1);
+  };
+
+  const addPromptsButton = (page: string) => (
+    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openPrompts(page)}>
       {t('addPrompts')}
-    </Link>
+    </Button>
   );
 
   /** A No AI traffic row's next step, by why AI engines skip it. */
   const reasonAction = (row: TrafficPageRow) =>
-    citationState(row) === 'not_targeted' ? addPromptsLink : auditButton(row.page);
+    citationState(row) === 'not_targeted' ? addPromptsButton(row.page) : auditButton(row.page);
 
   const platforms = (row: TrafficPageRow) =>
     row.aiPlatforms.length ? row.aiPlatforms.map(getPlatformName).join(', ') : '—';
 
-  /** A row's next step, with its menu: send the page to the Action Center. */
-  const rowActions = (row: TrafficPageRow, next: ReactNode, reason: TrafficPagesReason) => (
+  /**
+   * A row's next step, with its menu: send the page to the Action Center, and
+   * suggest prompts for it when that isn't already its next step.
+   */
+  const rowActions = (
+    row: TrafficPageRow,
+    next: ReactNode,
+    reason: TrafficPagesReason,
+    { addPrompts = true }: { addPrompts?: boolean } = {},
+  ) => (
     <div className="flex items-center justify-end gap-1">
       {next}
       <DropdownMenu>
@@ -220,6 +235,12 @@ export function PagesCard({
             <Send className="h-3.5 w-3.5" />
             {t('actions.sendToActionCenter')}
           </DropdownMenuItem>
+          {addPrompts && (
+            <DropdownMenuItem className="gap-2" onClick={() => openPrompts(row.page)}>
+              <ListPlus className="h-3.5 w-3.5" />
+              {t('addPrompts')}
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -387,7 +408,9 @@ export function PagesCard({
                         {row.valueRank === null ? '—' : `#${row.valueRank}`}
                       </TableCell>
                       <TableCell className="pr-6 text-right">
-                        {rowActions(row, reasonAction(row), 'no_ai_traffic')}
+                        {rowActions(row, reasonAction(row), 'no_ai_traffic', {
+                          addPrompts: citationState(row) !== 'not_targeted',
+                        })}
                       </TableCell>
                     </>
                   )}
@@ -414,7 +437,9 @@ export function PagesCard({
                         {platforms(row)}
                       </TableCell>
                       <TableCell className="text-right text-sm">{num(row.aiKeyEvents)}</TableCell>
-                      <TableCell className="pr-6 text-right">{addPromptsLink}</TableCell>
+                      <TableCell className="pr-6 text-right">
+                        {addPromptsButton(row.page)}
+                      </TableCell>
                     </>
                   )}
                   {tab === 'all' && (
@@ -511,6 +536,15 @@ export function PagesCard({
           </div>
         )}
       </CardContent>
+      <PagePromptsDialog
+        key={promptsOpened}
+        brandId={brandId}
+        dateWindow={dateWindow}
+        domain={domain}
+        page={promptsFor}
+        onClose={() => setPromptsFor(null)}
+        onTracked={() => setReloads((n) => n + 1)}
+      />
     </Card>
   );
 }

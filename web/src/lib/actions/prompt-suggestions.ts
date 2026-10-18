@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { addPromptToSet } from '@/lib/actions/prompt';
+import { addPromptTargetUrl } from '@/lib/actions/prompt-workflow';
 import { API_BASE_URL } from '@/config/api';
 // Types only — this file is `'use server'`, so the guards that go with them
 // live in a plain module (every runtime export here must be a server action).
@@ -283,4 +284,84 @@ export async function trackSuggestions(suggestionIds: string[]): Promise<TrackSu
   await Promise.all(added.map((a) => ackAccepted(session.access_token, a.id, a.promptId)));
   if (added.length > 0) revalidatePath('/dashboard/prompts');
   return { trackedIds: added.map((a) => a.id), skippedIds, ...failure };
+}
+
+export interface TrackPagePromptsResult {
+  /** The prompts added, in the order given. */
+  promptIds: string[];
+  /** Why the rest weren't; `code` 'plan_limit' when the plan's prompt locations ran out. */
+  error?: string;
+  code?: 'plan_limit';
+}
+
+/** More than a page's suggestions: it gets five. */
+const MAX_PAGE_PROMPTS = 10;
+
+/**
+ * Track prompts suggested for one page (AT-006 part B2), each pointing at
+ * it. Added one by one through addPromptToSet, as Insights' "Track N" does,
+ * so each passes the same plan check and the run stops at the first that
+ * fails. A prompt goes under the brand's topic of that name, in the brand's
+ * own spelling, or a new topic made for it, as an import does. Each added
+ * prompt gets the page as its target URL, so its answers show whether AI
+ * cites the page; a target that can't be saved leaves the prompt tracked.
+ * Their first answers come with the next tracking run.
+ */
+export async function trackPagePrompts(
+  brandId: string,
+  pageUrl: string | null,
+  prompts: { text: string; topic: string }[],
+): Promise<TrackPagePromptsResult> {
+  const wanted = (Array.isArray(prompts) ? prompts : [])
+    .filter((p) => typeof p?.text === 'string' && p.text.trim())
+    .slice(0, MAX_PAGE_PROMPTS);
+  if (wanted.length === 0) return { promptIds: [], error: 'Pick at least one prompt.' };
+
+  const supabase = await createClient();
+  const target = await promptTarget(supabase, brandId);
+  if ('error' in target) return { promptIds: [], error: target.error };
+
+  const keyOf = (t: string) => t.trim().toLowerCase().replace(/\s+/g, ' ');
+  const { data: topicRows } = await supabase.from('topics').select('name').eq('brand_id', brandId);
+  const topics = new Map((topicRows ?? []).map((t) => [keyOf(t.name as string), t.name as string]));
+
+  const promptIds: string[] = [];
+  let failure: { error: string; code?: 'plan_limit' } | undefined;
+  for (const p of wanted) {
+    const named = typeof p.topic === 'string' ? p.topic.trim().slice(0, 60) : '';
+    let topic = named ? topics.get(keyOf(named)) : undefined;
+    let madeTopicId: string | null = null;
+    if (named && !topic) {
+      const { data: made } = await supabase
+        .from('topics')
+        .insert({ brand_id: brandId, name: named, is_active: true })
+        .select('id, name')
+        .single();
+      if (made) {
+        topic = made.name as string;
+        madeTopicId = made.id as string;
+        topics.set(keyOf(topic), topic);
+      }
+    }
+
+    const result = await addPromptToSet({
+      ...target,
+      text: p.text.trim(),
+      category: topic ?? (named || undefined),
+    });
+    if ('error' in result) {
+      // A topic made for a prompt that wasn't added would sit empty.
+      if (madeTopicId) await supabase.from('topics').delete().eq('id', madeTopicId);
+      failure = { error: result.error, code: result.code };
+      break;
+    }
+    promptIds.push(result.prompt.id);
+    if (pageUrl) {
+      const targeted = await addPromptTargetUrl(result.prompt.id, pageUrl);
+      if ('error' in targeted) console.error('Page target URL not saved:', targeted.error);
+    }
+  }
+
+  if (promptIds.length > 0) revalidatePath('/dashboard/prompts');
+  return { promptIds, ...failure };
 }

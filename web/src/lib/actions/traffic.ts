@@ -638,6 +638,61 @@ export async function sendTrafficPagesToActionCenter(
   return res.json();
 }
 
+/** A prompt suggested for one page (AT-006 part B2). */
+export interface PagePromptSuggestion {
+  text: string;
+  topic: string;
+  reason: string;
+  /** The Search Console query it came from, when it did. */
+  sourceQuery: string | null;
+  impressions: number | null;
+}
+
+export interface PagePromptSuggestions {
+  page: { path: string; title: string | null };
+  /** Search Console queries that shared the page's words. */
+  queries: number;
+  suggestions: PagePromptSuggestion[];
+}
+
+/**
+ * "Add prompts" on the Pages section (AT-006 part B2): prompts whose best
+ * answer is this page, written from what the page says, its figures over the
+ * page's range and the brand's Search Console queries that share its words.
+ * Nothing is stored until the person tracks some.
+ */
+export async function suggestPagePrompts(
+  brandId: string,
+  window: TrafficDateWindow | undefined,
+  page: string,
+): Promise<PagePromptSuggestions | { error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'Not authenticated' };
+
+  const { from, to } = resolveTrafficWindow(window);
+  const res = await fetch(
+    `${API_BASE_URL}/api/prompts/suggestions/${encodeURIComponent(brandId)}/page`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ page, from, to }),
+    },
+  );
+
+  // Returned, not thrown: a thrown error's message is masked in production.
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return { error: body.message || body.error || `Server error: ${res.status}` };
+  }
+  return res.json();
+}
+
 /** Analytics' engagement figures for one group of sessions (AT-005). */
 export interface TrafficEngagement {
   sessions: number;

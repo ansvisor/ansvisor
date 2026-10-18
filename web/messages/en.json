@@ -3416,6 +3416,26 @@
         "auditsFailed": "Couldn't start the audits",
         "noneLeft": "No audits left this month",
         "overQuota": "{count, plural, one {# audit} other {# audits}}, {remaining} left this month"
+      },
+      "prompts": {
+        "title": "Suggested prompts",
+        "explain": "Questions people ask AI assistants that {page} answers. The prompts you track point to this page, so their answers show whether AI cites it.",
+        "pageTitle": "The page: {title}",
+        "loading": "Writing prompt suggestions for this page…",
+        "failed": "Couldn't suggest prompts for this page.",
+        "empty": "No new prompts to suggest for this page: the ones it answers are tracked already.",
+        "fromQuery": "From Search Console: “{query}” · {impressions} impressions",
+        "slotsLeft": "{count, plural, one {# prompt} other {# prompts}} left to add on your plan",
+        "unlimited": "No prompt limit on your plan",
+        "overSlots": "Select up to {count, plural, one {# prompt} other {# prompts}}: that's what your plan has left",
+        "addOwn": "Add your own",
+        "track": "Track {count, plural, one {# prompt} other {# prompts}}",
+        "tracked": "Now tracking {count, plural, one {# prompt} other {# prompts}}",
+        "trackedDescription": "They point to {page}; their first answers come with the next tracking run.",
+        "trackedPartly": "Tracked {tracked} of {total}: your plan's prompt locations are full.",
+        "planFull": "Your plan's prompt locations are full",
+        "trackFailed": "Couldn't track the prompts.",
+        "openPrompts": "Open Prompts"
       }
     }
   },

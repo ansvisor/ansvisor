@@ -17,6 +17,7 @@ import {
 import { withRetry } from '../lib/retry.js';
 import { getGscSuggestionCandidates } from '../lib/gsc-suggestions.js';
 import { getGaSuggestionCandidates } from '../lib/ga-suggestions.js';
+import { suggestPromptsForPage } from '../lib/page-prompt-suggestions.js';
 import { RELEVANCE_SCALE, ratingCostUsd, toRelevance } from '../lib/suggestion-relevance.js';
 import {
   ACTIONABLE_STATES,
@@ -518,6 +519,46 @@ router.post(
       const status = error.status || 500;
       req.log.error({ err: error }, 'prompt-suggestions refresh error');
       return res.status(status).json({ error: error.message || 'Failed to generate suggestions' });
+    }
+  },
+);
+
+const pageSuggestionsSchema = z.object({
+  // A path, as the AI Traffic page's Pages section lists it.
+  page: z.string().min(1).max(2048).startsWith('/'),
+  // The page's range, as its loaders take it: a timestamp, or a day from a
+  // custom range; absent for all time.
+  from: z.union([z.iso.datetime({ offset: true }), z.iso.date()]).optional(),
+  to: z.union([z.iso.datetime({ offset: true }), z.iso.date()]).optional(),
+});
+
+/**
+ * POST /api/prompts/suggestions/:brandId/page
+ * Body: { page, from?, to? }
+ *
+ * Prompts suggested for one page of the brand's site, from the AI Traffic
+ * page's Pages section (AT-006 part B2). Not stored: the person picks the
+ * ones to track, which then point at the page.
+ */
+router.post(
+  '/suggestions/:brandId/page',
+  requireFeature('prompt_suggestions'),
+  async (req, res) => {
+    try {
+      const parsed = pageSuggestionsSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
+      }
+      await assertBrandAccess(req.params.brandId, req.user.id);
+      const context = await loadSuggestionContext(req.params.brandId);
+      const result = await suggestPromptsForPage(req.params.brandId, { ...parsed.data, context });
+      return res.json(result);
+    } catch (error) {
+      const status = error.status || 500;
+      req.log.error({ err: error }, 'page prompt suggestions error');
+      return res
+        .status(status)
+        .json({ error: error.message || 'Failed to suggest prompts for this page' });
     }
   },
 );

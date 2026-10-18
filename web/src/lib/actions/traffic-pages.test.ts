@@ -16,7 +16,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 vi.mock('@/config/api', () => ({ API_BASE_URL: 'http://api.test' }));
 
-import { getTrafficPages, sendTrafficPagesToActionCenter } from './traffic';
+import { getTrafficPages, sendTrafficPagesToActionCenter, suggestPagePrompts } from './traffic';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -191,5 +191,44 @@ describe('sendTrafficPagesToActionCenter (part B)', () => {
     expect(
       await sendTrafficPagesToActionCenter('b1', undefined, ['/menu'], 'cited_not_clicked'),
     ).toEqual({ error: 'Not authenticated' });
+  });
+});
+
+describe('suggestPagePrompts (part B2)', () => {
+  it("asks the server for the page's prompts over the page range", async () => {
+    const answer = {
+      page: { path: '/gifts', title: 'Coffee gifts' },
+      queries: 1,
+      suggestions: [],
+    };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(answer), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(
+      await suggestPagePrompts('b1', { dateFrom: '2026-10-11T12:30:00.000Z' }, '/gifts'),
+    ).toEqual(answer);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('http://api.test/api/prompts/suggestions/b1/page');
+    expect(JSON.parse(init.body as string)).toEqual({
+      page: '/gifts',
+      from: '2026-10-11T12:30:00.000Z',
+      to: '2026-10-18T12:30:00.000Z',
+    });
+  });
+
+  it("returns the server's reason, a plan limit's message first", async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ error: 'plan_limit', message: 'Your plan has no suggestions.' }),
+            { status: 403 },
+          ),
+      ),
+    );
+    expect(await suggestPagePrompts('b1', undefined, '/gifts')).toEqual({
+      error: 'Your plan has no suggestions.',
+    });
   });
 });

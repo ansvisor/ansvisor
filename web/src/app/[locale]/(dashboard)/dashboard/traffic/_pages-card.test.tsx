@@ -40,6 +40,19 @@ vi.mock('@/i18n/navigation', () => ({
   useRouter: () => ({ push }),
 }));
 vi.mock('sonner', () => ({ toast }));
+// The suggested-prompts dialog (part B2) is tested on its own: here, which
+// page it opens for, and that tracking reads the list again.
+vi.mock('./_page-prompts-dialog', () => ({
+  PagePromptsDialog: ({ page, onTracked }: { page: string | null; onTracked: () => void }) =>
+    page ? (
+      <div data-testid="prompts-dialog">
+        {`prompts for ${page}`}
+        <button type="button" onClick={onTracked}>
+          tracked
+        </button>
+      </div>
+    ) : null,
+}));
 
 const { PagesCard } = await import('./_pages-card');
 
@@ -118,6 +131,8 @@ const tab = (label: string) =>
   [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find((el) =>
     el.textContent?.startsWith(label),
   )!;
+const dialog = () =>
+  container.querySelector('[data-testid="prompts-dialog"]')?.firstChild?.textContent ?? null;
 const button = (label: string) =>
   [...container.querySelectorAll<HTMLElement>('button, a')].find((el) => el.textContent === label)!;
 
@@ -155,8 +170,9 @@ describe('PagesCard', () => {
     runAudit.mockResolvedValue({ id: 'audit-1' });
     await render();
 
-    const links = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'));
-    expect(links).toEqual(['/dashboard/prompts']);
+    // Nothing points at /about: its next step is prompts suggested for it.
+    await act(async () => button('Add prompts').click());
+    expect(dialog()).toBe('prompts for /about');
 
     await act(async () => button('Audit page').click());
     expect(runAudit).toHaveBeenCalledWith(BRAND, 'https://acme-coffee.example.com/gifts');
@@ -190,7 +206,8 @@ describe('PagesCard', () => {
     });
     expect(text()).toContain('/subscriptions');
     expect(text()).toContain('ChatGPT, Perplexity');
-    expect(button('Add prompts').getAttribute('href')).toBe('/dashboard/prompts');
+    await act(async () => button('Add prompts').click());
+    expect(dialog()).toBe('prompts for /subscriptions');
   });
 
   it("never shows one list's rows under another's columns while it loads", async () => {
@@ -418,5 +435,26 @@ describe('PagesCard actions (AT-006 part B)', () => {
     await act(async () => tab('All pages').click());
     expect(button('Send to Action Center')).toBeUndefined();
     expect(container.querySelector('[aria-label^="More actions"]')).toBeNull();
+  });
+
+  it('suggests prompts from the row menu of a page whose next step is an audit', async () => {
+    getTrafficPages.mockResolvedValue(pages([page({ citations: 6 })]));
+    await render();
+    const trigger = container.querySelector<HTMLElement>('[aria-label="More actions for /gifts"]')!;
+    await act(async () => trigger.click());
+    const item = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (el) => el.textContent === 'Add prompts',
+    )!;
+    await act(async () => item.click());
+    expect(dialog()).toBe('prompts for /gifts');
+  });
+
+  it('reads the list again once prompts were tracked', async () => {
+    getTrafficPages.mockResolvedValue(pages([page({ page: '/about', valueRank: 2 })]));
+    await render();
+    await act(async () => button('Add prompts').click());
+    expect(getTrafficPages).toHaveBeenCalledTimes(1);
+    await act(async () => button('tracked').click());
+    expect(getTrafficPages).toHaveBeenCalledTimes(2);
   });
 });
