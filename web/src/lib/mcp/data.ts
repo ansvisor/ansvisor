@@ -22,6 +22,9 @@ import { mapSignalRows, type SignalRow } from '@/lib/signals/map';
 import { readPromptPlaces } from '@/lib/signals/prompt-places';
 import { currentActionFirst, signalDetailForApi, type SignalActionRef } from '@/lib/signals/detail';
 import { parseTaskDetails } from '@/lib/action-center/task-details';
+import { locationCode, isValidLocation } from '@/lib/region';
+import { getOrgLocationUsage, locationLimitMessage } from '@/lib/prompt-locations';
+import { filterPromptSuggestionEngines, promptSuggestionsAreStale } from './prompt-suggestions-utils';
 
 /**
  * Pure data-fetch functions shared by the MCP route and the parallel REST
@@ -503,6 +506,263 @@ export async function acceptTopicSuggestionFor(
   if (updateErr) throw new Error(updateErr.message);
 
   return { suggestion_id: suggestionId, topic_id: topic.id, topic_name: topic.name };
+}
+
+// ── Prompt suggestions (#918) ──────────────────────────────────────────────────
+// These tools operate only on suggestions already persisted by the dashboard.
+// Generation remains behind the existing plan-gated refresh action.
+
+export interface PromptSuggestionRow {
+  id: string;
+  suggested_text: string;
+  topic_name: string | null;
+  topic_id: string | null;
+  reason: string | null;
+  est_volume: number | null;
+  relevance: number | null;
+  source: string;
+  source_data: Record<string, unknown> | null;
+  generated_at: string;
+  expires_at: string;
+}
+
+export interface PromptSuggestionList {
+  suggestions: PromptSuggestionRow[];
+  stale: boolean;
+}
+
+/** List pending suggestions only after verifying that the brand belongs to this organization. */
+export async function listPromptSuggestionsFor(
+  auth: McpAuthContext,
+  brandId: string,
+): Promise<PromptSuggestionList | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: brand, error: brandError } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('id', brandId)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  if (brandError) throw new Error(brandError.message);
+  if (!brand) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from('prompt_suggestions')
+    .select(
+      'id, suggested_text, topic_name, topic_id, reason, est_volume, relevance, source, source_data, generated_at, expires_at',
+    )
+    .eq('brand_id', brandId)
+    .eq('status', 'new')
+    .order('generated_at', { ascending: false });
+  if (error) throw new Error(error.message);
+
+  const suggestions = (data ?? []) as unknown as PromptSuggestionRow[];
+  return { suggestions, stale: promptSuggestionsAreStale(suggestions) };
+}
+
+export interface DismissedPromptSuggestion {
+  id: string;
+  status: 'dismissed';
+}
+
+/** Dismiss only a pending suggestion belonging to the authenticated organization. */
+export async function dismissPromptSuggestionFor(
+  auth: McpAuthContext,
+  suggestionId: string,
+): Promise<DismissedPromptSuggestion | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: owned, error: lookupError } = await supabaseAdmin
+    .from('prompt_suggestions')
+    .select('id, brands!inner(organization_id)')
+    .eq('id', suggestionId)
+    .eq('brands.organization_id', auth.organizationId)
+    .eq('status', 'new')
+    .maybeSingle();
+  if (lookupError) throw new Error(lookupError.message);
+  if (!owned) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from('prompt_suggestions')
+    .update({ status: 'dismissed', updated_at: new Date().toISOString() })
+    .eq('id', suggestionId)
+    .eq('status', 'new')
+    .select('id, status')
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+
+  return { id: data.id, status: 'dismissed' };
+}
+
+export interface AcceptedPromptSuggestion {
+  suggestion_id: string;
+  prompt_id: string;
+  prompt_text: string;
+  status: 'added';
+}
+
+export type AcceptPromptSuggestionResult =
+  | AcceptedPromptSuggestion
+  | { error: string; code?: 'plan_limit' };
+
+/**
+ * Accept one pending prompt suggestion by creating a tracked prompt, then
+ * marking the suggestion added. Mirrors the dashboard's target defaults,
+ * plan engine filtering, shopping-mode behavior, region choice and location
+ * quota check. Every lookup is organization-scoped; duplicate acceptance
+ * removes any losing concurrent insert rather than leaving duplicate prompts.
+ */
+export async function acceptPromptSuggestionFor(
+  auth: McpAuthContext,
+  suggestionId: string,
+): Promise<AcceptPromptSuggestionResult | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: suggestion, error: suggestionError } = await supabaseAdmin
+    .from('prompt_suggestions')
+    .select('id, brand_id, suggested_text, topic_name, brands!inner(organization_id)')
+    .eq('id', suggestionId)
+    .eq('brands.organization_id', auth.organizationId)
+    .eq('status', 'new')
+    .maybeSingle();
+  if (suggestionError) throw new Error(suggestionError.message);
+  if (!suggestion) return null;
+
+  const { data: brand, error: brandError } = await supabaseAdmin
+    .from('brands')
+    .select('id, organization_id, region, state, shopping_mode_enabled')
+    .eq('id', suggestion.brand_id)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  if (brandError) throw new Error(brandError.message);
+  if (!brand) return null;
+
+  const { data: promptSet, error: promptSetError } = await supabaseAdmin
+    .from('prompt_sets')
+    .select('id')
+    .eq('brand_id', brand.id)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (promptSetError) throw new Error(promptSetError.message);
+  if (!promptSet) {
+    return { error: 'No prompt set exists for this brand. Create one first.' };
+  }
+
+  const { data: defaults, error: defaultsError } = await supabaseAdmin
+    .from('prompts')
+    .select('platforms, models')
+    .eq('prompt_set_id', promptSet.id)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (defaultsError) throw new Error(defaultsError.message);
+
+  const defaultPlatforms =
+    Array.isArray(defaults?.platforms) && defaults.platforms.length > 0
+      ? (defaults.platforms as string[])
+      : ['chatgpt-web'];
+  const defaultModels = Array.isArray(defaults?.models) ? (defaults.models as string[]) : [];
+
+  const { data: organization, error: organizationError } = await supabaseAdmin
+    .from('organizations')
+    .select(ORG_PLAN_COLUMNS)
+    .eq('id', auth.organizationId)
+    .maybeSingle();
+  if (organizationError) throw new Error(organizationError.message);
+  if (!organization) return { error: 'Could not load the organization plan.' };
+
+  const plan = planFromOrgRow(organization);
+  const filtered = filterPromptSuggestionEngines(
+    plan.limits,
+    defaultPlatforms,
+    defaultModels,
+  );
+  if (filtered.platforms.length === 0 && filtered.models.length === 0) {
+    return { error: 'Your plan does not allow any of the default prompt engines.' };
+  }
+
+  const platforms = brand.shopping_mode_enabled
+    ? Array.from(new Set([...filtered.platforms, 'chatgpt-shopping']))
+    : filtered.platforms.filter((platform) => platform !== 'chatgpt-shopping');
+  if (platforms.length === 0 && filtered.models.length === 0) {
+    return { error: 'At least one platform or model must be selected.' };
+  }
+
+  const usage = await getOrgLocationUsage(supabaseAdmin, auth.organizationId);
+  const limitError = locationLimitMessage(plan, usage.total, 1);
+  if (limitError) return { error: limitError, code: 'plan_limit' };
+
+  const country = (brand.region as string | null) ?? 'US';
+  const candidateRegion = locationCode(country, brand.state as string | null);
+  const region = isValidLocation(candidateRegion) ? candidateRegion : country;
+
+  let topicId: string | null = null;
+  if (suggestion.topic_name) {
+    const { data: topic, error: topicError } = await supabaseAdmin
+      .from('topics')
+      .select('id')
+      .eq('brand_id', brand.id)
+      .eq('name', suggestion.topic_name)
+      .limit(1)
+      .maybeSingle();
+    if (topicError) throw new Error(topicError.message);
+    topicId = topic?.id ?? null;
+  }
+
+  const { data: prompt, error: promptError } = await supabaseAdmin
+    .from('prompts')
+    .insert({
+      prompt_set_id: promptSet.id,
+      text: suggestion.suggested_text,
+      category: suggestion.topic_name ?? null,
+      topic_id: topicId,
+      platforms,
+      regions: [region],
+      models: filtered.models,
+      is_active: true,
+    })
+    .select('id, text')
+    .single();
+  if (promptError || !prompt) {
+    return { error: promptError?.message ?? 'Failed to add the prompt.' };
+  }
+
+  const { data: updated, error: updateError } = await supabaseAdmin
+    .from('prompt_suggestions')
+    .update({
+      status: 'added',
+      added_prompt_id: prompt.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', suggestionId)
+    .eq('status', 'new')
+    .select('id')
+    .maybeSingle();
+
+  if (updateError || !updated) {
+    // A concurrent accept may have won after our initial read. Remove the
+    // prompt we just inserted so the suggestion cannot create duplicates.
+    const { error: cleanupError } = await supabaseAdmin.from('prompts').delete().eq('id', prompt.id);
+    if (cleanupError) {
+      throw new Error(
+        updateError?.message ??
+          'Suggestion was processed concurrently and the duplicate prompt could not be removed.',
+      );
+    }
+    if (updateError) throw new Error(updateError.message);
+    return null;
+  }
+
+  return {
+    suggestion_id: suggestionId,
+    prompt_id: prompt.id,
+    prompt_text: prompt.text,
+    status: 'added',
+  };
 }
 
 // ── Prompts ───────────────────────────────────────────────────────────────────
