@@ -27,6 +27,7 @@ function mockWrites() {
     const builder = {
       select: () => builder,
       eq: () => builder,
+      is: () => builder,
       gte: () => builder,
       lte: () => builder,
       not: () => builder,
@@ -137,6 +138,62 @@ describe('measureKpis', () => {
     const values = await measureKpis('brand-1', ['ai_visibility'], '2026-09-01', '2026-09-07');
 
     expect(values.ai_visibility).toBeNull();
+  });
+
+  describe('AI referral traffic', () => {
+    // Each query's calls, and what it answers with.
+    function mockTraffic({ snippetVisits, gaRows }) {
+      const queries = [];
+      from.mockImplementation((table) => {
+        const calls = [];
+        queries.push({ table, calls });
+        const builder = {};
+        for (const method of ['select', 'eq', 'is', 'gte', 'lte']) {
+          builder[method] = (...args) => {
+            calls.push([method, ...args]);
+            return builder;
+          };
+        }
+        builder.then = (resolve) =>
+          resolve(
+            table === 'ai_traffic_logs'
+              ? { count: snippetVisits, error: null }
+              : { data: gaRows, error: null },
+          );
+        return builder;
+      });
+      return queries;
+    }
+
+    it("counts the snippet's visits, not its pageviews", async () => {
+      // A visit starts on a row whose visit_of is null (00172); its reloads
+      // are further rows of the same visit.
+      const queries = mockTraffic({ snippetVisits: 26, gaRows: [] });
+
+      const values = await measureKpis(
+        'brand-1',
+        ['ai_referral_traffic'],
+        '2026-09-01',
+        '2026-09-07',
+      );
+
+      expect(values.ai_referral_traffic).toBe(26);
+      expect(queries[0].table).toBe('ai_traffic_logs');
+      expect(queries[0].calls).toContainEqual(['is', 'visit_of', null]);
+    });
+
+    it("falls back to Analytics' sessions when the snippet has no visits", async () => {
+      mockTraffic({ snippetVisits: 0, gaRows: [{ sessions: 4 }, { sessions: '3' }] });
+
+      const values = await measureKpis(
+        'brand-1',
+        ['ai_referral_traffic'],
+        '2026-09-01',
+        '2026-09-07',
+      );
+
+      expect(values.ai_referral_traffic).toBe(7);
+    });
   });
 });
 
