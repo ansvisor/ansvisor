@@ -297,10 +297,17 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         'List saved report snapshots for a brand, newest first. Returns report ids, titles, templates, date ranges, and creation timestamps without loading the full report payload. Use get_report to read one report in full.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe('Maximum number of reports to return (default 50, max 100).'),
       },
     },
     async (args) => {
-      const reports = await listReportsFor(auth, args.brand_id);
+      const reports = await listReportsFor(auth, args.brand_id, args.limit);
       if (reports === null) {
         return {
           content: [{ type: 'text', text: 'Brand not found' }],
