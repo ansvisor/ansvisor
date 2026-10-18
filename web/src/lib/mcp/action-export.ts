@@ -181,6 +181,8 @@ export async function exportActionFor(
     .select(`${ACTION_COLUMNS}, brand_id, brands!inner(organization_id)`)
     .eq('id', actionId)
     .eq('brands.organization_id', auth.organizationId)
+    // A deleted action (00168) has nothing left to export.
+    .is('deleted_at', null)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!row) return null;

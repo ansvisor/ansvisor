@@ -7,8 +7,10 @@ import {
   actionEventText,
   actionGoal,
   actionTexts,
+  assigneeLabel,
   eventTaskText,
   humanizeKind,
+  labelInitials,
   taskText,
 } from './display';
 import { ACTION_KINDS } from './registry';
@@ -386,5 +388,23 @@ describe('History events', () => {
     expect(eventText('task_added')).toBe('Task added: “Ask the agency”');
     expect(eventText('task_renamed')).toBe('Task renamed to “Ask the agency”');
     expect(eventText('task_deleted')).toBe('Task deleted');
+  });
+});
+
+describe('assigneeLabel and labelInitials', () => {
+  it('names an assignee by name, else by e-mail, else not at all', () => {
+    expect(assigneeLabel({ fullName: ' Ada Lovelace ', email: 'ada@acme.example' })).toBe(
+      'Ada Lovelace',
+    );
+    expect(assigneeLabel({ fullName: null, email: 'cg@acme.example' })).toBe('cg@acme.example');
+    expect(assigneeLabel({ fullName: '  ', email: null })).toBeNull();
+    expect(assigneeLabel({ fullName: null })).toBeNull();
+  });
+
+  it("takes up to two initials from a name's words or an e-mail's name", () => {
+    expect(labelInitials('Ada Lovelace')).toBe('AL');
+    expect(labelInitials('ada.lovelace@acme.example')).toBe('AL');
+    expect(labelInitials('cg@acme.example')).toBe('C');
+    expect(labelInitials('Grace Brewster Hopper')).toBe('GB');
   });
 });

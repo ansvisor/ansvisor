@@ -215,6 +215,19 @@ describe('actionMarkdown', () => {
     );
   });
 
+  it('names an assignee with no name by e-mail, as the assignee picker does', () => {
+    const named = buildActionExport(
+      {
+        ...action,
+        assignee: { id: 'u2', fullName: null, avatarUrl: null, email: 'cg@acme.example' },
+      },
+      detail,
+      texts,
+      { origin: 'https://app.example', timeZone: 'Europe/Istanbul' },
+    );
+    expect(named.assignee).toBe('cg@acme.example');
+  });
+
   it('leaves out what an action has none of', () => {
     const bare = {
       ...exported,

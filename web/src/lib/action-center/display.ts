@@ -234,6 +234,29 @@ export function memberLabel(member: { fullName: string | null; email: string }):
   return member.fullName?.trim() || member.email;
 }
 
+/** An action's assignee named as the picker names them: null when nothing is known. */
+export function assigneeLabel(assignee: {
+  fullName: string | null;
+  email?: string | null;
+}): string | null {
+  return assignee.fullName?.trim() || assignee.email || null;
+}
+
+/**
+ * Up to two initials for an avatar: of a name's words, or of an e-mail's
+ * name split at its dots, dashes and underscores ("ada.lovelace@…" → "AL").
+ */
+export function labelInitials(label: string): string {
+  const name = label.includes('@') ? label.slice(0, label.indexOf('@')) : label;
+  return name
+    .split(/[\s._+-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
+}
+
 /**
  * A task's text: what the user wrote, or the template it was generated from.
  *
