@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { API_BASE_URL } from '@/config/api';
+import { TRAFFIC_PAGE_SIZE, countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { expandDateToEndOfDay, utcDay } from '@/lib/dates';
 import { getSuggestionSourceStates, type SourceState } from '@/lib/actions/integrations';
 
@@ -142,51 +143,6 @@ function listUtcDays(from: string, to: string): string[] {
   return days;
 }
 
-/**
- * PostgREST silently caps un-paginated selects at 1000 rows, which froze the
- * visits KPI at 1000 and truncated every breakdown on busy brands (#450).
- * Totals come from exact count queries; the breakdown/trend scans page
- * through the window with deterministic ordering and a hard ceiling so a
- * pathological brand can't pin the server action.
- *
- * The scans read the rows that start a visit only, so the breakdowns and the
- * trend count visits, not pageviews (AT-003).
- */
-const TRAFFIC_PAGE_SIZE = 1000;
-const TRAFFIC_MAX_ROWS = 50_000;
-
-async function scanTrafficLogs(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  brandId: string,
-  window: { columns: string; from?: string; to?: string; toInclusive?: boolean },
-  onRow: (row: Record<string, unknown>) => void,
-): Promise<void> {
-  for (let start = 0; start < TRAFFIC_MAX_ROWS; start += TRAFFIC_PAGE_SIZE) {
-    let query = supabase
-      .from('ai_traffic_logs')
-      .select(window.columns)
-      .eq('brand_id', brandId)
-      .is('visit_of', null)
-      // Deterministic order so .range() pages don't shuffle between requests.
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-      .range(start, start + TRAFFIC_PAGE_SIZE - 1);
-    if (window.from) query = query.gte('created_at', window.from);
-    if (window.to) {
-      query = window.toInclusive
-        ? query.lte('created_at', window.to)
-        : query.lt('created_at', window.to);
-    }
-
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
-
-    const batch = (data ?? []) as unknown as Record<string, unknown>[];
-    for (const row of batch) onRow(row);
-    if (batch.length < TRAFFIC_PAGE_SIZE) break;
-  }
-}
-
 export async function getTrafficSummary(
   brandId: string,
   window?: TrafficDateWindow,
@@ -197,25 +153,12 @@ export async function getTrafficSummary(
   const { from, to, prevFrom, prevTo } = resolveTrafficWindow(window);
 
   // Exact totals — count queries transfer no rows and are immune to the cap.
-  const countRows = async (
+  const countRows = (
     fromTs?: string,
     toTs?: string,
     toInclusive = false,
-    { visits = true } = {},
-  ) => {
-    let query = supabase
-      .from('ai_traffic_logs')
-      .select('id', { count: 'exact', head: true })
-      .eq('brand_id', brandId);
-    if (visits) query = query.is('visit_of', null);
-    if (fromTs) query = query.gte('created_at', fromTs);
-    if (toTs) {
-      query = toInclusive ? query.lte('created_at', toTs) : query.lt('created_at', toTs);
-    }
-    const { count, error } = await query;
-    if (error) throw new Error(error.message);
-    return count ?? 0;
-  };
+    opts?: { visits?: boolean },
+  ) => countTrafficLogs(supabase, brandId, { from: fromTs, to: toTs, toInclusive }, opts);
 
   // Platform breakdown + top pages, aggregated per batch.
   const platformMap = new Map<string, number>();

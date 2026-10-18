@@ -10,6 +10,7 @@ import {
 } from '@/lib/citations/classify';
 import { classifyArticleType } from '@/lib/citations/article-type';
 import { expandDateToEndOfDay } from '@/lib/dates';
+import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { API_BASE_URL } from '@/config/api';
 import { ORG_PLAN_COLUMNS, planFromOrgRow } from '@/lib/guards/plan-guard';
@@ -2201,26 +2202,28 @@ export async function getAiTrafficFor(
   if (!brand) return null;
 
   // Visits, not pageviews: a row whose visit_of is null starts one (00172),
-  // as the AI Traffic page counts them.
-  let query = supabaseAdmin
-    .from('ai_traffic_logs')
-    .select('source_platform, url, country')
-    .eq('brand_id', params.brandId)
-    .is('visit_of', null);
-
-  if (params.dateFrom) query = query.gte('created_at', params.dateFrom);
-  const expandedDateTo = expandDateToEndOfDay(params.dateTo);
-  if (expandedDateTo) query = query.lte('created_at', expandedDateTo);
-
-  const { data: rows, error } = await query;
-  if (error) throw new Error(error.message);
-
-  const rawRows =
-    (rows as Array<{
-      source_platform: string | null;
-      url: string;
-      country: string | null;
-    }> | null) ?? [];
+  // as the AI Traffic page counts them. The total by count, which no row cap
+  // touches, and the breakdowns by paging through the range: one plain
+  // select stopped at PostgREST's 1,000 rows.
+  const range = {
+    from: params.dateFrom,
+    to: expandDateToEndOfDay(params.dateTo),
+    toInclusive: true,
+  };
+  const rawRows: Array<{
+    source_platform: string | null;
+    url: string;
+    country: string | null;
+  }> = [];
+  const [totalVisits] = await Promise.all([
+    countTrafficLogs(supabaseAdmin, params.brandId, range),
+    scanTrafficLogs(
+      supabaseAdmin,
+      params.brandId,
+      { ...range, columns: 'source_platform, url, country' },
+      (row) => rawRows.push(row as (typeof rawRows)[number]),
+    ),
+  ]);
 
   // Platform breakdown
   const platformMap = new Map<string, number>();
@@ -2259,7 +2262,7 @@ export async function getAiTrafficFor(
     .sort((a, b) => b.visits - a.visits);
 
   return {
-    total_visits: rawRows.length,
+    total_visits: totalVisits,
     platform_breakdown,
     top_pages,
     country_breakdown,
