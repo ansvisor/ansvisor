@@ -3128,7 +3128,8 @@ export interface McpCompetitorRow {
 
 /**
  * List a brand's competitors only after confirming the brand belongs to the
- * authenticated organization. Do not rely on a caller-supplied brand id alone.
+ * authenticated organization. The joined ownership predicate on the data
+ * query prevents a brand reassignment between the check and the read.
  */
 export async function listCompetitorsFor(
   auth: McpAuthContext,
@@ -3147,8 +3148,9 @@ export async function listCompetitorsFor(
 
   const { data, error } = await supabaseAdmin
     .from('competitors')
-    .select('id, name, domain')
+    .select('id, name, domain, brands!inner(organization_id)')
     .eq('brand_id', brandId)
+    .eq('brands.organization_id', auth.organizationId)
     .order('created_at', { ascending: true });
   if (error) throw new Error(error.message);
 
@@ -3171,10 +3173,12 @@ export interface McpReportListItem {
 
 /**
  * List saved immutable report snapshots for an organization-owned brand.
+ * The database query repeats the ownership predicate to avoid a TOCTOU leak.
  */
 export async function listReportsFor(
   auth: McpAuthContext,
   brandId: string,
+  requestedLimit = 50,
 ): Promise<McpReportListItem[] | null> {
   if (!auth.organizationId) return null;
 
@@ -3187,11 +3191,14 @@ export async function listReportsFor(
   if (brandError) throw new Error(brandError.message);
   if (!brand) return null;
 
+  const limit = Math.min(Math.max(Math.trunc(requestedLimit), 1), 100);
   const { data, error } = await supabaseAdmin
     .from('reports')
-    .select('id, brand_id, title, template, date_from, date_to, created_at')
+    .select('id, brand_id, title, template, date_from, date_to, created_at, brands!inner(organization_id)')
     .eq('brand_id', brandId)
-    .order('created_at', { ascending: false });
+    .eq('brands.organization_id', auth.organizationId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
   if (error) throw new Error(error.message);
 
   return (data ?? []).map((row) => ({
