@@ -3117,7 +3117,6 @@ export async function createImproveActionFor(
   };
 }
 
-
 // ── Read-only competitor and report tools (#918) ────────────────────────────
 
 export interface McpCompetitorRow {
