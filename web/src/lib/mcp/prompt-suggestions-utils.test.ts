@@ -46,10 +46,7 @@ describe('promptSuggestionsAreStale', () => {
     const now = Date.parse('2026-10-18T12:00:00.000Z');
     expect(
       promptSuggestionsAreStale(
-        [
-          { expires_at: '2026-10-18T11:59:59.000Z' },
-          { expires_at: '2026-10-18T12:00:01.000Z' },
-        ],
+        [{ expires_at: '2026-10-18T11:59:59.000Z' }, { expires_at: '2026-10-18T12:00:01.000Z' }],
         now,
       ),
     ).toBe(false);
@@ -57,12 +54,7 @@ describe('promptSuggestionsAreStale', () => {
 
   it('treats all-expired or invalid expiries as stale', () => {
     const now = Date.parse('2026-10-18T12:00:00.000Z');
-    expect(
-      promptSuggestionsAreStale(
-        [{ expires_at: '2026-10-18T11:59:59.000Z' }],
-        now,
-      ),
-    ).toBe(true);
+    expect(promptSuggestionsAreStale([{ expires_at: '2026-10-18T11:59:59.000Z' }], now)).toBe(true);
     expect(promptSuggestionsAreStale([{ expires_at: 'not-a-date' }], now)).toBe(true);
   });
 });

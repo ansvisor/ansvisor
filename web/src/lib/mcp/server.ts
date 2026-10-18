@@ -294,9 +294,11 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'accept_prompt_suggestion',
     {
       description:
-        'Accept one pending prompt suggestion by creating a tracked prompt with the brand\'s default platform/model settings and marking the suggestion added. This consumes one active prompt location and respects the organization\'s plan limit and allowed engines. Only fire on explicit user intent for a specific suggestion from list_prompt_suggestions, never as part of an exploratory query. Accepting the same suggestion twice does not create a duplicate prompt.',
+        "Accept one pending prompt suggestion by creating a tracked prompt with the brand's default platform/model settings and marking the suggestion added. This consumes one active prompt location and respects the organization's plan limit and allowed engines. Only fire on explicit user intent for a specific suggestion from list_prompt_suggestions, never as part of an exploratory query. Accepting the same suggestion twice does not create a duplicate prompt.",
       inputSchema: {
-        suggestion_id: relaxedUuid.describe('Prompt suggestion UUID, from list_prompt_suggestions.'),
+        suggestion_id: relaxedUuid.describe(
+          'Prompt suggestion UUID, from list_prompt_suggestions.',
+        ),
       },
     },
     async (args) => {
@@ -327,7 +329,9 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         'Dismiss a pending prompt suggestion so it no longer appears in future suggestion lists. Only fire on explicit user intent for a specific suggestion from list_prompt_suggestions, never as part of an exploratory query.',
       inputSchema: {
-        suggestion_id: relaxedUuid.describe('Prompt suggestion UUID, from list_prompt_suggestions.'),
+        suggestion_id: relaxedUuid.describe(
+          'Prompt suggestion UUID, from list_prompt_suggestions.',
+        ),
       },
     },
     async (args) => {

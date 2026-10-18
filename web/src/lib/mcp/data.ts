@@ -24,7 +24,10 @@ import { currentActionFirst, signalDetailForApi, type SignalActionRef } from '@/
 import { parseTaskDetails } from '@/lib/action-center/task-details';
 import { locationCode, isValidLocation } from '@/lib/region';
 import { getOrgLocationUsage, locationLimitMessage } from '@/lib/prompt-locations';
-import { filterPromptSuggestionEngines, promptSuggestionsAreStale } from './prompt-suggestions-utils';
+import {
+  filterPromptSuggestionEngines,
+  promptSuggestionsAreStale,
+} from './prompt-suggestions-utils';
 
 /**
  * Pure data-fetch functions shared by the MCP route and the parallel REST
