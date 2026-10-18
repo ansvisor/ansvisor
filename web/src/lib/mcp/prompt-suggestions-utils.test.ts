@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { filterPromptSuggestionEngines, promptSuggestionsAreStale } from './prompt-suggestions-utils';
+import {
+  filterPromptSuggestionEngines,
+  promptSuggestionsAreStale,
+} from './prompt-suggestions-utils';
 
 describe('filterPromptSuggestionEngines', () => {
   it('keeps only plan-allowed platforms and models', () => {
