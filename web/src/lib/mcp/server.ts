@@ -8,6 +8,9 @@ import {
   dismissTopicSuggestionFor,
   generateBriefFor,
   getCompetitorComparisonFor,
+  listCompetitorsFor,
+  listReportsFor,
+  getReportFor,
   getContentOpportunityFor,
   getVisibilitySummaryFor,
   getVisibilityTrendFor,
@@ -260,6 +263,82 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       }
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'list_competitors',
+    {
+      description:
+        'List the competitors configured for a brand. Returns only id, name, and domain. Use list_brands first to resolve the brand id. This is the configured competitor list, not a performance ranking.',
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+      },
+    },
+    async (args) => {
+      const competitors = await listCompetitorsFor(auth, args.brand_id);
+      if (competitors === null) {
+        return {
+          content: [{ type: 'text', text: 'Brand not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(competitors, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'list_reports',
+    {
+      description:
+        'List saved report snapshots for a brand, newest first. Returns report ids, titles, templates, date ranges, and creation timestamps without loading the full report payload. Use get_report to read one report in full.',
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe('Maximum number of reports to return (default 50, max 100).'),
+      },
+    },
+    async (args) => {
+      const reports = await listReportsFor(auth, args.brand_id, args.limit);
+      if (reports === null) {
+        return {
+          content: [{ type: 'text', text: 'Brand not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(reports, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'get_report',
+    {
+      description:
+        'Get the full saved snapshot for one report, including its stored payload and metrics. This is read-only and does not regenerate the report. Use a report id from list_reports.',
+      inputSchema: {
+        report_id: relaxedUuid.describe('Saved report UUID, from list_reports.'),
+      },
+    },
+    async (args) => {
+      const report = await getReportFor(auth, args.report_id);
+      if (!report) {
+        return {
+          content: [{ type: 'text', text: 'Report not found' }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(report, null, 2) }],
       };
     },
   );
