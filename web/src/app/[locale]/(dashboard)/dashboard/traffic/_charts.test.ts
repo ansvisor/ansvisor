@@ -58,3 +58,12 @@ describe('formatTrafficBucketDate', () => {
     }
   });
 });
+
+describe('formatTrafficBucketDate for the 24-hour range', () => {
+  it("names an hour on the axis, and its day too in the tooltip, in the member's time zone", () => {
+    const hour = '2026-10-17T13:00:00.000Z';
+    expect(formatTrafficBucketDate(hour, { timeZone: 'UTC' })).toBe('13:00');
+    expect(formatTrafficBucketDate(hour, { withDay: true, timeZone: 'UTC' })).toBe('Oct 17, 13:00');
+    expect(formatTrafficBucketDate(hour, { timeZone: 'Europe/Istanbul' })).toBe('16:00');
+  });
+});

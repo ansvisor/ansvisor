@@ -2,7 +2,9 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { API_BASE_URL } from '@/config/api';
+import { TRAFFIC_PAGE_SIZE, countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { expandDateToEndOfDay, utcDay } from '@/lib/dates';
+import { isHourlyWindow, listUtcHours, utcHourKey } from '@/lib/traffic-buckets';
 import { getSuggestionSourceStates, type SourceState } from '@/lib/actions/integrations';
 
 export interface TrafficDateWindow {
@@ -42,6 +44,7 @@ export interface TrafficSummary {
 }
 
 export interface TrafficTrendPoint {
+  /** The bucket: a UTC day ("2026-10-17"), or an hour ("2026-10-17T13:00:00.000Z") in a 24-hour window. */
   date: string;
   [platform: string]: string | number;
 }
@@ -142,51 +145,6 @@ function listUtcDays(from: string, to: string): string[] {
   return days;
 }
 
-/**
- * PostgREST silently caps un-paginated selects at 1000 rows, which froze the
- * visits KPI at 1000 and truncated every breakdown on busy brands (#450).
- * Totals come from exact count queries; the breakdown/trend scans page
- * through the window with deterministic ordering and a hard ceiling so a
- * pathological brand can't pin the server action.
- *
- * The scans read the rows that start a visit only, so the breakdowns and the
- * trend count visits, not pageviews (AT-003).
- */
-const TRAFFIC_PAGE_SIZE = 1000;
-const TRAFFIC_MAX_ROWS = 50_000;
-
-async function scanTrafficLogs(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  brandId: string,
-  window: { columns: string; from?: string; to?: string; toInclusive?: boolean },
-  onRow: (row: Record<string, unknown>) => void,
-): Promise<void> {
-  for (let start = 0; start < TRAFFIC_MAX_ROWS; start += TRAFFIC_PAGE_SIZE) {
-    let query = supabase
-      .from('ai_traffic_logs')
-      .select(window.columns)
-      .eq('brand_id', brandId)
-      .is('visit_of', null)
-      // Deterministic order so .range() pages don't shuffle between requests.
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-      .range(start, start + TRAFFIC_PAGE_SIZE - 1);
-    if (window.from) query = query.gte('created_at', window.from);
-    if (window.to) {
-      query = window.toInclusive
-        ? query.lte('created_at', window.to)
-        : query.lt('created_at', window.to);
-    }
-
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
-
-    const batch = (data ?? []) as unknown as Record<string, unknown>[];
-    for (const row of batch) onRow(row);
-    if (batch.length < TRAFFIC_PAGE_SIZE) break;
-  }
-}
-
 export async function getTrafficSummary(
   brandId: string,
   window?: TrafficDateWindow,
@@ -197,25 +155,12 @@ export async function getTrafficSummary(
   const { from, to, prevFrom, prevTo } = resolveTrafficWindow(window);
 
   // Exact totals — count queries transfer no rows and are immune to the cap.
-  const countRows = async (
+  const countRows = (
     fromTs?: string,
     toTs?: string,
     toInclusive = false,
-    { visits = true } = {},
-  ) => {
-    let query = supabase
-      .from('ai_traffic_logs')
-      .select('id', { count: 'exact', head: true })
-      .eq('brand_id', brandId);
-    if (visits) query = query.is('visit_of', null);
-    if (fromTs) query = query.gte('created_at', fromTs);
-    if (toTs) {
-      query = toInclusive ? query.lte('created_at', toTs) : query.lt('created_at', toTs);
-    }
-    const { count, error } = await query;
-    if (error) throw new Error(error.message);
-    return count ?? 0;
-  };
+    opts?: { visits?: boolean },
+  ) => countTrafficLogs(supabase, brandId, { from: fromTs, to: toTs, toInclusive }, opts);
 
   // Platform breakdown + top pages, aggregated per batch.
   const platformMap = new Map<string, number>();
@@ -304,8 +249,10 @@ export async function getTrafficTrend(
 ): Promise<TrafficTrendPoint[]> {
   const supabase = await createClient();
   const { from, to } = resolveTrafficWindow(window);
+  // A day or less reads hour by hour (AT-017); longer windows by day.
+  const hourly = Boolean(from && to && isHourlyWindow(from, to));
 
-  // Group by day + platform, aggregated per batch (#450).
+  // Group by day (or hour) + platform, aggregated per batch (#450).
   const dayMap = new Map<string, Map<string, number>>();
   const allPlatforms = new Set<string>();
 
@@ -314,7 +261,8 @@ export async function getTrafficTrend(
     brandId,
     { columns: 'source_platform, created_at, id', from, to, toInclusive: true },
     (r) => {
-      const day = (r.created_at as string).slice(0, 10);
+      const created = r.created_at as string;
+      const day = hourly ? utcHourKey(created) : created.slice(0, 10);
       const platform = (r.source_platform as string) || 'unknown';
       allPlatforms.add(platform);
 
@@ -326,7 +274,7 @@ export async function getTrafficTrend(
 
   let days: string[];
   if (from && to) {
-    days = listUtcDays(from, to);
+    days = hourly ? listUtcHours(from, to) : listUtcDays(from, to);
   } else {
     days = [...dayMap.keys()].sort();
     if (days.length > TRAFFIC_TREND_MAX_DAYS) {
@@ -583,5 +531,91 @@ export async function getPageOpportunities(
       citingPrompts: Number(row.citing_prompts) || 0,
       targetingPrompts: Number(row.targeting_prompts) || 0,
     })),
+  };
+}
+
+/**
+ * The Google side of the AI Traffic KPI cards (AT-017, spec §3.2): from
+ * Analytics, all sessions and the AI channel's sessions, engaged sessions
+ * and key events; from Search Console, clicks against the period before.
+ * Each is asked for only when its source has data for the brand.
+ */
+export interface TrafficGoogleTotals {
+  ga: {
+    sessions: number;
+    aiSessions: number;
+    aiEngagedSessions: number;
+    aiKeyEvents: number;
+  } | null;
+  gsc: {
+    /** The days the clicks cover; no first day for all time. */
+    since: string | null;
+    until: string;
+    clicks: number;
+    /** The same-length period before; null for all time. */
+    prevClicks: number | null;
+  } | null;
+}
+
+export async function getTrafficGoogleTotals(
+  brandId: string,
+  window: TrafficDateWindow,
+  opts: {
+    ga: boolean;
+    gsc: boolean;
+    /**
+     * Short ranges read Search Console's latest reported day(s) — 1 for the
+     * 24-hour range, 7 for the week — because Google reports about two days
+     * late (spec §3.01). Null reads the range as it is.
+     */
+    gscLatestDays: number | null;
+  },
+): Promise<TrafficGoogleTotals> {
+  const supabase = await createClient();
+  // Both sources store whole days, so the range goes as its first and last.
+  const since = utcDay(window.dateFrom) ?? null;
+  const until = utcDay(window.dateTo) ?? new Date().toISOString().slice(0, 10);
+  const shift = (day: string, days: number) =>
+    new Date(Date.parse(`${day}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+
+  const [ga, gsc] = await Promise.all([
+    opts.ga
+      ? supabase
+          .rpc('ga_traffic_totals', { p_brand_id: brandId, p_since: since, p_until: until })
+          .single()
+      : null,
+    opts.gsc
+      ? supabase
+          .rpc('gsc_click_totals', {
+            p_brand_id: brandId,
+            p_since: opts.gscLatestDays ? shift(until, 1 - opts.gscLatestDays) : since,
+            p_until: until,
+            p_latest: Boolean(opts.gscLatestDays),
+          })
+          .single()
+      : null,
+  ]);
+  if (ga?.error) throw new Error(ga.error.message);
+  if (gsc?.error) throw new Error(gsc.error.message);
+
+  const gaRow = ga?.data;
+  const gscRow = gsc?.data;
+  return {
+    ga: gaRow
+      ? {
+          sessions: Number(gaRow.sessions) || 0,
+          aiSessions: Number(gaRow.ai_sessions) || 0,
+          aiEngagedSessions: Number(gaRow.ai_engaged_sessions) || 0,
+          aiKeyEvents: Number(gaRow.ai_key_events) || 0,
+        }
+      : null,
+    gsc: gscRow
+      ? {
+          since: gscRow.since,
+          until: gscRow.until ?? until,
+          clicks: Number(gscRow.clicks) || 0,
+          prevClicks: gscRow.prev_clicks === null ? null : Number(gscRow.prev_clicks) || 0,
+        }
+      : null,
   };
 }

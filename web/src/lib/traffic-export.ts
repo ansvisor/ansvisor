@@ -119,9 +119,17 @@ function kpis(data: TrafficExportData, label: ExportLabel): ExportTable {
 function trend(data: TrafficExportData, label: ExportLabel): ExportTable {
   const points = data.trend ?? [];
   const platforms = [...new Set(points.flatMap((p) => Object.keys(p).filter((k) => k !== 'date')))];
+  // The 24-hour range trends by hour (AT-017): "2026-10-17 13:00", UTC.
+  const hourly = points.some((p) => p.date.includes('T'));
   return {
-    headers: [label('columns.day'), ...platforms.map(getPlatformName)],
-    rows: points.map((p) => [p.date, ...platforms.map((k) => Number(p[k]) || 0)]),
+    headers: [
+      hourly ? label('columns.hour') : label('columns.day'),
+      ...platforms.map(getPlatformName),
+    ],
+    rows: points.map((p) => [
+      hourly ? utcMinute(p.date) : p.date,
+      ...platforms.map((k) => Number(p[k]) || 0),
+    ]),
   };
 }
 

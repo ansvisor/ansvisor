@@ -58,13 +58,15 @@ describe('gscPropertyHost', () => {
 });
 
 describe('sectionsNeeding', () => {
-  it('lists the sections a source unlocks (AT-016)', () => {
+  it('lists the sections a source unlocks, in the page order (AT-016, AT-017)', () => {
     expect(TRAFFIC_SECTION_SOURCES.pageOpportunities).toBe('google-analytics');
-    expect(sectionsNeeding('google-analytics')).toEqual(['pageOpportunities']);
-  });
-
-  it('lists nothing for a source no section needs yet', () => {
-    expect(sectionsNeeding('google-search-console')).toEqual([]);
+    expect(sectionsNeeding('google-analytics')).toEqual([
+      'aiShare',
+      'engagedVisits',
+      'keyEvents',
+      'pageOpportunities',
+    ]);
+    expect(sectionsNeeding('google-search-console')).toEqual(['googleClicks']);
   });
 });
 

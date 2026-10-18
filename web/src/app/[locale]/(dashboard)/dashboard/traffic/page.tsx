@@ -37,6 +37,7 @@ import {
   type DateRangePreset,
 } from '@/components/filters/date-range-filter';
 import { PageOpportunitiesCard } from './_opportunities-card';
+import { TRAFFIC_KPI_GRID, TrafficKpis } from './_kpis';
 import { ExportMenu, TableExport, useTrafficExport } from './_export';
 import { SourcesStrip } from './_sources-strip';
 import { SnippetBanner, SnippetDialog } from './_snippet-code';
@@ -56,7 +57,6 @@ import {
   Globe,
   TrendingUp,
   TrendingDown,
-  Users,
   LayoutList,
   Search,
   X,
@@ -67,6 +67,7 @@ import { cn } from '@/lib/utils';
 import { formatRelative } from '@/lib/format-relative';
 import { formatNumber } from '@/lib/format';
 import { visitChange } from '@/lib/traffic-change';
+import { browserStorage, readTrafficRange, writeTrafficRange } from '@/lib/traffic-range';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -80,39 +81,6 @@ import {
 const PAGE_SIZE = 10;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-function KpiCard({
-  title,
-  icon: Icon,
-  value,
-  sub,
-}: {
-  title: string;
-  icon: React.ElementType;
-  value: React.ReactNode;
-  sub: React.ReactNode;
-}) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
-        <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          {title}
-        </CardTitle>
-        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-3xl font-bold">{value}</div>
-        {/* One line, as in the approved mockup; the full text on hover. */}
-        <p
-          className="mt-1 truncate text-xs text-muted-foreground"
-          title={typeof sub === 'string' ? sub : undefined}
-        >
-          {sub}
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
 
 /**
  * A visit count against the previous period: a %, "new", "—", or "Low sample"
@@ -317,7 +285,16 @@ function EmptyLogsState({ hasFilters }: { hasFilters: boolean }) {
   }
 }
 
-function NoTrafficForPeriod({ rangeLabel, onReset }: { rangeLabel: string; onReset: () => void }) {
+function NoTrafficForPeriod({
+  rangeLabel,
+  onReset,
+  onShowWeek,
+}: {
+  rangeLabel: string;
+  onReset: () => void;
+  /** The 24-hour range offers the last 7 days first (AT-017). */
+  onShowWeek?: () => void;
+}) {
   const t = useTranslations('traffic');
   return (
     <Card>
@@ -327,9 +304,16 @@ function NoTrafficForPeriod({ rangeLabel, onReset }: { rangeLabel: string; onRes
         <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
           {t('noTrafficInPeriodDescription', { range: rangeLabel })}
         </p>
-        <Button variant="outline" size="sm" className="mt-4" onClick={onReset}>
-          {t('showAllData')}
-        </Button>
+        <div className="mt-4 flex justify-center gap-2">
+          {onShowWeek && (
+            <Button variant="outline" size="sm" onClick={onShowWeek}>
+              {t('visits.showLast7Days')}
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={onReset}>
+            {t('showAllData')}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -419,9 +403,16 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   const t = useTranslations('traffic');
   const tCommon = useTranslations('common');
   const tVisits = useTranslations('traffic.visits');
-  const [datePreset, setDatePreset] = useState<DatePreset>('7d');
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
+  // The page opens on the member's last range, or the last 24 hours (AT-017,
+  // spec §3.01). This only renders in the browser, once the brand has loaded,
+  // so the stored choice is read before the first load rather than after it.
+  const [initialRange] = useState(() => readTrafficRange(browserStorage()));
+  const [datePreset, setDatePreset] = useState<DatePreset>(initialRange.preset);
+  const [customFrom, setCustomFrom] = useState(initialRange.from);
+  const [customTo, setCustomTo] = useState(initialRange.to);
+  useEffect(() => {
+    writeTrafficRange(browserStorage(), { preset: datePreset, from: customFrom, to: customTo });
+  }, [datePreset, customFrom, customTo]);
   const dateWindow = useMemo(
     () => getDateRange(datePreset, { from: customFrom, to: customTo }),
     [datePreset, customFrom, customTo],
@@ -559,9 +550,10 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-4 w-96 mt-2" />
         </div>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-24" />
+        <div className={TRAFFIC_KPI_GRID}>
+          {Array.from({ length: 7 }, (_, i) => (
+            // The cards' own height, so nothing shifts when they arrive.
+            <Skeleton key={i} className="h-[133px] rounded-xl" />
           ))}
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -573,12 +565,9 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   }
 
   const totalVisits = summary?.totalVisits ?? 0;
-  const totalVisitsPrev = summary?.totalVisitsPrev ?? 0;
-  const totalPageviews = summary?.totalPageviews ?? 0;
   // From the summary, not the selected range: while a new range loads, the
   // numbers on screen are still the previous range's.
   const comparable = summary?.hasPreviousPeriod ?? false;
-  const topPlatform = summary?.platformBreakdown[0];
 
   const isEmpty = totalVisits === 0 && logs.length === 0;
   const hasAnyData = summary?.hasAnyData ?? false;
@@ -661,50 +650,25 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
         <NoTrafficForPeriod
           rangeLabel={rangeSubLabel}
           onReset={() => handleDatePresetChange('all')}
+          onShowWeek={datePreset === '24h' ? () => handleDatePresetChange('7d') : undefined}
         />
       ) : null}
       {isEmpty && opportunitiesCard}
       {!isEmpty && (
         <>
-          {/* KPI Cards */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            {/* One visit per session; the sub-line gives the pageviews and
-                the previous period's visits (AT-003). */}
-            <KpiCard
-              title="AI-Referred Visits"
-              icon={Users}
-              value={
-                <span className="flex items-center gap-2">
-                  {formatNumber(totalVisits)}
-                  {/* The tables show "—" for no change; the card shows nothing. */}
-                  {visitChange(totalVisits, totalVisitsPrev, { comparable }).kind !== 'none' && (
-                    <DeltaBadge
-                      current={totalVisits}
-                      previous={totalVisitsPrev}
-                      comparable={comparable}
-                    />
-                  )}
-                </span>
-              }
-              sub={
-                comparable
-                  ? tVisits('kpiSub', { pageviews: totalPageviews, previous: totalVisitsPrev })
-                  : tVisits('kpiSubNoPrevious', { pageviews: totalPageviews })
-              }
-            />
-            <KpiCard
-              title="Top Platform"
-              icon={Globe}
-              value={topPlatform ? getPlatformName(topPlatform.platform) : '—'}
-              sub={topPlatform ? `${formatNumber(topPlatform.visits)} visits` : 'no data'}
-            />
-            <KpiCard
-              title="Platforms"
-              icon={Globe}
-              value={summary?.platformBreakdown.length ?? 0}
-              sub="unique AI sources"
-            />
-          </div>
+          {/* KPI cards: two rows of four (AT-017, spec §3.2). */}
+          <TrafficKpis
+            brandId={brand.id}
+            dateWindow={dateWindow}
+            preset={datePreset}
+            summary={summary}
+            summaryLoading={isLoadingSummary}
+            sources={sources}
+            sourcesFailed={sourcesFailed}
+            canConnect={canManage}
+            onConnected={() => void loadSources()}
+            onRangeChange={handleDatePresetChange}
+          />
 
           {/* Charts row */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -924,6 +888,27 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                       />
                     );
                   })()}
+                  {/* What the list covers, and a wider range when it is a short one
+                      (AT-017, spec §3.01). */}
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-6 pb-1 text-xs text-muted-foreground">
+                    <span>
+                      {tVisits('listRange', {
+                        visits: logsTotal,
+                        pageviews: logsPageviews,
+                        range: rangeSubLabel,
+                        preset: datePreset === 'custom' || datePreset === 'all' ? 'other' : 'last',
+                      })}
+                    </span>
+                    {datePreset === '24h' && (
+                      <button
+                        type="button"
+                        onClick={() => handleDatePresetChange('7d')}
+                        className="font-medium text-foreground underline-offset-4 hover:underline"
+                      >
+                        {tVisits('showLast7Days')}
+                      </button>
+                    )}
+                  </div>
                   <p className="px-6 pb-4 text-xs text-muted-foreground">{tVisits('listNote')}</p>
                 </>
               )}

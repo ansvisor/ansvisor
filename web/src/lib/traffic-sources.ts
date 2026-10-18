@@ -80,6 +80,10 @@ export function sourceHost(
  * later section adds its own entry.
  */
 export const TRAFFIC_SECTION_SOURCES = {
+  aiShare: 'google-analytics',
+  engagedVisits: 'google-analytics',
+  keyEvents: 'google-analytics',
+  googleClicks: 'google-search-console',
   pageOpportunities: 'google-analytics',
 } as const satisfies Record<string, IntegrationProvider>;
 

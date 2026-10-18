@@ -21,6 +21,7 @@ import { getCitationsOverview, type CitationsSourceBreakdown } from '@/lib/actio
 import { getShoppingKpis } from '@/lib/actions/shopping';
 import { type SourceCategory } from '@/lib/citations/classify';
 import { stripEntityMarkup } from '@/lib/entity-markup';
+import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import {
   getReportTemplate,
   ALL_REPORT_SECTIONS,
@@ -480,36 +481,28 @@ async function getTrafficSnapshot(
   const prev = previousWindow(dateFrom, dateTo);
 
   // Visits, not pageviews: a row whose visit_of is null starts one (00172),
-  // as the AI Traffic page counts them.
-  const [{ data: cur, error }, { data: prevRows }] = await Promise.all([
-    supabase
-      .from('ai_traffic_logs')
-      .select('source_platform, url')
-      .eq('brand_id', brandId)
-      .is('visit_of', null)
-      .gte('created_at', dateFrom)
-      .lte('created_at', dateTo),
-    supabase
-      .from('ai_traffic_logs')
-      .select('id')
-      .eq('brand_id', brandId)
-      .is('visit_of', null)
-      .gte('created_at', prev.from)
-      .lt('created_at', prev.to),
+  // as the AI Traffic page counts them. The totals by count, which no row
+  // cap touches, and the breakdowns by paging through the period: one plain
+  // select stopped at PostgREST's 1,000 rows.
+  const period = { from: dateFrom, to: dateTo, toInclusive: true };
+  const cur: Record<string, unknown>[] = [];
+  const [totalVisits, prevVisits] = await Promise.all([
+    countTrafficLogs(supabase, brandId, period),
+    countTrafficLogs(supabase, brandId, { from: prev.from, to: prev.to }),
+    scanTrafficLogs(supabase, brandId, { ...period, columns: 'source_platform, url' }, (row) =>
+      cur.push(row),
+    ),
   ]);
-  if (error) throw new Error(error.message);
 
   const byPlatform = new Map<string, number>();
   const byPage = new Map<string, number>();
-  for (const r of cur ?? []) {
+  for (const r of cur) {
     const p = (r.source_platform as string) || 'unknown';
     byPlatform.set(p, (byPlatform.get(p) ?? 0) + 1);
     const u = (r.url as string) || '';
     if (u) byPage.set(u, (byPage.get(u) ?? 0) + 1);
   }
 
-  const totalVisits = cur?.length ?? 0;
-  const prevVisits = prevRows?.length ?? 0;
   return {
     totalVisits,
     change: prevVisits > 0 ? round1(((totalVisits - prevVisits) / prevVisits) * 100) : null,

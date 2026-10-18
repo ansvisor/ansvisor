@@ -150,8 +150,8 @@ describe('readers of the snippet count visits, not pageviews', () => {
       { platform: 'gemini', visits: 1 },
       { platform: 'chatgpt', visits: 1 },
     ]);
-    // This window and the one before it.
-    expect(trafficQueries()).toHaveLength(2);
+    // A count for this window and the one before it, and the breakdowns' scan.
+    expect(trafficQueries()).toHaveLength(3);
     for (const q of trafficQueries()) expect(visitsOnly(q.calls)).toBe(true);
   });
 
