@@ -676,11 +676,7 @@ export async function acceptPromptSuggestionFor(
   if (!organization) return { error: 'Could not load the organization plan.' };
 
   const plan = planFromOrgRow(organization);
-  const filtered = filterPromptSuggestionEngines(
-    plan.limits,
-    defaultPlatforms,
-    defaultModels,
-  );
+  const filtered = filterPromptSuggestionEngines(plan.limits, defaultPlatforms, defaultModels);
   if (filtered.platforms.length === 0 && filtered.models.length === 0) {
     return { error: 'Your plan does not allow any of the default prompt engines.' };
   }
@@ -746,7 +742,10 @@ export async function acceptPromptSuggestionFor(
   if (updateError || !updated) {
     // A concurrent accept may have won after our initial read. Remove the
     // prompt we just inserted so the suggestion cannot create duplicates.
-    const { error: cleanupError } = await supabaseAdmin.from('prompts').delete().eq('id', prompt.id);
+    const { error: cleanupError } = await supabaseAdmin
+      .from('prompts')
+      .delete()
+      .eq('id', prompt.id);
     if (cleanupError) {
       throw new Error(
         updateError?.message ??
