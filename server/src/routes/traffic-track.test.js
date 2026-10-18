@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
+import { AI_SOURCES_VERSION } from '../lib/ai-sources.js';
 
 /**
  * POST /track/:trackingCode (AT-003): each pageview is stored with the visit
@@ -8,6 +9,7 @@ import express from 'express';
 
 const inserted = [];
 const findVisitOf = vi.fn();
+let insertError = null;
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -17,7 +19,7 @@ vi.mock('../config/supabase.js', () => ({
       }),
       insert: async (row) => {
         inserted.push({ table, row });
-        return { error: null };
+        return { error: insertError };
       },
     }),
   },
@@ -46,6 +48,7 @@ afterAll(() => new Promise((resolve) => server.close(resolve)));
 
 beforeEach(() => {
   inserted.length = 0;
+  insertError = null;
   findVisitOf.mockReset();
 });
 
@@ -101,5 +104,44 @@ describe('POST /track/:trackingCode', () => {
     expect(res.status).toBe(204);
     expect(findVisitOf).not.toHaveBeenCalled();
     expect(inserted).toEqual([]);
+  });
+
+  it("stores an older snippet's host under the AI source list's key (AT-004)", async () => {
+    findVisitOf.mockResolvedValue(null);
+    await beacon({ s: 'chat.openai.com' });
+    expect(findVisitOf).toHaveBeenCalledWith(
+      expect.objectContaining({ sourcePlatform: 'chatgpt.com' }),
+    );
+    expect(inserted[0].row.source_platform).toBe('chatgpt.com');
+    // No list version from a snippet that predates it.
+    expect(inserted[0].row.source_list_version).toBeNull();
+  });
+
+  it('stores the list version the snippet counted the visit with', async () => {
+    findVisitOf.mockResolvedValue(null);
+    await beacon({ v: AI_SOURCES_VERSION });
+    expect(inserted[0].row.source_list_version).toBe(AI_SOURCES_VERSION);
+  });
+
+  it('ignores a version the list has never had', async () => {
+    findVisitOf.mockResolvedValue(null);
+    await beacon({ v: AI_SOURCES_VERSION + 1 });
+    await beacon({ v: '2' });
+    expect(inserted.map((i) => i.row.source_list_version)).toEqual([null, null]);
+  });
+
+  it('keeps a platform the list does not know as it was sent', async () => {
+    findVisitOf.mockResolvedValue(null);
+    await beacon({ s: 'some-new-assistant.example' });
+    expect(inserted[0].row.source_platform).toBe('some-new-assistant.example');
+  });
+
+  it('logs a write the database refuses', async () => {
+    const { default: logger } = await import('../lib/logger.js');
+    findVisitOf.mockResolvedValue(null);
+    insertError = { message: 'column "source_list_version" does not exist' };
+    const res = await beacon();
+    expect(res.status).toBe(204);
+    expect(logger.error).toHaveBeenCalledWith({ err: insertError }, 'traffic track insert failed');
   });
 });

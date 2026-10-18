@@ -1,8 +1,9 @@
 /**
- * AI referrers by the name their platform goes by. Keys are what the
- * tracking snippet (`server/src/public/t.js`) and the Analytics sync
- * (`server/src/lib/ga-sources.js`) store; `unknown` is kept only for
- * historical rows that predate #288 (null source_platform).
+ * AI referrers by the name their platform goes by. Keys are the AI source
+ * list's (`server/src/lib/ai-sources.json`), which the tracking snippet and
+ * the Analytics sync both store (AT-004). The other ChatGPT hosts are kept
+ * for rows from before the list, and `unknown` for historical rows that
+ * predate #288 (null source_platform).
  */
 const PLATFORM_NAMES: Record<string, string> = {
   'chatgpt.com': 'ChatGPT',

@@ -4,8 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 // SUPABASE_* env is absent (as in CI) — stub it before the import chain.
 vi.mock('../config/supabase.js', () => ({ default: {} }));
 
-import { classifyGaSource } from './ga-sources.js';
+import { AI_SOURCES_VERSION } from './ai-sources.js';
+import { GA_AI_SOURCE_PATTERN, classifyGaSource, gaAiPlatform } from './ga-sources.js';
 import {
+  GA_AI_FILTER,
+  aiReportDays,
   dayRange,
   gaDateToIso,
   mapAiTrafficRows,
@@ -66,6 +69,59 @@ describe('classifyGaSource', () => {
     expect(classifyGaSource('(direct)')).toBeNull();
     expect(classifyGaSource('(not set)')).toBeNull();
     expect(classifyGaSource(undefined)).toBeNull();
+  });
+
+  it('matches a subdomain of a listed host (AT-004)', () => {
+    expect(classifyGaSource('m.perplexity.ai')).toBe('perplexity.ai');
+    expect(classifyGaSource('search.chatgpt.com')).toBe('chatgpt.com');
+    expect(classifyGaSource('chat.deepseek.com')).toBe('deepseek.com');
+  });
+
+  it("doesn't count Bing: without the snippet's /ck/a path, a GA4 source can't tell Copilot from search", () => {
+    expect(classifyGaSource('bing.com')).toBeNull();
+    expect(classifyGaSource('bing')).toBeNull();
+  });
+});
+
+describe('gaAiPlatform', () => {
+  it("names a session GA4's AI Assistant channel holds but the list doesn't know by its source", () => {
+    expect(gaAiPlatform('chat.mistral.ai', 'AI Assistant')).toBe('chat.mistral.ai');
+    expect(gaAiPlatform('www.Mistral.ai', 'AI Assistant')).toBe('mistral.ai');
+    expect(gaAiPlatform('(not set)', 'AI Assistant')).toBeNull();
+  });
+
+  it('prefers the list, and leaves an unknown source outside the channel unnamed', () => {
+    expect(gaAiPlatform('chatgpt.com', 'Referral')).toBe('chatgpt.com');
+    expect(gaAiPlatform('example.com', 'Referral')).toBeNull();
+  });
+});
+
+describe('the AI report request', () => {
+  it("asks for a source on the list or GA4's AI Assistant channel", () => {
+    expect(GA_AI_FILTER.orGroup.expressions).toEqual([
+      {
+        filter: {
+          fieldName: 'sessionSource',
+          stringFilter: {
+            matchType: 'FULL_REGEXP',
+            value: GA_AI_SOURCE_PATTERN,
+            caseSensitive: false,
+          },
+        },
+      },
+      {
+        filter: {
+          fieldName: 'sessionDefaultChannelGroup',
+          stringFilter: { matchType: 'EXACT', value: 'AI Assistant' },
+        },
+      },
+    ]);
+  });
+
+  it('reads as far back as storage keeps on a first sync or a history backfill, else the last days', () => {
+    expect(aiReportDays({ first: true })).toHaveLength(401);
+    expect(aiReportDays({ first: false, aiHistory: true })).toHaveLength(401);
+    expect(aiReportDays({ first: false })).toHaveLength(4);
   });
 });
 
@@ -143,8 +199,69 @@ describe('mapAiTrafficRows', () => {
         transactions: 2,
         purchase_revenue: 149.9,
         engagement_duration_seconds: 106,
+        source_list_version: AI_SOURCES_VERSION,
       },
     ]);
+  });
+
+  it('sums one source split across channels back into one row (AT-004)', () => {
+    const split = report({
+      dims: [
+        'date',
+        'sessionSource',
+        'sessionDefaultChannelGroup',
+        'landingPage',
+        'landingPagePlusQueryString',
+      ],
+      metrics: TRAFFIC_METRICS,
+      rows: [
+        ['20260721', 'chatgpt.com', 'Referral', '/a', '/a', '4', '2', '1', '4', '0', '10', '30'],
+        [
+          '20260721',
+          'chatgpt.com',
+          'AI Assistant',
+          '/a',
+          '/a',
+          '6',
+          '3',
+          '0',
+          '6',
+          '1',
+          '5.5',
+          '60',
+        ],
+        [
+          '20260721',
+          'chat.mistral.ai',
+          'AI Assistant',
+          '/a',
+          '/a',
+          '2',
+          '1',
+          '0',
+          '2',
+          '0',
+          '0',
+          '8',
+        ],
+      ],
+    });
+
+    const rows = mapAiTrafficRows('brand-1', split);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      source: 'chatgpt.com',
+      platform: 'chatgpt.com',
+      sessions: 10,
+      engaged_sessions: 5,
+      key_events: 1,
+      total_users: 10,
+      transactions: 1,
+      purchase_revenue: 15.5,
+      engagement_duration_seconds: 90,
+    });
+    // An assistant only GA4's channel knows, under its own name.
+    expect(rows[1]).toMatchObject({ source: 'chat.mistral.ai', platform: 'chat.mistral.ai' });
   });
 
   it('keeps the path separately from the full entry URL', () => {

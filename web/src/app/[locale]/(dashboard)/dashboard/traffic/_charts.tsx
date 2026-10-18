@@ -50,12 +50,12 @@ function ChartContainer({
 
 // ─── Platform colors ─────────────────────────────────────────────────────────
 //
-// Keys must stay in sync with the detection host list in the tracking snippet
-// (`server/src/public/t.js`): every platform t.js can resolve and store needs a
+// Keys are the AI source list's (`server/src/lib/ai-sources.json`), which the
+// tracking snippet and the Analytics sync both store: every key there needs a
 // color here and a name in `@/lib/traffic-platforms`, otherwise it renders as
-// a raw hostname. `unknown` is kept
-// only for historical rows that predate #288 (null source_platform); new visits
-// always carry a concrete platform.
+// a grey raw hostname (traffic-platforms.test.ts checks). The other ChatGPT
+// hosts are kept for rows from before the list (AT-004), and `unknown` for
+// rows that predate #288 (null source_platform).
 
 const PLATFORM_COLORS: Record<string, string> = {
   'chatgpt.com': '#6366f1',
@@ -71,10 +71,12 @@ const PLATFORM_COLORS: Record<string, string> = {
   'poe.com': '#e9d5ff',
   'labs.google': '#b794f6',
   'bing.com': '#67c5d6',
+  'grok.com': '#4f46e5',
+  'deepseek.com': '#9333ea',
   unknown: '#94a3b8',
 };
 
-function getColor(platform: string): string {
+export function getColor(platform: string): string {
   return PLATFORM_COLORS[platform] ?? '#94a3b8';
 }
 
