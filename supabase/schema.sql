@@ -25185,7 +25185,8 @@ notify pgrst, 'reload schema';
 -- AI bots at the edge, but a job set up without the filter would send every
 -- line, so the same cap guards it.
 --
--- ai_bot_usage gains the month's raw records and when that cap was reached.
+-- ai_bot_usage gains the month's raw records and when that cap was reached;
+-- ai_bot_ingested_files keeps a retried file from being read twice.
 -- ai_bot_count_raw adds a batch's records under the usage row's lock and
 -- says whether the batch may be read: yes while the month was under the cap
 -- when it arrived, so a month overshoots by at most the batch that crosses
@@ -25194,6 +25195,21 @@ notify pgrst, 'reload schema';
 alter table public.ai_bot_usage
   add column raw_records bigint not null default 0,
   add column raw_capped_at timestamptz;
+
+-- A log file a sender sends again (it timed out waiting, say) is read once:
+-- each connection's files by the SHA-256 of their body, claimed before the
+-- read and given back when it fails, kept 7 days (the daily prune). No
+-- policies: only the service role reads or writes.
+create table public.ai_bot_ingested_files (
+    connection_id uuid not null references public.ai_bot_connections(id) on delete cascade,
+    body_hash text not null,
+    received_at timestamptz not null default now(),
+    primary key (connection_id, body_hash)
+);
+
+create index ai_bot_ingested_files_time_idx on public.ai_bot_ingested_files (received_at);
+
+alter table public.ai_bot_ingested_files enable row level security;
 
 create or replace function public.ai_bot_count_raw(
   p_connection_id uuid,

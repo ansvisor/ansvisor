@@ -145,6 +145,39 @@ export async function ingestBotRequests(connection, requests, deps = {}) {
 }
 
 /**
+ * Claim a log file for reading (a Logpush job's or a Vercel drain's), by
+ * the SHA-256 of its body per connection: a sender that times out waiting
+ * sends the same file again, and its chunks already written would count
+ * twice. Returns the hash, or null when the file was read already. A read
+ * that fails gives its claim back (releaseLogFile) so the retry is read.
+ */
+export async function claimLogFile(connection, body) {
+  const hash = createHash('sha256')
+    .update(Buffer.isBuffer(body) ? body : Buffer.alloc(0))
+    .digest('hex');
+  const { data, error } = await supabaseAdmin
+    .from('ai_bot_ingested_files')
+    .upsert(
+      { connection_id: connection.id, body_hash: hash },
+      { onConflict: 'connection_id,body_hash', ignoreDuplicates: true },
+    )
+    .select('body_hash');
+  if (error) throw new Error(error.message);
+  return (data ?? []).length > 0 ? hash : null;
+}
+
+/** Give a claim back after a read that failed. */
+export async function releaseLogFile(connection, hash) {
+  const { error } = await supabaseAdmin
+    .from('ai_bot_ingested_files')
+    .delete()
+    .eq('connection_id', connection.id)
+    .eq('body_hash', hash);
+  if (error)
+    logger.warn({ err: error, connectionId: connection.id }, '[ai-bots] claim release failed');
+}
+
+/**
  * Count a log sender's records against the month's raw cap (a Vercel drain
  * or a Logpush job, §6.3). `allowed` says whether this batch may be read; a
  * plan without the report reads none.
@@ -165,6 +198,8 @@ export async function countRawRecords(connection, records) {
 /** Verified rows are kept 90 days (§6.2); the bot × page × day counters 400. */
 export const EVENT_RETENTION_DAYS = 90;
 export const DAILY_RETENTION_DAYS = 400;
+/** Log file hashes kept for spotting a sender's retry (claimLogFile). */
+export const FILE_HASH_RETENTION_DAYS = 7;
 
 /** The daily prune of rows past their retention (the daily run). */
 export async function pruneBotEvents(now = Date.now()) {
@@ -179,4 +214,10 @@ export async function pruneBotEvents(now = Date.now()) {
     .delete()
     .lt('day', before(DAILY_RETENTION_DAYS).slice(0, 10));
   if (dailyError) logger.warn({ err: dailyError }, '[ai-bots] daily prune failed');
+  // A sender retries within minutes; a week of file hashes is plenty.
+  const { error: filesError } = await supabaseAdmin
+    .from('ai_bot_ingested_files')
+    .delete()
+    .lt('received_at', before(FILE_HASH_RETENTION_DAYS));
+  if (filesError) logger.warn({ err: filesError }, '[ai-bots] file hash prune failed');
 }
