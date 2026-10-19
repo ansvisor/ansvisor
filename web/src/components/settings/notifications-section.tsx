@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -22,7 +23,8 @@ import { parseRecipients } from '@/lib/pulse-recipients';
 /**
  * Settings → Notifications: Daily Pulse delivery preferences per brand
  * (#540). Frequency + optional explicit recipient list; an empty list
- * means every organization member receives the pulse.
+ * means every organization member receives the pulse. The AI Traffic weekly
+ * digest (AT-013) goes to the same recipients, and can be turned off here.
  */
 
 interface BrandPulseSettings {
@@ -30,6 +32,7 @@ interface BrandPulseSettings {
   brandName: string;
   frequency: string;
   recipients: string[];
+  trafficDigest: boolean;
 }
 
 const FREQUENCIES = ['daily', 'weekly', 'notable', 'off'] as const;
@@ -69,7 +72,7 @@ export function NotificationsSection() {
     void load();
   }, [load]);
 
-  async function save(brandId: string, frequency: string) {
+  async function save(brandId: string, frequency: string, trafficDigest: boolean) {
     if (savingBrand) return;
     const { valid: recipients, invalid } = parseRecipients(
       (recipientDrafts[brandId] ?? '').split(','),
@@ -81,7 +84,7 @@ export function NotificationsSection() {
       const res = await fetch('/api/settings/pulse', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandId, frequency, recipients }),
+        body: JSON.stringify({ brandId, frequency, recipients, trafficDigest }),
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string; invalid?: string[] };
       if (body.invalid?.length) {
@@ -90,7 +93,9 @@ export function NotificationsSection() {
       }
       if (!res.ok) throw new Error(body.error || 'Save failed');
       setBrands((prev) =>
-        prev.map((b) => (b.brandId === brandId ? { ...b, frequency, recipients } : b)),
+        prev.map((b) =>
+          b.brandId === brandId ? { ...b, frequency, recipients, trafficDigest } : b,
+        ),
       );
       setRecipientDrafts((prev) => ({ ...prev, [brandId]: recipients.join(', ') }));
       toast.success(t('pulseSaved'));
@@ -167,10 +172,34 @@ export function NotificationsSection() {
                   <p className="text-xs text-muted-foreground">{t('pulseRecipientsHint')}</p>
                 )}
               </div>
+              <div className="flex items-start gap-2.5">
+                {/* Not sent while the pulse is off; the brand's own choice is kept for when it's back. */}
+                <Checkbox
+                  id={`traffic-digest-${brand.brandId}`}
+                  className="mt-0.5"
+                  checked={brand.trafficDigest && brand.frequency !== 'off'}
+                  onCheckedChange={(on) =>
+                    setBrands((prev) =>
+                      prev.map((b) =>
+                        b.brandId === brand.brandId ? { ...b, trafficDigest: on === true } : b,
+                      ),
+                    )
+                  }
+                  disabled={!canManage || brand.frequency === 'off'}
+                />
+                <div className="space-y-0.5">
+                  <Label htmlFor={`traffic-digest-${brand.brandId}`}>{t('trafficDigest')}</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {brand.frequency === 'off'
+                      ? t('trafficDigestPulseOff')
+                      : t('trafficDigestHint')}
+                  </p>
+                </div>
+              </div>
               {canManage && (
                 <Button
                   size="sm"
-                  onClick={() => save(brand.brandId, brand.frequency)}
+                  onClick={() => save(brand.brandId, brand.frequency, brand.trafficDigest)}
                   disabled={savingBrand !== null}
                   className="gap-2"
                 >

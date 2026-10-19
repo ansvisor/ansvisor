@@ -7,7 +7,7 @@ vi.mock('../../../config/supabase.js', () => ({ default: { from: vi.fn(), rpc: v
 
 import { planTasks } from './plan.js';
 import { AUTOMATABLE_MODES, TASKS, libraryTasks, listTasks, validateTask } from './registry.js';
-import { loadDefinitions } from '../definitions/index.js';
+import { isEligible, loadDefinitions } from '../definitions/index.js';
 import { TOOLS } from '../execution/tools.js';
 
 const ALL = new Set(['tracking', 'competitors', 'site_audits', 'analytics']);
@@ -309,5 +309,20 @@ describe('the task registry', () => {
         for (const output of TASKS[id].outputs) expect(produced.has(output)).toBe(true);
       }
     }
+  });
+});
+
+describe('F02 for a brand without Site Audit (AT-013)', () => {
+  it('is raised from the AI bot report alone, without the tasks that read an audit', async () => {
+    const definitions = await loadDefinitions();
+    const f02 = definitions.find((d) => d.code === 'F02');
+    // cited_page_uncrawled comes from the brand's Cloudflare or Vercel, not an audit.
+    expect(isEligible(f02, BARE)).toBe(true);
+    const plan = keys(planTasks(f02, { sources: BARE }));
+    expect(plan).not.toContain('analyze_site_audit');
+    expect(plan).not.toContain('validate_technical_fix');
+    expect(plan).toContain('fix_crawler_access');
+    // With an audit, the plan reads it first.
+    expect(keys(planTasks(f02, { sources: ALL }))[0]).toBe('analyze_site_audit');
   });
 });

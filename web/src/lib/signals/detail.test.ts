@@ -158,6 +158,42 @@ describe('signalChange', () => {
   it('has nothing to say when the row records no figures', () => {
     expect(signalChange(lostCitation)).toBeNull();
   });
+
+  it("reads the weekly AI visits drop over seven days, and a new platform's first week (AT-013)", () => {
+    expect(
+      signalChange(
+        signal({
+          category: 'traffic',
+          kind: 'ai_visits_weekly_drop',
+          payload: { entity: 'pages', targets: [{ id: '/menu', label: '/menu' }] },
+          previousValue: 50,
+          currentValue: 28,
+          changeValue: -22,
+        }),
+      ),
+    ).toEqual({
+      period: 'week_over_week',
+      figures: [
+        { metric: 'ai_sessions', role: 'before', value: 50 },
+        { metric: 'ai_sessions', role: 'after', value: 28 },
+      ],
+    });
+    expect(
+      signalChange(
+        signal({
+          category: 'traffic',
+          kind: 'ai_platform_new',
+          payload: { aiSource: 'perplexity.ai' },
+          previousValue: 0,
+          currentValue: 4,
+          changeValue: 4,
+        }),
+      ),
+    ).toEqual({
+      period: 'last_7_days',
+      figures: [{ metric: 'ai_sessions', role: 'now', value: 4 }],
+    });
+  });
 });
 
 describe('signalWhereFields', () => {
@@ -252,6 +288,38 @@ describe('signalLinks', () => {
         }),
       ),
     ).toEqual([{ kind: 'prompts', href: '/dashboard/prompts' }]);
+  });
+
+  it("points AI Traffic's page findings at AI Traffic and names only their pages (AT-013)", () => {
+    const pages = { entity: 'pages', targets: [{ id: '/old-menu', label: '/old-menu' }] };
+    const broken = signal({
+      category: 'technical',
+      kind: 'broken_citation_target',
+      payload: pages,
+    });
+    const unread = signal({
+      category: 'technical',
+      kind: 'cited_page_uncrawled',
+      payload: pages,
+      currentValue: 3,
+    });
+    for (const s of [broken, unread]) {
+      expect(signalLinks(s)).toEqual([{ kind: 'traffic', href: '/dashboard/traffic' }]);
+      expect(signalWhereFields(s).map((f) => f.key)).toEqual(['pages']);
+    }
+    // Read over the bot report's 30 days.
+    expect(signalChange(unread)?.period).toBe('last_30_days');
+
+    const platform = signal({
+      category: 'traffic',
+      kind: 'ai_platform_new',
+      payload: { aiSource: 'grok.com' },
+      currentValue: 3,
+    });
+    expect(signalWhereFields(platform)).toEqual([
+      { key: 'scope', value: { type: 'scope', scope: 'platform' } },
+    ]);
+    expect(signalLinks(platform)).toEqual([{ kind: 'traffic', href: '/dashboard/traffic' }]);
   });
 });
 

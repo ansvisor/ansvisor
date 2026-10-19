@@ -239,6 +239,10 @@ export const ENGINE_THRESHOLDS = Object.freeze({
     aiTrafficMinSessions: 10,
     aiTrafficSlipRatio: 0.1,
     aiTrafficDropRatio: 0.3,
+    /** AI visits down this much week over week, from at least this many the
+     *  week before (AT-013, spec §3.8; 30 is the page's Low sample floor). */
+    aiVisitsWeeklyDropRatio: 0.4,
+    aiVisitsWeeklyMinVisits: 30,
     /** Key events per session above this multiple of the site's rate is a
      *  winning page; engagement below `underperform` of it is a weak one. */
     landingWinnerMultiple: 1.5,

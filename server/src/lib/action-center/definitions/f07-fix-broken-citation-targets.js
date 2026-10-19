@@ -3,8 +3,9 @@
  *
  * Signal: Owned URLs AI answers cite that are unavailable.
  *
- * Disabled. Cited owned URLs are not health-checked yet, so there is nothing
- * to detect a broken one from. Registered; enabled once URL checks exist.
+ * Detected from the AI visitors themselves (AT-012, AT-013): a page an AI
+ * answer sent someone to that answered 404 or 410, as the tracking snippet
+ * reports it. Each target carries the working page to redirect it to.
  */
 
 import { targetPayload } from './_helpers.js';
@@ -16,11 +17,9 @@ export default {
   category: 'fix',
   name: 'Fix Broken Citation Targets',
   signalKinds: ['broken_citation_target'],
-  requires: ['tracking'],
+  requires: ['ai_traffic'],
   optional: [],
-  enabled: false,
-  disabledReason:
-    'Cited owned URLs are not health-checked yet, so there is nothing to detect a broken one from. Registered; enabled once URL checks exist.',
+  enabled: true,
   tasks: [
     'analyze_citations',
     'identify_target_pages',

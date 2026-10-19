@@ -22,7 +22,7 @@ const WEEKLY_SEND_UTC_DAY = 1; // Monday
 
 let warnedAppUrlPath = false;
 
-function appUrl() {
+export function appUrl() {
   const raw = process.env.PUBLIC_APP_URL || 'http://localhost:3000';
   try {
     const url = new URL(raw);
@@ -39,8 +39,9 @@ function appUrl() {
   }
 }
 
-/** Recipient emails: explicit list from settings, else every org member. */
-async function resolveRecipients(organizationId, settings) {
+/** Recipient emails: explicit list from settings, else every org member.
+ *  The AI Traffic weekly digest (AT-013) sends to the same people. */
+export async function resolveRecipients(organizationId, settings) {
   if (settings?.recipients?.length) return settings.recipients;
 
   const { data: members } = await supabaseAdmin

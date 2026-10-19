@@ -1,6 +1,7 @@
 import type { Signal } from '@/lib/actions/signals';
 import { SIGNAL_KINDS, isLibrarySignalKind } from '@/lib/signals/registry';
 import { locationName, platformName, targetName } from '@/lib/signals/names';
+import { getPlatformName } from '@/lib/traffic-platforms';
 
 /**
  * Composes the display strings a signal row shows from `kind` + `payload`.
@@ -14,6 +15,17 @@ type Translator = (key: string, values?: Record<string, string | number>) => str
 function str(payload: Record<string, unknown>, key: string): string {
   const value = payload[key];
   return typeof value === 'string' ? value : String(value ?? '');
+}
+
+/**
+ * How many things a library finding is about. A group's value is its count,
+ * except for the AI traffic drops, whose value is the site's visits: they
+ * record their pages as `pageCount` (server library/detect.js).
+ */
+export function libraryTargetCount(signal: Signal, targets: readonly unknown[]): number {
+  const pageCount = signal.payload?.pageCount;
+  if (typeof pageCount === 'number') return Math.max(targets.length, pageCount);
+  return Math.max(targets.length, Number(signal.currentValue ?? 0));
 }
 
 /**
@@ -32,7 +44,7 @@ function librarySignalTexts(signal: Signal, t: Translator): { title: string; des
   const p = signal.payload ?? {};
   const targets = Array.isArray(p.targets) ? (p.targets as Array<{ label?: string }>) : [];
   const entity = str(p, 'entity');
-  const count = entity === '' ? 0 : Math.max(targets.length, Number(signal.currentValue ?? 0));
+  const count = entity === '' ? 0 : libraryTargetCount(signal, targets);
   const values: Record<string, string | number> = {
     targets: entity ? t(`targets.${entity}`, { count }) : '',
     name: targetName(entity, targets[0]?.label ?? ''),
@@ -113,6 +125,9 @@ export function signalTexts(signal: Signal, t: Translator): { title: string; des
         return { prompt: str(p, 'promptText'), gain: signal.changeValue ?? 0 };
       case 'new_engine':
         return { platform: platformName(str(p, 'platform')) };
+      // A referring platform, named as the AI Traffic page names it (AT-013).
+      case 'ai_platform_new':
+        return { platform: getPlatformName(str(p, 'aiSource')), visits: signal.currentValue ?? 0 };
       case 'first_citation':
         return { url: str(p, 'label') || str(p, 'url'), prompt: str(p, 'promptText') };
       case 'competitor_surge':
@@ -166,7 +181,7 @@ export function signalAffected(
     // The count for a group, the thing itself for a single finding.
     const targets = Array.isArray(p.targets) ? (p.targets as Array<{ label?: string }>) : [];
     const entity = str(p, 'entity');
-    const count = Math.max(targets.length, Number(signal.currentValue ?? 0));
+    const count = libraryTargetCount(signal, targets);
     if (targets.length === 1) {
       return { label: targetName(entity, targets[0]?.label ?? ''), detail: null };
     }
@@ -188,6 +203,8 @@ export function signalAffected(
       return { label: t('affected.prompts', { count: 1 }), detail: str(p, 'promptText') };
     case 'new_engine':
       return { label: t('affected.platform'), detail: platformName(str(p, 'platform')) };
+    case 'ai_platform_new':
+      return { label: t('affected.platform'), detail: getPlatformName(str(p, 'aiSource')) };
     case 'first_citation':
       return { label: t('affected.urls', { count: 1 }), detail: str(p, 'label') || str(p, 'url') };
     case 'competitor_surge':

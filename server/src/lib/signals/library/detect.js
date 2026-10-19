@@ -36,6 +36,31 @@ const GSC = ['gsc'];
 const GA = ['ga4'];
 const AUDIT = ['site_audit'];
 
+/** Midnight UTC `daysAgo` days before today's: whole days, so a pass early in
+ *  the morning compares full weeks rather than a few hours of today. */
+function utcMidnight(now, daysAgo) {
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return new Date(today - daysAgo * DAY_MS).toISOString();
+}
+
+/**
+ * The second before `iso`. ai_traffic_merged keeps Analytics rows through
+ * p_to's day (00176), so a window ending at midnight is read up to the
+ * second before with p_to_inclusive: an exclusive midnight would put that
+ * day's Analytics in both weeks.
+ */
+function lastSecond(iso) {
+  return new Date(Date.parse(iso) - 1000).toISOString();
+}
+
+/** The last seven whole days and the seven before, each up to its last second. */
+export function weeklyWindows(now) {
+  return {
+    cur: { from: utcMidnight(now, 7), to: lastSecond(utcMidnight(now, 0)) },
+    prev: { from: utcMidnight(now, 14), to: lastSecond(utcMidnight(now, 7)) },
+  };
+}
+
 function isoDay(now, daysAgo) {
   return new Date(now.getTime() - daysAgo * DAY_MS).toISOString().slice(0, 10);
 }
@@ -178,6 +203,46 @@ function context(brandId, now, sources) {
           p_cur_to: isoDay(now, 0),
           p_prev_from: isoDay(now, TRAFFIC_WINDOW_DAYS * 2 - 1),
           p_prev_to: isoDay(now, TRAFFIC_WINDOW_DAYS),
+        }),
+      ),
+    // AI visits as the AI Traffic page counts them (00176: the snippet on the
+    // days it ran, Analytics on the rest), over the last seven whole days
+    // and the seven before (AT-013).
+    weeklyVisits: () =>
+      once('weeklyVisits', async () => {
+        const read = ({ from, to }) =>
+          rpc('ai_traffic_merged', {
+            p_brand_id: brandId,
+            p_from: from,
+            p_to: to,
+            p_to_inclusive: true,
+            p_analytics: true,
+          });
+        const windows = weeklyWindows(now);
+        const [cur, prev] = await Promise.all([read(windows.cur), read(windows.prev)]);
+        return { cur: cur ?? {}, prev: prev ?? {} };
+      }),
+    // The pages AI visitors landed on that don't exist, over the last seven
+    // days (AT-012, 00186).
+    brokenLinks: () =>
+      once('brokenLinks', () =>
+        rpc('ai_traffic_broken_links', {
+          p_brand_id: brandId,
+          p_from: utcMidnight(now, 7),
+          p_to: now.toISOString(),
+          p_limit: 50,
+          p_offset: 0,
+        }),
+      ),
+    // The AI bot report's alert: cited pages no search bot read in the last
+    // 30 days (AT-011, 00185). Its window is its own, whatever days are asked.
+    botReport: () =>
+      once('botReport', () =>
+        rpc('ai_bot_report', {
+          p_brand_id: brandId,
+          p_since: isoDay(now, 0),
+          p_until: isoDay(now, 0),
+          p_limit: 0,
         }),
       ),
     gsc: () =>
@@ -635,6 +700,102 @@ const FAMILIES = [
     },
   },
 
+  // AI Traffic Analytics' alerts (AT-013, spec §3.8). A new platform sending
+  // visits is good news with no work behind it, so it is a recorder kind of
+  // its own (signals/traffic-platforms.js), not a library one.
+  {
+    name: 'aiTrafficAlerts',
+    requires: ['ai_traffic'],
+    kinds: ['ai_visits_weekly_drop', 'broken_citation_target'],
+    async run(ctx) {
+      const found = [];
+      const { cur, prev } = await ctx.weeklyVisits();
+      const before = Number(prev.visits) || 0;
+      const after = Number(cur.visits) || 0;
+      if (
+        before >= t.aiVisitsWeeklyMinVisits &&
+        c.relativeFall(before, after) >= t.aiVisitsWeeklyDropRatio
+      ) {
+        const falling = c.fallingPages(prev.pages, cur.pages);
+        const analytics =
+          c.analyticsDayCount(prev.analytics_days) + c.analyticsDayCount(cur.analytics_days);
+        found.push({
+          // Its value is the site's visits; the pages that fell are its targets.
+          ...group(
+            'ai_visits_weekly_drop',
+            'pages',
+            falling,
+            (p) => ({ id: p.page, label: p.page, before: p.before, now: p.now }),
+            analytics > 0 ? GA : AI,
+            { pageCount: falling.length },
+          ),
+          previousValue: before,
+          currentValue: after,
+          changeValue: after - before,
+        });
+      }
+
+      // Each missing page with what AI visitors got and the working page to
+      // redirect it to; the snippet is the only source (§3.8b).
+      const broken = await ctx.brokenLinks();
+      const rows = Array.isArray(broken?.rows) ? broken.rows : [];
+      if (rows.length > 0) {
+        found.push({
+          ...group(
+            'broken_citation_target',
+            'pages',
+            rows,
+            (r) => ({
+              id: r.page,
+              label: r.page,
+              visits: Number(r.visits) || 0,
+              status: r.status,
+              citations: Number(r.citations) || 0,
+              redirectTo: r.target ?? null,
+            }),
+            AI,
+          ),
+          currentValue: Number(broken.count) || rows.length,
+        });
+      }
+      return found;
+    },
+  },
+
+  {
+    name: 'aiBots',
+    // Any brand can connect its Cloudflare or Vercel; the report says
+    // whether it did.
+    requires: ['tracking'],
+    kinds: ['cited_page_uncrawled'],
+    async run(ctx) {
+      const report = await ctx.botReport();
+      // Only while the bot data is whole (00185's alert_state 'on'). With a
+      // sender stopped, revoked or past its cap ('stale'), the pages search
+      // bots read drain and every cited page would read as uncrawled; the
+      // kind is unread tonight, not recovered, so open signals and their
+      // tasks stay open until data returns. Under 30 days ('waiting') there
+      // is nothing to say yet.
+      if (report?.alert_state === 'stale') throw new DataNotWhole('bot data is stale');
+      if (report?.alert_state !== 'on') return [];
+      const uncrawled = Array.isArray(report?.uncrawled) ? report.uncrawled : [];
+      if (uncrawled.length === 0) return [];
+      return [
+        {
+          ...group(
+            'cited_page_uncrawled',
+            'pages',
+            uncrawled,
+            (u) => ({ id: u.page, label: u.page, citations: Number(u.citations) || 0 }),
+            AI,
+          ),
+          // The report names the ten most cited; the count is all of them.
+          currentValue: Number(report.uncrawled_count) || uncrawled.length,
+        },
+      ];
+    },
+  },
+
   {
     name: 'crossChannel',
     requires: ['ai_traffic'],
@@ -771,6 +932,13 @@ const FAMILIES = [
 export const LIBRARY_EMITTED_KINDS = Object.freeze(FAMILIES.flatMap((f) => f.kinds));
 
 /**
+ * Thrown by a family whose data is there but not whole tonight — a bot
+ * sender stopped, say. Its kinds are reported unread, as a failed read's are,
+ * so open signals stay open until the data is whole again; it isn't an error.
+ */
+export class DataNotWhole extends Error {}
+
+/**
  * Run every family the brand has the data for.
  *
  * `overflow` holds findings still detected but past their kind's cap. They
@@ -799,7 +967,14 @@ export async function libraryCandidates(brandId, { now = new Date(), sources } =
     } catch (err) {
       // One family's read failing costs that family's night, not the pass.
       for (const kind of family.kinds) unreadKinds.add(kind);
-      logger.error({ err, brandId, family: family.name }, '[signals] library family failed');
+      if (err instanceof DataNotWhole) {
+        logger.info(
+          { brandId, family: family.name, reason: err.message },
+          '[signals] library family data not whole',
+        );
+      } else {
+        logger.error({ err, brandId, family: family.name }, '[signals] library family failed');
+      }
     }
   }
   return { candidates, overflow, unreadKinds };

@@ -378,6 +378,14 @@ export function classifyGscQuery(q, prompt, t) {
 // ─── AI traffic ─────────────────────────────────────────────────────────────
 
 /**
+ * The days Analytics counted in an ai_traffic_merged read (00176): a jsonb
+ * array of those days, not a number.
+ */
+export function analyticsDayCount(value) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+/**
  * AI-referred traffic per page, from analytics where connected and the
  * tracking snippet otherwise. Analytics wins where both exist: it is the
  * brand's own measurement, and the snippet is ours.
@@ -438,6 +446,31 @@ export function siteTrafficRates(pages) {
 
 export function relativeFall(prev, cur) {
   return prev > 0 ? (prev - cur) / prev : 0;
+}
+
+/**
+ * The pages AI visits fell on between two windows of ai_traffic_merged
+ * (00176), biggest fall first: what a week-over-week drop is made of
+ * (AT-013). Its pages are paths, matched without case as the Pages section
+ * matches them.
+ */
+export function fallingPages(prevPages = [], curPages = []) {
+  const now = new Map();
+  for (const p of curPages) {
+    const key = String(p.page ?? '').toLowerCase();
+    now.set(key, (now.get(key) ?? 0) + (Number(p.visits) || 0));
+  }
+  const before = new Map();
+  for (const p of prevPages) {
+    const key = String(p.page ?? '').toLowerCase();
+    const entry = before.get(key) ?? { page: p.page, visits: 0 };
+    entry.visits += Number(p.visits) || 0;
+    before.set(key, entry);
+  }
+  return [...before.entries()]
+    .map(([key, p]) => ({ page: p.page, before: p.visits, now: now.get(key) ?? 0 }))
+    .filter((p) => p.before > p.now)
+    .sort((a, b) => b.before - b.now - (a.before - a.now) || a.page.localeCompare(b.page));
 }
 
 // ─── Site Audit ─────────────────────────────────────────────────────────────

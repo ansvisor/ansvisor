@@ -34,7 +34,11 @@ export type StoryFamily =
   | 'trafficGain'
   | 'searchLoss'
   | 'searchGap'
-  | 'technicalIssue';
+  | 'technicalIssue'
+  /** AI visitors landing on pages that don't exist (AT-012, AT-013). */
+  | 'brokenLinks'
+  /** Cited pages no AI search bot read in 30 days (AT-011, AT-013). */
+  | 'uncrawledPages';
 
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
@@ -59,6 +63,8 @@ const ALL_OF_THEM: readonly StoryFamily[] = [
   'competitorAhead',
   'trafficGain',
   'technicalIssue',
+  'brokenLinks',
+  'uncrawledPages',
 ];
 
 /** Families told about pages first; the rest about prompts first. */
@@ -69,6 +75,8 @@ const PAGE_FIRST: readonly StoryFamily[] = [
   'searchLoss',
   'searchGap',
   'technicalIssue',
+  'brokenLinks',
+  'uncrawledPages',
 ];
 
 /** Brand-wide rates, in percent, whose before and after the sentence can quote. */
@@ -76,6 +84,9 @@ const RATE_KINDS = ['sharp_drop', 'visibility_slipping'];
 
 /** The situation one signal describes. */
 export function storyFamily(signal: Pick<Signal, 'category' | 'kind'>): StoryFamily {
+  // Technical, but found on the AI Traffic page, not by Site Audit.
+  if (signal.kind === 'broken_citation_target') return 'brokenLinks';
+  if (signal.kind === 'cited_page_uncrawled') return 'uncrawledPages';
   const meta = isSignalKind(signal.kind) ? SIGNAL_KINDS[signal.kind] : null;
   const state = meta?.stateKey ?? 'gap';
   const group = meta?.positive

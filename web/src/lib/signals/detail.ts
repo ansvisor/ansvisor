@@ -2,6 +2,7 @@ import type { Signal } from './map';
 import { locationName, platformName } from './names';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import { isLibrarySignalKind, type SignalCategory, type SignalKind } from './registry';
+import { libraryTargetCount } from './display';
 
 /**
  * What a signal's detail says, as data (AC-001): where it happened, what
@@ -115,6 +116,8 @@ export type ChangePeriod =
   | 'last_14_days'
   | 'last_fortnight'
   | 'last_four_weeks'
+  /** The AI bot report's alert window (server 00185). */
+  | 'last_30_days'
   | 'latest';
 
 /** Days in each window of a before-and-after period: "previous 14 days". */
@@ -147,6 +150,9 @@ const WEEK_OVER_WEEK: Partial<Record<SignalKind, SignalMetric>> = {
   competitor_momentum: 'mentions',
   competitor_surge: 'mention_rate',
   ai_traffic_drop: 'ai_sessions',
+  // The AI Traffic page's own visits, the last seven whole days against the
+  // seven before (AT-013, server library/detect.js `ctx.weeklyVisits`).
+  ai_visits_weekly_drop: 'ai_sessions',
   visibility_traffic_loss: 'ai_sessions',
   cross_channel_risk: 'ai_sessions',
 };
@@ -158,6 +164,13 @@ const AI_TRAFFIC_KINDS: ReadonlySet<string> = new Set([
   'ai_landing_page_winner',
   'ai_landing_underperforming',
   'converting_page_slipping',
+]);
+
+// Page targets that carry their AI visits before and after: the 14-day kinds
+// and the weekly drop (AT-013).
+const VISIT_PAGE_KINDS: ReadonlySet<string> = new Set([
+  ...AI_TRAFFIC_KINDS,
+  'ai_visits_weekly_drop',
 ]);
 
 // Compared over the last 28 days against the 28 before (`ctx.gsc`).
@@ -213,8 +226,12 @@ export function signalChange(signal: Signal): SignalChange | null {
       );
     }
     return {
-      // AI sessions are always read over 14 days (`ctx.traffic`).
-      period: overTime === 'ai_sessions' ? 'fortnight_over_fortnight' : 'week_over_week',
+      // AI sessions are read over 14 days (`ctx.traffic`), the weekly drop's
+      // over seven.
+      period:
+        overTime === 'ai_sessions' && signal.kind !== 'ai_visits_weekly_drop'
+          ? 'fortnight_over_fortnight'
+          : 'week_over_week',
       figures,
     };
   }
@@ -344,6 +361,14 @@ export function signalChange(signal: Signal): SignalChange | null {
       return cur === null
         ? null
         : { period: 'last_7_days', figures: [{ metric: 'prompts', role: 'total', value: cur }] };
+    // Its first week's AI visits (AT-013).
+    case 'ai_platform_new':
+      return cur === null
+        ? null
+        : {
+            period: 'last_7_days',
+            figures: [{ metric: 'ai_sessions', role: 'now', value: cur }],
+          };
     case 'audit_low_score':
       return cur === null
         ? null
@@ -374,7 +399,9 @@ export function signalChange(signal: Signal): SignalChange | null {
       ? 'last_fortnight'
       : SEARCH_CONSOLE_KINDS.has(signal.kind)
         ? 'last_four_weeks'
-        : 'last_7_days';
+        : signal.kind === 'cited_page_uncrawled'
+          ? 'last_30_days'
+          : 'last_7_days';
     return { period, figures: [{ metric: counted, role: 'total', value: cur }] };
   }
   return null;
@@ -736,6 +763,17 @@ const CRAWLER_LAYOUT: WhereFieldKey[] = ['pages', 'issue', 'crawlers', 'evidence
 // A site-wide traffic finding has no page to cite: where its AI visits come from.
 const SITE_TRAFFIC_LAYOUT: WhereFieldKey[] = ['scope', 'aiReferrals'];
 
+// The AI Traffic page's own findings (AT-013): broken AI links, and cited
+// pages no AI search bot read. They name pages, not anything Site Audit checked.
+const AI_TRAFFIC_PAGE_FINDINGS: readonly SignalKind[] = [
+  'broken_citation_target',
+  'cited_page_uncrawled',
+];
+const AI_TRAFFIC_PAGES_LAYOUT: WhereFieldKey[] = ['pages'];
+
+// A platform that started sending AI visits: its title names it.
+const NEW_AI_PLATFORM_LAYOUT: WhereFieldKey[] = ['scope'];
+
 // A first citation is a gain: the page and the prompt, not who replaced it.
 const FIRST_CITATION_LAYOUT: WhereFieldKey[] = ['url', 'prompt', 'platforms', 'locations'];
 
@@ -798,7 +836,7 @@ function fieldValue(signal: Signal, key: WhereFieldKey): WhereValue | null {
   const entity = str(p, 'entity');
   const targets = targetsOf(signal);
   // A grouped finding names the first 50 of its targets; the count is all.
-  const total = Math.max(targets.length, Number(signal.currentValue ?? 0));
+  const total = libraryTargetCount(signal, targets);
 
   switch (key) {
     case 'scope': {
@@ -810,7 +848,8 @@ function fieldValue(signal: Signal, key: WhereFieldKey): WhereValue | null {
       if (
         entity === 'platforms' ||
         signal.kind === 'platform_gap' ||
-        signal.kind === 'new_engine'
+        signal.kind === 'new_engine' ||
+        signal.kind === 'ai_platform_new'
       ) {
         return { type: 'scope', scope: 'platform' };
       }
@@ -894,15 +933,13 @@ function fieldValue(signal: Signal, key: WhereFieldKey): WhereValue | null {
       return url ? { type: 'text', text: url } : null;
     }
     case 'pages': {
-      if (AI_TRAFFIC_KINDS.has(signal.kind) && targets.length && !isSiteWide(signal)) {
+      if (VISIT_PAGE_KINDS.has(signal.kind) && targets.length && !isSiteWide(signal)) {
         return {
           type: 'trafficPages',
           items: trafficPages(targets),
-          // A drop's value is the site's sessions; its pages are counted apart.
-          total:
-            signal.kind === 'ai_traffic_drop'
-              ? Math.max(targets.length, num(p.pageCount) ?? 0)
-              : total,
+          // A drop's value is the site's visits; its pages are counted apart
+          // (`pageCount`, read by libraryTargetCount).
+          total,
           metrics: TRAFFIC_METRICS[signal.kind] ?? [],
           siteEngagedRate: num(p.siteEngagedRate),
           siteKeyRate: num(p.siteKeyRate),
@@ -1036,9 +1073,13 @@ export function signalWhereFields(signal: Signal): WhereField[] {
         ? CRAWLER_LAYOUT
         : CITATION_LOSS.includes(signal.kind)
           ? CITATION_LOSS_LAYOUT
-          : signal.category === 'traffic' && isSiteWide(signal)
-            ? SITE_TRAFFIC_LAYOUT
-            : LAYOUT[signal.category];
+          : AI_TRAFFIC_PAGE_FINDINGS.includes(signal.kind)
+            ? AI_TRAFFIC_PAGES_LAYOUT
+            : signal.kind === 'ai_platform_new'
+              ? NEW_AI_PLATFORM_LAYOUT
+              : signal.category === 'traffic' && isSiteWide(signal)
+                ? SITE_TRAFFIC_LAYOUT
+                : LAYOUT[signal.category];
   const named = namedPlaces(signal);
   // A mention's position, sentiment and quote are given per prompt when the
   // evidence is recorded; asked for on their own only when it is not.
@@ -1099,6 +1140,9 @@ export function signalLinks(signal: Signal): SignalLink[] {
   }
   if (entity === 'sources' || signal.category === 'citation') {
     return [{ kind: 'citations', href: '/dashboard/citations' }];
+  }
+  if (AI_TRAFFIC_PAGE_FINDINGS.includes(signal.kind)) {
+    return [{ kind: 'traffic', href: '/dashboard/traffic' }];
   }
   switch (signal.category) {
     case 'competitor':

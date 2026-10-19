@@ -40,6 +40,7 @@ import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/pla
 import { analyzeBrandVolumes } from './lib/volume-analysis.js';
 import { runGscSync } from './lib/gsc-sync.js';
 import { runGaSync } from './lib/ga-sync.js';
+import { sendTrafficDigests } from './lib/traffic-digest/engine.js';
 import { runPageOpportunityDetection } from './lib/page-opportunities.js';
 import { runPulseCatchUp } from './lib/pulse/engine.js';
 import { runSignalCatchUp } from './lib/signals/pass.js';
@@ -287,13 +288,19 @@ async function runDailyTracking() {
     .catch((err) => {
       logger.error({ err }, '[ga-sync] daily run failed');
     })
-    .finally(() =>
-      sweepAutoAudits({ readInbox: readOpportunityInbox, startAudits: startAutoAudits }).catch(
-        (err) => {
-          logger.error({ err }, '[auto-audit] daily sweep crashed');
-        },
-      ),
-    );
+    .finally(() => {
+      // The AI Traffic weekly digest (AT-013): Mondays, after the sync, so
+      // last Sunday's Analytics numbers are in. Cloud only, like the pulse.
+      sendTrafficDigests().catch((err) => {
+        logger.error({ err }, '[traffic-digest] weekly sweep crashed');
+      });
+      return sweepAutoAudits({
+        readInbox: readOpportunityInbox,
+        startAudits: startAutoAudits,
+      }).catch((err) => {
+        logger.error({ err }, '[auto-audit] daily sweep crashed');
+      });
+    });
 
   return { triggered, total: brands.length };
 }
