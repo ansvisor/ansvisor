@@ -1377,9 +1377,9 @@ export async function getInsightsData(
     /** When the current view is filtered, check unfiltered data existence too. */
     checkUnfiltered?: boolean;
     /**
-     * The 24h preset: anchor dateFrom/dateTo to the last completed tracking
-     * run (see getTrackingWindow). Resolved here rather than by a separate
-     * client call, because each server action is its own queued request.
+     * The 24h preset: resolve the latest completed run here so the unfiltered
+     * view can use its UTC day window (and topic-filtered reads can retain the
+     * timestamp anchor), without a separate client action request.
      */
     anchor24h?: boolean;
   },
