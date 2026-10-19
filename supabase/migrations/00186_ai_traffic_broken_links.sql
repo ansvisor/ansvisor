@@ -12,20 +12,24 @@
 --   * http_status — the status, or null when the browser didn't tell;
 --   * not_found_title — no status, and the title said "not found".
 --
--- A page is broken in a range when its latest pageview with a status says
--- 404 or 410. With no status at all, a title saying "not found" counts unless
--- the nightly page read (site_pages, 00104) found the page working: a post
--- about fixing 404s is not a missing page. The status is decided per address
--- (the path plus its query, utm_* left out), and a path is broken only when
--- none of its addresses last answered 2xx or 3xx: on a shop where
--- /index.php?route=product&id=42 is gone and the other products work,
--- /index.php isn't broken, and no redirect of it (the whole site) is
--- suggested. Its visits are the pageviews that found it missing (404, 410,
--- or no status and a not-found title), not those from before it broke.
+-- A page is broken in a range when AI visitors found it missing in the range
+-- and its latest pageview with a status, up to now, still says 404 or 410.
+-- With no status at all, a title saying "not found" counts unless the nightly
+-- page read (site_pages, 00104) found the page working: a post about fixing
+-- 404s is not a missing page. A page the nightly read found working after its
+-- last miss is fixed, and isn't listed. The status is decided per address
+-- (the path plus its query, utm_* and click ids such as gclid left out), and
+-- a path is broken only when none of its addresses last answered 2xx or 3xx:
+-- on a shop where /index.php?route=product&id=42 is gone and the other
+-- products work, /index.php isn't broken. When every missing address of a
+-- page carries a query (a route on it, not the page), no redirect is
+-- suggested: one from the path would move the whole route. Its visits are
+-- the pageviews that found it missing (404, 410, or no status and a
+-- not-found title), not those from before it broke.
 --
--- Each broken page gets a suggested redirect to a page known to work (read
--- 2xx by the nightly page read, or landed on with a 2xx in the last 90
--- days), the first that fits of:
+-- Each other broken page gets a suggested redirect to a page known to work
+-- (read 2xx by the nightly page read, or its address without a query landed
+-- on with a 2xx in the last 90 days), the first that fits of:
 --
 --   * similar — the most path words in common, at least half of both pages'
 --     words together, a plural read as its singular
@@ -69,28 +73,40 @@ create or replace function public.ai_traffic_broken_pages(
   p_from timestamptz,
   p_to timestamptz
 )
-returns table (page_key text, status text)
+returns table (page_key text, status text, routed boolean)
 language sql
 stable
 set search_path to 'public'
 as $$
   with
+  -- Only the pageviews that say something about the page: a status, or a
+  -- not-found title. Read up to now, so a page that works again since the
+  -- window ended isn't listed.
   logs as (
     select
-      lower(public.normalize_page_path(l.url)) as page_key,
-      -- The address: the path plus its query, utm_* left out, in one order.
-      lower(public.normalize_page_path(l.url)) || coalesce('?' || (
-        select string_agg(q.part, '&' order by q.part)
-        from unnest(string_to_array(split_part(split_part(l.url, '#', 1), '?', 2), '&')) as q(part)
-        where q.part <> '' and q.part !~* '^utm_'
-      ), '') as address,
+      n.page_key,
+      -- The address: the path plus its query, tracking parameters left out,
+      -- in one order. Worked out only when the URL has a query.
+      case when q.query is null then n.page_key else n.page_key || '?' || q.query end as address,
       l.created_at,
       l.http_status,
-      l.not_found_title
+      l.not_found_title,
+      (p_to is null or l.created_at <= p_to)
+        and (l.http_status in (404, 410) or (l.http_status is null and l.not_found_title))
+        as failed_in_window
     from public.ai_traffic_logs l
+    cross join lateral (select lower(public.normalize_page_path(l.url)) as page_key) n
+    cross join lateral (
+      select case when strpos(l.url, '?') > 0 then (
+        select string_agg(qp.part, '&' order by qp.part)
+        from unnest(string_to_array(split_part(split_part(l.url, '#', 1), '?', 2), '&')) as qp(part)
+        where qp.part <> ''
+          and qp.part !~* '^(utm_[^=]*|gclid|fbclid|msclkid|srsltid|_gl|ref)(=|$)'
+      ) end as query
+    ) q
     where l.brand_id = p_brand_id
       and l.created_at >= coalesce(p_from, '-infinity'::timestamptz)
-      and (p_to is null or l.created_at <= p_to)
+      and (l.http_status is not null or l.not_found_title)
   ),
   address_state as (
     select
@@ -98,7 +114,8 @@ as $$
       address,
       (array_agg(http_status order by created_at desc) filter (where http_status is not null))[1]
         as last_status,
-      bool_or(not_found_title) as title_not_found
+      bool_or(not_found_title) as title_not_found,
+      max(created_at) filter (where failed_in_window) as last_failed_at
     from logs
     group by page_key, address
   ),
@@ -107,14 +124,21 @@ as $$
       page_key,
       max(last_status) filter (where last_status in (404, 410)) as last_status,
       bool_or(last_status is null and title_not_found) as title_not_found,
-      bool_or(last_status between 200 and 399) as works
+      -- No address with a status reads as not working, not as unknown.
+      coalesce(bool_or(last_status between 200 and 399), false) as works,
+      max(last_failed_at) as last_failed_at,
+      -- Every missing address carries a query: a route on the page, not the page.
+      bool_and(address <> page_key)
+        filter (where last_status in (404, 410) or (last_status is null and title_not_found))
+        as routed
     from address_state
     group by page_key
   ),
   -- What the nightly page read found (00104).
   fetched as (
     select lower(public.normalize_page_path(sp.url)) as page_key,
-           bool_or(sp.fetch_status between 200 and 399) as works
+           bool_or(sp.fetch_status between 200 and 399) as works,
+           max(sp.fetched_at) filter (where sp.fetch_status between 200 and 299) as last_ok_at
     from public.site_pages sp
     where sp.brand_id = p_brand_id
       and sp.fetch_status is not null
@@ -122,10 +146,14 @@ as $$
   )
   select
     s.page_key,
-    case when s.last_status is not null then s.last_status::text else 'title' end
+    case when s.last_status is not null then s.last_status::text else 'title' end,
+    coalesce(s.routed, false)
   from page_state s
   left join fetched f on f.page_key = s.page_key
   where not s.works
+    and s.last_failed_at is not null
+    -- The nightly read found it working after its last miss: fixed since.
+    and not coalesce(f.last_ok_at > s.last_failed_at, false)
     and (
       s.last_status in (404, 410)
       or (s.last_status is null and s.title_not_found and not coalesce(f.works, false))
@@ -138,7 +166,7 @@ grant execute on function public.ai_traffic_broken_pages(uuid, timestamptz, time
   to service_role;
 
 comment on function public.ai_traffic_broken_pages(uuid, timestamptz, timestamptz) is
-  'AI Traffic (AT-012): the brand''s pages AI visitors landed on in a window whose latest reported status was 404 or 410, or, with no status, whose title said not found and that the nightly page read never found working; decided per address (path plus query, utm_* left out), and a path none of whose addresses last answered 2xx or 3xx. No organization check: called only by ai_traffic_broken_links and ai_traffic_pages, after theirs.';
+  'AI Traffic (AT-012): the brand''s pages AI visitors found missing in a window whose latest reported status up to now is 404 or 410, or, with no status, whose title said not found and that the nightly page read never found working; not those the nightly read found working after their last miss. Decided per address (path plus query, utm_* and click ids left out), and a path none of whose addresses last answered 2xx or 3xx; routed when every missing address carries a query. No organization check: called only by ai_traffic_broken_links and ai_traffic_pages, after theirs.';
 
 -- ─── Broken AI links ────────────────────────────────────────────────────────
 
@@ -171,12 +199,13 @@ begin
   with
   logs as (
     select
-      lower(public.normalize_page_path(l.url)) as page_key,
-      public.normalize_page_path(l.url) as page,
+      lower(n.page) as page_key,
+      n.page,
       coalesce(l.visit_of, l.id) as visit,
       l.created_at,
       coalesce(nullif(l.source_platform, ''), 'unknown') as platform
     from public.ai_traffic_logs l
+    cross join lateral (select public.normalize_page_path(l.url) as page) n
     where l.brand_id = p_brand_id
       and l.created_at >= coalesce(p_from, '-infinity'::timestamptz)
       and (p_to is null or l.created_at <= p_to)
@@ -184,7 +213,7 @@ begin
       and (l.http_status in (404, 410) or (l.http_status is null and l.not_found_title))
   ),
   broken as (
-    select bp.page_key, bp.status
+    select bp.page_key, bp.status, bp.routed
     from public.ai_traffic_broken_pages(p_brand_id, p_from, p_to) bp
   ),
   visits as (
@@ -208,15 +237,26 @@ begin
     select c.page_key, c.citations
     from public.ai_traffic_page_citations(p_brand_id, v_since, v_until) c
   ),
-  -- Pages known to work, to redirect to.
+  -- Pages known to work, to redirect to. Only a page's own address counts:
+  -- /product.php?id=5 answering 200 says nothing about /product.php.
   landed as (
-    select lower(public.normalize_page_path(l.url)) as page_key,
-           min(public.normalize_page_path(l.url)) as page,
+    select lower(n.page) as page_key,
+           min(n.page) as page,
            (array_agg(l.http_status order by l.created_at desc))[1] as last_status
     from public.ai_traffic_logs l
+    cross join lateral (select public.normalize_page_path(l.url) as page) n
     where l.brand_id = p_brand_id
       and l.http_status is not null
       and l.created_at >= now() - interval '90 days'
+      and (
+        strpos(l.url, '?') = 0
+        or not exists (
+          select 1
+          from unnest(string_to_array(split_part(split_part(l.url, '#', 1), '?', 2), '&')) as qp(part)
+          where qp.part <> ''
+            and qp.part !~* '^(utm_[^=]*|gclid|fbclid|msclkid|srsltid|_gl|ref)(=|$)'
+        )
+      )
     group by 1
   ),
   candidates as (
@@ -282,9 +322,13 @@ begin
       b.status,
       coalesce(p.platforms, '{}'::text[]) as platforms,
       coalesce(ci.citations, 0)::bigint as citations,
-      case when v.page_key <> '/' then coalesce(s.target, pa.target, '/') end as target,
+      -- A route on the page (every missing address has a query) gets no
+      -- redirect: one from its path would move the whole route.
+      case when v.page_key <> '/' and not b.routed then coalesce(s.target, pa.target, '/') end
+        as target,
       case
         when v.page_key = '/' then null
+        when b.routed then 'query'
         when s.target is not null then 'similar'
         when pa.target is not null then 'parent'
         else 'home'
@@ -319,7 +363,7 @@ grant execute on function public.ai_traffic_broken_links(uuid, timestamptz, time
   to authenticated, service_role;
 
 comment on function public.ai_traffic_broken_links(uuid, timestamptz, timestamptz, integer, integer) is
-  'AI Traffic "Broken AI links" (AT-012, spec §3.5): the pages AI-referred visitors landed on that answered 404 or 410 (or, without a status, whose title said not found) in a window, with their visits, platforms, citations and a suggested redirect to a working page (similar path, parent page or home). Security definer with an organization check.';
+  'AI Traffic "Broken AI links" (AT-012, spec §3.5): the pages AI-referred visitors landed on that answered 404 or 410 (or, without a status, whose title said not found) in a window, with their visits, platforms, citations and a suggested redirect to a working page (similar path, parent page or home; none for a route on the page, target_reason query). Security definer with an organization check.';
 
 -- ─── The Pages section leaves broken pages out of Traffic, no prompt ─────────
 -- 00178's function with one change: a page AI visitors found missing is not
