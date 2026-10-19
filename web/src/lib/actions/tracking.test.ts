@@ -252,6 +252,40 @@ describe('Insights 24h rollup routing (#999)', () => {
     expect(rpcCalls.some((call) => call.name === 'share_of_voice_aggregates')).toBe(false);
     expect(rpcCalls.some((call) => call.name === 'ai_visibility_aggregates')).toBe(false);
   });
+
+  it('uses topic-scoped daily rollups for a topic-filtered 24h view (#867)', async () => {
+    const { getInsightsData } = await import('./tracking');
+    await getInsightsData('brand-id', { anchor24h: true, topicId: 'topic-1' });
+
+    expect(
+      rpcCalls.some(
+        (call) =>
+          call.name === 'insights_aggregates_daily' &&
+          call.args.p_day_from === '2026-10-18' &&
+          call.args.p_day_to === '2026-10-19' &&
+          call.args.p_topic_id === 'topic-1',
+      ),
+    ).toBe(true);
+    const dailyCalls = rpcCalls.filter((call) => call.name.endsWith('_daily'));
+    expect(dailyCalls.length).toBeGreaterThan(0);
+    for (const call of dailyCalls) {
+      expect(call.args.p_topic_id).toBe('topic-1');
+    }
+    expect(rpcCalls.some((call) => call.name === 'insights_aggregates')).toBe(false);
+    expect(rpcCalls.some((call) => call.name === 'competitor_aggregates')).toBe(false);
+    expect(rpcCalls.some((call) => call.name === 'share_of_voice_aggregates')).toBe(false);
+    expect(rpcCalls.some((call) => call.name === 'ai_visibility_aggregates')).toBe(false);
+  });
+
+  it('retains the raw fallback when no completed run exists', async () => {
+    listRows = {};
+    rpcByName = false;
+    const { getInsightsData } = await import('./tracking');
+    await getInsightsData('brand-id', { anchor24h: true });
+
+    expect(rpcCalls.some((call) => call.name === 'insights_aggregates')).toBe(true);
+    expect(rpcCalls.some((call) => call.name === 'insights_aggregates_daily')).toBe(false);
+  });
 });
 
 describe('getInsightsSummary', () => {
