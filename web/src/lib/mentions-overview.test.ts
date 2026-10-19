@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   averagePosition,
+  changeBasis,
   isLowSample,
   mentionRate,
   mentionTrend,
@@ -44,8 +45,24 @@ const raw = {
       prev_mentions: 7,
       prev_positive: 2,
       prev_negative: 2,
+      // On the prompts both windows answered (00195).
+      same_answers: 5,
+      same_mentions: 5,
+      same_positive: 2,
+      same_negative: 1,
+      same_prev_answers: 6,
+      same_prev_mentions: 6,
+      same_prev_positive: 1,
+      same_prev_negative: 2,
     },
   ],
+  same: {
+    prompts: 4,
+    new_prompts: 1,
+    dropped_prompts: 2,
+    current: { answers: 90, mentions: 90, occurrences: 250, positive: 40, negative: 20 },
+    previous: { answers: 80, mentions: 80, occurrences: 200, positive: 30, negative: 30 },
+  },
   daily: [{ day: '2026-10-16', answers: 4, mentions: 4, occurrences: 9, positive: 2, negative: 1 }],
   competitors: [
     {
@@ -85,6 +102,17 @@ describe('parseMentionsOverview', () => {
       positive: 2,
       negative: 2,
       previous: { answers: 7, mentions: 7, positive: 2, negative: 2 },
+      same: {
+        current: { answers: 5, mentions: 5, positive: 2, negative: 1 },
+        previous: { answers: 6, mentions: 6, positive: 1, negative: 2 },
+      },
+    });
+    expect(o.same).toMatchObject({
+      prompts: 4,
+      newPrompts: 1,
+      droppedPrompts: 2,
+      current: { occurrences: 250, positive: 40 },
+      previous: { occurrences: 200, negative: 30 },
     });
     expect(o.daily).toEqual([
       { day: '2026-10-16', answers: 4, mentions: 4, occurrences: 9, positive: 2, negative: 1 },
@@ -173,5 +201,31 @@ describe('mentionTrend', () => {
       { day: '2026-10-16', answers: 0, mentions: 0, occurrences: 0, rate: null, net: null },
       { day: '2026-10-17', answers: 5, mentions: 0, occurrences: 0, rate: 0, net: null },
     ]);
+  });
+});
+
+describe('changeBasis', () => {
+  it('takes the changes on the prompts both windows answered, or on all before 00195', () => {
+    const all = { answers: 10, mentions: 5, occurrences: 9 } as never;
+    const prevAll = { answers: 12, mentions: 8, occurrences: 20 } as never;
+    const shared = { answers: 6, mentions: 4, occurrences: 8 } as never;
+    const prevShared = { answers: 6, mentions: 3, occurrences: 5 } as never;
+    expect(
+      changeBasis({
+        current: all,
+        previous: prevAll,
+        same: {
+          prompts: 3,
+          newPrompts: 1,
+          droppedPrompts: 2,
+          current: shared,
+          previous: prevShared,
+        },
+      }),
+    ).toEqual({ current: shared, previous: prevShared });
+    expect(changeBasis({ current: all, previous: prevAll, same: null })).toEqual({
+      current: all,
+      previous: prevAll,
+    });
   });
 });

@@ -177,6 +177,47 @@ describe('OverviewKpis', () => {
     expect(text).toContain('n=100');
   });
 
+  it('takes each change on the prompts both windows answered, as Insights does (00195)', () => {
+    render(
+      <OverviewKpis
+        overview={{
+          ...overview,
+          // Over all prompts, 260 vs 200; on the 12 shared ones, 240 vs 160.
+          same: {
+            prompts: 12,
+            newPrompts: 3,
+            droppedPrompts: 1,
+            current: totals({
+              answers: 360,
+              mentions: 90,
+              occurrences: 240,
+              positive: 45,
+              negative: 9,
+              promptsWithMentions: 12,
+            }),
+            previous: totals({
+              answers: 360,
+              mentions: 80,
+              occurrences: 160,
+              positive: 40,
+              negative: 8,
+              promptsWithMentions: 12,
+            }),
+          },
+        }}
+        brand="Ansvisor"
+      />,
+    );
+    const text = container.textContent;
+    // The values stay the whole window's; the changes are the shared prompts'.
+    expect(text).toContain('260+50%');
+    // Mention rate 90/360 vs 80/360: +2.8 points; prompts with mentions 12 vs 12.
+    expect(text).toContain('25.0%+2.8');
+    expect(text).toContain('15±0');
+    // Net +34 shown; its change is (50 − 10) − (50 − 10) = 0.
+    expect(text).toContain('+34±0');
+  });
+
   it('marks net sentiment over fewer than 20 mentions as a low sample, without a change', () => {
     render(
       <OverviewKpis

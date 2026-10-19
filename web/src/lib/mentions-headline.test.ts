@@ -112,6 +112,25 @@ describe('mentionsHeadline', () => {
     });
   });
 
+  it('takes the net change on the prompts both windows answered (00195)', () => {
+    const h = mentionsHeadline(
+      overview({
+        current: totals({ answers: 100, mentions: 100, positive: 50, negative: 10 }),
+        previous: totals({ answers: 100, mentions: 100, positive: 20, negative: 10 }),
+        same: {
+          prompts: 8,
+          newPrompts: 2,
+          droppedPrompts: 0,
+          current: totals({ answers: 60, mentions: 60, positive: 30, negative: 6 }),
+          previous: totals({ answers: 60, mentions: 60, positive: 24, negative: 6 }),
+        },
+      }),
+    );
+    // Net +40 now; on the shared prompts +40 vs +30, not +40 vs +10 on all.
+    expect(h.net).toBe(40);
+    expect(h.netChange).toBe(10);
+  });
+
   it('gives no change from or to a low sample', () => {
     const h = mentionsHeadline(
       overview({
@@ -132,6 +151,18 @@ describe('mentionsHeadline', () => {
 });
 
 describe('platformNetChange', () => {
+  it('takes the change on the prompts both windows answered (00195)', () => {
+    const row = {
+      ...platform('claude', [40, 20, 0], [40, 10, 0]),
+      same: {
+        current: { answers: 30, mentions: 30, positive: 15, negative: 0 },
+        previous: { answers: 30, mentions: 30, positive: 12, negative: 0 },
+      },
+    };
+    // On all prompts +50 vs +25; on the shared ones +50 vs +40.
+    expect(platformNetChange(row)).toBe(10);
+  });
+
   it('needs 20 mentions in both windows', () => {
     expect(platformNetChange(platform('claude', [20, 10, 0], [20, 5, 0]))).toBe(25);
     expect(platformNetChange(platform('claude', [19, 10, 0], [20, 5, 0]))).toBeNull();
