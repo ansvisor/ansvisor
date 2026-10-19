@@ -8,16 +8,22 @@
 --
 -- gsc_query_stats (00047) holds Search Console by query, which can't say
 -- which page lost clicks, and drops anonymised queries. gsc_page_stats holds
--- it by page and day, synced alongside (server/src/lib/gsc-sync.js): the
--- first sync of a brand reads 190 days so a 90-day range has a whole period
--- before it, Google's delay included; later ones read the last 28, and rows
--- older than 190 days are pruned. The sync (service role) upserts on (brand_id, page, date); org
--- members read.
+-- it by page and day, synced alongside (server/src/lib/gsc-sync.js): a
+-- brand's sync reads 190 days so a 90-day range has a whole period before it,
+-- Google's delay included, until one gets through them all for its property
+-- (brands.gsc_pages_backfilled_property); later ones read the last 28, and
+-- rows older than 190 days are pruned. The sync (service role) upserts on
+-- (brand_id, page, date); org members read.
+--
+-- page_key is the page as the Pages section keys it (00178), stored: worked
+-- out per row at read time it took 4 s warm, 18 s cold, on 110k rows (the
+-- largest brand's 600 pages × 183 days); grouped by the column, 46 ms.
 
 create table public.gsc_page_stats (
     id uuid primary key default gen_random_uuid(),
     brand_id uuid not null references public.brands(id) on delete cascade,
     page text not null,
+    page_key text generated always as (lower(public.normalize_page_path(page))) stored,
     date date not null,
     clicks integer not null default 0,
     impressions integer not null default 0,
@@ -29,6 +35,17 @@ create table public.gsc_page_stats (
 
 create index gsc_page_stats_brand_date_idx
     on public.gsc_page_stats (brand_id, date desc);
+
+-- The sync's table-wide retention prune (date < 190 days ago).
+create index gsc_page_stats_date_idx
+    on public.gsc_page_stats (date);
+
+-- The property whose 190 days of pages the sync has read in full. Until it
+-- matches gsc_property, every sync reads them again, so a first sync cut
+-- short resumes; when it names another property, that one's page rows are
+-- dropped first.
+alter table public.brands
+    add column if not exists gsc_pages_backfilled_property text;
 
 alter table public.gsc_page_stats enable row level security;
 
@@ -128,8 +145,7 @@ begin
 
   with by_page as (
     select
-      lower(public.normalize_page_path(g.page)) as page_key,
-      min(public.normalize_page_path(g.page)) as page,
+      g.page_key,
       min(g.page) as url,
       sum(g.impressions) filter (where g.date >= v_since)::bigint as impressions,
       sum(g.clicks) filter (where g.date >= v_since)::bigint as clicks,
@@ -153,8 +169,10 @@ begin
       and bp.clicks::double precision / nullif(bp.impressions, 0)
           <= 0.8 * bp.prev_clicks::double precision / nullif(bp.prev_impressions, 0)
   ),
+  -- Only the rows shown work out their display path.
   ranked as (
-    select f.*, f.prev_ctr * f.impressions - f.clicks as clicks_lost
+    select f.*, public.normalize_page_path(f.url) as page,
+      f.prev_ctr * f.impressions - f.clicks as clicks_lost
     from flagged f
     order by clicks_lost desc, f.impressions desc, f.page_key
     limit p_limit

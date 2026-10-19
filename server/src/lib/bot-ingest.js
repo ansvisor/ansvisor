@@ -38,6 +38,28 @@ export function hashSecret(secret) {
   return createHash('sha256').update(secret).digest('hex');
 }
 
+/**
+ * Where a connection sends its events: the API's public address
+ * (PUBLIC_SERVER_URL), never the Host a request came in on. The create call
+ * comes from the web server, which may reach the API at an internal address,
+ * and the endpoint is written into the customer's Worker, Logpush job or
+ * drain, where it is hard to change later. https only, but for localhost
+ * outside production. Null when it isn't set or can't be used.
+ */
+export function publicIngestEndpoint(env = process.env) {
+  let url;
+  try {
+    url = new URL(env.PUBLIC_SERVER_URL ?? '');
+  } catch {
+    return null;
+  }
+  const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  const allowed =
+    url.protocol === 'https:' ||
+    (url.protocol === 'http:' && local && env.NODE_ENV !== 'production');
+  return allowed ? `${url.origin}/bots/ingest` : null;
+}
+
 /** The live connection a secret belongs to, with its brand's organization; null otherwise. */
 export async function connectionForSecret(secret) {
   if (typeof secret !== 'string' || !secret.startsWith(SECRET_PREFIX) || secret.length > 200) {

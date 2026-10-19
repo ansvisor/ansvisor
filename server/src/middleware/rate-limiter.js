@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import { verifiedUserId } from './verified-tokens.js';
 
@@ -75,6 +76,29 @@ export const trafficLimiter = rateLimit({
   legacyHeaders: false,
   message: '',
   handler: (_req, res) => res.status(204).end(),
+});
+
+/**
+ * AI-bot ingest key (AT-010): the connection, by its secret's hash, since a
+ * Cloudflare Worker's requests leave from addresses Cloudflare shares across
+ * its customers. Without a secret, the caller's IP.
+ */
+export function botIngestKey(req) {
+  const secret = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  if (!secret) return anonymousIpKey(req.ip);
+  return 'bot:' + createHash('sha256').update(secret).digest('hex');
+}
+
+// AI-bot ingest: 600 requests a minute per connection. A Worker isolate
+// sends a batch about every 10 s, and a Logpush job or drain a file at a
+// time, so this leaves room for many of them while stopping a runaway sender.
+export const botIngestLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 600,
+  keyGenerator: botIngestKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'rate_limited' },
 });
 
 // Auth endpoints: 10 requests per 15 minutes

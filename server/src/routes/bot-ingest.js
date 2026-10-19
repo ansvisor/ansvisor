@@ -20,6 +20,7 @@ import {
 } from '../lib/bot-ingest.js';
 import { LogTooLargeError, readSenderBody } from '../lib/bot-log-formats.js';
 import { logger } from '../lib/logger.js';
+import { botIngestLimiter } from '../middleware/rate-limiter.js';
 
 const router = Router();
 
@@ -27,7 +28,7 @@ const router = Router();
 // sent with Content-Encoding: gzip is inflated here, within the limit.
 const body = express.raw({ type: () => true, limit: '20mb' });
 
-router.post('/bots/ingest', body, async (req, res) => {
+router.post('/bots/ingest', botIngestLimiter, body, async (req, res) => {
   let connection = null;
   // A log file's claim, given back unless the file was read.
   let claim = null;
