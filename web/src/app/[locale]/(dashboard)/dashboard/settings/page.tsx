@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { ThemeSwitch } from '@/components/settings/theme-switch';
 import { cn } from '@/lib/utils';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { BillingSection } from '@/components/settings/billing-section';
@@ -26,7 +25,6 @@ import { toast } from 'sonner';
 
 type Section =
   | 'account'
-  | 'theme'
   | 'organization'
   | 'team'
   | 'notifications'
@@ -86,7 +84,6 @@ export default function SettingsPage() {
 
   const navItems: { id: Section; label: string }[] = [
     { id: 'account', label: t('account') },
-    { id: 'theme', label: t('theme') },
     { id: 'organization', label: t('organization') },
     { id: 'team', label: t('team') },
     { id: 'notifications', label: t('notifications') },
@@ -170,21 +167,6 @@ export default function SettingsPage() {
                 </Button>
               </CardContent>
             </Card>
-          )}
-
-          {/* Theme */}
-          {active === 'theme' && (
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t('theme')}</CardTitle>
-                  <CardDescription>{t('themeDescription')}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ThemeSwitch />
-                </CardContent>
-              </Card>
-            </div>
           )}
 
           {/* Organization */}
