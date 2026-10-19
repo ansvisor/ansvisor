@@ -1377,16 +1377,16 @@ export async function getInsightsData(
     /** When the current view is filtered, check unfiltered data existence too. */
     checkUnfiltered?: boolean;
     /**
-     * The 24h preset: resolve the latest completed run here so the unfiltered
-     * view can use its UTC day window (and topic-filtered reads can retain the
-     * timestamp anchor), without a separate client action request.
+     * The 24h preset: resolve the latest completed run here so the view can use
+     * its UTC day window (including topic-filtered daily rollups), without a
+     * separate client action request.
      */
     anchor24h?: boolean;
   },
 ): Promise<InsightsData> {
   const trackingWindow = opts.anchor24h ? await getTrackingWindow(brandId).catch(() => null) : null;
   const anchored = trackingWindow?.anchored ?? null;
-  const rollup24h = Boolean(opts.anchor24h && !opts.topicId && trackingWindow?.runDays);
+  const rollup24h = Boolean(opts.anchor24h && trackingWindow?.runDays);
 
   const filterOpts: InsightsFilterArgs = {
     model: opts.model,
@@ -1399,9 +1399,10 @@ export async function getInsightsData(
     samePrompts: opts.samePrompts,
   };
 
-  // Unfiltered 24h reads use daily rollups for the latest run's UTC day(s).
-  // Topic-filtered 24h reads still use the existing raw, anchored fallback.
-  // Keep the cached path until the rollup path's latency has been measured.
+  // All 24h reads use daily rollups for the latest run's UTC day(s), with
+  // p_topic_id passed through when a topic is selected. Without a completed
+  // run-day window, retain the existing raw, anchored fallback. Keep the cached
+  // path until the rollup path's latency has been measured.
   const windowedRead = rollup24h
     ? loadWindowedInsights(brandId, filterOpts, { strict: false })
     : anchored
