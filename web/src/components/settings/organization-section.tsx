@@ -25,7 +25,7 @@ import {
  * not exposed for editing — it is used in external integrations and must
  * remain stable.
  *
- * Follows the TeamSection / AgentSection pattern exactly:
+ * Follows the TeamSection / AiProvidersSection pattern exactly:
  *   - load via useEffect / useCallback
  *   - Skeleton while loading
  *   - admin-gate via useUserRole().canAdmin
