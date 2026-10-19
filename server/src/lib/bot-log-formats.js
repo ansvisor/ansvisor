@@ -18,55 +18,101 @@
  *
  * Log senders report every line they hold; `records` is that count, for the
  * raw-record cap.
+ *
+ * A file is read without holding up the API's other requests: it's inflated
+ * asynchronously, to at most MAX_INFLATED_BYTES, holds at most MAX_LOG_LINES
+ * (LogTooLargeError otherwise), and its lines are parsed a slice at a time.
+ * A line whose time can't be read is dropped, not the file.
  */
 
-import { gunzipSync } from 'zlib';
+import { setImmediate as nextTurn } from 'timers/promises';
+import { promisify } from 'util';
+import { gunzip } from 'zlib';
 
-/** A gzipped body opens to at most this much. */
-export const MAX_INFLATED_BYTES = 64 * 1024 * 1024;
+const gunzipAsync = promisify(gunzip);
+
+/**
+ * A gzipped body opens to at most this much. A Logpush job set up as
+ * bot-sender-setup.js says sends at most 10,000 lines, about 3 MB.
+ */
+export const MAX_INFLATED_BYTES = 16 * 1024 * 1024;
+
+/** Lines one body may hold: twice what such a Logpush file holds. */
+export const MAX_LOG_LINES = 20_000;
+
+/** Lines parsed before the API's other requests get a turn. */
+const PARSE_SLICE = 1000;
+
+/** A body past MAX_INFLATED_BYTES or MAX_LOG_LINES; the route answers 413. */
+export class LogTooLargeError extends Error {}
 
 /**
  * The body as text. A body sent with Content-Encoding: gzip arrives already
  * inflated by the body parser; a gzipped file sent as is (Logpush's) is told
  * by its magic bytes and inflated here.
  */
-export function bodyText(buffer) {
+export async function bodyText(buffer) {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) return '';
   const gzipped = buffer[0] === 0x1f && buffer[1] === 0x8b;
-  return (gzipped ? gunzipSync(buffer, { maxOutputLength: MAX_INFLATED_BYTES }) : buffer).toString(
-    'utf8',
-  );
+  if (!gzipped) return buffer.toString('utf8');
+  try {
+    const inflated = await gunzipAsync(buffer, { maxOutputLength: MAX_INFLATED_BYTES });
+    return inflated.toString('utf8');
+  } catch (err) {
+    if (err?.code === 'ERR_BUFFER_TOO_LARGE') {
+      throw new LogTooLargeError(`The file opens to more than ${MAX_INFLATED_BYTES} bytes`);
+    }
+    throw err;
+  }
 }
 
+const tooManyLines = (count) =>
+  new LogTooLargeError(`The file holds ${count} lines; at most ${MAX_LOG_LINES} are read`);
+
 /** JSON lines, or one JSON array; malformed lines are left out. */
-function readLines(text) {
+async function readLines(text) {
   const trimmed = text.trim();
   if (!trimmed) return [];
   if (trimmed.startsWith('[')) {
+    let list;
     try {
-      const list = JSON.parse(trimmed);
-      return Array.isArray(list) ? list : [];
+      list = JSON.parse(trimmed);
     } catch {
       return [];
+    }
+    if (!Array.isArray(list)) return [];
+    if (list.length > MAX_LOG_LINES) throw tooManyLines(list.length);
+    return list;
+  }
+  const lines = trimmed.split('\n');
+  if (lines.length > MAX_LOG_LINES) throw tooManyLines(lines.length);
+  const read = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (i > 0 && i % PARSE_SLICE === 0) await nextTurn();
+    const line = lines[i].trim();
+    if (!line) continue;
+    try {
+      read.push(JSON.parse(line));
+    } catch {
+      // A malformed line is left out.
     }
   }
-  return trimmed.split('\n').flatMap((line) => {
-    try {
-      return line.trim() ? [JSON.parse(line)] : [];
-    } catch {
-      return [];
-    }
-  });
+  return read;
+}
+
+/** An ISO time, or undefined for a value that isn't one. */
+function isoTime(ms) {
+  const date = new Date(ms);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
 /** Logpush's EdgeStartTimestamp in any of its formats, as an ISO time. */
 function logpushTime(value) {
-  if (typeof value === 'string' && !/^\d+$/.test(value)) return value;
+  if (typeof value === 'string' && !/^\d+$/.test(value)) return isoTime(value);
   const n = Number(value);
   if (!Number.isFinite(n)) return undefined;
   // ns, ms or s since the epoch, told apart by size.
-  const ms = n > 1e15 ? n / 1e6 : n > 1e12 ? n : n * 1000;
-  return new Date(ms).toISOString();
+  return isoTime(n > 1e15 ? n / 1e6 : n > 1e12 ? n : n * 1000);
 }
 
 export function readWorkerBody(text) {
@@ -79,8 +125,8 @@ export function readWorkerBody(text) {
   }
 }
 
-export function readLogpushBody(text) {
-  const lines = readLines(text);
+export async function readLogpushBody(text) {
+  const lines = await readLines(text);
   const requests = lines
     .filter((l) => l && typeof l === 'object' && 'ClientRequestUserAgent' in l)
     .map((l) => ({
@@ -92,12 +138,13 @@ export function readLogpushBody(text) {
       status: l.EdgeResponseStatus,
       at: logpushTime(l.EdgeStartTimestamp),
       country: l.ClientCountry,
-    }));
+    }))
+    .filter((r) => r.at !== undefined);
   return { records: lines.length, requests };
 }
 
-export function readVercelBody(text) {
-  const lines = readLines(text);
+export async function readVercelBody(text) {
+  const lines = await readLines(text);
   const requests = lines
     .filter((l) => l?.proxy && typeof l.proxy === 'object')
     .map(({ proxy, timestamp }) => ({
@@ -105,9 +152,10 @@ export function readVercelBody(text) {
       ip: proxy.clientIp,
       url: proxy.host ? `https://${proxy.host}${proxy.path ?? '/'}` : proxy.path,
       status: proxy.statusCode,
-      at: new Date(proxy.timestamp ?? timestamp ?? Date.now()).toISOString(),
+      at: isoTime(proxy.timestamp ?? timestamp ?? Date.now()),
       country: null,
-    }));
+    }))
+    .filter((r) => r.at !== undefined);
   return { records: lines.length, requests };
 }
 
@@ -118,8 +166,8 @@ const READERS = {
 };
 
 /** A connection's body as requests, and how many records it held. */
-export function readSenderBody(kind, buffer) {
+export async function readSenderBody(kind, buffer) {
   const read = READERS[kind];
   if (!read) return { records: 0, requests: [] };
-  return read(bodyText(buffer));
+  return read(await bodyText(buffer));
 }

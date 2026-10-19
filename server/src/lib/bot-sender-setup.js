@@ -41,8 +41,10 @@ export function logpushJob({ endpoint, secret }) {
         })),
       },
     }),
-    // Small files: each upload stays well under the endpoint's limit.
+    // Small files: each upload stays well under the endpoint's limits
+    // (bot-log-formats.js: 16 MB inflated, 20,000 lines).
     max_upload_bytes: 5_000_000,
+    max_upload_records: 10_000,
   };
 }
 

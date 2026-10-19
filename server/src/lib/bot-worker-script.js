@@ -25,6 +25,11 @@ const BOTS = ${tokens};
 const BATCH = ${WORKER_BATCH};
 let queue = [];
 
+function pageUrl(url) {
+  const u = new URL(url);
+  return u.origin + u.pathname;
+}
+
 function isAiBot(ua) {
   const s = (ua || '').toLowerCase();
   return BOTS.some((t) => s.includes(t));
@@ -47,13 +52,16 @@ async function flush() {
 
 export default {
   async fetch(request, env, ctx) {
+    // Should this script fail, the request still reaches the site.
+    ctx.passThroughOnException();
     const response = await fetch(request);
     const ua = request.headers.get('user-agent');
     if (isAiBot(ua)) {
       queue.push({
         userAgent: ua,
         ip: request.headers.get('cf-connecting-ip'),
-        url: request.url,
+        // The page, without its query string.
+        url: pageUrl(request.url),
         status: response.status,
         at: new Date().toISOString(),
         country: request.cf && request.cf.country,

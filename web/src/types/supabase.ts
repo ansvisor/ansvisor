@@ -610,6 +610,7 @@ export type Database = {
           created_at: string
           description: string | null
           ga_property_id: string | null
+          gsc_pages_backfilled_property: string | null
           gsc_property: string | null
           id: string
           industry: string | null
@@ -631,6 +632,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           ga_property_id?: string | null
+          gsc_pages_backfilled_property?: string | null
           gsc_property?: string | null
           id?: string
           industry?: string | null
@@ -652,6 +654,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           ga_property_id?: string | null
+          gsc_pages_backfilled_property?: string | null
           gsc_property?: string | null
           id?: string
           industry?: string | null
@@ -1105,6 +1108,7 @@ export type Database = {
           id: string
           impressions: number
           page: string
+          page_key: string | null
           position: number
         }
         Insert: {
@@ -1116,6 +1120,7 @@ export type Database = {
           id?: string
           impressions?: number
           page: string
+          page_key?: never
           position?: number
         }
         Update: {
@@ -1127,6 +1132,7 @@ export type Database = {
           id?: string
           impressions?: number
           page?: string
+          page_key?: never
           position?: number
         }
         Relationships: [
