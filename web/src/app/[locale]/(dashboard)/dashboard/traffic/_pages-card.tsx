@@ -154,7 +154,14 @@ function BrokenLinksTable({ rows }: { rows: TrafficBrokenLink[] }) {
                   )}
                 </>
               ) : (
-                <span className="text-sm text-muted-foreground">—</span>
+                <>
+                  <span className="text-sm text-muted-foreground">—</span>
+                  {row.targetReason === 'query' && (
+                    <div className="text-[10px] text-muted-foreground">
+                      {t('broken.reason.query')}
+                    </div>
+                  )}
+                </>
               )}
             </TableCell>
           </TableRow>

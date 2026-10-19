@@ -574,6 +574,16 @@ describe('trafficTable: Broken AI links (AT-012)', () => {
         target: null,
         targetReason: null,
       },
+      {
+        page: '/index.php',
+        visits: 2,
+        platforms: ['chatgpt.com'],
+        citations: 0,
+        lastVisit: '2026-10-18T10:00:00Z',
+        status: '404',
+        target: null,
+        targetReason: 'query',
+      },
     ],
   });
 
@@ -604,6 +614,18 @@ describe('trafficTable: Broken AI links (AT-012)', () => {
         ],
         // Nothing to redirect the home page to.
         ['/', null, null, null, 1, null, 0, '2026-10-18 12:00', 'Page title says not found'],
+        // Nor a route on a page: a 301 from its path would move the whole route.
+        [
+          '/index.php',
+          null,
+          null,
+          'Missing addresses have a query: no redirect suggested',
+          2,
+          'ChatGPT',
+          0,
+          '2026-10-18 10:00',
+          'Not found (404)',
+        ],
       ],
     });
   });

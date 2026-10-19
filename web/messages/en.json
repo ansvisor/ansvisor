@@ -3257,7 +3257,8 @@
       "redirectReasons": {
         "similar": "Similar page",
         "parent": "The page above it",
-        "home": "Home page"
+        "home": "Home page",
+        "query": "Missing addresses have a query: no redirect suggested"
       }
     },
     "change": {
@@ -3752,7 +3753,8 @@
         "reason": {
           "similar": "Similar page",
           "parent": "The page above it",
-          "home": "Home page"
+          "home": "Home page",
+          "query": "Missing addresses have a query: no redirect suggested"
         }
       }
     }
