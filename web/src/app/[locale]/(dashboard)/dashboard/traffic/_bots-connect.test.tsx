@@ -32,7 +32,16 @@ const { BotsSource } = await import('./_bots-connect');
 
 const info = (over: Partial<BotConnections> = {}): BotConnections => ({
   connections: [],
-  usage: { month: '2026-10-01', stored: 0, counted: 0, cappedAt: null, cap: 2_000_000 },
+  usage: {
+    month: '2026-10-01',
+    stored: 0,
+    counted: 0,
+    cappedAt: null,
+    cap: 2_000_000,
+    raw: 0,
+    rawCappedAt: null,
+    rawCap: 20_000_000,
+  },
   ...over,
 });
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
@@ -154,6 +163,9 @@ describe('BotsSource', () => {
           counted: 2_400_000,
           cappedAt: '2026-10-25T00:00:00Z',
           cap: 2_000_000,
+          raw: 0,
+          rawCappedAt: null,
+          rawCap: 20_000_000,
         },
       }),
     );
@@ -162,11 +174,39 @@ describe('BotsSource', () => {
     await act(async () => button('Manage')!.click());
     expect(page()).toContain('This month: 2,000,000 of 2,000,000 detailed rows.');
     expect(page()).toContain('Detailed rows paused until Nov 1, totals still counted.');
+    // A Worker's batches don't count against the log records cap.
+    expect(page()).not.toContain('Log records this month');
 
     await act(async () => button('Revoke')!.click());
     await act(async () => button('Revoke: stop reading it')!.click());
     expect(revokeBotConnection).toHaveBeenCalledWith('b1', 'c1');
     expect(toast.success).toHaveBeenCalled();
+  });
+
+  it("shows a log sender's records against the raw cap, and when its files are read again", async () => {
+    getBotConnections.mockResolvedValue(
+      info({
+        connections: [
+          { id: 'c1', kind: 'vercel_drain', createdAt: 't', lastEventAt: hoursAgo(30) },
+        ],
+        usage: {
+          month: '2026-10-01',
+          stored: 1_000,
+          counted: 1_000,
+          cappedAt: null,
+          cap: 2_000_000,
+          raw: 20_000_400,
+          rawCappedAt: '2026-10-18T09:00:00Z',
+          rawCap: 20_000_000,
+        },
+      }),
+    );
+    await render();
+    await act(async () => button('Manage')!.click());
+    expect(page()).toContain('Log records this month: 20,000,400 of 20,000,000.');
+    expect(page()).toContain(
+      "Log files paused until Nov 1: this month's log records are used up, so requests from Logpush or the Vercel drain aren't counted until then.",
+    );
   });
 
   it('waits for the first request, and keeps members from connecting', async () => {

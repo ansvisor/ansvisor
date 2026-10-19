@@ -17,7 +17,13 @@ import {
 import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
 import { formatRelative } from '@/lib/format-relative';
-import { botsCardState, lastBotEvent, rowsPausedUntil } from '@/lib/ai-bots';
+import {
+  botsCardState,
+  hasLogSender,
+  lastBotEvent,
+  logsPausedUntil,
+  rowsPausedUntil,
+} from '@/lib/ai-bots';
 import {
   createBotConnection,
   getBotConnections,
@@ -181,6 +187,13 @@ export function BotsDialog({
 
   const { usage, connections } = info;
   const pausedUntil = rowsPausedUntil(usage);
+  const logsPaused = logsPausedUntil(info);
+  const shortDay = (day: string) =>
+    new Date(`${day}T00:00:00Z`).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'UTC',
+    });
 
   return (
     <Dialog open={open} onOpenChange={close}>
@@ -258,9 +271,18 @@ export function BotsDialog({
                         stored: formatNumber(usage.stored),
                         cap: formatNumber(usage.cap),
                       })}
-                  {pausedUntil &&
-                    ` ${t('paused', { day: new Date(`${pausedUntil}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) })}`}
+                  {pausedUntil && ` ${t('paused', { day: shortDay(pausedUntil) })}`}
                 </p>
+                {/* Log senders' records count against their own cap (§6.3). */}
+                {hasLogSender(info) && usage.rawCap > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {t('rawUsage', {
+                      raw: formatNumber(usage.raw),
+                      cap: formatNumber(usage.rawCap),
+                    })}
+                    {logsPaused && ` ${t('logsPaused', { day: shortDay(logsPaused) })}`}
+                  </p>
+                )}
               </section>
             )}
 

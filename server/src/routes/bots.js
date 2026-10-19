@@ -4,7 +4,9 @@
  * own secret, shown once. Admins and managers make and revoke them, on plans
  * with the bot report (Starter has it locked, spec §7).
  *
- * GET    /api/bots/connections/:brandId           — the brand's connections and this month's use
+ * GET    /api/bots/connections/:brandId           — the brand's connections and this month's use:
+ *                                                   rows against the event cap, log records
+ *                                                   against the raw cap
  * POST   /api/bots/connections/:brandId           — { kind } → a connection, its secret, the endpoint and
  *                                                   what to copy: the Worker, a Logpush job or a Vercel drain
  * DELETE /api/bots/connections/:brandId/:id       — revoke one
@@ -14,7 +16,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { assertBrandAccess } from '../lib/access.js';
-import { PlanLimitError, getBotEventCap } from '../lib/plan-guard.js';
+import { PlanLimitError, getBotEventCap, getBotRawCap } from '../lib/plan-guard.js';
 import {
   CONNECTION_KINDS,
   hashSecret,
@@ -56,7 +58,7 @@ router.get('/connections/:brandId', async (req, res) => {
   try {
     const { brand } = await assertBrandAccess(req.params.brandId, req.user.id);
     const month = new Date().toISOString().slice(0, 7) + '-01';
-    const [{ data: connections, error }, { data: usage }, cap] = await Promise.all([
+    const [{ data: connections, error }, { data: usage }, cap, rawCap] = await Promise.all([
       supabaseAdmin
         .from('ai_bot_connections')
         .select('id, kind, created_at, last_event_at')
@@ -65,11 +67,12 @@ router.get('/connections/:brandId', async (req, res) => {
         .order('created_at'),
       supabaseAdmin
         .from('ai_bot_usage')
-        .select('stored_events, counted_events, capped_at')
+        .select('stored_events, counted_events, capped_at, raw_records, raw_capped_at')
         .eq('organization_id', brand.organization_id)
         .eq('month', month)
         .maybeSingle(),
       getBotEventCap(brand.organization_id),
+      getBotRawCap(brand.organization_id),
     ]);
     if (error) throw new Error(error.message);
     return res.json({
@@ -80,6 +83,11 @@ router.get('/connections/:brandId', async (req, res) => {
         counted: usage?.counted_events ?? 0,
         cappedAt: usage?.capped_at ?? null,
         cap,
+        // A Logpush job's or a Vercel drain's records (00184): past rawCap the
+        // files are counted but not read, so the report stops until the month ends.
+        raw: usage?.raw_records ?? 0,
+        rawCappedAt: usage?.raw_capped_at ?? null,
+        rawCap,
       },
     });
   } catch (error) {
