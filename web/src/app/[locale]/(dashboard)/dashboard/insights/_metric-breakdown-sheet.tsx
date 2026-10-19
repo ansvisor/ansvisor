@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useLocale, useTranslations } from 'next-intl';
 import { TrendingDown, TrendingUp, Minus, AlertTriangle } from 'lucide-react';
 import {
   Sheet,
@@ -15,20 +14,13 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
-import { numberFormat, type NumberFormat } from '@/lib/number-format';
-import { LOW_SAMPLE_ANSWERS } from '@/lib/insights-summary';
-import { getInsightsBreakdown } from '@/lib/actions/tracking';
 import {
-  pickDriver,
-  type BreakdownFilters,
+  getInsightsBreakdown,
   type BreakdownMetric,
   type BreakdownRow,
   type InsightsBreakdown,
-} from '@/lib/insights-breakdown';
+} from '@/lib/actions/tracking';
 import { sortBreakdownRowsForDisplay } from './breakdown-display';
-
-/** The panel's tabs: each kind of slice it lists. */
-export type BreakdownTab = 'prompts' | 'platforms' | 'topics';
 
 const METRIC_TITLE: Record<BreakdownMetric, string> = {
   mentions: 'Mentions',
@@ -44,21 +36,17 @@ interface Props {
   brandId: string | null;
   metric: BreakdownMetric | null;
   onOpenChange: (open: boolean) => void;
-  /** The window and filters the cards were loaded with, so the panel explains their numbers. */
-  filters?: BreakdownFilters;
-  /** The tab to open on, e.g. the one a "Why it changed" row belongs to; Prompts by default. */
-  initialTab?: BreakdownTab;
+  filters?: {
+    dateFrom?: string;
+    dateTo?: string;
+    region?: string;
+    model?: string;
+    topicId?: string;
+  };
 }
 
-export function MetricBreakdownSheet({
-  brandId,
-  metric,
-  onOpenChange,
-  filters,
-  initialTab,
-}: Props) {
+export function MetricBreakdownSheet({ brandId, metric, onOpenChange, filters }: Props) {
   const open = Boolean(brandId && metric);
-  const locale = useLocale();
   const [data, setData] = useState<InsightsBreakdown | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +66,7 @@ export function MetricBreakdownSheet({
     setLoading(true);
     setError(null);
 
-    getInsightsBreakdown(brandId, metric, filters, locale)
+    getInsightsBreakdown(brandId, metric, filters)
       .then((res) => {
         if (!cancelled) setData(res);
       })
@@ -96,7 +84,7 @@ export function MetricBreakdownSheet({
     };
     // filtersKey is the stable dependency; `filters` is intentionally omitted.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, brandId, metric, filtersKey, locale]);
+  }, [open, brandId, metric, filtersKey]);
 
   const title = metric ? METRIC_TITLE[metric] : '';
 
@@ -106,11 +94,9 @@ export function MetricBreakdownSheet({
         <SheetHeader className="border-b px-5 py-4">
           <SheetTitle className="text-base">{title} Breakdown</SheetTitle>
           <SheetDescription className="text-xs">
-            {!data
-              ? 'Comparing the selected window with the previous equal-length window.'
-              : data.windowDays === null
-                ? 'All time. There is no earlier period of the same length to compare.'
-                : `Last ${data.windowDays} day${data.windowDays !== 1 ? 's' : ''} vs previous ${data.windowDays} day${data.windowDays !== 1 ? 's' : ''}`}
+            {data
+              ? `Last ${data.windowDays} day${data.windowDays !== 1 ? 's' : ''} vs previous ${data.windowDays} day${data.windowDays !== 1 ? 's' : ''}`
+              : 'Comparing the selected window with the previous equal-length window.'}
           </SheetDescription>
         </SheetHeader>
 
@@ -124,9 +110,7 @@ export function MetricBreakdownSheet({
             </div>
           )}
 
-          {!loading && !error && data && metric && (
-            <BreakdownBody data={data} metric={metric} initialTab={initialTab} />
-          )}
+          {!loading && !error && data && metric && <BreakdownBody data={data} metric={metric} />}
         </div>
       </SheetContent>
     </Sheet>
@@ -146,19 +130,8 @@ function BreakdownSkeleton() {
   );
 }
 
-function BreakdownBody({
-  data,
-  metric,
-  initialTab,
-}: {
-  data: InsightsBreakdown;
-  metric: BreakdownMetric;
-  initialTab?: BreakdownTab;
-}) {
-  const [tab, setTab] = useState<BreakdownTab>(initialTab ?? 'prompts');
-  const f = numberFormat(useLocale());
-  const samePrompts = data.comparison?.basis === 'same';
-  const newCount = data.comparison?.newPrompts ?? 0;
+function BreakdownBody({ data, metric }: { data: InsightsBreakdown; metric: BreakdownMetric }) {
+  const [tab, setTab] = useState<'prompts' | 'platforms' | 'topics'>('prompts');
 
   const pickRows = () =>
     tab === 'prompts' ? data.byPrompt : tab === 'platforms' ? data.byPlatform : data.byTopic;
@@ -170,56 +143,25 @@ function BreakdownBody({
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="text-xs uppercase tracking-wide text-muted-foreground">
-              {data.windowDays === null ? 'All time' : `Current ${data.windowDays}d`}
+              Current {data.windowDays}d
             </div>
             <div className="text-2xl font-semibold tabular-nums">
-              {formatValue(data.curTotal, metric, f)}
+              {formatValue(data.curTotal, metric)}
               <span className="text-sm font-normal text-muted-foreground">
                 {METRIC_UNIT[metric]}
               </span>
             </div>
-            {data.windowDays !== null && (
-              <div className="text-xs text-muted-foreground">
-                {samePrompts && data.comparison!.samePrompts === 0 ? (
-                  'No prompt was answered in both periods'
-                ) : samePrompts ? (
-                  <>
-                    Same {data.comparison!.samePrompts}{' '}
-                    {data.comparison!.samePrompts === 1 ? 'prompt' : 'prompts'}:{' '}
-                    <span className="tabular-nums">
-                      {data.prevTotal === null ? '—' : formatValue(data.prevTotal, metric, f)} →{' '}
-                      {formatValue(data.comparedCur, metric, f)}
-                      {METRIC_UNIT[metric]}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    vs previous{' '}
-                    {data.prevTotal === null ? (
-                      'no data'
-                    ) : (
-                      <span className="tabular-nums">
-                        {formatValue(data.prevTotal, metric, f)}
-                        {METRIC_UNIT[metric]}
-                      </span>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
+            <div className="text-xs text-muted-foreground">
+              vs previous{' '}
+              <span className="tabular-nums">
+                {formatValue(data.prevTotal, metric)}
+                {METRIC_UNIT[metric]}
+              </span>
+            </div>
           </div>
-          {data.delta !== null && (
-            <DeltaPill delta={data.delta} deltaPct={data.deltaPct} metric={metric} big />
-          )}
+          <DeltaPill delta={data.delta} deltaPct={data.deltaPct} metric={metric} big />
         </div>
         <RootCauseSummary data={data} metric={metric} />
-        {newCount > 0 && (
-          <div className="mt-2 border-t pt-2 text-xs text-muted-foreground">
-            {samePrompts
-              ? `Not counted in the change: ${newCount} new ${newCount === 1 ? 'prompt' : 'prompts'} this period.`
-              : `The change includes ${newCount} new ${newCount === 1 ? 'prompt' : 'prompts'} added this period.`}
-          </div>
-        )}
       </div>
 
       {/* Tabs */}
@@ -246,12 +188,7 @@ function BreakdownBody({
         </TabsList>
 
         <TabsContent value={tab} className="mt-3">
-          <BreakdownTable
-            rows={pickRows()}
-            metric={metric}
-            kind={tab}
-            comparable={data.windowDays !== null}
-          />
+          <BreakdownTable rows={pickRows()} metric={metric} kind={tab} />
         </TabsContent>
       </Tabs>
     </div>
@@ -259,12 +196,15 @@ function BreakdownBody({
 }
 
 function RootCauseSummary({ data, metric }: { data: InsightsBreakdown; metric: BreakdownMetric }) {
-  const f = numberFormat(useLocale());
-  const isDrop = (data.delta ?? 0) < 0;
-  const topPrompt = pickDriver(data.byPrompt, data.delta);
-  const topPlatform = pickDriver(data.byPlatform, data.delta);
+  const isDrop = data.delta < 0;
+  const isFlat = data.delta === 0;
+  const topPrompt = isDrop ? data.byPrompt[0] : data.byPrompt[data.byPrompt.length - 1];
+  const topPlatform = isDrop ? data.byPlatform[0] : data.byPlatform[data.byPlatform.length - 1];
+  const promptContributes = !!topPrompt && (isDrop ? topPrompt.delta < 0 : topPrompt.delta > 0);
+  const platformContributes =
+    !!topPlatform && (isDrop ? topPlatform.delta < 0 : topPlatform.delta > 0);
 
-  if (!topPrompt) {
+  if (isFlat || !promptContributes || !topPrompt) {
     return (
       <div className="mt-2 text-xs text-muted-foreground leading-relaxed">{data.rootCause}</div>
     );
@@ -279,12 +219,12 @@ function RootCauseSummary({ data, metric }: { data: InsightsBreakdown; metric: B
       >
         &quot;{truncate(topPrompt.label, 60)}&quot;
       </Link>{' '}
-      {formatContribution(topPrompt, metric, f)}.
-      {topPlatform && (
+      {formatContribution(topPrompt, metric)}.
+      {platformContributes && topPlatform && (
         <>
           {' '}
           Top platform {isDrop ? 'drop' : 'gain'}: {topPlatform.label}{' '}
-          {formatContribution(topPlatform, metric, f)}.
+          {formatContribution(topPlatform, metric)}.
         </>
       )}
     </div>
@@ -295,16 +235,11 @@ function BreakdownTable({
   rows,
   metric,
   kind,
-  comparable,
 }: {
   rows: BreakdownRow[];
   metric: BreakdownMetric;
   kind: 'prompts' | 'platforms' | 'topics';
-  /** False for All time: no previous window, so no Prev or Change column. */
-  comparable: boolean;
 }) {
-  const t = useTranslations('insights.breakdown');
-  const f = numberFormat(useLocale());
   if (rows.length === 0) {
     return (
       <div className="py-10 text-center text-sm text-muted-foreground">
@@ -319,9 +254,9 @@ function BreakdownTable({
         <thead>
           <tr className="border-b bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
             <th className="text-left font-medium px-3 py-2">Name</th>
-            {comparable && <th className="text-right font-medium px-2 py-2 w-16">Prev</th>}
+            <th className="text-right font-medium px-2 py-2 w-16">Prev</th>
             <th className="text-right font-medium px-2 py-2 w-16">Cur</th>
-            {comparable && <th className="text-right font-medium px-2 py-2 w-24">Change</th>}
+            <th className="text-right font-medium px-2 py-2 w-24">Change</th>
           </tr>
         </thead>
         <tbody>
@@ -342,43 +277,13 @@ function BreakdownTable({
                   <div className="mt-0.5 text-[11px] text-muted-foreground">{r.sublabel}</div>
                 )}
               </td>
-              {/* A window without answers for the row is "No data", never a 0
-                  to change from; a score on under 20 answers is a low sample (VIS-005). */}
-              {comparable && (
-                <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
-                  {r.prev === null ? (
-                    '—'
-                  ) : r.prevRuns === 0 ? (
-                    <span className="whitespace-nowrap text-xs">{t('noData')}</span>
-                  ) : (
-                    formatValue(r.prev, metric, f)
-                  )}
-                </td>
-              )}
-              <td
-                className={cn(
-                  'px-2 py-2 text-right tabular-nums',
-                  r.curRuns === 0 && 'text-muted-foreground',
-                )}
-              >
-                {r.curRuns === 0 ? (
-                  <span className="whitespace-nowrap text-xs">{t('noData')}</span>
-                ) : (
-                  formatValue(r.cur, metric, f)
-                )}
+              <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                {formatValue(r.prev, metric)}
               </td>
-              {comparable && (
-                <td className="px-2 py-2 text-right">
-                  {r.prevRuns === 0 || r.curRuns === 0 ? (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  ) : metric === 'visibility' &&
-                    Math.min(r.prevRuns, r.curRuns) < LOW_SAMPLE_ANSWERS ? (
-                    <span className="text-xs text-muted-foreground">{t('lowSample')}</span>
-                  ) : (
-                    <DeltaPill delta={r.delta ?? 0} deltaPct={r.deltaPct} metric={metric} />
-                  )}
-                </td>
-              )}
+              <td className="px-2 py-2 text-right tabular-nums">{formatValue(r.cur, metric)}</td>
+              <td className="px-2 py-2 text-right">
+                <DeltaPill delta={r.delta} deltaPct={r.deltaPct} metric={metric} />
+              </td>
             </tr>
           ))}
         </tbody>
@@ -398,7 +303,6 @@ function DeltaPill({
   metric: BreakdownMetric;
   big?: boolean;
 }) {
-  const f = numberFormat(useLocale());
   if (delta === 0) {
     return (
       <span
@@ -407,8 +311,7 @@ function DeltaPill({
           big ? 'text-sm' : 'text-xs',
         )}
       >
-        <Minus className={big ? 'h-3.5 w-3.5' : 'h-3 w-3'} />
-        {f.number(0)}
+        <Minus className={big ? 'h-3.5 w-3.5' : 'h-3 w-3'} />0
       </span>
     );
   }
@@ -420,13 +323,13 @@ function DeltaPill({
   // Prefer percentage display for count metrics when available; fall back to
   // absolute delta for visibility (pts) or when previous was zero.
   const showPct = metric !== 'visibility' && deltaPct !== null;
-  const sign = positive ? '+' : '−';
+  const sign = positive ? '+' : '';
   const primary = showPct
-    ? `${sign}${f.percent(Math.abs(deltaPct))}`
+    ? `${sign}${deltaPct}%`
     : metric === 'visibility'
-      ? `${sign}${f.number(Math.abs(delta))} pts`
-      : `${sign}${f.number(Math.abs(delta))}`;
-  const secondary = showPct ? `${sign}${f.number(Math.abs(delta))}` : null;
+      ? `${sign}${delta} pts`
+      : `${sign}${delta}`;
+  const secondary = showPct ? `${sign}${delta}` : null;
 
   return (
     <span
@@ -447,25 +350,27 @@ function DeltaPill({
   );
 }
 
-function formatValue(value: number, metric: BreakdownMetric, f: NumberFormat): string {
-  return f.number(metric === 'visibility' ? Math.round(value * 10) / 10 : value);
+function formatValue(value: number, metric: BreakdownMetric): string {
+  if (metric === 'visibility') {
+    return value.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  }
+  return value.toLocaleString();
 }
 
-function formatContribution(row: BreakdownRow, metric: BreakdownMetric, f: NumberFormat): string {
-  const delta = row.delta ?? 0;
-  const isLoss = delta < 0;
-  const abs = Math.abs(delta);
+function formatContribution(row: BreakdownRow, metric: BreakdownMetric): string {
+  const isLoss = row.delta < 0;
+  const abs = Math.abs(row.delta);
 
   if (metric === 'visibility') {
     const verb = isLoss ? 'dropped' : 'rose';
-    return `${verb} ${f.number(Math.round(abs * 10) / 10)} pts`;
+    return `${verb} ${Math.round(abs * 10) / 10} pts`;
   }
 
   const verb = isLoss ? 'lost' : 'gained';
-  const core = `${verb} ${f.number(abs)} mention${abs !== 1 ? 's' : ''}`;
+  const core = `${verb} ${abs.toLocaleString()} mention${abs !== 1 ? 's' : ''}`;
   if (row.deltaPct === null) return core;
   const sign = row.deltaPct < 0 ? '−' : '+';
-  return `${core} (${sign}${f.percent(Math.abs(row.deltaPct))})`;
+  return `${core} (${sign}${Math.abs(row.deltaPct)}%)`;
 }
 
 function truncate(value: string, max: number): string {

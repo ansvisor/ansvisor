@@ -2,183 +2,132 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
-  OPEN_OPPORTUNITY_STATUSES,
+  MAX_OPEN_PER_PROMPT,
   OPPORTUNITIES_PER_RUN,
-  SCORE_WEIGHTS,
-  clusterMetrics,
-  coveredClusterIds,
-  openOpportunityOn,
-  openlyCoveredClusterIds,
-  opportunityScore,
-  pickClusters,
-  scoreComponents,
+  OPPORTUNITY_COUNT_RULE,
+  alreadySuggested,
+  belowOpenCap,
+  openCountsByPrompt,
+  openTitlesByPrompt,
+  opportunityKey,
+  relatedCandidate,
 } from './opportunity-limits.js';
+
+/**
+ * The count rule is shared because it was duplicated (#730).
+ *
+ * Two generators produce opportunities — the automatic one after each tracking
+ * cycle and the queued one behind the Generate button — and each used to carry
+ * its own copy of the sentence and its own schema ceiling. They had already
+ * drifted in wording. These tests fail if a number is hand-written back into
+ * either file, which is the only way they can disagree again.
+ */
 
 const source = (relative) =>
   readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8');
 
-const prompts = new Map([
-  [
-    'a',
-    {
-      text: 'best tools for x',
-      volume: { est_ai_volume: 3000, intent: 'best-top', keywords: ['x tools', 'x software'] },
-      metrics: { cells: 30, visibility: 10, top_competitor_visibility: 60, competitors: ['Rival'] },
-    },
-  ],
-  [
-    'b',
-    {
-      text: 'top x software',
-      volume: { est_ai_volume: 1000, intent: 'best-top', keywords: ['x software'] },
-      metrics: {
-        cells: 10,
-        visibility: 50,
-        top_competitor_visibility: 40,
-        competitors: ['Rival', 'Other'],
-      },
-    },
-  ],
-  // Tracked but not answered in the window: adds demand, not visibility.
-  ['c', { text: 'how to pick x', volume: { est_ai_volume: 500, intent: 'how-to', keywords: [] } }],
-]);
+const GENERATORS = [
+  ['automatic (tracking cycle)', './opportunity-generator.js'],
+  ['queued (Generate button)', '../workers/content-worker.js'],
+];
 
-describe('clusterMetrics', () => {
-  it('adds demand and weights visibility by engine-days', () => {
-    const m = clusterMetrics(['a', 'b', 'c', 'gone'], prompts);
-    expect(m.tested).toBe(2);
-    expect(m.demand).toBe(4500);
-    // (10×30 + 50×10) / 40 and (60×30 + 40×10) / 40
-    expect(m.visibility).toBe(20);
-    expect(m.topCompetitorVisibility).toBe(55);
-    expect(m.competitorGap).toBe(35);
-    expect(m.intent).toBe('best-top');
-    expect(m.keywords[0]).toBe('x software');
-    expect(m.competitorsCited).toEqual(['Rival', 'Other']);
-    expect(m.representative).toEqual({ id: 'a', text: 'best tools for x' });
-  });
-
-  it('reports a cluster with no answers as untested', () => {
-    const m = clusterMetrics(['c'], prompts);
-    expect(m.tested).toBe(0);
-    expect(m.visibility).toBe(0);
-    expect(m.representative).toEqual({ id: 'c', text: 'how to pick x' });
-  });
-});
-
-describe('score', () => {
-  it('scales each component to 0–100', () => {
-    expect(
-      scoreComponents({ demand: 2_000_000, visibility: 20, competitorGap: -5, intent: 'how-to' }),
-    ).toEqual({ demand: 100, visibilityGap: 80, competitorGap: 0, intent: 75 });
-  });
-
-  it('puts demand on a log scale so large clusters still differ', () => {
-    const demand = (d) =>
-      scoreComponents({ demand: d, visibility: 0, competitorGap: 0, intent: 'other' }).demand;
-    expect(demand(0)).toBe(0);
-    expect(demand(1000)).toBe(50);
-    expect(demand(10000)).toBe(66.7);
-    expect(demand(150000)).toBeLessThan(demand(1_000_000));
-  });
-
-  it('weights the components into the total', () => {
-    expect(Object.values(SCORE_WEIGHTS).reduce((a, b) => a + b, 0)).toBe(100);
-    expect(opportunityScore({ demand: 100, visibilityGap: 80, competitorGap: 0, intent: 75 })).toBe(
-      71.5,
-    );
-  });
-});
-
-describe('cluster selection', () => {
-  it('counts both own and merged clusters as covered', () => {
-    const covered = coveredClusterIds([
-      { cluster_id: 'c1', related_cluster_ids: ['c2'] },
-      { cluster_id: 'c3', related_cluster_ids: [] },
-    ]);
-    expect([...covered].sort()).toEqual(['c1', 'c2', 'c3']);
-  });
-
-  it("holds a prompt's own request back only with an open opportunity (PROMPT-006)", () => {
-    const rows = [
-      { cluster_id: 'c1', related_cluster_ids: ['c2'], status: 'in_progress' },
-      { cluster_id: 'c3', related_cluster_ids: [], status: 'dismissed' },
-      { cluster_id: 'c4', related_cluster_ids: [], status: 'done' },
-      { cluster_id: 'c5', related_cluster_ids: [], status: 'archived' },
-    ];
-    expect([...openlyCoveredClusterIds(rows)].sort()).toEqual(['c1', 'c2']);
-    expect(OPEN_OPPORTUNITY_STATUSES).toEqual(['new', 'reviewed', 'sent', 'in_progress']);
-  });
-
-  it('names the open opportunity that covers a cluster, merged ones included', () => {
-    const rows = [
-      { id: 'o1', cluster_id: 'c1', related_cluster_ids: [], status: 'dismissed' },
-      { id: 'o2', cluster_id: 'c9', related_cluster_ids: ['c1'], status: 'sent' },
-    ];
-    expect(openOpportunityOn(rows, 'c1')).toBe('o2');
-    expect(openOpportunityOn(rows, 'c2')).toBeNull();
-    expect(openOpportunityOn(rows, null)).toBeNull();
-  });
-
-  it('takes the best uncovered clusters that have answers', () => {
-    const cand = (id, score, tested = 1) => ({ id, score, topicId: id, metrics: { tested } });
-    const picked = pickClusters(
-      [
-        cand('low', 10),
-        cand('covered', 90),
-        cand('untested', 80, 0),
-        cand('high', 70),
-        cand('mid', 40),
-      ],
-      new Set(['covered']),
-      2,
-    );
-    expect(picked.map((c) => c.id)).toEqual(['high', 'mid']);
-  });
-
-  it('takes at most one cluster per topic, the no-topic scope included', () => {
-    const cand = (id, score, topicId) => ({ id, score, topicId, metrics: { tested: 1 } });
-    const picked = pickClusters(
-      [
-        cand('a1', 95, 'a'),
-        cand('a2', 90, 'a'),
-        cand('none1', 85, null),
-        cand('none2', 80, null),
-        cand('b1', 50, 'b'),
-      ],
-      new Set(),
-    );
-    expect(picked.map((c) => c.id)).toEqual(['a1', 'none1', 'b1']);
-  });
-
-  it('tops up from the best of the rest when asked for more than there are topics', () => {
-    const cand = (id, score, topicId) => ({ id, score, topicId, metrics: { tested: 1 } });
-    const candidates = [
-      cand('a1', 95, 'a'),
-      cand('a2', 90, 'a'),
-      cand('a3', 60, 'a'),
-      cand('b1', 50, 'b'),
-    ];
-    expect(pickClusters(candidates, new Set(), 3).map((c) => c.id)).toEqual(['a1', 'b1']);
-    expect(pickClusters(candidates, new Set(), 3, { fill: true }).map((c) => c.id)).toEqual([
-      'a1',
-      'b1',
-      'a2',
-    ]);
-  });
-});
-
-describe('generators', () => {
-  it('the Generate button runs the shared per-cluster generator', () => {
-    const code = source('../workers/content-worker.js');
-    expect(code).toContain('generateContentOpportunities(');
-    expect(code).toContain('refreshPromptClusters(');
-    // It adds to the list instead of replacing it (#63).
-    expect(code).not.toMatch(/\.delete\(\)/);
-  });
-
-  it('runs at most the shared count per run', () => {
+describe('opportunity count', () => {
+  it('asks for three', () => {
     expect(OPPORTUNITIES_PER_RUN).toBe(3);
-    expect(source('./opportunity-generator.js')).toContain('pickClusters(');
+  });
+
+  it('states the count and that the slots go to the highest-impact findings', () => {
+    expect(OPPORTUNITY_COUNT_RULE).toContain(String(OPPORTUNITIES_PER_RUN));
+    expect(OPPORTUNITY_COUNT_RULE).toMatch(/highest-impact/i);
+  });
+
+  for (const [label, path] of GENERATORS) {
+    it(`the ${label} generator takes its ceiling from the shared constant`, () => {
+      const code = source(path);
+      expect(code).toContain('OPPORTUNITIES_PER_RUN');
+      expect(code).toContain('.max(OPPORTUNITIES_PER_RUN)');
+      // A literal ceiling here is how the two drifted apart before.
+      expect(code).not.toMatch(/\.max\(\d+\)/);
+    });
+
+    it(`the ${label} generator takes its count instruction from the shared rule`, () => {
+      const code = source(path);
+      expect(code).toContain('${OPPORTUNITY_COUNT_RULE}');
+      expect(code).not.toMatch(/Generate (between )?\d+/);
+    });
+
+    it(`the ${label} generator drops an out-of-range prompt index`, () => {
+      const code = source(path);
+      expect(code).toContain('relatedCandidate(');
+      // The old fallback attached the opportunity to the top candidate.
+      expect(code).not.toMatch(/relatedPromptIndex\]\s*\|\|/);
+    });
+  }
+});
+
+describe('open-opportunity cap (#837)', () => {
+  it('counts open opportunities per prompt', () => {
+    const counts = openCountsByPrompt([
+      { prompt_id: 'a' },
+      { prompt_id: 'a' },
+      { prompt_id: 'b' },
+      { prompt_id: null },
+    ]);
+    expect(counts.get('a')).toBe(2);
+    expect(counts.get('b')).toBe(1);
+    expect(counts.size).toBe(2);
+  });
+
+  it('keeps prompts under the cap and drops prompts at it', () => {
+    const counts = new Map([
+      ['full', MAX_OPEN_PER_PROMPT],
+      ['partly', MAX_OPEN_PER_PROMPT - 1],
+    ]);
+    const kept = belowOpenCap(
+      [{ promptId: 'full' }, { promptId: 'partly' }, { promptId: 'fresh' }],
+      counts,
+    );
+    expect(kept.map((c) => c.promptId)).toEqual(['partly', 'fresh']);
+  });
+
+  it('resolves an in-range index and drops anything else', () => {
+    const candidates = [{ promptId: 'a' }, { promptId: 'b' }];
+    expect(relatedCandidate(candidates, 1)).toEqual({ promptId: 'b' });
+    expect(relatedCandidate(candidates, 2)).toBeNull();
+    expect(relatedCandidate(candidates, -1)).toBeNull();
+    expect(relatedCandidate(candidates, 0.5)).toBeNull();
+    expect(relatedCandidate(candidates, undefined)).toBeNull();
+  });
+
+  it('lists open titles per prompt and renders them for the prompt data', () => {
+    const titles = openTitlesByPrompt([
+      { prompt_id: 'a', title: 'Guide' },
+      { prompt_id: 'a', title: 'Checklist' },
+      { prompt_id: 'b', title: null },
+    ]);
+    expect(titles.get('a')).toEqual(['Guide', 'Checklist']);
+    expect(titles.has('b')).toBe(false);
+    expect(alreadySuggested(titles.get('a'))).toBe(' | Already suggested: "Guide"; "Checklist"');
+    expect(alreadySuggested(undefined)).toBe('');
+  });
+
+  it('keys duplicates by prompt and title, ignoring case and outer spaces', () => {
+    expect(opportunityKey('p', '  Guide ')).toBe(opportunityKey('p', 'guide'));
+    expect(opportunityKey('p', 'Guide')).not.toBe(opportunityKey('q', 'Guide'));
+  });
+
+  for (const [label, path] of GENERATORS) {
+    it(`the ${label} generator applies the cap and shows the model what is open`, () => {
+      const code = source(path);
+      expect(code).toContain('loadOpenOpportunities(');
+      expect(code).toContain('belowOpenCap(');
+      expect(code).toContain('${ALREADY_SUGGESTED_RULE}');
+      expect(code).toContain('opportunityKey(');
+    });
+  }
+
+  it('the Generate button adds to the open list instead of deleting it (#63)', () => {
+    const code = source('../workers/content-worker.js');
+    expect(code).not.toMatch(/\.delete\(\)/);
   });
 });

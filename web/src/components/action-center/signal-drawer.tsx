@@ -1,7 +1,8 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Check, Eye, RotateCcw, X } from 'lucide-react';
+import { ArrowUpRight, Check, Eye, RotateCcw, X } from 'lucide-react';
+import { Link } from '@/i18n/navigation';
 import {
   Sheet,
   SheetContent,
@@ -14,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import type { Signal } from '@/lib/actions/signals';
 import { SIGNAL_KINDS, type SignalStatus } from '@/lib/signals/registry';
-import { signalTexts } from '@/lib/signals/display';
+import { signalAffected, signalTexts } from '@/lib/signals/display';
 import { isKpiKey } from '@/lib/kpis/registry';
 import {
   ImpactDots,
@@ -23,21 +24,19 @@ import {
   SignalStatusBadge,
   SourceList,
 } from './signal-table';
-import { SignalChangeBlock, SignalEvidenceBlock, SignalWhereBlock } from './signal-detail-blocks';
 
 /**
- * Signal detail: where it happened, what changed, and what it rests on
- * (AC-001), then the related KPIs and triage. The "Create Action" CTA
- * belongs to the Actions iteration and is absent rather than dead.
+ * Signal detail: the evidence view. Deliberately light in v1 — identity,
+ * the measured change, affected entities, related KPIs, and triage. The
+ * "Create Action" CTA belongs to the Actions iteration and is absent rather
+ * than dead.
  */
 export function SignalDrawer({
-  brandId,
   signal,
   onOpenChange,
   onStatusChange,
   isBusy,
 }: {
-  brandId: string;
   signal: Signal | null;
   onOpenChange: (open: boolean) => void;
   onStatusChange: (signal: Signal, status: SignalStatus) => void;
@@ -50,8 +49,17 @@ export function SignalDrawer({
 
   if (!signal) return null;
   const texts = signalTexts(signal, tTexts);
+  const affected = signalAffected(signal, t);
   const stateKey = SIGNAL_KINDS[signal.kind].stateKey;
   const relatedKpis = signal.kpiKeys.filter(isKpiKey);
+
+  const formatStamp = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
 
   return (
     <Sheet open={Boolean(signal)} onOpenChange={onOpenChange}>
@@ -85,14 +93,64 @@ export function SignalDrawer({
             <DetailItem label={t('drawer.source')}>
               <SourceList sources={signal.source} />
             </DetailItem>
+            <DetailItem label={t('drawer.detected')}>
+              <span className="text-xs tabular-nums">{formatStamp(signal.detectedAt)}</span>
+            </DetailItem>
+            <DetailItem label={t('drawer.lastDetected')}>
+              <span className="text-xs tabular-nums">{formatStamp(signal.lastDetectedAt)}</span>
+            </DetailItem>
           </div>
 
+          {(signal.previousValue !== null || signal.changeValue !== null) && (
+            <>
+              <Separator />
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">
+                  {t('drawer.whatChanged')}
+                </p>
+                <div className="mt-2 flex items-baseline gap-3 tabular-nums">
+                  {signal.previousValue !== null && (
+                    <span className="text-sm text-muted-foreground line-through">
+                      {signal.previousValue}
+                    </span>
+                  )}
+                  {signal.currentValue !== null && (
+                    <span className="text-lg font-semibold">{signal.currentValue}</span>
+                  )}
+                  {signal.changeValue !== null && (
+                    <span
+                      className={
+                        signal.changeValue >= 0 === SIGNAL_KINDS[signal.kind].positive
+                          ? 'text-xs font-medium text-green-600 dark:text-green-400'
+                          : 'text-xs font-medium text-red-500'
+                      }
+                    >
+                      {signal.changeValue > 0 ? '+' : ''}
+                      {signal.changeValue}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+
           <Separator />
-          <SignalWhereBlock signal={signal} />
-          <Separator />
-          <SignalChangeBlock signal={signal} />
-          <Separator />
-          <SignalEvidenceBlock signal={signal} brandId={brandId} />
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">{t('drawer.affected')}</p>
+            <p className="mt-1 text-sm">{affected.label}</p>
+            {affected.detail && (
+              <p className="break-all text-xs text-muted-foreground">{affected.detail}</p>
+            )}
+            {typeof signal.payload.promptId === 'string' && (
+              <Link
+                href={`/dashboard/prompts/${signal.payload.promptId}`}
+                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-foreground underline-offset-2 hover:underline"
+              >
+                {t('drawer.viewPrompt')}
+                <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            )}
+          </div>
 
           {relatedKpis.length > 0 && (
             <>

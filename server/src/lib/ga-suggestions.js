@@ -201,8 +201,7 @@ export function summaryText(summary) {
     .join(' — ');
 }
 
-/** A page's summary, read through Scrape.do; null when it can't be read. */
-export async function readPage(url) {
+async function readPage(url) {
   try {
     const res = await fetchViaScrapeDo(url, { render: false, retries: 0 });
     if (!res.ok || !res.html) return null;

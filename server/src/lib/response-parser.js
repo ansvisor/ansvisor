@@ -3,8 +3,6 @@
  * Mentions and citations are computed locally; sentiment comes from AI.
  */
 
-import { stripEntityMarkup } from './entity-markup.js';
-
 /**
  * Strip markdown link URLs so only display text remains.
  * "[label](https://example.com/path)" → "label"
@@ -14,15 +12,6 @@ function stripUrls(text) {
   let cleaned = text.replace(/\[([^\]]*)\]\([^)]+\)/g, '$1');
   cleaned = cleaned.replace(/https?:\/\/[^\s)>\]]+/g, '');
   return cleaned;
-}
-
-/**
- * The answer as its reader sees it, for matching names: ChatGPT's entity tags
- * replaced by the names they stand for (their other attributes would count as
- * mentions), URLs stripped.
- */
-function matchableText(text) {
-  return stripUrls(stripEntityMarkup(text));
 }
 
 const WORD_CHAR = /[\p{L}\p{N}_]/u;
@@ -58,47 +47,6 @@ function countOccurrences(text, term) {
 }
 
 /**
- * A short quote of the answer around the brand's first mention, for the
- * Action Center's mention evidence (AC-001): the same name and domain
- * matching as the mention count, on the answer stripped of links and
- * markdown marks, cut to about `radius` characters on each side. Null when
- * the answer does not name the brand.
- */
-export function mentionExcerpt(text, brand, radius = 110) {
-  // Markdown's marks only: headings, quotes and list bullets at the start of
-  // a line, bold and code anywhere. A "#1" or "A > B" in a sentence stays.
-  const clean = stripUrls(String(text ?? ''))
-    .replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, '')
-    .replace(/^[ \t]*>[ \t]?/gm, '')
-    .replace(/^[ \t]*[*+-][ \t]+/gm, '')
-    .replace(/\*\*|__|`/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  let at = -1;
-  let length = 0;
-  for (const term of [brand?.brandName, ...(brand?.domains ?? [])].filter(Boolean)) {
-    const index = firstOccurrenceIndex(clean, term);
-    if (index >= 0 && (at < 0 || index < at)) {
-      at = index;
-      length = term.length;
-    }
-  }
-  if (at < 0) return null;
-  // Cut on spaces, so the quote starts and ends on whole words.
-  let start = Math.max(0, at - radius);
-  if (start > 0) {
-    const space = clean.indexOf(' ', start);
-    start = space >= 0 && space < at ? space + 1 : start;
-  }
-  let end = Math.min(clean.length, at + length + radius);
-  if (end < clean.length) {
-    const space = clean.lastIndexOf(' ', end);
-    end = space > at + length ? space : end;
-  }
-  return `${start > 0 ? '…' : ''}${clean.slice(start, end).trim()}${end < clean.length ? '…' : ''}`;
-}
-
-/**
  * Normalized hostname of a URL ("https://www.FOO.com/bar" → "foo.com").
  * Mirrors extractHostname in web/src/lib/citations/classify.ts — keep the two
  * in sync: citation_count must agree with the Citations page's read-time
@@ -118,13 +66,13 @@ export function extractHostname(rawUrl) {
 }
 
 /**
- * Whether a URL is on one of the brand's own domains: exact host or
- * subdomain match, same rule as the web classifier's 'you' category. The old
- * substring check (url.includes(domain)) also matched the brand's domain
- * inside another site's path or query string, and disagreed with the
+ * Count the citations that point at one of the brand's own domains: exact
+ * host or subdomain match, same rule as the web classifier's 'you' category.
+ * The old substring check (url.includes(domain)) also matched the brand's
+ * domain inside another site's path or query string, and disagreed with the
  * Citations page over www/subdomain variants.
  */
-export function ownDomainMatcher(brandDomains) {
+export function countOwnDomainCitations(citations, brandDomains) {
   const normalized = (brandDomains || [])
     .map(
       (d) =>
@@ -134,18 +82,14 @@ export function ownDomainMatcher(brandDomains) {
           .toLowerCase(),
     )
     .filter(Boolean);
-  return (url) => {
-    const host = extractHostname(url || '');
-    return Boolean(host) && normalized.some((d) => host === d || host.endsWith(`.${d}`));
-  };
-}
+  if (normalized.length === 0) return 0;
 
-/** Count the citations that point at one of the brand's own domains. */
-export function countOwnDomainCitations(citations, brandDomains) {
-  const isOwn = ownDomainMatcher(brandDomains);
   let count = 0;
   for (const cite of citations || []) {
-    if (isOwn(cite?.url)) count++;
+    const host = extractHostname(cite?.url || '');
+    if (host && normalized.some((d) => host === d || host.endsWith(`.${d}`))) {
+      count++;
+    }
   }
   return count;
 }
@@ -156,28 +100,12 @@ export function countOwnDomainCitations(citations, brandDomains) {
  * Used to short-circuit sentiment analysis when the brand isn't mentioned.
  */
 export function countBrandMentions(text, brand) {
-  const cleanText = matchableText(text);
+  const cleanText = stripUrls(text);
   let count = countOccurrences(cleanText, brand.brandName);
   for (const domain of brand.domains) {
     count += countOccurrences(cleanText, domain);
   }
   return count;
-}
-
-/**
- * Where the brand (name or any of its domains) appears in the text, as
- * [start, end) character ranges in order. Same matching as countBrandMentions,
- * but on the text as given, so the ranges index into it.
- */
-export function brandMentionRanges(text, brand) {
-  const ranges = [];
-  for (const term of [brand.brandName, ...(brand.domains || [])]) {
-    if (!term) continue;
-    for (const match of text.matchAll(nameRegex(term, 'gi'))) {
-      ranges.push([match.index, match.index + match[0].length]);
-    }
-  }
-  return ranges.sort((a, b) => a[0] - b[0]);
 }
 
 /**
@@ -209,7 +137,7 @@ function firstOccurrenceIndex(text, term) {
  *   competitors the answer actually mentions.
  */
 export function computeMentionPosition(text, brand, competitors = []) {
-  const cleanText = matchableText(text);
+  const cleanText = stripUrls(text);
 
   const entityFirstIndex = (names) => {
     let best = -1;
@@ -252,7 +180,7 @@ export function computeMentionPosition(text, brand, competitors = []) {
  */
 export function parseResponse(response, brand, sentiment = 'neutral', competitors = []) {
   const { text, citations } = response;
-  const cleanText = matchableText(text);
+  const cleanText = stripUrls(text);
 
   // --- Brand mention count (on URL-stripped text to avoid double-counting) ---
   let mentionCount = countOccurrences(cleanText, brand.brandName);

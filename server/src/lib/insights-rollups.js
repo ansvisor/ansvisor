@@ -19,8 +19,6 @@
 
 import supabaseAdmin from '../config/supabase.js';
 import { logger } from './logger.js';
-import { rebuildQueuedCitationRollups, refreshCitationsDaily } from './citations-rollups.js';
-import { refreshMentionsDaily } from './mentions-rollups.js';
 
 /** How many trailing days the daily sweep recomputes, today included. */
 export const SWEEP_DAYS = 3;
@@ -51,22 +49,13 @@ export async function refreshInsightsDaily(brandId, dayFrom, dayTo) {
 /**
  * Refresh the days a completed tracking run touched: from the run's start
  * day through today (a run crossing UTC midnight lands rows on two days).
- * The Citations (00118) and Mentions (00157) rollups are refreshed for the
- * same days.
  */
 export async function refreshForCompletedRun(brandId, runStartedAtIso) {
-  const dayFrom = utcDay(runStartedAtIso);
-  const dayTo = utcDay();
-  const ok = await refreshInsightsDaily(brandId, dayFrom, dayTo);
-  await refreshCitationsDaily(brandId, dayFrom, dayTo);
-  await refreshMentionsDaily(brandId, dayFrom, dayTo);
-  return ok;
+  return refreshInsightsDaily(brandId, utcDay(runStartedAtIso), utcDay());
 }
 
 /**
- * Daily backstop: refresh the trailing SWEEP_DAYS for every brand, Insights,
- * Citations and Mentions rollups alike, then rebuild the brands queued by
- * topic moves.
+ * Daily backstop: refresh the trailing SWEEP_DAYS for every brand.
  *
  * Deliberately every brand rather than "brands with recent results" — a
  * refresh over days with no rows deletes nothing and inserts nothing, so the
@@ -91,15 +80,10 @@ export async function sweepInsightsRollups({ days = SWEEP_DAYS } = {}) {
   let failed = 0;
   for (const brand of brands ?? []) {
     const ok = await refreshInsightsDaily(brand.id, dayFrom, dayTo);
-    const citationsOk = await refreshCitationsDaily(brand.id, dayFrom, dayTo);
-    const mentionsOk = await refreshMentionsDaily(brand.id, dayFrom, dayTo);
-    if (ok && citationsOk && mentionsOk) refreshed++;
+    if (ok) refreshed++;
     else failed++;
   }
 
   logger.info({ refreshed, failed, dayFrom, dayTo }, '[insights-rollups] sweep complete');
-
-  // Brands whose prompts changed topic get their citation history rebuilt.
-  await rebuildQueuedCitationRollups();
   return { refreshed, failed };
 }

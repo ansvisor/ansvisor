@@ -125,6 +125,6 @@ export async function acceptTopicSuggestion(suggestionId: string): Promise<{ top
     console.error('[topic-suggestions] accept ack failed:', await ack.text().catch(() => ''));
   }
 
-  revalidatePath('/dashboard/prompts/topics');
+  revalidatePath('/dashboard/topics');
   return { topicId: topic.id };
 }

@@ -20,9 +20,6 @@ import {
 import { getCitationsOverview, type CitationsSourceBreakdown } from '@/lib/actions/citations';
 import { getShoppingKpis } from '@/lib/actions/shopping';
 import { type SourceCategory } from '@/lib/citations/classify';
-import { stripEntityMarkup } from '@/lib/entity-markup';
-import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
-import { LOW_SAMPLE_VISITS } from '@/lib/traffic-change';
 import {
   getReportTemplate,
   ALL_REPORT_SECTIONS,
@@ -130,17 +127,8 @@ export interface ReportTopicPerf {
 
 export interface ReportAiTraffic {
   totalVisits: number;
-  /**
-   * Percent change vs the previous window, or null: no visits before, or too
-   * few on either side for a % to mean anything (see changeNote).
-   */
+  /** Percent change vs the previous window; null when the previous window had no visits. */
   change: number | null;
-  /**
-   * Why there's no %, as the AI Traffic page says it (AT-003): 'new' — visits
-   * now and none before; 'lowSample' — fewer than 30 visits in this period
-   * or the one before. Absent on reports created before it.
-   */
-  changeNote?: 'new' | 'lowSample';
   platformBreakdown: { platform: string; visits: number }[];
   topPages: { url: string; visits: number }[];
 }
@@ -490,41 +478,36 @@ async function getTrafficSnapshot(
   const supabase = await createClient();
   const prev = previousWindow(dateFrom, dateTo);
 
-  // Visits, not pageviews: a row whose visit_of is null starts one (00172),
-  // as the AI Traffic page counts them. The totals by count, which no row
-  // cap touches, and the breakdowns by paging through the period: one plain
-  // select stopped at PostgREST's 1,000 rows.
-  const period = { from: dateFrom, to: dateTo, toInclusive: true };
-  const cur: Record<string, unknown>[] = [];
-  const [totalVisits, prevVisits] = await Promise.all([
-    countTrafficLogs(supabase, brandId, period),
-    countTrafficLogs(supabase, brandId, { from: prev.from, to: prev.to }),
-    scanTrafficLogs(supabase, brandId, { ...period, columns: 'source_platform, url' }, (row) =>
-      cur.push(row),
-    ),
+  const [{ data: cur, error }, { data: prevRows }] = await Promise.all([
+    supabase
+      .from('ai_traffic_logs')
+      .select('source_platform, url')
+      .eq('brand_id', brandId)
+      .gte('created_at', dateFrom)
+      .lte('created_at', dateTo),
+    supabase
+      .from('ai_traffic_logs')
+      .select('id')
+      .eq('brand_id', brandId)
+      .gte('created_at', prev.from)
+      .lt('created_at', prev.to),
   ]);
+  if (error) throw new Error(error.message);
 
   const byPlatform = new Map<string, number>();
   const byPage = new Map<string, number>();
-  for (const r of cur) {
+  for (const r of cur ?? []) {
     const p = (r.source_platform as string) || 'unknown';
     byPlatform.set(p, (byPlatform.get(p) ?? 0) + 1);
     const u = (r.url as string) || '';
     if (u) byPage.set(u, (byPage.get(u) ?? 0) + 1);
   }
 
-  // A % on a handful of visits says more about chance than about a trend:
-  // 1,250 visits against 2 the week before read "+62400%". As on the AI
-  // Traffic page, a % only when both periods have LOW_SAMPLE_VISITS.
-  const lowSample = totalVisits < LOW_SAMPLE_VISITS || prevVisits < LOW_SAMPLE_VISITS;
-  const changeNote: ReportAiTraffic['changeNote'] =
-    prevVisits === 0 ? (totalVisits > 0 ? 'new' : undefined) : lowSample ? 'lowSample' : undefined;
-
+  const totalVisits = cur?.length ?? 0;
+  const prevVisits = prevRows?.length ?? 0;
   return {
     totalVisits,
-    change:
-      prevVisits > 0 && !lowSample ? round1(((totalVisits - prevVisits) / prevVisits) * 100) : null,
-    ...(changeNote ? { changeNote } : {}),
+    change: prevVisits > 0 ? round1(((totalVisits - prevVisits) / prevVisits) * 100) : null,
     platformBreakdown: [...byPlatform.entries()]
       .map(([platform, visits]) => ({ platform, visits }))
       .sort((a, b) => b.visits - a.visits)
@@ -641,9 +624,9 @@ const REPORT_EVIDENCE_COUNT = 10;
 /** How many sourcing prompts each cited URL lists. */
 const EVIDENCE_PROMPTS_PER_URL = 3;
 
-/** Light markdown/URL/entity-tag strip so excerpts read as prose. */
+/** Light markdown/URL strip so excerpts read as prose. */
 function stripMarkdown(text: string): string {
-  return stripEntityMarkup(text)
+  return text
     .replace(/\[([^\]]*)\]\([^)]+\)/g, '$1')
     .replace(/https?:\/\/[^\s)>\]]+/g, '')
     .replace(/[*_#`]/g, '')

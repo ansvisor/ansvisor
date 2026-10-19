@@ -8,11 +8,10 @@
  */
 
 import logger from './logger.js';
-import { stripEntityMarkup } from './entity-markup.js';
 
 const CLORO_API = 'https://api.cloro.dev';
 
-export const SCRAPER_TASK_TYPES = {
+const SCRAPER_TASK_TYPES = {
   'chatgpt-web': 'CHATGPT',
   'chatgpt-shopping': 'CHATGPT',
   'google-aio': 'GOOGLE',
@@ -88,32 +87,12 @@ export function buildRequestBody(promptText, scraperId, region, state) {
       html: false,
       markdown: true,
       rawResponse: false,
-      // Opt in to the observed query fan-out (#332), which Copilot and
-      // Perplexity populate; the health report's fan-out section flags one
-      // that stops. Not on ChatGPT: since 2026-09-30 its default (mobile-web)
-      // interface carries no query text, so the field came back empty on
-      // every answer while the add-on still cost +2 credits a task (#1119).
-      ...(scraperId === 'chatgpt-web' ? {} : { searchQueries: true }),
+      // Opt in to the observed query fan-out (#332). Copilot/Perplexity
+      // populate it; ChatGPT surfaces the key but returns it empty in
+      // practice — enabling it is free and harmless.
+      searchQueries: true,
     },
   };
-}
-
-/**
- * The sources an answer cites, as the citations we store. Since 2026-10-09
- * ChatGPT's `sources` also list the pages it read without citing them, marked
- * `footnote: true`; counted as citations, they put ChatGPT's citation numbers
- * at about 2.5× what its answers cite (#1119). Only ChatGPT sets the flag, but
- * it is honoured for every engine.
- */
-function toCitations(sources) {
-  return (sources || [])
-    .filter((src) => src.footnote !== true)
-    .map((src, idx) => ({
-      url: src.url || '',
-      title: src.label || '',
-      startIndex: idx * 100,
-      endIndex: idx * 100 + 50,
-    }));
 }
 
 /**
@@ -126,47 +105,42 @@ function toCitations(sources) {
  *    accepted so a potential upstream revert can't silently zero the field
  *    again.
  *  - Copilot / ChatGPT / Grok / Gemini → `searchQueries: string[]`
- *  - ChatGPT also → `mapSearchQueries: string[]`, the searches it ran on its
- *    map (kept with `engine: 'maps'`).
- * Entries are read as strings or as `{ query }` objects in every field: when
- * ChatGPT's fan-out went silent on 2026-09-30, nothing told an emptied field
- * from one that changed shape, and the strings-only read would have dropped
- * the second without a trace. Anything else (or missing) → `[]`. This is
- * OBSERVED data only — we never synthesize sub-queries.
+ * Anything else (or missing) → `[]`. This is OBSERVED data only — we never
+ * synthesize sub-queries.
  */
 function normalizeSearchQueries(result, scraperId) {
   // Trim on write so the same sub-query never fragments into whitespace
   // variants — the #333 aggregation groups by query string. `engine` is only
   // kept when it's a non-empty string (never a stray non-string value).
-  const toItem = (entry, fallbackEngine) => {
-    const query =
-      typeof entry === 'string' ? entry : typeof entry?.query === 'string' ? entry.query : null;
-    if (query === null || query.trim() === '') return null;
-    const engine =
-      typeof entry?.engine === 'string' && entry.engine.trim() !== ''
-        ? entry.engine.trim()
-        : fallbackEngine;
-    return { query: query.trim(), ...(engine ? { engine } : {}), source_platform: scraperId };
-  };
-  const read = (list, fallbackEngine) =>
-    Array.isArray(list)
-      ? list.map((entry) => toItem(entry, fallbackEngine)).filter((item) => item !== null)
-      : [];
+  if (Array.isArray(result.search_model_queries)) {
+    return result.search_model_queries
+      .map((entry) => {
+        if (typeof entry === 'string') {
+          return { query: entry.trim(), source_platform: scraperId };
+        }
+        if (typeof entry?.query === 'string') {
+          return {
+            query: entry.query.trim(),
+            ...(typeof entry.engine === 'string' && entry.engine.trim() !== ''
+              ? { engine: entry.engine.trim() }
+              : {}),
+            source_platform: scraperId,
+          };
+        }
+        return null;
+      })
+      .filter((item) => item !== null && item.query !== '');
+  }
 
-  // Perplexity's field first. An empty one falls through, so it can't hide a
-  // populated `searchQueries` beside it.
-  const perplexity = read(result.search_model_queries);
-  if (perplexity.length > 0) return perplexity;
+  if (Array.isArray(result.searchQueries)) {
+    return result.searchQueries
+      .filter((q) => typeof q === 'string' && q.trim() !== '')
+      .map((q) => ({ query: q.trim(), source_platform: scraperId }));
+  }
 
-  return [...read(result.searchQueries), ...read(result.mapSearchQueries, 'maps')];
+  return [];
 }
 
-/**
- * Parse a completed Cloro task into the answer we store. The text loses
- * ChatGPT's entity tags here (entity-markup.js), so the saved answer and every
- * metric derived from it read the names instead. Only ChatGPT has been seen
- * to send them, but the cleanup is harmless on the other engines.
- */
 export function parseScraperResponse(result, scraperId) {
   if (scraperId === 'chatgpt-shopping') {
     // ChatGPT Shopping returns a normal ChatGPT response shape *plus*
@@ -175,8 +149,13 @@ export function parseScraperResponse(result, scraperId) {
     // Model is forced to the shopping-specific id so Insights aggregates
     // (which exclude `platform = 'chatgpt-shopping'`) never mix this row
     // into brand-level visibility numbers.
-    const text = stripEntityMarkup(result.markdown || result.text || '');
-    const citations = toCitations(result.sources);
+    const text = result.markdown || result.text || '';
+    const citations = (result.sources || []).map((src, idx) => ({
+      url: src.url || '',
+      title: src.label || '',
+      startIndex: idx * 100,
+      endIndex: idx * 100 + 50,
+    }));
     return {
       text,
       citations,
@@ -192,16 +171,26 @@ export function parseScraperResponse(result, scraperId) {
       throw new Error('Google did not return an AI Overview for this query');
     }
 
-    const text = stripEntityMarkup(aio.markdown || aio.text || '');
-    const citations = toCitations(aio.sources);
+    const text = aio.markdown || aio.text || '';
+    const citations = (aio.sources || []).map((src, idx) => ({
+      url: src.url || '',
+      title: src.label || '',
+      startIndex: idx * 100,
+      endIndex: idx * 100 + 50,
+    }));
 
     return { text, citations, model: 'google-aio', shopping_cards: [] };
   }
 
   if (scraperId === 'google-aimode') {
     const aiMode = result.result || result;
-    const text = stripEntityMarkup(aiMode.markdown || aiMode.text || '');
-    const citations = toCitations(aiMode.sources);
+    const text = aiMode.markdown || aiMode.text || '';
+    const citations = (aiMode.sources || []).map((src, idx) => ({
+      url: src.url || '',
+      title: src.label || '',
+      startIndex: idx * 100,
+      endIndex: idx * 100 + 50,
+    }));
 
     // AI Mode returns its product cards under camelCase `shoppingCards`
     // (like Copilot — verified against the live response; not snake_case).
@@ -215,9 +204,14 @@ export function parseScraperResponse(result, scraperId) {
     };
   }
 
-  const text = stripEntityMarkup(result.markdown || result.text || '');
+  const text = result.markdown || result.text || '';
   const model = result.model || scraperId;
-  const citations = toCitations(result.sources);
+  const citations = (result.sources || []).map((src, idx) => ({
+    url: src.url || '',
+    title: src.label || '',
+    startIndex: idx * 100,
+    endIndex: idx * 100 + 50,
+  }));
 
   return {
     text,

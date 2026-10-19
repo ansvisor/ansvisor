@@ -68,8 +68,7 @@ export async function POST(req: NextRequest) {
             const { error } = await supabaseAdmin
               .from('organizations')
               .update({
-                // trialing for a first subscription, active without a trial.
-                subscription_status: subscription.status,
+                subscription_status: 'trialing',
                 plan: planId || 'starter',
                 stripe_customer_id: customerId,
                 stripe_subscription_id: subscriptionId,

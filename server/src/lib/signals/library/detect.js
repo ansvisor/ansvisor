@@ -25,8 +25,6 @@ import { resolve } from '../../../config/action-engine.js';
 import { resolveBrandSources } from '../../action-center/sources.js';
 import * as c from './classify.js';
 import { isTransientDbError } from '../../pulse/metrics.js';
-import { describeSignal } from '../../audit/rubric.js';
-import { TRAFFIC_WINDOW_DAYS } from '../traffic-evidence.js';
 
 const { library: t } = resolve();
 const DAY_MS = 86_400_000;
@@ -174,10 +172,10 @@ function context(brandId, now, sources) {
       once('traffic', () =>
         rpc('ae_ai_traffic_pages', {
           p_brand_id: brandId,
-          p_cur_from: isoDay(now, TRAFFIC_WINDOW_DAYS - 1),
+          p_cur_from: isoDay(now, 13),
           p_cur_to: isoDay(now, 0),
-          p_prev_from: isoDay(now, TRAFFIC_WINDOW_DAYS * 2 - 1),
-          p_prev_to: isoDay(now, TRAFFIC_WINDOW_DAYS),
+          p_prev_from: isoDay(now, 27),
+          p_prev_to: isoDay(now, 14),
         }),
       ),
     gsc: () =>
@@ -190,34 +188,6 @@ function context(brandId, now, sources) {
           p_prev_to: isoDay(now, 28),
         }),
       ),
-  };
-}
-
-/** A rate to three places: what the drawer shows. */
-const rounded = (value) => Math.round(value * 1000) / 1000;
-
-/**
- * A page of AI traffic as the drawer shows it (AC-001): its sessions, and
- * from Analytics what its AI visitors did, the engagement and key events the
- * classification compares with the site's. The snippet counts visits only.
- */
-function trafficTarget(p) {
-  const target = {
-    id: p.page,
-    label: p.page,
-    before: p.prev_sessions ?? 0,
-    now: p.cur_sessions ?? 0,
-  };
-  if (p.source !== 'analytics') return target;
-  const sessions = p.cur_sessions ?? 0;
-  const share = (part) => (sessions > 0 ? rounded((part ?? 0) / sessions) : null);
-  return {
-    ...target,
-    engagedRate: share(p.cur_engaged),
-    keyEvents: p.cur_key_events ?? 0,
-    keyEventsBefore: p.prev_key_events ?? 0,
-    // Key events per session, as the classification compares them: can pass 1.
-    keyRate: share(p.cur_key_events),
   };
 }
 
@@ -602,17 +572,23 @@ const FAMILIES = [
       const pages = c.mergeTrafficPages(await ctx.traffic());
       const site = c.siteTrafficRates(pages);
       const source = pages.some((p) => p.source === 'analytics') ? GA : AI;
-      // The site's rates the pages were compared with, from Analytics only.
-      const siteRates =
-        source === GA
-          ? { siteEngagedRate: rounded(site.engagedRate), siteKeyRate: rounded(site.keyRate) }
-          : {};
       const groups = {};
       for (const page of pages) {
         for (const kind of c.classifyTrafficPage(page, site, t)) (groups[kind] ??= []).push(page);
       }
       const found = Object.entries(groups).map(([kind, rows]) =>
-        group(kind, 'pages', rows, trafficTarget, source, siteRates),
+        group(
+          kind,
+          'pages',
+          rows,
+          (p) => ({
+            id: p.page,
+            label: p.page,
+            before: p.prev_sessions ?? 0,
+            now: p.cur_sessions ?? 0,
+          }),
+          source,
+        ),
       );
       if (
         site.prev >= t.aiTrafficMinSessions * 3 &&
@@ -620,12 +596,18 @@ const FAMILIES = [
       ) {
         const falling = pages.filter((p) => (p.prev_sessions ?? 0) > (p.cur_sessions ?? 0));
         found.push({
-          // Its value is the site's sessions, so the falling pages are counted
-          // apart: only the first 50 are kept as targets.
-          ...group('ai_traffic_drop', 'pages', falling, trafficTarget, source, {
-            ...siteRates,
-            pageCount: falling.length,
-          }),
+          ...group(
+            'ai_traffic_drop',
+            'pages',
+            falling,
+            (p) => ({
+              id: p.page,
+              label: p.page,
+              before: p.prev_sessions ?? 0,
+              now: p.cur_sessions ?? 0,
+            }),
+            source,
+          ),
           previousValue: site.prev,
           currentValue: site.cur,
           changeValue: site.cur - site.prev,
@@ -732,7 +714,7 @@ const FAMILIES = [
       const failures = await selectAll(() =>
         supabaseAdmin
           .from('audit_signal_results')
-          .select('audit_id, signal_key, evidence')
+          .select('audit_id, signal_key')
           .in('audit_id', ids)
           .eq('status', 'fail'),
       );
@@ -743,15 +725,8 @@ const FAMILIES = [
         if (!kind) continue;
         const page = pageOf.get(f.audit_id);
         const set = (groups[kind] ??= new Map());
-        const entry = set.get(page) ?? { page, checks: [], issues: [] };
+        const entry = set.get(page) ?? { page, checks: [] };
         entry.checks.push(f.signal_key);
-        // What the check found, named as the audit names it (AC-001): the
-        // drawer shows it as the issue's evidence.
-        entry.issues.push({
-          check: f.signal_key,
-          label: describeSignal(f.signal_key)?.label ?? f.signal_key,
-          evidence: f.evidence ?? {},
-        });
         set.set(page, entry);
       }
       return Object.entries(groups).map(([kind, pages]) =>
@@ -759,7 +734,7 @@ const FAMILIES = [
           kind,
           'pages',
           [...pages.values()],
-          (e) => ({ id: e.page, label: e.page, checks: e.checks, issues: e.issues }),
+          (e) => ({ id: e.page, label: e.page, checks: e.checks }),
           AUDIT,
         ),
       );

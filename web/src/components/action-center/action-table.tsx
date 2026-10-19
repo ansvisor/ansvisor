@@ -1,43 +1,20 @@
 'use client';
 
-import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   BarChart3,
-  Check,
-  CirclePlay,
   MessageSquare,
-  MoreHorizontal,
   MousePointerClick,
   Swords,
-  Trash2,
   Wrench,
   ShieldCheck,
   Layers,
   Quote,
   Sparkles,
   Target,
-  X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Table,
   TableBody,
@@ -48,13 +25,8 @@ import {
 } from '@/components/ui/table';
 import type { ActionItem } from '@/lib/actions/action-center';
 import type { ActionCategory, ActionKind, ActionStatus } from '@/lib/action-center/registry';
-import {
-  actionContextTags,
-  actionTexts,
-  assigneeLabel,
-  labelInitials,
-} from '@/lib/action-center/display';
-import type { PriorityLevel } from '@/lib/action-center/priority';
+import { actionContextTags, actionTexts } from '@/lib/action-center/display';
+import { ImpactDots } from './signal-table';
 import { formatRelative } from '@/lib/format-relative';
 import { cn } from '@/lib/utils';
 
@@ -120,163 +92,30 @@ export function ActionStatusBadge({ status }: { status: ActionStatus }) {
   );
 }
 
-export const PRIORITY_BADGE: Record<PriorityLevel, string> = {
-  critical: 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
-  high: 'border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-400',
-  medium: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
-  low: 'border-border bg-muted/50 text-muted-foreground',
-};
-
-/**
- * The priority score (AC-006), coloured by its level, and the level's name:
- * "84 High". It stands where Impact used to, since the score weighs impact
- * in. A dash until the server has scored the action.
- */
-export function PriorityBadge({
-  score,
-  level,
-}: {
-  score: number | null;
-  level: PriorityLevel | null;
-}) {
-  const t = useTranslations('actionCenter.actionsPage.priority');
-  if (score === null || level === null) {
-    return (
-      <span className="text-xs text-muted-foreground" title={t('notScored')}>
-        —
-      </span>
-    );
-  }
-  return (
-    <span className="flex items-center gap-1.5">
-      <Badge variant="outline" className={cn('font-semibold tabular-nums', PRIORITY_BADGE[level])}>
-        {score}
-      </Badge>
-      <span className="text-xs">{t(`levels.${level}`)}</span>
-    </span>
-  );
-}
-
 export function AssigneeAvatar({ assignee }: { assignee: ActionItem['assignee'] }) {
   if (!assignee) return <span className="text-xs text-muted-foreground">—</span>;
-  // Named as the assignee picker names them: by e-mail when there's no name.
-  const label = assigneeLabel(assignee);
-  const initials = (label && labelInitials(label)) || '?';
+  const initials = (assignee.fullName ?? '?')
+    .split(/\s+/)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
   return (
-    <Avatar className="h-6 w-6" title={label ?? undefined}>
+    <Avatar className="h-6 w-6" title={assignee.fullName ?? undefined}>
       {assignee.avatarUrl && <AvatarImage src={assignee.avatarUrl} alt="" />}
       <AvatarFallback className="text-[10px]">{initials}</AvatarFallback>
     </Avatar>
   );
 }
 
-/**
- * The menu column stays at the table's right edge: the table scrolls
- * sideways below about 1,100px, and the menu is what a row is reached for.
- * Opaque, with the row's hover tint, so it covers what scrolls under it.
- */
-const MENU_CELL =
-  'sticky right-0 z-[5] w-10 bg-background [tr:hover>&]:bg-[color-mix(in_oklab,var(--muted)_50%,var(--background))]';
-
-/** The statuses the row menu sets, in its order. */
-const MENU_STATUSES = [
-  { status: 'in_progress', icon: CirclePlay },
-  { status: 'completed', icon: Check },
-  { status: 'dismissed', icon: X },
-] as const;
-
-/**
- * An action's row menu: set it In Progress, Completed or Dismissed, or
- * delete it, without opening the drawer. The status it already has is off;
- * Delete asks first, and is off for members who can't delete.
- */
-function ActionMenu({
-  action,
-  title,
-  canDelete,
-  disabled,
-  onStatusChange,
-  onDelete,
-}: {
-  action: ActionItem;
-  title: string;
-  canDelete: boolean;
-  disabled: boolean;
-  onStatusChange: (action: ActionItem, status: ActionStatus) => void;
-  onDelete: (action: ActionItem) => void;
-}) {
-  const t = useTranslations('actionCenter.actionsPage');
-  const [confirming, setConfirming] = useState(false);
-  return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          className="rounded p-1 text-muted-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
-          disabled={disabled}
-          aria-label={t('rowMenu.label', { title })}
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40">
-          {MENU_STATUSES.map(({ status, icon: Icon }) => (
-            <DropdownMenuItem
-              key={status}
-              disabled={action.status === status}
-              onClick={() => onStatusChange(action, status)}
-            >
-              <Icon className="h-4 w-4" />
-              {t(`rowMenu.${status}`)}
-            </DropdownMenuItem>
-          ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            variant="destructive"
-            disabled={!canDelete}
-            title={canDelete ? undefined : t('rowMenu.deleteNotAllowed')}
-            onClick={() => setConfirming(true)}
-          >
-            <Trash2 className="h-4 w-4" />
-            {t('rowMenu.delete')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <Dialog open={confirming} onOpenChange={setConfirming}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{t('rowMenu.deleteTitle')}</DialogTitle>
-            <DialogDescription>{t('rowMenu.deleteConfirm')}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>{t('rowMenu.cancel')}</DialogClose>
-            <DialogClose render={<Button variant="destructive" onClick={() => onDelete(action)} />}>
-              {t('rowMenu.delete')}
-            </DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
 export function ActionTable({
   actions,
   onSelect,
-  onStatusChange,
-  onDelete,
-  canDelete = false,
-  busyIds,
 }: {
   actions: ActionItem[];
   onSelect: (action: ActionItem) => void;
-  /** With these, each row gets its menu (status changes and Delete). */
-  onStatusChange?: (action: ActionItem, status: ActionStatus) => void;
-  onDelete?: (action: ActionItem) => void;
-  canDelete?: boolean;
-  /** Actions with a change in flight: their menu waits. */
-  busyIds?: Set<string>;
 }) {
   const t = useTranslations('actionCenter.actionsPage');
-  const withMenu = Boolean(onStatusChange && onDelete);
   const tTexts = useTranslations('actionCenter.actionTexts');
   const tCategories = useTranslations('actionCenter.actionCategories');
   const tCommon = useTranslations('common');
@@ -287,16 +126,11 @@ export function ActionTable({
         <TableHeader>
           <TableRow>
             <TableHead className="text-xs">{t('table.action')}</TableHead>
-            <TableHead className="text-xs">{t('table.priority')}</TableHead>
+            <TableHead className="text-xs">{t('table.impact')}</TableHead>
             <TableHead className="text-xs">{t('table.status')}</TableHead>
             <TableHead className="text-xs">{t('table.assignee')}</TableHead>
             <TableHead className="text-xs">{t('table.dueDate')}</TableHead>
             <TableHead className="text-xs">{t('table.updated')}</TableHead>
-            {withMenu && (
-              <TableHead className={MENU_CELL}>
-                <span className="sr-only">{t('table.actions')}</span>
-              </TableHead>
-            )}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -331,7 +165,10 @@ export function ActionTable({
                   </div>
                 </TableCell>
                 <TableCell>
-                  <PriorityBadge score={action.priorityScore} level={action.priorityLevel} />
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs">{t(`impact.${action.impact}`)}</span>
+                    <ImpactDots impact={action.impact} />
+                  </div>
                 </TableCell>
                 <TableCell>
                   <ActionStatusBadge status={action.status} />
@@ -370,19 +207,6 @@ export function ActionTable({
                 <TableCell className="text-xs text-muted-foreground">
                   {formatRelative(action.updatedAt, tCommon)}
                 </TableCell>
-                {withMenu && onStatusChange && onDelete && (
-                  // The menu works on the row without opening the drawer.
-                  <TableCell className={MENU_CELL} onClick={(e) => e.stopPropagation()}>
-                    <ActionMenu
-                      action={action}
-                      title={texts.title}
-                      canDelete={canDelete}
-                      disabled={busyIds?.has(action.id) ?? false}
-                      onStatusChange={onStatusChange}
-                      onDelete={onDelete}
-                    />
-                  </TableCell>
-                )}
               </TableRow>
             );
           })}

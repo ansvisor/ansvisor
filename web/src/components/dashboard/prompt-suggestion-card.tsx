@@ -1,7 +1,6 @@
 'use client';
 
 import { memo, useState } from 'react';
-import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -107,7 +106,6 @@ export const PromptSuggestionCard = memo(function PromptSuggestionCard({
   onCategoryChange,
   mode = 'review',
 }: PromptSuggestionCardProps) {
-  const ts = useTranslations('prompts.suggestions');
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(text);
   const [editCategory, setEditCategory] = useState(category);
@@ -156,9 +154,6 @@ export const PromptSuggestionCard = memo(function PromptSuggestionCard({
       {/* Toggle checkbox */}
       <button
         type="button"
-        role="checkbox"
-        aria-checked={isActive}
-        aria-label={ts('include')}
         onClick={onToggle}
         className={cn(
           'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors',
@@ -212,11 +207,11 @@ export const PromptSuggestionCard = memo(function PromptSuggestionCard({
                 {onCategoryChange && topics && topics.length > 0 && (
                   <div>
                     <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                      {ts('topic')}
+                      Topic
                     </label>
                     <Select value={editCategory} onValueChange={(v) => v && setEditCategory(v)}>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder={ts('selectTopic')} />
+                        <SelectValue placeholder="Select a topic" />
                       </SelectTrigger>
                       <SelectContent>
                         {topics.map((t) => (
@@ -233,7 +228,7 @@ export const PromptSuggestionCard = memo(function PromptSuggestionCard({
                 {(onModelsChange || onPlatformsChange) && (
                   <div>
                     <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                      {ts('platformsAndModels')}
+                      Platform & Models
                     </label>
                     <Select
                       value="__placeholder__"
@@ -252,10 +247,8 @@ export const PromptSuggestionCard = memo(function PromptSuggestionCard({
                       <SelectTrigger className="w-full">
                         <span className="truncate text-muted-foreground">
                           {editModels.length + editPlatforms.length > 0
-                            ? ts('selectedCount', {
-                                count: editModels.length + editPlatforms.length,
-                              })
-                            : ts('selectPlatformsAndModels')}
+                            ? `${editModels.length + editPlatforms.length} selected`
+                            : 'Select platform & models'}
                         </span>
                       </SelectTrigger>
                       <SelectContent>

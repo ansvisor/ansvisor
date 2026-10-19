@@ -105,17 +105,10 @@ export function ScoreGauge({ score }: { score: number | null }) {
   );
 }
 
-// A value the user fills in, e.g. "[customer name]" or "[price]".
-const PLACEHOLDER = /(\[[A-Za-z][A-Za-z ]{1,38}\])/;
-
-function hasPlaceholder(text: string | null | undefined): boolean {
-  return !!text && PLACEHOLDER.test(text);
-}
-
-function DraftBlock({ text, copyLabel }: { text: string; copyLabel: string }) {
+function DraftBlock({ draft }: { draft: string }) {
   const t = useTranslations('audit');
   const copy = () => {
-    navigator.clipboard.writeText(text).then(
+    navigator.clipboard.writeText(draft).then(
       () => toast.success(t('copied')),
       () => toast.error(t('copyFailed')),
     );
@@ -127,40 +120,14 @@ function DraftBlock({ text, copyLabel }: { text: string; copyLabel: string }) {
         size="icon"
         className="absolute right-1 top-1 h-7 w-7"
         onClick={copy}
-        aria-label={copyLabel}
+        aria-label={t('copyDraft')}
       >
         <Copy className="h-3.5 w-3.5" />
       </Button>
       <pre className="whitespace-pre-wrap pr-8 text-xs leading-relaxed text-foreground">
-        {text.split(PLACEHOLDER).map((part, i) =>
-          i % 2 === 1 ? (
-            <mark
-              key={i}
-              className="rounded bg-amber-100 px-0.5 font-medium text-amber-900 dark:bg-amber-500/20 dark:text-amber-200"
-            >
-              {part}
-            </mark>
-          ) : (
-            part
-          ),
-        )}
+        {draft}
       </pre>
     </div>
-  );
-}
-
-/** The draft and code to paste, with a reminder when they hold placeholders. */
-function PasteBlocks({ rec }: { rec: AuditRecommendation }) {
-  const t = useTranslations('audit');
-  if (!rec.draft && !rec.code) return null;
-  return (
-    <>
-      {rec.draft && <DraftBlock text={rec.draft} copyLabel={t('copyDraft')} />}
-      {rec.code && <DraftBlock text={rec.code} copyLabel={t('copyCode')} />}
-      {(hasPlaceholder(rec.draft) || hasPlaceholder(rec.code)) && (
-        <p className="text-xs text-muted-foreground">{t('placeholderNote')}</p>
-      )}
-    </>
   );
 }
 
@@ -226,7 +193,7 @@ function SignalRow({
                 </span>{' '}
                 {recommendation.recommendation}
               </p>
-              <PasteBlocks rec={recommendation} />
+              {recommendation.draft && <DraftBlock draft={recommendation.draft} />}
             </div>
           ) : (
             signal.status !== 'pass' &&
@@ -255,7 +222,7 @@ function RecommendationItem({ rec }: { rec: AuditRecommendation }) {
         <span className="text-sm font-medium">{rec.label}</span>
       </div>
       <p className="text-sm text-muted-foreground">{rec.recommendation}</p>
-      <PasteBlocks rec={rec} />
+      {rec.draft && <DraftBlock draft={rec.draft} />}
     </div>
   );
 }

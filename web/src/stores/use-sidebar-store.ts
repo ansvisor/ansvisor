@@ -14,9 +14,7 @@ export const useSidebarStore = create<SidebarStore>()(
   persist(
     (set) => ({
       isOpen: true,
-      // Collapsed by default: the sidebar opens over the page on hover, and
-      // its button keeps it open for those who want it pinned.
-      isCollapsed: true,
+      isCollapsed: false,
       toggle: () => set((state) => ({ isOpen: !state.isOpen })),
       open: () => set({ isOpen: true }),
       close: () => set({ isOpen: false }),
@@ -24,11 +22,6 @@ export const useSidebarStore = create<SidebarStore>()(
     }),
     {
       name: 'sidebar-store',
-      // Version 1 made collapsed the default. A stored state from before it
-      // holds the old default rather than a choice, so it starts collapsed too.
-      version: 1,
-      migrate: (persisted, version) =>
-        version < 1 ? { ...(persisted as SidebarStore), isCollapsed: true } : persisted,
     },
   ),
 );

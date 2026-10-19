@@ -21,7 +21,6 @@ import { Link } from '@/i18n/navigation';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Markdown } from '@/components/ui/markdown';
 import { cn } from '@/lib/utils';
-import { useBrandStore } from '@/stores/use-brand-store';
 import { toast } from 'sonner';
 import {
   Check,
@@ -147,7 +146,6 @@ function AgentChat(props: {
   } = props;
   const t = useTranslations('agent');
   const tc = useTranslations('common');
-  const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
 
   // Ref mirrors activeId for prepareSendMessagesRequest. Reading the
@@ -251,7 +249,7 @@ function AgentChat(props: {
     const res = await fetch('/api/agent/conversations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brandId: activeBrandId }),
+      body: JSON.stringify({}),
     });
     if (!res.ok) {
       const body = await res.json().catch(() => null);
@@ -296,7 +294,7 @@ function AgentChat(props: {
       const res = await fetch('/api/agent/conversations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandId: activeBrandId }),
+        body: JSON.stringify({}),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);

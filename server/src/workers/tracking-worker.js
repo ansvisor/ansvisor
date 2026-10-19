@@ -10,8 +10,6 @@ import supabaseAdmin from '../config/supabase.js';
 import { hasFeature, getPlan, isCloud } from '../config/plans.js';
 import { applyPlanOverrides } from '../lib/plan-guard.js';
 import { generateContentOpportunities } from '../lib/opportunity-generator.js';
-import { refreshPromptClusters } from '../lib/prompt-clusters.js';
-import { refreshSitePages } from '../lib/site-pages.js';
 import { updateTargetUrlStats } from '../lib/target-url-stats.js';
 import { persistCitationRows } from '../lib/citation-rows.js';
 import { parseLocation, locationsForScraper } from '../lib/locations.js';
@@ -702,7 +700,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
             const mentionCount = countBrandMentions(aiResponse.text, brandInfo);
             const sentimentResult =
               mentionCount > 0
-                ? await analyzeSentimentAI(aiResponse.text, brandInfo.brandName, brandInfo.domains)
+                ? await analyzeSentimentAI(aiResponse.text, brandInfo.brandName)
                 : { sentiment: 'neutral', confidence: 0, reason: 'Brand not mentioned' };
             const metrics = parseResponse(
               aiResponse,
@@ -786,7 +784,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
           const mentionCount = countBrandMentions(aiResponse.text, brandInfo);
           const sentimentResult =
             mentionCount > 0
-              ? await analyzeSentimentAI(aiResponse.text, brandInfo.brandName, brandInfo.domains)
+              ? await analyzeSentimentAI(aiResponse.text, brandInfo.brandName)
               : { sentiment: 'neutral', confidence: 0, reason: 'Brand not mentioned' };
           const metrics = parseResponse(
             aiResponse,
@@ -848,18 +846,9 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
 
       const plan = getPlan(org?.plan);
       if (hasFeature(plan, 'content_optimization')) {
-        refreshPromptClusters(brandId)
-          .catch((err) => {
-            logger.error({ err, brandId }, 'prompt cluster refresh failed');
-          })
-          .then(() => refreshSitePages(brandId))
-          .catch((err) => {
-            logger.error({ err, brandId }, 'site page inventory refresh failed');
-          })
-          .then(() => generateContentOpportunities(brandId))
-          .catch((err) => {
-            logger.error({ err, brandId }, 'auto opportunity generation failed');
-          });
+        generateContentOpportunities(brandId).catch((err) => {
+          logger.error({ err, brandId }, 'auto opportunity generation failed');
+        });
       }
     }
   } catch (err) {

@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, useMemo, useTransition, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -34,7 +33,6 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { formatNumber } from '@/lib/format';
 import {
   getPromptSuggestions,
   refreshPromptSuggestions,
@@ -59,17 +57,17 @@ function gaEvidence(d: GaSuggestionSourceData): { label: string; tooltip: string
   if (d.kind === 'ai_momentum') {
     const engines = d.aiPlatforms.length ? d.aiPlatforms.join(', ') : 'AI assistants';
     return {
-      label: `AI traffic · ${formatNumber(d.aiSessions)} sessions`,
-      tooltip: `${engines} already sent ${formatNumber(d.aiSessions)} visits to ${d.landingPage} in the last 28 days. That topic is demonstrably answerable by an AI engine and you are already a candidate source for it — tracking a prompt around it turns an accident into a measured position.`,
+      label: `AI traffic · ${d.aiSessions.toLocaleString()} sessions`,
+      tooltip: `${engines} already sent ${d.aiSessions.toLocaleString()} visits to ${d.landingPage} in the last 28 days. That topic is demonstrably answerable by an AI engine and you are already a candidate source for it — tracking a prompt around it turns an accident into a measured position.`,
     };
   }
   const earns =
     d.revenue > 0
-      ? `${formatNumber(d.revenue)} in revenue`
-      : `${formatNumber(d.keyEvents)} conversions`;
+      ? `${d.revenue.toLocaleString()} in revenue`
+      : `${d.keyEvents.toLocaleString()} conversions`;
   return {
     label: `#${d.rank} by ${d.revenue > 0 ? 'revenue' : 'conversions'}`,
-    tooltip: `${d.landingPage} produced ${earns} from ${formatNumber(d.sessions)} sessions in the last 28 days, and nothing you track would surface it in an AI answer. Anyone asking an assistant about this has no way to find you.`,
+    tooltip: `${d.landingPage} produced ${earns} from ${d.sessions.toLocaleString()} sessions in the last 28 days, and nothing you track would surface it in an AI answer. Anyone asking an assistant about this has no way to find you.`,
   };
 }
 
@@ -153,7 +151,7 @@ function SourceBadges({ suggestion }: { suggestion: PromptSuggestion }) {
     <div className="flex flex-wrap items-center gap-1.5">
       {gsc && (
         <HoverTip
-          content={`From your Google Search Console data — the query "${gsc.query}" got ${formatNumber(gsc.impressions)} impressions in the last 28 days.`}
+          content={`From your Google Search Console data — the query "${gsc.query}" got ${gsc.impressions.toLocaleString()} impressions in the last 28 days.`}
         >
           <Badge variant="outline" className="gap-1.5 bg-card text-xs font-normal">
             <SearchCheck className="h-3.5 w-3.5 text-blue-500" />
@@ -204,10 +202,6 @@ const SOURCE_FILTER_LABELS: Record<SourceFilter, string> = {
   agents: 'Ansvisor Agents only',
 };
 
-function isMeasuredSuggestion(s: PromptSuggestion): boolean {
-  return s.source === 'gsc' || s.source === 'ga';
-}
-
 interface Props {
   brandId: string;
   onAccepted?: () => void;
@@ -257,7 +251,6 @@ function sourceNotice(
 }
 
 export function SuggestionsCard({ brandId, onAccepted, sourceStates }: Props) {
-  const t = useTranslations('prompts.suggestions');
   const [suggestions, setSuggestions] = useState<PromptSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -337,16 +330,14 @@ export function SuggestionsCard({ brandId, onAccepted, sourceStates }: Props) {
   );
 
   /**
-   * Dismiss only generated rows on screen. Search Console and Analytics rows
-   * carry a 30-day cooldown, so bulk clear keeps them visible unless the user
-   * explicitly dismisses each one.
+   * Dismiss everything on screen. Kept to what is actually listed rather than
+   * "every suggestion for this brand": dismissing a Search Console or
+   * Analytics row keeps that query or page out of the pool for 30 days, so
+   * clearing a filtered view must not silently suppress rows the user never
+   * looked at.
    */
   const handleClearAll = () => {
-    const preserved = visible.filter(isMeasuredSuggestion);
-    const doomed = visible.filter((s) => !isMeasuredSuggestion(s));
-    if (preserved.length > 0) {
-      toast.info(t('measuredSuggestionsKept'));
-    }
+    const doomed = visible;
     if (doomed.length === 0) return;
     setClearing(true);
     const ids = new Set(doomed.map((d) => d.id));
@@ -598,7 +589,7 @@ export function SuggestionsCard({ brandId, onAccepted, sourceStates }: Props) {
                               className="gap-1 text-xs font-normal tabular-nums"
                             >
                               <TrendingUp className="h-3 w-3" />
-                              {formatNumber(gsc.impressions)} impr/mo
+                              {gsc.impressions.toLocaleString()} impr/mo
                             </Badge>
                           ) : ga ? (
                             <HoverTip content={gaEvidence(ga).tooltip}>
@@ -617,7 +608,7 @@ export function SuggestionsCard({ brandId, onAccepted, sourceStates }: Props) {
                                 variant="outline"
                                 className="gap-1 text-xs font-normal tabular-nums"
                               >
-                                <TrendingUp className="h-3 w-3" />~{formatNumber(s.estVolume)}/mo
+                                <TrendingUp className="h-3 w-3" />~{s.estVolume.toLocaleString()}/mo
                               </Badge>
                             )
                           )}

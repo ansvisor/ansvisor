@@ -41,8 +41,6 @@ import { cn } from '@/lib/utils';
 import { formatRegionDisplay } from '@/lib/region';
 import { toast } from 'sonner';
 import { useUserRole } from '@/hooks/use-user-role';
-import { getOpportunities } from '@/lib/actions/content';
-import type { ContentOpportunity } from '@/types';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { WorkStatusBadge } from '@/components/prompts/work-status';
 import {
@@ -52,12 +50,7 @@ import {
   type PromptTargetUrl,
   type PromptWorkStatus,
 } from '@/lib/actions/prompt-workflow';
-import {
-  NotesCard,
-  TargetUrlsCard,
-  ContentOpportunitiesCard,
-  OPPORTUNITY_PREVIEW_LIMIT,
-} from './_workflow-cards';
+import { NotesCard, TargetUrlsCard } from './_workflow-cards';
 import { ResponseDetail } from '@/components/results/response-detail';
 import {
   CategoryBadge,
@@ -68,7 +61,6 @@ import {
 import { TablePager, usePagination } from '@/components/table-pager';
 import { MODEL_PROVIDER_LABELS, PLATFORM_LABELS } from '@/config/platform-labels';
 import { groupByPlatform, type PlatformGroup } from './grouping';
-import { dayRangeBounds, viewerTimeZone } from '@/lib/time-zone';
 
 // ─── Date range (kept in sync with the insights page filter bar) ─────────────
 
@@ -79,9 +71,10 @@ const DATE_PRESETS: DatePreset[] = ['24h', '7d', '30d', '90d', 'all', 'custom'];
 function getDateRange(preset: DatePreset, custom: { from: string; to: string }) {
   if (preset === 'all') return { dateFrom: undefined, dateTo: undefined };
   if (preset === 'custom') {
-    // Whole days on the viewer's clock, as the answer times below read.
-    const { from, to } = dayRangeBounds(custom.from, custom.to, viewerTimeZone());
-    return { dateFrom: from, dateTo: to };
+    return {
+      dateFrom: custom.from || undefined,
+      dateTo: custom.to ? `${custom.to}T23:59:59.999Z` : undefined,
+    };
   }
   if (preset === '24h') {
     const from = new Date();
@@ -163,20 +156,14 @@ function getModelDisplayName(model?: string, platform?: string): string {
   return model ?? platform ?? 'Unknown';
 }
 
-/**
- * An answer's time on the viewer's clock, with the zone so it can't be read
- * as UTC, written as the Positions panel writes it ("Oct 12, 16:28 GMT+3").
- */
 function formatTimestamp(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString('en-US', {
+  return date.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
-    hour: '2-digit',
+    hour: 'numeric',
     minute: '2-digit',
-    hourCycle: 'h23',
-    timeZoneName: 'short',
   });
 }
 
@@ -645,13 +632,8 @@ export default function PromptDetailPage() {
   const promptId = params.id as string;
 
   const { canManage } = useUserRole();
-  const [data, setData] = useState<PromptDetailData | null>(null);
-  const promptBrandId = data?.prompt.brandId;
-  const [opportunities, setOpportunities] = useState<ContentOpportunity[]>([]);
-  const [opportunitiesTotal, setOpportunitiesTotal] = useState(0);
-  const [opportunitiesLoading, setOpportunitiesLoading] = useState(true);
-  const [opportunitiesFailed, setOpportunitiesFailed] = useState(false);
 
+  const [data, setData] = useState<PromptDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -679,42 +661,6 @@ export default function PromptDetailPage() {
       cancelled = true;
     };
   }, [promptId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!promptBrandId) return;
-
-    setOpportunities([]);
-    setOpportunitiesTotal(0);
-    setOpportunitiesFailed(false);
-    setOpportunitiesLoading(true);
-
-    getOpportunities(promptBrandId, {
-      promptId,
-      status: 'new',
-      limit: OPPORTUNITY_PREVIEW_LIMIT,
-    })
-      .then((res) => {
-        if (cancelled) return;
-        setOpportunities(res.opportunities);
-        setOpportunitiesTotal(res.total);
-      })
-      .catch((err) => {
-        console.error('Failed to load opportunities:', err);
-        if (cancelled) return;
-        setOpportunities([]);
-        setOpportunitiesTotal(0);
-        setOpportunitiesFailed(true);
-        toast.error('Failed to load content opportunities');
-      })
-      .finally(() => {
-        if (!cancelled) setOpportunitiesLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [promptBrandId, promptId]);
 
   const handleStatusChange = (status: PromptWorkStatus | null) => {
     const previous = workStatus;
@@ -976,27 +922,18 @@ export default function PromptDetailPage() {
 
       {/* Workflow — outside the refetch overlay: notes and target URLs are
           date-window independent. */}
-      <div className="space-y-4">
-        <div className="grid gap-4 lg:grid-cols-2">
-          <NotesCard
-            promptId={promptId}
-            notes={notes}
-            onNotesChange={setNotes}
-            canManage={canManage}
-          />
-          <TargetUrlsCard
-            promptId={promptId}
-            urls={targetUrls}
-            onUrlsChange={setTargetUrls}
-            canManage={canManage}
-          />
-        </div>
-        <ContentOpportunitiesCard
+      <div className="grid gap-4 lg:grid-cols-2">
+        <NotesCard
           promptId={promptId}
-          opportunities={opportunities}
-          total={opportunitiesTotal}
-          loading={opportunitiesLoading}
-          failed={opportunitiesFailed}
+          notes={notes}
+          onNotesChange={setNotes}
+          canManage={canManage}
+        />
+        <TargetUrlsCard
+          promptId={promptId}
+          urls={targetUrls}
+          onUrlsChange={setTargetUrls}
+          canManage={canManage}
         />
       </div>
     </div>

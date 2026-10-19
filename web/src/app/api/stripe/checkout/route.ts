@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { stripe, PRICE_IDS } from '@/lib/stripe';
-import { TRIAL_DAYS, hasUsedTrial } from '@/lib/billing/trial';
 
 export async function POST(req: NextRequest) {
   try {
@@ -78,17 +77,12 @@ export async function POST(req: NextRequest) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-    // The free trial is for the organization's first subscription only. A
-    // customer who already had one — trial taken and canceled, or a lapsed
-    // plan — subscribes without another.
-    const trial = !(await hasUsedTrial(stripe, customerId));
-
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
       subscription_data: {
-        ...(trial ? { trial_period_days: TRIAL_DAYS } : {}),
+        trial_period_days: 14,
         metadata: { organization_id: organizationId, plan_id: planId },
       },
       success_url: `${appUrl}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`,

@@ -2,7 +2,6 @@ import supabaseAdmin from '../../config/supabase.js';
 import { computeAiVisibilityScore } from '../../config/visibility-score.js';
 import { chunkIds, selectInChunks } from '../chunked-in.js';
 import { logger } from '../logger.js';
-import { readAllRpcRows } from '../rpc-pages.js';
 import { resolve } from '../../config/action-engine.js';
 
 /**
@@ -105,30 +104,13 @@ export function isTransientDbError(message) {
   return /statement timeout|canceling statement|deadlock detected/i.test(message || '');
 }
 
-function rpc(name, params) {
-  return retried(name, () => supabaseAdmin.rpc(name, params));
-}
-
-/**
- * Every row of a set-returning RPC, in `key` order (see lib/rpc-pages.js):
- * one response stops at 1000 rows. A timeout on any page retries the read
- * from its first page.
- */
-function rpcRows(name, params, key) {
-  return retried(name, () =>
-    readAllRpcRows(name, (from, to) =>
-      supabaseAdmin.rpc(name, params).order(key, { ascending: true }).range(from, to),
-    ),
-  );
-}
-
-async function retried(name, read, attempt = 0) {
-  const { data, error } = await read();
+async function rpc(name, params, attempt = 0) {
+  const { data, error } = await supabaseAdmin.rpc(name, params);
   if (error) {
     if (attempt < RPC_RETRIES && isTransientDbError(error.message)) {
       logger.warn({ rpc: name, attempt: attempt + 1 }, 'pulse rpc timed out, retrying');
       await new Promise((r) => setTimeout(r, RPC_RETRY_DELAY_MS * (attempt + 1)));
-      return retried(name, read, attempt + 1);
+      return rpc(name, params, attempt + 1);
     }
     throw new Error(`${name} failed: ${error.message}`);
   }
@@ -216,22 +198,13 @@ async function competitorRates(brandId, from, to, days = null) {
   return { brandRate, competitors };
 }
 
-/**
- * Per-prompt AI Visibility Score over a window (movers highlight). One row per
- * prompt, so a brand past 1000 prompts needs more than one page.
- *
- * Exported for the test that pins the paging behaviour.
- */
-export async function promptScores(brandId, from, to) {
-  const rows = await rpcRows(
-    'prompt_visibility_summaries',
-    {
-      p_brand_id: brandId,
-      p_date_from: from.toISOString(),
-      p_date_to: to.toISOString(),
-    },
-    'prompt_id',
-  );
+/** Per-prompt AI Visibility Score over a window (movers highlight). */
+async function promptScores(brandId, from, to) {
+  const rows = await rpc('prompt_visibility_summaries', {
+    p_brand_id: brandId,
+    p_date_from: from.toISOString(),
+    p_date_to: to.toISOString(),
+  });
   const map = new Map();
   for (const row of rows ?? []) {
     if (!row.runs) continue;
@@ -314,9 +287,6 @@ async function newEngineAppearances(brandId, from) {
   return firsts;
 }
 
-/** How far back the lost-citation detector looks, in days. */
-export const LOST_CITATION_WINDOW_DAYS = 14;
-
 /**
  * High-volume prompts that stopped being cited: cited on >= 60% of the
  * days with results over the last 14 days, but 0 citations on the most
@@ -336,7 +306,7 @@ async function lostCitationPrompts(brandId, promptById, now) {
   const volumeIds = (volumes ?? []).map((v) => v.prompt_id);
   if (!volumeIds.length) return [];
 
-  const since = new Date(now.getTime() - LOST_CITATION_WINDOW_DAYS * DAY_MS).toISOString();
+  const since = new Date(now.getTime() - 14 * DAY_MS).toISOString();
   const PAGE = 1000;
   const rows = [];
   // Paging runs inside each id chunk rather than across the whole list: the

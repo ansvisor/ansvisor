@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { getPlatformFilterItems } from './_charts';
-import { getPlatformName } from '@/lib/traffic-platforms';
+import { getPlatformName } from './_charts';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getPublicApiBaseUrl } from '@/config/api';
 const ReferralTrendChart = dynamic(() => import('./_charts').then((m) => m.ReferralTrendChart), {
   ssr: false,
   loading: () => <Skeleton className="h-64 w-full" />,
@@ -21,11 +21,9 @@ import { useTranslations } from 'next-intl';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
 import {
-  getTrafficSources,
   getTrafficSummary,
   getTrafficTrend,
   getTrafficLogs,
-  type TrafficSources,
   type TrafficSummary,
   type TrafficTrendPoint,
   type TrafficLog,
@@ -36,16 +34,7 @@ import {
   DateRangeFilter,
   type DateRangePreset,
 } from '@/components/filters/date-range-filter';
-import { PagesCard } from './_pages-card';
-import { ConversionsSection } from './_conversions';
-import { TRAFFIC_KPI_GRID, TrafficKpis } from './_kpis';
-import { VisitListSourceNote } from './_visit-list-note';
-import { EngagedCell, KeyEventsCell, PlatformValueNote } from './_platform-value';
-import { ExportMenu, TableExport, useTrafficExport } from './_export';
-import { SourcesStrip } from './_sources-strip';
-import { SnippetBanner, SnippetDialog } from './_snippet-code';
-import { googleSourceStatus, snippetDetected } from '@/lib/traffic-sources';
-import { useUserRole } from '@/hooks/use-user-role';
+import { PageOpportunitiesCard } from './_opportunities-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -60,17 +49,21 @@ import {
   Globe,
   TrendingUp,
   TrendingDown,
+  Users,
   LayoutList,
+  Code,
+  Copy,
+  Check,
   Search,
   X,
   Loader2,
+  Download,
   CalendarX2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { toCsv } from '@/lib/csv';
 import { formatRelative } from '@/lib/format-relative';
-import { formatNumber } from '@/lib/format';
-import { visitChange } from '@/lib/traffic-change';
-import { browserStorage, readTrafficRange, writeTrafficRange } from '@/lib/traffic-range';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -83,55 +76,129 @@ import {
 
 const PAGE_SIZE = 10;
 
+/**
+ * PostgREST silently caps un-paginated selects at 1000 rows (see the citations
+ * export's note on the same limit) — fetch up to that ceiling in one request
+ * for the export rather than scanning further pages, matching the "high limit"
+ * scope in #607.
+ */
+const TRAFFIC_EXPORT_LIMIT = 1000;
+
+const TRAFFIC_EXPORT_HEADERS = ['timestamp', 'platform', 'page_url', 'referrer'];
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-/**
- * A visit count against the previous period: a %, "new", "—", or "Low sample"
- * when either period is too small for a % to mean anything (AT-003, F4).
- * `comparable` is false when the range has no previous period (all time).
- */
-function DeltaBadge({
-  current,
-  previous,
-  comparable = true,
+function KpiCard({
+  title,
+  icon: Icon,
+  value,
+  sub,
+  subPositive,
 }: {
-  current: number;
-  previous: number;
-  comparable?: boolean;
+  title: string;
+  icon: React.ElementType;
+  value: React.ReactNode;
+  sub: React.ReactNode;
+  subPositive?: boolean;
 }) {
-  const t = useTranslations('traffic.change');
-  const change = visitChange(current, previous, { comparable });
-  if (change.kind === 'none') return <span className="text-xs text-muted-foreground">—</span>;
-  if (change.kind === 'low') {
-    return (
-      <span
-        title={t('lowSampleHint')}
-        className="whitespace-nowrap rounded-md border border-dashed px-1.5 text-[11px] font-medium leading-4 text-muted-foreground"
-      >
-        {t('lowSample')}
-      </span>
-    );
-  }
-  if (change.kind === 'new') {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
+        <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          {title}
+        </CardTitle>
+        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-3xl font-bold">{value}</div>
+        <p
+          className={cn(
+            'text-xs mt-1 flex items-center gap-0.5',
+            subPositive === true
+              ? 'text-green-600 dark:text-green-400'
+              : subPositive === false
+                ? 'text-red-500'
+                : 'text-muted-foreground',
+          )}
+        >
+          {sub}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DeltaBadge({ current, previous }: { current: number; previous: number }) {
+  if (previous === 0 && current === 0)
+    return <span className="text-xs text-muted-foreground">—</span>;
+  if (previous === 0)
     return (
       <span className="flex items-center gap-0.5 text-xs font-medium text-green-600 dark:text-green-400">
         <TrendingUp className="h-3 w-3" />
-        {t('new')}
+        new
       </span>
     );
-  }
-  const pos = change.pct > 0;
+  const delta = Math.round(((current - previous) / previous) * 100);
+  if (delta === 0) return <span className="text-xs text-muted-foreground">—</span>;
+  const pos = delta > 0;
   return (
     <span
       className={cn(
-        'flex items-center gap-0.5 whitespace-nowrap text-xs font-medium',
+        'flex items-center gap-0.5 text-xs font-medium',
         pos ? 'text-green-600 dark:text-green-400' : 'text-red-500',
       )}
     >
       {pos ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
       {pos ? '+' : ''}
-      {formatNumber(change.pct)}%
+      {delta}%
     </span>
+  );
+}
+
+function SnippetBanner({ trackingCode }: { trackingCode?: string }) {
+  const [copied, setCopied] = useState(false);
+  const apiUrl = getPublicApiBaseUrl();
+  const snippet = `<script src="${apiUrl}/t.js" data-t="${trackingCode || 'YOUR_TRACKING_CODE'}" defer></script>`;
+
+  if (!trackingCode || !apiUrl) return null;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(snippet);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <Card className="border-blue-500/20 bg-blue-500/5">
+      <CardContent className="py-3 px-4 flex items-start gap-3">
+        <Code className="h-4 w-4 mt-0.5 shrink-0 text-blue-500" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium">Add this snippet to your website</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Paste this before the closing <code className="text-[11px]">&lt;/head&gt;</code> tag to
+            track AI-referred visits.
+          </p>
+          <div className="mt-2 relative">
+            <pre className="text-[11px] bg-muted/50 rounded-md px-3 py-2 overflow-x-auto font-mono">
+              {snippet}
+            </pre>
+          </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0 h-8 w-8"
+          onClick={handleCopy}
+          aria-label="Copy tracking script"
+        >
+          {copied ? (
+            <Check className="h-3.5 w-3.5 text-green-500" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -157,9 +224,7 @@ function TrafficFilterBar({
   platforms: string[];
   isLoading: boolean;
 }) {
-  const t = useTranslations('traffic');
   const hasActiveFilters = filters.platform || filters.search;
-  const platformItems = getPlatformFilterItems(platforms, t('allPlatforms'));
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -167,25 +232,22 @@ function TrafficFilterBar({
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
         <Input
           type="text"
-          placeholder={t('searchPlaceholder')}
+          placeholder="Search by URL or path..."
           value={searchInput}
           onChange={(e) => onSearchInputChange(e.target.value)}
           className="pl-9 h-9 text-sm"
         />
       </div>
 
-      <Select
-        value={filters.platform || ''}
-        onValueChange={(v) => onChange({ platform: v || '' })}
-        items={platformItems}
-      >
+      <Select value={filters.platform || ''} onValueChange={(v) => onChange({ platform: v || '' })}>
         <SelectTrigger className="w-40 h-9 text-sm">
-          <SelectValue placeholder={t('allPlatforms')} />
+          <SelectValue placeholder="All platforms" />
         </SelectTrigger>
         <SelectContent>
-          {platformItems.map((item) => (
-            <SelectItem key={item.value} value={item.value}>
-              {item.label}
+          <SelectItem value="">All platforms</SelectItem>
+          {platforms.map((p) => (
+            <SelectItem key={p} value={p}>
+              {getPlatformName(p)}
             </SelectItem>
           ))}
         </SelectContent>
@@ -203,7 +265,7 @@ function TrafficFilterBar({
           disabled={isLoading}
         >
           <X className="h-3.5 w-3.5" />
-          {t('clearFilters')}
+          Clear filters
         </Button>
       )}
     </div>
@@ -266,14 +328,13 @@ function TablePager({
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
 function EmptyLogsState({ hasFilters }: { hasFilters: boolean }) {
-  const t = useTranslations('traffic');
   if (hasFilters) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <Search className="h-10 w-10 text-muted-foreground/40 mb-3" />
-        <h3 className="text-sm font-medium">{t('noMatchingVisitsTitle')}</h3>
+        <h3 className="text-sm font-medium">No matching visits</h3>
         <p className="text-xs text-muted-foreground mt-1 max-w-md">
-          {t('noMatchingVisitsDescription')}
+          Try adjusting your filters or search terms.
         </p>
       </div>
     );
@@ -281,42 +342,27 @@ function EmptyLogsState({ hasFilters }: { hasFilters: boolean }) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <LayoutList className="h-10 w-10 text-muted-foreground/40 mb-3" />
-        <h3 className="text-sm font-medium">{t('noVisitsTitle')}</h3>
-        <p className="text-xs text-muted-foreground mt-1 max-w-md">{t('noVisitsDescription')}</p>
+        <h3 className="text-sm font-medium">No visits yet</h3>
+        <p className="text-xs text-muted-foreground mt-1 max-w-md">
+          Once visitors arrive from AI platforms, their visits will appear here.
+        </p>
       </div>
     );
   }
 }
 
-function NoTrafficForPeriod({
-  rangeLabel,
-  onReset,
-  onShowWeek,
-}: {
-  rangeLabel: string;
-  onReset: () => void;
-  /** The 24-hour range offers the last 7 days first (AT-017). */
-  onShowWeek?: () => void;
-}) {
-  const t = useTranslations('traffic');
+function NoTrafficForPeriod({ rangeLabel, onReset }: { rangeLabel: string; onReset: () => void }) {
   return (
     <Card>
       <CardContent className="py-16 text-center">
         <CalendarX2 className="h-10 w-10 mx-auto text-muted-foreground/50" />
-        <h3 className="text-lg font-semibold mt-4">{t('noTrafficInPeriodTitle')}</h3>
+        <h3 className="text-lg font-semibold mt-4">No traffic in this period</h3>
         <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-          {t('noTrafficInPeriodDescription', { range: rangeLabel })}
+          No AI-referred visits in the {rangeLabel}. There is traffic data in other time periods.
         </p>
-        <div className="mt-4 flex justify-center gap-2">
-          {onShowWeek && (
-            <Button variant="outline" size="sm" onClick={onShowWeek}>
-              {t('visits.showLast7Days')}
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={onReset}>
-            {t('showAllData')}
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" className="mt-4" onClick={onReset}>
+          Show all data
+        </Button>
       </CardContent>
     </Card>
   );
@@ -389,13 +435,14 @@ function getTrendTitle(preset: DatePreset, custom: { from: string; to: string })
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function TrafficPage() {
-  const t = useTranslations('traffic');
   const brand = useBrandStore((s) => s.getActiveBrand());
   if (!brand) {
     return (
       <div className="flex flex-col justify-center items-center py-20 text-center">
-        <h2 className="font-semibold text-lg">{t('noBrandTitle')}</h2>
-        <p className="mt-1 text-muted-foreground text-sm">{t('noBrandDescription')}</p>
+        <h2 className="font-semibold text-lg">No brand selected</h2>
+        <p className="mt-1 text-muted-foreground text-sm">
+          Select a brand to view AI traffic analytics.
+        </p>
       </div>
     );
   }
@@ -403,19 +450,10 @@ export default function TrafficPage() {
 }
 
 function TrafficPageContent({ brand }: { brand: Brand }) {
-  const t = useTranslations('traffic');
   const tCommon = useTranslations('common');
-  const tVisits = useTranslations('traffic.visits');
-  // The page opens on the member's last range, or the last 24 hours (AT-017,
-  // spec §3.01). This only renders in the browser, once the brand has loaded,
-  // so the stored choice is read before the first load rather than after it.
-  const [initialRange] = useState(() => readTrafficRange(browserStorage()));
-  const [datePreset, setDatePreset] = useState<DatePreset>(initialRange.preset);
-  const [customFrom, setCustomFrom] = useState(initialRange.from);
-  const [customTo, setCustomTo] = useState(initialRange.to);
-  useEffect(() => {
-    writeTrafficRange(browserStorage(), { preset: datePreset, from: customFrom, to: customTo });
-  }, [datePreset, customFrom, customTo]);
+  const [datePreset, setDatePreset] = useState<DatePreset>('7d');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const dateWindow = useMemo(
     () => getDateRange(datePreset, { from: customFrom, to: customTo }),
     [datePreset, customFrom, customTo],
@@ -426,41 +464,13 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   const [trend, setTrend] = useState<TrafficTrendPoint[]>([]);
   const [logs, setLogs] = useState<TrafficLog[]>([]);
   const [logsTotal, setLogsTotal] = useState(0);
-  const [logsPageviews, setLogsPageviews] = useState(0);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
-  // What feeds the page (AT-001); null while it loads.
-  const [sources, setSources] = useState<TrafficSources | null>(null);
-  // A failed read hides the strip and leaves the snippet code open, as before it.
-  const [sourcesFailed, setSourcesFailed] = useState(false);
-  const [codeOpen, setCodeOpen] = useState(false);
-  const { canManage } = useUserRole();
-
-  const loadSources = useCallback(async () => {
-    try {
-      setSources(await getTrafficSources(brand.id));
-      setSourcesFailed(false);
-    } catch (err) {
-      console.error('Failed to load traffic sources:', err);
-      setSourcesFailed(true);
-    }
-  }, [brand.id]);
-
-  useEffect(() => {
-    void loadSources();
-  }, [loadSources]);
+  const [isExporting, setIsExporting] = useState(false);
 
   const [filters, setFilters] = useState<TrafficFilters>({ platform: '', search: '' });
   const [searchInput, setSearchInput] = useState(filters.search);
   const [page, setPage] = useState(0);
-  // The page as files (AT-015): the same range, and the visit list's filters.
-  const exporter = useTrafficExport({
-    brandId: brand.id,
-    dateWindow,
-    rangeLabel: rangeSubLabel,
-    platform: filters.platform,
-    search: filters.search,
-  });
 
   useEffect(() => {
     const id = window.setTimeout(() => {
@@ -508,13 +518,48 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
       });
       setLogs(result.logs);
       setLogsTotal(result.total);
-      setLogsPageviews(result.pageviews);
     } catch (err) {
       console.error('Failed to load traffic logs:', err);
     } finally {
       setIsLoadingLogs(false);
     }
   }, [brand.id, page, filters.platform, filters.search, dateWindow]);
+
+  const handleExportCsv = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const result = await getTrafficLogs(brand.id, {
+        limit: TRAFFIC_EXPORT_LIMIT,
+        platform: filters.platform || undefined,
+        search: filters.search || undefined,
+        dateFrom: dateWindow.dateFrom,
+        dateTo: dateWindow.dateTo,
+      });
+
+      const rows = result.logs.map((log) => ({
+        timestamp: log.createdAt,
+        platform: log.sourcePlatform ? getPlatformName(log.sourcePlatform) : '',
+        page_url: log.url,
+        referrer: log.referrer ?? '',
+      }));
+
+      const csv = toCsv(rows, TRAFFIC_EXPORT_HEADERS);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const date = new Date().toISOString().slice(0, 10);
+
+      link.href = url;
+      link.download = `ansvisor_${brand.slug}_traffic_${date}.csv`;
+      link.click();
+
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to export CSV');
+    } finally {
+      setIsExporting(false);
+    }
+  }, [brand.id, brand.slug, filters.platform, filters.search, dateWindow]);
 
   const handleFiltersChange = useCallback((patch: Partial<TrafficFilters>) => {
     setPage(0);
@@ -553,10 +598,9 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-4 w-96 mt-2" />
         </div>
-        <div className={TRAFFIC_KPI_GRID}>
-          {Array.from({ length: 7 }, (_, i) => (
-            // The cards' own height, so nothing shifts when they arrive.
-            <Skeleton key={i} className="h-[133px] rounded-xl" />
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-24" />
           ))}
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -568,51 +612,14 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   }
 
   const totalVisits = summary?.totalVisits ?? 0;
-  // From the summary, not the selected range: while a new range loads, the
-  // numbers on screen are still the previous range's.
-  const comparable = summary?.hasPreviousPeriod ?? false;
-  // Analytics isn't ready for this brand: the platform table's engagement
-  // columns show "—", as the KPI cards do, and say what they need (AT-005,
-  // §3.8b's partial note) — even with rows left from an earlier connection.
-  const gaMissing =
-    !sourcesFailed && sources !== null && googleSourceStatus(sources.ga) !== 'connected';
+  const totalVisitsPrev = summary?.totalVisitsPrev ?? 0;
+  const visitsDelta =
+    totalVisitsPrev > 0 ? Math.round(((totalVisits - totalVisitsPrev) / totalVisitsPrev) * 100) : 0;
+  const topPlatform = summary?.platformBreakdown[0];
 
   const isEmpty = totalVisits === 0 && logs.length === 0;
   const hasAnyData = summary?.hasAnyData ?? false;
   const trulyEmpty = isEmpty && !hasAnyData;
-
-  // Pages: which answers send visitors (AT-006), in the page's range. It
-  // replaces "Pages AI engines aren't sending traffic to" (#719, AT-002),
-  // whose list is now its No AI traffic tab, and reads the snippet,
-  // Analytics, citations and the sitemap; without Analytics it says what's
-  // partial rather than hiding.
-  // Where AI visitors convert (AT-014, spec §3.4b): Google Analytics' own
-  // sessions, so it shows even when the snippet saw no visit in the range; a
-  // thin range reads the last 30 days.
-  const conversionsSection = (
-    <ConversionsSection
-      brandId={brand.id}
-      dateWindow={dateWindow}
-      rangeLabel={rangeSubLabel}
-      source={sourcesFailed ? null : (sources?.ga ?? null)}
-      domain={primaryDomain}
-      canConnect={canManage}
-      onConnected={() => void loadSources()}
-      pagesActions={<TableExport exporter={exporter} section="convertingPages" />}
-      answersActions={<TableExport exporter={exporter} section="buyerAnswers" />}
-    />
-  );
-
-  const pagesCard = (
-    <PagesCard
-      brandId={brand.id}
-      dateWindow={dateWindow}
-      rangeLabel={rangeSubLabel}
-      domain={primaryDomain}
-      analyticsMissing={gaMissing}
-      actions={<TableExport exporter={exporter} section="pageStatus" />}
-    />
-  );
 
   return (
     <div className="space-y-6">
@@ -637,33 +644,34 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
             onFromChange={handleCustomFromChange}
             onToChange={handleCustomToChange}
           />
-          <ExportMenu exporter={exporter} />
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => void handleExportCsv()}
+            disabled={isExporting || isEmpty}
+          >
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            {isExporting ? tCommon('exporting') : tCommon('exportCsv')}
+          </Button>
         </div>
       </div>
 
-      {!sourcesFailed && (
-        <SourcesStrip
-          sources={sources}
-          domain={primaryDomain}
-          hasTrackingCode={Boolean(brand.trackingCode)}
-          canConnect={canManage}
-          onShowCode={() => setCodeOpen(true)}
-          onConnected={() => void loadSources()}
-        />
-      )}
-      {/* The code stays open only while the snippet sends nothing (F3). */}
-      {(sourcesFailed || (sources && !snippetDetected(sources.snippetLastVisitAt))) && (
-        <SnippetBanner trackingCode={brand.trackingCode} />
-      )}
-      <SnippetDialog trackingCode={brand.trackingCode} open={codeOpen} onOpenChange={setCodeOpen} />
+      {/* Snippet Banner */}
+      <SnippetBanner trackingCode={brand.trackingCode} />
 
       {trulyEmpty ? (
         <Card>
           <CardContent className="py-16 text-center">
             <Globe className="h-10 w-10 mx-auto text-muted-foreground/50" />
-            <h3 className="text-lg font-semibold mt-4">{t('noDataTitle')}</h3>
+            <h3 className="text-lg font-semibold mt-4">No traffic data yet</h3>
             <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-              {brand.trackingCode ? t('noVisitsDescription') : t('noDataDescriptionNoSnippet')}
+              {brand.trackingCode
+                ? 'Once visitors arrive from AI platforms, their visits will appear here.'
+                : 'Add the tracking snippet to your website to start collecting AI-referred traffic data.'}
             </p>
           </CardContent>
         </Card>
@@ -671,27 +679,45 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
         <NoTrafficForPeriod
           rangeLabel={rangeSubLabel}
           onReset={() => handleDatePresetChange('all')}
-          onShowWeek={datePreset === '24h' ? () => handleDatePresetChange('7d') : undefined}
         />
-      ) : null}
-      {isEmpty && conversionsSection}
-      {isEmpty && pagesCard}
-      {!isEmpty && (
+      ) : (
         <>
-          {/* KPI cards: two rows of four (AT-017, spec §3.2). */}
-          <TrafficKpis
-            brandId={brand.id}
-            rangeLabel={rangeSubLabel}
-            dateWindow={dateWindow}
-            preset={datePreset}
-            summary={summary}
-            summaryLoading={isLoadingSummary}
-            sources={sources}
-            sourcesFailed={sourcesFailed}
-            canConnect={canManage}
-            onConnected={() => void loadSources()}
-            onRangeChange={handleDatePresetChange}
-          />
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <KpiCard
+              title="AI-Referred Visits"
+              icon={Users}
+              value={totalVisits.toLocaleString()}
+              sub={
+                totalVisitsPrev > 0 ? (
+                  <>
+                    {visitsDelta >= 0 ? (
+                      <TrendingUp className="h-3 w-3" />
+                    ) : (
+                      <TrendingDown className="h-3 w-3" />
+                    )}
+                    {visitsDelta >= 0 ? '+' : ''}
+                    {visitsDelta}% vs previous period
+                  </>
+                ) : (
+                  rangeSubLabel
+                )
+              }
+              subPositive={visitsDelta > 0 ? true : visitsDelta < 0 ? false : undefined}
+            />
+            <KpiCard
+              title="Top Platform"
+              icon={Globe}
+              value={topPlatform ? getPlatformName(topPlatform.platform) : '—'}
+              sub={topPlatform ? `${topPlatform.visits} visits` : 'no data'}
+            />
+            <KpiCard
+              title="Platforms"
+              icon={Globe}
+              value={summary?.platformBreakdown.length ?? 0}
+              sub="unique AI sources"
+            />
+          </div>
 
           {/* Charts row */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -700,7 +726,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                 <CardTitle className="font-medium text-sm">{trendTitle}</CardTitle>
               </CardHeader>
               <CardContent>
-                <ReferralTrendChart data={trend} analyticsDays={summary?.analyticsDays} />
+                <ReferralTrendChart data={trend} />
               </CardContent>
             </Card>
 
@@ -714,17 +740,12 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
             </Card>
           </div>
 
-          {/* Tables row: side by side from 1,280px. The platform table's five
-              columns (AT-005) need more than half the page below that, and
-              numeric cells never wrap (spec §3.2). */}
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          {/* Tables row */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {/* Platform table */}
             <Card>
               <CardHeader className="pb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-sm font-medium">Referrals by Platform</CardTitle>
-                  <TableExport exporter={exporter} section="platforms" />
-                </div>
+                <CardTitle className="text-sm font-medium">Referrals by Platform</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
@@ -732,10 +753,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                     <TableRow>
                       <TableHead className="pl-6">Platform</TableHead>
                       <TableHead className="text-right">Visits</TableHead>
-                      <TableHead className="text-right">Change</TableHead>
-                      {/* From Google Analytics (AT-005). */}
-                      <TableHead className="text-right">{t('platforms.engaged')}</TableHead>
-                      <TableHead className="text-right pr-6">{t('platforms.keyEvents')}</TableHead>
+                      <TableHead className="text-right pr-6">Change</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -747,38 +765,24 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                           </span>
                         </TableCell>
                         <TableCell className="text-right font-semibold tabular-nums">
-                          {formatNumber(row.visits)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end">
-                            <DeltaBadge
-                              current={row.visits}
-                              previous={row.visitsPrev}
-                              comparable={comparable}
-                            />
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <EngagedCell analytics={gaMissing ? null : row.analytics} />
+                          {row.visits.toLocaleString()}
                         </TableCell>
                         <TableCell className="text-right pr-6">
-                          <KeyEventsCell analytics={gaMissing ? null : row.analytics} />
+                          <div className="flex justify-end">
+                            <DeltaBadge current={row.visits} previous={row.visitsPrev} />
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-                {gaMissing && <PlatformValueNote />}
               </CardContent>
             </Card>
 
             {/* Top Pages */}
             <Card>
               <CardHeader className="pb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-sm font-medium">Top Landing Pages</CardTitle>
-                  <TableExport exporter={exporter} section="pages" />
-                </div>
+                <CardTitle className="text-sm font-medium">Top Landing Pages</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
@@ -786,11 +790,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                     <TableRow>
                       <TableHead className="pl-6">Page</TableHead>
                       <TableHead className="text-right">Visits</TableHead>
-                      <TableHead className="text-right">Change</TableHead>
-                      {/* How often tracked AI answers cite the page (AT-006). */}
-                      <TableHead className="text-right pr-6">
-                        {t('pageList.columns.citedInAnswers')}
-                      </TableHead>
+                      <TableHead className="text-right pr-6">Change</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -802,19 +802,12 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                           </span>
                         </TableCell>
                         <TableCell className="text-right font-semibold tabular-nums text-sm">
-                          {formatNumber(row.visits)}
+                          {row.visits.toLocaleString()}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right pr-6">
                           <div className="flex justify-end">
-                            <DeltaBadge
-                              current={row.visits}
-                              previous={row.visitsPrev}
-                              comparable={comparable}
-                            />
+                            <DeltaBadge current={row.visits} previous={row.visitsPrev} />
                           </div>
-                        </TableCell>
-                        <TableCell className="text-right pr-6 tabular-nums text-sm">
-                          {formatNumber(row.citations)}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -824,9 +817,12 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
             </Card>
           </div>
 
-          {conversionsSection}
-
-          {pagesCard}
+          {/* Findings from the Analytics connection (#719). Renders nothing
+              for brands without a mapped property, so the page is unchanged
+              for everyone who has not connected one. Kept visually distinct
+              from the tables above, which count the tracking snippet's own
+              visits — the two origins are never summed. */}
+          <PageOpportunitiesCard brandId={brand.id} />
 
           {/* Recent Visit Log with filtering and pagination*/}
           <Card>
@@ -837,14 +833,11 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                     <LayoutList className="h-4 w-4 text-muted-foreground" />
                     <CardTitle className="text-sm font-medium">Recent AI Referral Visits</CardTitle>
                   </div>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    {logsTotal > 0 && (
-                      <Badge variant="secondary" className="text-xs">
-                        {tVisits('listTotal', { visits: logsTotal, pageviews: logsPageviews })}
-                      </Badge>
-                    )}
-                    <TableExport exporter={exporter} section="visits" />
-                  </div>
+                  {logsTotal > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {logsTotal} total
+                    </Badge>
+                  )}
                 </div>
                 <TrafficFilterBar
                   filters={filters}
@@ -888,23 +881,15 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                             </span>
                           </TableCell>
                           <TableCell>
-                            <div className="flex min-w-0 items-center gap-1.5">
-                              <span className="font-mono text-xs text-muted-foreground line-clamp-1">
-                                {(() => {
-                                  try {
-                                    return new URL(row.url).pathname;
-                                  } catch {
-                                    return row.url;
-                                  }
-                                })()}
-                              </span>
-                              {/* A reload or a further link in the same visit (AT-003). */}
-                              {row.pageviews > 1 && (
-                                <span className="shrink-0 whitespace-nowrap rounded-full bg-muted px-1.5 text-[11px] font-medium leading-4 text-muted-foreground">
-                                  {tVisits('rowPageviews', { count: row.pageviews })}
-                                </span>
-                              )}
-                            </div>
+                            <span className="font-mono text-xs text-muted-foreground line-clamp-1">
+                              {(() => {
+                                try {
+                                  return new URL(row.url).pathname;
+                                } catch {
+                                  return row.url;
+                                }
+                              })()}
+                            </span>
                           </TableCell>
                           <TableCell className="text-right pr-6">
                             <span className="text-xs text-muted-foreground">
@@ -932,29 +917,6 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                       />
                     );
                   })()}
-                  {/* What the list covers, and a wider range when it is a short one
-                      (AT-017, spec §3.01). */}
-                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-6 pb-1 text-xs text-muted-foreground">
-                    <span>
-                      {tVisits('listRange', {
-                        visits: logsTotal,
-                        pageviews: logsPageviews,
-                        range: rangeSubLabel,
-                        preset: datePreset === 'custom' || datePreset === 'all' ? 'other' : 'last',
-                      })}
-                    </span>
-                    {datePreset === '24h' && (
-                      <button
-                        type="button"
-                        onClick={() => handleDatePresetChange('7d')}
-                        className="font-medium text-foreground underline-offset-4 hover:underline"
-                      >
-                        {tVisits('showLast7Days')}
-                      </button>
-                    )}
-                  </div>
-                  <VisitListSourceNote analyticsDays={summary?.analyticsDays.length ?? 0} />
-                  <p className="px-6 pb-4 text-xs text-muted-foreground">{tVisits('listNote')}</p>
                 </>
               )}
             </CardContent>

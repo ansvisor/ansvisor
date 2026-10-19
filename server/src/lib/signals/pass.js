@@ -22,8 +22,6 @@ import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { recordSignalsForBrand } from './record.js';
 import { generateActionsForBrand } from '../action-center/generate.js';
-import { rescoreBrandActions } from '../action-center/priority-data.js';
-import { sweepActionTasks } from '../action-center/task-writer/index.js';
 
 /**
  * How far back the sweep looks. Long enough to cover a missed night plus the
@@ -49,22 +47,6 @@ async function latestStampedRun(brandId, { anySource = false } = {}) {
 }
 
 /**
- * A night with no fresh results runs no generator, and the generator is what
- * scores the brand's active actions again. Without this, a brand whose
- * tracking is quiet keeps last night's scores, and an action opened before
- * scores existed keeps none. Best effort, as the generator's rescoring is: a
- * score that can't be worked out is no reason to fail the pass.
- */
-async function rescoreSkippedNight(brandId, now) {
-  try {
-    return { rescored: await rescoreBrandActions(brandId, { now }) };
-  } catch (err) {
-    logger.warn({ brandId, err: err.message }, '[actions] rescore on a skipped night failed');
-    return null;
-  }
-}
-
-/**
  * Record signals and consolidate them into actions for one brand, then log
  * the pass against the run it covered.
  *
@@ -85,9 +67,7 @@ export async function runSignalPass(brandId, { runAt, now = new Date() } = {}) {
   }
 
   const recorded = await recordSignalsForBrand(brandId, { now });
-  const generated = recorded.skipped
-    ? await rescoreSkippedNight(brandId, now)
-    : await generateActionsForBrand(brandId, { now });
+  const generated = recorded.skipped ? null : await generateActionsForBrand(brandId, { now });
 
   const { error } = await supabaseAdmin.from('signal_runs').upsert(
     {
@@ -100,14 +80,6 @@ export async function runSignalPass(brandId, { runAt, now = new Date() } = {}) {
     { onConflict: 'brand_id,tracking_run_at' },
   );
   if (error) throw new Error(error.message);
-
-  // Tonight's new actions get their tasks written (AC-004) without holding up
-  // the pass: a slow or failed model call costs only the template tasks.
-  if (generated?.created > 0) {
-    sweepActionTasks({ brandId, now }).catch((err) => {
-      logger.error({ err, brandId }, '[task-writer] sweep after the pass crashed');
-    });
-  }
 
   return { trackingRunAt, signals: recorded, actions: generated };
 }

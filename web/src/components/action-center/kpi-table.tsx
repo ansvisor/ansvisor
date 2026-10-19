@@ -10,7 +10,6 @@ import {
   Pencil,
   PieChart,
   Quote,
-  Smile,
   TrendingDown,
   TrendingUp,
   Trash2,
@@ -49,7 +48,6 @@ const KPI_ICONS: Record<KpiKey, React.ComponentType<{ className?: string }>> = {
   mentions: MessageSquare,
   share_of_voice: PieChart,
   ai_referral_traffic: MousePointerClick,
-  positive_sentiment: Smile,
 };
 
 /**
@@ -135,12 +133,10 @@ export function KpiTable({
   busyKey,
 }: {
   kpis: KpiSnapshot[];
-  /** Without them (the unsaved ready-made set) the rows have no menu. */
-  onEdit?: (key: KpiKey) => void;
-  onRemove?: (key: KpiKey) => void;
+  onEdit: (key: KpiKey) => void;
+  onRemove: (key: KpiKey) => void;
   busyKey: KpiKey | null;
 }) {
-  const editable = Boolean(onEdit && onRemove);
   const t = useTranslations('actionCenter.kpis');
   const tRegistry = useTranslations('actionCenter.registry');
 
@@ -156,11 +152,9 @@ export function KpiTable({
             <TableHead className="text-xs">{t('table.status')}</TableHead>
             <TableHead className="text-xs">{t('table.goal')}</TableHead>
             <TableHead className="text-xs">{t('table.vsGoal')}</TableHead>
-            {editable && (
-              <TableHead className="w-10">
-                <span className="sr-only">{t('table.actions')}</span>
-              </TableHead>
-            )}
+            <TableHead className="w-10">
+              <span className="sr-only">{t('table.actions')}</span>
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -207,29 +201,27 @@ export function KpiTable({
                 <TableCell>
                   <GoalProgress snapshot={kpi} />
                 </TableCell>
-                {editable && (
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        className="rounded p-1 text-muted-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
-                        disabled={busyKey === kpi.key}
-                        aria-label={t('menu.label', { name: tRegistry(`${kpi.key}.name`) })}
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => onEdit?.(kpi.key)}>
-                          <Pencil className="h-4 w-4" />
-                          {t('menu.edit')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem variant="destructive" onClick={() => onRemove?.(kpi.key)}>
-                          <Trash2 className="h-4 w-4" />
-                          {t('menu.remove')}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                )}
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      className="rounded p-1 text-muted-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+                      disabled={busyKey === kpi.key}
+                      aria-label={t('menu.label', { name: tRegistry(`${kpi.key}.name`) })}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => onEdit(kpi.key)}>
+                        <Pencil className="h-4 w-4" />
+                        {t('menu.edit')}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem variant="destructive" onClick={() => onRemove(kpi.key)}>
+                        <Trash2 className="h-4 w-4" />
+                        {t('menu.remove')}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
               </TableRow>
             );
           })}

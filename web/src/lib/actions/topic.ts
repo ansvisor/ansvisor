@@ -2,11 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
-import { API_BASE_URL } from '@/config/api';
 import type { Topic } from '@/types';
-import { DAY_MS, topicTrendDays, type TopicsWindow } from '@/lib/topic-trend';
-
-export type { TopicsWindow } from '@/lib/topic-trend';
 
 function mapTopicRow(row: Record<string, unknown>): Topic {
   return {
@@ -129,129 +125,31 @@ export interface TopicOverviewRow {
   visiblePrompts: number;
   /** Distinct prompts that produced results in the window (rate denominator). */
   activePrompts: number;
-  /**
-   * Score difference in points: the window against the window of the same
-   * length just before it. Without a window, the last 7 days against the 7
-   * before.
-   */
+  /** Rate difference in points: (current 7d) − (previous 7d). */
   visibilityChange: number | null;
   totalMentions: number;
   totalCitations: number;
   shareOfVoice: number;
   topCompetitor: { name: string; sov: number } | null;
   lastRunAt: string | null;
-  /** A point per day of `TopicOverviewSummary.trendDays`; empty when it is. */
   trendSparkline: number[];
 }
 
 export interface TopicOverviewSummary {
   topics: TopicOverviewRow[];
   unassignedPromptCount: number;
-  /**
-   * The UTC days the trend covers, oldest first: the window's whole days
-   * counted back from its end, none for a window under two days (one day has
-   * no line to draw). Without a window, the last 14 days.
-   */
-  trendDays: string[];
-}
-
-interface AnswerCounts {
-  answers: number;
-  mentionAnswers: number;
-  citationAnswers: number;
-  posSum: number;
-  posN: number;
-}
-
-/** One topic's figures, whichever function read them. */
-interface TopicAgg {
-  /** The table's window. */
-  window: AnswerCounts;
-  /** The change compares these two. */
-  current: AnswerCounts;
-  previous: AnswerCounts;
-  totalMentions: number;
-  totalCitations: number;
-  compMentions: number;
-  activePrompts: number;
-  visiblePrompts: number;
-  lastRunAt: string | null;
-  competitors: Record<string, { name: string; sov: number }>;
-  daily: Record<string, { visible: number; count: number }>;
-}
-
-const num = (v: unknown) => Number(v ?? 0);
-const counts = (r: Record<string, unknown>, prefix: string): AnswerCounts => ({
-  answers: num(r[`${prefix}answers`]),
-  mentionAnswers: num(r[`${prefix}mention_answers`]),
-  citationAnswers: num(r[`${prefix}citation_answers`]),
-  posSum: num(r[`${prefix}pos_sum`]),
-  posN: num(r[`${prefix}pos_n`]),
-});
-const shared = (r: Record<string, unknown>) => ({
-  totalMentions: num(r.total_mentions),
-  totalCitations: num(r.total_citations),
-  compMentions: num(r.comp_mentions),
-  activePrompts: num(r.active_prompts),
-  visiblePrompts: num(r.visible_prompts),
-  lastRunAt: (r.last_run_at as string | null) ?? null,
-  competitors: (r.competitors as TopicAgg['competitors'] | null) ?? {},
-  daily: (r.daily as TopicAgg['daily'] | null) ?? {},
-});
-
-/**
- * The window's figures from topics_overview_window (00156); null when the
- * database doesn't have it yet (PostgREST's PGRST202), for a web build
- * deployed before the migration, which then reads the fixed overview.
- */
-async function readWindowAggregates(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  brandId: string,
-  window: TopicsWindow,
-): Promise<Map<string, TopicAgg> | null> {
-  const { data, error } = await supabase.rpc('topics_overview_window', {
-    p_brand_id: brandId,
-    p_date_from: window.from,
-    p_date_to: window.to ?? undefined,
-  });
-  if (error?.code === 'PGRST202') return null;
-  if (error) throw new Error(error.message);
-  return new Map(
-    ((data ?? []) as unknown as Record<string, unknown>[]).map((r) => [
-      r.topic_id as string,
-      { window: counts(r, ''), current: counts(r, ''), previous: counts(r, 'prev_'), ...shared(r) },
-    ]),
-  );
-}
-
-/** The fixed overview (00057, 00098): 30 days, and 7 days against the 7 before. */
-async function readFixedAggregates(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  brandId: string,
-): Promise<Map<string, TopicAgg>> {
-  const { data, error } = await supabase.rpc('topics_overview_aggregates', {
-    p_brand_id: brandId,
-  });
-  if (error) throw new Error(error.message);
-  return new Map(
-    ((data ?? []) as unknown as Record<string, unknown>[]).map((r) => [
-      r.topic_id as string,
-      {
-        window: counts(r, ''),
-        current: counts(r, 'cur_'),
-        previous: counts(r, 'prev_'),
-        ...shared(r),
-      },
-    ]),
-  );
 }
 
 /**
- * Aggregate per-topic analytics for a brand over a window (the page's date
- * range), or the last 30 days without one: visibility, mentions, citations,
- * SoV, top competitor and a trend per topic. Visibility is the AI Visibility
- * Score over the topic's answers, the Insights headline's blend (#493).
- * chatgpt-shopping rows are excluded (#155).
+ * Aggregate per-topic analytics for a brand.
+ * Looks at last 30 days of prompt_results and derives visibility rate,
+ * mentions, citations, SoV, top competitor and a short sparkline per topic.
+ * Visibility uses the prompt-level rate from #490 (prompts appeared in ÷
+ * prompts with results), NOT the raw score average — the Topics page must
+ * read on the same scale as the Insights headline (#493). Change is
+ * (current 7d rate) − (previous 7d rate) in points. Like every analytical
+ * surface, chatgpt-shopping rows are excluded (#155) — totals here must
+ * agree with the Insights KPIs on the same 30d window (#464).
  */
 /**
  * The roster read still pages: PostgREST silently caps an un-paginated select
@@ -265,26 +163,12 @@ async function readFixedAggregates(
 const TOPIC_RESULTS_PAGE_SIZE = 1000;
 const TOPIC_PROMPTS_MAX_ROWS = 10_000;
 
-export async function getTopicsOverview(
-  brandId: string,
-  window?: TopicsWindow,
-): Promise<TopicOverviewSummary> {
+export async function getTopicsOverview(brandId: string): Promise<TopicOverviewSummary> {
   const supabase = await createClient();
 
   // Only the sparkline's day keys are built here now; every window boundary
   // is resolved inside the aggregate, from the database's clock.
   const now = Date.now();
-
-  // The aggregate needs only the brand, so it runs while the roster pages in.
-  // One aggregate per brand instead of downloading the window (#721); only the
-  // AI Visibility Score is computed here, over ~20 rows, so this page and the
-  // Insights headline keep one implementation.
-  const aggregates = (async () => {
-    const windowed = window ? await readWindowAggregates(supabase, brandId, window) : null;
-    return { windowed, aggByTopic: windowed ?? (await readFixedAggregates(supabase, brandId)) };
-  })();
-  // Settled here so a roster failure doesn't leave it rejecting unobserved.
-  aggregates.catch(() => {});
 
   const [topicsRes, setsRes] = await Promise.all([
     supabase
@@ -336,20 +220,59 @@ export async function getTopicsOverview(
     promptCountByTopic.set(p.topic_id, (promptCountByTopic.get(p.topic_id) ?? 0) + 1);
   }
 
-  const { windowed, aggByTopic } = await aggregates;
-  const trendDays =
-    window && windowed
-      ? topicTrendDays(window, now)
-      : Array.from({ length: 14 }, (_, i) =>
-          new Date(now - (13 - i) * DAY_MS).toISOString().slice(0, 10),
-        );
+  // One aggregate per brand instead of downloading the window (#721). The page
+  // used to page through every result row — 33 requests and 73 MB on the
+  // largest brand — to compute twenty table rows in JavaScript. The arithmetic
+  // now runs where the data is; only the AI Visibility Score stays here, over
+  // ~20 rows, so this page and the Insights headline keep one implementation.
+  const { data: aggRows, error: aggError } = await supabase.rpc('topics_overview_aggregates', {
+    p_brand_id: brandId,
+  });
+  if (aggError) throw new Error(aggError.message);
 
-  const scoreOf = (c: AnswerCounts) =>
+  interface TopicAggRow {
+    topic_id: string;
+    answers: number;
+    mention_answers: number;
+    citation_answers: number;
+    pos_sum: number;
+    pos_n: number;
+    cur_answers: number;
+    cur_mention_answers: number;
+    cur_citation_answers: number;
+    cur_pos_sum: number;
+    cur_pos_n: number;
+    prev_answers: number;
+    prev_mention_answers: number;
+    prev_citation_answers: number;
+    prev_pos_sum: number;
+    prev_pos_n: number;
+    total_mentions: number;
+    total_citations: number;
+    comp_mentions: number;
+    active_prompts: number;
+    visible_prompts: number;
+    last_run_at: string | null;
+    competitors: Record<string, { name: string; sov: number }>;
+    daily: Record<string, { visible: number; count: number }>;
+  }
+
+  const aggByTopic = new Map<string, TopicAggRow>(
+    ((aggRows ?? []) as unknown as TopicAggRow[]).map((row) => [row.topic_id, row]),
+  );
+
+  const scoreOf = (
+    answers: number,
+    mention: number,
+    citation: number,
+    posSum: number,
+    posN: number,
+  ) =>
     computeAiVisibilityScore({
-      answers: c.answers,
-      mentionAnswers: c.mentionAnswers,
-      citationAnswers: c.citationAnswers,
-      positionFactor: c.posN > 0 ? c.posSum / c.posN : null,
+      answers,
+      mentionAnswers: mention,
+      citationAnswers: citation,
+      positionFactor: posN > 0 ? posSum / posN : null,
     }) ?? 0;
 
   const rows: TopicOverviewRow[] = topics.map((t) => {
@@ -372,27 +295,49 @@ export async function getTopicsOverview(
         shareOfVoice: 0,
         topCompetitor: null,
         lastRunAt: null,
-        trendSparkline: trendDays.map(() => 0),
+        trendSparkline: Array.from({ length: 14 }, () => 0),
       };
     }
 
     // Visibility Rate IS the AI Visibility Score over the topic's answers —
     // same blend as the Insights headline (see lib/visibility-score).
-    const visibilityRate = scoreOf(agg.window);
+    const visibilityRate = scoreOf(
+      agg.answers,
+      agg.mention_answers,
+      agg.citation_answers,
+      agg.pos_sum,
+      agg.pos_n,
+    );
     const change =
-      agg.current.answers > 0 && agg.previous.answers > 0
-        ? Math.round((scoreOf(agg.current) - scoreOf(agg.previous)) * 10) / 10
+      agg.cur_answers > 0 && agg.prev_answers > 0
+        ? Math.round(
+            (scoreOf(
+              agg.cur_answers,
+              agg.cur_mention_answers,
+              agg.cur_citation_answers,
+              agg.cur_pos_sum,
+              agg.cur_pos_n,
+            ) -
+              scoreOf(
+                agg.prev_answers,
+                agg.prev_mention_answers,
+                agg.prev_citation_answers,
+                agg.prev_pos_sum,
+                agg.prev_pos_n,
+              )) *
+              10,
+          ) / 10
         : null;
 
     // The brand's own mentions are the same total the table shows.
-    const totalForSov = agg.totalMentions + agg.compMentions;
+    const totalForSov = agg.total_mentions + agg.comp_mentions;
     const shareOfVoice =
-      totalForSov > 0 ? Math.round((agg.totalMentions / totalForSov) * 1000) / 10 : 0;
+      totalForSov > 0 ? Math.round((agg.total_mentions / totalForSov) * 1000) / 10 : 0;
 
     let topCompetitor: TopicOverviewRow['topCompetitor'] = null;
     if (totalForSov > 0) {
       let best: { name: string; sov: number } | null = null;
-      for (const c of Object.values(agg.competitors)) {
+      for (const c of Object.values(agg.competitors ?? {})) {
         const pct = Math.round((c.sov / totalForSov) * 1000) / 10;
         if (!best || pct > best.sov) best = { name: c.name, sov: pct };
       }
@@ -401,29 +346,33 @@ export async function getTopicsOverview(
 
     // Daily visible-answer share (result-level) — a trend proxy for the
     // headline rate; sparklines have no axis, only shape matters.
-    const sparklineDays = trendDays.map((key) => {
-      const bucket = agg.daily[key];
-      return bucket && bucket.count > 0 ? Math.round((bucket.visible / bucket.count) * 100) : 0;
-    });
+    const sparklineDays: number[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const key = new Date(now - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const bucket = agg.daily?.[key];
+      sparklineDays.push(
+        bucket && bucket.count > 0 ? Math.round((bucket.visible / bucket.count) * 100) : 0,
+      );
+    }
 
     return {
       id: t.id,
       name: t.name,
       promptCount,
       visibilityRate,
-      visiblePrompts: agg.visiblePrompts,
-      activePrompts: agg.activePrompts,
+      visiblePrompts: agg.visible_prompts,
+      activePrompts: agg.active_prompts,
       visibilityChange: change,
-      totalMentions: agg.totalMentions,
-      totalCitations: agg.totalCitations,
+      totalMentions: agg.total_mentions,
+      totalCitations: agg.total_citations,
       shareOfVoice,
       topCompetitor,
-      lastRunAt: agg.lastRunAt,
+      lastRunAt: agg.last_run_at,
       trendSparkline: sparklineDays,
     };
   });
 
-  return { topics: rows, unassignedPromptCount, trendDays };
+  return { topics: rows, unassignedPromptCount };
 }
 
 export async function deleteTopic(topicId: string): Promise<void> {
@@ -456,42 +405,4 @@ export async function deleteTopic(topicId: string): Promise<void> {
   // Delete the topic
   const { error } = await supabase.from('topics').delete().eq('id', topicId);
   if (error) throw new Error(error.message);
-}
-
-/**
- * "Send action" on an Insights Opportunities topic (VIS-011): a Growth
- * action to capture the demand of the topic's suggested prompts. The server
- * reads the suggestions again; the same topic sent again returns the open
- * action.
- */
-export async function sendTopicOpportunityToActionCenter(
-  topicId: string,
-  suggestionIds: string[],
-): Promise<
-  | { actionId: string; actionNo: number; created: boolean }
-  // 'stale': none of the suggestions is still open in the topic (409).
-  | { error: string; code?: 'stale' }
-> {
-  const supabase = await createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) return { error: 'Not authenticated' };
-
-  const res = await fetch(`${API_BASE_URL}/api/topics/${topicId}/opportunity-action`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify({ suggestionIds }),
-  });
-
-  // Returned, not thrown: a thrown error's message is masked in production.
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    const error = body.details || body.error || `Server error: ${res.status}`;
-    return res.status === 409 ? { error, code: 'stale' } : { error };
-  }
-  return res.json();
 }

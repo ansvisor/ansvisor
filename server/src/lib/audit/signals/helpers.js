@@ -120,13 +120,10 @@ export function countPhrases(text, phrases) {
   const lower = text.toLowerCase();
   let count = 0;
   for (const p of phrases) {
-    const phrase = p.toLowerCase();
-    if (!phrase) continue;
-
-    let idx = lower.indexOf(phrase);
+    let idx = lower.indexOf(p);
     while (idx !== -1) {
       count += 1;
-      idx = lower.indexOf(phrase, idx + phrase.length);
+      idx = lower.indexOf(p, idx + p.length);
     }
   }
   return count;

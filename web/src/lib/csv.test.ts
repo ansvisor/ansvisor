@@ -1,5 +1,5 @@
-import { expect, test } from 'vitest';
-import { csvLine, toCsv } from './csv.js';
+﻿import { expect, test } from 'vitest';
+import { toCsv } from './csv.js';
 
 test('plain values pass through unquoted', () => {
   const result = toCsv([{ name: 'hello', value: 'world' }], ['name', 'value']);
@@ -60,28 +60,4 @@ test('multiple rows are joined by newline', () => {
     ['a', 'b'],
   );
   expect(result).toBe('a,b\n1,2\n3,4');
-});
-
-test('string values starting with formula injection triggers get prefixed with single quote', () => {
-  const result = toCsv(
-    [{ formula: '=1+1', plus: '+cmd', minus: '-calc', at: '@user', tab: '\ttab', cr: '\rline' }],
-    ['formula', 'plus', 'minus', 'at', 'tab', 'cr'],
-  );
-  expect(result).toBe(
-    'formula,plus,minus,at,tab,cr\n' + "'=1+1,'+cmd,'-calc,'@user,'\ttab,\"'\rline\"",
-  );
-});
-
-test('string with leading formula trigger and comma is prefixed and quoted', () => {
-  const result = toCsv([{ val: '=a,b' }], ['val']);
-  expect(result).toBe('val\n"\'=a,b"');
-});
-
-test('negative numbers remain untouched as numeric values', () => {
-  const result = toCsv([{ score: -3.2, rank: -5 }], ['score', 'rank']);
-  expect(result).toBe('score,rank\n-3.2,-5');
-});
-
-test('csvLine escapes each value as a cell', () => {
-  expect(csvLine(['Search', 'a, "b"', '=1+1', null])).toBe(`Search,"a, ""b""",'=1+1,`);
 });

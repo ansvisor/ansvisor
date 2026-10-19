@@ -27,7 +27,6 @@ import supabaseAdmin from '../../config/supabase.js';
 import { computeAiVisibilityScore } from '../../config/visibility-score.js';
 import { logger } from '../logger.js';
 import { resolve } from '../../config/action-engine.js';
-import { BASKET_KPIS, basketScope, measureBasket } from './basket-metrics.js';
 
 const DAY_MS = 86_400_000;
 
@@ -161,17 +160,16 @@ export async function measureKpis(brandId, kpiKeys, from, to) {
 /**
  * AI-referred visits over a window.
  *
- * Two sources exist: the tracking snippet, counted one row per visit (a row
- * whose visit_of is null starts a visit, 00172; reloads are further rows of
- * it), and the analytics integration's sessions. Whichever the brand actually
- * has is used — and when it has neither, the metric is unmeasured, not zero.
+ * Two sources exist and they measure different things: the tracking snippet
+ * logs each referred visit, while the analytics integration reports sessions.
+ * Whichever the brand actually has is used — and when it has neither, the
+ * metric is unmeasured, not zero.
  */
 async function measureTraffic(brandId, from, to) {
   const { count, error } = await supabaseAdmin
     .from('ai_traffic_logs')
     .select('id', { count: 'exact', head: true })
     .eq('brand_id', brandId)
-    .is('visit_of', null)
     .gte('created_at', `${from}T00:00:00Z`)
     .lte('created_at', `${to}T23:59:59Z`);
   if (error) throw new Error(`ai_traffic_logs: ${error.message}`);
@@ -235,47 +233,6 @@ export async function validateAction(action, { now = new Date() } = {}) {
   // action, and would file most recent work as a decline.
   if (afterWindow.to >= utcDay(now)) return null;
 
-  // An action sent from a content opportunity is measured on its own prompts
-  // and pages; the brand-wide numbers would bury a single piece of content.
-  // An Improve action (PROMPT-004) likewise, on its one prompt, and a topic
-  // gap (VIS-010) or opportunity (VIS-011) sent from Insights on the topic's
-  // prompts, answers sent from Mentions (MS-08) on their prompts, and pages
-  // sent from AI Traffic (AT-006) on those pages.
-  if (
-    action.kind === 'content_opportunity' ||
-    action.kind === 'prompt_improve' ||
-    action.kind === 'topic_competitor_gap' ||
-    action.kind === 'topic_opportunity' ||
-    action.kind === 'mention_review' ||
-    action.kind === 'traffic_pages'
-  ) {
-    const scope = await basketScope(action);
-    const [before, after] = await Promise.all([
-      measureBasket(action.brand_id, scope, beforeWindow.from, beforeWindow.to),
-      measureBasket(action.brand_id, scope, afterWindow.from, afterWindow.to),
-    ]);
-    const metrics = Object.entries(BASKET_KPIS).map(([metric, unit]) => ({
-      metric,
-      unit,
-      before: before[metric],
-      after: after[metric],
-    }));
-    const outcome = deriveOutcome(metrics);
-    await write(
-      action.id,
-      {
-        measuredAt: now.toISOString(),
-        beforeWindow,
-        afterWindow,
-        metrics,
-        scope: { kind: 'basket', prompts: scope.promptIds.length, pages: scope.pages.length },
-      },
-      outcome,
-      now,
-    );
-    return outcome;
-  }
-
   const kpiKeys = (action.kpi_keys ?? []).filter((key) => key in MEASURABLE_KPIS);
 
   // An action with no success metrics has nothing to measure. That is a gap
@@ -332,7 +289,7 @@ export async function sweepActionValidation({ now = new Date() } = {}) {
   const cutoff = new Date(now.getTime() - VALIDATION_WAIT_DAYS * DAY_MS).toISOString();
   const { data, error } = await supabaseAdmin
     .from('actions')
-    .select('id, brand_id, kind, payload, kpi_keys, created_at, completed_at')
+    .select('id, brand_id, kpi_keys, created_at, completed_at')
     .eq('status', 'completed')
     .eq('outcome', 'pending_measurement')
     .not('completed_at', 'is', null)

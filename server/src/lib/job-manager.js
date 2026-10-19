@@ -77,59 +77,29 @@ export async function failJob(jobId, reason) {
 }
 
 /**
- * Atomically move a job from 'waiting' to 'active' and count the attempt.
- * Returns the job row, or null when it was not waiting — cancelled, already
- * taken by another run chain, or the read failed. The status guard is what
- * makes it safe for the recovery sweep and a job's own retry timer to race
- * for the same job: only one of them gets it.
+ * Mark a job as active and increment attempts.
  */
-export async function claimWaitingJob(jobId) {
+export async function markJobActive(jobId) {
   const now = new Date().toISOString();
-  const { data: job, error } = await supabaseAdmin
+
+  // Use rpc-free approach: fetch then update
+  const { data: job } = await supabaseAdmin
     .from('jobs')
-    .update({ status: 'active', started_at: now, updated_at: now })
+    .select('attempts')
     .eq('id', jobId)
-    .eq('status', 'waiting')
-    .select('*')
-    .maybeSingle();
+    .single();
 
-  if (error) {
-    logger.error({ err: error, jobId }, 'failed to claim job');
-    return null;
-  }
-  if (!job) return null;
-
-  const attempts = (job.attempts || 0) + 1;
-  const { error: attemptsError } = await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from('jobs')
-    .update({ attempts })
+    .update({
+      status: 'active',
+      started_at: now,
+      updated_at: now,
+      attempts: (job?.attempts || 0) + 1,
+    })
     .eq('id', jobId);
-  if (attemptsError) logger.error({ err: attemptsError, jobId }, 'failed to count job attempt');
 
-  return { ...job, attempts };
-}
-
-/**
- * Jobs left in 'waiting' — the recovery sweep's input. Only rows untouched
- * for `idleMs`, so a job created a moment ago is left to the call that
- * created it, and created within `maxAgeMs`, because an older nightly job
- * would duplicate the next night's run.
- */
-export async function listWaitingJobs({ idleMs, maxAgeMs }) {
-  const now = Date.now();
-  const { data, error } = await supabaseAdmin
-    .from('jobs')
-    .select('id, type')
-    .eq('status', 'waiting')
-    .lt('updated_at', new Date(now - idleMs).toISOString())
-    .gt('created_at', new Date(now - maxAgeMs).toISOString())
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    logger.error({ err: error }, 'failed to list waiting jobs');
-    return [];
-  }
-  return data ?? [];
+  if (error) logger.error({ err: error, jobId }, 'failed to mark job active');
 }
 
 /**

@@ -27,16 +27,8 @@ const NOW = new Date('2026-09-16T04:00:00Z');
  * lets `await supabase.from(x).select(y).eq(...)` resolve without a terminal
  * call.
  */
-function mockDb({
-  signals = [],
-  activeActions = [],
-  closedActions = [],
-  candidates = [],
-  promptVolumes = [],
-  failActionUpdates = false,
-} = {}) {
-  // `log` keeps the order of the writes across tables.
-  const writes = { inserted: [], updated: [], upserted: [], log: [] };
+function mockDb({ signals = [], activeActions = [], closedActions = [], candidates = [] } = {}) {
+  const writes = { inserted: [], updated: [] };
 
   from.mockImplementation((table) => {
     const state = { op: 'select', payload: null, negated: false };
@@ -67,13 +59,6 @@ function mockDb({
         state.op = 'update';
         state.payload = payload;
         writes.updated.push({ table, patch: payload });
-        writes.log.push(`update ${table}`);
-        return builder;
-      },
-      upsert: (payload) => {
-        state.op = 'upsert';
-        writes.upserted.push({ table, rows: Array.isArray(payload) ? payload : [payload] });
-        writes.log.push(`upsert ${table}`);
         return builder;
       },
       then: (resolve, reject) => Promise.resolve(result()).then(resolve, reject),
@@ -81,18 +66,12 @@ function mockDb({
 
     function result() {
       if (state.op === 'insert') return { data: { id: `new-${table}` }, error: null };
-      if (state.op === 'upsert') return { data: null, error: null };
-      if (state.op === 'update') {
-        const failed =
-          failActionUpdates && table === 'actions' && 'priority_score' in state.payload;
-        return { data: null, error: failed ? { message: 'column does not exist' } : null };
-      }
+      if (state.op === 'update') return { data: null, error: null };
       if (table === 'signals') return { data: signals, error: null };
       if (table === 'actions') {
         return { data: state.negated ? activeActions : closedActions, error: null };
       }
       if (table === 'action_candidates') return { data: candidates, error: null };
-      if (table === 'prompt_volumes') return { data: promptVolumes, error: null };
       return { data: [], error: null };
     }
 
@@ -142,13 +121,6 @@ describe('generateActionsForBrand', () => {
     });
     // Its own baseline — the "before" half of a future measurement.
     expect(action.rows[0].baseline.signals).toHaveLength(1);
-    // Written with its priority (AC-006), from the drop it rests on.
-    expect(action.rows[0]).toMatchObject({
-      priority_score: expect.any(Number),
-      priority_level: expect.stringMatching(/^(critical|high|medium|low)$/),
-      priority_reason: expect.objectContaining({ change: 'dropped' }),
-      priority_updated_at: NOW.toISOString(),
-    });
     // The plan comes from the specification's library, and ends in validation.
     const keys = writes.inserted
       .find((w) => w.table === 'action_tasks')
@@ -196,83 +168,6 @@ describe('generateActionsForBrand', () => {
         (w) => w.table === 'action_events' && w.rows[0].event === 'signals_linked',
       ),
     ).toBe(true);
-  });
-
-  it('keeps every link in action_signals, the signals and the action both ways', async () => {
-    const writes = mockDb({ signals: [signal({ id: 's1' }), signal({ id: 's2' })] });
-
-    await generateActionsForBrand(BRAND, { now: NOW });
-
-    const links = writes.upserted.filter((w) => w.table === 'action_signals');
-    expect(links.flatMap((w) => w.rows)).toEqual([
-      { action_id: 'new-actions', signal_id: 's1', linked_at: NOW.toISOString() },
-      { action_id: 'new-actions', signal_id: 's2', linked_at: NOW.toISOString() },
-    ]);
-  });
-
-  it('writes the link before pointing the signal at the action', async () => {
-    const writes = mockDb({ signals: [signal()] });
-
-    await generateActionsForBrand(BRAND, { now: NOW });
-
-    // If the second write fails, the signal is not taken and is linked again
-    // the next night, rather than taken with no link to show it by.
-    const link = writes.log.indexOf('upsert action_signals');
-    const point = writes.log.indexOf('update signals');
-    expect(link).toBeGreaterThanOrEqual(0);
-    expect(link).toBeLessThan(point);
-  });
-
-  /**
-   * AC-007: signals stay granular, actions don't multiply. Two prompts that
-   * say much the same thing are two signals of one kind, and one kind is one
-   * response — so they are one action covering both.
-   */
-  it('makes one action of two similar prompts with the same root cause', async () => {
-    const writes = mockDb({
-      signals: [
-        signal({ id: 'best', payload: { promptText: 'What is the best AI rank tracker?' } }),
-        signal({
-          id: 'accurate',
-          payload: { promptText: 'What are the most accurate AI rank tracker tools?' },
-        }),
-      ],
-    });
-
-    const summary = await generateActionsForBrand(BRAND, { now: NOW });
-
-    expect(summary.created).toBe(1);
-    expect(writes.inserted.filter((w) => w.table === 'actions')).toHaveLength(1);
-    const linked = writes.updated.find((w) => w.table === 'signals');
-    expect(linked.patch).toEqual({ action_id: 'new-actions' });
-    expect(writes.upserted.flatMap((w) => w.rows).map((row) => row.signal_id)).toEqual([
-      'best',
-      'accurate',
-    ]);
-  });
-
-  /**
-   * A signal still open after its action closed is a condition still firing.
-   * It used to keep pointing at the closed action and never start another.
-   */
-  it('lets a signal whose action closed start the next cycle', async () => {
-    const writes = mockDb({
-      signals: [signal({ action_id: 'closed-1' })],
-      closedActions: [
-        { dedup_key: 'recover_visibility', completed_at: daysAgo(40), updated_at: daysAgo(40) },
-      ],
-    });
-
-    const summary = await generateActionsForBrand(BRAND, { now: NOW });
-
-    expect(summary.created).toBe(1);
-    expect(writes.updated.find((w) => w.table === 'signals').patch).toEqual({
-      action_id: 'new-actions',
-    });
-    // The closed action keeps its link: it still lists the signal.
-    expect(writes.upserted.flatMap((w) => w.rows)).toEqual([
-      { action_id: 'new-actions', signal_id: 's1', linked_at: NOW.toISOString() },
-    ]);
   });
 
   /**
@@ -340,7 +235,6 @@ describe('generateActionsForBrand', () => {
 
     expect(summary).toEqual({
       created: 0,
-      rescored: 0,
       refreshed: 0,
       resting: 0,
       ineligible: 0,
@@ -693,17 +587,10 @@ describe('the candidate queue', () => {
     expect(refresh.patch.last_seen_at).toBe(NOW.toISOString());
   });
 
-  it('does not queue a signal an active action was created from', async () => {
+  it('does not queue a signal an action has already claimed', async () => {
     const writes = mockDb({
       signals: [signal({ action_id: 'a1' })],
-      activeActions: [
-        {
-          id: 'a1',
-          dedup_key: 'recover_visibility',
-          status: 'new',
-          baseline: { signals: [{ id: 's1' }] },
-        },
-      ],
+      activeActions: [{ id: 'a1', dedup_key: 'recover_visibility', status: 'new' }],
     });
 
     const summary = await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
@@ -712,34 +599,6 @@ describe('the candidate queue', () => {
     expect(queueWrites(writes).filter((w) => w.rows || w.patch.status === 'waiting')).toHaveLength(
       0,
     );
-  });
-
-  /**
-   * A signal linked to an active action after it was created is its evidence,
-   * not its scope. It used to leave the queue the night after it was linked
-   * and the candidate went stale, so the next cycle never covered it.
-   */
-  it('keeps a newcomer queued on the nights after it was linked', async () => {
-    const writes = mockDb({
-      signals: [signal({ id: 'newcomer', action_id: 'a1' })],
-      activeActions: [
-        {
-          id: 'a1',
-          dedup_key: 'recover_visibility',
-          status: 'in_progress',
-          baseline: { signals: [{ id: 'original' }] },
-        },
-      ],
-    });
-
-    const summary = await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
-
-    expect(summary.queued).toBe(1);
-    expect(summary.stale).toBe(0);
-    const queued = writes.inserted.find((w) => w.table === 'action_candidates');
-    expect(queued.rows[0].signal_ids).toEqual(['newcomer']);
-    // Already its evidence: not linked again.
-    expect(writes.updated.some((w) => w.table === 'signals')).toBe(false);
   });
 
   /**
@@ -810,136 +669,5 @@ describe('the candidate queue', () => {
     const row = writes.inserted.find((w) => w.table === 'action_candidates').rows[0];
     expect(Number.isFinite(row.priority)).toBe(true);
     expect(row.priority).toBeGreaterThan(0);
-  });
-});
-
-/**
- * AC-006: every action carries a priority score, and the queue is ordered by
- * it. Quantity is not priority — the spec's own example is forty-seven
- * repetitive low-demand signals against one high-demand commercial loss.
- */
-describe('the priority score', () => {
-  const VOLUMES = [
-    ...Array.from({ length: 47 }, (_, i) => ({
-      prompt_id: `tail-${i}`,
-      est_ai_volume: 5,
-      intent: 'what-is',
-      fetched_at: NOW.toISOString(),
-    })),
-    { prompt_id: 'hot', est_ai_volume: 2000, intent: 'comparison', fetched_at: NOW.toISOString() },
-  ];
-
-  it('promotes one high-demand commercial loss before forty-seven low-demand gaps', async () => {
-    const spent = Array.from({ length: maxNewActionsPerDay - 1 }, (_, i) => ({
-      id: `spent-${i}`,
-      dedup_key: `unrelated-${i}`,
-      status: 'new',
-      created_at: NOW.toISOString(),
-    }));
-    const writes = mockDb({
-      signals: [
-        // Same impact as the loss, and far more of them.
-        ...Array.from({ length: 47 }, (_, i) =>
-          signal({
-            id: `gap-${i}`,
-            kind: 'uncovered_demand',
-            impact: 'high',
-            payload: { entity: 'prompts', targets: [{ id: `tail-${i}`, volume: 5 }] },
-          }),
-        ),
-        signal({
-          id: 'loss',
-          kind: 'lost_citations',
-          impact: 'high',
-          payload: { promptId: 'hot', promptText: 'Best AI rank tracker?' },
-        }),
-      ],
-      activeActions: spent,
-      promptVolumes: VOLUMES,
-    });
-
-    const summary = await generateActionsForBrand(BRAND, {
-      now: NOW,
-      sources: new Set([...ALL_SOURCES, 'volumes']),
-    });
-
-    expect(summary.created).toBe(1);
-    const opened = writes.inserted.find((w) => w.table === 'actions').rows[0];
-    expect(opened.kind).toBe('recover_lost_citations');
-    expect(opened.priority_reason).toMatchObject({
-      change: 'lost',
-      demand: 'high',
-      commercial: true,
-      heldBefore: true,
-    });
-    // The queue holds the gaps, scored below it.
-    const queued = writes.inserted
-      .filter((w) => w.table === 'action_candidates')
-      .flatMap((w) => w.rows);
-    const byDefinition = Object.fromEntries(queued.map((r) => [r.definition_id, r.priority]));
-    expect(byDefinition.recover_lost_citations).toBeGreaterThan(
-      byDefinition.create_content_for_demand,
-    );
-  });
-
-  it('works out every active action again from its evidence', async () => {
-    const writes = mockDb({
-      signals: [
-        signal({
-          id: 's9',
-          action_id: 'a1',
-          kind: 'lost_citations',
-          source: ['ai_results'],
-          detected_at: daysAgo(2),
-          payload: { promptId: 'hot' },
-        }),
-      ],
-      activeActions: [
-        {
-          id: 'a1',
-          dedup_key: 'recover_lost_citations',
-          status: 'in_progress',
-          created_at: daysAgo(5),
-          kind: 'recover_lost_citations',
-          category: 'recover',
-          impact: 'high',
-          payload: {},
-        },
-      ],
-      promptVolumes: VOLUMES,
-    });
-
-    const summary = await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
-
-    expect(summary.rescored).toBe(1);
-    const patch = writes.updated.find((w) => w.table === 'actions' && 'priority_score' in w.patch);
-    expect(patch.patch).toMatchObject({
-      priority_level: expect.any(String),
-      priority_reason: expect.objectContaining({ change: 'lost', days: 2 }),
-    });
-    // A priority refresh is not an edit: the action's updated_at stays put.
-    expect(patch.patch).not.toHaveProperty('updated_at');
-  });
-
-  it('keeps the night going when a priority cannot be saved', async () => {
-    mockDb({
-      signals: [],
-      activeActions: [
-        {
-          id: 'a1',
-          dedup_key: 'recover_lost_citations',
-          status: 'new',
-          created_at: daysAgo(1),
-          kind: 'recover_lost_citations',
-          category: 'recover',
-          impact: 'high',
-          payload: {},
-        },
-      ],
-      failActionUpdates: true,
-    });
-
-    const summary = await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
-    expect(summary.rescored).toBe(0);
   });
 });

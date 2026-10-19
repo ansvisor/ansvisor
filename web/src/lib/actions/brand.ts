@@ -5,9 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
 import { isWithinLimit } from '@/config/plans';
 import { slugify } from '@/lib/slug';
-import { API_BASE_URL } from '@/config/api';
 import type { Brand, BrandDomain } from '@/types';
-import { MAX_PINNED_COMPETITORS } from '@/lib/insights-trend';
 
 function mapDomainRow(d: Record<string, unknown>): BrandDomain {
   return {
@@ -197,37 +195,13 @@ export async function updateBrand(id: string, updates: UpdateBrandInput): Promis
   );
 }
 
-/**
- * Deletes a brand through the server, which removes its answers in batches
- * before the brand row: in one statement, a brand of any size outran the
- * database's 8-second limit for signed-in requests and was never deleted.
- *
- * `pending` means the server is still deleting a large brand; it finishes on
- * its own within minutes. Failures are returned rather than thrown, since a
- * thrown server-action error reaches the browser without its message.
- */
-export async function deleteBrand(
-  id: string,
-): Promise<{ deleted: boolean; pending?: boolean } | { error: string }> {
+export async function deleteBrand(id: string): Promise<void> {
   const supabase = await createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) return { error: 'Not authenticated' };
 
-  const res = await fetch(`${API_BASE_URL}/api/brands/${id}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${session.access_token}` },
-  });
-  const body = (await res.json().catch(() => ({}))) as {
-    deleted?: boolean;
-    pending?: boolean;
-    error?: string;
-  };
-  if (!res.ok) return { error: body.error || 'Failed to delete the brand.' };
+  const { error } = await supabase.from('brands').delete().eq('id', id);
 
+  if (error) throw new Error(error.message);
   revalidatePath('/dashboard/brands');
-  return { deleted: Boolean(body.deleted), pending: Boolean(body.pending) };
 }
 
 /**
@@ -340,45 +314,6 @@ export async function setBrandActive(brandId: string, isActive: boolean): Promis
   revalidatePath('/dashboard/brands');
 }
 
-/**
- * Pin competitors on the Insights visibility trend (VIS-007): saved on the
- * brand, in pin order, so the whole team sees the same lines whatever the
- * range. At most MAX_PINNED_COMPETITORS; ids that aren't this brand's
- * competitors are dropped. Returns what was saved.
- *
- * RLS gates the write like every brand setting: admins and managers only.
- */
-export async function setPinnedCompetitors(
-  brandId: string,
-  competitorIds: string[],
-): Promise<string[]> {
-  if (!Array.isArray(competitorIds) || competitorIds.some((id) => typeof id !== 'string')) {
-    throw new Error('Pinned competitors must be a list of competitor ids.');
-  }
-  const supabase = await createClient();
-  const wanted = [...new Set(competitorIds)];
-
-  const { data: owned, error: ownedError } = wanted.length
-    ? await supabase.from('competitors').select('id').eq('brand_id', brandId).in('id', wanted)
-    : { data: [], error: null };
-  if (ownedError) throw new Error(ownedError.message);
-  const ownedIds = new Set((owned ?? []).map((c) => c.id));
-  const pinned = wanted.filter((id) => ownedIds.has(id)).slice(0, MAX_PINNED_COMPETITORS);
-
-  // Return the updated row so RLS silently denying the write surfaces as an
-  // error, as in setBrandActive.
-  const { data, error } = await supabase
-    .from('brands')
-    .update({ insights_pinned_competitors: pinned })
-    .eq('id', brandId)
-    .select('id');
-  if (error) throw new Error(error.message);
-  if (!data || data.length === 0) {
-    throw new Error('Brand not found or you do not have permission to update it.');
-  }
-  return pinned;
-}
-
 export interface BrandCardSummary {
   brandId: string;
   visibility7d: number;
@@ -410,12 +345,10 @@ export async function getBrandsCardSummary(
       .select('id, prompt_sets!inner(brand_id)')
       .in('prompt_sets.brand_id', brandIds)
       .eq('is_active', true),
-    // Visits, not pageviews (00172), as the AI Traffic page counts them.
     supabase
       .from('ai_traffic_logs')
       .select('brand_id, created_at')
       .in('brand_id', brandIds)
-      .is('visit_of', null)
       .gte('created_at', new Date(now - 7 * 86400000).toISOString()),
   ]);
 

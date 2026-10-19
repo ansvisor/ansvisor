@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { Badge } from '@/components/ui/badge';
@@ -16,14 +15,9 @@ import {
 import { actionGoal, actionTexts } from '@/lib/action-center/display';
 import type { ActionHistoryItem } from '@/lib/action-center/history';
 import { UNCOUNTED_TASK_STATUSES } from '@/lib/action-center/registry';
-import { ActionIcon, PriorityBadge } from './action-table';
+import { ImpactDots } from './signal-table';
+import { ActionIcon } from './action-table';
 import { HistoryStatusBadge } from './history-table';
-import { ImproveOutcomeCard } from './improve-outcome-card';
-import { useActionStory } from './use-action-story';
-import { Skeleton } from '@/components/ui/skeleton';
-import { getActionSignals } from '@/lib/actions/action-center';
-import type { Signal } from '@/lib/signals/map';
-import { improvePlatformLabels } from '@/lib/improve-outcome';
 import { cn } from '@/lib/utils';
 
 /**
@@ -76,15 +70,14 @@ function ResultMetricCard({
  * for and the rest is the evidence behind it.
  */
 export function HistoryDrawer({
-  brandId,
   item,
   onOpenChange,
 }: {
-  brandId: string;
   item: ActionHistoryItem | null;
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations('actionCenter.historyPage');
+  const tActions = useTranslations('actionCenter.actionsPage');
   const tTexts = useTranslations('actionCenter.actionTexts');
   const tTypes = useTranslations('actionCenter.actionCategories');
   const tTasks = useTranslations('actionCenter.actionTasks');
@@ -93,39 +86,6 @@ export function HistoryDrawer({
   const tRegistry = useTranslations('actionCenter.registry');
   const tAffected = useTranslations('actionCenter.historyPage.affected');
   const router = useRouter();
-
-  // The signals the action took as evidence, read once it opens as the Actions
-  // drawer reads them, so its goal and what happened are told from its own
-  // data (AC-003). A failed read leaves the general sentences.
-  const itemId = item?.id ?? null;
-  const [read, setRead] = useState<{ id: string; signals: Signal[] } | null>(null);
-  useEffect(() => {
-    if (!itemId) return;
-    let cancelled = false;
-    getActionSignals(brandId, itemId).then(
-      (signals) => {
-        if (!cancelled) setRead({ id: itemId, signals });
-      },
-      () => {
-        if (!cancelled) setRead({ id: itemId, signals: [] });
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [brandId, itemId]);
-  const storyAction = useMemo(
-    () =>
-      item
-        ? { id: item.id, payload: item.payload, createdAt: item.createdAt, dueDate: item.dueDate }
-        : null,
-    [item],
-  );
-  const { story, ready } = useActionStory(
-    brandId,
-    storyAction,
-    read && read.id === itemId ? read.signals : null,
-  );
 
   if (!item) return null;
 
@@ -143,14 +103,15 @@ export function HistoryDrawer({
   return (
     <Sheet open={Boolean(item)} onOpenChange={onOpenChange}>
       <SheetContent className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-lg">
-        <SheetHeader className="border-b px-6 py-4 pr-12">
+        <SheetHeader className="border-b px-6 py-4">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge variant="outline" className="text-[10px]">
               {tTypes(item.type)}
             </Badge>
-            {item.priorityScore !== null && (
-              <PriorityBadge score={item.priorityScore} level={item.priorityLevel} />
-            )}
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <ImpactDots impact={item.impact} />
+              {tActions(`impact.${item.impact}`)}
+            </span>
             <HistoryStatusBadge status={item.status} />
             <span className="ml-auto text-muted-foreground">AC-{item.actionNo}</span>
           </div>
@@ -179,24 +140,16 @@ export function HistoryDrawer({
         </SheetHeader>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-4 text-sm">
-          <section aria-busy={!ready}>
+          <section>
             <p className="text-xs font-medium text-muted-foreground">{t('drawer.goal')}</p>
-            {ready ? (
-              <p className="mt-1">{story?.goal ?? actionGoal(item.kind, tTexts, item.payload)}</p>
-            ) : (
-              <Skeleton className="mt-1.5 h-4 w-3/4" />
-            )}
+            <p className="mt-1">{actionGoal(item.kind, tTexts)}</p>
           </section>
 
           <Separator />
 
-          <section aria-busy={!ready}>
+          <section>
             <p className="text-xs font-medium text-muted-foreground">{t('drawer.whatHappened')}</p>
-            {ready ? (
-              <p className="mt-1">{story?.why ?? texts.description}</p>
-            ) : (
-              <Skeleton className="mt-1.5 h-4 w-full" />
-            )}
+            <p className="mt-1">{texts.description}</p>
             {item.triggerSignals.length > 0 && (
               <p className="mt-1.5 text-xs text-muted-foreground">
                 {t('drawer.triggeredBy', { count: item.triggerSignals.length })}
@@ -240,16 +193,6 @@ export function HistoryDrawer({
           </section>
 
           <Separator />
-
-          {item.positionOutcome && (
-            <>
-              <ImproveOutcomeCard
-                outcome={item.positionOutcome}
-                labels={improvePlatformLabels(item.payload)}
-              />
-              <Separator />
-            </>
-          )}
 
           <section>
             <p className="text-xs font-medium text-muted-foreground">{t('drawer.affected')}</p>

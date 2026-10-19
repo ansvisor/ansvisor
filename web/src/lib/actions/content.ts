@@ -1,9 +1,8 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import type { ContentBrief, ContentOpportunity, OpportunityBasket, WebhookConfig } from '@/types';
+import type { ContentBrief, ContentOpportunity, WebhookConfig } from '@/types';
 import { API_BASE_URL } from '@/config/api';
-import type { ContentUsage } from '@/lib/content-usage';
 
 const AEO_SERVER_URL = API_BASE_URL;
 
@@ -16,66 +15,31 @@ async function getSession() {
   return session;
 }
 
-/** What a "+ New" request asks for (CONTENT-003). */
-export interface OnDemandRequest {
-  brandId: string;
-  count: number;
-  topicId?: string | null;
-  promptId?: string | null;
-  idea?: string | null;
-  /** One page of AI Traffic's Pages section (AT-006 part B3), as a path: one opportunity. */
-  pagePath?: string | null;
-  /** One per submit, so a double click or a retried request starts one job. */
-  idempotencyKey: string;
-}
-
-export type OnDemandResult =
-  | { ok: true; jobId: string; count: number }
-  | { ok: false; error: string; quotaExhausted?: boolean; periodEnd?: string | null };
-
-/** Starts generating opportunities now ("+ New"); errors come back as values. */
-export async function generateOpportunitiesOnDemand(
-  request: OnDemandRequest,
-): Promise<OnDemandResult> {
+export async function generateOpportunities(brandId: string): Promise<{ jobId: string }> {
   const session = await getSession();
 
-  const res = await fetch(`${AEO_SERVER_URL}/api/content/opportunities/generate`, {
+  const res = await fetch(`${AEO_SERVER_URL}/api/content/generate`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify(request),
+    body: JSON.stringify({ brandId }),
   });
 
-  const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    return {
-      ok: false,
-      error: body.message || body.error || `Server error: ${res.status}`,
-      quotaExhausted: body.error === 'quota_exhausted',
-      periodEnd: body.periodEnd ?? null,
-    };
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error: ${res.status}`);
   }
-  return { ok: true, jobId: body.jobId, count: body.count };
+
+  const data = await res.json();
+  return { jobId: data.jobId };
 }
 
 export interface GenerationJobStatus {
   status: 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'not_found';
   progress: { phase: string; message: string } | null;
-  result: {
-    generated: number;
-    /** Skipped as duplicates of existing opportunities (CONTENT-004); not counted. */
-    duplicates?: number;
-    /** The month's quota ran out before anything could be generated. */
-    limited?: boolean;
-    /** The opportunities this run created, newest work first. */
-    opportunityIds?: string[];
-    /** A run for one prompt wrote nothing: the open opportunity that answers it. */
-    existingId?: string;
-    /** A run for one page found no tracked prompts about it (AT-006 part B3). */
-    noMatch?: boolean;
-  } | null;
+  result: { generated: number } | null;
   failedReason: string | null;
 }
 
@@ -120,11 +84,6 @@ export async function getOpportunities(
     q?: string;
     type?: string;
     promptId?: string;
-    topicId?: string;
-    source?: string;
-    /** Suggested on or after / before (ISO), CONTENT-002. */
-    createdFrom?: string;
-    createdTo?: string;
     limit?: number;
     offset?: number;
     sort?: string;
@@ -136,7 +95,6 @@ export async function getOpportunities(
     avgScore: number;
     highImpactCount: number;
     sentCount: number;
-    signalCount: number;
   };
 }> {
   const session = await getSession();
@@ -147,10 +105,6 @@ export async function getOpportunities(
   if (filters?.q) params.set('q', filters.q);
   if (filters?.type) params.set('type', filters.type);
   if (filters?.promptId) params.set('prompt_id', filters.promptId);
-  if (filters?.topicId) params.set('topic_id', filters.topicId);
-  if (filters?.source) params.set('source', filters.source);
-  if (filters?.createdFrom) params.set('created_from', filters.createdFrom);
-  if (filters?.createdTo) params.set('created_to', filters.createdTo);
   if (filters?.limit) params.set('limit', String(filters.limit));
   if (filters?.offset) params.set('offset', String(filters.offset));
   if (filters?.sort) params.set('sort', filters.sort);
@@ -196,114 +150,10 @@ export async function getOpportunityPrompts(brandId: string): Promise<Opportunit
   return body.prompts;
 }
 
-export async function sendOpportunityToActionCenter(
-  id: string,
-  assetKey?: string,
-): Promise<{ actionId: string; created: boolean } | { error: string }> {
-  const session = await getSession();
-
-  const res = await fetch(`${AEO_SERVER_URL}/api/content/${id}/action`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify({ assetKey: assetKey ?? null }),
-  });
-
-  // Returned, not thrown: a thrown error's message is masked in production.
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    return { error: body.details || body.error || `Server error: ${res.status}` };
-  }
-  return res.json();
-}
-
-export interface OpportunityActionResult {
-  id: string;
-  actionNo: number;
-  title: string | null;
-  status: string;
-  outcome: string;
-  completedAt: string | null;
-  validatedAt: string | null;
-  metrics: { metric: string; unit: string; before: number | null; after: number | null }[];
-}
-
-/**
- * The Action Center actions sent from an opportunity, with what they measured.
- * Read with the user's session, so RLS keeps it to their organization.
- */
-export async function getOpportunityActions(ids: string[]): Promise<OpportunityActionResult[]> {
-  if (!ids.length) return [];
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('actions')
-    .select('id, action_no, status, outcome, completed_at, validated_at, validation, payload')
-    .in('id', ids)
-    .order('created_at');
-  if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => {
-    const payload = (row.payload ?? {}) as { title?: string };
-    const validation = (row.validation ?? null) as {
-      metrics?: OpportunityActionResult['metrics'];
-    } | null;
-    return {
-      id: row.id,
-      actionNo: Number(row.action_no),
-      title: payload.title ?? null,
-      status: row.status,
-      outcome: row.outcome,
-      completedAt: row.completed_at,
-      validatedAt: row.validated_at,
-      metrics: validation?.metrics ?? [],
-    };
-  });
-}
-
-export interface OpportunityTopic {
-  topicId: string;
-  name: string;
-  count: number;
-}
-
-export async function getOpportunityTopics(brandId: string): Promise<OpportunityTopic[]> {
-  const session = await getSession();
-
-  const res = await fetch(`${AEO_SERVER_URL}/api/content/brand/${brandId}/topics`, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${session.access_token}` },
-  });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Server error: ${res.status}`);
-  }
-
-  const body = (await res.json()) as { topics: OpportunityTopic[] };
-  return body.topics;
-}
-
 export async function getOpportunity(id: string): Promise<ContentOpportunity> {
   const session = await getSession();
 
   const res = await fetch(`${AEO_SERVER_URL}/api/content/${id}`, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${session.access_token}` },
-  });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Server error: ${res.status}`);
-  }
-
-  return res.json();
-}
-
-export async function getOpportunityBasket(id: string): Promise<OpportunityBasket> {
-  const session = await getSession();
-
-  const res = await fetch(`${AEO_SERVER_URL}/api/content/${id}/basket`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${session.access_token}` },
   });
@@ -328,24 +178,6 @@ export async function getBriefQuota(): Promise<BriefQuota> {
   const res = await fetch(`${AEO_SERVER_URL}/api/content/briefs/quota`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${session.access_token}` },
-  });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || body.error || `Server error: ${res.status}`);
-  }
-
-  return res.json();
-}
-
-/** Both monthly content counters and their period (CONTENT-001). */
-export async function getContentUsage(): Promise<ContentUsage> {
-  const session = await getSession();
-
-  const res = await fetch(`${AEO_SERVER_URL}/api/content/usage`, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${session.access_token}` },
-    cache: 'no-store',
   });
 
   if (!res.ok) {
@@ -382,8 +214,6 @@ export async function generateBrief(
 export async function updateOpportunityStatus(
   id: string,
   status: string,
-  /** Why it was dismissed (CONTENT-006); only read with status 'dismissed'. */
-  reason?: 'not_relevant' | 'wrong_angle',
 ): Promise<ContentOpportunity> {
   const session = await getSession();
 
@@ -393,7 +223,7 @@ export async function updateOpportunityStatus(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ status, ...(reason ? { reason } : {}) }),
+    body: JSON.stringify({ status }),
   });
 
   if (!res.ok) {
@@ -608,93 +438,4 @@ export async function saveWebhookConfig(
     createdAt: data.created_at ?? new Date().toISOString(),
     updatedAt: data.updated_at ?? new Date().toISOString(),
   };
-}
-
-export type AlternativeResult =
-  | { ok: true; jobId: string }
-  | { ok: false; error: string; quotaExhausted?: boolean; noCluster?: boolean };
-
-/**
- * "Another angle" (CONTENT-006): starts generating one more opportunity for
- * the same need with a different angle. Errors come back as values.
- */
-export async function suggestAlternative(
-  id: string,
-  { direction, idempotencyKey }: { direction?: string | null; idempotencyKey: string },
-): Promise<AlternativeResult> {
-  const session = await getSession();
-
-  const res = await fetch(`${AEO_SERVER_URL}/api/content/${id}/alternative`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify({ direction: direction || null, idempotencyKey }),
-  });
-
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    return {
-      ok: false,
-      error: body.message || body.error || `Server error: ${res.status}`,
-      quotaExhausted: body.error === 'quota_exhausted',
-      noCluster: body.error === 'no_cluster',
-    };
-  }
-  return { ok: true, jobId: body.jobId };
-}
-
-export type PromptSuggestionResult =
-  | { ok: true; jobId: string }
-  | { ok: true; existingId: string }
-  | { ok: false; error: string; quotaExhausted?: boolean };
-
-/**
- * "Suggest content" from the prompts table (PROMPT-006): one content
- * opportunity for the prompt, or the open one it already has. Errors come
- * back as values.
- */
-export async function suggestContentForPrompt(
-  promptId: string,
-  idempotencyKey: string,
-): Promise<PromptSuggestionResult> {
-  const session = await getSession();
-
-  const res = await fetch(`${AEO_SERVER_URL}/api/content/prompts/${promptId}/suggest`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify({ idempotencyKey }),
-  });
-
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    return {
-      ok: false,
-      error: body.message || body.error || `Server error: ${res.status}`,
-      quotaExhausted: body.error === 'quota_exhausted',
-    };
-  }
-  return body.existingId
-    ? { ok: true, existingId: body.existingId }
-    : { ok: true, jobId: body.jobId };
-}
-
-/**
- * The prompt's open content opportunity, if any (PROMPT-006): with the
- * month's quota used up, the row menu can still open it. Null when there is
- * none or it can't be read.
- */
-export async function getOpenSuggestionForPrompt(promptId: string): Promise<string | null> {
-  const session = await getSession();
-
-  const res = await fetch(`${AEO_SERVER_URL}/api/content/prompts/${promptId}/suggestion`, {
-    headers: { Authorization: `Bearer ${session.access_token}` },
-  });
-  if (!res.ok) return null;
-  const body = await res.json().catch(() => ({}));
-  return body.existingId ?? null;
 }

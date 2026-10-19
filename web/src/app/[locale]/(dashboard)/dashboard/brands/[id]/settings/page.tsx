@@ -15,7 +15,7 @@ import { getCompetitors, addCompetitor, deleteCompetitor } from '@/lib/actions/c
 import { getFaviconUrl } from '@/lib/favicon';
 import type { Competitor } from '@/types';
 import { INDUSTRIES, type Brand, type BrandDomain } from '@/types';
-import { REGIONS, REGION_ITEMS, US_STATES, US_STATE_ITEMS } from '@/config/prompt-options';
+import { REGIONS, US_STATES } from '@/config/prompt-options';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -60,8 +60,6 @@ import { getPublicApiBaseUrl } from '@/config/api';
 interface PageProps {
   params: Promise<{ id: string }>;
 }
-
-const INDUSTRY_ITEMS = INDUSTRIES.map((industry) => ({ value: industry, label: industry }));
 
 export default function BrandSettingsPage({ params }: PageProps) {
   const { id } = use(params);
@@ -126,13 +124,9 @@ export default function BrandSettingsPage({ params }: PageProps) {
         <TabsContent value="danger">
           <DangerTab
             brand={brand}
-            onDelete={async (pending) => {
+            onDelete={async () => {
               removeBrand(brand.id);
-              toast.success(
-                pending
-                  ? 'Deleting the brand. It has a lot of data, so this can take a few minutes.'
-                  : 'Brand deleted.',
-              );
+              toast.success('Brand deleted.');
               router.push('/dashboard/brands');
             }}
           />
@@ -159,7 +153,6 @@ function GeneralTab({
   const [region, setRegion] = useState(brand.region ?? 'US');
   const [usState, setUsState] = useState(brand.state ?? '');
   const [isSaving, setIsSaving] = useState(false);
-  const stateItems = [{ value: 'nationwide', label: t('settings.nationwide') }, ...US_STATE_ITEMS];
 
   const handleSave = async () => {
     if (!name.trim()) return;
@@ -227,11 +220,7 @@ function GeneralTab({
 
         <div className="space-y-2">
           <Label htmlFor="industry">{t('industry')}</Label>
-          <Select
-            items={INDUSTRY_ITEMS}
-            value={industry}
-            onValueChange={(v) => setIndustry(v ?? '')}
-          >
+          <Select value={industry} onValueChange={(v) => setIndustry(v ?? '')}>
             <SelectTrigger id="industry">
               <SelectValue placeholder={t('industryPlaceholder')} />
             </SelectTrigger>
@@ -257,9 +246,8 @@ function GeneralTab({
         </div>
 
         <div className="space-y-2">
-          <Label>{t('settings.region')}</Label>
+          <Label>Region</Label>
           <Select
-            items={REGION_ITEMS}
             value={region}
             onValueChange={(v) => {
               if (!v) return;
@@ -282,9 +270,8 @@ function GeneralTab({
 
         {region === 'US' && (
           <div className="space-y-2">
-            <Label>{t('settings.stateOptional')}</Label>
+            <Label>State (optional)</Label>
             <Select
-              items={stateItems}
               value={usState || 'nationwide'}
               onValueChange={(v) => setUsState(!v || v === 'nationwide' ? '' : v)}
             >
@@ -292,7 +279,7 @@ function GeneralTab({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="nationwide">{t('settings.nationwide')}</SelectItem>
+                <SelectItem value="nationwide">Nationwide (no state)</SelectItem>
                 {US_STATES.map((s) => (
                   <SelectItem key={s.code} value={s.code}>
                     {s.label}
@@ -300,7 +287,9 @@ function GeneralTab({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">{t('settings.stateHint')}</p>
+            <p className="text-xs text-muted-foreground">
+              Localizes AI answers to this state from the next tracking run onward.
+            </p>
           </div>
         )}
 
@@ -942,13 +931,7 @@ function TrackingTab({ brand }: { brand: Brand }) {
 
 // ─── Danger Tab ───────────────────────────────────────────────────────────────
 
-function DangerTab({
-  brand,
-  onDelete,
-}: {
-  brand: Brand;
-  onDelete: (pending: boolean) => Promise<void>;
-}) {
+function DangerTab({ brand, onDelete }: { brand: Brand; onDelete: () => Promise<void> }) {
   const t = useTranslations('brands');
   const [confirmValue, setConfirmValue] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
@@ -959,13 +942,8 @@ function DangerTab({
     if (!canDelete) return;
     setIsDeleting(true);
     try {
-      const result = await deleteBrand(brand.id);
-      if ('error' in result) {
-        toast.error(result.error);
-        setIsDeleting(false);
-        return;
-      }
-      await onDelete(Boolean(result.pending));
+      await deleteBrand(brand.id);
+      await onDelete();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete brand.');
       setIsDeleting(false);

@@ -23,6 +23,7 @@ import {
 } from '@/config/prompt-options';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
 import { isCloud, PLANS, SUBSCRIBABLE_PLANS, getPlan, type PlanId } from '@/config/plans';
+import { siteConfig } from '@/config/site';
 import { setPersonProperties, track } from '@/lib/analytics';
 
 const ONBOARDING_STEP_NAMES: Record<number, string> = {
@@ -224,7 +225,7 @@ const PLAN_STEP_COPY: Partial<
   starter: {
     tagline: 'Essential AI visibility tracking.',
     platformFeatures: 'Core Platform Features',
-    engines: 'ChatGPT & Microsoft Copilot',
+    engines: 'ChatGPT & Perplexity',
   },
   growth: {
     tagline: 'Advanced AI insights to accelerate growth.',
@@ -233,10 +234,6 @@ const PLAN_STEP_COPY: Partial<
       'ChatGPT, Google AI Overviews, Google AI Mode, Gemini, Microsoft Copilot, & Perplexity.',
   },
 };
-
-// Shown under the plan step's heading while the free trial is on offer; checkout
-// collects a card but charges nothing until the trial ends.
-const TRIAL_ASSURANCES = ['Zero risk', 'No charge today', 'Cancel anytime'];
 
 // Card width per step, matched to each step's content column; unlisted steps are forms.
 const STEP_FRAME_WIDTH: Record<number, 'medium' | 'wide'> = { 3: 'wide', 4: 'wide', 6: 'medium' };
@@ -337,30 +334,6 @@ export default function OnboardingPage() {
   // Step 6 (cloud only)
   const [checkoutLoading, setCheckoutLoading] = useState<PlanId | null>(null);
   const [organizationId, setOrganizationId] = useState<string | null>(null);
-  // Trial length when the plan step is reached; null once the organization has
-  // had a subscription, since checkout then starts the plan without a trial.
-  const [trialDays, setTrialDays] = useState<number | null>(14);
-  // Whether the trial check said yes. The trial's promises (no charge today,
-  // the day of the first charge) wait for it, so an organization whose trial
-  // is used is never told it won't be charged.
-  const [trialConfirmed, setTrialConfirmed] = useState(false);
-
-  useEffect(() => {
-    if (step !== 6) return;
-    let cancelled = false;
-    fetch('/api/stripe/trial')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((body: { trialAvailable: boolean; trialDays: number } | null) => {
-        if (cancelled || !body) return;
-        setTrialDays(body.trialAvailable ? body.trialDays : null);
-        setTrialConfirmed(body.trialAvailable);
-      })
-      // Keeps the default copy; checkout itself decides whether there is a trial.
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [step]);
   const [currentPlanId, setCurrentPlanId] = useState<PlanId>('starter');
 
   // What the dashboard preview shows when the plan step is reached by resuming
@@ -920,7 +893,7 @@ export default function OnboardingPage() {
 
       // Cloud mode → proceed to subscription step (tracking triggered after payment)
       if (isCloud()) {
-        toast.success('Almost done! Choose a plan to get started.');
+        toast.success('Almost done! Choose a plan to start your free trial.');
         setSavingCompetitors(false);
         setStep(6);
         return;
@@ -1696,23 +1669,10 @@ export default function OnboardingPage() {
       <div className="flex flex-col p-6 md:p-10">
         <div className="mx-auto w-full max-w-2xl flex-1">
           <div className="mb-8 text-center">
-            <p className="text-2xl tracking-tight">One last step</p>
+            <p className="text-2xl tracking-tight">Welcome to {siteConfig.name}!</p>
             <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">
-              {trialDays ? `Start Your ${trialDays}-Day Free Trial` : 'Choose Your Plan'}
+              Start Your 14-Day Free Trial
             </h1>
-            {trialDays && trialConfirmed ? (
-              <ul className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                {TRIAL_ASSURANCES.map((label) => (
-                  <li
-                    key={label}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-500/20 dark:text-emerald-300"
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                    {label}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
           </div>
 
           {/* Plan cards */}
@@ -1801,13 +1761,7 @@ export default function OnboardingPage() {
           </div>
 
           <p className="mt-8 text-center text-lg">Secure payments powered by Stripe.</p>
-          <p className="mt-1 text-center text-sm">
-            {!trialDays
-              ? 'Your free trial has been used, so your plan starts today. Cancel anytime.'
-              : trialConfirmed
-                ? `Your card is charged on day ${trialDays + 1}, unless you cancel in Settings before then.`
-                : 'Cancel anytime.'}
-          </p>
+          <p className="mt-1 text-center text-sm">Cancel anytime during your 14-day free trial.</p>
         </div>
 
         <div className="flex mx-auto w-full max-w-2xl items-center justify-between mt-8">
