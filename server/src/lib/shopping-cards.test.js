@@ -11,6 +11,7 @@ import {
   parseCopilotCard,
   parseChatgptCard,
   normalizeShoppingCards,
+  normalizeInlineProducts,
   matchCardBrand,
 } from './shopping-cards.js';
 
@@ -345,6 +346,62 @@ describe('shopping-cards – normalizeShoppingCards', () => {
     expect(result).toHaveLength(1);
     expect(result[0].product_title).toBe('A');
     expect(result[0].position).toBe(0);
+  });
+});
+
+describe('shopping-cards – normalizeInlineProducts (#1183)', () => {
+  // An entity listing as Cloro returns it since 2026-10-16: a card product
+  // without `position`, wrapped as an inline product by parseScraperResponse.
+  const entityListing = {
+    product: {
+      id: '23920641',
+      title: 'Trail Runner 2',
+      url: 'https://merchant.example/p/2?utm_source=chatgpt.com',
+      price: '$75.00',
+      merchants: 'Merchant',
+      image_urls: ['https://images.example.com/trail-runner-2.jpg'],
+      rating: 4.6,
+      num_reviews: 210,
+      offers: [{ merchant_name: 'Merchant', price: '$75.00', available: true }],
+    },
+    entity: 'Trail Runner 2',
+  };
+  const inlineProduct = {
+    product: { title: 'Road Runner', position: 1, price: '$90.00' },
+    render_as: 'inline',
+  };
+
+  it('parses each product like a carousel card', () => {
+    const [card] = normalizeInlineProducts('chatgpt-shopping', [entityListing]);
+    expect(card.product_title).toBe('Trail Runner 2');
+    expect(card.price_amount).toBe(75);
+    expect(card.price_currency).toBe('USD');
+    expect(card.image_url).toBe('https://images.example.com/trail-runner-2.jpg');
+    expect(card.merchant_domain).toBe('merchant.example');
+    expect(card.rating).toBe(4.6);
+    expect(card.review_count).toBe(210);
+  });
+
+  it('numbers them after the carousel and marks them inline', () => {
+    const cards = normalizeInlineProducts('chatgpt-shopping', [inlineProduct, entityListing], 3);
+    expect(cards.map((card) => card.position)).toEqual([4, 5]);
+    expect(cards.every((card) => card.raw.surface === 'inline')).toBe(true);
+  });
+
+  it('starts at 1 when there is no carousel', () => {
+    const cards = normalizeInlineProducts('chatgpt-shopping', [entityListing]);
+    expect(cards[0].position).toBe(1);
+  });
+
+  it('skips items without a product', () => {
+    const cards = normalizeInlineProducts('chatgpt-shopping', [{ id: 'x' }, null, entityListing]);
+    expect(cards).toHaveLength(1);
+    expect(cards[0].position).toBe(1);
+  });
+
+  it('returns [] for other platforms and non-array input', () => {
+    expect(normalizeInlineProducts('copilot-web', [entityListing])).toEqual([]);
+    expect(normalizeInlineProducts('chatgpt-shopping', null)).toEqual([]);
   });
 });
 
