@@ -1,6 +1,5 @@
 'use client';
 
-import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Code, Loader2 } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -8,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { SourceCard } from './_source-card';
+import { BotsSource } from './_bots-connect';
 import { formatRelative } from '@/lib/format-relative';
 import { useIntegrationConnect } from '@/hooks/use-integration-connect';
 import type { IntegrationProvider, SourceState } from '@/lib/actions/integrations';
@@ -18,40 +19,6 @@ import {
   snippetDetected,
   sourceHost,
 } from '@/lib/traffic-sources';
-
-type Tone = 'on' | 'sync' | 'off';
-
-const DOT: Record<Tone, string> = {
-  on: 'bg-emerald-500',
-  sync: 'bg-amber-500',
-  off: 'bg-muted-foreground/30',
-};
-
-/** One source: a status dot by the title, a sub-line, and its button. */
-function SourceCard({
-  tone,
-  title,
-  line,
-  action,
-}: {
-  tone: Tone;
-  title: string;
-  line: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="flex min-w-0 items-start gap-2.5 bg-card px-4 py-3">
-      <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', DOT[tone])} aria-hidden />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-semibold" title={title}>
-          {title}
-        </p>
-        <p className="line-clamp-2 text-xs text-muted-foreground">{line}</p>
-      </div>
-      {action && <div className="shrink-0 self-center">{action}</div>}
-    </div>
-  );
-}
 
 /**
  * Google Analytics or Google Search Console: connected with its property and
@@ -147,9 +114,10 @@ function GoogleSource({
  * snippet, Google Analytics, Google Search Console and AI bots — and what's
  * missing, with a way to connect it without leaving the page (fixes F8).
  * The snippet's code moves behind its Code button once it sends visits
- * (F3). AI bots come with phase 3 (AT-010), so that card says so for now.
+ * (F3). AI bots come from the brand's Cloudflare or Vercel (AT-010).
  */
 export function SourcesStrip({
+  brandId,
   sources,
   domain,
   hasTrackingCode,
@@ -157,6 +125,7 @@ export function SourcesStrip({
   onShowCode,
   onConnected,
 }: {
+  brandId: string;
   /** Null while loading. */
   sources: TrafficSources | null;
   /** The brand's primary domain, for the GA4 property line. */
@@ -217,7 +186,7 @@ export function SourcesStrip({
         canConnect={canConnect}
         onConnected={onConnected}
       />
-      <SourceCard tone="off" title={t('bots')} line={t('botsSoon')} />
+      <BotsSource brandId={brandId} canConnect={canConnect} />
     </section>
   );
 }

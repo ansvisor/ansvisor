@@ -677,6 +677,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
 
       {!sourcesFailed && (
         <SourcesStrip
+          brandId={brand.id}
           sources={sources}
           domain={primaryDomain}
           hasTrackingCode={Boolean(brand.trackingCode)}

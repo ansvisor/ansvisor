@@ -3328,11 +3328,81 @@
       "notConnectedGsc": "Not connected · see if AI is taking Google clicks",
       "unmapped": "Connected · choose a property for this brand",
       "notConfigured": "Not set up on this server",
-      "botsSoon": "Cloudflare / Vercel · coming soon",
+      "botsLoading": "Cloudflare / Vercel",
+      "botsFailed": "Cloudflare / Vercel · couldn't be read",
+      "botsLocked": "Cloudflare / Vercel · Growth+",
+      "botsNotConnected": "Cloudflare / Vercel · see which AI bots read your pages",
+      "botsWaiting": "Connected · waiting for the first AI-bot request",
+      "botsActive": "Cloudflare / Vercel · last event {when}",
+      "upgrade": "Upgrade",
       "connect": "Connect",
       "connecting": "Connecting…",
       "manage": "Manage",
       "connectNotAllowed": "Only admins and managers can connect a source."
+    },
+    "bots": {
+      "title": "AI bots reading your site",
+      "description": "See which AI bots read your pages, from your own Cloudflare or Vercel. Verified bots only: the user agent and the operator's published IP ranges must both match. No change to your site's speed.",
+      "connected": "Connected",
+      "choose": "How should your site send AI-bot requests?",
+      "addAnother": "Add another way",
+      "recommended": "Recommended",
+      "create": "Create connection",
+      "notAllowed": "Only admins and managers can connect a source.",
+      "planLimit": "The AI bot report comes with the Growth plan.",
+      "lastEvent": "Last request {when}",
+      "waiting": "Waiting for the first request",
+      "revoke": "Revoke",
+      "revokeConfirm": "Revoke: stop reading it",
+      "cancel": "Cancel",
+      "revoked": "Connection revoked. Its sender is no longer read.",
+      "usage": "This month: {stored} of {cap} detailed rows.",
+      "usageNoCap": "This month: {stored} detailed {count, plural, one {row} other {rows}}.",
+      "paused": "Detailed rows paused until {day}, totals still counted.",
+      "secretOnce": "Copy these settings now: the secret in them isn't shown again. Lost it? Revoke this connection and create a new one.",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyWorker": "Worker code",
+      "copyDestination": "Destination",
+      "copyLogpushJob": "Job settings (Cloudflare API: POST /zones/ZONE_ID/logpush/jobs)",
+      "copyEndpoint": "Endpoint URL",
+      "copyHeader": "Custom header",
+      "vercelFormat": "Format: JSON. Log sources: {sources}.",
+      "done": "Done",
+      "kinds": {
+        "cloudflare_worker": {
+          "name": "Cloudflare Worker",
+          "what": "A small Worker on your site's route passes every request through and sends only AI-bot requests, in batches.",
+          "cost": "On your Cloudflare bill: free up to 100,000 requests a day, then $5 a month for 10 million and $0.30 per extra million. It runs on every request, so busy sites may need the paid plan."
+        },
+        "cloudflare_logpush": {
+          "name": "Cloudflare Logpush",
+          "what": "Cloudflare sends only the log lines of AI bots, filtered at its edge. Nothing runs on your requests.",
+          "cost": "Logpush is on all Cloudflare plans and avoids the per-request Worker cost; whether the HTTP requests dataset is available depends on your account."
+        },
+        "vercel_drain": {
+          "name": "Vercel Drain",
+          "what": "Vercel sends your request logs; Ansvisor keeps the AI bots and drops the rest.",
+          "cost": "Vercel Pro and Enterprise only, at $0.50 per GB of drained data on your Vercel bill."
+        }
+      },
+      "steps": {
+        "cloudflare_worker": [
+          "In Cloudflare, open Workers & Pages and create a Worker.",
+          "Replace its code with the Worker code below and deploy it.",
+          "Add a route for your site, such as example.com/*, so the Worker sees its requests."
+        ],
+        "cloudflare_logpush": [
+          "In Cloudflare, open Analytics & Logs › Logpush and create a job for the HTTP requests dataset.",
+          "Choose HTTP destination and paste the destination below.",
+          "Pick the fields and the filter from the job settings below, or create the job through the API with them."
+        ],
+        "vercel_drain": [
+          "In Vercel, open Team Settings › Drains and add a Logs drain for your site's project.",
+          "Choose Custom endpoint and paste the endpoint URL below.",
+          "Set the format to JSON and add the custom header below."
+        ]
+      }
     },
     "gate": {
       "needs": "Needs {source}",

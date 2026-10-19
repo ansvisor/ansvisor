@@ -18,6 +18,9 @@ vi.mock('@/hooks/use-integration-connect', () => ({
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, ...props }: { href: string }) => <a href={href} {...props} />,
 }));
+// The AI bots card reads its connections on its own (AT-010, tested in
+// _bots-connect.test.tsx): here it stays loading.
+vi.mock('@/lib/actions/ai-bots', () => ({ getBotConnections: () => new Promise(() => {}) }));
 
 const { SourcesStrip } = await import('./_sources-strip');
 
@@ -56,6 +59,7 @@ function render(sources: TrafficSources | null, { canConnect = true } = {}) {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <SourcesStrip
+          brandId="b1"
           sources={sources}
           domain="acme-coffee.example.com"
           hasTrackingCode
@@ -95,7 +99,7 @@ describe('SourcesStrip', () => {
         line: 'acme-coffee.example.com (GSC) · synced 5h ago',
         button: 'Manage',
       },
-      { title: 'AI bots', line: 'Cloudflare / Vercel · coming soon', button: null },
+      { title: 'AI bots', line: 'Cloudflare / Vercel', button: null },
     ]);
     expect(container.querySelector('a')!.getAttribute('href')).toBe(
       '/dashboard/settings?tab=integrations',
