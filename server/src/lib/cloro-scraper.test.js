@@ -45,6 +45,34 @@ describe('cloro-scraper – parseScraperResponse', () => {
       expect(parsed.shopping_cards).toEqual([]);
       expect(parsed.inline_products).toEqual([]);
     });
+
+    it('adds the listings ChatGPT attaches to entities to inline_products (#1183)', () => {
+      const listing = {
+        id: '23920641',
+        title: 'Trail Runner 2',
+        url: 'https://merchant.example/p/2?utm_source=chatgpt.com',
+        price: '$75.00',
+        merchants: 'Merchant',
+      };
+      const result = {
+        markdown: 'hi',
+        sources: [],
+        shoppingCards: [],
+        inlineProducts: [{ product: { id: 'prod1' }, render_as: 'inline' }],
+        entities: [
+          { type: 'product', name: 'Trail Runner 1' },
+          { type: 'product', name: 'Trail Runner 2', product: listing },
+          { type: 'software', name: 'Tracker', product: null },
+        ],
+      };
+
+      const parsed = parseScraperResponse(result, 'chatgpt-shopping');
+
+      expect(parsed.inline_products).toEqual([
+        { product: { id: 'prod1' }, render_as: 'inline' },
+        { product: listing, entity: 'Trail Runner 2' },
+      ]);
+    });
   });
 
   describe('google-aio', () => {
