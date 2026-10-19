@@ -173,10 +173,11 @@ export function NotificationsSection() {
                 )}
               </div>
               <div className="flex items-start gap-2.5">
+                {/* Not sent while the pulse is off; the brand's own choice is kept for when it's back. */}
                 <Checkbox
                   id={`traffic-digest-${brand.brandId}`}
                   className="mt-0.5"
-                  checked={brand.trafficDigest}
+                  checked={brand.trafficDigest && brand.frequency !== 'off'}
                   onCheckedChange={(on) =>
                     setBrands((prev) =>
                       prev.map((b) =>
@@ -184,11 +185,15 @@ export function NotificationsSection() {
                       ),
                     )
                   }
-                  disabled={!canManage}
+                  disabled={!canManage || brand.frequency === 'off'}
                 />
                 <div className="space-y-0.5">
                   <Label htmlFor={`traffic-digest-${brand.brandId}`}>{t('trafficDigest')}</Label>
-                  <p className="text-xs text-muted-foreground">{t('trafficDigestHint')}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {brand.frequency === 'off'
+                      ? t('trafficDigestPulseOff')
+                      : t('trafficDigestHint')}
+                  </p>
                 </div>
               </div>
               {canManage && (

@@ -1,5 +1,7 @@
 import supabaseAdmin from '../../config/supabase.js';
+import { isEmailConfigured } from '../email.js';
 import { logger } from '../logger.js';
+import { readAllRpcRows } from '../rpc-pages.js';
 import { isCloud, isSubscriptionActive } from '../../config/plans.js';
 import { appUrl, resolveRecipients } from '../pulse/engine.js';
 import { untrackedGoogleQueries } from '../untracked-queries.js';
@@ -18,15 +20,37 @@ import { renderTrafficDigestEmail, sendTrafficDigestEmail } from './email.js';
  * The AI Traffic weekly digest (AT-013, spec §3.8): every Monday, for the
  * week before, "the summary line and the top three changes" to the Daily
  * Pulse's recipients (00036), unless Settings › Notifications turned it off
- * for the brand (00187).
+ * for the brand (00187) or the brand's pulse is off.
  *
  * A brand with no AI visits in either week gets nothing. A week is claimed in
  * ai_traffic_digests before anything is sent, so two sweeps can't mail it
- * twice. Cloud only, like the pulse's e-mail. Best effort: one brand's
- * failure is logged and the sweep moves on.
+ * twice, and marked sent (sent_at) once it went out. The sweep runs Monday
+ * to Wednesday: a week a failure left unsent (a read that kept failing, an
+ * e-mail Resend refused, a restart between the claim and the send) is tried
+ * again the next day, and one already sent is skipped. Cloud only, like the
+ * pulse's e-mail. Best effort: one brand's failure is logged and the sweep
+ * moves on.
  */
 
-const WEEKLY_SEND_UTC_DAY = 1; // Monday, as the weekly pulse
+/** Monday, as the weekly pulse; then Tuesday and Wednesday for a week left unsent. */
+const SEND_UTC_DAYS = [1, 2, 3];
+
+/** A claim this old without a send was left by a sweep that stopped; it's taken over. */
+const STALE_CLAIM_MS = 60 * 60 * 1000;
+
+/** A read is tried this many times before the brand's week waits for the next sweep. */
+const READ_ATTEMPTS = 3;
+
+async function withRetries(read, waitMs) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await read();
+    } catch (err) {
+      if (attempt >= READ_ATTEMPTS) throw err;
+      await new Promise((resolve) => setTimeout(resolve, waitMs * attempt));
+    }
+  }
+}
 
 async function rpc(name, params) {
   const { data, error } = await supabaseAdmin.rpc(name, params);
@@ -42,12 +66,15 @@ const lastSecond = (end) => new Date(Date.parse(end) - 1000).toISOString();
  * them for a 7-day range.
  */
 export async function readDigestData(brandId, week) {
+  // To each week's last second, inclusive: ai_traffic_merged keeps Analytics
+  // rows through p_to's day (00176), so a midnight end would count the
+  // Monday between the weeks in both.
   const merged = (from, to) =>
     rpc('ai_traffic_merged', {
       p_brand_id: brandId,
       p_from: from,
-      p_to: to,
-      p_to_inclusive: false,
+      p_to: lastSecond(to),
+      p_to_inclusive: true,
       p_analytics: true,
     });
   const [cur, prev] = await Promise.all([
@@ -144,7 +171,10 @@ export function digestContent(data, week) {
  *
  * @returns {Promise<object>} what happened: `{ sent, emailSent, recipients }` or `{ skipped }`
  */
-export async function sendTrafficDigestForBrand(brandId, { now = new Date() } = {}) {
+export async function sendTrafficDigestForBrand(
+  brandId,
+  { now = new Date(), retryWaitMs = 2000 } = {},
+) {
   const { data: brand } = await supabaseAdmin
     .from('brands')
     .select('id, name, organization_id, is_active')
@@ -161,21 +191,31 @@ export async function sendTrafficDigestForBrand(brandId, { now = new Date() } = 
 
   const { data: settings } = await supabaseAdmin
     .from('pulse_settings')
-    .select('recipients, traffic_digest')
+    .select('recipients, traffic_digest, frequency')
     .eq('brand_id', brandId)
     .maybeSingle();
-  if (settings?.traffic_digest === false) return { skipped: 'off' };
+  // On by default, but not where the brand's pulse is off. No settings row: on.
+  if (settings?.traffic_digest === false || settings?.frequency === 'off') {
+    return { skipped: 'off' };
+  }
 
   const week = digestWeek(now);
   const { data: existing } = await supabaseAdmin
     .from('ai_traffic_digests')
-    .select('id')
+    .select('id, sent_at, created_at')
     .eq('brand_id', brandId)
     .eq('week_start', week.firstDay)
     .maybeSingle();
-  if (existing) return { skipped: 'already_sent' };
+  if (existing?.sent_at) return { skipped: 'already_sent' };
+  if (existing) {
+    if (now.getTime() - Date.parse(existing.created_at) < STALE_CLAIM_MS) {
+      return { skipped: 'in_progress' };
+    }
+    // Claimed by a sweep that stopped before sending (a deploy, a restart).
+    await releaseClaim(existing.id);
+  }
 
-  const data = await readDigestData(brandId, week);
+  const data = await withRetries(() => readDigestData(brandId, week), retryWaitMs);
   const content = digestContent(data, week);
   if (content.visits === 0 && content.prevVisits === 0) return { skipped: 'no_traffic' };
 
@@ -191,22 +231,35 @@ export async function sendTrafficDigestForBrand(brandId, { now = new Date() } = 
     throw new Error(claimError.message);
   }
 
-  const recipients = await resolveRecipients(brand.organization_id, settings);
+  let recipients;
   let emailSent = false;
-  if (recipients.length) {
-    const settingsUrl = `${appUrl()}/dashboard/settings?tab=notifications`;
-    const { subject, html } = renderTrafficDigestEmail({
-      brandName: brand.name,
-      week,
-      ...content,
-      trafficUrl: `${appUrl()}/dashboard/traffic`,
-      settingsUrl,
-    });
-    emailSent = await sendTrafficDigestEmail({ to: recipients, subject, html, settingsUrl });
+  try {
+    recipients = await resolveRecipients(brand.organization_id, settings);
+    if (recipients.length) {
+      const settingsUrl = `${appUrl()}/dashboard/settings?tab=notifications`;
+      const { subject, html } = renderTrafficDigestEmail({
+        brandName: brand.name,
+        week,
+        ...content,
+        trafficUrl: `${appUrl()}/dashboard/traffic`,
+        settingsUrl,
+      });
+      emailSent = await sendTrafficDigestEmail({ to: recipients, subject, html, settingsUrl });
+      // Without Resend set up nothing could go out; with it, a false is a refusal.
+      if (!emailSent && isEmailConfigured()) throw new Error('Resend refused the digest');
+    }
+  } catch (err) {
+    // Give the week back, so the next sweep (through Wednesday) tries again.
+    await releaseClaim(row.id);
+    throw err;
   }
   await supabaseAdmin
     .from('ai_traffic_digests')
-    .update({ email_sent: emailSent, email_recipient_count: emailSent ? recipients.length : 0 })
+    .update({
+      email_sent: emailSent,
+      email_recipient_count: emailSent ? recipients.length : 0,
+      sent_at: new Date().toISOString(),
+    })
     .eq('id', row.id);
 
   logger.info(
@@ -216,22 +269,35 @@ export async function sendTrafficDigestForBrand(brandId, { now = new Date() } = 
   return { sent: true, emailSent, recipients: recipients.length };
 }
 
+/** Take back a claim, so a later sweep sends the week. */
+async function releaseClaim(id) {
+  const { error } = await supabaseAdmin.from('ai_traffic_digests').delete().eq('id', id);
+  if (error) logger.warn({ err: error, id }, '[traffic-digest] claim release failed');
+}
+
 /**
- * Monday's sweep: every active brand's digest for the week before. Called
- * from the daily cycle after the Analytics sync, so Sunday's numbers are in.
+ * The sweep, Monday to Wednesday: every active brand's digest for the week
+ * before that isn't sent yet. Called from the daily cycle after the
+ * Analytics sync, so Sunday's numbers are in.
  */
 export async function sendTrafficDigests({ now = new Date() } = {}) {
   if (!isCloud()) return { skipped: 'self_hosted' };
-  if (now.getUTCDay() !== WEEKLY_SEND_UTC_DAY) return { skipped: 'not_monday' };
+  if (!SEND_UTC_DAYS.includes(now.getUTCDay())) return { skipped: 'not_send_day' };
 
-  const { data: brands, error } = await supabaseAdmin
-    .from('brands')
-    .select('id')
-    .eq('is_active', true);
+  // Read past PostgREST's 1000-row page.
+  const { data: brands, error } = await readAllRpcRows('brands', (from, to) =>
+    supabaseAdmin
+      .from('brands')
+      .select('id')
+      .eq('is_active', true)
+      .order('id', { ascending: true })
+      .range(from, to),
+  );
   if (error) throw new Error(error.message);
 
   let sent = 0;
-  for (const { id } of brands ?? []) {
+  // A slice boundary can repeat a row (rpc-pages.js).
+  for (const id of new Set((brands ?? []).map((b) => b.id))) {
     try {
       const result = await sendTrafficDigestForBrand(id, { now });
       if (result.sent) sent += 1;

@@ -240,9 +240,8 @@ export function changeText(change) {
   const subject = change.type === 'platform' ? platformName(change.name) : change.name;
   const verb = change.type === 'platform' ? 'sent' : 'got';
   if (change.before === 0) {
-    const first =
-      change.now === 1 ? 'its first AI visit' : `its first ${formatNumber(change.now)} AI visits`;
-    return `${subject} ${verb} ${first}.`;
+    // Not "its first": a page or platform may be coming back after a quiet week.
+    return `${subject} ${verb} ${formatNumber(change.now)} AI ${plural(change.now, 'visit', 'visits')}, none the week before.`;
   }
   const direction = change.now > change.before ? 'up' : 'down';
   return `${subject} ${verb} ${formatNumber(change.now)} AI ${plural(change.now, 'visit', 'visits')}, ${direction} from ${formatNumber(change.before)}.`;

@@ -3,12 +3,14 @@
 -- ============================================================================
 -- Spec §3.8: "A weekly e-mail digest with the summary line and the top three
 -- changes." Sent on Mondays for the week before, per brand, to the Daily
--- Pulse's recipients (00036), whatever the pulse's own frequency.
+-- Pulse's recipients (00036), unless the pulse is off (frequency 'off').
 --
 --   * pulse_settings.traffic_digest — on unless an admin or manager turns it
 --     off in Settings › Notifications. A brand with no settings row gets it.
 --   * ai_traffic_digests — one row per brand and week: the claim that stops
---     a second send, and what went out.
+--     a second send, what went out, and when (sent_at). A claim with no
+--     sent_at was left by a failed or stopped sweep; the next one (through
+--     Wednesday) takes it over.
 --
 -- Written by the Express server's service-role client; members read their
 -- brands' rows, as with sent_pulses.
@@ -28,10 +30,13 @@ create table if not exists public.ai_traffic_digests (
   email_sent boolean not null default false,
   email_recipient_count integer not null default 0,
   created_at timestamptz not null default now(),
+  sent_at timestamptz,
   unique (brand_id, week_start)
 );
 
 alter table public.ai_traffic_digests enable row level security;
+
+grant select on public.ai_traffic_digests to authenticated;
 
 create policy "ai_traffic_digests: member select" on public.ai_traffic_digests
   for select using (

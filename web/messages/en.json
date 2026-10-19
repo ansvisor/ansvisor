@@ -4470,6 +4470,7 @@
     "pulseRecipientsInvalid": "Not a valid email address: {emails}. Fix or remove it before saving.",
     "trafficDigest": "AI Traffic weekly digest",
     "trafficDigestHint": "Every Monday: last week's AI visits in one summary line, with the top three changes. Sent to the recipients above.",
+    "trafficDigestPulseOff": "Not sent while the Daily Pulse is off. Turn the pulse back on to get it again.",
     "pulseSaved": "Notification settings saved",
     "pulseSaveFailed": "Could not save notification settings. Please try again.",
     "pulseLoadFailed": "Could not load notification settings.",

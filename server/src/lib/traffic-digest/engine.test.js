@@ -12,6 +12,9 @@ const state = vi.hoisted(() => ({
   claimError: null,
   inserted: [],
   updated: [],
+  deleted: [],
+  rpcCalls: [],
+  rpcFailures: 0,
   rpc: {},
 }));
 
@@ -38,10 +41,10 @@ vi.mock('../../config/supabase.js', () => {
               data: table === 'pulse_settings' ? state.settings : state.existing,
             }),
           };
-          // The sweep awaits the active brands' list itself.
+          // The sweep reads the active brands a page at a time.
           if (table === 'brands') {
-            chain.then = (resolve, reject) =>
-              Promise.resolve({ data: state.listBrands ?? [], error: null }).then(resolve, reject);
+            chain.order = () => chain;
+            chain.range = async () => ({ data: state.listBrands ?? [], error: null });
           }
           return chain;
         },
@@ -60,8 +63,21 @@ vi.mock('../../config/supabase.js', () => {
             return { error: null };
           },
         }),
+        delete: () => ({
+          eq: async (_col, id) => {
+            state.deleted.push({ table, id });
+            return { error: null };
+          },
+        }),
       }),
       rpc: (name, params) => {
+        state.rpcCalls.push({ name, params });
+        // A test may fail the first reads, as a transient error would.
+        if (state.rpcFailures > 0) {
+          state.rpcFailures -= 1;
+          const failed = { data: null, error: { message: 'connection reset' } };
+          return Object.assign(Promise.resolve(failed), single(null));
+        }
         const answer = { data: state.rpc[name]?.(params) ?? null, error: null };
         return Object.assign(Promise.resolve(answer), single(answer.data));
       },
@@ -70,7 +86,11 @@ vi.mock('../../config/supabase.js', () => {
 });
 vi.mock('../logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 const sendEmail = vi.fn(async () => true);
-vi.mock('../email.js', () => ({ sendEmail: (...args) => sendEmail(...args) }));
+let emailConfigured = true;
+vi.mock('../email.js', () => ({
+  sendEmail: (...args) => sendEmail(...args),
+  isEmailConfigured: () => emailConfigured,
+}));
 vi.mock('../pulse/engine.js', () => ({
   appUrl: () => 'https://app.example.com',
   resolveRecipients: async (_org, settings) => settings?.recipients ?? ['team@acme.example'],
@@ -93,6 +113,9 @@ beforeEach(() => {
     claimError: null,
     inserted: [],
     updated: [],
+    deleted: [],
+    rpcCalls: [],
+    rpcFailures: 0,
     listBrands: null,
     rpc: {
       ai_traffic_merged: (p) =>
@@ -104,7 +127,8 @@ beforeEach(() => {
       ai_traffic_broken_links: () => ({ count: 0, rows: [] }),
     },
   });
-  sendEmail.mockClear();
+  sendEmail.mockReset().mockResolvedValue(true);
+  emailConfigured = true;
   cloud = true;
 });
 
@@ -127,15 +151,77 @@ describe('sendTrafficDigestForBrand', () => {
     expect(mail.headers).toEqual({
       'List-Unsubscribe': '<https://app.example.com/dashboard/settings?tab=notifications>',
     });
-    expect(state.updated[0].patch).toEqual({ email_sent: true, email_recipient_count: 1 });
+    expect(state.updated[0].patch).toEqual({
+      email_sent: true,
+      email_recipient_count: 1,
+      sent_at: expect.any(String),
+    });
+  });
+
+  it("reads each week to its Sunday's last second, so the Monday between them counts once", async () => {
+    await sendTrafficDigestForBrand('b1', { now: MONDAY });
+    const merged = state.rpcCalls.filter((c) => c.name === 'ai_traffic_merged');
+    expect(merged.map((c) => [c.params.p_from, c.params.p_to, c.params.p_to_inclusive])).toEqual([
+      ['2026-10-12T00:00:00.000Z', '2026-10-18T23:59:59.000Z', true],
+      ['2026-10-05T00:00:00.000Z', '2026-10-11T23:59:59.000Z', true],
+    ]);
+  });
+
+  it('tries a failing read again before giving the week up', async () => {
+    state.rpcFailures = 2;
+    expect(await sendTrafficDigestForBrand('b1', { now: MONDAY, retryWaitMs: 0 })).toMatchObject({
+      sent: true,
+    });
+    state.rpcFailures = 9;
+    state.inserted = [];
+    await expect(sendTrafficDigestForBrand('b1', { now: MONDAY, retryWaitMs: 0 })).rejects.toThrow(
+      'connection reset',
+    );
+    // Nothing was claimed: Tuesday's sweep tries the week again.
+    expect(state.inserted).toEqual([]);
+  });
+
+  it('gives the week back when Resend refuses the e-mail', async () => {
+    sendEmail.mockResolvedValue(false);
+    await expect(sendTrafficDigestForBrand('b1', { now: MONDAY })).rejects.toThrow(
+      'Resend refused the digest',
+    );
+    expect(state.deleted).toEqual([{ table: 'ai_traffic_digests', id: 'd1' }]);
+
+    // Without Resend set up, nothing could go out: the week is done.
+    emailConfigured = false;
+    state.deleted = [];
+    expect(await sendTrafficDigestForBrand('b1', { now: MONDAY })).toMatchObject({
+      sent: true,
+      emailSent: false,
+    });
+    expect(state.deleted).toEqual([]);
+  });
+
+  it('takes over a claim a stopped sweep left, and leaves one still in progress', async () => {
+    state.existing = { id: 'd0', sent_at: null, created_at: '2026-10-19T02:50:00Z' };
+    expect(await sendTrafficDigestForBrand('b1', { now: MONDAY })).toEqual({
+      skipped: 'in_progress',
+    });
+    state.existing = { id: 'd0', sent_at: null, created_at: '2026-10-19T01:00:00Z' };
+    expect(await sendTrafficDigestForBrand('b1', { now: MONDAY })).toMatchObject({ sent: true });
+    expect(state.deleted).toEqual([{ table: 'ai_traffic_digests', id: 'd0' }]);
   });
 
   it('sends nothing when turned off, already sent, or without AI visits', async () => {
     state.settings = { recipients: null, traffic_digest: false };
     expect(await sendTrafficDigestForBrand('b1', { now: MONDAY })).toEqual({ skipped: 'off' });
 
+    // Nor where the brand's pulse is off.
+    state.settings = { recipients: null, traffic_digest: true, frequency: 'off' };
+    expect(await sendTrafficDigestForBrand('b1', { now: MONDAY })).toEqual({ skipped: 'off' });
+
     state.settings = null;
-    state.existing = { id: 'd0' };
+    state.existing = {
+      id: 'd0',
+      sent_at: '2026-10-19T03:01:00Z',
+      created_at: '2026-10-19T03:00:00Z',
+    };
     expect(await sendTrafficDigestForBrand('b1', { now: MONDAY })).toEqual({
       skipped: 'already_sent',
     });
@@ -159,9 +245,13 @@ describe('sendTrafficDigestForBrand', () => {
 });
 
 describe('sendTrafficDigests', () => {
-  it('runs on Mondays in the cloud only', async () => {
-    expect(await sendTrafficDigests({ now: new Date('2026-10-20T03:00:00Z') })).toEqual({
-      skipped: 'not_monday',
+  it('runs Monday to Wednesday, for a week left unsent, in the cloud only', async () => {
+    state.listBrands = [];
+    expect(await sendTrafficDigests({ now: new Date('2026-10-21T03:00:00Z') })).toEqual({
+      sent: 0,
+    });
+    expect(await sendTrafficDigests({ now: new Date('2026-10-22T03:00:00Z') })).toEqual({
+      skipped: 'not_send_day',
     });
     cloud = false;
     expect(await sendTrafficDigests({ now: MONDAY })).toEqual({ skipped: 'self_hosted' });

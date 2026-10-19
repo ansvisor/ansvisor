@@ -90,6 +90,29 @@ describe('NotificationsSection', () => {
     });
   });
 
+  it("shows it off, and can't be turned on, while the brand's pulse is off", async () => {
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      json: async () => ({
+        brands: [
+          {
+            brandId: 'b1',
+            brandName: 'Acme',
+            frequency: 'off',
+            recipients: [],
+            trafficDigest: true,
+          },
+        ],
+      }),
+    }));
+    await render();
+    expect(checkbox().getAttribute('data-state')).toBe('unchecked');
+    expect(
+      checkbox().hasAttribute('disabled') || checkbox().getAttribute('data-disabled') !== null,
+    ).toBe(true);
+    expect(container.textContent).toContain('Not sent while the Daily Pulse is off');
+  });
+
   it('lets members see it but not change it', async () => {
     canManage = false;
     await render();

@@ -5,6 +5,11 @@ import { logger } from './logger.js';
  * RESEND_FROM_EMAIL). Returns true when accepted. Missing config is a silent
  * no-op, so self-host and misconfigured environments never fail a caller.
  */
+/** Whether Resend is set up, so a false from sendEmail means it refused. */
+export function isEmailConfigured() {
+  return Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL);
+}
+
 export async function sendEmail({ to, subject, html, headers }) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL;

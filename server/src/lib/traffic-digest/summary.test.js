@@ -187,10 +187,10 @@ describe('topChanges', () => {
       'ChatGPT sent 12 AI visits, down from 30.',
     );
     expect(changeText({ type: 'platform', name: 'grok.com', before: 0, now: 3 })).toBe(
-      'Grok sent its first 3 AI visits.',
+      'Grok sent 3 AI visits, none the week before.',
     );
     expect(changeText({ type: 'page', name: '/new', before: 0, now: 1 })).toBe(
-      '/new got its first AI visit.',
+      '/new got 1 AI visit, none the week before.',
     );
     expect(changeText({ type: 'page', name: '/blog/beans', before: 2, now: 14 })).toBe(
       '/blog/beans got 14 AI visits, up from 2.',
