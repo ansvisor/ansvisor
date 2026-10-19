@@ -33,7 +33,7 @@ describe('getTrafficBrokenLinks', () => {
   it('reads each missing page with its visits and suggested redirect', async () => {
     rpc.mockResolvedValue({
       data: {
-        count: 2,
+        count: 3,
         rows: [
           link,
           {
@@ -45,6 +45,16 @@ describe('getTrafficBrokenLinks', () => {
             status: 'title',
             target: null,
             target_reason: null,
+          },
+          {
+            page: '/index.php',
+            visits: 2,
+            platforms: ['chatgpt.com'],
+            citations: 0,
+            last_visit: '2026-10-18T10:00:00+00:00',
+            status: '404',
+            target: null,
+            target_reason: 'query',
           },
         ],
       },
@@ -61,7 +71,7 @@ describe('getTrafficBrokenLinks', () => {
       p_offset: 0,
     });
     expect(result).toEqual({
-      count: 2,
+      count: 3,
       rows: [
         {
           page: '/guides/espresso-machine-for-beginner',
@@ -82,6 +92,17 @@ describe('getTrafficBrokenLinks', () => {
           status: 'title',
           target: null,
           targetReason: null,
+        },
+        // A route on the page: no redirect, and the reason says why.
+        {
+          page: '/index.php',
+          visits: 2,
+          platforms: ['chatgpt.com'],
+          citations: 0,
+          lastVisit: '2026-10-18T10:00:00+00:00',
+          status: '404',
+          target: null,
+          targetReason: 'query',
         },
       ],
     });

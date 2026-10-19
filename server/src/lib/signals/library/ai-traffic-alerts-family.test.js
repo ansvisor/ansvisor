@@ -7,10 +7,15 @@ import { describe, expect, it, vi } from 'vitest';
  * (AT-011).
  */
 
-vi.mock('../../../config/supabase.js', () => ({ default: { from: vi.fn(), rpc: vi.fn() } }));
-vi.mock('../../logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+const rpc = vi.fn();
+vi.mock('../../../config/supabase.js', () => ({
+  default: { from: vi.fn(), rpc: (...args) => rpc(...args) },
+}));
+const logger = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }));
+vi.mock('../../logger.js', () => ({ logger }));
 
-const { LIBRARY_FAMILIES, LIBRARY_EMITTED_KINDS, weeklyWindows } = await import('./detect.js');
+const { DataNotWhole, LIBRARY_FAMILIES, LIBRARY_EMITTED_KINDS, libraryCandidates, weeklyWindows } =
+  await import('./detect.js');
 
 const family = (name) => LIBRARY_FAMILIES.find((f) => f.name === name);
 
@@ -201,16 +206,37 @@ describe('the AI bots family', () => {
     ).toEqual([]);
   });
 
-  it("raises nothing while the bot data isn't whole, whatever the report lists", async () => {
+  it("reads nothing while the bot data isn't whole, whatever the report lists", async () => {
     // A sender stopped, was revoked or hit its cap: the pages read drained.
-    expect(
-      await bots({
+    await expect(
+      bots({
         first_day: '2026-09-01',
         alert_state: 'stale',
         uncrawled_count: 40,
         uncrawled: [{ page: '/gifts', citations: 9 }],
       }),
-    ).toEqual([]);
+    ).rejects.toBeInstanceOf(DataNotWhole);
+  });
+
+  it('keeps open signals open while the bot data is stale: the kind is unread, not an error', async () => {
+    rpc.mockImplementation(async (name) =>
+      name === 'ai_bot_report'
+        ? { data: { first_day: '2026-09-01', alert_state: 'stale' }, error: null }
+        : { data: null, error: { message: 'not this test' } },
+    );
+    const { unreadKinds } = await libraryCandidates('b1', {
+      now: new Date('2026-10-19T06:00:00Z'),
+      sources: new Set(['tracking']),
+    });
+    expect(unreadKinds.has('cited_page_uncrawled')).toBe(true);
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ family: 'aiBots', reason: 'bot data is stale' }),
+      '[signals] library family data not whole',
+    );
+    expect(logger.error).not.toHaveBeenCalledWith(
+      expect.objectContaining({ family: 'aiBots' }),
+      expect.anything(),
+    );
   });
 
   it('declares the kinds it can write, so a failed night is not read as recovery', () => {

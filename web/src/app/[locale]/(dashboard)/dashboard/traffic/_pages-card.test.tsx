@@ -313,7 +313,7 @@ describe('PagesCard', () => {
 
     const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
     getTrafficPages.mockResolvedValue(
-      pages([], {}, [
+      pages([], { brokenAiLinks: 3 }, [
         {
           page: '/guides/espresso-machine-for-beginner',
           visits: 3,
@@ -333,6 +333,16 @@ describe('PagesCard', () => {
           status: 'title',
           target: '/subscriptions',
           targetReason: 'parent',
+        },
+        {
+          page: '/index.php',
+          visits: 1,
+          platforms: [],
+          citations: 0,
+          lastVisit: hoursAgo(30),
+          status: '404',
+          target: null,
+          targetReason: 'query',
         },
       ]),
     );
@@ -362,8 +372,16 @@ describe('PagesCard', () => {
         '1d ago',
         '→ /subscriptionsThe page above it',
       ],
+      [
+        '/index.phpNot found (404)',
+        '1',
+        '—',
+        '0',
+        '1d ago',
+        '—Missing addresses have a query: no redirect suggested',
+      ],
     ]);
-    expect(text()).toContain('2 of 2 pages');
+    expect(text()).toContain('3 of 3 pages');
     // Its Excel / CSV is the redirect list; no Action Center footer.
     expect(exported()).toBe('redirect list');
     expect(text()).not.toContain('Send to Action Center');

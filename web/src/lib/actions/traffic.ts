@@ -576,10 +576,13 @@ export interface TrafficBrokenLink {
   lastVisit: string;
   /** The status the browser reported, or 'title' when only the title said so. */
   status: '404' | '410' | 'title';
-  /** Where to redirect it: a working page; none for the home page itself. */
+  /** Where to redirect it: a working page; none for the home page itself or a route on a page. */
   target: string | null;
-  /** Why that page: the most path words in common, the nearest page above it, or home. */
-  targetReason: 'similar' | 'parent' | 'home' | null;
+  /**
+   * Why that page: the most path words in common, the nearest page above it,
+   * or home; `query` when every missing address has a query (no redirect).
+   */
+  targetReason: 'similar' | 'parent' | 'home' | 'query' | null;
 }
 
 export interface TrafficBrokenLinks {
@@ -588,7 +591,7 @@ export interface TrafficBrokenLinks {
 }
 
 const BROKEN_STATUSES = new Set(['404', '410', 'title']);
-const TARGET_REASONS = new Set(['similar', 'parent', 'home']);
+const TARGET_REASONS = new Set(['similar', 'parent', 'home', 'query']);
 
 /** Broken AI links (AT-012, spec §3.5; 00186), from the snippet alone. */
 export async function getTrafficBrokenLinks(
