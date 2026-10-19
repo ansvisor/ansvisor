@@ -310,6 +310,37 @@ export async function setBrandShoppingMode(
 }
 
 /**
+ * Setup found the brand sells products online (competitor research's
+ * isEcommerce): its industry becomes E-commerce & Retail when it has none,
+ * and Shopping mode goes on, so Product Visibility shows in the menu. A
+ * brand already in Shopping mode is left as it is.
+ */
+export async function markBrandAsEcommerce(
+  brandId: string,
+): Promise<{ industry: string | null; promptsUpdated: number }> {
+  const supabase = await createClient();
+  const { data: brand, error } = await supabase
+    .from('brands')
+    .select('industry, shopping_mode_enabled')
+    .eq('id', brandId)
+    .single();
+  if (error || !brand) throw new Error(error?.message ?? 'Brand not found');
+
+  let industry: string | null = brand.industry ?? null;
+  if (!industry) {
+    industry = 'E-commerce & Retail';
+    const { error: updateErr } = await supabase
+      .from('brands')
+      .update({ industry })
+      .eq('id', brandId);
+    if (updateErr) throw new Error(updateErr.message);
+  }
+  if (brand.shopping_mode_enabled) return { industry, promptsUpdated: 0 };
+  const { promptsUpdated } = await setBrandShoppingMode(brandId, true);
+  return { industry, promptsUpdated };
+}
+
+/**
  * Pause / resume a brand (#286).
  *
  * Sets `brands.is_active`. When `false`, the daily tracking cron skips the
