@@ -3,9 +3,12 @@
  *
  * For every active brand mapped to a GSC property (whose org connection is
  * live), pulls the last SYNC_WINDOW_DAYS of per-query daily stats through
- * Composio and upserts them into gsc_query_stats. Parameters are fully
- * deterministic — no LLM anywhere in this path. Per-brand failures are
- * logged and skipped; one broken property never aborts the run.
+ * Composio and upserts them into gsc_query_stats, and the same per page into
+ * gsc_page_stats (AT-008: which pages lose clicks while impressions rise). A
+ * brand's first page sync reads PAGE_BACKFILL_DAYS, so a 90-day range has a
+ * period before it. Parameters are fully deterministic — no LLM anywhere in
+ * this path. Per-brand failures are logged and skipped; one broken property
+ * never aborts the run.
  */
 
 import supabaseAdmin from '../config/supabase.js';
@@ -19,6 +22,10 @@ const ROW_LIMIT = 5000;
 // — hitting it is logged, never silent.
 const MAX_PAGES = 5;
 const UPSERT_CHUNK = 500;
+// Page stats (AT-008): the first sync reads 190 days — a 90-day range and
+// the 90 days before it, plus Google's delay — in SYNC_WINDOW_DAYS steps so
+// each step keeps the row cap; the daily prune keeps as many.
+export const PAGE_BACKFILL_DAYS = 190;
 
 /** YYYY-MM-DD in UTC, `daysAgo` days before now. */
 function utcDateString(daysAgo = 0) {
@@ -45,16 +52,39 @@ export function mapAnalyticsRows(brandId, rows) {
   return mapped;
 }
 
-async function syncBrand(brand) {
+/** Map raw GSC rows ({keys:[page,date],...}) to gsc_page_stats rows (AT-008). */
+export function mapPageRows(brandId, rows) {
+  return mapAnalyticsRows(brandId, rows).map(({ query, ...row }) => ({ ...row, page: query }));
+}
+
+/**
+ * The windows a brand's page sync reads, as days ago: the last
+ * SYNC_WINDOW_DAYS, or PAGE_BACKFILL_DAYS in SYNC_WINDOW_DAYS steps when the
+ * brand has no page rows yet.
+ */
+export function pageSyncWindows(hasPageRows) {
+  if (hasPageRows) return [{ from: SYNC_WINDOW_DAYS, to: 0 }];
+  const windows = [];
+  for (let to = 0; to < PAGE_BACKFILL_DAYS; to += SYNC_WINDOW_DAYS + 1) {
+    windows.push({ from: Math.min(to + SYNC_WINDOW_DAYS, PAGE_BACKFILL_DAYS), to });
+  }
+  return windows;
+}
+
+/**
+ * Pull one window of daily rows by `dimension` and upsert them, paging
+ * through the result set up to the row cap. Returns the rows written.
+ */
+async function pullWindow(brand, { dimension, table, onConflict, map }, { from, to }) {
   const entityId = `org_${brand.organization_id}`;
   let total = 0;
 
   for (let page = 0; page < MAX_PAGES; page++) {
     const rows = await queryGscSearchAnalytics(entityId, {
       site_url: brand.gsc_property,
-      start_date: utcDateString(SYNC_WINDOW_DAYS),
-      end_date: utcDateString(0),
-      dimensions: ['query', 'date'],
+      start_date: utcDateString(from),
+      end_date: utcDateString(to),
+      dimensions: [dimension, 'date'],
       search_type: 'web',
       row_limit: ROW_LIMIT,
       start_row: page * ROW_LIMIT,
@@ -63,12 +93,10 @@ async function syncBrand(brand) {
       dimension_filter_groups: [],
     });
 
-    const mapped = mapAnalyticsRows(brand.id, rows);
+    const mapped = map(brand.id, rows);
     for (let i = 0; i < mapped.length; i += UPSERT_CHUNK) {
       const chunk = mapped.slice(i, i + UPSERT_CHUNK);
-      const { error } = await supabaseAdmin
-        .from('gsc_query_stats')
-        .upsert(chunk, { onConflict: 'brand_id,query,date' });
+      const { error } = await supabaseAdmin.from(table).upsert(chunk, { onConflict });
       if (error) throw new Error(`Upsert failed: ${error.message}`);
     }
     total += mapped.length;
@@ -78,9 +106,41 @@ async function syncBrand(brand) {
   }
 
   logger.warn(
-    { brandId: brand.id, total, maxRows: MAX_PAGES * ROW_LIMIT },
+    { brandId: brand.id, dimension, total, maxRows: MAX_PAGES * ROW_LIMIT },
     '[gsc-sync] page cap reached — result set truncated',
   );
+  return total;
+}
+
+const QUERIES = {
+  dimension: 'query',
+  table: 'gsc_query_stats',
+  onConflict: 'brand_id,query,date',
+  map: mapAnalyticsRows,
+};
+const PAGES = {
+  dimension: 'page',
+  table: 'gsc_page_stats',
+  onConflict: 'brand_id,page,date',
+  map: mapPageRows,
+};
+
+async function syncBrand(brand) {
+  return pullWindow(brand, QUERIES, { from: SYNC_WINDOW_DAYS, to: 0 });
+}
+
+/** The brand's page stats (AT-008): PAGE_BACKFILL_DAYS on its first sync, then the last 28. */
+async function syncBrandPages(brand) {
+  const { data, error } = await supabaseAdmin
+    .from('gsc_page_stats')
+    .select('id')
+    .eq('brand_id', brand.id)
+    .limit(1);
+  if (error) throw new Error(error.message);
+  let total = 0;
+  for (const window of pageSyncWindows((data ?? []).length > 0)) {
+    total += await pullWindow(brand, PAGES, window);
+  }
   return total;
 }
 
@@ -121,7 +181,15 @@ export async function runGscSync({ organizationId, brandId } = {}) {
   for (const brand of brands || []) {
     try {
       const count = await syncBrand(brand);
-      results.push({ brandId: brand.id, rows: count });
+      // The page stats are a step of their own: failing there leaves the
+      // query rows synced.
+      let pages = null;
+      try {
+        pages = await syncBrandPages(brand);
+      } catch (err) {
+        logger.error({ err, brandId: brand.id }, '[gsc-sync] page sync failed');
+      }
+      results.push({ brandId: brand.id, rows: count, pages });
       synced++;
     } catch (err) {
       logger.error({ err, brandId: brand.id }, '[gsc-sync] brand sync failed');
@@ -140,6 +208,13 @@ export async function runGscSync({ organizationId, brandId } = {}) {
       .lt('date', utcDateString(90));
     if (pruneError) {
       logger.warn({ err: pruneError }, '[gsc-sync] retention prune failed');
+    }
+    const { error: pagePruneError } = await supabaseAdmin
+      .from('gsc_page_stats')
+      .delete()
+      .lt('date', utcDateString(PAGE_BACKFILL_DAYS));
+    if (pagePruneError) {
+      logger.warn({ err: pagePruneError }, '[gsc-sync] page retention prune failed');
     }
   }
 

@@ -11,6 +11,7 @@
 import type { Sheet } from 'write-excel-file/node';
 import type {
   TrafficConversions,
+  TrafficGooglePages,
   TrafficLog,
   TrafficPages,
   TrafficSources,
@@ -21,6 +22,7 @@ import { csvLine } from '@/lib/csv';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import { pageStatuses } from '@/lib/traffic-pages';
 import { conversionRate } from '@/lib/traffic-conversions';
+import { ctrPct, impressionsRise } from '@/lib/traffic-google-pages';
 import { visitChange } from '@/lib/traffic-change';
 import {
   googleSourceStatus,
@@ -37,6 +39,7 @@ export const TRAFFIC_EXPORT_SECTIONS = [
   'convertingPages',
   'buyerAnswers',
   'pageStatus',
+  'googlePages',
   'visits',
 ] as const;
 
@@ -49,6 +52,7 @@ export const TRAFFIC_TABLE_SECTIONS = [
   'convertingPages',
   'buyerAnswers',
   'pageStatus',
+  'googlePages',
   'visits',
 ] as const;
 
@@ -75,6 +79,8 @@ export interface TrafficExportData {
   pageStatus?: TrafficPages | null;
   /** Where AI visitors convert, every row (AT-014). */
   conversions?: TrafficConversions | null;
+  /** Is AI taking Google clicks?, every page (AT-008). */
+  googlePages?: TrafficGooglePages | null;
   sources?: TrafficSources | null;
 }
 
@@ -325,6 +331,50 @@ function buyerAnswers(data: TrafficExportData, label: ExportLabel): ExportTable 
   }));
 }
 
+/**
+ * Is AI taking Google clicks? (AT-008): every page that qualifies, with both
+ * periods' figures and the days compared, since they end on Google's latest
+ * reported day rather than the range's last.
+ */
+function googlePages(data: TrafficExportData, label: ExportLabel): ExportTable {
+  const g = data.googlePages;
+  const note = (key: string) => ({ headers: [label('columns.note')], rows: [[label(key)]] });
+  if (!g || !g.lastDay) return note('notes.noGooglePages');
+  if (!g.since) return note('notes.noPreviousPeriod');
+  if (g.incomplete) return note('notes.googleHistoryShort');
+  if (g.rows.length === 0) return note('notes.noGoogleClicksLost');
+  const days = `${g.since} – ${g.until}`;
+  const prevDays = `${g.prevSince} – ${g.prevUntil}`;
+  return {
+    headers: [
+      label('columns.page'),
+      label('columns.url'),
+      label('columns.impressions'),
+      label('columns.previousImpressions'),
+      label('columns.change'),
+      label('columns.ctr'),
+      label('columns.previousCtr'),
+      label('columns.clicks'),
+      label('columns.previousClicks'),
+      label('columns.days'),
+      label('columns.previousDays'),
+    ],
+    rows: g.rows.map((row) => [
+      row.page,
+      row.url,
+      row.impressions,
+      row.prevImpressions,
+      impressionsRise(row),
+      ctrPct(row.clicks, row.impressions),
+      ctrPct(row.prevClicks, row.prevImpressions),
+      row.clicks,
+      row.prevClicks,
+      days,
+      prevDays,
+    ]),
+  };
+}
+
 function visits(data: TrafficExportData, label: ExportLabel): ExportTable {
   return {
     headers: [
@@ -369,6 +419,8 @@ export function trafficTable(
       return buyerAnswers(data, label);
     case 'pageStatus':
       return pageStatus(data, label);
+    case 'googlePages':
+      return googlePages(data, label);
     case 'visits':
       return visits(data, label);
   }

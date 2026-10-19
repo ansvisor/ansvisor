@@ -33,6 +33,7 @@ const loaders = vi.hoisted(() => ({
   getTrafficSources: vi.fn(),
   getTrafficPages: vi.fn(),
   getTrafficConversions: vi.fn(),
+  getTrafficGooglePages: vi.fn(),
 }));
 vi.mock('@/lib/actions/traffic', () => loaders);
 
@@ -100,6 +101,16 @@ beforeEach(() => {
     counts: { noAiTraffic: 0, citedNotClicked: 0, trafficNoPrompt: 0, all: 0 },
     rows: [],
   });
+  loaders.getTrafficGooglePages.mockResolvedValue({
+    lastDay: '2026-10-17',
+    since: '2026-10-11',
+    until: '2026-10-17',
+    prevSince: '2026-10-04',
+    prevUntil: '2026-10-10',
+    incomplete: false,
+    count: 0,
+    rows: [],
+  });
 });
 
 const WINDOW = { dateFrom: '2026-10-11T09:00:00.000Z' };
@@ -136,6 +147,7 @@ describe('GET /api/traffic/export', () => {
       'Top converting pages',
       'Answers that bring buyers',
       'Pages by status',
+      'Is AI taking Google clicks',
       'Visits',
     ]);
 
@@ -172,6 +184,7 @@ describe('GET /api/traffic/export', () => {
       'top-converting-pages.csv',
       'answers-that-bring-buyers.csv',
       'pages-by-status.csv',
+      'is-ai-taking-google-clicks.csv',
       'visits.csv',
     ]);
     for (const file of Object.values(files)) expect(startsWithBom(file)).toBe(true);

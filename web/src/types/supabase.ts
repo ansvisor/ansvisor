@@ -1095,6 +1095,50 @@ export type Database = {
           },
         ]
       }
+      gsc_page_stats: {
+        Row: {
+          brand_id: string
+          clicks: number
+          created_at: string
+          ctr: number
+          date: string
+          id: string
+          impressions: number
+          page: string
+          position: number
+        }
+        Insert: {
+          brand_id: string
+          clicks?: number
+          created_at?: string
+          ctr?: number
+          date: string
+          id?: string
+          impressions?: number
+          page: string
+          position?: number
+        }
+        Update: {
+          brand_id?: string
+          clicks?: number
+          created_at?: string
+          ctr?: number
+          date?: string
+          id?: string
+          impressions?: number
+          page?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gsc_page_stats_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gsc_query_stats: {
         Row: {
           brand_id: string
@@ -2867,6 +2911,17 @@ export type Database = {
           p_limit?: number | null
           p_since: string | null
           p_until: string | null
+        }
+        Returns: Json
+      }
+      ai_traffic_google_pages: {
+        Args: {
+          p_brand_id: string
+          p_latest?: boolean
+          p_limit?: number
+          p_min_impressions?: number
+          p_since: string | null
+          p_until: string
         }
         Returns: Json
       }

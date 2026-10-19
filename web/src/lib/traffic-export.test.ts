@@ -356,6 +356,82 @@ describe('where AI visitors convert (AT-014)', () => {
   });
 });
 
+describe('trafficTable: Is AI taking Google clicks (AT-008)', () => {
+  const googlePages = (
+    over: Partial<NonNullable<TrafficExportData['googlePages']>> = {},
+  ): NonNullable<TrafficExportData['googlePages']> => ({
+    lastDay: '2026-10-17',
+    since: '2026-10-11',
+    until: '2026-10-17',
+    prevSince: '2026-10-04',
+    prevUntil: '2026-10-10',
+    incomplete: false,
+    count: 1,
+    rows: [
+      {
+        page: '/blog/how-to',
+        url: 'https://acme.example/blog/how-to',
+        impressions: 1420,
+        prevImpressions: 1000,
+        clicks: 14,
+        prevClicks: 31,
+        promptId: 'p1',
+      },
+    ],
+    ...over,
+  });
+
+  it('holds both periods, the rise, the CTRs and the days compared', () => {
+    const table = trafficTable('googlePages', data({ googlePages: googlePages() }), label);
+    expect(table.headers).toEqual([
+      'Page',
+      'URL',
+      'Impressions',
+      'Impressions, previous period',
+      'Change (%)',
+      'CTR (%)',
+      'CTR, previous period (%)',
+      'Clicks',
+      'Clicks, previous period',
+      'Days',
+      'Days, previous period',
+    ]);
+    expect(table.rows).toEqual([
+      [
+        '/blog/how-to',
+        'https://acme.example/blog/how-to',
+        1420,
+        1000,
+        42,
+        1,
+        3.1,
+        14,
+        31,
+        '2026-10-11 – 2026-10-17',
+        '2026-10-04 – 2026-10-10',
+      ],
+    ]);
+  });
+
+  it('says why there are no rows, never an empty sheet', () => {
+    const rows = (g: TrafficExportData['googlePages']) =>
+      trafficTable('googlePages', data({ googlePages: g }), label).rows;
+    expect(rows(googlePages({ rows: [], count: 0 }))).toEqual([
+      ["No page's impressions rose 15% while its CTR fell 20% in this range"],
+    ]);
+    expect(rows(googlePages({ lastDay: null, since: null, rows: [] }))).toEqual([
+      ['No page data from Google Search Console yet'],
+    ]);
+    expect(rows(null)).toEqual([['No page data from Google Search Console yet']]);
+    expect(rows(googlePages({ since: null, rows: [] }))).toEqual([
+      ['No previous period for all time'],
+    ]);
+    expect(rows(googlePages({ incomplete: true, rows: [] }))).toEqual([
+      ["Google Search Console's page history doesn't reach back to the period before this range"],
+    ]);
+  });
+});
+
 describe('filtersTable', () => {
   it('records the range, the filters, the sources and when', () => {
     const table = filtersTable(
@@ -389,6 +465,7 @@ describe('trafficWorkbook', () => {
       'Top converting pages',
       'Answers that bring buyers',
       'Pages by status',
+      'Is AI taking Google clicks',
       'Visits',
     ]);
     // A bold header row, then the rows with their numbers as numbers.

@@ -67,7 +67,11 @@ describe('sectionsNeeding', () => {
       'conversions',
       'pageValue',
     ]);
-    expect(sectionsNeeding('google-search-console')).toEqual(['googleClicks']);
+    expect(sectionsNeeding('google-search-console')).toEqual([
+      'googleClicks',
+      'googleTrend',
+      'googlePages',
+    ]);
   });
 });
 
