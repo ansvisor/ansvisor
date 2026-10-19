@@ -1,4 +1,4 @@
-import { sendEmail } from '../email.js';
+import { deliverEmail } from '../email.js';
 import { changeText, platformName } from './summary.js';
 
 /**
@@ -243,7 +243,7 @@ export function renderTrafficDigestEmail({
   return { subject, html };
 }
 
-/** Sends through the Resend HTTP API; false when it isn't configured or refuses. */
+/** Sends through the Resend HTTP API: 'sent', 'refused', 'unknown' or 'skipped' (deliverEmail). */
 export function sendTrafficDigestEmail({ to, subject, html, settingsUrl }) {
-  return sendEmail({ to, subject, html, headers: { 'List-Unsubscribe': `<${settingsUrl}>` } });
+  return deliverEmail({ to, subject, html, headers: { 'List-Unsubscribe': `<${settingsUrl}>` } });
 }

@@ -8,9 +8,10 @@
 --   * pulse_settings.traffic_digest — on unless an admin or manager turns it
 --     off in Settings › Notifications. A brand with no settings row gets it.
 --   * ai_traffic_digests — one row per brand and week: the claim that stops
---     a second send, what went out, and when (sent_at). A claim with no
---     sent_at was left by a failed or stopped sweep; the next one (through
---     Wednesday) takes it over.
+--     a second send, what went out, and when (sent_at, set just before the
+--     e-mail goes, so a stop after the send never mails the week twice). A
+--     claim with no sent_at was left by a sweep that stopped before sending;
+--     the next one (through Wednesday) takes it over.
 --
 -- Written by the Express server's service-role client; members read their
 -- brands' rows, as with sent_pulses.

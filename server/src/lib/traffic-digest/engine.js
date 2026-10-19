@@ -1,5 +1,4 @@
 import supabaseAdmin from '../../config/supabase.js';
-import { isEmailConfigured } from '../email.js';
 import { logger } from '../logger.js';
 import { readAllRpcRows } from '../rpc-pages.js';
 import { isCloud, isSubscriptionActive } from '../../config/plans.js';
@@ -24,12 +23,15 @@ import { renderTrafficDigestEmail, sendTrafficDigestEmail } from './email.js';
  *
  * A brand with no AI visits in either week gets nothing. A week is claimed in
  * ai_traffic_digests before anything is sent, so two sweeps can't mail it
- * twice, and marked sent (sent_at) once it went out. The sweep runs Monday
- * to Wednesday: a week a failure left unsent (a read that kept failing, an
- * e-mail Resend refused, a restart between the claim and the send) is tried
- * again the next day, and one already sent is skipped. Cloud only, like the
- * pulse's e-mail. Best effort: one brand's failure is logged and the sweep
- * moves on.
+ * twice, and marked sent (sent_at) just before the e-mail goes, so a stop
+ * after the send can't leave a claim a later sweep takes over and sends
+ * again. The sweep runs Monday to Wednesday: a week a failure left unsent (a
+ * read that kept failing, an e-mail Resend refused, a restart between the
+ * claim and the send) is tried again the next day, and one already sent is
+ * skipped. An e-mail Resend gave no answer for may have gone out, so its
+ * week isn't sent again: Resend's idempotency keys don't last to the next
+ * day. Cloud only, like the pulse's e-mail. Best effort: one brand's failure
+ * is logged and the sweep moves on.
  */
 
 /** Monday, as the weekly pulse; then Tuesday and Wednesday for a week left unsent. */
@@ -50,6 +52,14 @@ async function withRetries(read, waitMs) {
       await new Promise((resolve) => setTimeout(resolve, waitMs * attempt));
     }
   }
+}
+
+/** Writes to the week's row, tried again as the reads are; throws when it still fails. */
+function updateDigest(id, patch, waitMs) {
+  return withRetries(async () => {
+    const { error } = await supabaseAdmin.from('ai_traffic_digests').update(patch).eq('id', id);
+    if (error) throw new Error(`ai_traffic_digests: ${error.message}`);
+  }, waitMs);
 }
 
 async function rpc(name, params) {
@@ -232,7 +242,8 @@ export async function sendTrafficDigestForBrand(
   }
 
   let recipients;
-  let emailSent = false;
+  // Nothing to send to, or Resend isn't set up: the week is done all the same.
+  let outcome = 'skipped';
   try {
     recipients = await resolveRecipients(brand.organization_id, settings);
     if (recipients.length) {
@@ -244,23 +255,42 @@ export async function sendTrafficDigestForBrand(
         trafficUrl: `${appUrl()}/dashboard/traffic`,
         settingsUrl,
       });
-      emailSent = await sendTrafficDigestEmail({ to: recipients, subject, html, settingsUrl });
-      // Without Resend set up nothing could go out; with it, a false is a refusal.
-      if (!emailSent && isEmailConfigured()) throw new Error('Resend refused the digest');
+      // Marked sent before it goes. When this fails, nothing went out.
+      await updateDigest(row.id, { sent_at: new Date().toISOString() }, retryWaitMs);
+      outcome = await sendTrafficDigestEmail({ to: recipients, subject, html, settingsUrl });
+      // Resend answered with an error: nothing went out.
+      if (outcome === 'refused') throw new Error('Resend refused the digest');
     }
   } catch (err) {
     // Give the week back, so the next sweep (through Wednesday) tries again.
     await releaseClaim(row.id);
     throw err;
   }
-  await supabaseAdmin
-    .from('ai_traffic_digests')
-    .update({
-      email_sent: emailSent,
-      email_recipient_count: emailSent ? recipients.length : 0,
-      sent_at: new Date().toISOString(),
-    })
-    .eq('id', row.id);
+  if (outcome === 'unknown') {
+    logger.warn(
+      { brandId, week: week.firstDay },
+      '[traffic-digest] no answer from Resend; the week is not sent again',
+    );
+  }
+  const emailSent = outcome === 'sent';
+  try {
+    await updateDigest(
+      row.id,
+      {
+        email_sent: emailSent,
+        email_recipient_count: emailSent ? recipients.length : 0,
+        sent_at: new Date().toISOString(),
+      },
+      retryWaitMs,
+    );
+  } catch (err) {
+    // The claim stays, marked sent before the e-mail went (or with nothing to
+    // send): only the record of what went out is missing.
+    logger.error(
+      { err, brandId, week: week.firstDay },
+      '[traffic-digest] recording the send failed',
+    );
+  }
 
   logger.info(
     { brandId, week: week.firstDay, emailSent, recipients: recipients.length },

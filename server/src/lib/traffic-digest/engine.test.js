@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({
   deleted: [],
   rpcCalls: [],
   rpcFailures: 0,
+  updateFailures: 0,
   rpc: {},
 }));
 
@@ -59,6 +60,11 @@ vi.mock('../../config/supabase.js', () => {
         },
         update: (patch) => ({
           eq: async () => {
+            // A test may fail the writes, as a dropped connection would.
+            if (state.updateFailures > 0) {
+              state.updateFailures -= 1;
+              return { error: { message: 'connection reset' } };
+            }
             state.updated.push({ table, patch });
             return { error: null };
           },
@@ -84,13 +90,11 @@ vi.mock('../../config/supabase.js', () => {
     },
   };
 });
-vi.mock('../logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
-const sendEmail = vi.fn(async () => true);
-let emailConfigured = true;
-vi.mock('../email.js', () => ({
-  sendEmail: (...args) => sendEmail(...args),
-  isEmailConfigured: () => emailConfigured,
-}));
+const logger = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }));
+vi.mock('../logger.js', () => ({ logger }));
+// 'sent', 'refused', 'unknown' or 'skipped', as deliverEmail says.
+const deliverEmail = vi.fn(async () => 'sent');
+vi.mock('../email.js', () => ({ deliverEmail: (...args) => deliverEmail(...args) }));
 vi.mock('../pulse/engine.js', () => ({
   appUrl: () => 'https://app.example.com',
   resolveRecipients: async (_org, settings) => settings?.recipients ?? ['team@acme.example'],
@@ -116,6 +120,7 @@ beforeEach(() => {
     deleted: [],
     rpcCalls: [],
     rpcFailures: 0,
+    updateFailures: 0,
     listBrands: null,
     rpc: {
       ai_traffic_merged: (p) =>
@@ -127,8 +132,9 @@ beforeEach(() => {
       ai_traffic_broken_links: () => ({ count: 0, rows: [] }),
     },
   });
-  sendEmail.mockReset().mockResolvedValue(true);
-  emailConfigured = true;
+  deliverEmail.mockReset().mockResolvedValue('sent');
+  logger.warn.mockReset();
+  logger.error.mockReset();
   cloud = true;
 });
 
@@ -143,7 +149,7 @@ describe('sendTrafficDigestForBrand', () => {
       table: 'ai_traffic_digests',
       row: { brand_id: 'b1', week_start: '2026-10-12' },
     });
-    const [mail] = sendEmail.mock.calls[0];
+    const [mail] = deliverEmail.mock.calls[0];
     expect(mail.to).toEqual(['team@acme.example']);
     expect(mail.subject).toBe('Acme AI traffic last week: 36 AI visits (−40%)');
     expect(mail.html).toContain('2 pages are cited in AI answers but get no clicks.');
@@ -151,11 +157,11 @@ describe('sendTrafficDigestForBrand', () => {
     expect(mail.headers).toEqual({
       'List-Unsubscribe': '<https://app.example.com/dashboard/settings?tab=notifications>',
     });
-    expect(state.updated[0].patch).toEqual({
-      email_sent: true,
-      email_recipient_count: 1,
-      sent_at: expect.any(String),
-    });
+    // Marked sent before it went, then what went out.
+    expect(state.updated.map((u) => u.patch)).toEqual([
+      { sent_at: expect.any(String) },
+      { email_sent: true, email_recipient_count: 1, sent_at: expect.any(String) },
+    ]);
   });
 
   it("reads each week to its Sunday's last second, so the Monday between them counts once", async () => {
@@ -182,20 +188,72 @@ describe('sendTrafficDigestForBrand', () => {
   });
 
   it('gives the week back when Resend refuses the e-mail', async () => {
-    sendEmail.mockResolvedValue(false);
+    deliverEmail.mockResolvedValue('refused');
     await expect(sendTrafficDigestForBrand('b1', { now: MONDAY })).rejects.toThrow(
       'Resend refused the digest',
     );
     expect(state.deleted).toEqual([{ table: 'ai_traffic_digests', id: 'd1' }]);
 
     // Without Resend set up, nothing could go out: the week is done.
-    emailConfigured = false;
+    deliverEmail.mockResolvedValue('skipped');
     state.deleted = [];
     expect(await sendTrafficDigestForBrand('b1', { now: MONDAY })).toMatchObject({
       sent: true,
       emailSent: false,
     });
     expect(state.deleted).toEqual([]);
+  });
+
+  it("keeps the week when Resend gave no answer: it may have gone, and isn't sent twice", async () => {
+    deliverEmail.mockResolvedValue('unknown');
+    expect(await sendTrafficDigestForBrand('b1', { now: MONDAY })).toMatchObject({
+      sent: true,
+      emailSent: false,
+    });
+    expect(state.deleted).toEqual([]);
+    expect(state.updated.at(-1).patch).toMatchObject({ sent_at: expect.any(String) });
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ brandId: 'b1', week: '2026-10-12' }),
+      '[traffic-digest] no answer from Resend; the week is not sent again',
+    );
+  });
+
+  it('tries a failing write again; a send it cannot record keeps its claim', async () => {
+    // The mark before the send fails twice, then holds.
+    state.updateFailures = 2;
+    expect(await sendTrafficDigestForBrand('b1', { now: MONDAY, retryWaitMs: 0 })).toMatchObject({
+      sent: true,
+      emailSent: true,
+    });
+    expect(state.updated).toHaveLength(2);
+
+    // The mark never holds: nothing is sent, and the week is given back.
+    state.updated = [];
+    state.updateFailures = 3;
+    deliverEmail.mockClear();
+    await expect(sendTrafficDigestForBrand('b1', { now: MONDAY, retryWaitMs: 0 })).rejects.toThrow(
+      'connection reset',
+    );
+    expect(deliverEmail).not.toHaveBeenCalled();
+    expect(state.deleted).toEqual([{ table: 'ai_traffic_digests', id: 'd1' }]);
+
+    // The record after the send never holds: the claim, marked sent, stays.
+    state.deleted = [];
+    state.updated = [];
+    deliverEmail.mockImplementation(async () => {
+      state.updateFailures = 3;
+      return 'sent';
+    });
+    expect(await sendTrafficDigestForBrand('b1', { now: MONDAY, retryWaitMs: 0 })).toMatchObject({
+      sent: true,
+      emailSent: true,
+    });
+    expect(state.updated.map((u) => u.patch)).toEqual([{ sent_at: expect.any(String) }]);
+    expect(state.deleted).toEqual([]);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ brandId: 'b1', week: '2026-10-12' }),
+      '[traffic-digest] recording the send failed',
+    );
   });
 
   it('takes over a claim a stopped sweep left, and leaves one still in progress', async () => {
@@ -231,7 +289,7 @@ describe('sendTrafficDigestForBrand', () => {
     expect(await sendTrafficDigestForBrand('b1', { now: MONDAY })).toEqual({
       skipped: 'no_traffic',
     });
-    expect(sendEmail).not.toHaveBeenCalled();
+    expect(deliverEmail).not.toHaveBeenCalled();
     expect(state.inserted).toEqual([]);
   });
 
@@ -240,7 +298,7 @@ describe('sendTrafficDigestForBrand', () => {
     expect(await sendTrafficDigestForBrand('b1', { now: MONDAY })).toEqual({
       skipped: 'already_sent',
     });
-    expect(sendEmail).not.toHaveBeenCalled();
+    expect(deliverEmail).not.toHaveBeenCalled();
   });
 });
 
