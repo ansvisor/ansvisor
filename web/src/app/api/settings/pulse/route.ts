@@ -6,7 +6,8 @@ import { parseRecipients } from '@/lib/pulse-recipients';
 /**
  * GET / PUT /api/settings/pulse
  *
- * Daily Pulse delivery preferences (#540), per brand.
+ * Daily Pulse delivery preferences (#540), per brand, and whether the AI
+ * Traffic weekly digest (AT-013) goes to the same recipients.
  *
  * Auth model (same bar as the webhook config RLS):
  * - GET: any signed-in org member sees each brand's frequency/recipients.
@@ -60,7 +61,7 @@ export async function GET() {
   const { data: settings } = brandIds.length
     ? await supabaseAdmin
         .from('pulse_settings')
-        .select('brand_id, frequency, recipients')
+        .select('brand_id, frequency, recipients, traffic_digest')
         .in('brand_id', brandIds)
     : { data: [] };
 
@@ -74,6 +75,8 @@ export async function GET() {
         brandName: brand.name,
         frequency: s?.frequency ?? 'daily',
         recipients: s?.recipients ?? [],
+        // On unless turned off (00187).
+        trafficDigest: s?.traffic_digest ?? true,
       };
     }),
   });
@@ -91,7 +94,12 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  let body: { brandId?: string; frequency?: string; recipients?: unknown };
+  let body: {
+    brandId?: string;
+    frequency?: string;
+    recipients?: unknown;
+    trafficDigest?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
@@ -111,6 +119,9 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Invalid recipient email', invalid }, { status: 400 });
   }
   const recipients = valid.slice(0, 50);
+  if (body.trafficDigest !== undefined && typeof body.trafficDigest !== 'boolean') {
+    return NextResponse.json({ error: 'trafficDigest must be true or false' }, { status: 400 });
+  }
 
   // The brand must belong to the caller's org.
   const { data: brand } = await supabaseAdmin
@@ -127,6 +138,8 @@ export async function PUT(request: Request) {
       brand_id: brandId,
       frequency,
       recipients: recipients.length ? recipients : null,
+      // Left as it is when the caller doesn't say.
+      ...(typeof body.trafficDigest === 'boolean' ? { traffic_digest: body.trafficDigest } : {}),
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'brand_id' },

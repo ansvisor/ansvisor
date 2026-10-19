@@ -21,6 +21,21 @@ describe('the AI source list on the page', () => {
     }
   });
 
+  it('names every platform in the weekly digest e-mail as the page names it (AT-013)', () => {
+    const digestNames = JSON.parse(
+      readFileSync(
+        join(__dirname, '../../../server/src/lib/traffic-digest/platform-names.json'),
+        'utf8',
+      ),
+    ) as Record<string, string>;
+    for (const { key } of list.sources) {
+      expect(digestNames[key], key).toBe(getPlatformName(key));
+    }
+    for (const [key, name] of Object.entries(digestNames)) {
+      expect(getPlatformName(key), key).toBe(name);
+    }
+  });
+
   it('colors every engine on the list', () => {
     const fallback = getColor('not-an-engine.example');
     for (const { key } of list.sources) {
