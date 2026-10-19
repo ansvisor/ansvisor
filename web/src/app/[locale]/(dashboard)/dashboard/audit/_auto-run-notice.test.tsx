@@ -1,9 +1,10 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import type { AutoAuditRun } from '@/lib/actions/audits';
+import type { NextAutoRun } from '@/lib/audit-auto-runs';
 import { AutoRunNotice } from './_auto-run-notice';
 
 (
@@ -30,11 +31,15 @@ const run = (over: Partial<AutoAuditRun> = {}): AutoAuditRun => ({
 let container: HTMLDivElement;
 let root: Root;
 
-function render(value: AutoAuditRun | null, nextRunAt: string | null = '2026-10-14T12:00:00.000Z') {
+function render(
+  value: AutoAuditRun | null,
+  nextRun: NextAutoRun | null = { at: '2026-10-14T00:00:00.000Z', soon: false },
+  onViewPages?: () => void,
+) {
   act(() => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <AutoRunNotice brandId={BRAND} run={value} nextRunAt={nextRunAt} />
+        <AutoRunNotice brandId={BRAND} run={value} nextRun={nextRun} onViewPages={onViewPages} />
       </NextIntlClientProvider>,
     );
   });
@@ -66,10 +71,32 @@ afterEach(() => {
 
 describe('AutoRunNotice', () => {
   it('sums up the run with the next run date', () => {
-    render(run());
+    render(run({ pages: 2 }));
     expect(container.textContent).toBe(
       'Auto-audit · Oct 7 · 2 pages audited · 3 critical issues · next run Oct 14',
     );
+  });
+
+  it("counts the audits that failed, so they don't go missing", () => {
+    render(run());
+    expect(container.textContent).toBe(
+      "Auto-audit · Oct 7 · 2 pages audited · 3 critical issues · 1 page couldn't be audited · next run Oct 14",
+    );
+  });
+
+  it("says within a day when the next run's turn has started without it", () => {
+    render(run({ pages: 2 }), { at: '2026-10-14T00:00:00.000Z', soon: true });
+    expect(container.textContent).toContain('next run within a day');
+  });
+
+  it('leads to the pages the run audited', () => {
+    const onViewPages = vi.fn();
+    render(run(), null, onViewPages);
+    const view = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'View pages',
+    )!;
+    act(() => view.click());
+    expect(onViewPages).toHaveBeenCalled();
   });
 
   it('shows a run still going, and no next run when there is none', () => {

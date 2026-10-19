@@ -87,10 +87,13 @@ const GRID = 'grid grid-cols-1 gap-3 sm:grid-cols-2 min-[75rem]:grid-cols-4';
 export function AuditOverviewCards({
   overview,
   quota,
+  now,
   onOpenSettings,
 }: {
   overview: AuditOverview | null;
   quota: AuditQuota | null;
+  /** For the runs' states (done, skipped, next). */
+  now: Date;
   /** Opens the Site Audit settings, from How it works. */
   onOpenSettings?: () => void;
 }) {
@@ -133,7 +136,7 @@ export function AuditOverviewCards({
   const quotaFooter = !quota ? null : shares ? (
     <div className="space-y-2 pb-0.5">
       <QuotaSegments quota={quota} />
-      {auto?.enabled && <RunDots auto={auto} />}
+      {auto?.enabled && <RunDots auto={auto} now={now} />}
       <div className="truncate text-xs text-muted-foreground">
         {auto?.enabled
           ? tq('autoShare', { share: autoSharePct(auto, quota.limit) })
@@ -144,7 +147,7 @@ export function AuditOverviewCards({
     </div>
   ) : auto?.enabled ? (
     <div className="space-y-2 pb-0.5">
-      <RunDots auto={auto} />
+      <RunDots auto={auto} now={now} />
       <div className="truncate text-xs text-muted-foreground">
         {tq('autoPerRun', { perRun: auto.perRun })}
       </div>

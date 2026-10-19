@@ -322,12 +322,14 @@ function ShoppingModeCard({
   brand: Brand;
   onUpdate: (updates: Partial<Brand>) => void;
 }) {
-  const { canAdmin } = useUserRole();
+  const t = useTranslations('brands');
+  // Admins and managers, as the brands, prompts and brand_platforms writes allow.
+  const { canManage } = useUserRole();
   const [enabled, setEnabled] = useState(brand.shoppingModeEnabled);
   const [saving, setSaving] = useState(false);
 
   async function handleToggle(next: boolean) {
-    if (!canAdmin) return;
+    if (!canManage) return;
     const previous = enabled;
     setEnabled(next);
     setSaving(true);
@@ -335,13 +337,13 @@ function ShoppingModeCard({
       const { promptsUpdated } = await setBrandShoppingMode(brand.id, next);
       onUpdate({ shoppingModeEnabled: next });
       if (next && promptsUpdated > 0) {
-        toast.success(`Shopping mode on — ${promptsUpdated} prompt(s) updated`);
+        toast.success(t('settings.shopping.onWithPrompts', { count: promptsUpdated }));
       } else {
-        toast.success(next ? 'Shopping mode on' : 'Shopping mode off');
+        toast.success(next ? t('settings.shopping.on') : t('settings.shopping.off'));
       }
     } catch (err) {
       setEnabled(previous);
-      toast.error(err instanceof Error ? err.message : 'Failed to save');
+      toast.error(err instanceof Error ? err.message : t('settings.shopping.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -352,33 +354,31 @@ function ShoppingModeCard({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <ShoppingBag className="h-4 w-4" />
-          Shopping mode
+          {t('settings.shopping.title')}
         </CardTitle>
-        <CardDescription>
-          Turn this on if this brand is in e-commerce. We&rsquo;ll add ChatGPT Shopping to every
-          prompt under this brand and reveal the Shopping dashboard.
-        </CardDescription>
+        <CardDescription>{t('settings.shopping.description')}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex items-start gap-3">
           <Checkbox
             id="shopping-mode"
             checked={enabled}
-            disabled={saving || !canAdmin}
+            disabled={saving || !canManage}
             onCheckedChange={(v) => handleToggle(v === true)}
           />
           <div className="space-y-1">
             <Label htmlFor="shopping-mode" className="font-medium">
-              This brand is in e-commerce / shopping
+              {t('settings.shopping.label')}
             </Label>
             <p className="text-xs text-muted-foreground">
-              Adds{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px]">chatgpt-shopping</code> to
-              every existing prompt&apos;s platform list and enables the Shopping platform on this
-              brand.
+              {t.rich('settings.shopping.help', {
+                code: (chunks) => (
+                  <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{chunks}</code>
+                ),
+              })}
             </p>
-            {!canAdmin && (
-              <p className="text-xs text-muted-foreground">Only admins can change this setting.</p>
+            {!canManage && (
+              <p className="text-xs text-muted-foreground">{t('settings.shopping.managersOnly')}</p>
             )}
           </div>
           {saving && <Loader2 className="ml-auto h-4 w-4 animate-spin text-muted-foreground" />}

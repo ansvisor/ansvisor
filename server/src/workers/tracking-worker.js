@@ -60,6 +60,17 @@ export function runnablePlatforms(platforms, { shoppingEnabled } = {}) {
 }
 
 /**
+ * Whether ChatGPT Shopping is run for a brand: its Shopping mode is on, and
+ * its plan has the Shopping page (`shopping_analytics`) that shows the
+ * results. On a plan without it, every ChatGPT Shopping task would be a paid
+ * Cloro submission nobody can see. `plan` is null on self-host, where every
+ * feature is on.
+ */
+export function shoppingTracked(brand, plan) {
+  return Boolean(brand?.shopping_mode_enabled) && (!plan || hasFeature(plan, 'shopping_analytics'));
+}
+
+/**
  * PostgREST silently caps an un-paginated select at 1000 rows, so reading a
  * brand's pending tasks in one request under-reports any run that submitted
  * more than that (#714). Page through instead.
@@ -268,25 +279,30 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   // filter at run time instead of trusting the stored arrays. `null` means
   // every model is allowed (self-host, or a plan without the restriction).
   let allowedModels = null;
+  let plan = null;
   if (isCloud()) {
     const { data: org } = await supabaseAdmin
       .from('organizations')
       .select('plan, plan_overrides')
       .eq('id', brand.organization_id)
       .single();
-    const plan = applyPlanOverrides(getPlan(org?.plan), org);
+    plan = applyPlanOverrides(getPlan(org?.plan), org);
     allowedModels = plan.limits.allowedModels ?? null;
     if (allowedModels) {
       logger.info({ brandId, allowedModels }, 'api-model tracking plan-gated for this org');
     }
+  }
+  // ChatGPT Shopping, like the models, only where the plan shows its results.
+  const shoppingEnabled = shoppingTracked(brand, plan);
+  if (brand.shopping_mode_enabled && !shoppingEnabled) {
+    logger.info({ brandId }, 'chatgpt-shopping not tracked: the plan has no Shopping page');
   }
   const allowedModelsFor = (prompt) => {
     const models = prompt.models && prompt.models.length > 0 ? prompt.models : [];
     return allowedModels ? models.filter((m) => allowedModels.includes(m)) : models;
   };
 
-  const allowedPlatformsFor = (prompt) =>
-    runnablePlatforms(prompt.platforms, { shoppingEnabled: brand.shopping_mode_enabled });
+  const allowedPlatformsFor = (prompt) => runnablePlatforms(prompt.platforms, { shoppingEnabled });
 
   // A prompt's tracked locations (#691): country codes and US state codes
   // (`US-CA`) alike. No locations means one untargeted run, which is what an

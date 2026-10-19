@@ -47,6 +47,9 @@ function fakeQueryBuilder(table: string) {
     select: record('select'),
     eq: record('eq'),
     neq: record('neq'),
+    not: record('not'),
+    is: record('is'),
+    gte: record('gte'),
     maybeSingle: async () => promptResultRead,
     in: record('in'),
     order: record('order'),
@@ -151,6 +154,137 @@ describe('getPromptResultById', () => {
       id: 'result-id',
       searchQueries: promptResultRow.search_queries,
     });
+  });
+});
+
+describe('getTrackingWindow (#999)', () => {
+  beforeEach(() => {
+    listQueries = [];
+    listRows = {
+      tracking_runs: [
+        {
+          started_at: '2026-10-18T23:30:00.000Z',
+          completed_at: '2026-10-19T01:15:00.000Z',
+          source: 'cron',
+        },
+        {
+          started_at: '2026-10-16T22:00:00.000Z',
+          completed_at: '2026-10-16T23:00:00.000Z',
+          source: 'cron',
+        },
+      ],
+    };
+  });
+
+  afterEach(() => {
+    listRows = {};
+    listQueries = [];
+  });
+
+  it('returns UTC day windows for the latest and previous completed runs', async () => {
+    const { getTrackingWindow } = await import('./tracking');
+    const window = await getTrackingWindow('brand-id');
+
+    expect(window.runDays).toEqual({ dayFrom: '2026-10-18', dayTo: '2026-10-19' });
+    expect(window.previousRunDays).toEqual({ dayFrom: '2026-10-16', dayTo: '2026-10-16' });
+    expect(window.lastRunAt).toBe('2026-10-19T01:15:00.000Z');
+    expect(listQueries.find((q) => q.table === 'tracking_runs')?.calls).toContainEqual([
+      'select',
+      'started_at, completed_at',
+    ]);
+  });
+});
+
+describe('Insights 24h rollup routing (#999)', () => {
+  beforeEach(() => {
+    rpcCalls = [];
+    listQueries = [];
+    rpcByName = true;
+    listRows = {
+      tracking_runs: [
+        {
+          started_at: '2026-10-18T23:30:00.000Z',
+          completed_at: '2026-10-19T01:15:00.000Z',
+          source: 'cron',
+        },
+        {
+          started_at: '2026-10-16T22:00:00.000Z',
+          completed_at: '2026-10-16T23:00:00.000Z',
+          source: 'cron',
+        },
+      ],
+    };
+  });
+
+  afterEach(() => {
+    rpcByName = false;
+    listRows = {};
+    listQueries = [];
+    rpcCalls = [];
+  });
+
+  it('uses daily rollups for the latest run and the previous run for deltas', async () => {
+    const { getInsightsData } = await import('./tracking');
+    const data = await getInsightsData('brand-id', { anchor24h: true });
+
+    expect(data.trackingWindow?.runDays).toEqual({
+      dayFrom: '2026-10-18',
+      dayTo: '2026-10-19',
+    });
+    expect(
+      rpcCalls.some(
+        (call) =>
+          call.name === 'insights_aggregates_daily' &&
+          call.args.p_day_from === '2026-10-18' &&
+          call.args.p_day_to === '2026-10-19',
+      ),
+    ).toBe(true);
+    expect(
+      rpcCalls.some(
+        (call) =>
+          call.name === 'insights_aggregates_daily' &&
+          call.args.p_day_from === '2026-10-16' &&
+          call.args.p_day_to === '2026-10-16',
+      ),
+    ).toBe(true);
+    expect(rpcCalls.some((call) => call.name === 'insights_aggregates')).toBe(false);
+    expect(rpcCalls.some((call) => call.name === 'competitor_aggregates')).toBe(false);
+    expect(rpcCalls.some((call) => call.name === 'share_of_voice_aggregates')).toBe(false);
+    expect(rpcCalls.some((call) => call.name === 'ai_visibility_aggregates')).toBe(false);
+  });
+
+  it('uses topic-scoped daily rollups for a topic-filtered 24h view (#867)', async () => {
+    const { getInsightsData } = await import('./tracking');
+    await getInsightsData('brand-id', { anchor24h: true, topicId: 'topic-1' });
+
+    expect(
+      rpcCalls.some(
+        (call) =>
+          call.name === 'insights_aggregates_daily' &&
+          call.args.p_day_from === '2026-10-18' &&
+          call.args.p_day_to === '2026-10-19' &&
+          call.args.p_topic_id === 'topic-1',
+      ),
+    ).toBe(true);
+    const dailyCalls = rpcCalls.filter((call) => call.name.endsWith('_daily'));
+    expect(dailyCalls.length).toBeGreaterThan(0);
+    for (const call of dailyCalls) {
+      expect(call.args.p_topic_id).toBe('topic-1');
+    }
+    expect(rpcCalls.some((call) => call.name === 'insights_aggregates')).toBe(false);
+    expect(rpcCalls.some((call) => call.name === 'competitor_aggregates')).toBe(false);
+    expect(rpcCalls.some((call) => call.name === 'share_of_voice_aggregates')).toBe(false);
+    expect(rpcCalls.some((call) => call.name === 'ai_visibility_aggregates')).toBe(false);
+  });
+
+  it('retains the raw fallback when no completed run exists', async () => {
+    listRows = {};
+    rpcByName = false;
+    const { getInsightsData } = await import('./tracking');
+    await getInsightsData('brand-id', { anchor24h: true });
+
+    expect(rpcCalls.some((call) => call.name === 'insights_aggregates')).toBe(true);
+    expect(rpcCalls.some((call) => call.name === 'insights_aggregates_daily')).toBe(false);
   });
 });
 
