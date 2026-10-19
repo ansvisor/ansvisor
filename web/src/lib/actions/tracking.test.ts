@@ -47,6 +47,9 @@ function fakeQueryBuilder(table: string) {
     select: record('select'),
     eq: record('eq'),
     neq: record('neq'),
+    not: record('not'),
+    is: record('is'),
+    gte: record('gte'),
     maybeSingle: async () => promptResultRead,
     in: record('in'),
     order: record('order'),
@@ -151,6 +154,44 @@ describe('getPromptResultById', () => {
       id: 'result-id',
       searchQueries: promptResultRow.search_queries,
     });
+  });
+});
+
+describe('getTrackingWindow (#999)', () => {
+  beforeEach(() => {
+    listQueries = [];
+    listRows = {
+      tracking_runs: [
+        {
+          started_at: '2026-10-18T23:30:00.000Z',
+          completed_at: '2026-10-19T01:15:00.000Z',
+          source: 'cron',
+        },
+        {
+          started_at: '2026-10-16T22:00:00.000Z',
+          completed_at: '2026-10-16T23:00:00.000Z',
+          source: 'cron',
+        },
+      ],
+    };
+  });
+
+  afterEach(() => {
+    listRows = {};
+    listQueries = [];
+  });
+
+  it('returns UTC day windows for the latest and previous completed runs', async () => {
+    const { getTrackingWindow } = await import('./tracking');
+    const window = await getTrackingWindow('brand-id');
+
+    expect(window.runDays).toEqual({ dayFrom: '2026-10-18', dayTo: '2026-10-19' });
+    expect(window.previousRunDays).toEqual({ dayFrom: '2026-10-16', dayTo: '2026-10-16' });
+    expect(window.lastRunAt).toBe('2026-10-19T01:15:00.000Z');
+    expect(listQueries.find((q) => q.table === 'tracking_runs')?.calls).toContainEqual([
+      'select',
+      'started_at, completed_at',
+    ]);
   });
 });
 
