@@ -25,7 +25,7 @@ const { data: brand } = await supabaseAdmin
   .eq('id', brandId)
   .single();
 const week = digestWeek(new Date());
-const content = digestContent(await readDigestData(brandId, week));
+const content = digestContent(await readDigestData(brandId, week), week);
 const { subject, html } = renderTrafficDigestEmail({
   brandName: brand?.name ?? brandId,
   week,

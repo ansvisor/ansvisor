@@ -61,6 +61,28 @@ export function digestWeek(now) {
   };
 }
 
+/** AI visits on each day of the week, Monday first, from ai_traffic_merged's days. */
+export function dailyVisits(week, days = []) {
+  const totals = new Map();
+  for (const d of days) {
+    const day = String(d.day).slice(0, 10);
+    totals.set(day, (totals.get(day) ?? 0) + n(d.visits));
+  }
+  return Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(Date.parse(week.start) + i * DAY_MS).toISOString().slice(0, 10);
+    return { day, visits: totals.get(day) ?? 0 };
+  });
+}
+
+/** The week's platforms with visits, most first, at most `limit`. */
+export function topPlatforms(platforms = [], limit = 5) {
+  return platforms
+    .map((p) => ({ platform: String(p.platform ?? ''), visits: n(p.visits) }))
+    .filter((p) => p.visits > 0 && p.platform)
+    .sort((a, b) => b.visits - a.visits || a.platform.localeCompare(b.platform))
+    .slice(0, limit);
+}
+
 /** The page's change rule (web/src/lib/traffic-change.ts): a % only on 30 visits each. */
 export function visitChangePct(current, previous) {
   if (previous === 0 || current < LOW_SAMPLE_VISITS || previous < LOW_SAMPLE_VISITS) return null;

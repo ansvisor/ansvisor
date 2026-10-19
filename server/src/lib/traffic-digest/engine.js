@@ -3,7 +3,15 @@ import { logger } from '../logger.js';
 import { isCloud, isSubscriptionActive } from '../../config/plans.js';
 import { appUrl, resolveRecipients } from '../pulse/engine.js';
 import { untrackedGoogleQueries } from '../untracked-queries.js';
-import { digestWeek, summarySentences, topChanges, visitChangePct } from './summary.js';
+import {
+  dailyVisits,
+  digestWeek,
+  formatShare,
+  summarySentences,
+  topChanges,
+  topPlatforms,
+  visitChangePct,
+} from './summary.js';
 import { renderTrafficDigestEmail, sendTrafficDigestEmail } from './email.js';
 
 /**
@@ -104,14 +112,20 @@ export async function readDigestData(brandId, week) {
   };
 }
 
-/** What the e-mail says, from the numbers. */
-export function digestContent(data) {
+/** What the e-mail says and shows, from the numbers. */
+export function digestContent(data, week) {
   const visits = Number(data.cur.visits) || 0;
   const prevVisits = Number(data.prev.visits) || 0;
+  const platforms = topPlatforms(data.cur.platforms ?? []);
   return {
     visits,
     prevVisits,
     change: visitChangePct(visits, prevVisits),
+    // The cards and charts (the summary line says the same in words).
+    share: data.gaSessions ? formatShare(visits, data.gaSessions) : null,
+    citedNotClicked: data.citedNotClicked ?? 0,
+    platforms,
+    days: dailyVisits(week, data.cur.days ?? []),
     sentences: summarySentences({
       visits,
       prevVisits,
@@ -162,7 +176,7 @@ export async function sendTrafficDigestForBrand(brandId, { now = new Date() } = 
   if (existing) return { skipped: 'already_sent' };
 
   const data = await readDigestData(brandId, week);
-  const content = digestContent(data);
+  const content = digestContent(data, week);
   if (content.visits === 0 && content.prevVisits === 0) return { skipped: 'no_traffic' };
 
   // Claim the week first: the unique (brand_id, week_start) is the race-safe

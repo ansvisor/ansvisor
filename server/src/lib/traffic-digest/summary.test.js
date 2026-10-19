@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   bestConvertingPlatform,
   changeText,
+  dailyVisits,
   digestWeek,
   summarySentences,
   topChanges,
+  topPlatforms,
   visitChangePct,
 } from './summary.js';
 
@@ -27,6 +29,41 @@ describe('digestWeek', () => {
     });
     // A Sunday still reports the week before this one.
     expect(digestWeek(new Date('2026-10-25T23:00:00Z')).firstDay).toBe('2026-10-12');
+  });
+});
+
+describe('the charts', () => {
+  const week = digestWeek(new Date('2026-10-19T02:00:00Z'));
+
+  it('gives every day of the week its visits, Monday first, quiet days included', () => {
+    expect(
+      dailyVisits(week, [
+        { day: '2026-10-13', platform: 'chatgpt.com', visits: 3 },
+        { day: '2026-10-13', platform: 'grok.com', visits: 1 },
+        { day: '2026-10-18', platform: 'chatgpt.com', visits: 2 },
+      ]),
+    ).toEqual([
+      { day: '2026-10-12', visits: 0 },
+      { day: '2026-10-13', visits: 4 },
+      { day: '2026-10-14', visits: 0 },
+      { day: '2026-10-15', visits: 0 },
+      { day: '2026-10-16', visits: 0 },
+      { day: '2026-10-17', visits: 0 },
+      { day: '2026-10-18', visits: 2 },
+    ]);
+  });
+
+  it('lists the platforms with visits, most first', () => {
+    expect(
+      topPlatforms([
+        { platform: 'perplexity.ai', visits: 11 },
+        { platform: 'claude.ai', visits: 0 },
+        { platform: 'chatgpt.com', visits: '21' },
+      ]),
+    ).toEqual([
+      { platform: 'chatgpt.com', visits: 21 },
+      { platform: 'perplexity.ai', visits: 11 },
+    ]);
   });
 });
 
