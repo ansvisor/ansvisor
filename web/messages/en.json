@@ -3984,9 +3984,9 @@
     "noNewCompetitorSuggestions": "All suggested competitors are already on your list.",
     "selectedCompetitorCount": "{count} selected",
     "addSelectedCompetitors": "Add {count, plural, one {# competitor} other {# competitors}}",
-    "suggestedCompetitorsAdded": "{count, plural, one {# competitor added successfully.} other {# competitors added successfully.}",
+    "suggestedCompetitorsAdded": "{count, plural, one {# competitor added successfully.} other {# competitors added successfully.}}",
     "suggestedCompetitorsAddError": "Failed to add competitors. Please try again.",
-    "suggestedCompetitorsPartialError": "{count, plural, one {# competitor couldn't be added. You can retry the remaining suggestions.} other {# competitors couldn't be added. You can retry the remaining suggestions.}",
+    "suggestedCompetitorsPartialError": "{count, plural, one {# competitor couldn't be added. You can retry the remaining suggestions.} other {# competitors couldn't be added. You can retry the remaining suggestions.}}",
     "missingCompetitorWebsite": "Add a website to this brand before asking AI to suggest competitors."
   },
   "citations": {
