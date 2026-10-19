@@ -10,13 +10,18 @@
  *   2. Runs sentiment analysis (only if brand was mentioned)
  *   3. Computes visibility metrics + competitor mentions via parseResponse
  *   4. Inserts a `prompt_results` row
- *   5. Normalizes any captured shopping_cards into prompt_result_shopping_cards
+ *   5. Normalizes any captured shopping_cards, then ChatGPT's inline products,
+ *      into prompt_result_shopping_cards
  */
 
 import supabaseAdmin from '../config/supabase.js';
 import { analyzeSentimentAI } from './ai-tracker.js';
 import { parseResponse, countBrandMentions } from './response-parser.js';
-import { normalizeShoppingCards, matchCardBrand } from './shopping-cards.js';
+import {
+  normalizeShoppingCards,
+  normalizeInlineProducts,
+  matchCardBrand,
+} from './shopping-cards.js';
 import { updateTargetUrlStats } from './target-url-stats.js';
 import { persistCitationRows } from './citation-rows.js';
 import { logger } from './logger.js';
@@ -103,6 +108,7 @@ export async function handleScraperResult({
     platform: scraperId,
     region,
     rawCards: aiResponse.shopping_cards ?? [],
+    rawInlineProducts: aiResponse.inline_products ?? [],
     brandInfo: { brandId, brandName: brandInfo.brandName, domains: brandInfo.domains },
     competitors,
   });
@@ -123,6 +129,7 @@ export async function handleScraperResult({
  * @param {string} args.platform
  * @param {string|null} args.region
  * @param {unknown[]} args.rawCards
+ * @param {unknown[]} [args.rawInlineProducts] ChatGPT's in-answer products, stored after the cards
  * @param {{ brandId: string, brandName: string, domains: string[] }} args.brandInfo
  * @param {Array<{ id: string, name: string, domain: string|null }>} args.competitors
  * @returns {Promise<number>} number of rows inserted (0 if none / on failure)
@@ -133,10 +140,16 @@ export async function persistShoppingCards({
   platform,
   region,
   rawCards,
+  rawInlineProducts = [],
   brandInfo,
   competitors,
 }) {
-  const normalized = normalizeShoppingCards(platform, rawCards);
+  const cards = normalizeShoppingCards(platform, rawCards);
+  const lastPosition = cards.reduce((max, card) => Math.max(max, card.position ?? 0), 0);
+  const normalized = [
+    ...cards,
+    ...normalizeInlineProducts(platform, rawInlineProducts, lastPosition),
+  ];
   if (normalized.length === 0) return 0;
 
   const rows = normalized.map((card) => {
