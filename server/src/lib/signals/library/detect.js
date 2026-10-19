@@ -770,9 +770,13 @@ const FAMILIES = [
     kinds: ['cited_page_uncrawled'],
     async run(ctx) {
       const report = await ctx.botReport();
-      // Only while the bot data is whole (00185's alert_state 'on'): with a
-      // sender stopped, revoked or past its cap, the pages search bots read
-      // drain and every cited page would read as uncrawled.
+      // Only while the bot data is whole (00185's alert_state 'on'). With a
+      // sender stopped, revoked or past its cap ('stale'), the pages search
+      // bots read drain and every cited page would read as uncrawled; the
+      // kind is unread tonight, not recovered, so open signals and their
+      // tasks stay open until data returns. Under 30 days ('waiting') there
+      // is nothing to say yet.
+      if (report?.alert_state === 'stale') throw new DataNotWhole('bot data is stale');
       if (report?.alert_state !== 'on') return [];
       const uncrawled = Array.isArray(report?.uncrawled) ? report.uncrawled : [];
       if (uncrawled.length === 0) return [];
@@ -928,6 +932,13 @@ const FAMILIES = [
 export const LIBRARY_EMITTED_KINDS = Object.freeze(FAMILIES.flatMap((f) => f.kinds));
 
 /**
+ * Thrown by a family whose data is there but not whole tonight — a bot
+ * sender stopped, say. Its kinds are reported unread, as a failed read's are,
+ * so open signals stay open until the data is whole again; it isn't an error.
+ */
+export class DataNotWhole extends Error {}
+
+/**
  * Run every family the brand has the data for.
  *
  * `overflow` holds findings still detected but past their kind's cap. They
@@ -956,7 +967,14 @@ export async function libraryCandidates(brandId, { now = new Date(), sources } =
     } catch (err) {
       // One family's read failing costs that family's night, not the pass.
       for (const kind of family.kinds) unreadKinds.add(kind);
-      logger.error({ err, brandId, family: family.name }, '[signals] library family failed');
+      if (err instanceof DataNotWhole) {
+        logger.info(
+          { brandId, family: family.name, reason: err.message },
+          '[signals] library family data not whole',
+        );
+      } else {
+        logger.error({ err, brandId, family: family.name }, '[signals] library family failed');
+      }
     }
   }
   return { candidates, overflow, unreadKinds };
