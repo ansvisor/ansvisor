@@ -2,6 +2,7 @@ import createMiddleware from 'next-intl/middleware';
 import { type NextRequest, NextResponse } from 'next/server';
 import { routing } from '@/i18n/routing';
 import { updateSession } from '@/lib/supabase/middleware';
+import { nextFromRequest } from '@/lib/auth-next';
 
 const intlMiddleware = createMiddleware(routing);
 
@@ -46,8 +47,14 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isProtected(pathnameWithoutLocale) && !user) {
+    // Back to this page after signing in, query included (an e-mail's
+    // `?tab=notifications`): `next` is what the sign-in form and the OAuth
+    // callback read.
     const signInUrl = new URL('/sign-in', request.url);
-    signInUrl.searchParams.set('redirectTo', pathname);
+    signInUrl.searchParams.set(
+      'next',
+      nextFromRequest(pathnameWithoutLocale, request.nextUrl.search),
+    );
     return NextResponse.redirect(signInUrl);
   }
 

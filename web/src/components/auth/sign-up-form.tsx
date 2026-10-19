@@ -139,7 +139,7 @@ export function SignUpForm() {
       </form>
 
       <OrDivider label={t('orContinueWith')} />
-      <OAuthButtons />
+      <OAuthButtons next={nextPath} />
 
       <p className="text-center text-sm text-muted-foreground">
         {t('termsAgreement')}{' '}
