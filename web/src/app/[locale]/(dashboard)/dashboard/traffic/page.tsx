@@ -44,10 +44,13 @@ import { EngagedCell, KeyEventsCell, PlatformValueNote } from './_platform-value
 import { ExportMenu, TableExport, useTrafficExport } from './_export';
 import { SourcesStrip } from './_sources-strip';
 import { SnippetBanner, SnippetDialog } from './_snippet-code';
+import { GoogleTrendView } from './_google-trend';
+import { NeedsTag } from './_source-gate';
 import { googleSourceStatus, snippetDetected } from '@/lib/traffic-sources';
 import { useUserRole } from '@/hooks/use-user-role';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
   TableBody,
@@ -406,6 +409,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   const t = useTranslations('traffic');
   const tCommon = useTranslations('common');
   const tVisits = useTranslations('traffic.visits');
+  const tTrend = useTranslations('traffic.trend');
   // The page opens on the member's last range, or the last 24 hours (AT-017,
   // spec §3.01). This only renders in the browser, once the brand has loaded,
   // so the stored choice is read before the first load rather than after it.
@@ -424,6 +428,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   const trendTitle = getTrendTitle(datePreset, { from: customFrom, to: customTo });
   const [summary, setSummary] = useState<TrafficSummary | null>(null);
   const [trend, setTrend] = useState<TrafficTrendPoint[]>([]);
+  const [trendView, setTrendView] = useState<'platforms' | 'google'>('platforms');
   const [logs, setLogs] = useState<TrafficLog[]>([]);
   const [logsTotal, setLogsTotal] = useState(0);
   const [logsPageviews, setLogsPageviews] = useState(0);
@@ -576,6 +581,12 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   // §3.8b's partial note) — even with rows left from an earlier connection.
   const gaMissing =
     !sourcesFailed && sources !== null && googleSourceStatus(sources.ga) !== 'connected';
+  // The trend's Google line reads Search Console once it has data, or when
+  // the states couldn't be read, as the Google clicks card does; null while
+  // they load (AT-008).
+  const gscConnected = sources
+    ? googleSourceStatus(sources.gsc) === 'connected'
+    : sourcesFailed || null;
 
   const isEmpty = totalVisits === 0 && logs.length === 0;
   const hasAnyData = summary?.hasAnyData ?? false;
@@ -697,10 +708,35 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Card className="lg:col-span-2">
               <CardHeader className="pb-2">
-                <CardTitle className="font-medium text-sm">{trendTitle}</CardTitle>
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="font-medium text-sm">{trendTitle}</CardTitle>
+                    {trendView === 'google' && <NeedsTag provider="google-search-console" />}
+                  </div>
+                  {/* By platform, or AI visits against Google clicks (AT-008, spec §3.3). */}
+                  <Tabs
+                    value={trendView}
+                    onValueChange={(v) => setTrendView(v as 'platforms' | 'google')}
+                  >
+                    <TabsList variant="line" aria-label={trendTitle}>
+                      <TabsTrigger value="platforms">{tTrend('tabs.platforms')}</TabsTrigger>
+                      <TabsTrigger value="google">{tTrend('tabs.google')}</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
               </CardHeader>
               <CardContent>
-                <ReferralTrendChart data={trend} analyticsDays={summary?.analyticsDays} />
+                {trendView === 'google' ? (
+                  <GoogleTrendView
+                    brandId={brand.id}
+                    trend={trend}
+                    rangeStart={dateWindow.dateFrom}
+                    gscConnected={gscConnected}
+                    onShowWeek={() => handleDatePresetChange('7d')}
+                  />
+                ) : (
+                  <ReferralTrendChart data={trend} analyticsDays={summary?.analyticsDays} />
+                )}
               </CardContent>
             </Card>
 

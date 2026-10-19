@@ -2870,6 +2870,14 @@ export type Database = {
         }
         Returns: Json
       }
+      ai_traffic_google_trend: {
+        Args: {
+          p_brand_id: string
+          p_since: string
+          p_until: string
+        }
+        Returns: Json
+      }
       ai_visibility_aggregates: {
         Args: {
           p_brand_id: string

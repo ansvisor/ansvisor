@@ -3226,7 +3226,28 @@
       "showLast7Days": "Show last 7 days"
     },
     "trend": {
-      "fromAnalytics": "from Google Analytics"
+      "fromAnalytics": "from Google Analytics",
+      "tabs": {
+        "platforms": "By platform",
+        "google": "vs Google clicks"
+      },
+      "google": {
+        "aiLine": "AI visits",
+        "googleLine": "Google clicks",
+        "withIndex": "{count} · index {index}",
+        "notReported": "not reported yet",
+        "noData": "no data",
+        "actions": "{count, plural, one {# action} other {# actions}} entered the Action Center",
+        "prompts": "{count, plural, one {# prompt} other {# prompts}} added",
+        "daily": "Google reports clicks by day. Pick 7 days or longer to compare them with AI visits.",
+        "showWeek": "Show last 7 days",
+        "needsGsc": "The Google clicks line needs Google Search Console.",
+        "failed": "Google clicks couldn't be loaded.",
+        "noClicks": "No Google clicks for this range in Google Search Console.",
+        "until": "Google clicks until {day}: Google reports about two days late.",
+        "legend": "Each line starts at 100 on its first day with data. AI Overviews and AI Mode clicks are part of Google organic clicks and can't be separated.",
+        "markers": "Dashed amber lines mark the days actions entered the Action Center or prompts were added."
+      }
     },
     "platforms": {
       "engaged": "Engaged",

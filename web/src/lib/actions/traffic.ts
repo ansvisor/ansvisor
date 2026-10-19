@@ -919,3 +919,48 @@ export async function getTrafficGoogleTotals(
       : null,
   };
 }
+
+/** The Google side of the trend's "vs Google clicks" view (AT-008), by UTC day. */
+export interface TrafficGoogleTrend {
+  /** Search Console clicks on the days it has rows for. */
+  clicks: { day: string; clicks: number }[];
+  /** The first day Search Console has rows for the brand; null with none. */
+  firstDay: string | null;
+  /** The latest day Google has reported; null with none. */
+  lastDay: string | null;
+  /** The days actions entered the Action Center or prompts were added. */
+  markers: { day: string; actions: number; prompts: number }[];
+}
+
+/**
+ * Search Console clicks and the event markers for the trend's "vs Google
+ * clicks" view (AT-008, spec §3.3; 00180), between two UTC days. The AI
+ * line is the page's own trend.
+ */
+export async function getTrafficGoogleTrend(
+  brandId: string,
+  since: string,
+  until: string,
+): Promise<TrafficGoogleTrend> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('ai_traffic_google_trend', {
+    p_brand_id: brandId,
+    p_since: since,
+    p_until: until,
+  });
+  if (error) throw new Error(error.message);
+  const raw = (data ?? {}) as Record<string, unknown>;
+  const n = (v: unknown) => Number(v) || 0;
+  const list = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]) : []);
+  const day = (v: unknown) => (typeof v === 'string' ? v : null);
+  return {
+    clicks: list(raw.clicks).map((r) => ({ day: String(r.day), clicks: n(r.clicks) })),
+    firstDay: day(raw.first_day),
+    lastDay: day(raw.last_day),
+    markers: list(raw.markers).map((r) => ({
+      day: String(r.day),
+      actions: n(r.actions),
+      prompts: n(r.prompts),
+    })),
+  };
+}

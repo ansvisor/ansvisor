@@ -7,6 +7,9 @@ import { formatNumber } from '@/lib/format';
 import {
   AreaChart,
   Area,
+  LineChart,
+  Line,
+  ReferenceLine,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -17,6 +20,7 @@ import {
   Cell,
 } from 'recharts';
 import type { TrafficTrendPoint } from '@/lib/actions/traffic';
+import type { GoogleTrendPoint } from '@/lib/traffic-google-trend';
 
 // ─── Auto-sizing wrapper ─────────────────────────────────────────────────────
 
@@ -278,6 +282,153 @@ export function ReferralTrendChart({
             />
           ))}
         </AreaChart>
+      )}
+    </ChartContainer>
+  );
+}
+
+// ─── AI visits vs Google clicks (AT-008) ─────────────────────────────────────
+
+/** The AI line in the platforms' indigo, Google's in its green, markers in amber. */
+const AI_LINE = '#6366f1';
+const GOOGLE_LINE = '#34a853';
+const MARKER = '#f59e0b';
+const BASELINE = '#94a3b8';
+
+function GoogleTrendTooltip({
+  active,
+  payload,
+  label,
+  googleUntil,
+  hasGoogle,
+}: {
+  active?: boolean;
+  payload?: { payload: GoogleTrendPoint }[];
+  label?: string;
+  googleUntil: string | null;
+  hasGoogle: boolean;
+}) {
+  const t = useTranslations('traffic.trend.google');
+  if (!active || !payload?.length || !label) return null;
+  const point = payload[0].payload;
+  const line = (color: string, name: string, value: string) => (
+    <div className="flex items-center gap-2">
+      <span
+        className="inline-block h-2 w-2 rounded-full shrink-0"
+        style={{ backgroundColor: color }}
+      />
+      <span className="text-muted-foreground">{name}:</span>
+      <span className="font-medium text-foreground">{value}</span>
+    </div>
+  );
+  const indexed = (count: number, index: number | null) =>
+    index === null
+      ? formatNumber(count)
+      : t('withIndex', { count: formatNumber(count), index: formatNumber(index) });
+  return (
+    <div className="rounded-lg border bg-background px-3 py-2 shadow-md text-xs">
+      <p className="font-medium text-foreground mb-1">
+        {formatTrafficBucketDate(label, { withDay: true })}
+      </p>
+      {line(AI_LINE, t('aiLine'), indexed(point.visits, point.ai))}
+      {hasGoogle &&
+        line(
+          GOOGLE_LINE,
+          t('googleLine'),
+          point.clicks === null
+            ? googleUntil && point.date > googleUntil
+              ? t('notReported')
+              : t('noData')
+            : indexed(point.clicks, point.google),
+        )}
+      {point.actions > 0 && (
+        <p className="mt-1 text-muted-foreground">{t('actions', { count: point.actions })}</p>
+      )}
+      {point.prompts > 0 && (
+        <p className="text-muted-foreground">{t('prompts', { count: point.prompts })}</p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * AI visits and Google organic clicks, each indexed to 100 on its first day
+ * with any (spec §3.3), with a dashed amber line on each day actions entered
+ * the Action Center or prompts were added.
+ */
+export function GoogleTrendChart({
+  points,
+  googleUntil,
+}: {
+  points: GoogleTrendPoint[];
+  /** Google's latest reported day, when the range runs past it. */
+  googleUntil: string | null;
+}) {
+  const t = useTranslations('traffic.trend.google');
+  if (!points.length) return null;
+  const markerDays = points.filter((p) => p.actions > 0 || p.prompts > 0).map((p) => p.date);
+  // Without Google's days (no Search Console) the legend shows the AI line alone.
+  const hasGoogle = points.some((p) => p.google !== null);
+
+  return (
+    <ChartContainer height={220}>
+      {(width) => (
+        <LineChart
+          width={width}
+          height={220}
+          data={points}
+          margin={{ top: 4, right: 4, left: -24, bottom: 0 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+          <XAxis
+            dataKey="date"
+            tick={{ fontSize: 11 }}
+            tickLine={false}
+            axisLine={false}
+            className="fill-muted-foreground"
+            tickFormatter={(v: string) => formatTrafficBucketDate(v)}
+          />
+          <YAxis
+            tick={{ fontSize: 11 }}
+            tickLine={false}
+            axisLine={false}
+            className="fill-muted-foreground"
+            allowDecimals={false}
+          />
+          <ReferenceLine y={100} stroke={BASELINE} strokeDasharray="2 4" />
+          {markerDays.map((day) => (
+            <ReferenceLine key={day} x={day} stroke={MARKER} strokeDasharray="3 3" />
+          ))}
+          <Tooltip
+            content={<GoogleTrendTooltip googleUntil={googleUntil} hasGoogle={hasGoogle} />}
+          />
+          <Legend
+            iconType="circle"
+            iconSize={8}
+            wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+            formatter={(value: string) => (value === 'ai' ? t('aiLine') : t('googleLine'))}
+          />
+          <Line
+            type="monotone"
+            dataKey="ai"
+            name="ai"
+            stroke={AI_LINE}
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 3 }}
+          />
+          {hasGoogle && (
+            <Line
+              type="monotone"
+              dataKey="google"
+              name="google"
+              stroke={GOOGLE_LINE}
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 3 }}
+            />
+          )}
+        </LineChart>
       )}
     </ChartContainer>
   );
