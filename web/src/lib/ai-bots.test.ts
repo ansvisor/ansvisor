@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { botsCardState, lastBotEvent, rowsPausedUntil } from './ai-bots';
+import {
+  botReportState,
+  botsCardState,
+  lastBotEvent,
+  rowsPausedUntil,
+  sampleBotTypes,
+} from './ai-bots';
 import type { BotConnections, BotUsage } from '@/lib/actions/ai-bots';
 
 /** The AI bots source card's state (AT-010). */
@@ -49,5 +55,45 @@ describe('lastBotEvent and rowsPausedUntil', () => {
     );
     expect(rowsPausedUntil(usage())).toBeNull();
     expect(rowsPausedUntil(usage({ cap: -1, cappedAt: '2026-10-20T00:00:00Z' }))).toBeNull();
+  });
+});
+
+describe('botReportState and sampleBotTypes (AT-011)', () => {
+  const report = (lastSeen: string | null) => ({
+    firstDay: null,
+    lastSeen,
+    types: [],
+    bots: [],
+    pageCount: 0,
+    pages: [],
+    uncrawledCount: null,
+    uncrawled: null,
+    alertFrom: null,
+  });
+
+  it("is locked without the report, off, waiting, or the brand's own data", () => {
+    expect(
+      botReportState({ connections: [], usage: usage({ cap: 0 }) }, report('2026-10-19T09:00:00Z')),
+    ).toBe('locked');
+    expect(botReportState({ connections: [], usage: usage() }, report(null))).toBe('off');
+    expect(botReportState({ connections: [conn(null)], usage: usage() }, report(null))).toBe(
+      'waiting',
+    );
+    expect(
+      botReportState({ connections: [conn(null)], usage: usage() }, report('2026-10-19T09:00:00Z')),
+    ).toBe('data');
+    // Bots counted before the connection was revoked still show.
+    expect(
+      botReportState({ connections: [], usage: usage() }, report('2026-10-19T09:00:00Z')),
+    ).toBe('data');
+  });
+
+  it("samples the mockup's numbers, last seen 2h, 40m and 5m ago", () => {
+    const now = Date.parse('2026-10-19T12:00:00.000Z');
+    expect(sampleBotTypes(now).map((t) => [t.type, t.hits, t.pages, t.lastSeen])).toEqual([
+      ['training', 8420, 612, '2026-10-19T10:00:00.000Z'],
+      ['search', 3115, 488, '2026-10-19T11:20:00.000Z'],
+      ['user', 1302, 214, '2026-10-19T11:55:00.000Z'],
+    ]);
   });
 });

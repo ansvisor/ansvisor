@@ -46,6 +46,7 @@ import { SourcesStrip } from './_sources-strip';
 import { SnippetBanner, SnippetDialog } from './_snippet-code';
 import { GoogleTrendView } from './_google-trend';
 import { GoogleSection } from './_google-section';
+import { BotsReportSection } from './_bots-report';
 import { NeedsTag } from './_source-gate';
 import { googleSourceStatus, snippetDetected } from '@/lib/traffic-sources';
 import { useUserRole } from '@/hooks/use-user-role';
@@ -432,6 +433,9 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   const [trendView, setTrendView] = useState<'platforms' | 'google'>('platforms');
   // Bumped when Google queries are tracked, so the summary line counts again (AT-009).
   const [queriesRevision, setQueriesRevision] = useState(0);
+  // Bumped when an AI-bot connection is made or revoked, so the sources
+  // strip's card and the bot report read it again (AT-010, AT-011).
+  const [botsRevision, setBotsRevision] = useState(0);
   const [logs, setLogs] = useState<TrafficLog[]>([]);
   const [logsTotal, setLogsTotal] = useState(0);
   const [logsPageviews, setLogsPageviews] = useState(0);
@@ -648,6 +652,21 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
     />
   );
 
+  // AI bots reading the site (AT-011, spec §3.7): from the brand's own
+  // Cloudflare or Vercel, so it shows even when the snippet saw no visit.
+  const botsSection = (
+    <BotsReportSection
+      brandId={brand.id}
+      dateWindow={dateWindow}
+      rangeLabel={rangeSubLabel}
+      canConnect={canManage}
+      revision={botsRevision}
+      onChanged={() => setBotsRevision((n) => n + 1)}
+      typesActions={<TableExport exporter={exporter} section="bots" />}
+      pagesActions={<TableExport exporter={exporter} section="botPages" />}
+    />
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -684,6 +703,8 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
           canConnect={canManage}
           onShowCode={() => setCodeOpen(true)}
           onConnected={() => void loadSources()}
+          botsRevision={botsRevision}
+          onBotsChanged={() => setBotsRevision((n) => n + 1)}
         />
       )}
       {/* The code stays open only while the snippet sends nothing (F3). */}
@@ -712,6 +733,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
       {isEmpty && conversionsSection}
       {isEmpty && pagesCard}
       {isEmpty && googleSection}
+      {isEmpty && botsSection}
       {!isEmpty && (
         <>
           {/* KPI cards: two rows of four (AT-017, spec §3.2). */}
@@ -891,6 +913,8 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
           {pagesCard}
 
           {googleSection}
+
+          {botsSection}
 
           {/* Recent Visit Log with filtering and pagination*/}
           <Card>

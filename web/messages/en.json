@@ -3120,6 +3120,8 @@
         "pageStatus": "Pages by status",
         "googlePages": "Is AI taking Google clicks",
         "googleQueries": "Untracked Google queries",
+        "bots": "AI bots",
+        "botPages": "Pages AI bots read",
         "visits": "Visits"
       },
       "columns": {
@@ -3167,7 +3169,15 @@
         "previousClicks": "Clicks, previous period",
         "days": "Days",
         "previousDays": "Days, previous period",
-        "query": "Query"
+        "query": "Query",
+        "bot": "Bot",
+        "botType": "Bot type",
+        "hits": "Hits",
+        "pagesRead": "Pages read",
+        "lastSeen": "Last seen (UTC)",
+        "trainingLast": "Training, last read (UTC)",
+        "searchLast": "Search index, last read (UTC)",
+        "userLast": "User fetch, last read (UTC)"
       },
       "metrics": {
         "visits": "AI-referred visits",
@@ -3191,7 +3201,13 @@
         "googleHistoryShort": "Google Search Console's page history doesn't reach back to the period before this range",
         "noGoogleQueries": "No query data from Google Search Console yet",
         "noUntrackedQueries": "Every Google query with clicks in this range is tracked",
-        "queriesCapped": "Only the 5,000 most clicked queries were checked"
+        "queriesCapped": "Only the 5,000 most clicked queries were checked",
+        "noBots": "No AI-bot requests in this range"
+      },
+      "botTypes": {
+        "training": "Training",
+        "search": "Search index",
+        "user": "User fetch"
       },
       "sourceStates": {
         "active": "Active",
@@ -3403,6 +3419,40 @@
           "Set the format to JSON and add the custom header below."
         ]
       }
+    },
+    "botReport": {
+      "title": "AI bots reading your site",
+      "needs": "Growth and above · needs Cloudflare or Vercel",
+      "typesTitle": "By bot type",
+      "pagesTitle": "Pages AI bots read",
+      "columns": {
+        "type": "Bot type",
+        "hits": "Hits",
+        "pages": "Pages",
+        "lastSeen": "Last seen",
+        "page": "Page"
+      },
+      "types": {
+        "training": "Training",
+        "search": "Search index",
+        "user": "User fetch"
+      },
+      "overlayTitle": "See which AI bots read your pages",
+      "connectBody": "Connect Cloudflare or Vercel in 2 minutes. Verified bots only. No change to your site's speed.",
+      "lockedBody": "The AI bot report comes with the Growth plan. Verified bots only, from your own Cloudflare or Vercel.",
+      "connect": "Connect",
+      "preview": "Preview with sample data",
+      "upgrade": "Upgrade",
+      "sampleNote": "Sample data: connect Cloudflare or Vercel to see yours.",
+      "waiting": "Waiting for the first AI-bot request from your Cloudflare or Vercel. Requests show here as soon as they arrive.",
+      "emptyRange": "No AI bot read your site in this range.",
+      "failed": "Couldn't load the AI bot report.",
+      "morePages": "{shown} of {count} pages · the export has them all",
+      "uncrawled": "{count, plural, one {# page AI answers cited wasn't read by any search bot in the last 30 days} other {# pages AI answers cited weren't read by any search bot in the last 30 days}}",
+      "cited": "{count, plural, one {cited # time} other {cited # times}}",
+      "moreUncrawled": "and {count} more",
+      "allCrawled": "Every page AI answers cited in the last 30 days was read by a search bot.",
+      "alertStarts": "The search-bot alert starts on {day}, 30 days after the first AI-bot request."
     },
     "gate": {
       "needs": "Needs {source}",

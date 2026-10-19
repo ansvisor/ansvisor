@@ -124,6 +124,8 @@ export function SourcesStrip({
   canConnect,
   onShowCode,
   onConnected,
+  botsRevision,
+  onBotsChanged,
 }: {
   brandId: string;
   /** Null while loading. */
@@ -134,6 +136,9 @@ export function SourcesStrip({
   canConnect: boolean;
   onShowCode: () => void;
   onConnected: () => void;
+  /** Bumped when an AI-bot connection is made or revoked on the page. */
+  botsRevision?: number;
+  onBotsChanged?: () => void;
 }) {
   const t = useTranslations('traffic.sources');
   const tCommon = useTranslations('common');
@@ -186,7 +191,12 @@ export function SourcesStrip({
         canConnect={canConnect}
         onConnected={onConnected}
       />
-      <BotsSource brandId={brandId} canConnect={canConnect} />
+      <BotsSource
+        brandId={brandId}
+        canConnect={canConnect}
+        revision={botsRevision}
+        onChanged={onBotsChanged}
+      />
     </section>
   );
 }

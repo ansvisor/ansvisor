@@ -11,6 +11,7 @@
 import type { Sheet } from 'write-excel-file/node';
 import type {
   TrafficConversions,
+  TrafficBots,
   TrafficGooglePages,
   TrafficLog,
   TrafficUntrackedQueries,
@@ -24,6 +25,7 @@ import { getPlatformName } from '@/lib/traffic-platforms';
 import { pageStatuses } from '@/lib/traffic-pages';
 import { conversionRate } from '@/lib/traffic-conversions';
 import { ctrPct, impressionsRise } from '@/lib/traffic-google-pages';
+import { botName } from '@/lib/ai-bot-names';
 import { visitChange } from '@/lib/traffic-change';
 import {
   googleSourceStatus,
@@ -42,6 +44,8 @@ export const TRAFFIC_EXPORT_SECTIONS = [
   'pageStatus',
   'googlePages',
   'googleQueries',
+  'bots',
+  'botPages',
   'visits',
 ] as const;
 
@@ -56,6 +60,8 @@ export const TRAFFIC_TABLE_SECTIONS = [
   'pageStatus',
   'googlePages',
   'googleQueries',
+  'bots',
+  'botPages',
   'visits',
 ] as const;
 
@@ -86,6 +92,8 @@ export interface TrafficExportData {
   googlePages?: TrafficGooglePages | null;
   /** Google queries you don't track yet, every one the server checked (AT-009). */
   googleQueries?: TrafficUntrackedQueries | null;
+  /** AI bots reading the site, every page (AT-011). */
+  bots?: TrafficBots | null;
   sources?: TrafficSources | null;
 }
 
@@ -400,6 +408,53 @@ function googleQueries(data: TrafficExportData, label: ExportLabel): ExportTable
   return { ...table, rows: [...table.rows, [label('notes.queriesCapped'), null, null, null]] };
 }
 
+/** AI bots reading the site (AT-011): each bot with its type, hits, pages and last request. */
+function bots(data: TrafficExportData, label: ExportLabel): ExportTable {
+  const rows = data.bots?.bots ?? [];
+  if (rows.length === 0)
+    return { headers: [label('columns.note')], rows: [[label('notes.noBots')]] };
+  return {
+    headers: [
+      label('columns.bot'),
+      label('columns.botType'),
+      label('columns.hits'),
+      label('columns.pagesRead'),
+      label('columns.lastSeen'),
+    ],
+    rows: rows.map((row) => [
+      botName(row.bot),
+      label(`botTypes.${row.type}`),
+      row.hits,
+      row.pages,
+      row.lastSeen ? utcMinute(row.lastSeen) : null,
+    ]),
+  };
+}
+
+/** The pages AI bots read (AT-011), with when each type last read them. */
+function botPages(data: TrafficExportData, label: ExportLabel): ExportTable {
+  const rows = data.bots?.pages ?? [];
+  if (rows.length === 0)
+    return { headers: [label('columns.note')], rows: [[label('notes.noBots')]] };
+  const at = (iso: string | null) => (iso ? utcMinute(iso) : null);
+  return {
+    headers: [
+      label('columns.page'),
+      label('columns.hits'),
+      label('columns.trainingLast'),
+      label('columns.searchLast'),
+      label('columns.userLast'),
+    ],
+    rows: rows.map((row) => [
+      row.page,
+      row.hits,
+      at(row.trainingLast),
+      at(row.searchLast),
+      at(row.userLast),
+    ]),
+  };
+}
+
 function visits(data: TrafficExportData, label: ExportLabel): ExportTable {
   return {
     headers: [
@@ -448,6 +503,10 @@ export function trafficTable(
       return googlePages(data, label);
     case 'googleQueries':
       return googleQueries(data, label);
+    case 'bots':
+      return bots(data, label);
+    case 'botPages':
+      return botPages(data, label);
     case 'visits':
       return visits(data, label);
   }

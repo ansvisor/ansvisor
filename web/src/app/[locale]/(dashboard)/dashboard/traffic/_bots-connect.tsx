@@ -321,7 +321,19 @@ export function BotsDialog({
  * waiting until the first request, then the last request's time; Manage
  * opens the same dialog.
  */
-export function BotsSource({ brandId, canConnect }: { brandId: string; canConnect: boolean }) {
+export function BotsSource({
+  brandId,
+  canConnect,
+  revision = 0,
+  onChanged,
+}: {
+  brandId: string;
+  canConnect: boolean;
+  /** Bumped when a connection is made or revoked anywhere on the page. */
+  revision?: number;
+  /** A connection was made or revoked here. */
+  onChanged?: () => void;
+}) {
   const t = useTranslations('traffic.sources');
   const tCommon = useTranslations('common');
   const [info, setInfo] = useState<BotConnections | { error: string } | null>(null);
@@ -335,7 +347,7 @@ export function BotsSource({ brandId, canConnect }: { brandId: string; canConnec
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, revision]);
 
   const title = t('bots');
   if (!info) return <SourceCard tone="off" title={title} line={t('botsLoading')} />;
@@ -407,7 +419,7 @@ export function BotsSource({ brandId, canConnect }: { brandId: string; canConnec
           info={info}
           canConnect={canConnect}
           onOpenChange={setOpen}
-          onChanged={load}
+          onChanged={() => (onChanged ? onChanged() : load())}
         />
       )}
     </>
