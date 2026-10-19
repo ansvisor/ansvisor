@@ -1370,7 +1370,20 @@ export default function CompetitorsPage() {
     const added = results.filter((result) => result.status === 'fulfilled').length;
     const failed = results.length - added;
 
-    if (added > 0) await loadData();
+    if (added > 0) {
+      // Refresh in place rather than toggling the page-wide initial loader:
+      // the suggestion dialog should remain open when some inserts fail.
+      try {
+        const [currentCompetitors, comparison] = await Promise.all([
+          getCompetitors(brand.id),
+          getCompetitorComparison(brand.id, last30Days()),
+        ]);
+        setCompetitors(currentCompetitors);
+        setComparisonData(comparison.brands.length > 1 ? comparison : null);
+      } catch {
+        toast.error(t('loadError'));
+      }
+    }
     return { added, failed };
   }
 
