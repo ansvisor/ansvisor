@@ -161,6 +161,8 @@ export interface AuditedPage {
   previousScore: number | null;
   status: AuditedPageStatus;
   lastAuditedAt: string;
+  /** Whether the audit the row opens was an auto-audit run's (SA-006) or a user's. */
+  lastAuditSource?: 'user' | 'auto';
   /** Latest completed scores, oldest first. */
   trend: number[];
   /** Failed and warning signals in the latest completed audit. */
@@ -563,4 +565,58 @@ export async function getAuditPages(
   const data = await res.json();
   const pages: AuditedPage[] = data.pages ?? [];
   return { pages, total: data.total ?? pages.length, primaryHost: data.primaryHost ?? null };
+}
+
+/** The Site Audit hub's main reads: the page shows once they're in. */
+export interface AuditHub {
+  pages: AuditedPages;
+  quota: AuditQuota;
+  trend: AuditTrend;
+  /** The KPI cards; null when they can't be read (the cards are left out). */
+  overview: AuditOverview | null;
+}
+
+/**
+ * The hub's main reads in one request, run side by side here. Server actions
+ * called from the page run one at a time, so separate calls added their
+ * times up: 23 s on production (2026-10-19), not the slowest read's 13.
+ */
+export async function getAuditHub(brandId: string, pageLimit = 50): Promise<AuditHub> {
+  const [pages, quota, trend, overview] = await Promise.all([
+    getAuditPages(brandId, 0, pageLimit),
+    getAuditQuota(),
+    getAuditTrend(brandId),
+    getAuditOverview(brandId).catch((err) => {
+      console.error('Failed to load the Site Audit overview:', err);
+      return null;
+    }),
+  ]);
+  return { pages, quota, trend, overview };
+}
+
+/** The hub's slower reads, which fill in after the page shows. */
+export interface AuditHubExtras {
+  /** The Opportunities inbox; null when it can't be read (its tab is left out). */
+  opportunities: AuditOpportunities | null;
+  /** The latest auto-audit run on the brand's pages; null for none, or when it can't be read. */
+  latestRun: AutoAuditRun | null;
+}
+
+/**
+ * The Opportunities inbox and the latest auto-audit run, side by side, after
+ * getAuditHub: the inbox alone took 13 s on production (2026-10-19), and the
+ * page needn't wait for it.
+ */
+export async function getAuditHubExtras(brandId: string): Promise<AuditHubExtras> {
+  const [opportunities, latestRun] = await Promise.all([
+    getAuditOpportunities(brandId).catch((err) => {
+      console.error('Failed to load the Site Audit opportunities:', err);
+      return null;
+    }),
+    getLatestAutoRun(brandId).catch((err) => {
+      console.error('Failed to load the latest auto-audit run:', err);
+      return null;
+    }),
+  ]);
+  return { opportunities, latestRun };
 }

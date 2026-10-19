@@ -32,8 +32,8 @@ export function formatDate(iso: string | null): string {
 }
 
 /** "Oct 17": a short day label, e.g. for a chart axis. */
-export function formatMonthDay(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+export function formatMonthDay(iso: string, timeZone?: string): string {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone });
 }
 
 /** "Oct 17, 2026, 2:05 PM": a date with its time, for runs on the same day. */

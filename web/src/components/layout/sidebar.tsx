@@ -26,6 +26,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { BrandSwitcher } from '@/components/layout/brand-switcher';
 import { UserProfileNavItem } from '@/components/layout/user-profile-nav-item';
+import { ThemeToggle } from '@/components/layout/theme-toggle';
 import {
   ChevronDown,
   ChevronsLeft,
@@ -269,11 +270,14 @@ export function Sidebar() {
         )}
       >
         <div
-          className={cn('flex h-16 items-center border-b px-3', compact && 'justify-center px-0')}
+          className={cn(
+            'flex h-16 items-center gap-2 border-b px-3',
+            compact && 'justify-center px-0',
+          )}
         >
           <Link
             href="/dashboard"
-            className={cn('flex items-center gap-2 overflow-hidden', !compact && 'w-full')}
+            className={cn('flex items-center gap-2 overflow-hidden', !compact && 'min-w-0 flex-1')}
           >
             <Image
               src={logoSrc}
@@ -285,6 +289,9 @@ export function Sidebar() {
             />
             {!compact && <span className="truncate font-semibold">{siteConfig.name}</span>}
           </Link>
+          {/* Too narrow beside the logo when collapsed; it shows while the
+              sidebar is open over the page. */}
+          {!compact && <ThemeToggle className="shrink-0" />}
         </div>
 
         <div className={cn('border-b px-2 py-2', compact && 'px-1')}>
@@ -511,7 +518,8 @@ export function Sidebar() {
             aria-label={isCollapsed ? t('keepSidebarOpen') : t('collapseSidebar')}
             title={isCollapsed ? t('keepSidebarOpen') : t('collapseSidebar')}
             className={cn(
-              'flex h-9 w-full items-center gap-2 px-2',
+              // In the menu items' gray, not the button's black.
+              'flex h-9 w-full items-center gap-2 px-2 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
               compact ? 'justify-center' : 'justify-start',
             )}
           >
