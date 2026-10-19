@@ -4,6 +4,7 @@ import { Fragment } from 'react';
 import { useTranslations } from 'next-intl';
 import { CATEGORY_META, pct } from '@/components/audit/audit-report';
 import type { AuditOverview, AuditQuota } from '@/lib/actions/audits';
+import { nextAutoRun } from '@/lib/audit-auto-runs';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -63,14 +64,18 @@ export function AuditSummaryStrip({
     );
   }
   const auto = quota?.auto;
-  if (auto?.enabled && auto.nextRun) {
-    const days = daysUntil(auto.nextRun.at, now);
-    const when =
-      days <= 0
+  if (auto?.enabled) {
+    // This month's next run, else next month's first; within a day when its
+    // turn has started without it (the next daily sweep takes it).
+    const next = nextAutoRun(auto, now);
+    const days = daysUntil(next.at, now);
+    const when = next.soon
+      ? t('withinADay')
+      : days <= 0
         ? t('today')
         : days === 1
           ? t('tomorrow')
-          : t('onDate', { date: formatMonthDay(auto.nextRun.at) });
+          : t('onDate', { date: formatMonthDay(next.at) });
     items.push(t.rich('nextAuto', { b, when, count: auto.perRun }));
   } else if (auto && !auto.enabled) {
     items.push(t('autoOff'));

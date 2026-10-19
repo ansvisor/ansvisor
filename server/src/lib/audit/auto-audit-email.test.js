@@ -12,7 +12,8 @@ describe('renderAutoAuditEmail', () => {
     });
     expect(subject).toBe('Site Audit: 25 pages audited · 6 critical issues');
     expect(html).toContain('25 pages audited · 6 critical issues · next run Oct 28');
-    expect(html).toContain('http://localhost:3000/dashboard/audit');
+    // Open Site Audit lands on Pages, where the run's audits are.
+    expect(html).toContain('href="http://localhost:3000/dashboard/audit?tab=pages"');
     // One brand: no per-brand list, nothing failed.
     expect(html).not.toContain('<ul');
     expect(html).not.toContain("couldn't");
