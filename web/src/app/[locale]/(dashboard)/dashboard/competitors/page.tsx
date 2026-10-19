@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { getCompetitors, addCompetitor, deleteCompetitor } from '@/lib/actions/competitor';
-import { suggestCompetitors, type SuggestedCompetitor } from '@/lib/ai-brand-setup';
+import type { SuggestedCompetitor } from '@/lib/ai-brand-setup';
 import { SuggestCompetitorsDialog } from './_suggest-competitors-dialog';
 import {
   getCompetitorComparison,
