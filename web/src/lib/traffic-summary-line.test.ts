@@ -33,7 +33,9 @@ describe('summaryLine', () => {
       top: { platform: 'chatgpt.com', visits: 38 },
       best: { platform: 'perplexity.ai', rate: 16.1 },
       citedNotClicked: 2,
+      untrackedQueries: 0,
     });
+    expect(summaryLine(input({ untrackedQueries: 7 })).untrackedQueries).toBe(7);
   });
 
   it('leaves out what needs Google Analytics without it (§3.8b rule 5)', () => {

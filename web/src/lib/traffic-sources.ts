@@ -88,6 +88,7 @@ export const TRAFFIC_SECTION_SOURCES = {
   conversions: 'google-analytics',
   pageValue: 'google-analytics',
   googlePages: 'google-search-console',
+  googleQueries: 'google-search-console',
 } as const satisfies Record<string, IntegrationProvider>;
 
 export type TrafficSection = keyof typeof TRAFFIC_SECTION_SOURCES;

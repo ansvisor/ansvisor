@@ -99,6 +99,7 @@ export function TrafficKpis({
   onConnected,
   onRangeChange,
   rangeLabel,
+  queriesRevision = 0,
 }: {
   brandId: string;
   dateWindow: TrafficDateWindow;
@@ -116,6 +117,8 @@ export function TrafficKpis({
   onRangeChange: (preset: DateRangePreset) => void;
   /** The page's own words for the range, for the summary line (AT-007). */
   rangeLabel: string;
+  /** Bumped when Google queries were tracked: the summary line counts them again. */
+  queriesRevision?: number;
 }) {
   const t = useTranslations('traffic.kpis');
   const tVisits = useTranslations('traffic.visits');
@@ -238,6 +241,8 @@ export function TrafficKpis({
         summary={summary}
         summaryLoading={summaryLoading}
         gaSessions={gaSessions}
+        gscReady={sources || sourcesFailed ? gscReady : undefined}
+        queriesRevision={queriesRevision}
       />
       <div className={TRAFFIC_KPI_GRID}>
         {/* One visit per session; the sub-line gives the pageviews and the

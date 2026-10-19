@@ -12,8 +12,10 @@ import type { TrafficDateWindow, TrafficSummary } from '@/lib/actions/traffic';
  */
 
 const getTrafficPages = vi.fn();
+const getUntrackedGoogleQueries = vi.fn();
 vi.mock('@/lib/actions/traffic', () => ({
   getTrafficPages: (...args: unknown[]) => getTrafficPages(...args),
+  getUntrackedGoogleQueries: (...args: unknown[]) => getUntrackedGoogleQueries(...args),
 }));
 
 const { SummaryLine } = await import('./_summary-line');
@@ -54,6 +56,7 @@ let root: Root;
 
 beforeEach(() => {
   getTrafficPages.mockReset().mockResolvedValue(cited(2));
+  getUntrackedGoogleQueries.mockReset().mockResolvedValue({ count: 0, capped: false, rows: [] });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -69,6 +72,8 @@ async function render({
   // 'loading' stands for undefined, which a default would swallow.
   gaSessions = 8000 as number | null | 'loading',
   summaryLoading = false,
+  gscReady = false as boolean | 'loading',
+  queriesRevision = 0,
 } = {}) {
   await act(async () => {
     root.render(
@@ -80,6 +85,8 @@ async function render({
           summary={sum}
           summaryLoading={summaryLoading}
           gaSessions={gaSessions === 'loading' ? undefined : gaSessions}
+          gscReady={gscReady === 'loading' ? undefined : gscReady}
+          queriesRevision={queriesRevision}
         />
       </NextIntlClientProvider>,
     );
@@ -134,12 +141,39 @@ describe('SummaryLine', () => {
     expect(text()).not.toContain('previous period');
   });
 
+  it('states the untracked Google queries only with Search Console (AT-009)', async () => {
+    getUntrackedGoogleQueries.mockResolvedValue({ count: 14, capped: false, rows: [] });
+    await render({ gscReady: true });
+    expect(getUntrackedGoogleQueries).toHaveBeenCalledWith('b1', WEEK, { limit: 0 });
+    expect(text()).toContain("14 Google queries with clicks aren't tracked as prompts.");
+
+    // Tracking some from the page counts them again.
+    getUntrackedGoogleQueries.mockResolvedValue({ count: 13, capped: false, rows: [] });
+    await render({ gscReady: true, queriesRevision: 1 });
+    expect(getUntrackedGoogleQueries).toHaveBeenCalledTimes(2);
+    expect(text()).toContain("13 Google queries with clicks aren't tracked as prompts.");
+
+    getUntrackedGoogleQueries.mockClear();
+    await render({ gscReady: false });
+    expect(getUntrackedGoogleQueries).not.toHaveBeenCalled();
+    expect(text()).not.toContain('Google queries');
+  });
+
+  it('says a floor when the server checked only the most clicked queries', async () => {
+    getUntrackedGoogleQueries.mockResolvedValue({ count: 1, capped: true, rows: [] });
+    await render({ gscReady: true });
+    expect(text()).toContain("1+ Google query with clicks isn't tracked as prompts.");
+  });
+
   it('waits for Analytics and the summary rather than changing under the reader', async () => {
     await render({ gaSessions: 'loading' });
     expect(text()).toBe('');
     expect(container.querySelector('[data-slot="skeleton"]')).not.toBeNull();
 
     await render({ summaryLoading: true });
+    expect(text()).toBe('');
+
+    await render({ gscReady: 'loading' });
     expect(text()).toBe('');
   });
 });

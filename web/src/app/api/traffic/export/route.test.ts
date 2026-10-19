@@ -34,6 +34,7 @@ const loaders = vi.hoisted(() => ({
   getTrafficPages: vi.fn(),
   getTrafficConversions: vi.fn(),
   getTrafficGooglePages: vi.fn(),
+  getUntrackedGoogleQueries: vi.fn(),
 }));
 vi.mock('@/lib/actions/traffic', () => loaders);
 
@@ -111,6 +112,14 @@ beforeEach(() => {
     count: 0,
     rows: [],
   });
+  loaders.getUntrackedGoogleQueries.mockResolvedValue({
+    lastDay: '2026-10-17',
+    since: '2026-10-11',
+    until: '2026-10-17',
+    count: 1,
+    capped: false,
+    rows: [{ query: 'cold brew ratio', clicks: 25, impressions: 610 }],
+  });
 });
 
 const WINDOW = { dateFrom: '2026-10-11T09:00:00.000Z' };
@@ -148,6 +157,7 @@ describe('GET /api/traffic/export', () => {
       'Answers that bring buyers',
       'Pages by status',
       'Is AI taking Google clicks',
+      'Untracked Google queries',
       'Visits',
     ]);
 
@@ -185,6 +195,7 @@ describe('GET /api/traffic/export', () => {
       'answers-that-bring-buyers.csv',
       'pages-by-status.csv',
       'is-ai-taking-google-clicks.csv',
+      'untracked-google-queries.csv',
       'visits.csv',
     ]);
     for (const file of Object.values(files)) expect(startsWithBom(file)).toBe(true);

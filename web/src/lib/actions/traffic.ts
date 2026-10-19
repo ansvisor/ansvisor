@@ -1043,3 +1043,71 @@ export async function getTrafficGooglePages(
     })),
   };
 }
+
+/** A Google query no tracked prompt covers (AT-009). */
+export interface UntrackedQuery {
+  query: string;
+  clicks: number;
+  impressions: number;
+}
+
+export interface TrafficUntrackedQueries {
+  /** The latest day Google has reported for the brand; null with no Search Console data. */
+  lastDay: string | null;
+  /** The days read, ending on Google's latest; no first day for all time. */
+  since: string | null;
+  until: string | null;
+  /** Every untracked query with clicks; `rows` holds the first `limit`. */
+  count: number;
+  /** More queries had clicks than the server checks: `count` is a floor. */
+  capped: boolean;
+  rows: UntrackedQuery[];
+}
+
+/**
+ * Google queries you don't track yet (AT-009, spec §3.6): the brand's
+ * Search Console queries with clicks that no active prompt covers, most
+ * clicks first, over the range's whole days ending on Google's latest
+ * reported day (§3.01). The server decides "covers", by the rule Prompt
+ * Suggestions uses for Google queries.
+ */
+export async function getUntrackedGoogleQueries(
+  brandId: string,
+  window: TrafficDateWindow | undefined,
+  { limit = 10 }: { limit?: number } = {},
+): Promise<TrafficUntrackedQueries> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  const { from, to } = resolveTrafficWindow(window);
+  const { since, until } = googlePagesWindow(from, to);
+  const query = new URLSearchParams({ until, limit: String(limit) });
+  if (since) query.set('since', since);
+  const res = await fetch(
+    `${API_BASE_URL}/api/prompts/untracked-queries/${encodeURIComponent(brandId)}?${query}`,
+    { headers: { Authorization: `Bearer ${session.access_token}` } },
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Server error: ${res.status}`);
+  }
+  const raw = (await res.json()) as Record<string, unknown>;
+  const n = (v: unknown) => Number(v) || 0;
+  const day = (v: unknown) => (typeof v === 'string' ? v : null);
+  const list = Array.isArray(raw.rows) ? (raw.rows as Record<string, unknown>[]) : [];
+  return {
+    lastDay: day(raw.lastDay),
+    since: day(raw.since),
+    until: day(raw.until),
+    count: n(raw.count),
+    capped: raw.capped === true,
+    rows: list.map((r) => ({
+      query: String(r.query),
+      clicks: n(r.clicks),
+      impressions: n(r.impressions),
+    })),
+  };
+}

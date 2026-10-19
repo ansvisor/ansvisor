@@ -12,8 +12,10 @@ import {
   getTrafficSummary,
   getTrafficTrend,
   getTrafficVisitsForExport,
+  getUntrackedGoogleQueries,
 } from '@/lib/actions/traffic';
 import { utcDay } from '@/lib/dates';
+import { UNTRACKED_QUERY_SCAN } from '@/lib/traffic-google-pages';
 import {
   TRAFFIC_EXPORT_MAX_ROWS,
   TRAFFIC_EXPORT_SECTIONS,
@@ -92,7 +94,7 @@ export async function GET(req: Request) {
   const wholePage = !q.section;
 
   try {
-    const [summary, trend, visits, sources, pageStatus, conversions, googlePages] =
+    const [summary, trend, visits, sources, pageStatus, conversions, googlePages, googleQueries] =
       await Promise.all([
         needs('kpis', 'platforms', 'pages')
           ? getTrafficSummary(q.brandId, window, { topPages: Number.MAX_SAFE_INTEGER })
@@ -120,6 +122,10 @@ export async function GET(req: Request) {
         needs('googlePages')
           ? getTrafficGooglePages(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS })
           : undefined,
+        // Every Google query no tracked prompt covers, as far as the server checks (AT-009).
+        needs('googleQueries')
+          ? getUntrackedGoogleQueries(q.brandId, window, { limit: UNTRACKED_QUERY_SCAN })
+          : undefined,
       ]);
     // Larger than an export built on request should be (spec §3.9).
     if (visits === null) return Response.json({ error: 'too_large' }, { status: 413 });
@@ -141,6 +147,7 @@ export async function GET(req: Request) {
       pageStatus,
       conversions,
       googlePages,
+      googleQueries,
       sources,
     };
 

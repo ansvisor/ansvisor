@@ -432,6 +432,49 @@ describe('trafficTable: Is AI taking Google clicks (AT-008)', () => {
   });
 });
 
+describe('trafficTable: Untracked Google queries (AT-009)', () => {
+  const googleQueries = (
+    over: Partial<NonNullable<TrafficExportData['googleQueries']>> = {},
+  ): NonNullable<TrafficExportData['googleQueries']> => ({
+    lastDay: '2026-10-17',
+    since: '2026-10-11',
+    until: '2026-10-17',
+    count: 2,
+    capped: false,
+    rows: [
+      { query: 'cold brew ratio', clicks: 25, impressions: 610 },
+      { query: 'oat milk latte', clicks: 4, impressions: 120 },
+    ],
+    ...over,
+  });
+  const table = (q: TrafficExportData['googleQueries']) =>
+    trafficTable('googleQueries', data({ googleQueries: q }), label);
+
+  it('holds every query with its clicks, impressions and the days read', () => {
+    expect(table(googleQueries())).toEqual({
+      headers: ['Query', 'Clicks', 'Impressions', 'Days'],
+      rows: [
+        ['cold brew ratio', 25, 610, '2026-10-11 – 2026-10-17'],
+        ['oat milk latte', 4, 120, '2026-10-11 – 2026-10-17'],
+      ],
+    });
+    expect(table(googleQueries({ since: null })).rows[0][3]).toBe('Start – 2026-10-17');
+    expect(table(googleQueries({ capped: true })).rows.at(-1)).toEqual([
+      'Only the 5,000 most clicked queries were checked',
+      null,
+      null,
+      null,
+    ]);
+  });
+
+  it('says why there are no rows, never an empty sheet', () => {
+    expect(table(googleQueries({ rows: [], count: 0 })).rows).toEqual([
+      ['Every Google query with clicks in this range is tracked'],
+    ]);
+    expect(table(null).rows).toEqual([['No query data from Google Search Console yet']]);
+  });
+});
+
 describe('filtersTable', () => {
   it('records the range, the filters, the sources and when', () => {
     const table = filtersTable(
@@ -466,6 +509,7 @@ describe('trafficWorkbook', () => {
       'Answers that bring buyers',
       'Pages by status',
       'Is AI taking Google clicks',
+      'Untracked Google queries',
       'Visits',
     ]);
     // A bold header row, then the rows with their numbers as numbers.

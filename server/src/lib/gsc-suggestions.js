@@ -72,15 +72,24 @@ export function normalizeTokens(text) {
     .filter((t) => t && !STOPWORDS.has(t));
 }
 
-/** True when the query's meaningful tokens are mostly present in one prompt. */
-export function isCoveredByPrompts(query, promptTexts) {
+/** Each prompt's meaningful tokens, read once for checking many queries. */
+export function promptTokenSets(promptTexts) {
+  return promptTexts.map((text) => new Set(normalizeTokens(text)));
+}
+
+/** `isCoveredByPrompts` against prompts already split by `promptTokenSets`. */
+export function isCoveredByTokenSets(query, tokenSets) {
   const queryTokens = normalizeTokens(query);
   if (queryTokens.length === 0) return true; // stopwords-only — nothing to track
-  return promptTexts.some((text) => {
-    const promptTokens = new Set(normalizeTokens(text));
+  return tokenSets.some((promptTokens) => {
     const hits = queryTokens.filter((t) => promptTokens.has(t)).length;
     return hits / queryTokens.length >= COVERAGE_OVERLAP;
   });
+}
+
+/** True when the query's meaningful tokens are mostly present in one prompt. */
+export function isCoveredByPrompts(query, promptTexts) {
+  return isCoveredByTokenSets(query, promptTokenSets(promptTexts));
 }
 
 /** Click-based rationale: protect what earns traffic, capture what doesn't convert. */

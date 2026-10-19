@@ -30,6 +30,7 @@ import {
 import { formatTrafficBucketDate } from './_charts';
 import { PagePromptsDialog } from './_page-prompts-dialog';
 import { NeedsTag, SourceUnavailable } from './_source-gate';
+import { UntrackedQueriesCard } from './_untracked-queries';
 
 /** CTR as the table shows it: "3.1%". */
 function ctr(clicks: number, impressions: number): string {
@@ -42,12 +43,15 @@ function days(since: string, until: string): string {
 }
 
 /**
- * The Google Search Console section (AT-008 part B, spec §3.6). Its card
- * "Is AI taking Google clicks?" lists the pages whose impressions rose 15% or
+ * The Google Search Console section (AT-008 part B and AT-009, spec §3.6).
+ * Its card "Is AI taking Google clicks?" lists the pages whose impressions rose 15% or
  * more while their CTR fell 20% or more against the period before: an AI
  * Overview may be answering in place of the click. Each page's next step is
  * the Positions panel of a tracked prompt about it, or Add prompts when
  * there is none.
+ *
+ * Beside it, the Google queries no tracked prompt covers yet, to track
+ * (AT-009).
  *
  * Google reports about two days late, so the days compared end on the latest
  * it has reported, and the header says which (§3.01). The section needs
@@ -61,7 +65,10 @@ export function GoogleSection({
   domain,
   canConnect,
   onConnected,
-  actions,
+  canTrack,
+  onQueriesTracked,
+  pagesActions,
+  queriesActions,
 }: {
   brandId: string;
   dateWindow: TrafficDateWindow;
@@ -72,8 +79,13 @@ export function GoogleSection({
   domain: string | undefined;
   canConnect: boolean;
   onConnected: () => void;
-  /** The card's Excel / CSV buttons (AT-015). */
-  actions?: ReactNode;
+  /** Admins and managers add prompts from the untracked queries. */
+  canTrack: boolean;
+  /** Queries became prompts: the summary line counts them again. */
+  onQueriesTracked?: () => void;
+  /** Each card's Excel / CSV buttons (AT-015). */
+  pagesActions?: ReactNode;
+  queriesActions?: ReactNode;
 }) {
   const t = useTranslations('traffic.google');
   // Tracking prompts for a page reads the list again, for its Positions link.
@@ -229,38 +241,47 @@ export function GoogleSection({
           </CardContent>
         </Card>
       ) : (
-        <Card className={cn(!current && 'opacity-80')} aria-busy={!current}>
-          <CardHeader className="pb-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-baseline gap-x-2">
-                <CardTitle className="text-sm font-medium">{t('taking.title')}</CardTitle>
-                {result?.since && result.until && result.prevSince && result.prevUntil && (
-                  <span className="text-xs text-muted-foreground">
-                    {t('taking.compared', {
-                      days: days(result.since, result.until),
-                      prevDays: days(result.prevSince, result.prevUntil),
-                    })}
-                  </span>
-                )}
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <Card className={cn(!current && 'opacity-80')} aria-busy={!current}>
+            <CardHeader className="pb-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  <CardTitle className="text-sm font-medium">{t('taking.title')}</CardTitle>
+                  {result?.since && result.until && result.prevSince && result.prevUntil && (
+                    <span className="text-xs text-muted-foreground">
+                      {t('taking.compared', {
+                        days: days(result.since, result.until),
+                        prevDays: days(result.prevSince, result.prevUntil),
+                      })}
+                    </span>
+                  )}
+                </div>
+                {pagesActions}
               </div>
-              {actions}
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            {body}
-            {result && result.count > result.rows.length && (
-              <p className="px-6 pt-3 text-xs text-muted-foreground">
-                {t('taking.more', {
-                  shown: formatNumber(result.rows.length),
-                  count: formatNumber(result.count),
-                })}
+            </CardHeader>
+            <CardContent className="p-0">
+              {body}
+              {result && result.count > result.rows.length && (
+                <p className="px-6 pt-3 text-xs text-muted-foreground">
+                  {t('taking.more', {
+                    shown: formatNumber(result.rows.length),
+                    count: formatNumber(result.count),
+                  })}
+                </p>
+              )}
+              <p className="px-6 py-3 text-xs text-muted-foreground">
+                {t('taking.legend', { min: formatNumber(GOOGLE_PAGES_MIN_IMPRESSIONS) })}
               </p>
-            )}
-            <p className="px-6 py-3 text-xs text-muted-foreground">
-              {t('taking.legend', { min: formatNumber(GOOGLE_PAGES_MIN_IMPRESSIONS) })}
-            </p>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+          <UntrackedQueriesCard
+            brandId={brandId}
+            dateWindow={dateWindow}
+            canTrack={canTrack}
+            onTracked={onQueriesTracked}
+            actions={queriesActions}
+          />
+        </div>
       )}
 
       <PagePromptsDialog
