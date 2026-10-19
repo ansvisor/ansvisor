@@ -31,8 +31,14 @@ const warn = vi.fn();
 vi.mock('./logger.js', () => ({ logger: { warn: (...a) => warn(...a) } }));
 
 const { clearRangeCache } = await import('./ai-bots.js');
-const { MAX_BATCH, connectionForSecret, hashSecret, ingestBotRequests, newConnectionSecret } =
-  await import('./bot-ingest.js');
+const {
+  MAX_BATCH,
+  connectionForSecret,
+  hashSecret,
+  ingestBotRequests,
+  newConnectionSecret,
+  publicIngestEndpoint,
+} = await import('./bot-ingest.js');
 
 const NOW = Date.parse('2026-10-19T10:00:00.000Z');
 const fetchImpl = vi.fn(async (url) => ({
@@ -170,5 +176,31 @@ describe('connection secrets', () => {
     connectionRow = { ...connectionRow, revoked_at: '2026-10-18T00:00:00Z' };
     expect(await connectionForSecret(a)).toBeNull();
     expect(await connectionForSecret('not-a-secret')).toBeNull();
+  });
+});
+
+describe('publicIngestEndpoint', () => {
+  it("builds the endpoint from the API's public address, whatever its path", () => {
+    expect(publicIngestEndpoint({ PUBLIC_SERVER_URL: 'https://api.ansvisor.com/' })).toBe(
+      'https://api.ansvisor.com/bots/ingest',
+    );
+    expect(publicIngestEndpoint({ PUBLIC_SERVER_URL: 'https://api.example.com/v1' })).toBe(
+      'https://api.example.com/bots/ingest',
+    );
+  });
+
+  it('refuses no address, a plain-http one, and localhost in production', () => {
+    expect(publicIngestEndpoint({})).toBeNull();
+    expect(publicIngestEndpoint({ PUBLIC_SERVER_URL: 'not a url' })).toBeNull();
+    expect(publicIngestEndpoint({ PUBLIC_SERVER_URL: 'http://api.example.com' })).toBeNull();
+    expect(
+      publicIngestEndpoint({ PUBLIC_SERVER_URL: 'http://localhost:80', NODE_ENV: 'production' }),
+    ).toBeNull();
+  });
+
+  it('allows http on localhost while developing', () => {
+    expect(
+      publicIngestEndpoint({ PUBLIC_SERVER_URL: 'http://localhost:8082', NODE_ENV: 'development' }),
+    ).toBe('http://localhost:8082/bots/ingest');
   });
 });

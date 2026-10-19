@@ -45,7 +45,7 @@ describe('buildWorkerScript', () => {
     );
     const { worker } = await loadWorker();
     const waits = [];
-    const ctx = { waitUntil: (p) => waits.push(p) };
+    const ctx = { waitUntil: (p) => waits.push(p), passThroughOnException: vi.fn() };
 
     const human = await worker.fetch(
       new Request('https://acme.example/', { headers: { 'user-agent': 'Mozilla/5.0 Chrome/129' } }),
@@ -54,6 +54,8 @@ describe('buildWorkerScript', () => {
     );
     expect(await human.text()).toBe('page');
     expect(waits).toHaveLength(0);
+    // A failure in the script still lets the request reach the site.
+    expect(ctx.passThroughOnException).toHaveBeenCalled();
 
     for (let i = 0; i < WORKER_BATCH; i++) {
       await worker.fetch(
@@ -75,7 +77,8 @@ describe('buildWorkerScript', () => {
     expect(sent[0].body.requests[0]).toMatchObject({
       userAgent: 'Mozilla/5.0; compatible; GPTBot/1.2',
       ip: '20.171.206.9',
-      url: 'https://acme.example/menu?i=0',
+      // The page without its query string, which can carry personal data.
+      url: 'https://acme.example/menu',
       status: 200,
     });
   });
