@@ -80,7 +80,7 @@ const data = (over: Partial<TrafficExportData> = {}): TrafficExportData => ({
     },
   ],
   pageStatus: {
-    counts: { noAiTraffic: 1, citedNotClicked: 1, trafficNoPrompt: 1, all: 3 },
+    counts: { noAiTraffic: 1, citedNotClicked: 1, trafficNoPrompt: 1, brokenAiLinks: 0, all: 3 },
     rows: [
       {
         page: '/shop/beans',
@@ -96,6 +96,7 @@ const data = (over: Partial<TrafficExportData> = {}): TrafficExportData => ({
         revenue: 0,
         engagementSeconds: 0,
         inSitemap: true,
+        broken: false,
         valueRank: 3,
       },
       {
@@ -112,9 +113,11 @@ const data = (over: Partial<TrafficExportData> = {}): TrafficExportData => ({
         revenue: 0,
         engagementSeconds: 0,
         inSitemap: false,
+        broken: false,
         valueRank: null,
       },
     ],
+    brokenLinks: [],
   },
   sources: {
     snippetLastVisitAt: new Date().toISOString(),
@@ -240,6 +243,22 @@ describe('trafficTable', () => {
       ['/shop/beans', 0, 0, 25, null, 2, 440, 3, 'Yes', 'No AI traffic; Cited, not clicked'],
       ['/menu', 12, 2, 0, 'ChatGPT, Gemini', 0, 0, null, 'No', 'Traffic, no prompt'],
     ]);
+  });
+
+  it('labels a page AI visitors found missing as a broken link (AT-012)', () => {
+    const pageStatus = data().pageStatus!;
+    const table = trafficTable(
+      'pageStatus',
+      data({
+        pageStatus: {
+          ...pageStatus,
+          rows: [{ ...pageStatus.rows[1], page: '/old-menu', broken: true }],
+        },
+      }),
+      label,
+    );
+    expect(table.rows[0][0]).toBe('/old-menu');
+    expect(table.rows[0].at(-1)).toBe('Broken AI links');
   });
 
   it('says there are no pages, never an empty sheet', () => {
@@ -531,6 +550,93 @@ describe('trafficTable: AI bots (AT-011)', () => {
   });
 });
 
+describe('trafficTable: Broken AI links (AT-012)', () => {
+  const brokenLinks = (): NonNullable<TrafficExportData['brokenLinks']> => ({
+    count: 2,
+    rows: [
+      {
+        page: '/guides/espresso-machine-for-beginner',
+        visits: 3,
+        platforms: ['chatgpt.com', 'perplexity.ai'],
+        citations: 14,
+        lastVisit: '2026-10-19T08:27:11.697Z',
+        status: '404',
+        target: '/guides/espresso-machines-for-beginners',
+        targetReason: 'similar',
+      },
+      {
+        page: '/',
+        visits: 1,
+        platforms: [],
+        citations: 0,
+        lastVisit: '2026-10-18T12:00:00Z',
+        status: 'title',
+        target: null,
+        targetReason: null,
+      },
+      {
+        page: '/index.php',
+        visits: 2,
+        platforms: ['chatgpt.com'],
+        citations: 0,
+        lastVisit: '2026-10-18T10:00:00Z',
+        status: '404',
+        target: null,
+        targetReason: 'query',
+      },
+    ],
+  });
+
+  it('is a redirect list: from, to and a 301, with why that page and what visitors got', () => {
+    expect(trafficTable('brokenLinks', data({ brokenLinks: brokenLinks() }), label)).toEqual({
+      headers: [
+        'From',
+        'To',
+        'Redirect type',
+        'Why this page',
+        'AI visits',
+        'Top platforms',
+        'Citations',
+        'Last visit (UTC)',
+        'What the visitor got',
+      ],
+      rows: [
+        [
+          '/guides/espresso-machine-for-beginner',
+          '/guides/espresso-machines-for-beginners',
+          301,
+          'Similar page',
+          3,
+          'ChatGPT, Perplexity',
+          14,
+          '2026-10-19 08:27',
+          'Not found (404)',
+        ],
+        // Nothing to redirect the home page to.
+        ['/', null, null, null, 1, null, 0, '2026-10-18 12:00', 'Page title says not found'],
+        // Nor a route on a page: a 301 from its path would move the whole route.
+        [
+          '/index.php',
+          null,
+          null,
+          'Missing addresses have a query: no redirect suggested',
+          2,
+          'ChatGPT',
+          0,
+          '2026-10-18 10:00',
+          'Not found (404)',
+        ],
+      ],
+    });
+  });
+
+  it('says no AI visitor landed on a missing page, never an empty sheet', () => {
+    expect(trafficTable('brokenLinks', data({ brokenLinks: null }), label).rows).toEqual([
+      ['No AI visitor landed on a missing page in this range'],
+    ]);
+  });
+});
+
 describe('filtersTable', () => {
   it('records the range, the filters, the sources and when', () => {
     const table = filtersTable(
@@ -564,6 +670,7 @@ describe('trafficWorkbook', () => {
       'Top converting pages',
       'Answers that bring buyers',
       'Pages by status',
+      'Broken AI links',
       'Is AI taking Google clicks',
       'Untracked Google queries',
       'AI bots',

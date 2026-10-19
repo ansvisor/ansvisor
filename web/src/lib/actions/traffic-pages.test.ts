@@ -49,7 +49,7 @@ describe('getTrafficPages', () => {
 
     // All time has no start; ten rows unless asked for more.
     await getTrafficPages('b1', undefined, { tab: 'all' });
-    expect(rpc).toHaveBeenLastCalledWith('ai_traffic_pages', {
+    expect(rpc).toHaveBeenCalledWith('ai_traffic_pages', {
       p_brand_id: 'b1',
       p_from: null,
       p_to: null,
@@ -60,9 +60,20 @@ describe('getTrafficPages', () => {
   });
 
   it('gives every tab its count and each row in the card’s terms', async () => {
-    rpc.mockResolvedValue({
+    // Broken AI links are counted on their own (AT-012).
+    const brokenLinks = { data: { count: 2, rows: [] }, error: null };
+    rpc.mockImplementation(async (name: string) =>
+      name === 'ai_traffic_pages' ? pages : brokenLinks,
+    );
+    const pages = {
       data: {
-        counts: { all: 14, no_ai_traffic: 8, cited_not_clicked: 1, traffic_no_prompt: 5 },
+        counts: {
+          all: 14,
+          no_ai_traffic: 8,
+          cited_not_clicked: 1,
+          traffic_no_prompt: 5,
+          broken_ai_links: 2,
+        },
         rows: [
           {
             page: '/subscriptions',
@@ -78,16 +89,17 @@ describe('getTrafficPages', () => {
             revenue: '129.50',
             engagement_seconds: 5400,
             in_sitemap: true,
+            broken: true,
             value_rank: 2,
           },
           { page: '/menu', ai_platforms: null, in_sitemap: false, value_rank: null },
         ],
       },
       error: null,
-    });
+    };
 
     expect(await getTrafficPages('b1', undefined, { tab: 'all' })).toEqual({
-      counts: { noAiTraffic: 8, citedNotClicked: 1, trafficNoPrompt: 5, all: 14 },
+      counts: { noAiTraffic: 8, citedNotClicked: 1, trafficNoPrompt: 5, brokenAiLinks: 2, all: 14 },
       rows: [
         {
           page: '/subscriptions',
@@ -103,6 +115,7 @@ describe('getTrafficPages', () => {
           revenue: 129.5,
           engagementSeconds: 5400,
           inSitemap: true,
+          broken: true,
           valueRank: 2,
         },
         {
@@ -119,9 +132,11 @@ describe('getTrafficPages', () => {
           revenue: 0,
           engagementSeconds: 0,
           inSitemap: false,
+          broken: false,
           valueRank: null,
         },
       ],
+      brokenLinks: [],
     });
   });
 
@@ -129,8 +144,9 @@ describe('getTrafficPages', () => {
     // 00178 answers null rather than another brand's pages.
     rpc.mockResolvedValue({ data: null, error: null });
     expect(await getTrafficPages('b1', undefined, { tab: 'noAiTraffic' })).toEqual({
-      counts: { noAiTraffic: 0, citedNotClicked: 0, trafficNoPrompt: 0, all: 0 },
+      counts: { noAiTraffic: 0, citedNotClicked: 0, trafficNoPrompt: 0, brokenAiLinks: 0, all: 0 },
       rows: [],
+      brokenLinks: [],
     });
   });
 

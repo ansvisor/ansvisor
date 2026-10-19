@@ -515,11 +515,18 @@ export async function getTrafficVisitsForExport(
  * The Pages section (AT-006, spec §3.5; 00178): the brand's pages in the
  * page's range with their AI visits (the snippet or Analytics, day by day),
  * how often tracked answers cite them, the prompts pointing to them and
- * their traffic from every channel, sorted into three work lists.
+ * their traffic from every channel, sorted into three work lists; and
+ * Broken AI links, the pages AI visitors landed on that don't exist
+ * (AT-012, 00186).
  */
-export type TrafficPagesTab = 'noAiTraffic' | 'citedNotClicked' | 'trafficNoPrompt' | 'all';
+export type TrafficPagesTab =
+  | 'noAiTraffic'
+  | 'citedNotClicked'
+  | 'trafficNoPrompt'
+  | 'brokenAiLinks'
+  | 'all';
 
-const TAB_PARAM: Record<TrafficPagesTab, string> = {
+const TAB_PARAM: Record<Exclude<TrafficPagesTab, 'brokenAiLinks'>, string> = {
   noAiTraffic: 'no_ai_traffic',
   citedNotClicked: 'cited_not_clicked',
   trafficNoPrompt: 'traffic_no_prompt',
@@ -546,13 +553,91 @@ export interface TrafficPageRow {
   revenue: number;
   engagementSeconds: number;
   inSitemap: boolean;
+  /** AI visitors found the page missing: it is on Broken AI links (AT-012). */
+  broken: boolean;
   /** The page's place on the site by value, among pages with traffic. */
   valueRank: number | null;
+}
+
+/**
+ * A page AI visitors landed on that doesn't exist (AT-012): the browser said
+ * 404 or 410, or, giving no status (Safari), the page's title said "not
+ * found" and the nightly page read never found it working.
+ */
+export interface TrafficBrokenLink {
+  /** The path, as normalize_page_path writes it. */
+  page: string;
+  /** AI-referred visits that landed on it in the range. */
+  visits: number;
+  /** The assistants that sent the most visits, most first (up to three). */
+  platforms: string[];
+  /** Times tracked AI answers cited it in the range. */
+  citations: number;
+  lastVisit: string;
+  /** The status the browser reported, or 'title' when only the title said so. */
+  status: '404' | '410' | 'title';
+  /** Where to redirect it: a working page; none for the home page itself or a route on a page. */
+  target: string | null;
+  /**
+   * Why that page: the most path words in common, the nearest page above it,
+   * or home; `query` when every missing address has a query (no redirect).
+   */
+  targetReason: 'similar' | 'parent' | 'home' | 'query' | null;
+}
+
+export interface TrafficBrokenLinks {
+  count: number;
+  rows: TrafficBrokenLink[];
+}
+
+const BROKEN_STATUSES = new Set(['404', '410', 'title']);
+const TARGET_REASONS = new Set(['similar', 'parent', 'home', 'query']);
+
+/** Broken AI links (AT-012, spec §3.5; 00186), from the snippet alone. */
+export async function getTrafficBrokenLinks(
+  brandId: string,
+  window: TrafficDateWindow | undefined,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<TrafficBrokenLinks> {
+  const supabase = await createClient();
+  const { from, to } = resolveTrafficWindow(window);
+  const { data, error } = await supabase.rpc('ai_traffic_broken_links', {
+    p_brand_id: brandId,
+    p_from: from ?? null,
+    p_to: to ?? null,
+    p_limit: opts.limit ?? 10,
+    p_offset: opts.offset ?? 0,
+  });
+  if (error) throw new Error(error.message);
+
+  const raw = (data ?? {}) as { count?: number; rows?: Record<string, unknown>[] };
+  return {
+    count: Number(raw.count) || 0,
+    rows: (raw.rows ?? []).map((row) => {
+      const status = String(row.status);
+      const reason = row.target_reason as string | null;
+      return {
+        page: row.page as string,
+        visits: Number(row.visits) || 0,
+        platforms: (row.platforms as string[] | null) ?? [],
+        citations: Number(row.citations) || 0,
+        lastVisit: row.last_visit as string,
+        status: (BROKEN_STATUSES.has(status) ? status : '404') as TrafficBrokenLink['status'],
+        target: (row.target as string | null) ?? null,
+        targetReason:
+          reason && TARGET_REASONS.has(reason)
+            ? (reason as TrafficBrokenLink['targetReason'])
+            : null,
+      };
+    }),
+  };
 }
 
 export interface TrafficPages {
   counts: Record<TrafficPagesTab, number>;
   rows: TrafficPageRow[];
+  /** The Broken AI links tab's rows, read when it is the tab asked for. */
+  brokenLinks: TrafficBrokenLink[];
 }
 
 export async function getTrafficPages(
@@ -562,14 +647,28 @@ export async function getTrafficPages(
 ): Promise<TrafficPages> {
   const supabase = await createClient();
   const { from, to } = resolveTrafficWindow(window);
-  const { data, error } = await supabase.rpc('ai_traffic_pages', {
-    p_brand_id: brandId,
-    p_from: from ?? null,
-    p_to: to ?? null,
-    p_tab: TAB_PARAM[opts.tab],
-    p_limit: opts.limit ?? 10,
-    p_offset: opts.offset ?? 0,
-  });
+  const broken = opts.tab === 'brokenAiLinks';
+  // Every tab is counted here; only the asked tab's rows are read, Broken AI
+  // links' from its own list, which is left empty when it can't be read.
+  const [{ data, error }, brokenLinks] = await Promise.all([
+    supabase.rpc('ai_traffic_pages', {
+      p_brand_id: brandId,
+      p_from: from ?? null,
+      p_to: to ?? null,
+      p_tab: broken ? 'all' : TAB_PARAM[opts.tab as keyof typeof TAB_PARAM],
+      p_limit: broken ? 0 : (opts.limit ?? 10),
+      p_offset: broken ? 0 : (opts.offset ?? 0),
+    }),
+    broken
+      ? getTrafficBrokenLinks(brandId, window, {
+          limit: opts.limit ?? 10,
+          offset: opts.offset ?? 0,
+        }).catch((err) => {
+          console.error('Failed to load the broken AI links:', err);
+          return null;
+        })
+      : null,
+  ]);
   if (error) throw new Error(error.message);
 
   const raw = (data ?? {}) as { counts?: Record<string, number>; rows?: Record<string, unknown>[] };
@@ -579,8 +678,10 @@ export async function getTrafficPages(
       noAiTraffic: Number(counts.no_ai_traffic) || 0,
       citedNotClicked: Number(counts.cited_not_clicked) || 0,
       trafficNoPrompt: Number(counts.traffic_no_prompt) || 0,
+      brokenAiLinks: Number(counts.broken_ai_links) || 0,
       all: Number(counts.all) || 0,
     },
+    brokenLinks: brokenLinks?.rows ?? [],
     rows: (raw.rows ?? []).map((row) => ({
       page: row.page as string,
       aiVisits: Number(row.ai_visits) || 0,
@@ -595,6 +696,7 @@ export async function getTrafficPages(
       revenue: Number(row.revenue) || 0,
       engagementSeconds: Number(row.engagement_seconds) || 0,
       inSitemap: Boolean(row.in_sitemap),
+      broken: Boolean(row.broken),
       valueRank:
         row.value_rank === null || row.value_rank === undefined ? null : Number(row.value_rank),
     })),

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import messages from '../../../../../messages/en.json';
 import { createClient } from '@/lib/supabase/server';
 import {
+  getTrafficBrokenLinks,
   getTrafficConversions,
   getTrafficGooglePages,
   getTrafficPages,
@@ -105,6 +106,7 @@ export async function GET(req: Request) {
       googlePages,
       googleQueries,
       bots,
+      brokenLinks,
     ] = await Promise.all([
       needs('kpis', 'platforms', 'pages')
         ? getTrafficSummary(q.brandId, window, { topPages: Number.MAX_SAFE_INTEGER })
@@ -141,6 +143,10 @@ export async function GET(req: Request) {
       needs('bots', 'botPages')
         ? getTrafficBots(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS }).catch(() => null)
         : undefined,
+      // Every broken AI link, as the redirect list (AT-012).
+      needs('brokenLinks')
+        ? getTrafficBrokenLinks(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS })
+        : undefined,
     ]);
     // Larger than an export built on request should be (spec §3.9).
     if (visits === null) return Response.json({ error: 'too_large' }, { status: 413 });
@@ -164,6 +170,7 @@ export async function GET(req: Request) {
       googlePages,
       googleQueries,
       bots,
+      brokenLinks,
       sources,
     };
 

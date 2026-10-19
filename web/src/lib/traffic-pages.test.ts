@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { CITED_NOT_CLICKED_MIN, citationState, pageStatuses, pageUrl } from './traffic-pages';
 
-/** The Pages section's lists, as 00178 sorts pages into them (AT-006). */
+/** The Pages section's lists, as 00178 and 00186 sort pages into them (AT-006, AT-012). */
 
 const row = (over: Partial<Parameters<typeof pageStatuses>[0]> = {}) => ({
   aiVisits: 0,
   citations: 0,
   sessions: 0,
   inSitemap: false,
+  broken: false,
   ...over,
 });
 
@@ -31,6 +32,13 @@ describe('pageStatuses', () => {
   it('puts AI visits that no tracked answer cites on Traffic, no prompt', () => {
     expect(pageStatuses(row({ aiVisits: 3 }))).toEqual(['trafficNoPrompt']);
     expect(pageStatuses(row({ aiVisits: 3, citations: 1 }))).toEqual([]);
+  });
+
+  it('puts a page AI visitors found missing on Broken AI links, not Traffic, no prompt (AT-012)', () => {
+    expect(pageStatuses(row({ aiVisits: 3, broken: true }))).toEqual(['brokenAiLinks']);
+    expect(pageStatuses(row({ aiVisits: 3, citations: 9, broken: true }))).toEqual([
+      'brokenAiLinks',
+    ]);
   });
 });
 

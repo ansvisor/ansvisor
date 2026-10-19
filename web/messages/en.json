@@ -3134,6 +3134,7 @@
         "convertingPages": "Top converting pages",
         "buyerAnswers": "Answers that bring buyers",
         "pageStatus": "Pages by status",
+        "brokenLinks": "Broken AI links",
         "googlePages": "Is AI taking Google clicks",
         "googleQueries": "Untracked Google queries",
         "bots": "AI bots",
@@ -3193,7 +3194,13 @@
         "lastSeen": "Last seen (UTC)",
         "trainingLast": "Training, last read (UTC)",
         "searchLast": "Search index, last read (UTC)",
-        "userLast": "User fetch, last read (UTC)"
+        "userLast": "User fetch, last read (UTC)",
+        "redirectFrom": "From",
+        "redirectTo": "To",
+        "redirectType": "Redirect type",
+        "redirectReason": "Why this page",
+        "lastVisit": "Last visit (UTC)",
+        "landingStatus": "What the visitor got"
       },
       "metrics": {
         "visits": "AI-referred visits",
@@ -3218,7 +3225,8 @@
         "noGoogleQueries": "No query data from Google Search Console yet",
         "noUntrackedQueries": "Every Google query with clicks in this range is tracked",
         "queriesCapped": "Only the 5,000 most clicked queries were checked",
-        "noBots": "No AI-bot requests in this range"
+        "noBots": "No AI-bot requests in this range",
+        "noBrokenLinks": "No AI visitor landed on a missing page in this range"
       },
       "botTypes": {
         "training": "Training",
@@ -3252,10 +3260,22 @@
       "pageStatuses": {
         "noAiTraffic": "No AI traffic",
         "citedNotClicked": "Cited, not clicked",
-        "trafficNoPrompt": "Traffic, no prompt"
+        "trafficNoPrompt": "Traffic, no prompt",
+        "brokenAiLinks": "Broken AI links"
       },
       "yes": "Yes",
-      "no": "No"
+      "no": "No",
+      "brokenStatuses": {
+        "404": "Not found (404)",
+        "410": "Gone (410)",
+        "title": "Page title says not found"
+      },
+      "redirectReasons": {
+        "similar": "Similar page",
+        "parent": "The page above it",
+        "home": "Home page",
+        "query": "Missing addresses have a query: no redirect suggested"
+      }
     },
     "change": {
       "new": "new",
@@ -3653,6 +3673,11 @@
           "explain": "Pages AI assistants sent visitors to that no tracked prompt's answer cited in this range: the visits come from questions you don't track.",
           "empty": "Every page with AI visits is cited by a prompt you track in this range."
         },
+        "brokenAiLinks": {
+          "label": "Broken AI links",
+          "explain": "Pages AI visitors landed on that don't exist (404). Redirect each one to the suggested page: Excel or CSV gives you the redirect list.",
+          "empty": "No AI visitor landed on a missing page in this range. They show here when your 404 page carries the tracking snippet too."
+        },
         "all": {
           "label": "All pages",
           "explain": "Every page with AI visits, citations, traffic or a sitemap entry in this range.",
@@ -3669,7 +3694,9 @@
         "platforms": "Top platforms",
         "keyEvents": "Key events",
         "status": "Status",
-        "citedInAnswers": "Cited in answers"
+        "citedInAnswers": "Cited in answers",
+        "lastVisit": "Last visit",
+        "redirectTo": "Redirect to"
       },
       "auditPage": "Audit page",
       "addPrompts": "Add prompts",
@@ -3732,6 +3759,19 @@
         "planFull": "Your plan's prompt locations are full",
         "trackFailed": "Couldn't track the prompts.",
         "openPrompts": "Open Prompts"
+      },
+      "broken": {
+        "status": {
+          "404": "Not found (404)",
+          "410": "Gone (410)",
+          "title": "Page title says not found"
+        },
+        "reason": {
+          "similar": "Similar page",
+          "parent": "The page above it",
+          "home": "Home page",
+          "query": "Missing addresses have a query: no redirect suggested"
+        }
       }
     }
   },

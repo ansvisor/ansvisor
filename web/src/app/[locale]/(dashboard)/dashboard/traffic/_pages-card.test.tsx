@@ -3,7 +3,12 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
-import type { TrafficDateWindow, TrafficPageRow, TrafficPages } from '@/lib/actions/traffic';
+import type {
+  TrafficBrokenLink,
+  TrafficDateWindow,
+  TrafficPageRow,
+  TrafficPages,
+} from '@/lib/actions/traffic';
 
 /**
  * The Pages section (AT-006): three work lists and the full list, each with
@@ -84,13 +89,26 @@ const page = (over: Partial<TrafficPageRow> = {}): TrafficPageRow => ({
   revenue: 0,
   engagementSeconds: 0,
   inSitemap: true,
+  broken: false,
   valueRank: 1,
   ...over,
 });
 
-const pages = (rows: TrafficPageRow[], counts: Partial<TrafficPages['counts']> = {}) => ({
-  counts: { noAiTraffic: 3, citedNotClicked: 1, trafficNoPrompt: 2, all: 14, ...counts },
+const pages = (
+  rows: TrafficPageRow[],
+  counts: Partial<TrafficPages['counts']> = {},
+  brokenLinks: TrafficBrokenLink[] = [],
+): TrafficPages => ({
+  counts: {
+    noAiTraffic: 3,
+    citedNotClicked: 1,
+    trafficNoPrompt: 2,
+    brokenAiLinks: 2,
+    all: 14,
+    ...counts,
+  },
   rows,
+  brokenLinks,
 });
 
 let container: HTMLDivElement;
@@ -120,6 +138,8 @@ async function render({
   domain = 'acme-coffee.example.com',
   analyticsMissing = false,
 }: { domain?: string; analyticsMissing?: boolean } = {}) {
+  // Each list's own Excel / CSV, told apart by name.
+  const exportButton = (name: string) => <span data-testid="export">{name}</span>;
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
@@ -129,6 +149,8 @@ async function render({
           rangeLabel="Last 7 days"
           domain={domain}
           analyticsMissing={analyticsMissing}
+          actions={exportButton('pages by status')}
+          brokenActions={exportButton('redirect list')}
         />
       </NextIntlClientProvider>,
     );
@@ -255,6 +277,8 @@ describe('PagesCard', () => {
       pages([
         page({ citations: 25, sessions: 40 }),
         page({ page: '/subscriptions', aiVisits: 8, citations: 4 }),
+        // A missing page AI visitors land on is a broken link, not Traffic, no prompt (AT-012).
+        page({ page: '/old-menu', aiVisits: 2, sessions: 0, inSitemap: false, broken: true }),
       ]),
     );
     await act(async () => tab('All pages').click());
@@ -262,7 +286,7 @@ describe('PagesCard', () => {
     const badges = [...container.querySelectorAll('tbody [data-slot="badge"]')].map(
       (b) => b.textContent,
     );
-    expect(badges).toEqual(['No AI traffic', 'Cited, not clicked']);
+    expect(badges).toEqual(['No AI traffic', 'Cited, not clicked', 'Broken AI links']);
     // A page on no list is doing fine.
     const status = [...container.querySelectorAll('tbody tr')][1].lastElementChild;
     expect(status?.textContent).toBe('—');
@@ -278,6 +302,97 @@ describe('PagesCard', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await act(async () => tab('Cited, not clicked').click());
     expect(text()).toContain("The pages couldn't be loaded.");
+  });
+
+  it('lists the broken AI links with where to redirect each, and exports the redirect list (AT-012)', async () => {
+    getTrafficPages.mockResolvedValue(pages([]));
+    await render();
+    expect(tab('Broken AI links').textContent).toBe('Broken AI links2');
+    const exported = () => container.querySelector('[data-testid="export"]')?.textContent;
+    expect(exported()).toBe('pages by status');
+
+    const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
+    getTrafficPages.mockResolvedValue(
+      pages([], { brokenAiLinks: 3 }, [
+        {
+          page: '/guides/espresso-machine-for-beginner',
+          visits: 3,
+          platforms: ['chatgpt.com', 'perplexity.ai'],
+          citations: 14,
+          lastVisit: hoursAgo(5),
+          status: '404',
+          target: '/guides/espresso-machines-for-beginners',
+          targetReason: 'similar',
+        },
+        {
+          page: '/subscriptions/old-plan',
+          visits: 1,
+          platforms: [],
+          citations: 0,
+          lastVisit: hoursAgo(30),
+          status: 'title',
+          target: '/subscriptions',
+          targetReason: 'parent',
+        },
+        {
+          page: '/index.php',
+          visits: 1,
+          platforms: [],
+          citations: 0,
+          lastVisit: hoursAgo(30),
+          status: '404',
+          target: null,
+          targetReason: 'query',
+        },
+      ]),
+    );
+    await act(async () => tab('Broken AI links').click());
+
+    expect(getTrafficPages).toHaveBeenLastCalledWith(BRAND, WEEK, {
+      tab: 'brokenAiLinks',
+      limit: 10,
+    });
+    const rows = [...container.querySelectorAll('tbody tr')].map((row) =>
+      [...row.querySelectorAll('td')].map((cell) => cell.textContent),
+    );
+    expect(rows).toEqual([
+      [
+        '/guides/espresso-machine-for-beginnerNot found (404)',
+        '3',
+        'ChatGPT, Perplexity',
+        '14',
+        '5h ago',
+        '→ /guides/espresso-machines-for-beginnersSimilar page',
+      ],
+      [
+        '/subscriptions/old-planPage title says not found',
+        '1',
+        '—',
+        '0',
+        '1d ago',
+        '→ /subscriptionsThe page above it',
+      ],
+      [
+        '/index.phpNot found (404)',
+        '1',
+        '—',
+        '0',
+        '1d ago',
+        '—Missing addresses have a query: no redirect suggested',
+      ],
+    ]);
+    expect(text()).toContain('3 of 3 pages');
+    // Its Excel / CSV is the redirect list; no Action Center footer.
+    expect(exported()).toBe('redirect list');
+    expect(text()).not.toContain('Send to Action Center');
+  });
+
+  it('says how broken links show up when there are none', async () => {
+    getTrafficPages.mockResolvedValue(pages([], { brokenAiLinks: 0 }));
+    await render();
+    await act(async () => tab('Broken AI links').click());
+    expect(text()).toContain('when your 404 page carries the tracking snippet too');
+    expect(text()).not.toContain('{');
   });
 
   it('audits a page on a domain stored with its scheme', async () => {

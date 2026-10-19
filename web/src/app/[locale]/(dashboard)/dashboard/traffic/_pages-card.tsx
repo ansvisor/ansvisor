@@ -26,10 +26,12 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
+import { formatRelative } from '@/lib/format-relative';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import { citationState, pageStatuses, pageUrl } from '@/lib/traffic-pages';
 import {
   getTrafficPages,
+  type TrafficBrokenLink,
   type TrafficDateWindow,
   type TrafficPageRow,
   type TrafficPages,
@@ -52,6 +54,9 @@ import { PagePromptsDialog } from './_page-prompts-dialog';
  *   - Cited, not clicked: answers cite them at least 20 times, nobody clicks.
  *   - Traffic, no prompt: AI visitors arrive from questions no tracked
  *     prompt's answer covers.
+ *   - Broken AI links: AI visitors landed on a page that doesn't exist, with
+ *     the working page to redirect it to (AT-012); its Excel / CSV is the
+ *     redirect list.
  *
  * A row's action is the next step for it: audit the page, or track prompts
  * suggested for it that point to it; its menu sends it to the Action Center. Under the two
@@ -59,7 +64,13 @@ import { PagePromptsDialog } from './_page-prompts-dialog';
  * their cited pages can be audited at once (AT-006 part B).
  */
 
-const TABS: TrafficPagesTab[] = ['noAiTraffic', 'citedNotClicked', 'trafficNoPrompt', 'all'];
+const TABS: TrafficPagesTab[] = [
+  'noAiTraffic',
+  'citedNotClicked',
+  'trafficNoPrompt',
+  'brokenAiLinks',
+  'all',
+];
 const PAGE_SIZE = 10;
 
 /** Which figure ranks No AI traffic, in the words of what the property reports. */
@@ -92,6 +103,74 @@ function PageCell({ page }: { page: string }) {
 
 const num = (n: number) => <span className="tabular-nums">{formatNumber(n)}</span>;
 
+/** Broken AI links (AT-012): each missing page, what the visitor got and where to send it. */
+function BrokenLinksTable({ rows }: { rows: TrafficBrokenLink[] }) {
+  const t = useTranslations('traffic.pageList');
+  const tCommon = useTranslations('common');
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="pl-6">{t('columns.page')}</TableHead>
+          <TableHead className="whitespace-normal text-right">{t('columns.aiVisits')}</TableHead>
+          <TableHead className="whitespace-normal">{t('columns.platforms')}</TableHead>
+          <TableHead className="whitespace-normal text-right">{t('columns.citations')}</TableHead>
+          <TableHead className="whitespace-normal">{t('columns.lastVisit')}</TableHead>
+          <TableHead className="pr-6">{t('columns.redirectTo')}</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((row) => (
+          <TableRow key={row.page} className="hover:bg-muted/50">
+            <TableCell className="pl-6 min-w-36 max-w-[180px] whitespace-normal xl:max-w-[280px]">
+              <span className="font-mono text-xs break-all line-clamp-2" title={row.page}>
+                {row.page}
+              </span>
+              <div className="text-[10px] text-muted-foreground">
+                {t(`broken.status.${row.status}`)}
+              </div>
+            </TableCell>
+            <TableCell className="text-right font-semibold text-sm">{num(row.visits)}</TableCell>
+            <TableCell className="min-w-24 whitespace-normal text-sm text-muted-foreground">
+              {row.platforms.length ? row.platforms.map(getPlatformName).join(', ') : '—'}
+            </TableCell>
+            <TableCell className="text-right text-sm">{num(row.citations)}</TableCell>
+            <TableCell className="text-sm text-muted-foreground">
+              {formatRelative(row.lastVisit, tCommon)}
+            </TableCell>
+            <TableCell className="pr-6 min-w-36 max-w-[200px] whitespace-normal xl:max-w-[360px]">
+              {row.target ? (
+                <>
+                  <span
+                    className="font-mono text-xs text-muted-foreground break-all line-clamp-2"
+                    title={row.target}
+                  >
+                    → {row.target}
+                  </span>
+                  {row.targetReason && (
+                    <div className="text-[10px] text-muted-foreground">
+                      {t(`broken.reason.${row.targetReason}`)}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <span className="text-sm text-muted-foreground">—</span>
+                  {row.targetReason === 'query' && (
+                    <div className="text-[10px] text-muted-foreground">
+                      {t('broken.reason.query')}
+                    </div>
+                  )}
+                </>
+              )}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
 export function PagesCard({
   brandId,
   dateWindow,
@@ -99,6 +178,7 @@ export function PagesCard({
   domain,
   analyticsMissing,
   actions,
+  brokenActions,
 }: {
   brandId: string;
   dateWindow: TrafficDateWindow;
@@ -110,6 +190,8 @@ export function PagesCard({
   analyticsMissing: boolean;
   /** The section's Excel / CSV buttons (AT-015). */
   actions?: ReactNode;
+  /** Broken AI links' own Excel / CSV: the redirect list (AT-012). */
+  brokenActions?: ReactNode;
 }) {
   const t = useTranslations('traffic.pageList');
   const tReason = useTranslations('traffic.pageOpportunities');
@@ -155,6 +237,8 @@ export function PagesCard({
   // Another tab's rows don't fit this tab's columns: wait for its own.
   const loading = !loaded || loaded.tab !== tab;
   const rows = loading ? [] : (result?.rows ?? []);
+  const brokenRows = loading ? [] : (result?.brokenLinks ?? []);
+  const shown = tab === 'brokenAiLinks' ? brokenRows.length : rows.length;
   const total = result?.counts[tab] ?? 0;
   const signal = valueSignal(rows);
 
@@ -284,7 +368,7 @@ export function PagesCard({
             <Badge variant="outline" className="text-xs">
               {rangeLabel}
             </Badge>
-            {actions}
+            {tab === 'brokenAiLinks' ? brokenActions : actions}
           </div>
         </div>
         <p className="text-xs text-muted-foreground">{t('subtitle')}</p>
@@ -311,8 +395,10 @@ export function PagesCard({
           </div>
         ) : !result ? (
           <p className="px-6 py-4 text-sm text-muted-foreground">{t('failed')}</p>
-        ) : rows.length === 0 ? (
+        ) : shown === 0 ? (
           <p className="px-6 py-4 text-sm text-muted-foreground">{t(`tabs.${tab}.empty`)}</p>
+        ) : tab === 'brokenAiLinks' ? (
+          <BrokenLinksTable rows={brokenRows} />
         ) : (
           <Table>
             <TableHeader>
@@ -486,9 +572,9 @@ export function PagesCard({
           <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-3 text-xs text-muted-foreground">
             <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span>
-                {t('shown', { shown: rows.length, total })} · {t('sameWindow')}
+                {t('shown', { shown, total })} · {t('sameWindow')}
               </span>
-              {rows.length < total && (
+              {shown < total && (
                 <button
                   type="button"
                   disabled={stale}

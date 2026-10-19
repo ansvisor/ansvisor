@@ -10,6 +10,11 @@
  * chatgpt.com are stored as one engine, and the list's version, stored with
  * the visit.
  *
+ * It also sends the landing page's HTTP status as the browser saw it, for
+ * Broken AI links (AT-012): st, from the navigation entry, or 0 where the
+ * browser doesn't report one (Safari); then nf is 1 when the page's title
+ * reads "404" or "not found".
+ *
  * Plain ES5 apart from URL / URLSearchParams, as before: it runs on the
  * customer's pages, in whatever browser their visitors have.
  */
@@ -49,7 +54,10 @@ if(!pf){try{pf=m(new URLSearchParams(location.search).get("utm_source"),true)}ca
 if(!pf)return;
 window.__at=1;
 var c=document.currentScript,k=c.getAttribute("data-t"),o=c.src.replace(/\\/t\\.js(\\?.*)?$/,"");
-var b=JSON.stringify({u:location.href,r:r,s:pf,v:V,a:navigator.userAgent,t:Date.now(),l:navigator.language,d:screen.width+"x"+screen.height});
+var st=0,nf=0;
+try{var n=performance.getEntriesByType("navigation")[0];st=n&&n.responseStatus||0}catch(e){}
+if(!st&&/(^|[^0-9])404([^0-9]|$)|not found/i.test(document.title||""))nf=1;
+var b=JSON.stringify({u:location.href,r:r,s:pf,v:V,a:navigator.userAgent,t:Date.now(),l:navigator.language,d:screen.width+"x"+screen.height,st:st,nf:nf});
 var x=o+"/track/"+k;
 if(navigator.sendBeacon)navigator.sendBeacon(x,new Blob([b],{type:"text/plain;charset=UTF-8"}));
 else fetch(x,{method:"POST",body:b,headers:{"Content-Type":"text/plain;charset=UTF-8"},keepalive:!0}).catch(function(){});

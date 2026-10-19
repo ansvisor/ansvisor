@@ -4,7 +4,8 @@ import { AI_SOURCES_VERSION } from '../lib/ai-sources.js';
 
 /**
  * POST /track/:trackingCode (AT-003): each pageview is stored with the visit
- * it belongs to, and a failed visit lookup still stores the pageview.
+ * it belongs to, and a failed visit lookup still stores the pageview; with
+ * the landing page's status, for Broken AI links (AT-012).
  */
 
 const inserted = [];
@@ -134,6 +135,37 @@ describe('POST /track/:trackingCode', () => {
     findVisitOf.mockResolvedValue(null);
     await beacon({ s: 'some-new-assistant.example' });
     expect(inserted[0].row.source_platform).toBe('some-new-assistant.example');
+  });
+
+  it("stores the landing page's status, or whether its title said not found (AT-012)", async () => {
+    findVisitOf.mockResolvedValue(null);
+    await beacon({ st: 404, nf: 0 });
+    // Safari: no status, and the title said "not found".
+    await beacon({ st: 0, nf: 1 });
+    // A status wins over the title.
+    await beacon({ st: 200, nf: 1 });
+    // An older snippet sends neither.
+    await beacon();
+    expect(inserted.map((i) => [i.row.http_status, i.row.not_found_title])).toEqual([
+      [404, false],
+      [null, true],
+      [200, false],
+      [null, false],
+    ]);
+  });
+
+  it('ignores a status no response could have', async () => {
+    findVisitOf.mockResolvedValue(null);
+    await beacon({ st: 99 });
+    await beacon({ st: 600 });
+    await beacon({ st: '404' });
+    await beacon({ st: 404.5, nf: 'yes' });
+    expect(inserted.map((i) => [i.row.http_status, i.row.not_found_title])).toEqual([
+      [null, false],
+      [null, false],
+      [null, false],
+      [null, false],
+    ]);
   });
 
   it('logs a write the database refuses', async () => {

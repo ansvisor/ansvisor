@@ -36,6 +36,7 @@ const loaders = vi.hoisted(() => ({
   getTrafficGooglePages: vi.fn(),
   getUntrackedGoogleQueries: vi.fn(),
   getTrafficBots: vi.fn(),
+  getTrafficBrokenLinks: vi.fn(),
 }));
 vi.mock('@/lib/actions/traffic', () => loaders);
 
@@ -114,6 +115,7 @@ beforeEach(() => {
     rows: [],
   });
   loaders.getTrafficBots.mockResolvedValue(null);
+  loaders.getTrafficBrokenLinks.mockResolvedValue({ count: 0, rows: [] });
   loaders.getUntrackedGoogleQueries.mockResolvedValue({
     lastDay: '2026-10-17',
     since: '2026-10-11',
@@ -158,6 +160,7 @@ describe('GET /api/traffic/export', () => {
       'Top converting pages',
       'Answers that bring buyers',
       'Pages by status',
+      'Broken AI links',
       'Is AI taking Google clicks',
       'Untracked Google queries',
       'AI bots',
@@ -198,6 +201,7 @@ describe('GET /api/traffic/export', () => {
       'top-converting-pages.csv',
       'answers-that-bring-buyers.csv',
       'pages-by-status.csv',
+      'broken-ai-links.csv',
       'is-ai-taking-google-clicks.csv',
       'untracked-google-queries.csv',
       'ai-bots.csv',
@@ -244,6 +248,38 @@ describe('GET /api/traffic/export', () => {
     );
     expect(loaders.getTrafficSummary).not.toHaveBeenCalled();
     expect(loaders.getTrafficSources).not.toHaveBeenCalled();
+  });
+
+  it('reads every broken AI link for the redirect list (AT-012)', async () => {
+    loaders.getTrafficBrokenLinks.mockResolvedValue({
+      count: 1,
+      rows: [
+        {
+          page: '/guides/old-roast',
+          visits: 2,
+          platforms: ['chatgpt.com'],
+          citations: 5,
+          lastVisit: '2026-10-18T12:00:00Z',
+          status: '404',
+          target: '/guides',
+          targetReason: 'parent',
+        },
+      ],
+    });
+    const res = await get({ format: 'csv', section: 'brokenLinks' });
+
+    expect(res.headers.get('Content-Disposition')).toContain('acme-coffee-broken-ai-links-');
+    const csv = await csvOf(res);
+    expect(csv.text.split('\n')).toEqual([
+      'From,To,Redirect type,Why this page,AI visits,Top platforms,Citations,Last visit (UTC),What the visitor got',
+      '/guides/old-roast,/guides,301,The page above it,2,ChatGPT,5,2026-10-18 12:00,Not found (404)',
+    ]);
+    expect(loaders.getTrafficBrokenLinks).toHaveBeenCalledWith(
+      BRAND,
+      { dateFrom: undefined, dateTo: undefined },
+      { limit: TRAFFIC_EXPORT_MAX_ROWS },
+    );
+    expect(loaders.getTrafficPages).not.toHaveBeenCalled();
   });
 
   it('reads every row of where AI visitors convert for its tables (AT-014)', async () => {

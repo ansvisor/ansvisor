@@ -1,6 +1,7 @@
 /**
  * The Pages section's work lists (AT-006, spec §3.5), as 00178 sorts pages
- * into them, for the card's labels and the export's Status column.
+ * into them (and 00186 Broken AI links, AT-012), for the card's labels and
+ * the export's Status column.
  */
 
 import type { TrafficPageRow } from '@/lib/actions/traffic';
@@ -8,17 +9,23 @@ import type { TrafficPageRow } from '@/lib/actions/traffic';
 /** Cited at least this often with no AI visit: answers show the page, nobody clicks. */
 export const CITED_NOT_CLICKED_MIN = 20;
 
-export type TrafficPageStatus = 'noAiTraffic' | 'citedNotClicked' | 'trafficNoPrompt';
+export type TrafficPageStatus =
+  | 'noAiTraffic'
+  | 'citedNotClicked'
+  | 'trafficNoPrompt'
+  | 'brokenAiLinks';
 
 /** The lists a page is on, in the tabs' order; none for a page doing fine. */
 export function pageStatuses(
-  row: Pick<TrafficPageRow, 'aiVisits' | 'citations' | 'sessions' | 'inSitemap'>,
+  row: Pick<TrafficPageRow, 'aiVisits' | 'citations' | 'sessions' | 'inSitemap' | 'broken'>,
 ): TrafficPageStatus[] {
   const statuses: TrafficPageStatus[] = [];
   if (row.aiVisits === 0 && (row.sessions > 0 || row.inSitemap)) statuses.push('noAiTraffic');
   if (row.aiVisits === 0 && row.citations >= CITED_NOT_CLICKED_MIN)
     statuses.push('citedNotClicked');
-  if (row.aiVisits > 0 && row.citations === 0) statuses.push('trafficNoPrompt');
+  // A missing page needs a redirect, not prompts.
+  if (row.aiVisits > 0 && row.citations === 0 && !row.broken) statuses.push('trafficNoPrompt');
+  if (row.broken) statuses.push('brokenAiLinks');
   return statuses;
 }
 
