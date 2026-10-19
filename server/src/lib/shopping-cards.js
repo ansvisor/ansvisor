@@ -432,6 +432,41 @@ export function normalizeShoppingCards(platform, cards) {
 }
 
 /**
+ * Normalize ChatGPT's single in-answer products (`prompt_results.inline_products`,
+ * each `{ product, … }`) into the same rows as its carousel cards.
+ *
+ * They take the positions after `afterPosition`, the carousel's last, so the
+ * two never collide on (prompt_result_id, position), and `raw.surface` tells
+ * them apart. Only ChatGPT Shopping has inline products; any other platform
+ * returns `[]`.
+ *
+ * @param {string} platform
+ * @param {unknown} items
+ * @param {number} [afterPosition]
+ */
+export function normalizeInlineProducts(platform, items, afterPosition = 0) {
+  if (platform !== 'chatgpt-shopping' || !Array.isArray(items)) return [];
+  const products = items
+    .map((item) => item?.product)
+    .filter((product) => product && typeof product === 'object');
+  return products
+    .map((product, i) => {
+      try {
+        const card = parseChatgptCard(product, 0);
+        return {
+          ...card,
+          position: afterPosition + i + 1,
+          raw: { ...card.raw, surface: 'inline' },
+        };
+      } catch (err) {
+        logger.error({ err, platform, position: i }, '[shopping-cards] inline parser failed');
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+/**
  * Match a normalized card against the tracked brand and competitors.
  * Returns `{ matched_brand_id, matched_brand_role }`.
  *
