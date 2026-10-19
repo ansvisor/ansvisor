@@ -2157,7 +2157,8 @@
       "label": "Site Audit lists",
       "opportunities": "Opportunities",
       "pages": "Pages",
-      "noPages": "No pages audited yet. Audit an opportunity or enter a URL above."
+      "noPages": "No pages audited yet. Audit an opportunity or enter a URL above.",
+      "loading": "Loading"
     },
     "opportunities": {
       "priority": "Priority",

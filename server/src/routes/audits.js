@@ -733,7 +733,11 @@ async function readExcludePatterns(brandId) {
  * pages to put back. The route shows it; auto-audit runs take their pages
  * from it (SA-006).
  */
+/** An inbox read slower than this logs how long each of its steps took. */
+const SLOW_INBOX_MS = 2000;
+
 export async function readOpportunityInbox(brandId) {
+  const startedAt = Date.now();
   const [primary, gaPages, sitePages, audits, prefs, excludePatterns] = await Promise.all([
     primaryDomainOf(brandId),
     // Up to 30% of GA's 5,000 pages a day: past PostgREST's 1000-row page.
@@ -759,6 +763,7 @@ export async function readOpportunityInbox(brandId) {
     readExcludePatterns(brandId),
   ]);
   for (const read of [gaPages, sitePages, audits, prefs]) if (read.error) throw read.error;
+  const readsDoneAt = Date.now();
 
   const primaryHost = normStoredDomain(primary);
   const auditPages = buildAuditPages(audits.data);
@@ -766,6 +771,7 @@ export async function readOpportunityInbox(brandId) {
     competitorOpportunityPages(brandId, sitePages.data ?? []),
     readTemplateGroups({ primaryHost, sitePages: sitePages.data ?? [], auditPages }),
   ]);
+  const sourcesDoneAt = Date.now();
   const { rows, excluded } = buildOpportunities({
     primaryHost,
     gaPages: gaPages.data ?? [],
@@ -786,6 +792,25 @@ export async function readOpportunityInbox(brandId) {
   ]);
   const visitsOf = (urls) =>
     visits === null ? null : urls.reduce((sum, url) => sum + (visits.get(url) ?? 0), 0);
+
+  // The hub waits on this read (13 s on production, 2026-10-19): say which
+  // step is slow, so it can be made faster.
+  const doneAt = Date.now();
+  if (doneAt - startedAt >= SLOW_INBOX_MS) {
+    logger.warn(
+      {
+        brandId,
+        rows: rows.length + templateRows.length,
+        ms: {
+          reads: readsDoneAt - startedAt,
+          competitorsAndTemplates: sourcesDoneAt - readsDoneAt,
+          aiVisits: doneAt - sourcesDoneAt,
+          total: doneAt - startedAt,
+        },
+      },
+      '[audit] slow opportunities inbox read',
+    );
+  }
 
   return {
     // Scored and ordered once each page has its AI visits (SA-005); a page
