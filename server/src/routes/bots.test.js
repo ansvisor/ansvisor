@@ -86,6 +86,7 @@ let server;
 let baseUrl;
 
 beforeEach(async () => {
+  vi.stubEnv('PUBLIC_SERVER_URL', 'https://api.example.com');
   role = 'admin';
   cap = 2_000_000;
   inserted.length = 0;
@@ -105,6 +106,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await new Promise((resolve) => server.close(resolve));
 });
 
@@ -121,7 +123,8 @@ describe('AI bot connections', () => {
     expect(res.status).toBe(201);
     const body = await res.json();
     expect(body.secret).toMatch(/^abot_/);
-    expect(body.endpoint).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/bots\/ingest$/);
+    // The API's public address, not the Host the web server reached it on.
+    expect(body.endpoint).toBe('https://api.example.com/bots/ingest');
     expect(body.workerScript).toContain(body.secret);
     expect(body.workerScript).toContain(body.endpoint);
     expect(inserted[0]).toMatchObject({
@@ -139,6 +142,13 @@ describe('AI bot connections', () => {
     const logpush = await (await create({ kind: 'cloudflare_logpush' })).json();
     expect(logpush.logpushJob.destination_conf).toContain(encodeURIComponent(logpush.secret));
     expect(logpush.vercelDrain).toBeNull();
+  });
+
+  it('makes no connection while the server has no public https address', async () => {
+    vi.stubEnv('PUBLIC_SERVER_URL', 'http://api.example.com');
+    const res = await create({ kind: 'cloudflare_worker' });
+    expect(res.status).toBe(503);
+    expect(inserted).toHaveLength(0);
   });
 
   it('refuses Starter, members and unknown kinds', async () => {
