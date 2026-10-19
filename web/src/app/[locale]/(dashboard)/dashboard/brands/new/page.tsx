@@ -290,6 +290,7 @@ export default function NewBrandPage() {
   const [loadingCompetitors, setLoadingCompetitors] = useState(false);
   const [competitorSuggestError, setCompetitorSuggestError] = useState(false);
   const [ecommerceDetected, setEcommerceDetected] = useState(false);
+  const ecommerceSetup = useRef<Promise<void> | null>(null);
   const [competitorName, setCompetitorName] = useState('');
   const [competitorDomain, setCompetitorDomain] = useState('');
   const [savingCompetitors, setSavingCompetitors] = useState(false);
@@ -599,7 +600,8 @@ export default function NewBrandPage() {
         region,
       });
       setSuggestedCompetitors((prev) => mergeCompetitorSuggestions(prev, competitors));
-      if (isEcommerce) void turnOnProductVisibility();
+      // Kept, so Finish waits for it: it updates the prompts one by one.
+      if (isEcommerce) ecommerceSetup.current = turnOnProductVisibility();
     } catch (err) {
       console.error('Competitor suggestion error:', err);
       setCompetitorSuggestError(true);
@@ -668,6 +670,9 @@ export default function NewBrandPage() {
     if (!createdBrand) return;
     setSavingCompetitors(true);
     try {
+      // Shopping mode first, if it is still going on: the first run should
+      // track ChatGPT Shopping on every prompt, not some of them.
+      await ecommerceSetup.current;
       const selected = takePendingCompetitor().filter((c) => c.selected);
       if (selected.length > 0) {
         await Promise.all(

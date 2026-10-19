@@ -66,7 +66,10 @@ describe('POST /api/competitors/suggest', () => {
     expect(researchPrompt).toContain(
       '"Acme Coffee" itself sells products that shoppers buy online',
     );
-    expect(generateObject.mock.calls[0][0].schema.shape.isEcommerce).toBeDefined();
+    // Optional, so an answer without it still structures the competitors.
+    const { schema } = generateObject.mock.calls[0][0];
+    expect(schema.safeParse({ competitors }).success).toBe(true);
+    expect(schema.shape.isEcommerce.safeParse(true).success).toBe(true);
   });
 
   it('says no when the answer has no verdict', async () => {

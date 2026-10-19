@@ -10,6 +10,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 let brand: { industry: string | null; shopping_mode_enabled: boolean };
 let prompts: { id: string; platforms: string[] }[];
 let writes: { table: string; op: string; value: unknown }[];
+// RLS lets a write through, or matches no row without an error (an analyst).
+let denied: boolean;
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/guards/plan-guard', () => ({ getOrgPlan: vi.fn() }));
@@ -21,8 +23,9 @@ vi.mock('@/lib/supabase/server', () => ({
       let value: unknown = null;
       const settle = async () => {
         if (op !== 'select') {
+          if (op === 'update' && denied) return { data: [], error: null };
           writes.push({ table, op, value });
-          return { error: null };
+          return { data: [{ id: 'row' }], error: null };
         }
         return { data: table === 'prompts' ? prompts : brand, error: null };
       };
@@ -47,7 +50,7 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { markBrandAsEcommerce } = await import('./brand');
+const { markBrandAsEcommerce, setBrandShoppingMode } = await import('./brand');
 
 beforeEach(() => {
   brand = { industry: null, shopping_mode_enabled: false };
@@ -56,6 +59,7 @@ beforeEach(() => {
     { id: 'p2', platforms: ['chatgpt-web', 'chatgpt-shopping'] },
   ];
   writes = [];
+  denied = false;
 });
 
 describe('markBrandAsEcommerce', () => {
@@ -82,12 +86,27 @@ describe('markBrandAsEcommerce', () => {
     expect(writes.some((w) => (w.value as { industry?: string })?.industry)).toBe(false);
   });
 
-  it('leaves a brand already in Shopping mode as it is', async () => {
-    brand = { industry: 'Fashion & Apparel', shopping_mode_enabled: true };
-    expect(await markBrandAsEcommerce('b1')).toEqual({
-      industry: 'Fashion & Apparel',
-      promptsUpdated: 0,
-    });
+  it('leaves a brand already in Shopping mode as it is, industry included', async () => {
+    brand = { industry: null, shopping_mode_enabled: true };
+    expect(await markBrandAsEcommerce('b1')).toEqual({ industry: null, promptsUpdated: 0 });
+    expect(writes).toEqual([]);
+  });
+
+  it('fails, writing nothing, when RLS denies the brand update', async () => {
+    denied = true;
+    await expect(markBrandAsEcommerce('b1')).rejects.toThrow(
+      'Brand not found or you do not have permission to update it.',
+    );
+    expect(writes).toEqual([]);
+  });
+});
+
+describe('setBrandShoppingMode', () => {
+  it('fails when RLS denies the brand update, adding no prompt platform or brand_platforms row', async () => {
+    denied = true;
+    await expect(setBrandShoppingMode('b1', true)).rejects.toThrow(
+      'Brand not found or you do not have permission to update it.',
+    );
     expect(writes).toEqual([]);
   });
 });

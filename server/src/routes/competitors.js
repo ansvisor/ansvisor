@@ -18,8 +18,10 @@ const competitorSchema = z.object({
     )
     .min(3)
     .max(10),
+  // Optional: a verdict the model leaves out mustn't fail the competitors.
   isEcommerce: z
     .boolean()
+    .optional()
     .describe(
       'True only when the brand itself sells products shoppers buy online: an online store, a direct-to-consumer brand or a retailer, with product pages and a checkout. False for software, services, agencies, media, restaurants and B2B-only sellers.',
     ),
