@@ -13,6 +13,8 @@ import { apiLimiter } from './middleware/rate-limiter.js';
 import requestIdMiddleware from './middleware/request-id.js';
 import routes from './routes/index.js';
 import trafficRoutes from './routes/traffic.js';
+import botIngestRoutes from './routes/bot-ingest.js';
+import { pruneBotEvents } from './lib/bot-ingest.js';
 import {
   createJob,
   cleanupStaleJobs,
@@ -60,6 +62,9 @@ app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 // --- Public traffic tracking (before helmet/cors — needs its own CORS for any origin) ---
 app.use('/', trafficRoutes);
+// AI-bot requests from brands' Cloudflare / Vercel (AT-010): authenticated by
+// each connection's secret, server to server.
+app.use('/', botIngestRoutes);
 
 // --- Request logger (before everything to catch all requests) ---
 app.use(requestIdMiddleware);
@@ -252,6 +257,11 @@ async function runDailyTracking() {
   // fails the tracking run. No-ops when Composio isn't configured.
   runGscSync().catch((err) => {
     logger.error({ err }, '[gsc-sync] daily run failed');
+  });
+
+  // AI-bot rows past their retention (AT-010): 90 days, counters 400.
+  pruneBotEvents().catch((err) => {
+    logger.error({ err }, '[ai-bots] daily prune failed');
   });
 
   // Google Analytics sync (#704) — same contract as the Search Console sync
