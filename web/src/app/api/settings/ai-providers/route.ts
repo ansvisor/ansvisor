@@ -65,11 +65,30 @@ async function getAdmin(): Promise<Caller | NextResponse> {
   return ctx;
 }
 
-async function setActive(organizationId: string, provider: AiProvider) {
+/** Under a lock on the org's keys (00188); with onlyIfNone, only while none is Chat's. */
+async function setActive(organizationId: string, provider: AiProvider, onlyIfNone = false) {
   return supabaseAdmin.rpc('set_active_ai_provider', {
     p_organization_id: organizationId,
     p_provider: provider,
+    p_only_if_none: onlyIfNone,
   });
+}
+
+/**
+ * The Anthropic key's copy on `organizations` (00010), which only the old
+ * settings route wrote: cleared when the key is replaced or removed here, so
+ * a removed key doesn't stay stored, or come back on a rollback.
+ */
+async function clearLegacyAnthropicKey(organizationId: string) {
+  return supabaseAdmin
+    .from('organizations')
+    .update({
+      anthropic_api_key_encrypted: null,
+      anthropic_api_key_last4: null,
+      anthropic_api_key_set_at: null,
+      anthropic_api_key_set_by: null,
+    })
+    .eq('id', organizationId);
 }
 
 export async function GET() {
@@ -176,17 +195,16 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // The first key saved is the one Chat uses.
-  const { data: active } = await supabaseAdmin
-    .from('organization_ai_keys')
-    .select('provider')
-    .eq('organization_id', organizationId)
-    .eq('active', true)
-    .maybeSingle();
-  if (!active) {
-    const { error: activeError } = await setActive(organizationId, provider);
-    if (activeError) {
-      return NextResponse.json({ error: activeError.message }, { status: 500 });
+  // The first key saved is the one Chat uses: decided under the lock, so a
+  // switch at the same time can't be overridden.
+  const { error: activeError } = await setActive(organizationId, provider, true);
+  if (activeError) {
+    return NextResponse.json({ error: activeError.message }, { status: 500 });
+  }
+  if (provider === 'anthropic') {
+    const { error: legacyError } = await clearLegacyAnthropicKey(organizationId);
+    if (legacyError) {
+      return NextResponse.json({ error: legacyError.message }, { status: 500 });
     }
   }
   return NextResponse.json({ ok: true });
@@ -219,30 +237,19 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: 'Unknown provider' }, { status: 400 });
   }
   const organizationId = ctx.profile.organization_id;
-  const { data: removed, error } = await supabaseAdmin
-    .from('organization_ai_keys')
-    .delete()
-    .eq('organization_id', organizationId)
-    .eq('provider', provider)
-    .select('active');
+  // Removed, and when it was Chat's key the most recently saved other one
+  // takes over, in one transaction under a lock on the org's keys (00188).
+  const { error } = await supabaseAdmin.rpc('remove_ai_provider_key', {
+    p_organization_id: organizationId,
+    p_provider: provider,
+  });
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-
-  // Chat's key went: the most recently saved other one takes over.
-  if (removed?.some((row) => row.active)) {
-    const { data: next } = await supabaseAdmin
-      .from('organization_ai_keys')
-      .select('provider')
-      .eq('organization_id', organizationId)
-      .order('set_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (next && isAiProvider(next.provider)) {
-      const { error: activeError } = await setActive(organizationId, next.provider);
-      if (activeError) {
-        return NextResponse.json({ error: activeError.message }, { status: 500 });
-      }
+  if (provider === 'anthropic') {
+    const { error: legacyError } = await clearLegacyAnthropicKey(organizationId);
+    if (legacyError) {
+      return NextResponse.json({ error: legacyError.message }, { status: 500 });
     }
   }
   return NextResponse.json({ ok: true });

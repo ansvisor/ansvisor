@@ -7,6 +7,18 @@ import { chatModelId, type AiProvider, type AiProviderSettings } from './provide
 /** A provider SDK's language model — each of them builds the same kind. */
 export type AgentModel = ReturnType<ReturnType<typeof createOpenAI>>;
 
+/**
+ * OpenAI's Responses API (and Azure's) stores each response by default, and
+ * saved turns would then go back as references to those stored items rather
+ * than as text: a key from another project, an expired item or zero data
+ * retention fails the thread with "item not found". The app keeps the whole
+ * history itself.
+ */
+export const AGENT_PROVIDER_OPTIONS = {
+  openai: { store: false },
+  azure: { store: false },
+};
+
 /** The provider, key and settings Chat calls a model with. */
 export interface AgentModelConfig {
   provider: AiProvider;

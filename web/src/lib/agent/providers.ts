@@ -71,7 +71,10 @@ export function parseProviderSettings(
   // OpenRouter has no default: its ids name the model's maker.
   if (provider === 'openrouter' && !model.includes('/')) return { error: 'model' };
   if (!model) return { settings: {} };
-  if (!MODEL_ID.test(model)) return { error: 'model' };
+  // Some SDKs put the id in the URL's path (Gemini): no `..`, and a `/` only
+  // where OpenRouter's ids need one.
+  if (!MODEL_ID.test(model) || model.includes('..')) return { error: 'model' };
+  if (provider !== 'openrouter' && model.includes('/')) return { error: 'model' };
   return { settings: { model } };
 }
 

@@ -68,6 +68,12 @@ describe('parseProviderSettings', () => {
       settings: { model: 'claude-opus-4-8' },
     });
     expect(parseProviderSettings('openai', { model: 'gpt 5' })).toEqual({ error: 'model' });
+    // The id can land in a URL path: no `..`, and `/` only on OpenRouter.
+    expect(parseProviderSettings('google', { model: '../v1/files' })).toEqual({ error: 'model' });
+    expect(parseProviderSettings('openai', { model: 'org/gpt-5.5' })).toEqual({ error: 'model' });
+    expect(parseProviderSettings('openrouter', { model: 'openai/../x' })).toEqual({
+      error: 'model',
+    });
   });
 });
 

@@ -24628,22 +24628,35 @@ from public.organizations
 where anthropic_api_key_encrypted is not null
 on conflict (organization_id, provider) do nothing;
 
--- Makes one saved provider the one Chat uses. Two statements, others off
--- first: the unique index is checked row by row. False when the
--- organization has no key for that provider.
+-- Makes one saved provider the one Chat uses; with p_only_if_none, only when
+-- none is yet (a first key saved). The organization's rows are locked first,
+-- so two switches at once queue rather than both setting `active` and one
+-- failing the unique index. Others off first: that index is checked row by
+-- row. False when the organization has no key for that provider.
 create or replace function public.set_active_ai_provider(
   p_organization_id uuid,
-  p_provider text
+  p_provider text,
+  p_only_if_none boolean default false
 ) returns boolean
 language plpgsql
 set search_path = public
 as $$
 begin
+  perform 1 from organization_ai_keys
+  where organization_id = p_organization_id
+  for update;
+
   if not exists (
     select 1 from organization_ai_keys
     where organization_id = p_organization_id and provider = p_provider
   ) then
     return false;
+  end if;
+  if p_only_if_none and exists (
+    select 1 from organization_ai_keys
+    where organization_id = p_organization_id and active
+  ) then
+    return true;
   end if;
   update organization_ai_keys set active = false
   where organization_id = p_organization_id and active and provider <> p_provider;
@@ -24653,8 +24666,57 @@ begin
 end;
 $$;
 
-revoke execute on function public.set_active_ai_provider(uuid, text)
+revoke execute on function public.set_active_ai_provider(uuid, text, boolean)
   from public, anon, authenticated;
-grant execute on function public.set_active_ai_provider(uuid, text)
+grant execute on function public.set_active_ai_provider(uuid, text, boolean)
   to service_role;
+
+-- Removes a provider's key. When it was the one Chat used, the most recently
+-- saved other key takes over, in the same transaction and under the same
+-- lock as a switch. Returns the provider Chat uses afterwards, or null.
+create or replace function public.remove_ai_provider_key(
+  p_organization_id uuid,
+  p_provider text
+) returns text
+language plpgsql
+set search_path = public
+as $$
+declare
+  v_was_active boolean;
+  v_next text;
+begin
+  perform 1 from organization_ai_keys
+  where organization_id = p_organization_id
+  for update;
+
+  delete from organization_ai_keys
+  where organization_id = p_organization_id and provider = p_provider
+  returning active into v_was_active;
+
+  if coalesce(v_was_active, false) then
+    select provider into v_next
+    from organization_ai_keys
+    where organization_id = p_organization_id
+    order by set_at desc
+    limit 1;
+    if v_next is not null then
+      update organization_ai_keys set active = true
+      where organization_id = p_organization_id and provider = v_next;
+    end if;
+    return v_next;
+  end if;
+
+  select provider into v_next
+  from organization_ai_keys
+  where organization_id = p_organization_id and active;
+  return v_next;
+end;
+$$;
+
+revoke execute on function public.remove_ai_provider_key(uuid, text)
+  from public, anon, authenticated;
+grant execute on function public.remove_ai_provider_key(uuid, text)
+  to service_role;
+
+notify pgrst, 'reload schema';
 

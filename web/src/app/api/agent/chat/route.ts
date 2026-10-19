@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { resolveAgentAuth } from '@/lib/agent/auth';
 import { buildAgentTools } from '@/lib/agent/tools';
 import { buildAgentSystemPrompt } from '@/lib/agent/system-prompt';
-import { buildAgentModel } from '@/lib/agent/model';
+import { AGENT_PROVIDER_OPTIONS, buildAgentModel } from '@/lib/agent/model';
 import { resolveAgentModelConfig } from '@/lib/agent/key';
 import { recordAgentTokenUsage } from '@/lib/agent/token-quota';
 import { getPlan, hasFeature, type PlanId } from '@/config/plans';
@@ -123,11 +123,13 @@ export async function POST(req: Request) {
     // get_visibility_summary → answer" chain without burning tokens
     // forever on a pathological loop.
     stopWhen: stepCountIs(20),
-    onFinish: async ({ usage }) => {
-      // Bill the turn. inputTokens / outputTokens are the counts from the
-      // provider; default to 0 if a step finished without billable usage.
-      const promptTokens = usage?.inputTokens ?? 0;
-      const completionTokens = usage?.outputTokens ?? 0;
+    providerOptions: AGENT_PROVIDER_OPTIONS,
+    onFinish: async ({ totalUsage }) => {
+      // Bill the turn: every step's tokens (totalUsage), not only the last
+      // step's (usage), which leaves out a turn's tool calls. Default to 0 if
+      // nothing was billable.
+      const promptTokens = totalUsage?.inputTokens ?? 0;
+      const completionTokens = totalUsage?.outputTokens ?? 0;
       try {
         await recordAgentTokenUsage(auth.userId, organizationId, promptTokens, completionTokens);
       } catch (err) {

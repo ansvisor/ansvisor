@@ -30,7 +30,7 @@ vi.mock('@/lib/supabase/admin', () => ({
       queries.push(query);
       const settle = () => Promise.resolve(results.shift() ?? { data: null, error: null });
       const chain: Record<string, unknown> = {};
-      for (const op of ['select', 'eq', 'upsert', 'delete', 'order', 'limit']) {
+      for (const op of ['select', 'eq', 'upsert', 'update', 'delete', 'order', 'limit']) {
         chain[op] = (...args: unknown[]) => {
           query.calls.push([op, ...args]);
           return chain;
@@ -154,7 +154,7 @@ describe('PUT', () => {
   });
 
   it('saves the key encrypted, and makes the first one the one Chat uses', async () => {
-    results = [{ error: null }, { data: null, error: null }];
+    results = [{ error: null }];
     const res = await PUT(
       send('PUT', {
         provider: 'azure',
@@ -175,17 +175,32 @@ describe('PUT', () => {
     });
     // A replaced key keeps whether Chat uses it.
     expect(upsert[1]).not.toHaveProperty('active');
+    // Only while no key is Chat's, decided under the lock (00188).
     expect(rpc).toHaveBeenCalledWith('set_active_ai_provider', {
       p_organization_id: 'org1',
       p_provider: 'azure',
+      p_only_if_none: true,
     });
+    // Only an Anthropic key has an old copy to clear.
+    expect(queries.map((q) => q.table)).toEqual(['organization_ai_keys']);
   });
 
-  it('leaves the provider Chat uses as it is when there is one', async () => {
-    results = [{ error: null }, { data: { provider: 'anthropic' }, error: null }];
-    const res = await PUT(send('PUT', { provider: 'openai', apiKey: KEY }));
-    expect(res.status).toBe(200);
-    expect(rpc).not.toHaveBeenCalled();
+  it("clears the Anthropic key's old copy on organizations when it is replaced", async () => {
+    results = [{ error: null }, { error: null }];
+    expect((await PUT(send('PUT', { provider: 'anthropic', apiKey: KEY }))).status).toBe(200);
+    expect(queries[1].table).toBe('organizations');
+    expect(queries[1].calls).toEqual([
+      [
+        'update',
+        {
+          anthropic_api_key_encrypted: null,
+          anthropic_api_key_last4: null,
+          anthropic_api_key_set_at: null,
+          anthropic_api_key_set_by: null,
+        },
+      ],
+      ['eq', 'id', 'org1'],
+    ]);
   });
 });
 
@@ -196,6 +211,7 @@ describe('PATCH', () => {
     expect(rpc).toHaveBeenCalledWith('set_active_ai_provider', {
       p_organization_id: 'org1',
       p_provider: 'google',
+      p_only_if_none: false,
     });
   });
 
@@ -213,28 +229,27 @@ describe('DELETE', () => {
       }),
     );
 
-  it("hands Chat to the most recently saved other key when Chat's goes", async () => {
-    results = [{ data: [{ active: true }], error: null }, { data: { provider: 'google' } }];
-    const res = await remove('openai');
-    expect(res.status).toBe(200);
-    expect(queries[0].calls).toEqual([
-      ['delete'],
-      ['eq', 'organization_id', 'org1'],
-      ['eq', 'provider', 'openai'],
-      ['select', 'active'],
-    ]);
-    expect(queries[1].calls).toContainEqual(['order', 'set_at', { ascending: false }]);
-    expect(rpc).toHaveBeenCalledWith('set_active_ai_provider', {
+  it('removes the key in one locked step that also hands Chat to another key', async () => {
+    rpc.mockResolvedValue({ data: 'google', error: null });
+    expect((await remove('openai')).status).toBe(200);
+    expect(rpc).toHaveBeenCalledWith('remove_ai_provider_key', {
       p_organization_id: 'org1',
-      p_provider: 'google',
+      p_provider: 'openai',
     });
+    expect(queries).toHaveLength(0);
   });
 
-  it("leaves Chat as it is when the key removed wasn't Chat's", async () => {
-    results = [{ data: [{ active: false }], error: null }];
-    expect((await remove('openai')).status).toBe(200);
-    expect(queries).toHaveLength(1);
-    expect(rpc).not.toHaveBeenCalled();
+  it("clears the Anthropic key's old copy too", async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+    results = [{ error: null }];
+    expect((await remove('anthropic')).status).toBe(200);
+    expect(queries[0].table).toBe('organizations');
+    expect(queries[0].calls[0][0]).toBe('update');
+  });
+
+  it('answers 500 when the removal fails', async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: 'boom' } });
+    expect((await remove('openai')).status).toBe(500);
   });
 
   it('refuses an unknown provider', async () => {
