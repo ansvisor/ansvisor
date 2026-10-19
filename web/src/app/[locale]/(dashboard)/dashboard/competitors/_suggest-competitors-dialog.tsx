@@ -50,9 +50,7 @@ export function SuggestCompetitorsDialog({
 
   const website = useMemo(
     () =>
-      brand.domains.find((domain) => domain.isPrimary)?.domain ??
-      brand.domains[0]?.domain ??
-      '',
+      brand.domains.find((domain) => domain.isPrimary)?.domain ?? brand.domains[0]?.domain ?? '',
     [brand.domains],
   );
 
