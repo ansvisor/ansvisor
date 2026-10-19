@@ -91,14 +91,7 @@ export function SuggestCompetitorsDialog({
   }, [brand.description, brand.language, brand.name, brand.region, t, website]);
 
   useEffect(() => {
-    if (open) {
-      void loadSuggestions();
-      return;
-    }
-
-    setSuggestions([]);
-    setSelectedKeys([]);
-    setLoadError(false);
+    if (open) void loadSuggestions();
   }, [open, loadSuggestions]);
 
   const visibleSuggestions = useMemo(
