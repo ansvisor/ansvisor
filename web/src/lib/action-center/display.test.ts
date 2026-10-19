@@ -11,6 +11,7 @@ import {
   eventTaskText,
   humanizeKind,
   labelInitials,
+  pickedAssignee,
   taskText,
 } from './display';
 import { ACTION_KINDS } from './registry';
@@ -430,6 +431,35 @@ describe('History events', () => {
     expect(eventText('task_added')).toBe('Task added: “Ask the agency”');
     expect(eventText('task_renamed')).toBe('Task renamed to “Ask the agency”');
     expect(eventText('task_deleted')).toBe('Task deleted');
+  });
+});
+
+describe('pickedAssignee', () => {
+  const members = [
+    { userId: 'u1', email: 'ada@acme.example', fullName: 'Ada Lovelace', avatarUrl: 'a.png' },
+    { userId: 'u2', email: 'cg@acme.example', fullName: null, avatarUrl: null },
+  ];
+
+  it("shows the picked member at once, a nameless one by e-mail (#1147's patch)", () => {
+    expect(pickedAssignee('u1', members)).toEqual({
+      id: 'u1',
+      fullName: 'Ada Lovelace',
+      avatarUrl: 'a.png',
+      email: 'ada@acme.example',
+    });
+    const nameless = pickedAssignee('u2', members);
+    expect(nameless?.email).toBe('cg@acme.example');
+    expect(assigneeLabel(nameless!)).toBe('cg@acme.example');
+  });
+
+  it('is nobody for Unassigned, and an id alone for a member the list no longer has', () => {
+    expect(pickedAssignee(null, members)).toBeNull();
+    expect(pickedAssignee('gone', members)).toEqual({
+      id: 'gone',
+      fullName: null,
+      avatarUrl: null,
+      email: null,
+    });
   });
 });
 
