@@ -36,6 +36,57 @@ const signal = (over: Partial<Signal>): Signal => ({
 });
 
 describe('signalTexts', () => {
+  it("names AI Traffic's alerts: the weekly drop, broken links, unread cited pages and a new platform (AT-013)", () => {
+    const pages = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({ id: `/p${i}`, label: `/p${i}` }));
+    const drop = signal({
+      category: 'traffic',
+      kind: 'ai_visits_weekly_drop',
+      payload: { entity: 'pages', targets: pages(3), pageCount: 3 },
+      previousValue: 50,
+      currentValue: 28,
+    });
+    expect(signalTexts(drop, tTexts)).toEqual({
+      title: 'AI visits fell from 50 to 28 week over week',
+      description: 'AI-referred visits fell 40% or more against the week before, across 3 pages.',
+    });
+    // Its value is the site's visits; its pages are counted apart.
+    expect(signalAffected(drop, tPage)).toEqual({ label: '3 pages', detail: '/p0' });
+
+    const broken = signal({
+      category: 'technical',
+      kind: 'broken_citation_target',
+      payload: { entity: 'pages', targets: pages(2) },
+      currentValue: 2,
+    });
+    expect(signalTexts(broken, tTexts).title).toBe('Broken AI links on 2 pages');
+    expect(signalAffected(broken, tPage)).toEqual({ label: '2 pages', detail: '/p0' });
+
+    const unread = signal({
+      category: 'technical',
+      kind: 'cited_page_uncrawled',
+      payload: { entity: 'pages', targets: pages(10) },
+      currentValue: 14,
+    });
+    expect(signalTexts(unread, tTexts).title).toBe(
+      "AI search bots haven't read 14 pages that AI answers cite",
+    );
+
+    const platform = signal({
+      category: 'traffic',
+      kind: 'ai_platform_new',
+      payload: { aiSource: 'perplexity.ai', firstDay: '2026-10-16' },
+      previousValue: 0,
+      currentValue: 4,
+      changeValue: 4,
+    });
+    expect(signalTexts(platform, tTexts)).toEqual({
+      title: 'Perplexity started sending visitors',
+      description: '4 AI visits from Perplexity in the last 7 days, the first it has sent.',
+    });
+    expect(signalAffected(platform, tPage)).toEqual({ label: 'Platform', detail: 'Perplexity' });
+  });
+
   it('names the platform and says how far its mention rate fell', () => {
     const drop = signal({
       payload: {

@@ -196,6 +196,43 @@ describe('actionStory', () => {
     expect(told.goal).toBe('Issues fixed on acme.example/pricing by Nov 8.');
   });
 
+  it("tells AI Traffic's page findings by what visitors and bots found, not as Site Audit's (AT-013)", () => {
+    const broken = tell([
+      signal({
+        category: 'technical',
+        kind: 'broken_citation_target',
+        payload: {
+          entity: 'pages',
+          targets: [
+            { id: '/old-menu', label: '/old-menu', visits: 2, redirectTo: '/menu' },
+            { id: '/gift-box', label: '/gift-box', visits: 1, redirectTo: '/gifts' },
+          ],
+        },
+        currentValue: 2,
+      }),
+    ])!;
+    expect(broken.family).toBe('brokenLinks');
+    expect(broken.why).toBe("AI visitors landed on 2 pages on Oct 9, and they don't exist.");
+    expect(broken.goal).toBe('Working redirects for both pages by Nov 8.');
+
+    const unread = tell([
+      signal({
+        category: 'technical',
+        kind: 'cited_page_uncrawled',
+        payload: {
+          entity: 'pages',
+          targets: [{ id: '/guides/espresso', label: '/guides/espresso' }],
+        },
+        currentValue: 1,
+      }),
+    ])!;
+    expect(unread.family).toBe('uncrawledPages');
+    expect(unread.why).toBe(
+      'AI answers cite /guides/espresso, and no AI search bot read it in the last 30 days.',
+    );
+    expect(unread.goal).toBe('AI search bots reading /guides/espresso again by Nov 8.');
+  });
+
   it('quotes a brand-wide rate when nothing narrower is affected', () => {
     const told = tell([
       signal({

@@ -36,6 +36,13 @@ const GSC = ['gsc'];
 const GA = ['ga4'];
 const AUDIT = ['site_audit'];
 
+/** Midnight UTC `daysAgo` days before today's: whole days, so a pass early in
+ *  the morning compares full weeks rather than a few hours of today. */
+function utcMidnight(now, daysAgo) {
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return new Date(today - daysAgo * DAY_MS).toISOString();
+}
+
 function isoDay(now, daysAgo) {
   return new Date(now.getTime() - daysAgo * DAY_MS).toISOString().slice(0, 10);
 }
@@ -178,6 +185,48 @@ function context(brandId, now, sources) {
           p_cur_to: isoDay(now, 0),
           p_prev_from: isoDay(now, TRAFFIC_WINDOW_DAYS * 2 - 1),
           p_prev_to: isoDay(now, TRAFFIC_WINDOW_DAYS),
+        }),
+      ),
+    // AI visits as the AI Traffic page counts them (00176: the snippet on the
+    // days it ran, Analytics on the rest), over the last seven whole days
+    // and the seven before (AT-013).
+    weeklyVisits: () =>
+      once('weeklyVisits', async () => {
+        const read = (from, to) =>
+          rpc('ai_traffic_merged', {
+            p_brand_id: brandId,
+            p_from: from,
+            p_to: to,
+            p_to_inclusive: false,
+            p_analytics: true,
+          });
+        const [cur, prev] = await Promise.all([
+          read(utcMidnight(now, 7), utcMidnight(now, 0)),
+          read(utcMidnight(now, 14), utcMidnight(now, 7)),
+        ]);
+        return { cur: cur ?? {}, prev: prev ?? {} };
+      }),
+    // The pages AI visitors landed on that don't exist, over the last seven
+    // days (AT-012, 00186).
+    brokenLinks: () =>
+      once('brokenLinks', () =>
+        rpc('ai_traffic_broken_links', {
+          p_brand_id: brandId,
+          p_from: utcMidnight(now, 7),
+          p_to: now.toISOString(),
+          p_limit: 50,
+          p_offset: 0,
+        }),
+      ),
+    // The AI bot report's alert: cited pages no search bot read in the last
+    // 30 days (AT-011, 00185). Its window is its own, whatever days are asked.
+    botReport: () =>
+      once('botReport', () =>
+        rpc('ai_bot_report', {
+          p_brand_id: brandId,
+          p_since: isoDay(now, 0),
+          p_until: isoDay(now, 0),
+          p_limit: 0,
         }),
       ),
     gsc: () =>
@@ -632,6 +681,95 @@ const FAMILIES = [
         });
       }
       return found;
+    },
+  },
+
+  // AI Traffic Analytics' alerts (AT-013, spec §3.8). A new platform sending
+  // visits is good news with no work behind it, so it is a recorder kind of
+  // its own (signals/traffic-platforms.js), not a library one.
+  {
+    name: 'aiTrafficAlerts',
+    requires: ['ai_traffic'],
+    kinds: ['ai_visits_weekly_drop', 'broken_citation_target'],
+    async run(ctx) {
+      const found = [];
+      const { cur, prev } = await ctx.weeklyVisits();
+      const before = Number(prev.visits) || 0;
+      const after = Number(cur.visits) || 0;
+      if (
+        before >= t.aiVisitsWeeklyMinVisits &&
+        c.relativeFall(before, after) >= t.aiVisitsWeeklyDropRatio
+      ) {
+        const falling = c.fallingPages(prev.pages, cur.pages);
+        const analytics = (Number(prev.analytics_days) || 0) + (Number(cur.analytics_days) || 0);
+        found.push({
+          // Its value is the site's visits; the pages that fell are its targets.
+          ...group(
+            'ai_visits_weekly_drop',
+            'pages',
+            falling,
+            (p) => ({ id: p.page, label: p.page, before: p.before, now: p.now }),
+            analytics > 0 ? GA : AI,
+            { pageCount: falling.length },
+          ),
+          previousValue: before,
+          currentValue: after,
+          changeValue: after - before,
+        });
+      }
+
+      // Each missing page with what AI visitors got and the working page to
+      // redirect it to; the snippet is the only source (§3.8b).
+      const broken = await ctx.brokenLinks();
+      const rows = Array.isArray(broken?.rows) ? broken.rows : [];
+      if (rows.length > 0) {
+        found.push({
+          ...group(
+            'broken_citation_target',
+            'pages',
+            rows,
+            (r) => ({
+              id: r.page,
+              label: r.page,
+              visits: Number(r.visits) || 0,
+              status: r.status,
+              citations: Number(r.citations) || 0,
+              redirectTo: r.target ?? null,
+            }),
+            AI,
+          ),
+          currentValue: Number(broken.count) || rows.length,
+        });
+      }
+      return found;
+    },
+  },
+
+  {
+    name: 'aiBots',
+    // Any brand can connect its Cloudflare or Vercel; the report says
+    // whether it did.
+    requires: ['tracking'],
+    kinds: ['cited_page_uncrawled'],
+    async run(ctx) {
+      const report = await ctx.botReport();
+      // Null without a connection, and until the first AI-bot request is 30
+      // days old: before then "not read in 30 days" means nothing (00185).
+      const uncrawled = Array.isArray(report?.uncrawled) ? report.uncrawled : [];
+      if (uncrawled.length === 0) return [];
+      return [
+        {
+          ...group(
+            'cited_page_uncrawled',
+            'pages',
+            uncrawled,
+            (u) => ({ id: u.page, label: u.page, citations: Number(u.citations) || 0 }),
+            AI,
+          ),
+          // The report names the ten most cited; the count is all of them.
+          currentValue: Number(report.uncrawled_count) || uncrawled.length,
+        },
+      ];
     },
   },
 

@@ -1,7 +1,8 @@
 /**
  * R03 — Recover AI Traffic.
  *
- * Signal: AI referral traffic falling significantly.
+ * Signal: AI referral traffic falling significantly: over two weeks against
+ * the two before, or by 40% week over week (AT-013, spec §3.8).
  */
 
 import { targetPayload } from './_helpers.js';
@@ -12,7 +13,7 @@ export default {
   version: 1,
   category: 'recover',
   name: 'Recover AI Traffic',
-  signalKinds: ['ai_traffic_drop'],
+  signalKinds: ['ai_traffic_drop', 'ai_visits_weekly_drop'],
   requires: ['ai_traffic'],
   optional: ['analytics'],
   enabled: true,

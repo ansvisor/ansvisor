@@ -1,7 +1,9 @@
 /**
  * F02 — Fix AI Crawler Accessibility.
  *
- * Signal: Pages AI crawlers are blocked from.
+ * Signal: Pages AI crawlers are blocked from, as Site Audit finds them, and
+ * cited pages no AI search bot read in 30 days, as the brand's own
+ * Cloudflare or Vercel reports it (AT-013, spec §3.8).
  */
 
 import { targetPayload } from './_helpers.js';
@@ -12,7 +14,7 @@ export default {
   version: 1,
   category: 'fix',
   name: 'Fix AI Crawler Accessibility',
-  signalKinds: ['crawler_blocked'],
+  signalKinds: ['crawler_blocked', 'cited_page_uncrawled'],
   requires: ['site_audits'],
   optional: [],
   enabled: true,

@@ -49,6 +49,7 @@ const SEVERITY = {
 const KIND_CHANGE = {
   // Something held is gone.
   lost_citations: 'lost',
+  broken_citation_target: 'lost',
   owned_page_citation_lost: 'lost',
   high_value_prompt_lost: 'lost',
   lost_mentions: 'lost',
@@ -57,6 +58,7 @@ const KIND_CHANGE = {
   platform_drop: 'dropped',
   topic_drop: 'dropped',
   ai_traffic_drop: 'dropped',
+  ai_visits_weekly_drop: 'dropped',
   gsc_decline: 'dropped',
   visibility_traffic_loss: 'dropped',
   cross_channel_risk: 'dropped',
@@ -81,10 +83,12 @@ const KIND_CHANGE = {
   weak_internal_links: 'issue',
   content_gap: 'issue',
   audit_low_score: 'issue',
+  cited_page_uncrawled: 'issue',
   // Ground to win.
   page_opportunity: 'opportunity',
   ai_landing_page_winner: 'opportunity',
   new_engine: 'opportunity',
+  ai_platform_new: 'opportunity',
   gsc_low_ctr: 'opportunity',
   // Ground never held: a gap to close or a lead to answer.
   prompt_visibility_gap: 'gap',
@@ -121,6 +125,7 @@ const KIND_CHANGE = {
 const SESSION_KINDS = new Set([
   'ai_traffic_slipping',
   'ai_traffic_drop',
+  'ai_visits_weekly_drop',
   'ai_landing_page_winner',
   'ai_landing_underperforming',
   'converting_page_slipping',
@@ -144,8 +149,10 @@ const HELD_BEFORE = new Set([
   'page_citation_slipping',
   'citation_at_risk',
   'ai_traffic_drop',
+  'ai_visits_weekly_drop',
   'ai_traffic_slipping',
   'converting_page_slipping',
+  'broken_citation_target',
   'gsc_decline',
   'gsc_risk',
   'visibility_traffic_loss',
@@ -155,6 +162,8 @@ const HELD_BEFORE = new Set([
 /** Kinds whose cure is a fix on the brand's own site. */
 const SITE_FIX = new Set([
   'crawler_blocked',
+  'cited_page_uncrawled',
+  'broken_citation_target',
   'structured_data_issue',
   'outdated_content',
   'weak_internal_links',

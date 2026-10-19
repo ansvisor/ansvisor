@@ -91,6 +91,12 @@ export const LIBRARY_KINDS = Object.freeze({
   converting_page_slipping: meta('traffic', 'high', ['ai_referral_traffic']),
   cross_channel_risk: meta('traffic', 'high', ['ai_referral_traffic']),
   visibility_traffic_loss: meta('traffic', 'high', ['ai_referral_traffic', 'ai_visibility']),
+  // AI Traffic Analytics' alerts (AT-013, spec §3.8): the week-over-week drop,
+  // the pages AI visitors landed on that don't exist (AT-012), and the cited
+  // pages no AI search bot read in 30 days (AT-011).
+  ai_visits_weekly_drop: meta('traffic', 'high', ['ai_referral_traffic']),
+  broken_citation_target: meta('technical', 'high', ['ai_referral_traffic', 'citations']),
+  cited_page_uncrawled: meta('technical', 'medium', ['citations']),
 
   // ── Site Audit findings ───────────────────────────────────────────────────
   crawler_blocked: meta('technical', 'high', []),

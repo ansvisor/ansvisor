@@ -37,6 +37,7 @@ import { readAllRpcRows } from '../rpc-pages.js';
 import { resolve } from '../../config/action-engine.js';
 import { EXCLUSIVE_KIND_GROUPS, LIBRARY_KINDS } from './library/kinds.js';
 import { libraryCandidates } from './library/detect.js';
+import { newAiPlatformCandidates } from './traffic-platforms.js';
 
 const DAY_MS = 86_400_000;
 
@@ -163,6 +164,14 @@ const BASE_KINDS = {
     impact: 'medium',
     kpiKeys: [],
     persistent: true,
+  },
+  // An AI platform started sending visits (AT-013): an event, like
+  // new_engine, that no definition turns into work.
+  ai_platform_new: {
+    category: 'traffic',
+    impact: 'medium',
+    kpiKeys: ['ai_referral_traffic'],
+    persistent: false,
   },
 };
 
@@ -847,6 +856,7 @@ export async function recordSignalsForBrand(brandId, { now = new Date() } = {}) 
   candidates.push(...(await auditCandidates(brandId, now)));
   candidates.push(...(await platformGapCandidates(brandId)));
   candidates.push(...(await competitorCitationGapCandidates(brandId, now)));
+  candidates.push(...(await newAiPlatformCandidates(brandId, { now })));
 
   // The V1 definition library's detectors (#818). Isolated per family inside:
   // a read that fails costs that family's signals for the night, and its kinds

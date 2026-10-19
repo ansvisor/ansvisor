@@ -476,6 +476,7 @@
             "last_7_days": "Last 7 days",
             "last_fortnight": "Last 14 days",
             "last_four_weeks": "Last 28 days",
+            "last_30_days": "Last 30 days",
             "last_14_days": "Days with answers in the last 14 days",
             "latest": "Latest data"
           },
@@ -537,6 +538,10 @@
       "new_engine": {
         "title": "New AI platform appearance",
         "description": "Your brand appeared on {platform} for the first time."
+      },
+      "ai_platform_new": {
+        "title": "{platform} started sending visitors",
+        "description": "{visits, plural, one {# AI visit} other {# AI visits}} from {platform} in the last 7 days, the first it has sent."
       },
       "lost_citations": {
         "title": "Citations lost for “{prompt}”",
@@ -747,6 +752,18 @@
       "visibility_traffic_loss": {
         "title": "Visibility and AI traffic falling together",
         "description": "AI visibility and AI-referred traffic fell in the same window. A correlation, not a proven cause."
+      },
+      "ai_visits_weekly_drop": {
+        "title": "AI visits fell from {from} to {to} week over week",
+        "description": "AI-referred visits fell 40% or more against the week before, across {targets}."
+      },
+      "broken_citation_target": {
+        "title": "Broken AI links on {targets}",
+        "description": "AI answers send people to these pages and they answer 404. Redirect each one to a working page."
+      },
+      "cited_page_uncrawled": {
+        "title": "AI search bots haven't read {targets} that AI answers cite",
+        "description": "Your Cloudflare or Vercel saw no AI search bot read these cited pages in the last 30 days. Check that search crawlers can reach them."
       },
       "crawler_blocked": {
         "title": "AI crawlers blocked on {targets}",
@@ -1115,7 +1132,11 @@
             "searchGap": "{subject} {count, plural, one {underperforms} other {underperform}} in Google search{when}.",
             "searchGapAll": "Your pages underperform in Google search{when}.",
             "technicalIssue": "Site Audit flagged {subject}{issues}{when}.",
-            "technicalIssueAll": "Site Audit flagged your site{issues}{when}."
+            "technicalIssueAll": "Site Audit flagged your site{issues}{when}.",
+            "brokenLinks": "AI visitors landed on {subject}{when}, and {count, plural, one {it doesn't} other {they don't}} exist.",
+            "brokenLinksAll": "AI visitors landed on pages that don't exist{when}.",
+            "uncrawledPages": "AI answers cite {subject}, and no AI search bot read {count, plural, one {it} other {them}} in the last 30 days.",
+            "uncrawledPagesAll": "AI answers cite pages no AI search bot read in the last 30 days."
           },
           "goal": {
             "citationLoss": "Citations back on {scope} by {date}.",
@@ -1149,7 +1170,11 @@
             "searchGap": "Better Google search results for {scope} by {date}.",
             "searchGapAll": "Better Google search results by {date}.",
             "technicalIssue": "Issues fixed on {scope} by {date}.",
-            "technicalIssueAll": "Issues fixed by {date}."
+            "technicalIssueAll": "Issues fixed by {date}.",
+            "brokenLinks": "Working redirects for {scope} by {date}.",
+            "brokenLinksAll": "Working redirects for every broken AI link by {date}.",
+            "uncrawledPages": "AI search bots reading {scope} again by {date}.",
+            "uncrawledPagesAll": "AI search bots reading your cited pages by {date}."
           }
         },
         "tasksProgress": "{completed} / {total} tasks completed",

@@ -320,6 +320,29 @@ describe('classifyTrafficPage', () => {
   });
 });
 
+describe('fallingPages', () => {
+  it('lists the pages AI visits fell on, biggest fall first, matching paths without case (AT-013)', () => {
+    expect(
+      c.fallingPages(
+        [
+          { page: '/menu', visits: 30 },
+          { page: '/Gifts', visits: 12 },
+          { page: '/about', visits: 8 },
+        ],
+        [
+          { page: '/menu', visits: 12 },
+          { page: '/gifts', visits: 12 },
+          { page: '/blog', visits: 4 },
+        ],
+      ),
+    ).toEqual([
+      { page: '/menu', before: 30, now: 12 },
+      { page: '/about', before: 8, now: 0 },
+    ]);
+    expect(c.fallingPages(undefined, undefined)).toEqual([]);
+  });
+});
+
 describe('the library’s signal kinds', () => {
   /**
    * `signals.category` has a check constraint. A kind outside it fails the

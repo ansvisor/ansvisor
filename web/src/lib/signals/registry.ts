@@ -33,6 +33,7 @@ export type BaseSignalKind =
   | 'competitor_citation_gap'
   | 'prompt_gain'
   | 'new_engine'
+  | 'ai_platform_new'
   | 'lost_citations'
   | 'first_citation'
   | 'competitor_surge'
@@ -97,6 +98,7 @@ const BASE_SIGNAL_KINDS: Record<BaseSignalKind, SignalKindMeta> = {
   competitor_citation_gap: { kind: 'competitor_citation_gap', stateKey: 'gap', positive: false },
   prompt_gain: { kind: 'prompt_gain', stateKey: 'gained', positive: true },
   new_engine: { kind: 'new_engine', stateKey: 'gained', positive: true },
+  ai_platform_new: { kind: 'ai_platform_new', stateKey: 'gained', positive: true },
   lost_citations: { kind: 'lost_citations', stateKey: 'lost', positive: false },
   first_citation: { kind: 'first_citation', stateKey: 'gained', positive: true },
   competitor_surge: { kind: 'competitor_surge', stateKey: 'gain', positive: false },

@@ -71,6 +71,7 @@ export const SIGNAL_ICONS: Partial<
   competitor_citation_gap: Quote,
   prompt_gain: TrendingUp,
   new_engine: Sparkles,
+  ai_platform_new: Sparkles,
   lost_citations: Unlink,
   first_citation: Link2,
   competitor_surge: Swords,
@@ -471,7 +472,9 @@ export function SignalTable({
                   <SourceList sources={lead.source} />
                 </TableCell>
                 <TableCell className="max-w-[180px]">
-                  <p className="text-xs font-medium">{affectedLabel}</p>
+                  <p className="truncate text-xs font-medium" title={affectedLabel}>
+                    {affectedLabel}
+                  </p>
                   {affected.detail && (
                     <p className="truncate text-xs text-muted-foreground">{affected.detail}</p>
                   )}
