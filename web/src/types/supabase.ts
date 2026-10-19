@@ -2959,6 +2959,15 @@ export type Database = {
         }
         Returns: Json
       }
+      ai_bot_report: {
+        Args: {
+          p_brand_id: string
+          p_limit?: number
+          p_since: string | null
+          p_until: string
+        }
+        Returns: Json
+      }
       ai_traffic_conversions: {
         Args: {
           p_brand_id: string

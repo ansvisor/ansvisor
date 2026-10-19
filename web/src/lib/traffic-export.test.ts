@@ -475,6 +475,62 @@ describe('trafficTable: Untracked Google queries (AT-009)', () => {
   });
 });
 
+describe('trafficTable: AI bots (AT-011)', () => {
+  const bots = (): NonNullable<TrafficExportData['bots']> => ({
+    firstDay: '2026-09-01',
+    lastSeen: '2026-10-19T09:30:00Z',
+    types: [],
+    bots: [
+      { bot: 'gptbot', type: 'training', hits: 120, pages: 40, lastSeen: '2026-10-19T09:30:00Z' },
+      { bot: 'perplexity-user', type: 'user', hits: 3, pages: 2, lastSeen: null },
+    ],
+    pageCount: 1,
+    pages: [
+      {
+        page: '/menu',
+        hits: 80,
+        trainingLast: '2026-10-19T09:30:00Z',
+        searchLast: null,
+        userLast: '2026-10-18T12:00:00Z',
+      },
+    ],
+    uncrawledCount: 0,
+    uncrawled: [],
+    alertState: 'on',
+    alertFrom: '2026-09-30',
+    since: '2026-10-12',
+  });
+
+  it('holds each bot with its type, and each page with every type last read', () => {
+    expect(trafficTable('bots', data({ bots: bots() }), label)).toEqual({
+      headers: ['Bot', 'Bot type', 'Hits', 'Pages read', 'Last seen (UTC)'],
+      rows: [
+        ['GPTBot', 'Training', 120, 40, '2026-10-19 09:30'],
+        ['Perplexity-User', 'User fetch', 3, 2, null],
+      ],
+    });
+    expect(trafficTable('botPages', data({ bots: bots() }), label)).toEqual({
+      headers: [
+        'Page',
+        'Hits',
+        'Training, last read (UTC)',
+        'Search index, last read (UTC)',
+        'User fetch, last read (UTC)',
+      ],
+      rows: [['/menu', 80, '2026-10-19 09:30', null, '2026-10-18 12:00']],
+    });
+  });
+
+  it('says there were no AI-bot requests, never an empty sheet', () => {
+    expect(trafficTable('bots', data({ bots: null }), label).rows).toEqual([
+      ['No AI-bot requests in this range'],
+    ]);
+    expect(trafficTable('botPages', data({}), label).rows).toEqual([
+      ['No AI-bot requests in this range'],
+    ]);
+  });
+});
+
 describe('filtersTable', () => {
   it('records the range, the filters, the sources and when', () => {
     const table = filtersTable(
@@ -510,6 +566,8 @@ describe('trafficWorkbook', () => {
       'Pages by status',
       'Is AI taking Google clicks',
       'Untracked Google queries',
+      'AI bots',
+      'Pages AI bots read',
       'Visits',
     ]);
     // A bold header row, then the rows with their numbers as numbers.

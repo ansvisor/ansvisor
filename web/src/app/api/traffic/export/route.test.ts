@@ -35,6 +35,7 @@ const loaders = vi.hoisted(() => ({
   getTrafficConversions: vi.fn(),
   getTrafficGooglePages: vi.fn(),
   getUntrackedGoogleQueries: vi.fn(),
+  getTrafficBots: vi.fn(),
 }));
 vi.mock('@/lib/actions/traffic', () => loaders);
 
@@ -112,6 +113,7 @@ beforeEach(() => {
     count: 0,
     rows: [],
   });
+  loaders.getTrafficBots.mockResolvedValue(null);
   loaders.getUntrackedGoogleQueries.mockResolvedValue({
     lastDay: '2026-10-17',
     since: '2026-10-11',
@@ -158,6 +160,8 @@ describe('GET /api/traffic/export', () => {
       'Pages by status',
       'Is AI taking Google clicks',
       'Untracked Google queries',
+      'AI bots',
+      'Pages AI bots read',
       'Visits',
     ]);
 
@@ -196,6 +200,8 @@ describe('GET /api/traffic/export', () => {
       'pages-by-status.csv',
       'is-ai-taking-google-clicks.csv',
       'untracked-google-queries.csv',
+      'ai-bots.csv',
+      'pages-ai-bots-read.csv',
       'visits.csv',
     ]);
     for (const file of Object.values(files)) expect(startsWithBom(file)).toBe(true);
@@ -280,6 +286,12 @@ describe('GET /api/traffic/export', () => {
     auth.user = { id: 'u1' };
     auth.brand = null;
     expect((await get({ format: 'xlsx' })).status).toBe(404);
+  });
+
+  it('exports the rest when the AI bot report times out', async () => {
+    loaders.getTrafficBots.mockRejectedValue(new Error('statement timeout'));
+    const res = await get({ format: 'xlsx' });
+    expect(res.status).toBe(200);
   });
 
   it('reports a failed read as an error, not as an empty file', async () => {

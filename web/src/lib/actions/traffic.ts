@@ -1111,3 +1111,112 @@ export async function getUntrackedGoogleQueries(
     })),
   };
 }
+
+/** One type of AI bot in the bot report (AT-011): training, search index or user fetch. */
+export interface BotTypeRow {
+  type: 'training' | 'search' | 'user';
+  hits: number;
+  pages: number;
+  lastSeen: string | null;
+  /** The bots of this type seen, by key. */
+  bots: string[];
+}
+
+export interface BotRow {
+  bot: string;
+  type: BotTypeRow['type'];
+  hits: number;
+  pages: number;
+  lastSeen: string | null;
+}
+
+/** A page AI bots read, with when each type last read it. */
+export interface BotPageRow {
+  page: string;
+  hits: number;
+  trainingLast: string | null;
+  searchLast: string | null;
+  userLast: string | null;
+}
+
+export interface TrafficBots {
+  /** The first day any bot was counted; null with none. */
+  firstDay: string | null;
+  lastSeen: string | null;
+  types: BotTypeRow[];
+  bots: BotRow[];
+  pageCount: number;
+  pages: BotPageRow[];
+  /** Cited pages no search bot read in 30 days; null unless alertState is 'on'. */
+  uncrawledCount: number | null;
+  uncrawled: { page: string; citations: number }[] | null;
+  /**
+   * The search-bot alert: 'waiting' for 30 days of bot data, 'stale' while no
+   * live connection has sent for 2 days or search hits went past the month's
+   * cap (the pages read would drain and list every cited page), else 'on'.
+   */
+  alertState: 'waiting' | 'stale' | 'on';
+  /** The day the search-bot alert starts, 30 days after the first request. */
+  alertFrom: string | null;
+  /** The first day the report covers: "All time" is the last 90 days. */
+  since: string | null;
+}
+
+/**
+ * AI bots reading the site (AT-011, spec §3.7; 00185): verified AI-bot hits
+ * in the range by type and by bot, the most read pages with each type's
+ * last read, and the cited pages no search bot read in the last 30 days.
+ */
+export async function getTrafficBots(
+  brandId: string,
+  window: TrafficDateWindow | undefined,
+  { limit = 10 }: { limit?: number } = {},
+): Promise<TrafficBots> {
+  const supabase = await createClient();
+  const { from, to } = resolveTrafficWindow(window);
+  const { data, error } = await supabase.rpc('ai_bot_report', {
+    p_brand_id: brandId,
+    p_since: utcDay(from) ?? null,
+    p_until: utcDay(to) ?? new Date().toISOString().slice(0, 10),
+    p_limit: limit,
+  });
+  if (error) throw new Error(error.message);
+  const raw = (data ?? {}) as Record<string, unknown>;
+  const n = (v: unknown) => Number(v) || 0;
+  const str = (v: unknown) => (typeof v === 'string' ? v : null);
+  const list = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]) : []);
+  return {
+    firstDay: str(raw.first_day),
+    lastSeen: str(raw.last_seen),
+    types: list(raw.types).map((r) => ({
+      type: r.type as BotTypeRow['type'],
+      hits: n(r.hits),
+      pages: n(r.pages),
+      lastSeen: str(r.last_seen),
+      bots: Array.isArray(r.bots) ? (r.bots as string[]) : [],
+    })),
+    bots: list(raw.bots).map((r) => ({
+      bot: String(r.bot),
+      type: r.type as BotTypeRow['type'],
+      hits: n(r.hits),
+      pages: n(r.pages),
+      lastSeen: str(r.last_seen),
+    })),
+    pageCount: n(raw.page_count),
+    pages: list(raw.pages).map((r) => ({
+      page: String(r.page),
+      hits: n(r.hits),
+      trainingLast: str(r.training_last),
+      searchLast: str(r.search_last),
+      userLast: str(r.user_last),
+    })),
+    uncrawledCount: raw.uncrawled_count == null ? null : n(raw.uncrawled_count),
+    uncrawled: Array.isArray(raw.uncrawled)
+      ? list(raw.uncrawled).map((r) => ({ page: String(r.page), citations: n(r.citations) }))
+      : null,
+    alertState:
+      raw.alert_state === 'on' || raw.alert_state === 'stale' ? raw.alert_state : 'waiting',
+    alertFrom: str(raw.alert_from),
+    since: str(raw.since),
+  };
+}

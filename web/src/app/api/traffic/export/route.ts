@@ -9,6 +9,7 @@ import {
   getTrafficGooglePages,
   getTrafficPages,
   getTrafficSources,
+  getTrafficBots,
   getTrafficSummary,
   getTrafficTrend,
   getTrafficVisitsForExport,
@@ -94,39 +95,53 @@ export async function GET(req: Request) {
   const wholePage = !q.section;
 
   try {
-    const [summary, trend, visits, sources, pageStatus, conversions, googlePages, googleQueries] =
-      await Promise.all([
-        needs('kpis', 'platforms', 'pages')
-          ? getTrafficSummary(q.brandId, window, { topPages: Number.MAX_SAFE_INTEGER })
-          : undefined,
-        needs('trend') ? getTrafficTrend(q.brandId, window) : undefined,
-        needs('visits')
-          ? getTrafficVisitsForExport(q.brandId, {
-              ...window,
-              platform: q.platform,
-              search: q.search,
-              max: TRAFFIC_EXPORT_MAX_ROWS,
-            })
-          : undefined,
-        // For the Filters sheet.
-        wholePage ? getTrafficSources(q.brandId).catch(() => null) : undefined,
-        // Every page of the Pages section, with its lists (AT-006).
-        needs('pageStatus')
-          ? getTrafficPages(q.brandId, window, { tab: 'all', limit: TRAFFIC_EXPORT_MAX_ROWS })
-          : undefined,
-        // Every row of where AI visitors convert, over the window the page reads (AT-014).
-        needs('convertingPages', 'buyerAnswers')
-          ? getTrafficConversions(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS })
-          : undefined,
-        // Every page of Is AI taking Google clicks?, over the days it compares (AT-008).
-        needs('googlePages')
-          ? getTrafficGooglePages(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS })
-          : undefined,
-        // Every Google query no tracked prompt covers, as far as the server checks (AT-009).
-        needs('googleQueries')
-          ? getUntrackedGoogleQueries(q.brandId, window, { limit: UNTRACKED_QUERY_SCAN })
-          : undefined,
-      ]);
+    const [
+      summary,
+      trend,
+      visits,
+      sources,
+      pageStatus,
+      conversions,
+      googlePages,
+      googleQueries,
+      bots,
+    ] = await Promise.all([
+      needs('kpis', 'platforms', 'pages')
+        ? getTrafficSummary(q.brandId, window, { topPages: Number.MAX_SAFE_INTEGER })
+        : undefined,
+      needs('trend') ? getTrafficTrend(q.brandId, window) : undefined,
+      needs('visits')
+        ? getTrafficVisitsForExport(q.brandId, {
+            ...window,
+            platform: q.platform,
+            search: q.search,
+            max: TRAFFIC_EXPORT_MAX_ROWS,
+          })
+        : undefined,
+      // For the Filters sheet.
+      wholePage ? getTrafficSources(q.brandId).catch(() => null) : undefined,
+      // Every page of the Pages section, with its lists (AT-006).
+      needs('pageStatus')
+        ? getTrafficPages(q.brandId, window, { tab: 'all', limit: TRAFFIC_EXPORT_MAX_ROWS })
+        : undefined,
+      // Every row of where AI visitors convert, over the window the page reads (AT-014).
+      needs('convertingPages', 'buyerAnswers')
+        ? getTrafficConversions(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS })
+        : undefined,
+      // Every page of Is AI taking Google clicks?, over the days it compares (AT-008).
+      needs('googlePages')
+        ? getTrafficGooglePages(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS })
+        : undefined,
+      // Every Google query no tracked prompt covers, as far as the server checks (AT-009).
+      needs('googleQueries')
+        ? getUntrackedGoogleQueries(q.brandId, window, { limit: UNTRACKED_QUERY_SCAN })
+        : undefined,
+      // Every page AI bots read, with the bot types (AT-011).
+      // Left out when it fails (a timeout on a large site), so the rest still exports.
+      needs('bots', 'botPages')
+        ? getTrafficBots(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS }).catch(() => null)
+        : undefined,
+    ]);
     // Larger than an export built on request should be (spec §3.9).
     if (visits === null) return Response.json({ error: 'too_large' }, { status: 413 });
 
@@ -148,6 +163,7 @@ export async function GET(req: Request) {
       conversions,
       googlePages,
       googleQueries,
+      bots,
       sources,
     };
 
