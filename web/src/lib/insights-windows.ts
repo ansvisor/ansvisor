@@ -89,7 +89,7 @@ export type MetricWindow =
 export interface ComparisonWindows {
   /** The window the number on screen covers. */
   cur: MetricWindow;
-  /** The equal-length window right before it; null for All time, which has none. */
+  /** The previous comparison window; null for All time, which has none. */
   prev: MetricWindow | null;
   /** Length of `cur` in days (24h is 1); null for All time. */
   windowDays: number | null;
