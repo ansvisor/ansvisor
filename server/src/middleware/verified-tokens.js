@@ -13,36 +13,66 @@ import { createHash } from 'node:crypto';
  */
 const TTL_MS = 30 * 60 * 1000;
 const MAX_ENTRIES = 5000;
-const cache = new Map();
 
 function hashAuthHeader(authorizationHeader) {
   return createHash('sha256').update(authorizationHeader).digest('hex').slice(0, 32);
 }
 
+function verifiedCache() {
+  const cache = new Map();
+  return {
+    mark(authorizationHeader, id) {
+      if (!authorizationHeader || !id) return;
+      if (cache.size >= MAX_ENTRIES) {
+        cache.delete(cache.keys().next().value);
+      }
+      cache.set(hashAuthHeader(authorizationHeader), { id, expiresAt: Date.now() + TTL_MS });
+    },
+    get(authorizationHeader) {
+      if (!authorizationHeader) return null;
+      const key = hashAuthHeader(authorizationHeader);
+      const hit = cache.get(key);
+      if (!hit) return null;
+      if (hit.expiresAt < Date.now()) {
+        cache.delete(key);
+        return null;
+      }
+      return hit.id;
+    },
+    clear() {
+      cache.clear();
+    },
+  };
+}
+
+const users = verifiedCache();
+
 export function markTokenVerified(authorizationHeader, userId) {
-  if (!authorizationHeader || !userId) return;
-  if (cache.size >= MAX_ENTRIES) {
-    cache.delete(cache.keys().next().value);
-  }
-  cache.set(hashAuthHeader(authorizationHeader), {
-    userId,
-    expiresAt: Date.now() + TTL_MS,
-  });
+  users.mark(authorizationHeader, userId);
 }
 
 export function verifiedUserId(authorizationHeader) {
-  if (!authorizationHeader) return null;
-  const key = hashAuthHeader(authorizationHeader);
-  const hit = cache.get(key);
-  if (!hit) return null;
-  if (hit.expiresAt < Date.now()) {
-    cache.delete(key);
-    return null;
-  }
-  return hit.userId;
+  return users.get(authorizationHeader);
+}
+
+/**
+ * AI-bot senders (AT-010) whose secret named a live connection, mapped to
+ * the connection's id. Kept apart from users, so a bot secret never earns
+ * a dashboard bucket. Each accepted request marks it again, so a sender
+ * that keeps sending keeps its bucket.
+ */
+const botSenders = verifiedCache();
+
+export function markBotSenderVerified(authorizationHeader, connectionId) {
+  botSenders.mark(authorizationHeader, connectionId);
+}
+
+export function verifiedBotConnection(authorizationHeader) {
+  return botSenders.get(authorizationHeader);
 }
 
 // Test hook — the limiter's behavior depends on cache state.
 export function clearVerifiedTokens() {
-  cache.clear();
+  users.clear();
+  botSenders.clear();
 }

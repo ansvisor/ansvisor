@@ -33,11 +33,14 @@ vi.mock('../lib/plan-guard.js', () => ({
 
 const { default: router } = await import('./bot-ingest.js');
 const { PlanLimitError } = await import('../lib/plan-guard.js');
+const { botIngestKey } = await import('../middleware/rate-limiter.js');
+const { clearVerifiedTokens } = await import('../middleware/verified-tokens.js');
 
 let server;
 let url;
 
 beforeEach(async () => {
+  clearVerifiedTokens();
   connectionForSecret.mockReset();
   ingestBotRequests
     .mockReset()
@@ -194,9 +197,38 @@ describe('POST /bots/ingest', () => {
     connectionForSecret.mockResolvedValue(null);
     expect((await post('abot_bad', { requests: [] })).status).toBe(401);
     expect(ingestBotRequests).not.toHaveBeenCalled();
+    // A made-up secret earns no bucket of its own.
+    expect(botIngestKey({ headers: { authorization: 'Bearer abot_bad' }, ip: '1.1.1.1' })).toBe(
+      'ip:1.1.1.1',
+    );
 
     connectionForSecret.mockResolvedValue({ id: 'c1', kind: 'cloudflare_worker' });
     ingestBotRequests.mockRejectedValue(new PlanLimitError('choose a plan', 402));
     expect((await post('abot_x', { requests: [] })).status).toBe(402);
+  });
+
+  it("checks the secret before reading the body: an unknown one gets 401, not the body's 413", async () => {
+    connectionForSecret.mockResolvedValue(null);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer abot_bad' },
+      body: Buffer.alloc(21 * 1024 * 1024),
+    });
+    expect(res.status).toBe(401);
+    expect(claimLogFile).not.toHaveBeenCalled();
+  });
+
+  it("gives a matched secret its connection's bucket for the next requests", async () => {
+    connectionForSecret.mockResolvedValue({ id: 'c1', kind: 'cloudflare_worker' });
+    const req = { headers: { authorization: 'Bearer abot_x' }, ip: '1.1.1.1' };
+    expect(botIngestKey(req)).toBe('ip:1.1.1.1');
+    expect((await post('abot_x', { requests: [] })).status).toBe(200);
+    expect(botIngestKey(req)).toBe('bot:c1');
+  });
+
+  it('answers 500 when the secret lookup fails, without reading the body', async () => {
+    connectionForSecret.mockRejectedValue(new Error('database down'));
+    expect((await post('abot_x', { requests: [] })).status).toBe(500);
+    expect(ingestBotRequests).not.toHaveBeenCalled();
   });
 });
