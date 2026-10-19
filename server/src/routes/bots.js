@@ -5,7 +5,8 @@
  * with the bot report (Starter has it locked, spec §7).
  *
  * GET    /api/bots/connections/:brandId           — the brand's connections and this month's use
- * POST   /api/bots/connections/:brandId           — { kind } → a connection, its secret, the endpoint, the Worker
+ * POST   /api/bots/connections/:brandId           — { kind } → a connection, its secret, the endpoint and
+ *                                                   what to copy: the Worker, a Logpush job or a Vercel drain
  * DELETE /api/bots/connections/:brandId/:id       — revoke one
  */
 
@@ -16,6 +17,7 @@ import { assertBrandAccess } from '../lib/access.js';
 import { PlanLimitError, getBotEventCap } from '../lib/plan-guard.js';
 import { CONNECTION_KINDS, hashSecret, newConnectionSecret } from '../lib/bot-ingest.js';
 import { buildWorkerScript } from '../lib/bot-worker-script.js';
+import { logpushJob, vercelDrain } from '../lib/bot-sender-setup.js';
 
 const router = Router();
 
@@ -105,12 +107,15 @@ router.post('/connections/:brandId', async (req, res) => {
 
     // The dashboard reached this server at its public address; so can the edge.
     const endpoint = `${req.protocol}://${req.get('host')}/bots/ingest`;
+    const { kind } = parsed.data;
+    // What the person copies into Cloudflare or Vercel, with the secret in it once.
     return res.status(201).json({
       connection,
       secret,
       endpoint,
-      workerScript:
-        parsed.data.kind === 'cloudflare_worker' ? buildWorkerScript({ endpoint, secret }) : null,
+      workerScript: kind === 'cloudflare_worker' ? buildWorkerScript({ endpoint, secret }) : null,
+      logpushJob: kind === 'cloudflare_logpush' ? logpushJob({ endpoint, secret }) : null,
+      vercelDrain: kind === 'vercel_drain' ? vercelDrain({ endpoint, secret }) : null,
     });
   } catch (error) {
     return fail(req, res, error, 'create the AI bot connection');

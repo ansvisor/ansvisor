@@ -707,6 +707,15 @@ export async function getBotEventCap(orgId) {
 }
 
 /**
+ * Raw log records a month an organization's Vercel drains and Logpush jobs
+ * may send before the server stops reading them (AT-010, spec §6.3).
+ */
+export async function getBotRawCap(orgId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  return plan.limits.maxBotRawRecordsPerMonth ?? 0;
+}
+
+/**
  * Express middleware that attaches req.plan from the authenticated user.
  * Must run after auth middleware (req.user must exist).
  */

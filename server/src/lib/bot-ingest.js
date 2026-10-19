@@ -13,11 +13,14 @@
 import { createHash, randomBytes } from 'crypto';
 import supabaseAdmin from '../config/supabase.js';
 import { verifyBotRequest } from './ai-bots.js';
-import { getBotEventCap } from './plan-guard.js';
+import { getBotEventCap, getBotRawCap } from './plan-guard.js';
 import { logger } from './logger.js';
 
-/** The most requests one batch may carry (a Worker sends about 100). */
+/** The most requests one Worker batch may carry (a Worker sends about 100). */
 export const MAX_BATCH = 500;
+
+/** Verified events are written this many at a time. */
+export const WRITE_CHUNK = 500;
 
 /** Requests older than this are dropped: a sender catching up after a week isn't the site's reading now. */
 export const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -79,11 +82,13 @@ function readRequest(raw, now) {
 
 /**
  * Verify and store one batch for a connection. Returns what was received,
- * verified and stored, and why the rest wasn't counted.
+ * verified and stored, and why the rest wasn't counted. A Worker batch is
+ * kept to MAX_BATCH; a log file (`limit: Infinity`) is read whole and its
+ * verified events written WRITE_CHUNK at a time.
  */
 export async function ingestBotRequests(connection, requests, deps = {}) {
   const now = deps.now ?? Date.now();
-  const list = Array.isArray(requests) ? requests.slice(0, MAX_BATCH) : [];
+  const list = Array.isArray(requests) ? requests.slice(0, deps.limit ?? MAX_BATCH) : [];
   const skipped = { invalid: 0, unknown_agent: 0, unverified_ip: 0, no_ranges: 0 };
   const events = [];
   for (const raw of list) {
@@ -113,28 +118,48 @@ export async function ingestBotRequests(connection, requests, deps = {}) {
     // A plan without the report (Starter) stores nothing, not even counters.
     if (cap === 0)
       return { received: list.length, verified: events.length, stored, skipped, locked: true };
-    const { data, error } = await supabaseAdmin.rpc('ai_bot_ingest', {
-      p_connection_id: connection.id,
-      p_cap: cap,
-      p_events: events,
-    });
-    if (error) throw new Error(error.message);
-    if (data?.error) throw new Error(`ai_bot_ingest: ${data.error}`);
-    stored = data?.stored ?? 0;
-    if (data?.crossed80) {
-      logger.warn(
-        {
-          organizationId: connection.organizationId,
-          brandId: connection.brandId,
-          used: data.used,
-          cap,
-        },
-        '[ai-bots] 80% of the monthly bot event cap reached',
-      );
+    for (let i = 0; i < events.length; i += WRITE_CHUNK) {
+      const { data, error } = await supabaseAdmin.rpc('ai_bot_ingest', {
+        p_connection_id: connection.id,
+        p_cap: cap,
+        p_events: events.slice(i, i + WRITE_CHUNK),
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(`ai_bot_ingest: ${data.error}`);
+      stored += data?.stored ?? 0;
+      if (data?.crossed80) {
+        logger.warn(
+          {
+            organizationId: connection.organizationId,
+            brandId: connection.brandId,
+            used: data.used,
+            cap,
+          },
+          '[ai-bots] 80% of the monthly bot event cap reached',
+        );
+      }
     }
   }
 
   return { received: list.length, verified: events.length, stored, skipped };
+}
+
+/**
+ * Count a log sender's records against the month's raw cap (a Vercel drain
+ * or a Logpush job, §6.3). `allowed` says whether this batch may be read; a
+ * plan without the report reads none.
+ */
+export async function countRawRecords(connection, records) {
+  const cap = await getBotRawCap(connection.organizationId);
+  if (cap === 0) return { allowed: false, locked: true };
+  const { data, error } = await supabaseAdmin.rpc('ai_bot_count_raw', {
+    p_connection_id: connection.id,
+    p_count: records,
+    p_cap: cap,
+  });
+  if (error) throw new Error(error.message);
+  if (data?.error) throw new Error(`ai_bot_count_raw: ${data.error}`);
+  return { allowed: data?.allowed === true, raw: data?.raw ?? null, cap };
 }
 
 /** Verified rows are kept 90 days (§6.2); the bot × page × day counters 400. */
