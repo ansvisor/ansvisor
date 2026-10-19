@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
-import type { AuditSettings } from '@/lib/actions/audits';
+import type { AuditAutoStatus, AuditSettings, AutoAuditRun } from '@/lib/actions/audits';
 import { AuditSettingsDialog, parsePatterns } from './_settings-dialog';
 
 (
@@ -36,7 +36,42 @@ let root: Root;
 const onSaved = vi.fn();
 const onOpenChange = vi.fn();
 
-async function render(canManage = true) {
+/** A billing month from Sep 22 to Oct 22 whose last run (day 28, Oct 19) is done. */
+const schedule = (enabled = true): AuditAutoStatus => ({
+  enabled,
+  setting: null,
+  emailAfterRun: false,
+  perRun: 5,
+  reserved: 0,
+  used: 5,
+  running: 0,
+  periodStart: '2026-09-22T00:00:00.000Z',
+  periodEnd: '2026-10-22T00:00:00.000Z',
+  runs: [
+    { day: 1, at: '2026-09-22T00:00:00.000Z', done: false },
+    { day: 7, at: '2026-09-28T00:00:00.000Z', done: false },
+    { day: 14, at: '2026-10-05T00:00:00.000Z', done: false },
+    { day: 21, at: '2026-10-12T00:00:00.000Z', done: false },
+    { day: 28, at: '2026-10-19T00:00:00.000Z', done: enabled },
+  ],
+  nextRun: null,
+});
+const latestRun: AutoAuditRun = {
+  id: 'run-1',
+  day: 28,
+  status: 'completed',
+  startedAt: '2026-10-19T06:00:00.000Z',
+  finishedAt: '2026-10-19T06:40:00.000Z',
+  pages: 5,
+  completed: 5,
+  running: 0,
+  criticalIssues: 12,
+};
+
+async function render(
+  canManage = true,
+  timing?: { schedule: AuditAutoStatus; latestRun: AutoAuditRun | null },
+) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
@@ -46,6 +81,9 @@ async function render(canManage = true) {
           onOpenChange={onOpenChange}
           canManage={canManage}
           onSaved={onSaved}
+          schedule={timing?.schedule}
+          latestRun={timing?.latestRun}
+          now={new Date('2026-10-19T12:00:00Z')}
         />
       </NextIntlClientProvider>,
     );
@@ -143,6 +181,22 @@ describe('AuditSettingsDialog', () => {
       null,
     );
     expect(dialog().textContent).toContain('No pinned pages. Pin them from Opportunities.');
+  });
+
+  it('says when the last run was and when the next one is', async () => {
+    await render(true, { schedule: schedule(), latestRun });
+    expect(dialog().textContent).toContain('Last run Oct 19 · Next run Oct 22');
+  });
+
+  it('says when the first run is once auto-audit is turned on, and nothing while off', async () => {
+    actions.getAuditSettings.mockResolvedValue(
+      settings({ autoAudit: { enabled: false, setting: false, perRun: 5, limit: 100 } }),
+    );
+    await render(true, { schedule: schedule(false), latestRun: null });
+    expect(dialog().textContent).not.toContain('run Oct');
+    act(() => (dialog().querySelector('#audit-auto') as HTMLElement).click());
+    // Day 28's turn has started without it: the next daily sweep takes it.
+    expect(dialog().textContent).toContain('First run within a day');
   });
 
   it('says what a plan without a monthly limit runs', async () => {

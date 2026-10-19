@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { NEXT_COOKIE, NEXT_COOKIE_MAX_AGE, safeNextPath } from '@/lib/auth-next';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 
@@ -38,12 +39,21 @@ function GoogleIcon({ className }: { className?: string }) {
 
 type Provider = 'github' | 'google';
 
-export function OAuthButtons() {
+/**
+ * GitHub and Google sign-in. `next` is the page to come back to: kept in a
+ * short-lived cookie for /auth/callback, so the redirect URL the providers
+ * and Supabase allow stays exactly the same.
+ */
+export function OAuthButtons({ next }: { next?: string | null } = {}) {
   const [loadingProvider, setLoadingProvider] = useState<Provider | null>(null);
 
   async function handleOAuth(provider: Provider) {
     setLoadingProvider(provider);
     const supabase = createClient();
+    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = next
+      ? `${NEXT_COOKIE}=${encodeURIComponent(safeNextPath(next))}; Path=/; Max-Age=${NEXT_COOKIE_MAX_AGE}; SameSite=Lax${secure}`
+      : `${NEXT_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax${secure}`;
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider,

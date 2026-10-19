@@ -85,6 +85,10 @@ function warningLine(w) {
       return listItem(
         `Visibility score dropped sharply: <strong>${escapeHtml(String(w.from))} → ${escapeHtml(String(w.to))}</strong> week-over-week`,
       );
+    case 'visibility_slipping':
+      return listItem(
+        `Visibility is slipping: <strong>${escapeHtml(String(w.from))} → ${escapeHtml(String(w.to))}</strong> week-over-week`,
+      );
     case 'competitor_surge':
       return listItem(
         `<strong>${escapeHtml(w.competitorName)}</strong> surged from ${escapeHtml(String(w.from))} to ${escapeHtml(String(w.to))} week-over-week`,
@@ -108,9 +112,11 @@ function warningLine(w) {
 export function renderPulseEmail({ brandName, metrics, insightsUrl, settingsUrl }) {
   const { kpis, highlights, warnings, degradedPlatforms, windowDays } = metrics;
   const windowLabel = windowDays === 7 ? 'last 7 days' : 'last 24 hours';
+  // The weekly frequency reads a 7-day window; daily and notable read a day.
+  const title = windowDays === 7 ? 'Weekly Pulse' : 'Daily Pulse';
 
   const trend = kpis.weekTrend;
-  const subject = `${brandName} Daily Pulse — visibility ${kpis.visibilityRate} (${signed(trend)} pts this week)`;
+  const subject = `${brandName} ${title} — visibility ${kpis.visibilityRate} (${signed(trend)} pts this week)`;
 
   const highlightItems = highlights.map(highlightLine).filter(Boolean).join('');
   const warningItems = warnings.map(warningLine).filter(Boolean).join('');
@@ -122,7 +128,7 @@ export function renderPulseEmail({ brandName, metrics, insightsUrl, settingsUrl 
     : '';
 
   const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
-  <h1 style="font-size:18px;color:#111827;margin:0 0 4px 0;">Daily Pulse — ${escapeHtml(brandName)}</h1>
+  <h1 style="font-size:18px;color:#111827;margin:0 0 4px 0;">${title} — ${escapeHtml(brandName)}</h1>
   <p style="font-size:13px;color:#6b7280;margin:0 0 20px 0;">How your brand showed up in AI answers over the ${windowLabel}.</p>
 
   <table role="presentation" cellspacing="8" style="border-collapse:separate;width:100%;margin-bottom:8px;">
