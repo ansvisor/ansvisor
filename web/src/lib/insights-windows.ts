@@ -4,9 +4,9 @@ import { expandDateToEndOfDay } from '@/lib/dates';
 //
 // The aggregate RPCs used to rescan a brand's whole history per page load;
 // past ~55k results that exceeds the authenticated role's 8s statement
-// timeout and the wide presets die. Every preset except 24h now describes its
-// window as whole UTC days, and calls that carry one are answered from the
-// pre-aggregated daily tables instead — cost scales with days in the window,
+// timeout and the wide presets die. Presets describe their rollup windows as
+// whole UTC days (24h uses the latest completed run's day(s)), and calls that
+// carry one are answered from the daily tables — cost scales with days in the window,
 // never with accumulated results.
 //
 // Topic-filtered calls are served from the rollups too (00164): with
@@ -28,6 +28,8 @@ export interface DayWindow {
 export interface WindowedOpts {
   topicId?: string;
   days?: DayWindow;
+  /** Previous completed run's day window, when a view is anchored to a run. */
+  previousDays?: DayWindow;
 }
 
 /** The day window to serve from rollups, or null when the raw path must answer. */
@@ -48,11 +50,16 @@ export function addDays(day: string, n: number): string {
 /**
  * Current + previous equal-length day windows for the ↑/↓ delta math. An
  * unbounded window anchors to the trailing 7 days, mirroring what the raw
- * path's `now() - 7d` default has always compared against. The previous
- * window ends the day BEFORE the current one starts — the raw path's
+ * path's `now() - 7d` default has always compared against. When a previous
+ * completed run's window is supplied, use it instead of deriving an adjacent
+ * equal-length period. The previous window ends the day BEFORE the current
+ * one starts by default — the raw path's
  * timestamp arithmetic let the two windows share their boundary instant.
  */
-export function deltaDayWindows(days: DayWindow): {
+export function deltaDayWindows(
+  days: DayWindow,
+  previousDays?: DayWindow,
+): {
   cur: { dayFrom: string; dayTo: string };
   prev: { dayFrom: string; dayTo: string };
 } {
@@ -60,9 +67,14 @@ export function deltaDayWindows(days: DayWindow): {
   const curFrom = days.dayFrom ?? addDays(curTo, -6);
   const len = Math.round((Date.parse(curTo) - Date.parse(curFrom)) / DAY_MS) + 1;
   const prevTo = addDays(curFrom, -1);
+  const defaultPrev = { dayFrom: addDays(prevTo, -(len - 1)), dayTo: prevTo };
+  const prev =
+    previousDays?.dayFrom && previousDays?.dayTo
+      ? { dayFrom: previousDays.dayFrom, dayTo: previousDays.dayTo }
+      : defaultPrev;
   return {
     cur: { dayFrom: curFrom, dayTo: curTo },
-    prev: { dayFrom: addDays(prevTo, -(len - 1)), dayTo: prevTo },
+    prev,
   };
 }
 
@@ -80,7 +92,7 @@ export type MetricWindow =
 export interface ComparisonWindows {
   /** The window the number on screen covers. */
   cur: MetricWindow;
-  /** The equal-length window right before it; null for All time, which has none. */
+  /** The previous comparison window; null for All time, which has none. */
   prev: MetricWindow | null;
   /** Length of `cur` in days (24h is 1); null for All time. */
   windowDays: number | null;
@@ -92,7 +104,7 @@ export interface ComparisonWindows {
  * the same filters always compare the same answers (VIS-001).
  *
  * - Whole-day windows compare against the equal run of whole days ending
- *   the day before (deltaDayWindows).
+ *   the day before by default (deltaDayWindows), or a supplied previous run.
  * - Timestamp windows compare against the equal span ending where the
  *   current one starts.
  * - All time has no previous window: there is no earlier period of the same
@@ -105,7 +117,7 @@ export function comparisonWindows(
   const daily = dailyWindow(opts);
   if (daily) {
     if (!daily.dayFrom) return { cur: { kind: 'days', days: daily }, prev: null, windowDays: null };
-    const { cur, prev } = deltaDayWindows(daily);
+    const { cur, prev } = deltaDayWindows(daily, opts?.previousDays);
     return {
       cur: { kind: 'days', days: daily },
       prev: { kind: 'days', days: prev },

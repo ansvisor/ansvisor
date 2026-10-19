@@ -67,6 +67,16 @@ describe('comparisonWindows', () => {
 
     expect(w.prev).toEqual({ kind: 'days', days: deltaDayWindows(days).prev });
   });
+
+  it("uses the previous completed run's days for a run-anchored comparison (#999)", () => {
+    const days = { dayFrom: '2026-10-18', dayTo: '2026-10-19' };
+    const previousDays = { dayFrom: '2026-10-16', dayTo: '2026-10-16' };
+    const w = comparisonWindows({ days, previousDays });
+
+    expect(w.cur).toEqual({ kind: 'days', days });
+    expect(w.prev).toEqual({ kind: 'days', days: previousDays });
+    expect(deltaDayWindows(days, previousDays).prev).toEqual(previousDays);
+  });
 });
 
 describe('visibilityChange', () => {
