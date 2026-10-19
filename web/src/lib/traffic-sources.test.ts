@@ -71,6 +71,7 @@ describe('sectionsNeeding', () => {
       'googleClicks',
       'googleTrend',
       'googlePages',
+      'googleQueries',
     ]);
   });
 });

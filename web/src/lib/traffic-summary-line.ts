@@ -9,7 +9,9 @@
  *     connected Google Analytics (§3.8b rule 5: without GA4 it never says
  *     "Perplexity visitors convert best");
  *   - the best-converting platform, only when at least two platforms have 30
- *     visits and 5 key events, the bar for comparing conversions (§5.4).
+ *     visits and 5 key events, the bar for comparing conversions (§5.4);
+ *   - the untracked Google queries, only from a connected Search Console
+ *     (AT-009).
  *
  * Pure: the component renders the words.
  */
@@ -31,6 +33,8 @@ export interface SummaryLineInput {
   gaSessions: number | null;
   /** Pages answers cite 20+ times with no AI visit (AT-006); null while unknown. */
   citedNotClicked: number | null;
+  /** Google queries with clicks no prompt tracks (AT-009); null without Search Console. */
+  untrackedQueries?: number | null;
 }
 
 export interface SummaryLine {
@@ -44,6 +48,8 @@ export interface SummaryLine {
   best: { platform: string; rate: number } | null;
   /** 0 says nothing. */
   citedNotClicked: number;
+  /** 0 says nothing. */
+  untrackedQueries: number;
 }
 
 /** The platform whose visits convert best, when two or more can be compared. */
@@ -75,5 +81,6 @@ export function summaryLine(input: SummaryLineInput): SummaryLine {
     top: top && top.visits > 0 ? { platform: top.platform, visits: top.visits } : null,
     best: ga ? bestConvertingPlatform(input.platforms) : null,
     citedNotClicked: input.citedNotClicked ?? 0,
+    untrackedQueries: input.untrackedQueries ?? 0,
   };
 }

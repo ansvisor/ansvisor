@@ -6,6 +6,12 @@
 /** Impressions a page needs in the period before to be compared. */
 export const GOOGLE_PAGES_MIN_IMPRESSIONS = 100;
 
+/**
+ * The most clicked Google queries the server checks for untracked ones
+ * (AT-009): server/src/lib/untracked-queries.js's UNTRACKED_QUERY_SCAN.
+ */
+export const UNTRACKED_QUERY_SCAN = 5000;
+
 const DAY_MS = 86_400_000;
 
 /**

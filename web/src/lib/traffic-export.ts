@@ -13,6 +13,7 @@ import type {
   TrafficConversions,
   TrafficGooglePages,
   TrafficLog,
+  TrafficUntrackedQueries,
   TrafficPages,
   TrafficSources,
   TrafficSummary,
@@ -40,6 +41,7 @@ export const TRAFFIC_EXPORT_SECTIONS = [
   'buyerAnswers',
   'pageStatus',
   'googlePages',
+  'googleQueries',
   'visits',
 ] as const;
 
@@ -53,6 +55,7 @@ export const TRAFFIC_TABLE_SECTIONS = [
   'buyerAnswers',
   'pageStatus',
   'googlePages',
+  'googleQueries',
   'visits',
 ] as const;
 
@@ -81,6 +84,8 @@ export interface TrafficExportData {
   conversions?: TrafficConversions | null;
   /** Is AI taking Google clicks?, every page (AT-008). */
   googlePages?: TrafficGooglePages | null;
+  /** Google queries you don't track yet, every one the server checked (AT-009). */
+  googleQueries?: TrafficUntrackedQueries | null;
   sources?: TrafficSources | null;
 }
 
@@ -375,6 +380,26 @@ function googlePages(data: TrafficExportData, label: ExportLabel): ExportTable {
   };
 }
 
+/** Google queries you don't track yet (AT-009): every one, with the days read. */
+function googleQueries(data: TrafficExportData, label: ExportLabel): ExportTable {
+  const q = data.googleQueries;
+  const note = (key: string) => ({ headers: [label('columns.note')], rows: [[label(key)]] });
+  if (!q || !q.lastDay) return note('notes.noGoogleQueries');
+  if (q.rows.length === 0) return note('notes.noUntrackedQueries');
+  const days = q.since ? `${q.since} – ${q.until}` : `${label('filters.start')} – ${q.until}`;
+  const table: ExportTable = {
+    headers: [
+      label('columns.query'),
+      label('columns.clicks'),
+      label('columns.impressions'),
+      label('columns.days'),
+    ],
+    rows: q.rows.map((row) => [row.query, row.clicks, row.impressions, days]),
+  };
+  if (!q.capped) return table;
+  return { ...table, rows: [...table.rows, [label('notes.queriesCapped'), null, null, null]] };
+}
+
 function visits(data: TrafficExportData, label: ExportLabel): ExportTable {
   return {
     headers: [
@@ -421,6 +446,8 @@ export function trafficTable(
       return pageStatus(data, label);
     case 'googlePages':
       return googlePages(data, label);
+    case 'googleQueries':
+      return googleQueries(data, label);
     case 'visits':
       return visits(data, label);
   }

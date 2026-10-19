@@ -27,6 +27,8 @@ const getTrafficPages = vi.fn(async () => ({
 vi.mock('@/lib/actions/traffic', () => ({
   getTrafficGoogleTotals: (...args: unknown[]) => getTrafficGoogleTotals(...args),
   getTrafficPages: (...args: unknown[]) => getTrafficPages(...(args as [])),
+  // The summary line's untracked Google queries (AT-009): tested with the line.
+  getUntrackedGoogleQueries: async () => ({ count: 0, capped: false, rows: [] }),
 }));
 const connect = vi.fn();
 vi.mock('@/hooks/use-integration-connect', () => ({

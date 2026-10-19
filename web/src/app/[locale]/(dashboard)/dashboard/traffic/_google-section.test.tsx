@@ -32,6 +32,9 @@ vi.mock('./_page-prompts-dialog', () => ({
   },
 }));
 
+// The untracked queries card has its own tests.
+vi.mock('./_untracked-queries', () => ({ UntrackedQueriesCard: () => null }));
+
 const { GoogleSection } = await import('./_google-section');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -108,6 +111,7 @@ async function render(source: SourceState | null = gsc()) {
           domain="acme.example"
           canConnect
           onConnected={() => {}}
+          canTrack
         />
       </NextIntlClientProvider>,
     );

@@ -8,6 +8,7 @@ import { getPlatformName } from '@/lib/traffic-platforms';
 import { summaryLine } from '@/lib/traffic-summary-line';
 import {
   getTrafficPages,
+  getUntrackedGoogleQueries,
   type TrafficDateWindow,
   type TrafficSummary,
 } from '@/lib/actions/traffic';
@@ -15,8 +16,9 @@ import {
 /**
  * The summary line above the KPI cards (AT-007, spec §3.1): the range's
  * visits, their share of all traffic and change, the top and best-converting
- * platforms, and the pages answers cite that nobody clicks, in one or two
- * sentences with a fixed template. Analytics' facts appear only while it is
+ * platforms, the pages answers cite that nobody clicks, and the Google
+ * queries no prompt tracks (AT-009), in one or two sentences with a fixed
+ * template. Analytics' and Search Console's facts appear only while they are
  * connected (§3.8b rule 5); the line waits for every number it states, so it
  * never changes under the reader.
  */
@@ -27,6 +29,8 @@ export function SummaryLine({
   summary,
   summaryLoading,
   gaSessions,
+  gscReady,
+  queriesRevision = 0,
 }: {
   brandId: string;
   dateWindow: TrafficDateWindow;
@@ -40,11 +44,41 @@ export function SummaryLine({
    * connected or couldn't be read, undefined while it loads.
    */
   gaSessions: number | null | undefined;
+  /** Search Console has data for the brand; undefined while its state loads. */
+  gscReady: boolean | undefined;
+  /** Bumped when Google queries were tracked from the page: counts them again. */
+  queriesRevision?: number;
 }) {
   const t = useTranslations('traffic.summaryLine');
   const key = `${brandId}|${dateWindow.dateFrom ?? ''}|${dateWindow.dateTo ?? ''}`;
   // The Cited, not clicked count for the range (AT-006), as the Pages tab counts it.
   const [cited, setCited] = useState<{ key: string; count: number | null } | null>(null);
+
+  // Google queries no prompt tracks (AT-009), when Search Console is connected.
+  const untrackedKey = `${key}|${queriesRevision}`;
+  const [untracked, setUntracked] = useState<{
+    key: string;
+    count: number | null;
+    capped: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!gscReady) return;
+    let cancelled = false;
+    getUntrackedGoogleQueries(brandId, dateWindow, { limit: 0 })
+      .then((queries) => {
+        if (!cancelled) {
+          setUntracked({ key: untrackedKey, count: queries.count, capped: queries.capped });
+        }
+      })
+      .catch(() => {
+        // Best effort, as the cited count.
+        if (!cancelled) setUntracked({ key: untrackedKey, count: null, capped: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, dateWindow, untrackedKey, gscReady]);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,7 +96,15 @@ export function SummaryLine({
   }, [brandId, dateWindow, key]);
 
   const citedNow = cited?.key === key ? cited : null;
-  if (!summary || summaryLoading || gaSessions === undefined || !citedNow) {
+  const untrackedNow = gscReady ? (untracked?.key === untrackedKey ? untracked : null) : undefined;
+  if (
+    !summary ||
+    summaryLoading ||
+    gaSessions === undefined ||
+    gscReady === undefined ||
+    !citedNow ||
+    untrackedNow === null
+  ) {
     return <Skeleton className="h-4 w-2/3" />;
   }
 
@@ -73,6 +115,7 @@ export function SummaryLine({
     platforms: summary.platformBreakdown,
     gaSessions,
     citedNotClicked: citedNow.count,
+    untrackedQueries: untrackedNow?.count ?? null,
   });
   const range = rangeLabel.charAt(0).toUpperCase() + rangeLabel.slice(1);
 
@@ -112,6 +155,14 @@ export function SummaryLine({
     }
   }
   if (line.citedNotClicked > 0) sentences.push(t('cited', { count: line.citedNotClicked }));
+  if (line.untrackedQueries > 0) {
+    sentences.push(
+      t('untracked', {
+        count: line.untrackedQueries,
+        shown: `${formatNumber(line.untrackedQueries)}${untrackedNow?.capped ? '+' : ''}`,
+      }),
+    );
+  }
 
   return <p className="text-sm text-muted-foreground">{sentences.join(' ')}</p>;
 }

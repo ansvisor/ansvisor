@@ -18,6 +18,7 @@ import { withRetry } from '../lib/retry.js';
 import { getGscSuggestionCandidates } from '../lib/gsc-suggestions.js';
 import { getGaSuggestionCandidates } from '../lib/ga-suggestions.js';
 import { suggestPromptsForPage } from '../lib/page-prompt-suggestions.js';
+import { UNTRACKED_QUERY_SCAN, untrackedGoogleQueries } from '../lib/untracked-queries.js';
 import { RELEVANCE_SCALE, ratingCostUsd, toRelevance } from '../lib/suggestion-relevance.js';
 import {
   ACTIONABLE_STATES,
@@ -583,6 +584,42 @@ router.get('/suggestions/:brandId', async (req, res) => {
     const status = error.status || 500;
     req.log.error({ err: error }, 'prompt-suggestions list error');
     return res.status(status).json({ error: error.message || 'Failed to load suggestions' });
+  }
+});
+
+const untrackedQueriesSchema = z.object({
+  // The days the AI Traffic page reads: the range's first (absent for all
+  // time) and last; the window then ends on Google's latest reported day.
+  since: z.iso.date().optional(),
+  until: z.iso.date(),
+  limit: z.coerce.number().int().min(0).max(UNTRACKED_QUERY_SCAN).default(10),
+});
+
+/**
+ * GET /api/prompts/untracked-queries/:brandId?since=&until=&limit=
+ *
+ * Google queries you don't track yet (AT-009): the brand's Search Console
+ * queries with clicks that no active prompt covers, most clicks first, for
+ * the AI Traffic page. Read on request; tracking one adds it as a prompt.
+ */
+router.get('/untracked-queries/:brandId', async (req, res) => {
+  try {
+    const parsed = untrackedQueriesSchema.safeParse(req.query ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
+    }
+    await assertBrandAccess(req.params.brandId, req.user.id);
+    const { since, until, limit } = parsed.data;
+    const result = await untrackedGoogleQueries(req.params.brandId, {
+      since: since ?? null,
+      until,
+      limit,
+    });
+    return res.json(result);
+  } catch (error) {
+    const status = error.status || 500;
+    req.log.error({ err: error }, 'untracked queries error');
+    return res.status(status).json({ error: error.message || 'Failed to read Google queries' });
   }
 });
 

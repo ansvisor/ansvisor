@@ -3135,6 +3135,7 @@
         "buyerAnswers": "Answers that bring buyers",
         "pageStatus": "Pages by status",
         "googlePages": "Is AI taking Google clicks",
+        "googleQueries": "Untracked Google queries",
         "visits": "Visits"
       },
       "columns": {
@@ -3181,7 +3182,8 @@
         "clicks": "Clicks",
         "previousClicks": "Clicks, previous period",
         "days": "Days",
-        "previousDays": "Days, previous period"
+        "previousDays": "Days, previous period",
+        "query": "Query"
       },
       "metrics": {
         "visits": "AI-referred visits",
@@ -3202,7 +3204,10 @@
         "conversionLowSample": "Low sample: fewer than 30 AI visits",
         "noGooglePages": "No page data from Google Search Console yet",
         "noGoogleClicksLost": "No page's impressions rose 15% while its CTR fell 20% in this range",
-        "googleHistoryShort": "Google Search Console's page history doesn't reach back to the period before this range"
+        "googleHistoryShort": "Google Search Console's page history doesn't reach back to the period before this range",
+        "noGoogleQueries": "No query data from Google Search Console yet",
+        "noUntrackedQueries": "Every Google query with clicks in this range is tracked",
+        "queriesCapped": "Only the 5,000 most clicked queries were checked"
       },
       "sourceStates": {
         "active": "Active",
@@ -3371,7 +3376,8 @@
         "conversions": "where AI visitors convert",
         "pageValue": "which valuable pages get no AI traffic",
         "googleTrend": "AI visits against Google clicks",
-        "googlePages": "which pages AI may be taking Google clicks from"
+        "googlePages": "which pages AI may be taking Google clicks from",
+        "googleQueries": "Google queries you don't track yet"
       }
     },
     "google": {
@@ -3400,6 +3406,27 @@
         "positionsTip": "See in Positions whether you're cited for a tracked prompt about this page",
         "addPrompts": "Add prompts",
         "addPromptsTip": "No tracked prompt is about this page yet"
+      },
+      "untracked": {
+        "title": "Untracked Google queries",
+        "untilDay": "until {day}",
+        "legend": "Google queries with clicks that no tracked prompt covers. Track one to see whether AI answers name you for it; each uses a prompt slot.",
+        "slotsLeft": "{count, plural, =0 {No prompt slots left on your plan.} one {# prompt slot left on your plan.} other {# prompt slots left on your plan.}}",
+        "columns": {
+          "query": "Query",
+          "clicks": "Clicks",
+          "impressions": "Impr."
+        },
+        "track": "Track",
+        "trackAll": "Track all ({count})",
+        "count": "{shown} of {count} queries · the export has them all",
+        "tracked": "{count, plural, one {Tracking # query as a prompt} other {Tracking # queries as prompts}}",
+        "planLimit": "{count, plural, one {# query needs another prompt slot} other {# queries need more prompt slots}}: your plan's are used up.",
+        "noSlots": "No prompt slots left on your plan",
+        "trackNotAllowed": "Only admins and managers can add prompts.",
+        "failed": "Couldn't load these queries.",
+        "noData": "Google Search Console has no queries for this brand yet.",
+        "empty": "Every Google query with clicks in this range is tracked."
       }
     },
     "summaryLine": {
@@ -3411,7 +3438,8 @@
       "top": "{platform} sent the most ({count})",
       "best": "{platform} visitors convert best ({rate} of their visits had a key event)",
       "topAndBest": "{platform} sent the most ({count}), and its visitors convert best ({rate} of their visits had a key event).",
-      "cited": "{count, plural, one {# page is cited in AI answers but gets no clicks.} other {# pages are cited in AI answers but get no clicks.}}"
+      "cited": "{count, plural, one {# page is cited in AI answers but gets no clicks.} other {# pages are cited in AI answers but get no clicks.}}",
+      "untracked": "{shown} Google {count, plural, one {query} other {queries}} with clicks {count, plural, one {isn't} other {aren't}} tracked as prompts."
     },
     "conversions": {
       "title": "Where AI visitors convert",

@@ -430,6 +430,8 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   const [summary, setSummary] = useState<TrafficSummary | null>(null);
   const [trend, setTrend] = useState<TrafficTrendPoint[]>([]);
   const [trendView, setTrendView] = useState<'platforms' | 'google'>('platforms');
+  // Bumped when Google queries are tracked, so the summary line counts again (AT-009).
+  const [queriesRevision, setQueriesRevision] = useState(0);
   const [logs, setLogs] = useState<TrafficLog[]>([]);
   const [logsTotal, setLogsTotal] = useState(0);
   const [logsPageviews, setLogsPageviews] = useState(0);
@@ -626,9 +628,10 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
     />
   );
 
-  // Google Search Console (AT-008, spec §3.6): pages whose impressions rose
-  // while their CTR fell. Search Console's own data, so it shows even when
-  // the snippet saw no visit in the range.
+  // Google Search Console (AT-008, AT-009, spec §3.6): pages whose
+  // impressions rose while their CTR fell, and the queries no tracked prompt
+  // covers. Search Console's own data, so it shows even when the snippet saw
+  // no visit in the range.
   const googleSection = (
     <GoogleSection
       brandId={brand.id}
@@ -638,7 +641,10 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
       domain={primaryDomain}
       canConnect={canManage}
       onConnected={() => void loadSources()}
-      actions={<TableExport exporter={exporter} section="googlePages" />}
+      canTrack={canManage}
+      onQueriesTracked={() => setQueriesRevision((n) => n + 1)}
+      pagesActions={<TableExport exporter={exporter} section="googlePages" />}
+      queriesActions={<TableExport exporter={exporter} section="googleQueries" />}
     />
   );
 
@@ -720,6 +726,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
             canConnect={canManage}
             onConnected={() => void loadSources()}
             onRangeChange={handleDatePresetChange}
+            queriesRevision={queriesRevision}
           />
 
           {/* Charts row */}
