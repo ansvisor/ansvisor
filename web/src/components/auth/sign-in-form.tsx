@@ -10,9 +10,9 @@ import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { ArrowRight, Loader2 } from 'lucide-react';
 import { OAuthButtons } from '@/components/auth/oauth-buttons';
-import { Separator } from '@/components/ui/separator';
+import { OrDivider } from '@/components/auth/or-divider';
 import { track } from '@/lib/analytics';
 
 export function SignInForm() {
@@ -57,21 +57,10 @@ export function SignInForm() {
   }
 
   return (
-    <div className="space-y-4">
-      <OAuthButtons />
-
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <Separator className="w-full" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-card px-2 text-muted-foreground">{t('orContinueWith')}</span>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-2">
-          <Label htmlFor="email">{t('email')}</Label>
+          <Label htmlFor="email">{t('workEmail')}</Label>
           <Input
             id="email"
             type="email"
@@ -81,6 +70,7 @@ export function SignInForm() {
             required
             autoComplete="email"
             disabled={isLoading}
+            className="h-11"
           />
         </div>
 
@@ -102,20 +92,27 @@ export function SignInForm() {
             required
             autoComplete="current-password"
             disabled={isLoading}
+            className="h-11"
           />
         </div>
 
-        <Button type="submit" className="w-full" disabled={isLoading}>
+        <Button type="submit" className="h-11 w-full text-base" disabled={isLoading}>
           {isLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               {t('signingIn')}
             </>
           ) : (
-            t('signIn')
+            <>
+              {t('signIn')}
+              <ArrowRight className="h-4 w-4" />
+            </>
           )}
         </Button>
       </form>
+
+      <OrDivider label={t('orContinueWith')} />
+      <OAuthButtons />
     </div>
   );
 }

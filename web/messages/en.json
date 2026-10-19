@@ -49,20 +49,28 @@
     "chat": "Chat",
     "actionCenter": "Action Center",
     "insights": "Visibility",
-    "traffic": "AI Traffic Analytics",
+    "traffic": "AI Referral Traffic",
     "prompts": "Prompts",
-    "topics": "Topics",
     "content": "Content",
     "audit": "Site Audit",
     "competitors": "Competitors",
     "citations": "Citations",
+    "mentions": "Mentions",
     "shopping": "Shopping",
     "reports": "Reports",
     "settings": "Settings",
     "analytics": "Analytics",
     "optimization": "Optimization",
     "toggleMenu": "Toggle navigation menu",
-    "feedback": "Send feedback"
+    "keepSidebarOpen": "Keep sidebar open",
+    "collapseSidebar": "Collapse sidebar",
+    "feedback": "Send feedback",
+    "trackedPrompts": "Tracked Prompts",
+    "promptSuggestions": "Prompt Suggestions",
+    "topics": "Topics",
+    "queryFanouts": "Query Fan-outs",
+    "promptsInsights": "Insights",
+    "toggleSubmenu": "Show or hide {label}"
   },
   "actionCenter": {
     "tabs": {
@@ -131,6 +139,11 @@
       "noBrand": {
         "title": "No brand selected",
         "description": "Select a brand to view its KPIs."
+      },
+      "presets": {
+        "setUp": "We set up these KPIs for you. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. Change or remove them any time.",
+        "preview": "Suggested KPIs. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. They're saved the first time an admin or manager opens this tab.",
+        "dismiss": "Dismiss"
       }
     },
     "drawer": {
@@ -204,6 +217,14 @@
       "ai_referral_traffic": {
         "name": "AI Referral Traffic",
         "description": "Visits arriving from AI platforms"
+      },
+      "positive_sentiment": {
+        "name": "Positive Sentiment",
+        "description": "Positive share of the AI responses naming you"
+      },
+      "competitor_lead": {
+        "name": "Lead over top competitor",
+        "description": "Your visibility minus the strongest competitor's on the same prompts, in points"
       }
     },
     "signalCategories": {
@@ -219,10 +240,15 @@
       "subtitle": "Real-time signals from AI Search, your site, and the web. These signals drive your Action Center.",
       "cards": {
         "total": "Total Signals",
+        "totalPopulation": "active in the last {days, plural, one {day} other {# days}}",
         "important": "Important Signals",
+        "importantPopulation": "high impact, active in the last {days, plural, one {day} other {# days}}",
         "new": "New Signals",
+        "newPopulation": "detected in the last {days, plural, one {day} other {# days}}",
         "resolved": "Resolved Signals",
+        "resolvedPopulation": "resolved in the last {days, plural, one {day} other {# days}}",
         "avgImpact": "Avg. Signal Impact",
+        "avgImpactPopulation": "across signals active in the last {days, plural, one {day} other {# days}}",
         "noPrev": "no previous data",
         "vsRange": "vs {range}",
         "impactSame": "Same as previous {days} days",
@@ -234,6 +260,7 @@
         "impact": "Impact",
         "status": "Status",
         "source": "Source",
+        "platform": "Platform",
         "all": "All",
         "search": "Search signals…",
         "clear": "Clear filters"
@@ -247,6 +274,17 @@
         "detected": "Detected",
         "status": "Status",
         "actions": "Actions"
+      },
+      "where": {
+        "platforms": "Tracked on {names}",
+        "locations": "Tracked in {names}"
+      },
+      "grouped": {
+        "badge": "×{count} grouped",
+        "toggle": "{count} grouped signals, one per prompt",
+        "topic": "In {topic}",
+        "noTopic": "No topic",
+        "countsNote": "Copies of one finding count once: the same prompt text, found in the same run, tracked as several prompts."
       },
       "status": {
         "new": "New",
@@ -315,14 +353,176 @@
         "description": "Select a brand to view its signals."
       },
       "drawer": {
+        "where": "Where",
         "whatChanged": "What changed",
-        "affected": "Affected",
+        "evidence": "Evidence and links",
         "relatedKpis": "Related KPIs",
-        "detected": "Detected",
+        "detected": "First detected",
         "lastDetected": "Last detected",
         "source": "Source",
         "status": "Status",
-        "viewPrompt": "View prompt"
+        "viewPrompt": "View prompt",
+        "notAvailable": "Not available",
+        "none": "None",
+        "trafficPages": {
+          "sessions": "Sessions {before} → {now}",
+          "engagement": "Engagement rate {rate}",
+          "engagementVsSite": "Engagement rate {rate} (site {site})",
+          "keyEvents": "Key events {before} → {now}",
+          "keyRate": "{rate} key events per session",
+          "keyRateVsSite": "{rate} key events per session (site {site})"
+        },
+        "referrals": {
+          "none": "No AI referrals",
+          "period": "Visits in the last {days} days, against the {days} before"
+        },
+        "allPlatforms": "All tracked platforms",
+        "checkEvidence": {
+          "yes": "yes",
+          "no": "no",
+          "keys": {
+            "aiBotsMentioned": "In robots.txt",
+            "ageDays": "Age in days",
+            "newest": "Newest date",
+            "dateSignals": "Date signals",
+            "blockCount": "JSON-LD blocks",
+            "blocks": "JSON-LD blocks",
+            "parsed": "Parsed",
+            "wellFormedNodes": "Well-formed nodes",
+            "types": "Schema types",
+            "faqPage": "FAQ schema",
+            "questionCount": "Questions",
+            "internalLinks": "Internal links",
+            "matches": "Wikidata matches",
+            "qid": "Wikidata ID",
+            "label": "Wikidata label",
+            "description": "Wikidata description",
+            "note": "Note"
+          }
+        },
+        "mentions": {
+          "sentiment": {
+            "positive": "Positive",
+            "neutral": "Neutral",
+            "negative": "Negative"
+          },
+          "quotedFrom": "{platform}, {date}"
+        },
+        "positions": {
+          "you": "You",
+          "new": "new",
+          "lost": "lost",
+          "untitled": "Untitled prompt",
+          "sourceAnswers": "cited in {count} of the {of, plural, one {# latest answer} other {# latest answers}} they win"
+        },
+        "cited": {
+          "position": "#{position}",
+          "lastCited": "last cited {date}",
+          "answers": "{count, plural, one {in # answer} other {in # answers}}",
+          "answersOf": "in {count} of {of, plural, one {# latest answer} other {# latest answers}}"
+        },
+        "loading": "Loading…",
+        "more": "+{count} more",
+        "usedBy": "Used by actions",
+        "usedByNone": "No action uses this signal yet.",
+        "usedByFailed": "Couldn’t load the actions.",
+        "actionLabel": "AC-{no} · {title}",
+        "fields": {
+          "scope": "Scope",
+          "prompt": "Prompt",
+          "prompts": "Prompts",
+          "topic": "Topic",
+          "platforms": "Platforms",
+          "locations": "Locations",
+          "trackedOn": "Tracked on",
+          "trackedIn": "Tracked in",
+          "domain": "Domain",
+          "competitor": "Competitor",
+          "url": "URL",
+          "pages": "Pages",
+          "queries": "Queries",
+          "engagementRank": "Engagement rank",
+          "lostUrl": "Your page cited before",
+          "citedNow": "Cited now",
+          "exampleUrls": "Example cited URLs",
+          "competitorsNamed": "Competitors it names",
+          "bestPage": "Your best matching page",
+          "position": "Mention position",
+          "sentiment": "Sentiment",
+          "excerpt": "Answer excerpt",
+          "aiReferrals": "AI referrals by platform",
+          "citablePrompts": "Prompts it could be cited on",
+          "issue": "Issue",
+          "crawlers": "Affected crawlers",
+          "evidence": "Failed checks",
+          "competitorPositions": "Positions by prompt",
+          "winningSources": "Sources behind their wins",
+          "mentionDetails": "Mentions by prompt"
+        },
+        "scopes": {
+          "all_prompts": "All prompts",
+          "site": "Whole site",
+          "topic": "Topic",
+          "platform": "Platform",
+          "location": "Location",
+          "prompt": "Prompt"
+        },
+        "change": {
+          "points": "{value} pts",
+          "periods": {
+            "week_over_week": "Last 7 days against the 7 days before",
+            "fortnight_over_fortnight": "Last 14 days against the 14 days before",
+            "four_weeks_over_four_weeks": "Last 28 days against the 28 days before",
+            "last_7_days": "Last 7 days",
+            "last_fortnight": "Last 14 days",
+            "last_four_weeks": "Last 28 days",
+            "last_14_days": "Days with answers in the last 14 days",
+            "latest": "Latest data"
+          },
+          "metrics": {
+            "visibility_rate": "Visibility rate",
+            "mention_rate": "Mention rate",
+            "coverage": "Coverage",
+            "mentions": "Mentions",
+            "citation_answers": "Answers citing",
+            "answers_citing": "Answers citing it",
+            "visibility_score": "Visibility score",
+            "ai_sessions": "AI referral sessions",
+            "search_clicks": "Search clicks",
+            "sessions": "Sessions",
+            "engagement_rank": "Engagement rank",
+            "prompts": "Prompts",
+            "pages": "Pages",
+            "queries": "Queries",
+            "cited_days": "Cited days"
+          },
+          "roles": {
+            "before": "previous {days} days",
+            "after": "last {days} days",
+            "earlier": "earlier days",
+            "latest": "latest days",
+            "change": "change",
+            "you": "you",
+            "competitor": "{name}",
+            "best": "{name} (best)",
+            "this": "{name}",
+            "total": "all",
+            "naming_you": "naming you",
+            "competitors_only": "naming only competitors",
+            "now": "now",
+            "unnamed": "competitor"
+          }
+        },
+        "links": {
+          "prompt_answers": "View AI answers",
+          "prompts": "Open Prompts",
+          "topic": "Open topic",
+          "citations": "Open Citations",
+          "competitors": "Open Competitors",
+          "traffic": "Open Traffic",
+          "audit": "Open Site Audit",
+          "insights": "Open Insights"
+        }
       }
     },
     "signalTexts": {
@@ -340,7 +540,9 @@
       },
       "lost_citations": {
         "title": "Citations lost for “{prompt}”",
-        "description": "Your pages are no longer cited in answers to this prompt."
+        "titleOn": "Citations lost on {platform} for “{prompt}”",
+        "description": "Your pages are no longer cited in answers to this prompt.",
+        "descriptionPage": "{page} is no longer cited on {platforms}."
       },
       "first_citation": {
         "title": "First citation for {url}",
@@ -416,39 +618,39 @@
       },
       "topic_gap": {
         "title": "Partial coverage of {name}",
-        "description": "You appear on part of this topic’s prompts."
+        "description": "You appear on {to}% of its {prompts, plural, one {# prompt} other {# prompts}}."
       },
       "topic_uncovered": {
         "title": "Barely present in {name}",
-        "description": "You appear on few of this topic’s prompts."
+        "description": "You appear on {to}% of its {prompts, plural, one {# prompt} other {# prompts}}."
       },
       "topic_slipping": {
         "title": "Coverage slipping in {name}",
-        "description": "Your coverage of this topic is starting to fall."
+        "description": "You now appear on {to}% of its {prompts, plural, one {# prompt} other {# prompts}}, slipping from {from}%."
       },
       "topic_drop": {
         "title": "Coverage dropped in {name}",
-        "description": "Your coverage of this topic fell significantly."
+        "description": "You now appear on {to}% of its {prompts, plural, one {# prompt} other {# prompts}}, down from {from}%."
       },
       "platform_slipping": {
         "title": "Visibility slipping on {name}",
-        "description": "Your mention rate on this platform is starting to fall."
+        "description": "Your mention rate slipped from {from}% to {to}% against the week before."
       },
       "platform_drop": {
         "title": "Visibility dropped on {name}",
-        "description": "Your mention rate on this platform fell significantly."
+        "description": "Your mention rate fell from {from}% to {to}% against the week before."
       },
       "country_gap": {
         "title": "Weak in {name}",
-        "description": "You are far less visible here than in your strongest region."
+        "description": "You are mentioned in {to}% of answers here, against {from}% in {best}."
       },
       "competitor_leads": {
         "title": "{name} is mentioned far more than you",
-        "description": "This competitor is named a multiple of your count."
+        "description": "Mentioned {to, plural, one {# time} other {# times}} this week, against your {from}."
       },
       "competitor_momentum": {
         "title": "{name} is gaining fast",
-        "description": "This competitor’s mentions grew sharply against the week before."
+        "description": "Mentions rose from {from} to {to} against the week before."
       },
       "competitor_topic_lead": {
         "title": "A competitor leads {name}",
@@ -464,23 +666,23 @@
       },
       "authority_citation_gap": {
         "title": "Rarely beside {name}",
-        "description": "This source is cited widely, and rarely in answers that name you."
+        "description": "Cited in {answers, plural, one {# answer} other {# answers}} this week; you are named in only {withBrand} of them."
       },
       "third_party_citation_gap": {
         "title": "{name} could reference your pages",
-        "description": "This source is cited when answers discuss you, and does not reference your own pages."
+        "description": "Cited in {answers, plural, one {# answer} other {# answers}} this week, {withBrand} of them naming you."
       },
       "third_party_presence_gap": {
         "title": "Absent from answers citing {name}",
-        "description": "Answers citing this source never name your brand."
+        "description": "Cited in {answers, plural, one {# answer} other {# answers}} across {prompts, plural, one {# prompt} other {# prompts}} this week; none of them name you."
       },
       "competitor_cited_source": {
         "title": "{name} cites competitors, not you",
-        "description": "This source appears in answers naming competitors, and never in yours."
+        "description": "Cited in {answers, plural, one {# answer} other {# answers}} this week. Competitors alone are named in {competitorOnly} of them; you in none."
       },
       "competitor_winning_source": {
         "title": "Competitors win {name}",
-        "description": "Competitors appear across several prompts citing this source; you never do."
+        "description": "Cited in {answers, plural, one {# answer} other {# answers}} across {prompts, plural, one {# prompt} other {# prompts}} this week. Competitors alone are named in {competitorOnly} of them; you in none."
       },
       "page_citation_slipping": {
         "title": "Citations slipping on {targets}",
@@ -593,19 +795,19 @@
       "subtitle": "Know what changed, what matters, and what to do next.",
       "cards": {
         "top": "Top Actions",
-        "topSub": "Highest priority right now",
+        "topSub": "Highest-priority actions to work on next",
         "atRisk": "At Risk",
         "atRiskSub": "Recover and Fix — visibility or traffic declining",
         "opportunities": "Opportunities",
         "opportunitiesSub": "High potential to grow",
         "inProgress": "In Progress",
         "inProgressSub": "Actions currently running",
-        "impact": "Potential Impact",
-        "impactSub": "Across open actions"
+        "priority": "Highest Priority",
+        "prioritySub": "Across open actions"
       },
       "allActions": "All",
       "filters": {
-        "impact": "Impact",
+        "priority": "Priority",
         "status": "Status",
         "assignee": "Assignee",
         "all": "All",
@@ -616,14 +818,13 @@
       "sort": {
         "label": "Sort",
         "priority": "Priority",
-        "impact": "Impact",
         "newest": "Newest",
         "due_date": "Due date",
         "updated": "Recently updated"
       },
       "table": {
+        "priority": "Priority Score",
         "action": "Action",
-        "impact": "Impact",
         "status": "Status",
         "assignee": "Assignee",
         "dueDate": "Due date",
@@ -636,11 +837,6 @@
         "on_hold": "On Hold",
         "completed": "Completed",
         "dismissed": "Dismissed"
-      },
-      "impact": {
-        "high": "High",
-        "medium": "Medium",
-        "low": "Low"
       },
       "taskProgress": "{completed}/{total} tasks",
       "tags": {
@@ -657,6 +853,19 @@
       "menu": {
         "label": "Actions for this item"
       },
+      "rowMenu": {
+        "label": "Actions for {title}",
+        "in_progress": "In Progress",
+        "completed": "Completed",
+        "dismissed": "Dismiss",
+        "delete": "Delete",
+        "deleteNotAllowed": "Only admins and managers can delete actions",
+        "deleteTitle": "Delete this action?",
+        "deleteConfirm": "It leaves the Action Center for everyone and won't come back on its own tomorrow.",
+        "cancel": "Cancel",
+        "statusChanged": "Moved to {status}",
+        "deleted": "Action deleted"
+      },
       "empty": {
         "title": "No actions yet",
         "description": "Actions are generated from your signals after daily tracking runs. When meaningful work emerges, it will appear here — quality over quantity."
@@ -671,10 +880,143 @@
         "description": "Select a brand to view its actions."
       },
       "updateFailed": "Couldn't update the action.",
+      "priority": {
+        "label": "Priority",
+        "levels": {
+          "critical": "Critical",
+          "high": "High",
+          "medium": "Medium",
+          "low": "Low"
+        },
+        "notScored": "Not scored yet",
+        "why": "Why this priority?",
+        "reason": {
+          "change": {
+            "lost": "Lost ground on {subject}",
+            "dropped": "A sharp drop on {subject}",
+            "slipping": "Slipping on {subject}",
+            "gap": "A gap to close on {subject}",
+            "issue": "A site issue on {subject}",
+            "opportunity": "Room to grow on {subject}",
+            "gain": "A gain on {subject}",
+            "none": "Its findings have resolved"
+          },
+          "subject": {
+            "prompts": "{count, plural, one {# {demand}prompt} other {# {demand}prompts}}",
+            "pages": "{count, plural, one {# {demand}page} other {# {demand}pages}}",
+            "queries": "{count, plural, one {# {demand}query} other {# {demand}queries}}",
+            "topics": "{count, plural, one {# {demand}topic} other {# {demand}topics}}",
+            "platforms": "{count, plural, one {# platform} other {# platforms}}",
+            "regions": "{count, plural, one {# region} other {# regions}}",
+            "competitors": "{count, plural, one {# competitor} other {# competitors}}",
+            "sources": "{count, plural, one {# source} other {# sources}}"
+          },
+          "alone": {
+            "lost": "Lost ground",
+            "dropped": "A sharp drop",
+            "slipping": "Slipping",
+            "gap": "A gap to close",
+            "issue": "A site issue",
+            "opportunity": "Room to grow",
+            "gain": "A gain"
+          },
+          "demand": {
+            "high": "high-demand",
+            "low": "low-demand"
+          },
+          "when": {
+            "today": "today",
+            "days": "{days, plural, one {# day ago} other {# days ago}}"
+          },
+          "highDemand": "high search demand",
+          "commercial": "commercial intent",
+          "heldBefore": "previously visible",
+          "sources": "confirmed by {count} sources",
+          "sentence": {
+            "withWhen": "{what} {when}",
+            "withExtras": "{text} — {extras}",
+            "separator": ", ",
+            "end": "{text}."
+          }
+        }
+      },
+      "export": {
+        "copyAll": "Copy Data",
+        "menu": "Export",
+        "csv": "Export CSV",
+        "excel": "Export Excel",
+        "copied": "Action {ref} copied: {entity, select, prompts {{affected, plural, one {# prompt} other {# prompts}}, } pages {{affected, plural, one {# page} other {# pages}}, } other {}}{tasks, plural, one {# task} other {# tasks}}, {signals, plural, one {# signal} other {# signals}}",
+        "exportFailed": "Couldn't create the export.",
+        "preview": {
+          "copy": "Copy all",
+          "copied": "Copied",
+          "failed": "Couldn't copy. The text is selected: press ⌘C or Ctrl+C."
+        },
+        "skipped": "Skipped: {reason}",
+        "answerSource": "AI answer",
+        "affectedHeading": "Affected ({count})",
+        "tasksHeading": "Tasks ({count})",
+        "signalsHeading": "Signals ({count})",
+        "historyHeading": "History ({count})",
+        "sheets": {
+          "action": "Action",
+          "affected": "Affected",
+          "tasks": "Tasks",
+          "signals": "Signals",
+          "history": "History"
+        },
+        "action": "Action",
+        "title": "Title",
+        "priority": "Priority",
+        "priorityValue": "{score} ({level})",
+        "priorityWhy": "Why this priority",
+        "category": "Category",
+        "impact": "Impact",
+        "status": "Status",
+        "assignee": "Assignee",
+        "dueDate": "Due",
+        "tags": "Tags",
+        "why": "Why",
+        "goal": "Goal",
+        "kpis": "KPIs",
+        "decision": "Decision",
+        "pages": "Pages",
+        "created": "Created",
+        "updated": "Updated",
+        "link": "Link",
+        "task": "Task",
+        "details": "Details",
+        "taskWhere": "Where",
+        "taskWhy": "Why",
+        "taskHow": "How",
+        "taskDoneWhen": "Done when",
+        "taskEffort": "Effort",
+        "sentToContent": "Sent to Content",
+        "sentToWebhook": "Sent to the webhook",
+        "item": "Item",
+        "volume": "Volume",
+        "lostPage": "Lost page",
+        "citedInstead": "Cited instead",
+        "affectedPrompt": "Prompt",
+        "affectedPage": "Page",
+        "affectedCompetitor": "Competitor",
+        "affectedTopic": "Topic",
+        "type": "Type",
+        "entity": "Affected",
+        "signal": "Signal",
+        "description": "Description",
+        "platforms": "Platforms",
+        "locations": "Locations",
+        "firstDetected": "First detected",
+        "lastDetected": "Last detected",
+        "date": "Date",
+        "event": "Event"
+      },
       "drawer": {
         "actionId": "Action ID",
         "tabs": {
           "overview": "Overview",
+          "affected": "Affected",
           "tasks": "Tasks",
           "signals": "Signals",
           "history": "History"
@@ -684,7 +1026,132 @@
         "kpis": "KPIs",
         "kpiTarget": "target {target}",
         "noKpis": "No configured KPIs are linked to this action.",
-        "primarySignals": "Primary signals",
+        "support": "{count, plural, =0 {No open signal supports this action any more.} one {# signal supports this action} other {# signals support this action}}",
+        "supportAll": "All signals ({count})",
+        "affected": {
+          "prompts": "{count, plural, one {# prompt} other {# prompts}}",
+          "pages": "{count, plural, one {# page} other {# pages}}",
+          "prompt": "Prompt",
+          "volume": "Volume",
+          "lostOn": "Lost on",
+          "platforms": "Platforms",
+          "lostPage": "Your lost page",
+          "citedInstead": "Cited instead",
+          "ahead": "Ahead of you",
+          "aheadValue": "{competitor} {them} vs you {you} on {platform}",
+          "aheadNotNamed": "{competitor} {them} on {platform}; you're not named",
+          "positions": "See positions for {prompt}",
+          "positionsShort": "See positions",
+          "page": "Page",
+          "visits": "AI visits",
+          "visitsValue": "{before} → {now}",
+          "from": "From",
+          "issues": "Issues",
+          "competitors": "Competitors",
+          "topics": "Topics",
+          "more": "Showing {shown} of {total}",
+          "empty": "Nothing recorded to list for this action."
+        },
+        "story": {
+          "subject": {
+            "prompts": "{count, plural, one {# prompt} other {# prompts}}",
+            "pages": "{count, plural, one {# page} other {# pages}}",
+            "topics": "prompts in {count, plural, one {# topic} other {# topics}}",
+            "prompt": "“{label}”",
+            "page": "{label}",
+            "topic": "prompts in {label}",
+            "inTopic": " in {topic}",
+            "volume": " (~{volume} AI searches a month)"
+          },
+          "noun": {
+            "prompts": "{count, plural, one {prompt} other {prompts}}",
+            "pages": "{count, plural, one {page} other {pages}}",
+            "topics": "{count, plural, one {topic} other {topics}}"
+          },
+          "scope": {
+            "all": "{count, plural, =2 {both {noun}} other {all # {noun}}}",
+            "some": "≥{target} of {count} {noun}"
+          },
+          "domain": " to {domain}",
+          "platforms": " on {list}",
+          "more": "{count} more",
+          "when": {
+            "day": " on {day}",
+            "range": " between {from} and {to}"
+          },
+          "fromToRate": " from {from}% to {to}%",
+          "fromToVisits": " from {before} to {now}",
+          "issues": ": {list}",
+          "competitorUnnamed": "a competitor",
+          "why": {
+            "citationLoss": "{count, plural, one {{subject} lost its citations} other {{subject} lost their citations}}{domain}{platforms}{when}.",
+            "citationLossAll": "Your pages lost citations{domain}{platforms}{when}.",
+            "citationGap": "{entity, select, pages {{subject} {count, plural, one {doesn't} other {don't}} cite you} other {AI answers to {subject} cite other sites, not yours}}{platforms}{when}.",
+            "citationGapAll": "AI answers cite other sites, not yours{platforms}{when}.",
+            "citationGain": "{entity, select, pages {{subject} started earning citations} other {AI answers to {subject} started citing you}}{platforms}{when}.",
+            "citationGainAll": "AI answers started citing you{platforms}{when}.",
+            "visibilityLoss": "Your brand dropped out of AI answers to {subject}{platforms}{when}.",
+            "visibilityLossAll": "Your AI visibility fell{fromTo}{platforms}{when}.",
+            "visibilityGap": "{entity, select, pages {{subject} {count, plural, one {isn't} other {aren't}} showing up in AI answers} other {Your brand is missing from AI answers to {subject}}}{platforms}{when}.",
+            "visibilityGapAll": "Your brand is missing from AI answers{platforms}{when}.",
+            "visibilityGain": "{entity, select, pages {{subject} started showing up in AI answers} other {Your brand started appearing in AI answers to {subject}}}{platforms}{when}.",
+            "visibilityGainAll": "Your AI visibility rose{fromTo}{platforms}{when}.",
+            "mentionLoss": "AI answers to {subject} stopped naming your brand{platforms}{when}.",
+            "mentionLossAll": "AI answers stopped naming your brand{platforms}{when}.",
+            "mentionGap": "AI answers to {subject} name your brand without citing you{platforms}{when}.",
+            "mentionGapAll": "AI answers name your brand without citing you{platforms}{when}.",
+            "competitorBehind": "{named, select, yes {{competitor} {competitors, plural, one {is} other {are}}} other {A competitor is}} ahead of you on {subject}{platforms}{when}.",
+            "competitorBehindAll": "{named, select, yes {{competitor} {competitors, plural, one {is} other {are}}} other {A competitor is}} ahead of you{platforms}{when}.",
+            "competitorAhead": "You moved ahead of {competitor} on {subject}{platforms}{when}.",
+            "competitorAheadAll": "You moved ahead of {competitor}{platforms}{when}.",
+            "trafficLoss": "AI visits to {subject} fell{fromTo}{when}.",
+            "trafficLossAll": "AI visits to your site fell{fromTo}{when}.",
+            "trafficGap": "{subject} {count, plural, one {draws} other {draw}} fewer AI visits than {count, plural, one {it} other {they}} could{when}.",
+            "trafficGapAll": "Your pages draw fewer AI visits than they could{when}.",
+            "trafficGain": "AI visits to {subject} rose{fromTo}{when}.",
+            "trafficGainAll": "AI visits to your site rose{fromTo}{when}.",
+            "searchLoss": "Google search clicks to {subject} fell{when}.",
+            "searchLossAll": "Google search clicks to your site fell{when}.",
+            "searchGap": "{subject} {count, plural, one {underperforms} other {underperform}} in Google search{when}.",
+            "searchGapAll": "Your pages underperform in Google search{when}.",
+            "technicalIssue": "Site Audit flagged {subject}{issues}{when}.",
+            "technicalIssueAll": "Site Audit flagged your site{issues}{when}."
+          },
+          "goal": {
+            "citationLoss": "Citations back on {scope} by {date}.",
+            "citationLossAll": "Your citations back{platforms} by {date}.",
+            "citationGap": "Cited on {scope} by {date}.",
+            "citationGapAll": "Cited in AI answers{platforms} by {date}.",
+            "citationGain": "Citations kept on {scope} through {date}.",
+            "citationGainAll": "Citations kept{platforms} through {date}.",
+            "visibilityLoss": "Back in AI answers to {scope} by {date}.",
+            "visibilityLossAll": "{hasFrom, select, yes {AI visibility back to {from}%} other {AI visibility back}}{platforms} by {date}.",
+            "visibilityGap": "{entity, select, pages {Showing up in AI answers on {scope}} other {In AI answers to {scope}}} by {date}.",
+            "visibilityGapAll": "In AI answers{platforms} by {date}.",
+            "visibilityGain": "Still in AI answers to {scope} through {date}.",
+            "visibilityGainAll": "AI visibility kept{platforms} through {date}.",
+            "mentionLoss": "Named again in AI answers to {scope} by {date}.",
+            "mentionLossAll": "Named again in AI answers{platforms} by {date}.",
+            "mentionGap": "Cited, not just named, on {scope} by {date}.",
+            "mentionGapAll": "Cited, not just named, in AI answers{platforms} by {date}.",
+            "competitorBehind": "Ahead of {competitor} on {scope} by {date}.",
+            "competitorBehindAll": "Back ahead of {competitor}{platforms} by {date}.",
+            "competitorAhead": "Still ahead of {competitor} on {scope} through {date}.",
+            "competitorAheadAll": "Still ahead of {competitor}{platforms} through {date}.",
+            "trafficLoss": "{hasVisits, select, yes {AI visits to {subject} back to {before}} other {AI visits back on {scope}}} by {date}.",
+            "trafficLossAll": "{hasVisits, select, yes {AI visits back to {before}} other {AI visits back}} by {date}.",
+            "trafficGap": "More AI visits to {scope} by {date}.",
+            "trafficGapAll": "More AI visits to your pages by {date}.",
+            "trafficGain": "{hasVisits, select, yes {AI visits to {subject} at {now} or more} other {AI visits kept on {scope}}} through {date}.",
+            "trafficGainAll": "{hasVisits, select, yes {AI visits at {now} or more} other {AI visits kept}} through {date}.",
+            "searchLoss": "Search clicks back on {scope} by {date}.",
+            "searchLossAll": "Search clicks back by {date}.",
+            "searchGap": "Better Google search results for {scope} by {date}.",
+            "searchGapAll": "Better Google search results by {date}.",
+            "technicalIssue": "Issues fixed on {scope} by {date}.",
+            "technicalIssueAll": "Issues fixed by {date}."
+          }
+        },
         "tasksProgress": "{completed} / {total} tasks completed",
         "noSignals": "No linked signals.",
         "assignee": "Assignee",
@@ -699,12 +1166,18 @@
           "assigned": "Assignee changed",
           "due_date_set": "Due date updated",
           "task_status": "Task updated",
+          "task_added": "Task added: “{title}”",
+          "task_renamed": "Task renamed to “{title}”",
+          "task_deleted": "Task deleted",
+          "task_edited": "Task edited",
+          "tasks_generated": "{count, plural, one {# task} other {# tasks}} written from the action's evidence",
+          "task_sent": "{to, select, content {Sent to Content} webhook {Sent to the webhook} other {Sent}}: {title}",
           "task_ran": "{task} — carried out automatically ({tool})",
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
-          "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor"
+          "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
+          "position_outcome_recorded": "{measurable, plural, =0 {30-day result: not enough data to compare positions} other {30-day result: position improved on {improved} of # platforms}}",
+          "outcome_measured": "{outcome, select, improved {Result: metrics improved after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}"
         },
-        "taskText": "Task text",
-        "renameTask": "Rename task",
         "deleteTask": "Delete task",
         "addTask": "Add task",
         "addTaskPlaceholder": "What needs doing?",
@@ -713,7 +1186,174 @@
         "skipReason": "Why was this skipped?",
         "skipReasonPlaceholder": "e.g. handled elsewhere, no longer relevant",
         "skipConfirm": "Skip task",
-        "skipCancel": "Cancel"
+        "skipCancel": "Cancel",
+        "send": {
+          "sentToContent": "Sent to Content as an opportunity",
+          "alreadyInContent": "This task is already in Content",
+          "sentToWebhook": "Sent to the webhook",
+          "timeout": "Sending took too long. Please try again.",
+          "unreachable": "Couldn't reach the server. Please try again.",
+          "unauthenticated": "Your session has ended. Please sign in again.",
+          "errors": {
+            "not_found": "This task no longer exists.",
+            "from_content": "This action came from Content, so its tasks stay here.",
+            "not_content": "Only a content task can be sent to Content.",
+            "no_title": "The task needs text before it can be sent.",
+            "no_webhook": "This brand has no active webhook. Set one up in Content → Webhook Settings.",
+            "webhook_failed": "The webhook didn't accept the task. Check its settings and try again."
+          }
+        },
+        "regenerate": {
+          "button": "Regenerate tasks",
+          "confirm": "Write this action's tasks again from its evidence? Done, under-way and hand-added tasks stay.",
+          "confirmButton": "Regenerate",
+          "cancel": "Cancel",
+          "busy": "Writing tasks…",
+          "done": "{count, plural, one {# task written} other {# tasks written}}",
+          "timeout": "Writing the tasks took too long. Please try again.",
+          "unreachable": "Couldn't reach the server. Please try again.",
+          "unauthenticated": "Your session has ended. Please sign in again.",
+          "errors": {
+            "disabled": "Writing tasks isn't turned on for this workspace.",
+            "not_found": "This action no longer exists.",
+            "sent": "This action keeps the tasks it was sent with.",
+            "closed": "This action is closed.",
+            "busy": "This action's tasks are already being written. Try again in a minute.",
+            "no_targets": "This action names no page, prompt or domain to write tasks about.",
+            "no_valid_tasks": "None of the written tasks passed the quality check. Please try again.",
+            "budget": "Writing tasks uses this month's AI budget, which is used up or not part of your plan."
+          }
+        },
+        "task": {
+          "showDetails": "Show details",
+          "hideDetails": "Hide details",
+          "what": "What",
+          "where": "Where",
+          "why": "Why",
+          "how": "How",
+          "howHint": "One step per line, up to {max}",
+          "doneWhen": "Done when",
+          "type": "Type",
+          "noType": "No type",
+          "effort": "Effort",
+          "effortPlaceholder": "e.g. ~2h",
+          "role": "Role",
+          "rolePlaceholder": "e.g. Content writer",
+          "edit": "Edit",
+          "save": "Save",
+          "cancel": "Cancel",
+          "empty": "No details yet: add where to do it, how, and when it counts as done.",
+          "answerSource": "AI answer",
+          "sendToContent": "Send to Content",
+          "sendToWebhook": "Send to webhook",
+          "sendToWebhookAgain": "Send to webhook again",
+          "sentToContent": "Sent to Content as an opportunity ·",
+          "openInContent": "Open",
+          "sentToWebhook": "Sent to the webhook on {date}"
+        },
+        "noSignalsOpportunity": "This action was sent from Content Optimization. Its evidence is the opportunity on the Overview tab, not detection signals.",
+        "opportunity": {
+          "title": "Content opportunity",
+          "open": "Open opportunity",
+          "brief": "Brief & outline",
+          "words": "~{count} words",
+          "noBrief": "No brief yet. <link>Generate one on the opportunity.</link>",
+          "prompts": "{count, plural, one {# prompt to answer} other {# prompts to answer}}",
+          "queries": "{count, plural, one {# search AI engines ran} other {# searches AI engines ran}}",
+          "allQueries": "Show all {count}",
+          "fewerQueries": "Show fewer",
+          "unavailable": "The opportunity this action was sent from is no longer available."
+        },
+        "noSignalsImprove": "This action was sent from the Prompts Improve tab, so it has no detection signals. Its evidence is the prompt and platforms below.",
+        "improve": {
+          "source": "Source",
+          "sourceValue": "Prompts › Improve",
+          "openPanel": "Open in Prompts",
+          "prompt": "Prompt",
+          "platforms": "Platforms at send time",
+          "states": {
+            "not_mentioned": "Not mentioned",
+            "mentioned_late": "Mentioned · Late",
+            "not_cited": "Mentioned early · not cited",
+            "doing_well": "Doing well",
+            "no_runs": "No runs"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "summary": "{measurable, plural, =0 {Not enough data to compare yet} other {Position improved on {improved} of # platforms}}",
+            "updated": "Updated {date}",
+            "final": "Final result · {date}",
+            "platform": "Platform",
+            "before": "Before",
+            "after": "Last 7 days",
+            "afterFinal": "Day 30",
+            "reads": {
+              "not_mentioned": "Not mentioned",
+              "mentioned": "Mentioned",
+              "no_runs": "No runs"
+            },
+            "verdicts": {
+              "improved": "Improved",
+              "declined": "Declined",
+              "unchanged": "No meaningful change",
+              "not_enough_data": "Not enough data"
+            },
+            "note": "Before is the 7 days before this action was sent. The latest 7 days are re-read daily while the action is open and for 30 days after it's completed. A position counts as changed when it moves at least 0.5.",
+            "noteFinal": "The 7 days before this action was sent, next to the 7 days ending 30 days after it was completed. A position counts as changed when it moves at least 0.5."
+          }
+        },
+        "noSignalsTopicGap": "This action was sent from Insights' Topics vs competitors, so it has no detection signals. Its evidence is the topic and scores on the Overview tab.",
+        "topicGap": {
+          "source": "Source",
+          "sourceValue": "Insights › Topics vs competitors",
+          "openTopic": "Open topic",
+          "topic": "Topic",
+          "scores": "Visibility when sent",
+          "you": "You",
+          "gap": "{gap} pts behind"
+        },
+        "noSignalsTopicOpportunity": "This action was sent from Insights' Opportunities, so it has no detection signals. Its evidence is the topic and suggested prompts on the Overview tab.",
+        "noSignalsMentionReview": "This action was sent from Mentions, so it has no detection signals. Its evidence is the answers quoted on the Overview tab.",
+        "noSignalsTrafficPages": "This action was sent from AI Traffic Analytics, so it has no detection signals. Its evidence is the pages and figures on the Overview tab.",
+        "topicOpportunity": {
+          "source": "Source",
+          "sourceValue": "Insights › Opportunities",
+          "topic": "Topic",
+          "openTopic": "Open topic",
+          "plan": "Plan",
+          "planNew": "Write new content: none of your prompts tracked this topic when it was sent",
+          "planExpand": "Grow what covers it: your prompts tracked this topic when it was sent",
+          "demand": "Suggested prompts when sent",
+          "demandValue": "{count, plural, one {# prompt} other {# prompts}} · ~{volume}/mo",
+          "volume": "~{volume}/mo"
+        },
+        "mentionReview": {
+          "source": "Source",
+          "sourceValue": "Mentions & Sentiment › Mentions",
+          "openMentions": "Open Mentions",
+          "answers": "Answers when sent",
+          "answersValue": "{count, plural, one {# answer naming your brand} other {# answers naming your brand}}",
+          "answersNegative": "{count, plural, one {# answer naming your brand} other {# answers naming your brand}} · {negative} negative",
+          "quotes": "What they said",
+          "sentiment": {
+            "positive": "Positive",
+            "neutral": "Neutral",
+            "negative": "Negative"
+          }
+        },
+        "trafficPages": {
+          "source": "Source",
+          "sourceValue": "AI Traffic Analytics › Pages · {list}",
+          "lists": {
+            "cited_not_clicked": "Cited, not clicked",
+            "no_ai_traffic": "No AI traffic"
+          },
+          "openTraffic": "Open AI Traffic",
+          "range": "Range when sent",
+          "rangeAll": "All time",
+          "pages": "Pages when sent",
+          "figures": "{citations, plural, one {# citation} other {# citations}} · {sessions, plural, one {# session} other {# sessions}} · {aiVisits, plural, one {# AI visit} other {# AI visits}}"
+        }
       }
     },
     "actionTexts": {
@@ -1102,6 +1742,51 @@
         "platforms": "{count, plural, one {# platform} other {# platforms}}",
         "regions": "{count, plural, one {# region} other {# regions}}",
         "competitors": "{count, plural, one {# competitor} other {# competitors}}"
+      },
+      "content_opportunity": {
+        "title": "Act on a content opportunity for {targets}",
+        "titleGeneric": "Act on a content opportunity",
+        "description": "Sent from Content Optimization: a piece of content, or work on an existing page, that answers a group of related prompts.",
+        "goal": "Get the brand into AI answers for these prompts with the content this opportunity calls for."
+      },
+      "prompt_improve": {
+        "title": "Improve position for {targets}",
+        "titleGeneric": "Improve a prompt's position",
+        "description": "Sent from the Prompts Improve tab: platform-specific changes to get the brand mentioned earlier and cited for one prompt.",
+        "goal": "Get the brand mentioned early and cited for this prompt on the platforms it covers."
+      },
+      "topic_competitor_gap": {
+        "title": "Close the {gap}-pt gap with {competitor} in {topic}",
+        "titleGeneric": "Close a topic gap with a competitor",
+        "description": "Sent from Insights: a competitor leads one of your topics on Visibility.",
+        "goal": "Lead the topic, or close most of the gap."
+      },
+      "topic_opportunity": {
+        "title": "Capture ~{demand}/mo of AI demand in {topic}",
+        "titleGeneric": "Capture the AI demand in a topic",
+        "description": "Sent from Insights: prompts suggested for one of your topics, with the monthly AI demand behind them.",
+        "goal": "Get the brand into AI answers for the topic's suggested prompts."
+      },
+      "mention_review": {
+        "title": "Improve how AI describes you for \"{prompt}\"",
+        "titleMany": "Improve how AI describes you across {count, plural, one {# prompt} other {# prompts}}",
+        "titleGeneric": "Improve how AI describes you",
+        "description": "Sent from Mentions: answers naming your brand, to change how AI describes it.",
+        "descriptionCounts": "Sent from Mentions: {count, plural, one {# answer} other {# answers}} naming your brand.",
+        "descriptionNegative": "Sent from Mentions: {count, plural, one {# answer} other {# answers}} naming your brand, {negative} of them negative.",
+        "goal": "Get AI to describe the brand accurately and favourably in these answers."
+      },
+      "traffic_pages": {
+        "title": "Earn AI visits for {targets}",
+        "titleGeneric": "Earn AI visits for your pages",
+        "citedTitle": "Turn AI answers citing {page} into visits",
+        "citedTitleMany": "Turn AI answers citing {count, plural, one {# page} other {# pages}} into visits",
+        "noAiTitle": "Capture AI traffic for {page}",
+        "noAiTitleMany": "Capture AI traffic for {count, plural, one {# page} other {# pages}}",
+        "description": "Sent from AI Traffic Analytics: pages from the Pages section.",
+        "citedDescription": "Sent from AI Traffic Analytics: AI answers cited {count, plural, one {this page} other {these pages}} {citations, plural, one {# time} other {# times}} in the range, and none sent a visit.",
+        "noAiDescription": "Sent from AI Traffic Analytics: {count, plural, one {a page} other {# pages}} with visitors or in your sitemap that got no AI visit in the range.",
+        "goal": "Earn AI-referred visits to these pages."
       }
     },
     "actionTasks": {
@@ -1270,6 +1955,14 @@
         "competitors": "{count, plural, one {# competitor} other {# competitors}}"
       }
     },
+    "taskTypes": {
+      "content": "Content",
+      "on_page": "On-page",
+      "technical": "Technical",
+      "outreach": "Outreach",
+      "pr": "PR",
+      "product": "Product"
+    },
     "taskStatus": {
       "todo": "To Do",
       "in_progress": "In Progress",
@@ -1284,7 +1977,7 @@
       "table": {
         "action": "Action",
         "type": "Type",
-        "impact": "Impact",
+        "priority": "Priority Score",
         "affected": "Affected",
         "result": "Result",
         "status": "Status",
@@ -1298,13 +1991,13 @@
         "dismissed": "Dismissed"
       },
       "affected": {
-        "prompt": "{count} prompts",
-        "url": "{count} pages",
-        "citation": "{count} signals",
-        "keyword": "{count} keywords",
-        "topic": "{count} topics",
+        "prompt": "{count, plural, one {# prompt} other {# prompts}}",
+        "url": "{count, plural, one {# page} other {# pages}}",
+        "citation": "{count, plural, one {# signal} other {# signals}}",
+        "keyword": "{count, plural, one {# keyword} other {# keywords}}",
+        "topic": "{count, plural, one {# topic} other {# topics}}",
         "competitor": "Competitor",
-        "platform": "{count} platforms"
+        "platform": "{count, plural, one {# platform} other {# platforms}}"
       },
       "range": {
         "7d": "7d",
@@ -1315,12 +2008,12 @@
       "sort": {
         "newest": "Newest",
         "oldest": "Oldest",
-        "impact": "Impact"
+        "priority": "Priority"
       },
       "filters": {
         "status": "Status",
         "type": "Type",
-        "impact": "Impact",
+        "priority": "Priority",
         "source": "Source",
         "sort": "Sort",
         "all": "All",
@@ -1345,7 +2038,7 @@
       "drawer": {
         "goal": "What was the goal?",
         "whatHappened": "What happened?",
-        "triggeredBy": "Consolidated from {count} signals",
+        "triggeredBy": "Consolidated from {count, plural, one {# signal} other {# signals}}",
         "result": "Result",
         "visibilityChange": "Visibility Change",
         "citationsChange": "Citations Change",
@@ -1355,7 +2048,7 @@
         "netChange": "net change",
         "ofAffected": "of affected",
         "fromStart": "from start",
-        "days": "{n} days",
+        "days": "{n, plural, one {# day} other {# days}}",
         "affected": "Affected",
         "noAffected": "Nothing recorded.",
         "tasks": "Tasks ({completed}/{total})",
@@ -1378,6 +2071,7 @@
         "title": "No brand selected",
         "description": "Select a brand to view its action history."
       },
+      "positionResult": "{measurable, plural, =0 {Positions: not enough data} other {Position improved on {improved} of # platforms}}",
       "outcomeHint": {
         "pending_measurement": "no result recorded",
         "improved": "vs before",
@@ -1431,7 +2125,190 @@
     "description": "Score any page against the 47-signal AEO/GEO",
     "runAudit": "Run Audit",
     "running": "Auditing…",
-    "recent": "Recent Audits",
+    "pages": {
+      "title": "Pages",
+      "page": "Page",
+      "score": "Score",
+      "issues": "Issues",
+      "status": "Status",
+      "lastAudit": "Last audit",
+      "showHistory": "Show earlier audits of {page}",
+      "hideHistory": "Hide earlier audits of {page}",
+      "viewReport": "View report",
+      "select": "Select {page}",
+      "selectAll": "Select all pages shown",
+      "moreRuns": "{count, plural, one {# older audit} other {# older audits}} not shown",
+      "statuses": {
+        "good": "Good",
+        "improving": "Improving",
+        "needs_work": "Needs work",
+        "running": "Running",
+        "failed": "Failed"
+      },
+      "groupByTemplate": "Group by template",
+      "templatesFailed": "Couldn't group the pages by template",
+      "templateAudited": "{audited} of {pages} pages audited",
+      "templateFix": "Fix once: <b>{gaps}</b> · applies to {pages} pages",
+      "otherPages": "Other pages"
+    },
+    "lists": {
+      "label": "Site Audit lists",
+      "opportunities": "Opportunities",
+      "pages": "Pages",
+      "noPages": "No pages audited yet. Audit an opportunity or enter a URL above."
+    },
+    "opportunities": {
+      "priority": "Priority",
+      "priorityTip": "How much auditing this page could win: its value to the business × the opportunity (no AI traffic, a competitor cited, never or long ago audited) × how easy it is to fix (how close it is to passing), each 0–1, on a 0–100 scale.",
+      "priorityParts": "Value {value} × opportunity {opportunity} × ease {ease}",
+      "page": "Page",
+      "why": "Why",
+      "aiVisits": "AI visits",
+      "lastAudit": "Last audit",
+      "never": "never",
+      "lastAuditValue": "{date} · {score}",
+      "running": "Running",
+      "select": "Select {page}",
+      "selectAll": "Select all opportunities shown",
+      "reasons": {
+        "noAiTraffic": "No AI traffic",
+        "topValue": "Top {share}% by {signal}",
+        "signals": {
+          "revenue": "revenue",
+          "transactions": "transactions",
+          "key_events": "key events",
+          "engagement": "engagement"
+        },
+        "targetedNotCited": "Targeted, not cited",
+        "neverAudited": "Never audited",
+        "staleAudit": "Audited {days} days ago",
+        "competitorCited": "{name}{others, plural, =0 {} other { +#}} cited on {prompts, plural, one {# prompt} other {# prompts}}",
+        "pinned": "Pinned"
+      },
+      "auditSelected": "Audit selected",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "exclude": "Exclude",
+      "pinnedToast": "{count, plural, one {# page pinned} other {# pages pinned}}",
+      "unpinnedToast": "{count, plural, one {# page unpinned} other {# pages unpinned}}",
+      "excludedToast": "{count, plural, one {# page excluded} other {# pages excluded}}",
+      "undo": "Undo",
+      "excluded": "{count, plural, one {# excluded page} other {# excluded pages}}",
+      "showExcluded": "Show",
+      "hideExcluded": "Hide",
+      "restore": "Restore",
+      "restoredToast": "{count, plural, one {# page restored} other {# pages restored}}",
+      "empty": "No pages to audit right now. Opportunities come from Google Analytics (valuable pages without AI traffic), from prompts where a competitor is cited and you aren't, and from your site's pages that were never audited or not in {days} days.",
+      "showMore": "Show more",
+      "prefsFailed": "Couldn't update the pages",
+      "templatePages": "· {pages} pages",
+      "templateFixOnce": "Fix once, applies to {pages} pages",
+      "templateAudited": "{audited} of {pages}",
+      "templateExcludedToast": "{count, plural, one {Excluded {template} and its pages} other {Excluded # templates and their pages}}",
+      "templateRestoredToast": "The template's pages are back"
+    },
+    "overview": {
+      "yourDomain": "your domain",
+      "siteScore": "Site score",
+      "siteScoreTip": "The average score of each page's latest audit on {domain}. The change compares it with each page's previous audit.",
+      "siteScoreSub": "average of latest audits",
+      "pagesAudited": "Pages audited",
+      "pagesAuditedTip": "Pages of {domain} with a completed audit. Audits of other sites are listed under Pages but left out of these cards.",
+      "pagesSub": "on {domain}",
+      "pagesSubOther": "+ {count} on other sites",
+      "authority": "Authority · E-E-A-T",
+      "authorityTip": "The Authority and E-E-A-T scores, averaged over each page's latest audit, and the signals that fail or warn on the most pages.",
+      "gapsSub": "Top gaps",
+      "noGaps": "No Authority or E-E-A-T gaps",
+      "noPages": "No pages audited yet",
+      "gapPages": "{pages} of {total}",
+      "auditsThisMonth": "Audits this month",
+      "auditsTip": "Your plan's audits this billing month: what's left, with the share auto-audit keeps for the runs still to come. Audits still running already count; failed ones don't.",
+      "ofLeft": "of {limit} left",
+      "unlimited": "Unlimited",
+      "unlimitedSub": "no monthly limit"
+    },
+    "quota": {
+      "bar": "Auto used {autoUsed} · Auto scheduled {autoScheduled} · You used {youUsed} · Free {free}",
+      "runs": "Auto-audit runs this month",
+      "run_done": "done",
+      "run_next": "next run",
+      "run_upcoming": "upcoming",
+      "autoShare": "Auto {share}%",
+      "autoOff": "Auto-audit off",
+      "autoPerRun": "Auto · {perRun} pages a run",
+      "howItWorks": "How it works",
+      "how1": "Your plan includes <b>{limit} audits a month</b>.",
+      "how2": "<b>{share}%</b> runs automatically: <b>{runShare}%</b> on days 1, 7, 14, 21 and 28 of your billing month, on the top-priority pages.",
+      "how3": "The other <b>{rest}%</b> is yours: a single URL, or in bulk from Opportunities.",
+      "how4": "Turn auto-audit off in <settings>Settings</settings> to keep all {limit}.",
+      "howOff2": "Auto-audit is off, so all {limit} are yours: a single URL, or in bulk from Opportunities.",
+      "howOff3": "Turn it on in <settings>Settings</settings> to audit the top-priority pages on days 1, 7, 14, 21 and 28.",
+      "emptyPool": "You've used your {yours} audits. {scheduled} auto audits are still scheduled. <off>Turn off auto-audit</off> to use them now, or upgrade."
+    },
+    "strip": {
+      "siteScore": "<b>{score}</b> site score",
+      "pages": "{count, plural, one {# page} other {# pages}} audited",
+      "noPages": "No pages audited yet",
+      "lowest": "Lowest: <b>{category} {score}</b>",
+      "nextAuto": "Next auto-audit <b>{when}</b> · {count, plural, one {# page} other {# pages}}",
+      "today": "today",
+      "tomorrow": "tomorrow",
+      "onDate": "on {date}",
+      "autoOff": "Auto-audit off"
+    },
+    "settings": {
+      "button": "Settings",
+      "title": "Site Audit settings",
+      "autoAudit": "Auto-audit",
+      "autoAuditLabel": "Audit top-priority pages automatically",
+      "autoAuditOn": "{perRun} pages on days 1, 7, 14, 21 and 28 of your billing month: {total} of your {limit} audits.",
+      "autoAuditOff": "Off: all {limit} audits a month are yours.",
+      "autoAuditUnlimited": "{perRun} pages on days 1, 7, 14, 21 and 28 of the month.",
+      "orgWide": "Applies to every brand in your organization.",
+      "emailLabel": "E-mail the team after each run",
+      "excludeTitle": "Excluded pages",
+      "excludeHelp": "One path per line, * for anything. These pages stay out of Opportunities and auto-audits.",
+      "pinnedTitle": "Pinned pages",
+      "pinnedHelp": "Pinned pages always go first in auto-audits.",
+      "noPinned": "No pinned pages. Pin them from Opportunities.",
+      "unpin": "Unpin",
+      "unpinned": "Page unpinned",
+      "readOnly": "Only admins and managers can change these settings.",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saved": "Site Audit settings saved",
+      "saveFailed": "Couldn't save the settings",
+      "loadFailed": "Couldn't load the settings"
+    },
+    "autoRun": {
+      "label": "Auto-audit",
+      "done": "{pages, plural, one {# page} other {# pages}} audited · {issues, plural, one {# critical issue} other {# critical issues}}",
+      "running": "Auditing {pages, plural, one {# page} other {# pages}} · {completed} done",
+      "nextRun": "next run {date}",
+      "dismiss": "Dismiss"
+    },
+    "bulk": {
+      "toolbar": "Actions for the selected pages",
+      "selected": "{count} selected",
+      "uses": "Uses {count} of your {remaining} audits",
+      "overQuota": "Uses {count} of your {remaining} audits · select up to {remaining}",
+      "noneLeft": "No audits left this month",
+      "reaudit": "Re-audit",
+      "clear": "Clear selection",
+      "started": "{count, plural, one {# audit started} other {# audits started}} · they run a few at a time"
+    },
+    "export": {
+      "button": "Export",
+      "csv": "CSV",
+      "excel": "Excel",
+      "sheet": "Pages",
+      "previousScore": "Previous score",
+      "change": "Change",
+      "audits": "Audits",
+      "failed": "Couldn't export the pages"
+    },
+    "loadMore": "Load more",
     "retry": "Retry",
     "deleteAudit": "Delete audit",
     "loadFailed": "Couldn't load this audit",
@@ -1468,6 +2345,8 @@
     "copied": "Copied",
     "copyFailed": "Copy failed",
     "copyDraft": "Copy draft",
+    "copyCode": "Copy code",
+    "placeholderNote": "Replace placeholders in [brackets] with your real data before publishing.",
     "finding": "Finding",
     "why": "Why",
     "recommendedFix": "Recommended fix",
@@ -1489,8 +2368,11 @@
   "auth": {
     "signIn": "Sign in",
     "signUp": "Sign up",
+    "signInSubtitle": "Welcome back! Continue to your workspace.",
+    "signUpSubtitle": "Create your account to start tracking your brand across AI platforms.",
     "signOut": "Sign out",
     "email": "Email",
+    "workEmail": "Work email",
     "password": "Password",
     "forgotPassword": "Forgot password?",
     "noAccount": "Don't have an account?",
@@ -1500,6 +2382,7 @@
     "signingUp": "Creating account...",
     "emailPlaceholder": "you@company.com",
     "passwordPlaceholder": "••••••••",
+    "passwordRuleLength": "At least 8 characters",
     "fullName": "Full name",
     "fullNamePlaceholder": "John Doe",
     "magicLink": "Send magic link",
@@ -1520,7 +2403,7 @@
     "updatingPassword": "Updating...",
     "passwordUpdated": "Your password has been updated. You can now sign in.",
     "orContinueWith": "Or continue with",
-    "termsAgreement": "By continuing, you agree to our",
+    "termsAgreement": "By creating an account, you agree to our",
     "termsOfService": "Terms of Service",
     "and": "and",
     "privacyPolicy": "Privacy Policy",
@@ -1533,6 +2416,32 @@
       "generic": "An error occurred. Please try again.",
       "emailNotConfirmed": "Please verify your email address first. Check your inbox for the confirmation link.",
       "signOutError": "Failed to sign out. Please try again."
+    },
+    "pitch": {
+      "eyebrow": "AI visibility platform",
+      "titleLead": "Improve AI Visibility and",
+      "titleAccent": "Drive Growth.",
+      "subtitle": "Track your brand's presence across ChatGPT, Google AI, Perplexity and more.",
+      "features": {
+        "monitor": {
+          "title": "Monitor brand mentions and citations",
+          "body": "See how and where your brand appears across AI search."
+        },
+        "discover": {
+          "title": "Discover new opportunities",
+          "body": "Find high-potential topics and prompts to grow visibility."
+        },
+        "act": {
+          "title": "Turn insights into growth strategies",
+          "body": "Prioritize actions and track your impact over time."
+        }
+      }
+    },
+    "footer": {
+      "openSource": "Open source under",
+      "mitLicense": "MIT license",
+      "terms": "Terms",
+      "privacy": "Privacy"
     }
   },
   "dashboard": {
@@ -1561,7 +2470,229 @@
     "positiveSentiment": "Positive Sentiment",
     "neutral": "Neutral",
     "negative": "Negative",
-    "sovByPlatform": "Share of Voice by Platform"
+    "resultDetail": {
+      "notFoundTitle": "Result not found",
+      "notFoundDescription": "This result may have been deleted or does not exist.",
+      "loadFailedTitle": "Couldn't load this result",
+      "loadFailedDescription": "Something went wrong while loading this result. Please try again.",
+      "goBack": "Go back",
+      "brandCitations": "Brand Citations",
+      "totalCitations": "Total Citations",
+      "checkedAt": "Checked: {date}"
+    },
+    "compare": {
+      "hint": "Changes compare only prompts tracked in both periods",
+      "newExcluded": "{count, plural, one {# new prompt excluded} other {# new prompts excluded}}",
+      "newIncluded": "{count, plural, one {includes # new prompt} other {includes # new prompts}}"
+    },
+    "kpi": {
+      "sectionLabel": "Key metrics",
+      "noData": "No data",
+      "viewBreakdown": "{metric}: view breakdown",
+      "openPrompts": "Tracked prompts: open Prompts",
+      "openCitations": "Citations: open Citations",
+      "openMentions": "Mentions: open Mentions",
+      "visibility": "Visibility",
+      "visibilityTip": "AI Visibility Score (0–100) from how often answers name you, cite your site and how early you're named. See Formulas.",
+      "rankOf": "#{rank} of {count} brands",
+      "appearedIn": "appeared in {visible} of {active} prompts",
+      "trackedPrompts": "Tracked prompts",
+      "trackedPromptsTip": "Prompts answered in this period. The bar is your plan: {used} of {limit} prompt locations in use, shared by every brand in your workspace. A prompt counts once per location it tracks; paused prompts don't count.",
+      "trackedPromptsTipUnlimited": "Prompts answered in this period. Your plan has no prompt location limit.",
+      "slotsLeft": "{count, plural, other {# prompts/locations left to add}}",
+      "limitReached": "Plan limit reached",
+      "overLimit": "{count, plural, other {# over your plan limit}}",
+      "unlimited": "{count, plural, one {# active location} other {# active locations}} · Unlimited",
+      "quotaLabel": "{used} of {limit} active prompt locations used",
+      "mentions": "Mentions",
+      "mentionsTip": "Times answers named your brand. The change is against the previous period.",
+      "citations": "Citations",
+      "citationsTip": "Times answers cited your pages. The change is against the previous period.",
+      "vsPrevious": "vs previous period",
+      "netSentiment": "Net sentiment",
+      "netSentimentTip": "Positive minus negative share of the answers that name or cite your brand.",
+      "sentimentSplit": "{positive} pos · {negative} neg",
+      "sampleTip": {
+        "all": "{count, plural, one {Based on # answer} other {Based on # answers}} in this period.",
+        "named": "{count, plural, one {Based on # answer that names you} other {Based on # answers that name you}} in this period.",
+        "placed": "{count, plural, one {Based on # answer that places you} other {Based on # answers that place you}} in this period."
+      },
+      "lowSample": "{count, plural, one {Low sample · # answer} other {Low sample · # answers}}",
+      "lowSampleShort": "Low sample",
+      "coverage": "Coverage",
+      "coverageTip": "Share of answered prompts where you appear at least once.",
+      "coverageSub": "{visible} of {active} prompts",
+      "shareOfVoice": "Share of voice",
+      "shareOfVoiceTip": "Your mentions divided by mentions of all tracked brands.",
+      "shareOfVoiceSub": "of brand mentions",
+      "avgPosition": "Avg. position",
+      "avgPositionTip": "Average position when you're named. Lower is better.",
+      "avgPositionSub": "when mentioned",
+      "citationRate": "Citation rate",
+      "citationRateTip": "Share of answers that cite your domain.",
+      "citationRateSub": "of answers cite you"
+    },
+    "summary": {
+      "label": "Summary",
+      "visibility": "visibility",
+      "lowSample": "{count, plural, one {(low sample · # answer)} other {(low sample · # answers)}}",
+      "rank": "#{rank}",
+      "ofCount": "of {count}",
+      "pts": "{value} pts",
+      "behind": "behind {name}",
+      "ahead": "ahead of {name}",
+      "tied": "tied with {name}",
+      "upMost": "Up most:",
+      "downMost": "Down most:",
+      "vs": "vs {from} – {to}",
+      "copy": "Copy summary",
+      "copied": "Summary copied",
+      "copyFailed": "Couldn't copy the summary. Select the text and copy it instead."
+    },
+    "platforms": {
+      "title": "By AI platform",
+      "tableLabel": "Visibility by AI platform",
+      "platform": "Platform",
+      "visibility": "Visibility",
+      "change": "Change",
+      "coverage": "Coverage",
+      "shareOfVoice": "Share of voice",
+      "avgPosition": "Avg. pos",
+      "lowSample": "Low sample · {count, plural, one {# run} other {# runs}}",
+      "noRuns": "No runs this period",
+      "biggestDrop": "biggest drop"
+    },
+    "leaderboard": {
+      "title": "Leaderboard",
+      "headToHead": "Head-to-Head",
+      "lowSample": "{count, plural, one {Low sample · # answer} other {Low sample · # answers}}",
+      "you": "You",
+      "coverageSov": "Coverage {coverage} · SoV {sov}",
+      "scoreDetail": "Mentioned in {mentions} answers · cited in {citations} · position factor {factor}",
+      "more": "{count} more",
+      "moreLabel": "Show {count, plural, one {# more brand} other {# more brands}}",
+      "showAll": "Show all {count}",
+      "showLess": "Show less",
+      "gapTo": "{gap} pts to #{rank}",
+      "tiedWith": "Level with #{rank}",
+      "lever": "lever: {platform}"
+    },
+    "whyChanged": {
+      "title": "Why it changed",
+      "rowLowSample": "Low sample",
+      "fullBreakdown": "Full breakdown",
+      "gains": "Gains",
+      "drops": "Drops",
+      "kind": {
+        "platform": "Platform",
+        "topic": "Topic",
+        "prompt": "Prompt"
+      },
+      "uncategorized": "Uncategorized",
+      "deletedPrompt": "Deleted prompt",
+      "range": "{prev} → {cur}",
+      "open": "Open {name} in the breakdown",
+      "lowSample": "Too few answers compared to explain the change: {cur} this period, {prev} before.",
+      "steady": "Nothing moved the score by 0.1 pts or more.",
+      "newExcluded": "{count, plural, one {# new prompt} other {# new prompts}}{hasDate, select, yes { · {date}} other {}} · own baseline, not counted",
+      "newIncluded": "{count, plural, one {# new prompt} other {# new prompts}}{hasDate, select, yes { · {date}} other {}} · counted in the change"
+    },
+    "trend": {
+      "subtitle": "Visibility · {range}",
+      "lowSample": "{count, plural, one {low sample · # answer} other {low sample · # answers}}",
+      "range": {
+        "24h": "last 24 hours",
+        "7d": "last 7 days",
+        "30d": "last 30 days",
+        "90d": "last 90 days",
+        "all": "all time",
+        "custom": "{from} – {to}"
+      },
+      "noData": "No visibility data for this period yet",
+      "pin": "Pin",
+      "pinTitle": "Pin up to 5 competitors",
+      "pinMenu": "Competitors on the chart",
+      "pinLimit": "Up to 5 competitors",
+      "pinFailed": "Couldn't save the pinned competitors.",
+      "promptsAdded": "{count, plural, one {# prompt} other {# prompts}} added · {date}",
+      "goal": "Goal {value}",
+      "goalLegend": "Action Center goal"
+    },
+    "topicMap": {
+      "title": "Topics vs competitors",
+      "tableLabel": "Visibility by topic and brand",
+      "topic": "Topic",
+      "you": "You",
+      "gap": "Gap",
+      "lead": "Lead",
+      "lowSample": "Low sample",
+      "openTopic": "Open {topic}",
+      "showAll": "Show all {count}",
+      "showLess": "Show less"
+    },
+    "breakdown": {
+      "noData": "No data",
+      "lowSample": "Low sample"
+    },
+    "header": {
+      "lastRun": "Last run {when}",
+      "noRuns": "No runs yet",
+      "nextRun": "next run in {when}",
+      "minutes": "{n}m",
+      "hours": "{n}h",
+      "days": "{n}d"
+    },
+    "opportunities": {
+      "title": "Opportunities",
+      "seeAll": "See all",
+      "listLabel": "What to track next",
+      "topicKind": "Topic",
+      "promptKind": "Prompt",
+      "prompts": "{count, plural, one {# prompt} other {# prompts}}",
+      "volume": "~{volume}/mo",
+      "notTracked": "not tracked",
+      "competitorLeads": "{name} leads",
+      "leaderScore": "leader {score}",
+      "youLead": "you lead",
+      "track": "Track",
+      "trackCount": "Track {count}",
+      "trackHint": "Start tracking this prompt",
+      "trackCountHint": "Start tracking the {count} prompts suggested for {topic}",
+      "planFull": "Your plan's prompt locations are full",
+      "tracked": "Now tracking {count, plural, one {# prompt} other {# prompts}}",
+      "trackedPartly": "Tracked {tracked} of {total}: your plan's prompt locations are full.",
+      "trackFailed": "Couldn't track the suggestions.",
+      "openPrompts": "Open",
+      "addingPrompts": "Adding prompts to Tracked Prompts…",
+      "empty": "No prompt suggestions yet. Generate ideas to see what to track next.",
+      "unrated": "These suggestions aren't rated for fit yet. New suggestions are rated when they refresh, within a monthly allowance on your plan.",
+      "noneRelevant": "No suggestion fits your brand closely enough right now. Refresh for new ideas.",
+      "allTracked": "You're tracking every suggestion that fits. Refresh suggestions for more ideas.",
+      "alreadyHandled": "These suggestions were already accepted or dismissed.",
+      "openSuggestions": "Open suggestions",
+      "sendAction": "Send action",
+      "sendActionHint": "Open a Growth action for {topic} in the Action Center",
+      "sendNeedsTopic": "This topic isn't saved yet. Refresh suggestions to send it.",
+      "sent": "AC-{no} sent to the Action Center",
+      "alreadySent": "Already in the Action Center as AC-{no}",
+      "sendStale": "These suggestions changed since the page loaded. Refresh to see the latest.",
+      "sendFailed": "Couldn't send to the Action Center.",
+      "openAction": "Open",
+      "suggestContent": "Suggest content",
+      "suggestHint": "Write a content suggestion for this topic, steered by this prompt.",
+      "suggestHintQuota": "Uses one of the month's content suggestions.",
+      "suggestTrackFirst": "Track the topic first: content is written from the answers your tracked prompts get.",
+      "contentLimit": "Monthly content limit reached",
+      "contentLimitResets": "Monthly content limit reached · resets {date}",
+      "writing": "Writing a content suggestion…",
+      "written": "Content suggestion created",
+      "openContent": "Open",
+      "notWritten": "Couldn't write a new suggestion for this topic yet",
+      "notWrittenWhy": "Its tracked prompts are already covered by open suggestions, or have no answers yet. Nothing was used from your content quota.",
+      "writeFailed": "Couldn't write a content suggestion",
+      "stillWriting": "Still writing the content suggestion",
+      "stillWritingWhy": "It will appear in Content when it's done."
+    }
   },
   "topics": {
     "addTopic": "Add Topic",
@@ -1571,8 +2702,6 @@
     "failedToAddTopic": "Failed to add topic",
     "noBrandTitle": "No brand selected",
     "noBrandBody": "Select a brand from the top switcher to view topic analytics.",
-    "title": "Topics",
-    "description": "Topic-level analytics across all tracked prompts (last 30 days)",
     "exportHint": "No topics yet - add topics or run a tracking job first.",
     "manageTopics": "Manage topics",
     "kpi": {
@@ -1581,7 +2710,7 @@
       "allCategorised": "All prompts categorised",
       "bestPerformer": "Best performer",
       "biggestGap": "Biggest gap",
-      "topMover": "Top mover (7d)",
+      "topMover": "Top mover",
       "noDataYet": "No data yet",
       "notEnoughData": "Not enough data"
     },
@@ -1594,7 +2723,7 @@
     "columns": {
       "topic": "Topic",
       "prompts": "Prompts",
-      "visibility": "Visibility (30d)",
+      "visibility": "Visibility",
       "sov": "SoV",
       "mentions": "Mentions",
       "citations": "Citations",
@@ -1609,12 +2738,20 @@
     "title": "Content Opportunities",
     "description": "AI-powered content recommendations to improve your visibility in AI-generated answers.",
     "opportunities": "Opportunities",
-    "generate": "Generate Opportunities",
     "autoGeneratedHint": "Opportunities are generated automatically as your tracking data comes in.",
-    "regenerate": "Refresh Opportunities",
-    "generating": "Analyzing...",
+    "generating": "Generating…",
     "send": "Send",
     "sendToWorkflow": "Send to Workflow",
+    "generateBrief": "Generate Brief",
+    "generatingBrief": "Generating...",
+    "briefGenerated": "Brief Generated",
+    "briefLimitReached": "You've used this month's content briefs",
+    "sendToActions": "Send to Actions",
+    "openInActions": "Open in Actions",
+    "sendAgain": "Send Again",
+    "copyAllData": "Copy All Data",
+    "copiedToast": "Copied to clipboard",
+    "copyError": "Could not copy to the clipboard",
     "sending": "Sending...",
     "noResults": "No opportunities match your filters.",
     "clearFilters": "Clear filters",
@@ -1624,6 +2761,7 @@
     "undoFailed": "Failed to undo",
     "cancel": "Cancel",
     "viewDetails": "View Details",
+    "openInNewTab": "Open in new tab",
     "configureWebhook": "Configure Webhook",
     "noOpportunities": "No content opportunities yet",
     "noOpportunitiesHint": "Generate opportunities to get AI-powered content recommendations based on your prompt data.",
@@ -1634,7 +2772,9 @@
       "sent": "Sent to Workflow",
       "in_progress": "In Progress",
       "done": "Done",
-      "dismissed": "Dismissed"
+      "dismissed": "Dismissed",
+      "archived": "Archived",
+      "reviewed": "Reviewed"
     },
     "impact": {
       "high": "High",
@@ -1645,6 +2785,22 @@
       "owned": "Owned",
       "earned": "Earned"
     },
+    "typeHint": {
+      "owned": "Content on your own site",
+      "earned": "Coverage on other sites: articles, reviews, links"
+    },
+    "usage": {
+      "title": "This billing period",
+      "opportunities": "New opportunities",
+      "briefs": "Content briefs",
+      "remaining": "{count, plural, one {# remaining} other {# remaining}}",
+      "limitReached": "Limit reached",
+      "unlimited": "Unlimited",
+      "plan": "{plan} plan",
+      "resets": "Resets {date}",
+      "upgrade": "Upgrade plan",
+      "tooltip": "Every new opportunity counts once, whether Ansvisor suggested it or you asked for it; dismissed and deleted ones still count, merged duplicates don't. Generating a brief counts separately. Unused allowance doesn't carry over. Both reset on {date}, when your subscription renews."
+    },
     "kpi": {
       "total": "Total Opportunities",
       "highImpact": "High Impact",
@@ -1653,12 +2809,117 @@
       "shown": "{count} shown",
       "opportunities": "opportunities",
       "outOf100": "out of 100",
-      "sentOrInProgress": "sent or in progress"
+      "sentOrInProgress": "sent or in progress",
+      "fromSignals": "from {count, plural, one {# signal} other {# signals}} analyzed"
     },
     "filters": {
+      "search": "Search opportunities",
       "allStatuses": "All Statuses",
       "allImpacts": "All Impacts",
-      "allTypes": "All Types"
+      "allTypes": "All Types",
+      "allTopics": "All Topics",
+      "allSources": "All Sources"
+    },
+    "suggestedRange": {
+      "label": "Suggested",
+      "all": "All time",
+      "month": "This month",
+      "last30": "Last 30 days",
+      "custom": "Custom",
+      "from": "From",
+      "to": "To"
+    },
+    "newSinceVisit": "New since your last visit",
+    "scope": {
+      "group": "{topic} · {count, plural, one {# prompt} other {# prompts}}",
+      "groupNoTopic": "{count, plural, one {# prompt} other {# prompts}}",
+      "single": "Single prompt",
+      "groupHint": "Built for a group of related prompts that one piece of content can answer",
+      "singleHint": "Built for one prompt",
+      "action": "From {ref}",
+      "actionNoRef": "From an action",
+      "actionHint": "Sent from an Action Center task"
+    },
+    "source": {
+      "label": "Source",
+      "system": "System",
+      "manual": "Manual",
+      "prompt": "Prompt",
+      "action": "Action"
+    },
+    "sourceHint": {
+      "system": "Suggested automatically as tracking data comes in",
+      "manual": "Created with + New",
+      "prompt": "Suggested from a prompt in the prompts table",
+      "action": "Sent from a task in the Action Center"
+    },
+    "new": "New",
+    "newDone": "{generated, plural, =0 {No new opportunities} one {1 opportunity created} other {# opportunities created}}{duplicates, plural, =0 {} one { · 1 duplicate skipped (not counted)} other { · # duplicates skipped (not counted)}}",
+    "newNothing": "No new opportunities: every matching need already has one.",
+    "newLimitReached": "Monthly opportunity limit reached.",
+    "newLimitTooltip": "Monthly limit reached. Resets on {date}.",
+    "newRefunded": "Nothing was used from your monthly quota.",
+    "retry": "Retry",
+    "generatingRow": "Generating…",
+    "alternative": {
+      "button": "Another angle",
+      "running": "Writing another angle…",
+      "hint": "Suggest one more opportunity for the same need, with a different angle",
+      "badge": "Alternative",
+      "of": "Another angle on",
+      "title": "Another angle",
+      "description": "Ansvisor writes one more opportunity for the same need, with a different content type, format, audience or approach. Both stay in the list so you can keep the one you prefer.",
+      "direction": "Direction (optional)",
+      "directionPlaceholder": "e.g. more technical, a video instead of a blog post, aimed at agencies",
+      "uses": "Uses 1 of your {remaining} remaining this month → {after} left after this.",
+      "usesUnlimited": "Uses one generation.",
+      "noneLeft": "You've used this month's opportunities. They reset when your subscription renews.",
+      "generate": "Write another angle",
+      "started": "Writing another angle — it will appear in the list.",
+      "done": "Another angle is in the list.",
+      "none": "No new angle could be written for this need.",
+      "failed": "Couldn't write another angle — please try again.",
+      "stillRunning": "Still writing another angle — it will appear in the list when it's done."
+    },
+    "dismissReason": {
+      "title": "Why dismiss it?",
+      "description": "This helps Ansvisor suggest better opportunities.",
+      "not_relevant": {
+        "label": "The topic doesn't matter to us",
+        "hint": "It won't be suggested again in this form for 90 days."
+      },
+      "wrong_angle": {
+        "label": "Right topic, wrong angle",
+        "hint": "Dismiss it and ask for another angle on the same need."
+      }
+    },
+    "newDialog": {
+      "title": "New content opportunities",
+      "description": "Generate fresh suggestions now instead of waiting for the next scheduled run.",
+      "focus": "Focus (optional)",
+      "focusOptions": {
+        "auto": "Let Ansvisor choose",
+        "topic": "Topic",
+        "prompt": "Prompt"
+      },
+      "pickTopic": "Choose a topic",
+      "pickPrompt": "Choose a prompt",
+      "idea": "Or describe an idea (optional)",
+      "ideaPlaceholder": "e.g. a comparison page against Profound for agencies",
+      "count": "How many",
+      "fewer": "Fewer",
+      "more": "More",
+      "max": "max {max}",
+      "uses": "Uses {count} of your {remaining} remaining this month → {after} left after this. Duplicates of existing opportunities are skipped and don't count.",
+      "usesUnlimited": "Generates up to {count}. Duplicates of existing opportunities are skipped.",
+      "noneLeft": "You've used this month's opportunities. They reset when your subscription renews.",
+      "generate": "Generate {count}"
+    },
+    "sort": {
+      "label": "Sort",
+      "score": "Highest score",
+      "newest": "Newest",
+      "oldest": "Oldest"
     },
     "bulk": {
       "selected": "{count} selected",
@@ -1674,6 +2935,7 @@
     },
     "table": {
       "action": "Action",
+      "suggested": "Suggested",
       "type": "Type",
       "impact": "Impact",
       "score": "Score",
@@ -1682,6 +2944,15 @@
     },
     "detail": {
       "backToList": "Back to Opportunities",
+      "fromTask": {
+        "title": "From a task in {ref}",
+        "titleNoRef": "From an Action Center task",
+        "where": "Where",
+        "why": "Why",
+        "how": "How",
+        "doneWhen": "Done when",
+        "effort": "Effort"
+      },
       "sourceData": "Source Data",
       "relatedPrompt": "Related Prompt",
       "estAiVolume": "Est. AI Volume",
@@ -1693,7 +2964,29 @@
       "webhookStatus": "Webhook Status",
       "notSentYet": "Not sent to any workflow yet.",
       "sentAt": "Sent at {date}",
-      "webhookResponse": "Webhook Response"
+      "webhookResponse": "Webhook Response",
+      "topCompetitor": "Strongest Competitor",
+      "basketTitle": "Opportunity Basket",
+      "basketSummary": "{prompts, plural, one {# prompt} other {# prompts}} · {included} searches included · {excluded} excluded",
+      "basketIncluded": "Searches AI engines ran for these prompts",
+      "basketShowExcluded": "Show {count} excluded searches",
+      "basketHideExcluded": "Hide excluded searches",
+      "scoreTitle": "Why This Score",
+      "scoreWeight": "{weight}% of score",
+      "scoreWindow": "Measured over the last {days} days.",
+      "score": {
+        "demand": "Demand",
+        "visibilityGap": "Visibility gap",
+        "competitorGap": "Competitor gap",
+        "intent": "Intent"
+      },
+      "targetTitle": "Your Site",
+      "targetStats": "{citations, plural, one {# AI citation} other {# AI citations}} · {sessions, plural, one {# session} other {# sessions}} in the last 30 days",
+      "assetsTitle": "Recommended Assets",
+      "primaryAsset": "Primary",
+      "resultsTitle": "Results",
+      "resultsPending": "Completed. Measured from {date}, once a full window has passed.",
+      "resultsUnavailable": "The actions sent from this opportunity are no longer available."
     },
     "webhook": {
       "title": "Webhook Settings",
@@ -1718,8 +3011,8 @@
       "saveError": "Failed to save webhook config"
     },
     "loadError": "Failed to load content opportunities",
+    "exportError": "Failed to export opportunities",
     "loadOpportunityError": "Failed to load opportunity",
-    "generatedToast": "Generated {count} opportunities",
     "generationFailed": "Generation failed — please try again",
     "generationTimedOut": "Generation timed out — please try again",
     "generateError": "Failed to generate opportunities",
@@ -1735,7 +3028,51 @@
     "bulkDismissError": "Bulk dismiss failed",
     "bulkDeleteError": "Bulk delete failed",
     "briefGeneratedToast": "Content brief generated!",
-    "briefGenerateError": "Failed to generate brief"
+    "briefGenerateError": "Failed to generate brief",
+    "restore": "Restore",
+    "restoredToast": "Restored to New",
+    "restoreError": "Failed to restore the opportunity",
+    "decision": {
+      "create": "Create",
+      "optimize": "Optimize",
+      "expand": "Expand",
+      "refresh": "Refresh",
+      "consolidate": "Consolidate",
+      "defend": "Defend"
+    },
+    "decisionHint": {
+      "create": "No page on your site answers this yet. Write a new one.",
+      "optimize": "A page on your site already targets this. Make it the answer AI engines pick.",
+      "expand": "A page on your site covers part of this. Add the angles it misses.",
+      "refresh": "A page on your site covers this but is out of date. Update it.",
+      "consolidate": "Several pages on your site target this and split its signals. Merge them into one.",
+      "defend": "You are already visible here. Keep this page ahead of competitors."
+    },
+    "assetType": {
+      "blog_post": "Blog post",
+      "pillar_guide": "Pillar guide",
+      "landing_page": "Landing page",
+      "comparison_page": "Comparison page",
+      "glossary_page": "Glossary page",
+      "faq_page": "FAQ page",
+      "product_page": "Product page",
+      "category_page": "Category page",
+      "third_party_article": "Third-party article",
+      "backlink": "Backlink"
+    },
+    "sendToActionCenter": "Send to Action Center",
+    "sendAsset": "Send",
+    "openInActionCenter": "Open in Action Center",
+    "sentToActionCenter": "Sent to the Action Center",
+    "alreadyInActionCenter": "Already in the Action Center",
+    "sendToActionCenterError": "Failed to send to the Action Center",
+    "markReviewed": "Mark as reviewed",
+    "reviewedError": "Failed to mark as reviewed",
+    "duplicatesMerged": "{count, plural, one {1 similar suggestion was merged into this one.} other {# similar suggestions were merged into this one.}}",
+    "duplicatesMergedHint": "They rested on the same prompts and AI searches, so they weren't created and didn't use your quota.",
+    "newSignal": "New signal detected",
+    "newSignalScoreRose": "Completed earlier, and its opportunity has grown since: the score rose from {from} to {to}.",
+    "newSignalGainLost": "Completed earlier, but the gain did not hold: visibility on these prompts was {after}% after the work and is {now}% now."
   },
   "traffic": {
     "title": "AI Traffic Analytics",
@@ -1743,15 +3080,820 @@
     "totalCrawls": "Total Crawls",
     "uniqueBots": "Unique Bots",
     "referralTraffic": "AI Referral Traffic",
-    "topPages": "Top Crawled Pages"
+    "topPages": "Top Crawled Pages",
+    "searchPlaceholder": "Search by URL or path...",
+    "allPlatforms": "All platforms",
+    "clearFilters": "Clear filters",
+    "noMatchingVisitsTitle": "No matching visits",
+    "noMatchingVisitsDescription": "Try adjusting your filters or search terms.",
+    "noVisitsTitle": "No visits yet",
+    "noVisitsDescription": "Once visitors arrive from AI platforms, their visits will appear here.",
+    "noTrafficInPeriodTitle": "No traffic in this period",
+    "noTrafficInPeriodDescription": "No AI-referred visits in the {range}. There is traffic data in other time periods.",
+    "showAllData": "Show all data",
+    "noBrandTitle": "No brand selected",
+    "noBrandDescription": "Select a brand to view AI traffic analytics.",
+    "noDataTitle": "No traffic data yet",
+    "noDataDescriptionNoSnippet": "Add the tracking snippet to your website to start collecting AI-referred traffic data.",
+    "snippetTitle": "Add this snippet to your website",
+    "snippetDescription": "Paste this before the closing <code>{tag}</code> tag to track AI-referred visits.",
+    "copySnippet": "Copy tracking script",
+    "export": {
+      "button": "Export",
+      "exporting": "Exporting…",
+      "excel": "Excel (.xlsx)",
+      "excelHint": "Whole page, one sheet per section",
+      "csv": "CSV (.zip)",
+      "csvHint": "One CSV per section",
+      "tableExcel": "Excel",
+      "tableCsv": "CSV",
+      "failed": "The export failed. Please try again.",
+      "tooLarge": "This range has more than {max} visits, too many to export at once. Choose a shorter range.",
+      "sheets": {
+        "filters": "Filters",
+        "kpis": "KPIs",
+        "trend": "Trend",
+        "platforms": "Platforms",
+        "pages": "Top landing pages",
+        "convertingPages": "Top converting pages",
+        "buyerAnswers": "Answers that bring buyers",
+        "pageStatus": "Pages by status",
+        "visits": "Visits"
+      },
+      "columns": {
+        "setting": "Setting",
+        "metric": "Metric",
+        "value": "Value",
+        "engaged": "Engaged (%)",
+        "keyEvents": "Key events",
+        "note": "Note",
+        "day": "Day",
+        "hour": "Hour (UTC)",
+        "platform": "Platform",
+        "visits": "Visits",
+        "previousVisits": "Visits, previous period",
+        "change": "Change (%)",
+        "share": "Share (%)",
+        "page": "Page",
+        "url": "URL",
+        "aiVisibility": "AI visibility",
+        "citations": "Citations",
+        "targetingPrompts": "Prompts targeting",
+        "sessions": "Sessions",
+        "rankedBy": "Ranked by",
+        "rank": "Rank",
+        "percentile": "Percentile",
+        "time": "Time (UTC)",
+        "referrer": "Referrer",
+        "country": "Country",
+        "pageviews": "Pageviews",
+        "aiVisits": "AI visits",
+        "aiKeyEvents": "Key events from AI",
+        "topPlatforms": "Top platforms",
+        "inSitemap": "In sitemap",
+        "status": "Status",
+        "revenue": "Revenue",
+        "conversionRate": "Rate (%)",
+        "bestPlatform": "Best platform",
+        "topic": "Topic",
+        "citedPages": "Cited pages"
+      },
+      "metrics": {
+        "visits": "AI-referred visits",
+        "pageviews": "Pageviews",
+        "previousVisits": "Visits, previous period",
+        "change": "Change vs previous period (%)",
+        "topPlatform": "Top platform",
+        "topPlatformVisits": "Top platform visits",
+        "platforms": "Platforms"
+      },
+      "notes": {
+        "lowSample": "Low sample: fewer than 30 visits in this period or the one before",
+        "new": "New: no visits in the previous period",
+        "noPreviousPeriod": "No previous period for all time",
+        "noPages": "No pages in this range",
+        "noConversions": "No key events from AI visitors in this range",
+        "lastThirtyDays": "Last 30 days: the selected range has fewer than 30 AI visits",
+        "conversionLowSample": "Low sample: fewer than 30 AI visits"
+      },
+      "sourceStates": {
+        "active": "Active",
+        "notDetected": "Not detected",
+        "connected": "Connected",
+        "syncing": "Syncing",
+        "unmapped": "Connected, no property for this brand",
+        "not_connected": "Not connected",
+        "not_configured": "Not set up on this server"
+      },
+      "filters": {
+        "brand": "Brand",
+        "range": "Range",
+        "from": "From",
+        "to": "To",
+        "start": "Start",
+        "platform": "Platform",
+        "allPlatforms": "All platforms",
+        "search": "Search",
+        "none": "None",
+        "snippet": "Tracking snippet",
+        "ga": "Google Analytics",
+        "gsc": "Google Search Console",
+        "exportedAt": "Exported at"
+      },
+      "pageStatuses": {
+        "noAiTraffic": "No AI traffic",
+        "citedNotClicked": "Cited, not clicked",
+        "trafficNoPrompt": "Traffic, no prompt"
+      },
+      "yes": "Yes",
+      "no": "No"
+    },
+    "change": {
+      "new": "new",
+      "lowSample": "Low sample",
+      "lowSampleHint": "Fewer than 30 visits in this period or the one before, so a % change would mislead."
+    },
+    "visits": {
+      "kpiSub": "{pageviews, plural, one {# pageview} other {# pageviews}} · {previous, number} in the previous period",
+      "kpiSubNoPrevious": "{pageviews, plural, one {# pageview} other {# pageviews}}",
+      "kpiSubAnalytics": "{previous, number} in the previous period · {days, plural, one {# day} other {# days}} from Google Analytics",
+      "kpiSubAnalyticsNoPrevious": "{days, plural, one {# day} other {# days}} from Google Analytics",
+      "listTotal": "{visits, plural, one {# visit} other {# visits}} ({pageviews, plural, one {# pageview} other {# pageviews}})",
+      "rowPageviews": "{count, plural, one {# pageview} other {# pageviews}}",
+      "listNote": "One row per visit (session). Repeated pageviews in the same visit are grouped.",
+      "listAnalyticsNote": "Google Analytics doesn't report single visits: this list shows the tracking snippet's, while the totals above also count {days, plural, one {# day} other {# days}} from Google Analytics.",
+      "listRange": "{visits, plural, one {# visit} other {# visits}} ({pageviews, plural, one {# pageview} other {# pageviews}}) {preset, select, last {in the {range}} other {· {range}}}",
+      "showLast7Days": "Show last 7 days"
+    },
+    "trend": {
+      "fromAnalytics": "from Google Analytics"
+    },
+    "platforms": {
+      "engaged": "Engaged",
+      "keyEvents": "Key events",
+      "lowSample": "Low sample: {sessions, plural, one {# session} other {# sessions}} in Google Analytics",
+      "needsAnalytics": "Engaged and key events need Google Analytics."
+    },
+    "kpis": {
+      "visits": "AI-referred visits",
+      "visitsTip": "Visits from AI assistants, one per session: from the tracking snippet on days it sent any, and from Google Analytics on the other days, never added together. Below 30 visits in this period or the one before, the change shows Low sample.",
+      "topPlatform": "Top platform",
+      "topPlatformTip": "The AI platform that sent the most visits in this range.",
+      "topPlatformSub": "{visits, plural, one {# visit} other {# visits}}",
+      "platforms": "Platforms",
+      "platformsTip": "AI platforms that sent at least one visit in this range.",
+      "platformsSub": "unique AI sources",
+      "noData": "no data",
+      "aiShare": "AI share of traffic",
+      "aiShareTip": "AI-referred visits as a share of all the sessions Google Analytics recorded on the range's days. Analytics counts whole days, so the last 24 hours are compared with yesterday and today.",
+      "aiShareSub": "{visits, number} of {sessions, plural, one {# session} other {# sessions}}",
+      "engaged": "Engaged visits",
+      "engagedTip": "The share of AI sessions Google Analytics counts as engaged — 10 seconds or longer, with a key event, or with two or more page views — beside the same share for Google organic. Below 30 AI sessions the rate shows Low sample.",
+      "engagedSub": "{engaged, number} of {sessions, plural, one {# AI session} other {# AI sessions}}",
+      "engagedVsOrganic": "vs {rate} Google organic",
+      "keyEvents": "Key events from AI",
+      "keyEventsTip": "Key events (conversions) Google Analytics recorded in sessions from AI assistants. The rate is the share of AI sessions with a key event, as Google Analytics reports it, compared with Google organic once both have 30 sessions and 5 key events. Revenue shows when the property reports purchases.",
+      "keyEventsSub": "in {sessions, plural, one {# AI session} other {# AI sessions}}",
+      "keyEventRate": "{rate} of AI sessions",
+      "keyEventRateRevenue": "{rate} of AI sessions · {revenue} revenue",
+      "vsOrganic": "{ratio} organic",
+      "keyEventsNone": "none in {range}",
+      "see30d": "see 30d",
+      "googleClicks": "Google clicks",
+      "googleClicksTip": "Clicks from Google Search, from Google Search Console. Google reports about two days late, so the 24-hour and 7-day ranges show its latest reported days. Searches Google keeps private aren't included, so the total can be a little lower than in Search Console.",
+      "latestDay": "{days} · latest reported day",
+      "latestDays": "{days} · latest reported days",
+      "clicksPrevious": "{previous, number} in the previous period",
+      "allTime": "all time",
+      "noRangeData": "No data in this range",
+      "noAiSessions": "No AI sessions in this range",
+      "syncing": "Syncing…",
+      "waitGa": "about 15 min",
+      "waitGsc": "up to 48 h",
+      "unmapped": "Choose a property for this brand"
+    },
+    "sources": {
+      "label": "Data sources",
+      "snippet": "Tracking snippet",
+      "snippetActive": "Active · last visit {when}",
+      "snippetNotDetected": "Not detected",
+      "code": "Code",
+      "install": "Install",
+      "ga": "Google Analytics",
+      "gsc": "Google Search Console",
+      "bots": "AI bots",
+      "property": "{host} ({source})",
+      "synced": "{property} · synced {when}",
+      "syncingGa": "Syncing · first data in ~15 min",
+      "syncingGsc": "Syncing · first data in up to 48 h",
+      "notConnectedGa": "Not connected · see which AI visits convert",
+      "notConnectedGsc": "Not connected · see if AI is taking Google clicks",
+      "unmapped": "Connected · choose a property for this brand",
+      "notConfigured": "Not set up on this server",
+      "botsSoon": "Cloudflare / Vercel · coming soon",
+      "connect": "Connect",
+      "connecting": "Connecting…",
+      "manage": "Manage",
+      "connectNotAllowed": "Only admins and managers can connect a source."
+    },
+    "gate": {
+      "needs": "Needs {source}",
+      "notConnectedTitle": "Connect {source} to see this",
+      "notConnectedGa": "Shows which AI visits engage, convert and earn revenue. Read-only access, takes about a minute.",
+      "notConnectedGsc": "Shows Google clicks and AI Overviews / AI Mode impressions per page. Read-only access.",
+      "connect": "Connect {source}",
+      "neededFor": "Needed for: {sections}",
+      "syncingTitleGa": "Importing your Google Analytics data",
+      "syncingTitleGsc": "Google Search Console data is on its way",
+      "syncingGa": "First numbers in about 15 minutes. Up to 14 months of history can take up to 24 hours.",
+      "syncingGsc": "Google reports with about a 2-day delay, so the first numbers can take up to 48 hours.",
+      "connectedTo": "Connected to {property}",
+      "unmappedTitle": "Choose a property for this brand",
+      "unmapped": "{source} is connected, but no property is chosen for this brand yet.",
+      "notConfiguredTitle": "Not set up on this server",
+      "notConfigured": "{source} needs its connection keys on this Ansvisor server before anyone can connect it.",
+      "noData": "No data for this range in {source}",
+      "showAllTime": "Show all time",
+      "sections": {
+        "aiShare": "AI share of traffic",
+        "engagedVisits": "engaged visits",
+        "keyEvents": "key events from AI",
+        "googleClicks": "Google clicks",
+        "conversions": "where AI visitors convert",
+        "pageValue": "which valuable pages get no AI traffic"
+      }
+    },
+    "summaryLine": {
+      "none": "{range}: no AI-referred visits yet.",
+      "visits": "{range}: {count, plural, one {# AI-referred visit} other {# AI-referred visits}}",
+      "share": "{share} of all traffic",
+      "up": "up {pct}% on the previous period",
+      "down": "down {pct}% on the previous period",
+      "top": "{platform} sent the most ({count})",
+      "best": "{platform} visitors convert best ({rate} of their visits had a key event)",
+      "topAndBest": "{platform} sent the most ({count}), and its visitors convert best ({rate} of their visits had a key event).",
+      "cited": "{count, plural, one {# page is cited in AI answers but gets no clicks.} other {# pages are cited in AI answers but get no clicks.}}"
+    },
+    "conversions": {
+      "title": "Where AI visitors convert",
+      "rankedByKeyEvents": "Ranked by key events from AI visits",
+      "rankedByRevenue": "Ranked by revenue from AI visits",
+      "widened": "fewer than 30 AI visits in the selected range, so this uses the last 30 days",
+      "last30Days": "Last 30 days",
+      "lowSample": "Low sample",
+      "lowSampleHint": "{visits, plural, one {# AI visit} other {# AI visits}}: fewer than 30, so a rate would mislead.",
+      "rateUnknown": "Google Analytics hasn't reported the rate for these sessions yet.",
+      "failed": "Couldn't load where AI visitors convert.",
+      "empty": "No key events from AI visitors in this range.",
+      "pages": {
+        "title": "Top converting pages from AI",
+        "legend": "AI visits are Google Analytics sessions from AI assistants. The rate is the share with a key event, shown from 30 visits."
+      },
+      "answers": {
+        "title": "Which answers bring buyers",
+        "legend": "Topics of the tracked prompts whose answers cite the converting pages, by the AI platform the visitors came from. Shows which topics bring buyers, not just visits."
+      },
+      "columns": {
+        "page": "Landing page",
+        "aiVisits": "AI visits",
+        "keyEvents": "Key events",
+        "revenue": "Revenue",
+        "rate": "Rate",
+        "bestPlatform": "Best platform",
+        "platform": "Platform",
+        "topic": "Topic"
+      }
+    },
+    "pageOpportunities": {
+      "rank": "Rank {by}",
+      "minutes": "{minutes} min",
+      "signals": {
+        "revenue": {
+          "by": "by revenue",
+          "column": "Revenue",
+          "explain": "Ranked by the revenue these pages produced."
+        },
+        "transactions": {
+          "by": "by orders",
+          "column": "Orders",
+          "explain": "Ranked by how many orders started on these pages."
+        },
+        "key_events": {
+          "by": "by conversions",
+          "column": "Conversions",
+          "explain": "Ranked by the conversions Analytics records on these pages."
+        },
+        "engagement": {
+          "by": "by engagement",
+          "column": "Engagement",
+          "explain": "Ranked by time on page, because this property reports no revenue or conversions. Set up key events in Analytics to rank these by what they earn instead."
+        }
+      },
+      "citation": {
+        "cited": {
+          "label": "Cited",
+          "detail": "{count, plural, one {# citation} other {# citations}} in answers"
+        },
+        "targeted_not_cited": {
+          "label": "Not cited",
+          "detail": "{count, plural, one {# prompt targets} other {# prompts target}} this page"
+        },
+        "not_targeted": {
+          "label": "No prompt",
+          "detail": "nothing you track points here"
+        }
+      }
+    },
+    "pageList": {
+      "title": "Pages",
+      "subtitle": "Which pages get AI visits, which don't, and why",
+      "needsAnalytics": "Key events and the No AI traffic list need Google Analytics; without it they show what the snippet and your sitemap know.",
+      "tabs": {
+        "noAiTraffic": {
+          "label": "No AI traffic",
+          "explain": "Pages with traffic in Google Analytics or in your sitemap that got no AI visit in this range, most valuable first. AI visibility says why.",
+          "empty": "Every page with traffic or in your sitemap got AI visits in this range."
+        },
+        "citedNotClicked": {
+          "label": "Cited, not clicked",
+          "explain": "Pages AI answers cited at least 20 times in this range that got no AI visit: answers show them, nobody clicks through.",
+          "empty": "No page was cited 20 times or more without an AI visit in this range."
+        },
+        "trafficNoPrompt": {
+          "label": "Traffic, no prompt",
+          "explain": "Pages AI assistants sent visitors to that no tracked prompt's answer cited in this range: the visits come from questions you don't track.",
+          "empty": "Every page with AI visits is cited by a prompt you track in this range."
+        },
+        "all": {
+          "label": "All pages",
+          "explain": "Every page with AI visits, citations, traffic or a sitemap entry in this range.",
+          "empty": "No pages in this range."
+        }
+      },
+      "columns": {
+        "page": "Page",
+        "aiVisibility": "AI visibility",
+        "sessions": "Sessions",
+        "citations": "Cited in answers",
+        "prompts": "Prompts pointing here",
+        "aiVisits": "AI visits",
+        "platforms": "Top platforms",
+        "keyEvents": "Key events",
+        "status": "Status",
+        "citedInAnswers": "Cited in answers"
+      },
+      "auditPage": "Audit page",
+      "addPrompts": "Add prompts",
+      "auditFailed": "The audit couldn't start.",
+      "failed": "The pages couldn't be loaded.",
+      "shown": "{shown, number} of {total, plural, one {# page} other {# pages}}",
+      "sameWindow": "same range as the rest of the page",
+      "showMore": "Show more",
+      "actions": {
+        "menu": "More actions for {page}",
+        "sendToActionCenter": "Send to Action Center",
+        "sending": "Sending to the Action Center…",
+        "sent": "Sent to the Action Center",
+        "sentDescription": "AC-{number} · {count, plural, one {# page} other {# pages}}",
+        "alreadySent": "Already in the Action Center",
+        "alreadySentDescription": "AC-{number} is open with these pages.",
+        "open": "Open",
+        "sendFailed": "Couldn't send to the Action Center",
+        "auditCited": "Audit {count, plural, one {# cited page} other {# cited pages}}",
+        "auditPages": "Audit {count, plural, one {# page} other {# pages}}",
+        "auditing": "Starting the audits…",
+        "auditsStarted": "{count, plural, one {# audit started} other {# audits started}}",
+        "auditsStartedDescription": "They run a few at a time; results appear in Site Audit.",
+        "openAudit": "Open Site Audit",
+        "auditsFailed": "Couldn't start the audits",
+        "noneLeft": "No audits left this month",
+        "overQuota": "{count, plural, one {# audit} other {# audits}}, {remaining} left this month",
+        "suggestContent": "Suggest content",
+        "suggesting": "Writing a content suggestion for {page}…",
+        "suggested": "Content suggestion created",
+        "suggestedDescription": "For {page}, from the tracked prompts about it. It used one of this month's content suggestions.",
+        "suggestionExists": "This page already has a content suggestion",
+        "openExisting": "Open existing",
+        "suggestNoPrompts": "No tracked prompts are about {page} yet",
+        "suggestNoPromptsDescription": "Content suggestions are written from tracked prompts' answers. Add prompts for this page first; nothing was used from this month's content suggestions.",
+        "addPrompts": "Add prompts",
+        "suggestLimited": "Monthly content limit reached.",
+        "suggestNothing": "Couldn't write a suggestion for this page yet",
+        "suggestNothingDescription": "Its prompts need tracked answers first; they come with the next tracking run.",
+        "suggestFailed": "Couldn't write a content suggestion",
+        "suggestTimeout": "Still writing the content suggestion",
+        "suggestTimeoutDescription": "It will appear in Content when it is done."
+      },
+      "prompts": {
+        "title": "Suggested prompts",
+        "explain": "Questions people ask AI assistants that {page} answers. The prompts you track point to this page, so their answers show whether AI cites it.",
+        "pageTitle": "The page: {title}",
+        "loading": "Writing prompt suggestions for this page…",
+        "failed": "Couldn't suggest prompts for this page.",
+        "empty": "No new prompts to suggest for this page: the ones it answers are tracked already.",
+        "fromQuery": "From Search Console: “{query}” · {impressions} impressions",
+        "slotsLeft": "{count, plural, one {# prompt} other {# prompts}} left to add on your plan",
+        "unlimited": "No prompt limit on your plan",
+        "overSlots": "Select up to {count, plural, one {# prompt} other {# prompts}}: that's what your plan has left",
+        "addOwn": "Add your own",
+        "track": "Track {count, plural, one {# prompt} other {# prompts}}",
+        "tracked": "Now tracking {count, plural, one {# prompt} other {# prompts}}",
+        "trackedDescription": "They point to {page}; their first answers come with the next tracking run.",
+        "trackedPartly": "Tracked {tracked} of {total}: your plan's prompt locations are full.",
+        "planFull": "Your plan's prompt locations are full",
+        "trackFailed": "Couldn't track the prompts.",
+        "openPrompts": "Open Prompts"
+      }
+    }
   },
   "prompts": {
+    "positions": {
+      "answers": "{count, plural, one {# answer} other {# answers}}",
+      "answersInPeriod": "{count, plural, one {# answer} other {# answers}} in this period",
+      "mentionedIn": "In {mentioned} of {answers, plural, one {# answer} other {# answers}} · {mentions, plural, one {# mention} other {# mentions}}",
+      "citedIn": "In {cited} of {answers, plural, one {# answer} other {# answers}} · {citations, plural, one {# citation} other {# citations}}",
+      "mentionedInPeriod": "In {mentioned} of {answers, plural, one {# answer} other {# answers}} in this period · {mentions, plural, one {# mention} other {# mentions}}",
+      "citedInPeriod": "In {cited} of {answers, plural, one {# answer} other {# answers}} in this period · {citations, plural, one {# citation} other {# citations}}",
+      "includedOnly": "Answer counts cover the platforms your plan includes.",
+      "notMentioned": "Not mentioned",
+      "notMentionedTitle": "Not mentioned in any of {count, plural, one {# answer} other {# answers}} in this period",
+      "citedOnly": "Cited only",
+      "citedOnlyTitle": "Cited in {cited} of {count, plural, one {# answer} other {# answers}} in this period, named in none"
+    },
     "title": "Prompt Volumes",
     "description": "Discover query volumes and trends across AI platforms.",
     "totalVolume": "Total Volume",
     "trending": "Trending",
     "presenceRate": "Presence Rate",
-    "gaps": "Content Gaps"
+    "gaps": "Content Gaps",
+    "suggestions": {
+      "measuredSuggestionsKept": "Search Console and Analytics suggestions were kept — dismiss them individually to hide them for 30 days.",
+      "include": "Include this prompt",
+      "topic": "Topic",
+      "selectTopic": "Select a topic",
+      "platformsAndModels": "Platform & Models",
+      "selectPlatformsAndModels": "Select platform & models",
+      "selectedCount": "{count} selected"
+    },
+    "usage": {
+      "title": "Tracked Prompts",
+      "subtitle": "Every tracked prompt for this brand · edit or pause any row in place",
+      "subtitleReadOnly": "Read-only overview of every tracked prompt for this brand",
+      "planAndUsage": "Plan & usage",
+      "planPill": "{plan} plan",
+      "planLabel": {
+        "self_hosted": "Self-Hosted",
+        "starter": "Starter",
+        "growth": "Growth",
+        "enterprise": "Enterprise"
+      },
+      "thisBrand": "This brand",
+      "account": "Account",
+      "activePrompts": "Active prompts",
+      "totalPrompts": "Total prompts",
+      "promptLocations": "Prompt locations",
+      "slotsLeft": "Slots left",
+      "paused": "{count} paused",
+      "new": "{count} new",
+      "beingTracked": "being tracked now",
+      "activePlusPaused": "active + paused",
+      "acrossBrands": "across {count, plural, one {# brand} other {# brands}}",
+      "locationPairs": "prompt × location pairs",
+      "overLimit": "over limit",
+      "collapsedLocations": "{used} / {limit} prompt locations",
+      "ofLimit": "of {limit} on {plan}",
+      "onPlan": "on {plan}",
+      "unlimited": "Unlimited",
+      "cta": {
+        "upgrade_growth": "Upgrade to Growth",
+        "upgrade": "Upgrade plan",
+        "contact": "Contact us"
+      },
+      "footer": "Click a card to filter the table (Active · Paused · All).",
+      "updated": "Counts updated {when}",
+      "updatedJustNow": "Counts updated just now",
+      "loadFailed": "Couldn't load the counts",
+      "retry": "Retry",
+      "showPaused": "Show paused prompts",
+      "showNew": "Show prompts added in the last 24 hours",
+      "table": {
+        "tracked": "Tracked prompts ({count})",
+        "active": "Active prompts ({count})",
+        "new": "New prompts ({count})",
+        "paused": "Paused prompts ({count})",
+        "all": "All prompts ({count})",
+        "filtered": "Filtered by status",
+        "showAll": "Show all {count}",
+        "none": {
+          "tracked": "No tracked prompts match.",
+          "active": "No active prompts match.",
+          "new": "No new prompts match.",
+          "paused": "No paused prompts match."
+        }
+      }
+    },
+    "status": {
+      "label": "Status",
+      "tracked": "Active + New",
+      "all": "All statuses",
+      "active": "Active",
+      "new": "New",
+      "paused": "Paused",
+      "newHint": "Added in the last 24 hours"
+    },
+    "fanout": {
+      "engines": "Engines",
+      "allEngines": "All engines",
+      "share": "{percent} of answers",
+      "noneSince": "none since {date}",
+      "noneInWindow": "none in this window",
+      "notShared": "not shared",
+      "silentTitle": "{engine} usually shares the searches behind its answers, but none arrived since {date}.",
+      "silentTitleNoDate": "{engine} usually shares the searches behind its answers, but none arrived in this window.",
+      "silentBody": "Its answers are still tracked as usual; only the list of searches is missing.",
+      "notSharedNote": "{engines} don't come with the searches behind their answers, so they can't appear here.",
+      "enginesLegend": "Coloured: shared searches for this prompt in the window. Faded: tracked, but shared none.",
+      "engineEmptyTitle": "No {engine} searches in the {range}",
+      "engineEmptyBody": "{engine} usually shares the searches behind its answers. Try a longer date range.",
+      "emptyTitle": "No fan-out captured yet",
+      "emptyBody": "Copilot and Perplexity share the searches behind their answers; ChatGPT, Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
+      "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. Only Copilot and Perplexity share them."
+    },
+    "bulkDelete": {
+      "progress": "Deleting {done} of {total} prompts…",
+      "failed": "{count, plural, one {Failed to delete the prompt.} other {Failed to delete the prompts.}}",
+      "stopped": "{deleted} of {total} prompts deleted",
+      "stoppedDescription": "Deleting stopped at an error. {kept, plural, one {The other prompt is} other {The other # prompts are}} back in the list, so you can try again.",
+      "notDeleted": "{kept} of {total} {total, plural, one {prompt} other {prompts}} couldn't be deleted."
+    },
+    "columns": {
+      "added": "Added",
+      "tips": {
+        "status": "New: added in the last 24 hours. Active: being tracked. Paused: not tracked.",
+        "work": "Your content work on this prompt.",
+        "visibility": "Score from 0 to 100 over the {range}: mentions 60%, citations 25%, position 15%.",
+        "mentions": "How often AI answers named your brand over the {range}.",
+        "citations": "How often AI answers cited your pages over the {range}.",
+        "positions": "Where AI answers name your brand, on average, over the {range}. Lower is better.",
+        "volume": "Estimated monthly AI searches for this prompt.",
+        "competition": "Google Ads competition for its keywords: Low, Medium or High.",
+        "runs": "AI answers collected over the {range}. One run is one AI platform answering this prompt once.",
+        "added": "When this prompt was added.",
+        "lastRun": "When this prompt was last checked."
+      }
+    },
+    "performance": {
+      "label": "Performance",
+      "title": "Where your brand is named in this prompt's AI answers: Best in the first third of the brands listed, Good in the middle, Late in the last third, Missing in fewer than half the answers. Late and Missing list the furthest behind first.",
+      "all": "All performance",
+      "best": "Best",
+      "good": "Good",
+      "late": "Late",
+      "missing": "Missing",
+      "option": "{label} · {count}",
+      "none": "No prompts are {label} in this range.",
+      "showAll": "Show all performance",
+      "order": "Furthest behind first: late or missing on the most AI platforms, then the worse average position."
+    }
+  },
+  "mentions": {
+    "title": "Mentions & Sentiment",
+    "description": "Where AI mentions your brand, how it describes you, why, and what to do about it.",
+    "selectBrand": "Select a brand to see its mentions.",
+    "tabs": {
+      "label": "Mentions & Sentiment views",
+      "overview": "Overview",
+      "mentions": "Mentions",
+      "perception": "Perception"
+    },
+    "filters": {
+      "platform": "Platform",
+      "allPlatforms": "All platforms",
+      "country": "Country",
+      "allCountries": "All countries",
+      "topic": "Topic",
+      "allTopics": "All topics",
+      "search": "Search",
+      "searchPlaceholder": "Search prompts…"
+    },
+    "comingSoon": "This view is on its way: its figures and charts arrive with the next updates.",
+    "overview": {
+      "sectionLabel": "Mentions overview",
+      "loadError": "Couldn't load the overview. Try again in a moment.",
+      "unavailable": "Mention figures aren't available yet. They appear once the mentions data has been prepared.",
+      "pickDates": "Choose a start or end date to see the overview.",
+      "empty": "No tracked responses in this period. Try a longer range or clear the filters.",
+      "headline": {
+        "label": "Summary",
+        "net": "Net sentiment is <b>{net}</b>.",
+        "netChange": "Net sentiment is <b>{net}</b> (<tone>{change}</tone> vs the previous {period}).",
+        "netLowSample": "Net sentiment is <b>{net}</b> (low sample: {count, plural, one {# mention} other {# mentions}}).",
+        "noMentions": "AI didn't name {brand} in the tracked responses of this period.",
+        "moverDown": "Most of the drop is on <b>{platform} ({change})</b>.",
+        "moverUp": "Most of the rise is on <b>{platform} ({change})</b>.",
+        "companionsOne": "AI usually names {brand} next to <b>{first}</b>.",
+        "companionsTwo": "AI usually names {brand} next to <b>{first}</b> and <b>{second}</b>.",
+        "period": "{days, plural, one {day} other {# days}}",
+        "period24h": "24 hours",
+        "basis": "Built from aggregates with a fixed template, no LLM call · {range} · {answers, plural, one {# tracked response} other {# tracked responses}} · {mentions, plural, one {# mention} other {# mentions}}"
+      },
+      "kpi": {
+        "totalMentions": "Total mentions",
+        "totalMentionsTip": "Responses that name {brand} at least once. A response naming you twice counts once.",
+        "totalMentionsSub": "responses naming {brand}",
+        "mentionRate": "Mention rate",
+        "mentionRateTip": "The share of tracked responses that name {brand}.",
+        "mentionRateSub": "of {count} tracked responses",
+        "promptsWithMentions": "Prompts with mentions",
+        "promptsWithMentionsTip": "Prompts with at least one response naming {brand} in this period.",
+        "promptsWithMentionsSub": "of {count} tracked prompts",
+        "netSentiment": "Net sentiment",
+        "netSentimentTip": "Positive minus negative share of the responses naming {brand}, from −100 to +100. Neutral mentions count in the total.",
+        "sampleTip": "{count, plural, one {Based on # tracked response} other {Based on # tracked responses}} in this period.",
+        "sampleTipNamed": "{count, plural, one {Based on # response naming {brand}} other {Based on # responses naming {brand}}} in this period.",
+        "splitLabel": "{positive} positive, {neutral} neutral, {negative} negative",
+        "lowSample": "{count, plural, one {Low sample · # response} other {Low sample · # responses}}"
+      },
+      "sentiment": {
+        "positive": "Positive",
+        "neutral": "Neutral",
+        "negative": "Negative"
+      },
+      "trend": {
+        "title": "Mentions & sentiment over time",
+        "metricLabel": "Trend metric",
+        "mentions": "Mentions",
+        "rate": "Mention rate",
+        "net": "Net sentiment",
+        "tooltipResponses": "{count, plural, one {# response} other {# responses}}",
+        "tooltipMentions": "{count, plural, one {# mention} other {# mentions}}",
+        "lowSample": "Low sample",
+        "tooShort": "The trend needs a range of at least two days."
+      },
+      "platforms": {
+        "title": "By AI platform",
+        "tableLabel": "Mentions and sentiment by AI platform",
+        "platform": "Platform",
+        "mentions": "Mentions",
+        "rate": "Rate",
+        "sentiment": "Sentiment",
+        "net": "Net",
+        "lowSample": "Low sample",
+        "negativeNet": "negative net sentiment",
+        "disagree": "Platforms disagree: {high} is {highNet} but {low} is {lowNet}."
+      },
+      "competitors": {
+        "title": "Competitor framing",
+        "description": "How often AI names each brand, and how often in the same responses as you.",
+        "tableLabel": "Mentions of your brand and competitors",
+        "brand": "Brand",
+        "mentions": "Mentions",
+        "rate": "Rate",
+        "alsoNamesYou": "Also names you",
+        "alsoNamesYouTip": "Of the responses naming this competitor, how many name {brand} too, and what share of its mentions that is.",
+        "you": "You",
+        "none": "No competitors yet. Add them on the Competitors page to compare."
+      }
+    },
+    "table": {
+      "sectionLabel": "Mentions table",
+      "tableLabel": "Answers that mention your brand",
+      "sentiment": "Sentiment",
+      "allSentiments": "All sentiments",
+      "coMentioned": "Co-mentioned",
+      "anyCompetitor": "Any or none",
+      "noCompetitor": "No competitor",
+      "groupBy": "Group by",
+      "noGrouping": "None",
+      "groupPrompt": "Prompt",
+      "groupPlatform": "Platform",
+      "sort": "Sort",
+      "sortNewest": "Newest",
+      "sortOldest": "Oldest",
+      "sortCoMentions": "Most co-mentions",
+      "sortNegative": "Most negative",
+      "summary": "{mentions, plural, one {# mention} other {# mentions}} · {prompts, plural, one {# prompt} other {# prompts}}",
+      "columns": {
+        "prompt": "Prompt",
+        "platform": "Platform",
+        "country": "Country",
+        "context": "Mention context",
+        "sentiment": "Sentiment",
+        "position": "Position",
+        "coMentioned": "Co-mentioned",
+        "topic": "Topic",
+        "date": "Date"
+      },
+      "positionOf": "#{position} of {count}",
+      "positionOnly": "#{position}",
+      "noSentiment": "Not rated",
+      "groupRow": "{label} · {count, plural, one {# mention} other {# mentions}}",
+      "openRow": "Open the answer to “{prompt}” on {platform}",
+      "empty": "No mentions match these filters. Try another sentiment or co-mention filter, or a longer range.",
+      "loadError": "Couldn't load the mentions. Try again in a moment.",
+      "unavailable": "The mentions table isn't available yet. It appears once the mentions data has been prepared.",
+      "pickDates": "Choose a start or end date to see the mentions."
+    },
+    "drawer": {
+      "label": "Answer detail",
+      "position": "Position #{position} of {count}",
+      "positionOnly": "Position #{position}",
+      "topic": "Topic: {topic}",
+      "viewPrompt": "View prompt",
+      "mention": "Mention",
+      "coMentioned": "Also named in this answer",
+      "noCoMentions": "No competitor is named in this answer.",
+      "competitorTone": "Competitors' tone isn't measured yet; the sentiment is toward your brand.",
+      "response": "Full AI response",
+      "stored": "stored, not regenerated",
+      "showResponse": "Show the response",
+      "hideResponse": "Hide the response",
+      "loading": "Loading the answer…",
+      "loadError": "Couldn't load this answer. Try again in a moment.",
+      "missing": "This answer is no longer stored.",
+      "citations": "Citations in this answer",
+      "noCitations": "This answer cites no sources.",
+      "copy": "Copy response",
+      "copied": "Response copied",
+      "copyFailed": "Couldn't copy the response. Select the text and copy it instead.",
+      "close": "Close",
+      "legendBrand": "Your brand",
+      "legendCompetitor": "Competitors",
+      "correction": {
+        "open": "Sentiment is wrong?",
+        "title": "Correct the sentiment toward your brand",
+        "hint": "Every figure counts the new sentiment from now on; the original stays in the history.",
+        "options": "New sentiment",
+        "note": "Note (optional)",
+        "notePlaceholder": "Why is it wrong? It helps improve the classification.",
+        "save": "Save correction",
+        "cancel": "Cancel",
+        "saved": "Sentiment corrected",
+        "savedDescription": "This answer now counts as {sentiment} everywhere.",
+        "unchanged": "The answer already has this sentiment.",
+        "failed": "Couldn't correct the sentiment",
+        "forbidden": "Only admins and managers can correct a sentiment.",
+        "correctedBy": "Corrected by {name} on {date} · was {previous}",
+        "correctedOn": "Corrected on {date} · was {previous}"
+      }
+    },
+    "actions": {
+      "sendToActionCenter": "Send to Action Center",
+      "sending": "Sending to the Action Center…",
+      "sent": "Sent to the Action Center",
+      "sentDescription": "AC-{number} · {count, plural, one {# answer} other {# answers}}",
+      "alreadySent": "Already in the Action Center",
+      "alreadySentDescription": "AC-{number} is open with these answers.",
+      "open": "Open",
+      "sendFailed": "Couldn't send to the Action Center",
+      "suggestContent": "Suggest content",
+      "suggesting": "Writing a content suggestion…",
+      "suggested": "Content suggestion created",
+      "suggestionExists": "This prompt already has a content suggestion",
+      "openExisting": "Open existing",
+      "suggestLimited": "Monthly content limit reached.",
+      "suggestNothing": "Couldn't write a suggestion for this prompt yet",
+      "suggestNothingDescription": "It needs tracked answers and a prompt group first; both come with its next tracking run.",
+      "suggestFailed": "Couldn't write a content suggestion",
+      "suggestTimeout": "Still writing the content suggestion",
+      "suggestTimeoutDescription": "It will appear in Content when it is done.",
+      "selected": "{count, plural, one {# answer selected} other {# answers selected}}",
+      "clearSelection": "Clear",
+      "selectAll": "Select every answer on this page",
+      "selectRow": "Select the answer to “{prompt}” on {platform}"
+    },
+    "export": {
+      "copySummary": "Copy summary",
+      "copying": "Copying…",
+      "copied": "Summary copied",
+      "copyFailed": "Couldn't copy the summary. Try again in a moment.",
+      "copyBlocked": "Your browser didn't allow copying here. Allow clipboard access for this site and try again.",
+      "exportFailed": "Couldn't export the mentions. Try again in a moment.",
+      "nothing": "No mentions to export for these filters.",
+      "capped": "The file holds {shown} of {total} mentions. Narrow the filters to export the rest.",
+      "pickDates": "Choose a start or end date first.",
+      "reports": "Reports",
+      "exportSelected": "Export",
+      "facts": {
+        "period": "Period",
+        "periodDays": "{from} – {to} ({days, plural, one {# day} other {# days}}, UTC)",
+        "periodMoments": "{from} – {to} UTC",
+        "responses": "Tracked responses (n)",
+        "mentions": "Mentions (n)",
+        "prompts": "Prompts with mentions (n)",
+        "inFile": "Mentions in this file (n)",
+        "note": "Note",
+        "capped": "Only the first {shown} of {total} mentions, in the table's order. Narrow the filters to export the rest.",
+        "exported": "Exported (UTC)"
+      },
+      "summary": {
+        "title": "Mentions & Sentiment · {brand}",
+        "search": "Search: “{q}”",
+        "kpi": "{label}: {value}",
+        "kpiChange": "{label}: {value} ({change})",
+        "net": "{net} · {split} (n={count})"
+      }
+    }
   },
   "competitors": {
     "title": "Competitors",
@@ -1766,6 +3908,7 @@
     "citations": "Citations",
     "trackedCompetitors": "Tracked Competitors",
     "selectToCompare": "Select a competitor to see head-to-head comparison.",
+    "windowLast30Days": "Scores cover the last 30 days.",
     "selected": "Selected",
     "noData": "No data",
     "emptyTitle": "No competitors yet",
@@ -1986,6 +4129,9 @@
     },
     "topicPerformance": "Topic Performance",
     "aiTraffic": "AI Traffic",
+    "aiTrafficNew": "new",
+    "aiTrafficLowSample": "Low sample",
+    "aiTrafficLowSampleHint": "Fewer than 30 visits in this period or the one before, so a % change would mislead.",
     "shoppingVisibility": "Shopping Visibility",
     "auditScore": "Site Audit Score",
     "auditedOn": "Audited on",
@@ -2001,6 +4147,7 @@
     "queryFanout": "Query Fan-out",
     "queryFanoutDescription": "Sub-queries answer engines actually ran while answering your tracked prompts.",
     "fanoutCoverage": "{queries} distinct sub-queries across {answers} answers",
+    "loadReportFailed": "Couldn't load this report.",
     "notFound": "Report not found.",
     "backToReports": "Back to Reports",
     "generatedOn": "Generated on",
@@ -2046,6 +4193,7 @@
     "pulseRecipients": "Recipients",
     "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
     "pulseRecipientsHint": "Comma-separated email addresses. Leave empty to send to every organization member.",
+    "pulseRecipientsInvalid": "Not a valid email address: {emails}. Fix or remove it before saving.",
     "pulseSaved": "Notification settings saved",
     "pulseSaveFailed": "Could not save notification settings. Please try again.",
     "pulseLoadFailed": "Could not load notification settings.",
@@ -2105,7 +4253,7 @@
     "remove": "Remove",
     "apiKeys_description": "Long-lived tokens for the Ansvisor MCP server and other external clients. Keys are shown once at creation — store them somewhere safe.",
     "apiKeys_mcpEndpoint": "MCP endpoint",
-    "apiKeys_mcpEndpointHint": "Paste this URL + a key below into Claude Desktop / Claude Code / Cursor. See the <link>MCP guide</link>.",
+    "apiKeys_mcpEndpointHint": "Create a key to get a ready-to-paste setup for Claude, Codex, Cursor and other MCP clients. See the <link>MCP guide</link>.",
     "apiKeys_noKeys": "No API keys yet. Create one to connect the MCP server.",
     "apiKeys_revoked": "revoked",
     "apiKeys_created": "Created {date} · Last used {lastUsed}",
@@ -2117,6 +4265,21 @@
     "apiKeys_copyTitle": "Copy your API key",
     "apiKeys_copyDescription": "You won't be able to see this again. Store it somewhere safe.",
     "apiKeys_done": "Done",
+    "apiKeys_connectTitle": "Connect a client",
+    "apiKeys_copySnippet": "Copy setup",
+    "apiKeys_connectHint": "The setup includes this key, so copy it now. The <link>MCP guide</link> shows how to keep the key in an environment variable instead.",
+    "apiKeysConnectWhere": {
+      "claude-code": "Run in your terminal.",
+      "claude-desktop": "In Claude, open Settings → Connectors → Add custom connector and fill in these fields.",
+      "codex": "Add to ~/.codex/config.toml.",
+      "cursor": "Add to ~/.cursor/mcp.json, merging into any existing mcpServers.",
+      "vscode": "Add to .vscode/mcp.json, or run \"MCP: Open User Configuration\" for every workspace.",
+      "windsurf": "In the Cascade panel, open … → Open MCP config file and merge this in.",
+      "gemini-cli": "Run in your terminal.",
+      "hermes": "Add to ~/.hermes/config.yaml.",
+      "openclaw": "Add to ~/.openclaw/openclaw.json, merging into any existing mcp.servers.",
+      "zed": "Add to your Zed settings.json."
+    },
     "apiKeys_name": "Name",
     "agent_description": "Bring your own Anthropic API key. The in-product agent uses your key to call Claude directly — usage is billed to your Anthropic account, not to Ansvisor.",
     "agent_keyConfigured": "Key configured",
@@ -2144,6 +4307,53 @@
     "integrations_disconnectDescription": "The stored connection is removed for the whole organization. You can reconnect at any time.",
     "removeMember": "Remove team member",
     "invitationActions": "Invitation actions",
+    "team_description": "Manage team members and their access.",
+    "team_seatsUsedUnlimited": "{count, plural, one {# seat} other {# seats}} used",
+    "team_seatsUsed": "{used} of {max} seats used",
+    "team_seatLimitTitle": "Seat limit reached",
+    "team_seatLimitDescription": "Your {plan} plan includes {count, plural, one {# seat} other {# seats}}. Upgrade to invite more teammates.",
+    "team_upgrade": "Upgrade",
+    "team_pendingInvitations": "Pending invitations",
+    "team_pendingInvitationsDescription": "Invitations that haven't been accepted yet.",
+    "team_role_admin": "Admin",
+    "team_role_manager": "Manager",
+    "team_role_analyst": "Analyst",
+    "team_role_agency_partner": "Agency Partner",
+    "team_you": "You",
+    "team_loadFailed": "Failed to load team",
+    "team_roleUpdated": "Role updated",
+    "team_roleUpdateFailed": "Failed to update role",
+    "team_memberRemoved": "Member removed",
+    "team_memberRemoveFailed": "Failed to remove member",
+    "team_removeDialogTitle": "Remove team member?",
+    "team_removeDialogDescription": "{name} will lose access to this organization. This cannot be undone.",
+    "team_cancel": "Cancel",
+    "team_removing": "Removing...",
+    "team_removeMemberConfirm": "Remove member",
+    "team_invitationRevoked": "Invitation revoked",
+    "team_invitationRevokeFailed": "Failed to revoke invitation",
+    "team_invitationResent": "Invitation resent (link copied)",
+    "team_invitationResendFailed": "Failed to resend invitation",
+    "team_expired": "Expired",
+    "team_expires": "Expires {date}",
+    "team_resendInvite": "Resend invite",
+    "team_revoke": "Revoke",
+    "team_emailRequired": "Email is required",
+    "team_invitationSent": "Invitation sent",
+    "team_inviteCreated": "Invite created — share the link",
+    "team_invitationSendFailed": "Failed to send invitation",
+    "team_linkCopied": "Link copied",
+    "team_inviteMember": "Invite member",
+    "team_inviteDialogTitle": "Invite a team member",
+    "team_inviteDialogDescription": "They'll receive an email with a link to join your organization.",
+    "team_inviteLinkEmailSent": "Invitation sent. You can also share this link directly:",
+    "team_inviteLinkNoEmail": "No email was sent — this address may already have an account. Share this link with them directly:",
+    "team_email": "Email",
+    "team_emailPlaceholder": "teammate@company.com",
+    "team_role": "Role",
+    "team_done": "Done",
+    "team_sending": "Sending...",
+    "team_sendInvitation": "Send invitation",
     "organization": "Organization",
     "org_title": "Organization",
     "org_description": "Manage your organization name and view plan details.",
@@ -2208,6 +4418,10 @@
       "dangerTab": "Danger Zone",
       "saveChanges": "Save Changes",
       "saved": "Brand updated!",
+      "region": "Region",
+      "stateOptional": "State (optional)",
+      "nationwide": "Nationwide (no state)",
+      "stateHint": "Localizes AI answers to this state from the next tracking run onward.",
       "deleteWarning": "This action cannot be undone. All data for this brand (insights, content, competitors) will be permanently deleted.",
       "confirmDelete": "Type the brand name to confirm:",
       "deleteConfirmPlaceholder": "Brand name",

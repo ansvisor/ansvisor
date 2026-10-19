@@ -1,6 +1,9 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
+import { getPlatformName } from '@/lib/traffic-platforms';
+import { formatNumber } from '@/lib/format';
 import {
   AreaChart,
   Area,
@@ -48,11 +51,12 @@ function ChartContainer({
 
 // ─── Platform colors ─────────────────────────────────────────────────────────
 //
-// Keys must stay in sync with the detection host list in the tracking snippet
-// (`server/src/public/t.js`): every platform t.js can resolve and store needs a
-// label + color here, otherwise it renders as a raw hostname. `unknown` is kept
-// only for historical rows that predate #288 (null source_platform); new visits
-// always carry a concrete platform.
+// Keys are the AI source list's (`server/src/lib/ai-sources.json`), which the
+// tracking snippet and the Analytics sync both store: every key there needs a
+// color here and a name in `@/lib/traffic-platforms`, otherwise it renders as
+// a grey raw hostname (traffic-platforms.test.ts checks). The other ChatGPT
+// hosts are kept for rows from before the list (AT-004), and `unknown` for
+// rows that predate #288 (null source_platform).
 
 const PLATFORM_COLORS: Record<string, string> = {
   'chatgpt.com': '#6366f1',
@@ -68,60 +72,77 @@ const PLATFORM_COLORS: Record<string, string> = {
   'poe.com': '#e9d5ff',
   'labs.google': '#b794f6',
   'bing.com': '#67c5d6',
+  'grok.com': '#4f46e5',
+  'deepseek.com': '#9333ea',
   unknown: '#94a3b8',
 };
 
-const PLATFORM_NAMES: Record<string, string> = {
-  'chatgpt.com': 'ChatGPT',
-  'chat.openai.com': 'ChatGPT',
-  'search.chatgpt.com': 'ChatGPT',
-  'perplexity.ai': 'Perplexity',
-  'claude.ai': 'Claude',
-  'gemini.google.com': 'Gemini',
-  'copilot.microsoft.com': 'Copilot',
-  'you.com': 'You.com',
-  'phind.com': 'Phind',
-  'meta.ai': 'Meta AI',
-  'poe.com': 'Poe',
-  'labs.google': 'Google Labs',
-  'bing.com': 'Bing',
-  unknown: 'Unknown',
-};
-
-function getColor(platform: string): string {
+export function getColor(platform: string): string {
   return PLATFORM_COLORS[platform] ?? '#94a3b8';
 }
 
-export function getPlatformName(platform: string): string {
-  return PLATFORM_NAMES[platform] ?? platform;
+/**
+ * Options of the platform filter, with an empty-valued "all" option first. Base UI's Select can only
+ * show the label of the picked option in its trigger when it is given the options as `items`;
+ * without them the trigger shows the raw value, the platform's domain (for example `chatgpt.com`).
+ */
+export function getPlatformFilterItems(
+  platforms: string[],
+  allLabel: string,
+): { value: string; label: string }[] {
+  return [
+    { value: '', label: allLabel },
+    ...platforms.map((platform) => ({ value: platform, label: getPlatformName(platform) })),
+  ];
 }
 
-function formatTrafficBucketDate(value: string): string {
-  const d = new Date(value);
-
-  return d.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
+/**
+ * A trend bucket's label. A day reads "Oct 12", in UTC because the day
+ * buckets are UTC days. An hour (the 24-hour range, AT-017) reads "13:00" on
+ * the axis and "Oct 17, 13:00" in the tooltip, in the member's own time zone.
+ * English like the rest of the UI, not the browser's language (F7).
+ */
+export function formatTrafficBucketDate(
+  value: string,
+  { withDay = false, timeZone }: { withDay?: boolean; timeZone?: string } = {},
+): string {
+  const date = new Date(value);
+  if (!value.includes('T')) {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  }
+  const hour = date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone,
   });
+  if (!withDay) return hour;
+  return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone })}, ${hour}`;
 }
 
 // ─── Custom Tooltips ──────────────────────────────────────────────────────────
 
-function AreaTooltip({
+export function AreaTooltip({
   active,
   payload,
   label,
+  analyticsDays,
 }: {
   active?: boolean;
   payload?: { name: string; value: number; color: string }[];
   label?: string;
+  /** Days whose visits came from Google Analytics rather than the snippet (AT-004). */
+  analyticsDays?: Set<string>;
 }) {
+  const t = useTranslations('traffic.trend');
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-lg border bg-background px-3 py-2 shadow-md text-xs">
       <p className="font-medium text-foreground mb-1">
-        {label ? formatTrafficBucketDate(label) : ''}
+        {label ? formatTrafficBucketDate(label, { withDay: true }) : ''}
+        {label && analyticsDays?.has(label) && (
+          <span className="font-normal text-muted-foreground"> · {t('fromAnalytics')}</span>
+        )}
       </p>
       {payload.map((entry) => (
         <div key={entry.name} className="flex items-center gap-2">
@@ -130,7 +151,7 @@ function AreaTooltip({
             style={{ backgroundColor: entry.color }}
           />
           <span className="text-muted-foreground">{getPlatformName(entry.name)}:</span>
-          <span className="font-medium text-foreground">{entry.value.toLocaleString()}</span>
+          <span className="font-medium text-foreground">{formatNumber(entry.value)}</span>
         </div>
       ))}
     </div>
@@ -189,8 +210,16 @@ function BarList({ data }: { data: { name: string; value: number; color: string 
 
 // ─── Exported Charts ──────────────────────────────────────────────────────────
 
-export function ReferralTrendChart({ data }: { data: TrafficTrendPoint[] }) {
+export function ReferralTrendChart({
+  data,
+  analyticsDays,
+}: {
+  data: TrafficTrendPoint[];
+  /** Days filled from Google Analytics, named in the tooltip (AT-004). */
+  analyticsDays?: string[];
+}) {
   if (!data.length) return null;
+  const fromAnalytics = new Set(analyticsDays);
 
   // Extract platform keys (everything except 'date')
   const platformKeys = Object.keys(data[0]).filter((k) => k !== 'date');
@@ -228,7 +257,7 @@ export function ReferralTrendChart({ data }: { data: TrafficTrendPoint[] }) {
             className="fill-muted-foreground"
             allowDecimals={false}
           />
-          <Tooltip content={<AreaTooltip />} />
+          <Tooltip content={<AreaTooltip analyticsDays={fromAnalytics} />} />
           <Legend
             iconType="circle"
             iconSize={8}

@@ -8,6 +8,9 @@ import topicRoutes from './topics.js';
 import auditRoutes from './audits.js';
 import reportRoutes from './reports.js';
 import integrationRoutes from './integrations.js';
+import mentionRoutes from './mentions.js';
+import brandRoutes from './brands.js';
+import actionCenterRoutes from './action-center.js';
 
 const router = Router();
 
@@ -20,6 +23,9 @@ router.use('/topics', topicRoutes);
 router.use('/audits', auditRoutes);
 router.use('/reports', reportRoutes);
 router.use('/integrations', integrationRoutes);
+router.use('/mentions', mentionRoutes);
+router.use('/brands', brandRoutes);
+router.use('/action-center', actionCenterRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', user: req.user?.id });

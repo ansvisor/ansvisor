@@ -1,84 +1,193 @@
 /**
- * How many content opportunities one generation run may produce.
+ * How content opportunities are counted, ranked and scored (#857).
  *
- * The two generators — the automatic one fired after each tracking cycle and
- * the queued one behind the Generate button — used to carry this rule as a
- * hand-written sentence and a schema ceiling apiece, and had already drifted
- * apart in wording. They share it from here so the button and the nightly run
- * cannot disagree about how many a brand gets.
- *
- * Three, not the five-to-fifteen it was: the model reliably landed near ten,
- * which is more than anyone works through in a day. Generation appends
- * nightly, so anything the reader does not act on accumulates — a short list
- * that gets read beats a long one that gets scrolled past.
+ * Opportunities are generated per prompt cluster: a group of prompts in one
+ * topic that a single piece of content can answer (lib/prompt-clusters.js).
+ * A cluster's figures are built from its member prompts, and the score keeps
+ * its components so the detail page can say why it is what it is.
+ */
+
+/**
+ * Opportunities one generation run may produce. A short list that gets read
+ * beats a long one that gets scrolled past, and generation runs nightly, so
+ * three a night reaches every cluster over time.
  */
 export const OPPORTUNITIES_PER_RUN = 3;
 
-/**
- * The count instruction, worded for a model that must now choose.
- *
- * At ten the ranking barely mattered; the good ones arrived alongside the
- * filler. At three there is no room for filler, so the instruction has to say
- * that the slots go to the highest-impact opportunities in the data rather
- * than to whichever the model composes first. The prompt data is already
- * ordered by score, which is what "provided" refers to.
- */
-export const OPPORTUNITY_COUNT_RULE = `- Generate exactly ${OPPORTUNITIES_PER_RUN} opportunities: the ${OPPORTUNITIES_PER_RUN} highest-impact ones supported by the data provided, not the first ${OPPORTUNITIES_PER_RUN} that come to mind. Weigh volume, the visibility gap and the competitor gap together when choosing which ${OPPORTUNITIES_PER_RUN} to keep, and drop anything you would have ranked below them.`;
+/** Window the cluster metrics are measured over. */
+export const OPPORTUNITY_WINDOW_DAYS = 30;
 
 /**
- * Open (status 'new') opportunities a prompt may hold before the nightly run
- * skips it (#837). Prompts are ranked by a deterministic score, so without a
- * cap the same top prompts win every night and pile up rewordings of one idea
- * — one prompt had collected 38 open opportunities over 32 nights.
+ * Estimated monthly AI volume at which the demand component tops out. The
+ * scale is logarithmic: a cluster adds up its prompts' volumes, and on a
+ * linear scale with the old per-prompt ceiling of 50,000 most clusters sat
+ * at 100 and demand stopped telling them apart. 1,000 scores 50, 10,000
+ * scores 67, 150,000 scores 86.
  */
-export const MAX_OPEN_PER_PROMPT = 3;
+const DEMAND_CEILING = 1_000_000;
 
-/** Open opportunity count per prompt id, from rows carrying `prompt_id`. */
-export function openCountsByPrompt(rows) {
+export const INTENT_WEIGHTS = {
+  comparison: 1.0,
+  'best-top': 0.95,
+  'vs-review': 0.9,
+  recommendation: 0.85,
+  'how-to': 0.75,
+  'problem-solving': 0.7,
+  'what-is': 0.6,
+  other: 0.5,
+};
+
+/** Score weights per component, out of 100. */
+export const SCORE_WEIGHTS = { demand: 40, visibilityGap: 30, competitorGap: 20, intent: 10 };
+
+const round1 = (n) => Math.round(n * 10) / 10;
+
+function mostFrequent(values, limit) {
   const counts = new Map();
-  for (const r of rows || []) {
-    if (r.prompt_id) counts.set(r.prompt_id, (counts.get(r.prompt_id) || 0) + 1);
-  }
-  return counts;
-}
-
-/** Candidates whose prompt still has room for another open opportunity. */
-export function belowOpenCap(candidates, counts) {
-  return candidates.filter((c) => (counts.get(c.promptId) || 0) < MAX_OPEN_PER_PROMPT);
+  for (const v of values) counts.set(v, (counts.get(v) || 0) + 1);
+  return [...counts]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([v]) => v);
 }
 
 /**
- * The candidate an opportunity's relatedPromptIndex points at, or null when
- * the model returned an index outside the list. Such an opportunity is
- * dropped: falling back to the first candidate attached it to the prompt that
- * was already the most crowded.
+ * A cluster's figures from its member prompts.
+ *
+ * Demand adds up: one piece of content answers every member. Visibility and
+ * the strongest competitor's visibility are averaged over the members that
+ * have answers in the window, weighted by how many engine-days each has.
+ *
+ * @param {string[]} promptIds - the cluster's members
+ * @param {Map<string, {text: string, volume?: object, metrics?: object}>} prompts
  */
-export function relatedCandidate(candidates, index) {
-  return Number.isInteger(index) && index >= 0 && index < candidates.length
-    ? candidates[index]
-    : null;
+export function clusterMetrics(promptIds, prompts) {
+  const members = promptIds.map((id) => ({ id, ...prompts.get(id) })).filter((m) => m.text);
+  const tested = members.filter((m) => m.metrics?.cells > 0);
+  const cells = tested.reduce((s, m) => s + m.metrics.cells, 0);
+  const weighted = (key) =>
+    cells ? tested.reduce((s, m) => s + m.metrics[key] * m.metrics.cells, 0) / cells : 0;
+
+  const volume = (m) => m.volume?.est_ai_volume || 0;
+  const visibility = round1(weighted('visibility'));
+  const topCompetitorVisibility = round1(weighted('top_competitor_visibility'));
+  const representative = [...(tested.length ? tested : members)].sort(
+    (a, b) => volume(b) - volume(a),
+  )[0];
+
+  return {
+    tested: tested.length,
+    demand: members.reduce((s, m) => s + volume(m), 0),
+    visibility,
+    topCompetitorVisibility,
+    competitorGap: round1(topCompetitorVisibility - visibility),
+    intent:
+      mostFrequent(
+        members.map((m) => m.volume?.intent || 'other'),
+        1,
+      )[0] || 'other',
+    keywords: mostFrequent(
+      members.flatMap((m) => m.volume?.keywords || []),
+      8,
+    ),
+    competitorsCited: mostFrequent(
+      tested.flatMap((m) => m.metrics.competitors || []),
+      5,
+    ),
+    representative: representative ? { id: representative.id, text: representative.text } : null,
+  };
 }
 
-/** The instruction that goes with the "Already suggested" lists in the prompt data. */
-export const ALREADY_SUGGESTED_RULE = `- Some prompts list opportunities "Already suggested" for them. Do not repeat or reword those: suggest a genuinely different piece of content for that prompt, or choose another prompt.`;
+/** Each score component on a 0–100 scale. */
+export function scoreComponents({ demand, visibility, competitorGap, intent }) {
+  return {
+    demand: round1(Math.min(Math.log10(1 + demand) / Math.log10(1 + DEMAND_CEILING), 1) * 100),
+    visibilityGap: round1(100 - visibility),
+    competitorGap: round1(Math.min(Math.max(competitorGap, 0), 100)),
+    intent: round1((INTENT_WEIGHTS[intent] || INTENT_WEIGHTS.other) * 100),
+  };
+}
 
-/** Open opportunity titles per prompt id, from rows carrying `prompt_id` and `title`. */
-export function openTitlesByPrompt(rows) {
-  const titles = new Map();
+/** The weighted total of the components, 0–100. */
+export function opportunityScore(components) {
+  const total = Object.entries(SCORE_WEIGHTS).reduce(
+    (s, [key, weight]) => s + (components[key] * weight) / 100,
+    0,
+  );
+  return Math.round(total * 100) / 100;
+}
+
+/**
+ * Clusters that already have an opportunity, as its own cluster or a merged
+ * one. Any status counts: a cluster gets one opportunity, and a dismissed one
+ * is not suggested again in other words.
+ */
+export function coveredClusterIds(rows) {
+  const ids = new Set();
   for (const r of rows || []) {
-    if (!r.prompt_id || !r.title) continue;
-    if (!titles.has(r.prompt_id)) titles.set(r.prompt_id, []);
-    titles.get(r.prompt_id).push(r.title);
+    if (r.cluster_id) ids.add(r.cluster_id);
+    for (const id of r.related_cluster_ids || []) ids.add(id);
   }
-  return titles;
+  return ids;
 }
 
-/** The prompt-data suffix listing what a prompt already holds, or '' if nothing. */
-export function alreadySuggested(titles) {
-  return titles?.length ? ` | Already suggested: ${titles.map((t) => `"${t}"`).join('; ')}` : '';
+/** Statuses that still stand for a need's content work. */
+export const OPEN_OPPORTUNITY_STATUSES = ['new', 'reviewed', 'sent', 'in_progress'];
+
+/**
+ * Clusters with an open opportunity, which is all that holds back a prompt's
+ * own "Suggest content" (PROMPT-006): unlike coveredClusterIds, a dismissed
+ * or finished one doesn't count, since the user is asking again on purpose.
+ */
+export function openlyCoveredClusterIds(rows) {
+  return coveredClusterIds(
+    (rows || []).filter((r) => OPEN_OPPORTUNITY_STATUSES.includes(r.status)),
+  );
 }
 
-/** Duplicate key: the same prompt and the same title, ignoring case and outer spaces. */
-export function opportunityKey(promptId, title) {
-  return `${promptId}::${(title || '').toLowerCase().trim()}`;
+/** An open opportunity covering the cluster, as its own or a merged one; null when none. */
+export function openOpportunityOn(rows, clusterId) {
+  if (!clusterId) return null;
+  const match = (rows || []).find(
+    (r) =>
+      OPEN_OPPORTUNITY_STATUSES.includes(r.status) &&
+      (r.cluster_id === clusterId || (r.related_cluster_ids || []).includes(clusterId)),
+  );
+  return match?.id ?? null;
+}
+
+/**
+ * The highest-scoring clusters with answers and no opportunity yet, at most
+ * one per topic, so a run's few suggestions spread across the brand's topics
+ * instead of all landing in its strongest one. The no-topic scope (null)
+ * counts as one topic. With `fill`, a request for more than one per topic
+ * is topped up from the best of the rest.
+ */
+export function pickClusters(
+  candidates,
+  covered,
+  count = OPPORTUNITIES_PER_RUN,
+  { fill = false } = {},
+) {
+  const topics = new Set();
+  const picked = [];
+  const ranked = [...candidates]
+    .filter((c) => c.metrics.tested > 0 && !covered.has(c.id))
+    .sort((a, b) => b.score - a.score);
+  for (const c of ranked) {
+    const topic = c.topicId ?? null;
+    if (topics.has(topic)) continue;
+    topics.add(topic);
+    picked.push(c);
+    if (picked.length === count) return picked;
+  }
+  // A request for more than there are topics (CONTENT-003's "+ New") takes
+  // the next best clusters once every topic has one.
+  if (fill) {
+    for (const c of ranked) {
+      if (picked.length === count) break;
+      if (!picked.includes(c)) picked.push(c);
+    }
+  }
+  return picked;
 }

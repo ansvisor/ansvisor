@@ -10,6 +10,7 @@
 
 import { expect, test } from 'vitest';
 import { formatRelative } from './format-relative.js';
+import { formatDate } from './format';
 
 // ---------------------------------------------------------------------------
 // Stub translator
@@ -128,19 +129,34 @@ test('29 days ago → 29d ago', () => {
   expect(formatRelative(isoDaysAgo(29), t)).toBe('29d ago');
 });
 
-test('30 days ago → locale date string, not "30d ago"', () => {
+test('30 days ago → a date, not "30d ago"', () => {
   const iso = isoDaysAgo(30);
   const result = formatRelative(iso, t);
   // Must NOT look like "Xd ago"
   expect(result).not.toMatch(/^\d+d ago$/);
-  // Must be a non-empty date string (locale-formatted)
-  expect(result.length).toBeGreaterThan(0);
-  expect(result).toBe(new Date(iso).toLocaleDateString());
+  expect(result).toBe(formatDate(iso));
 });
 
-test('412 days ago → locale date string, not "412d ago"', () => {
+test('412 days ago → a date, not "412d ago"', () => {
   const iso = isoDaysAgo(412);
   const result = formatRelative(iso, t);
   expect(result).not.toMatch(/^\d+d ago$/);
-  expect(result).toBe(new Date(iso).toLocaleDateString());
+  expect(result).toBe(formatDate(iso));
+});
+
+test('an older date reads in English whatever the browser language (F7)', () => {
+  // A Turkish browser used to show "10.09.2025" here.
+  const toLocaleDateString = Date.prototype.toLocaleDateString;
+  Date.prototype.toLocaleDateString = function (
+    this: Date,
+    locales?: Intl.LocalesArgument,
+    options?: Intl.DateTimeFormatOptions,
+  ) {
+    return toLocaleDateString.call(this, locales ?? 'tr-TR', options);
+  };
+  try {
+    expect(formatRelative('2025-09-10T12:00:00.000Z', t)).toBe('Sep 10, 2025');
+  } finally {
+    Date.prototype.toLocaleDateString = toLocaleDateString;
+  }
 });

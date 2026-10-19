@@ -1,0 +1,476 @@
+/**
+ * The AI Traffic page as files (AT-015, spec §3.9): the whole page as an
+ * Excel workbook, one sheet per section plus a Filters sheet, or as a zip of
+ * one CSV per section; and each table on its own.
+ *
+ * Pure: the route reads the data and calls these. Numbers stay numbers, so a
+ * spreadsheet can sum them; a % change the page wouldn't show (below 30
+ * visits, or no previous period) is left empty with the reason beside it.
+ */
+
+import type { Sheet } from 'write-excel-file/node';
+import type {
+  TrafficConversions,
+  TrafficLog,
+  TrafficPages,
+  TrafficSources,
+  TrafficSummary,
+  TrafficTrendPoint,
+} from '@/lib/actions/traffic';
+import { csvLine } from '@/lib/csv';
+import { getPlatformName } from '@/lib/traffic-platforms';
+import { pageStatuses } from '@/lib/traffic-pages';
+import { conversionRate } from '@/lib/traffic-conversions';
+import { visitChange } from '@/lib/traffic-change';
+import {
+  googleSourceStatus,
+  snippetDetected,
+  type GoogleSourceStatus,
+} from '@/lib/traffic-sources';
+
+/** Every section, in the page's order. */
+export const TRAFFIC_EXPORT_SECTIONS = [
+  'kpis',
+  'trend',
+  'platforms',
+  'pages',
+  'convertingPages',
+  'buyerAnswers',
+  'pageStatus',
+  'visits',
+] as const;
+
+export type TrafficExportSection = (typeof TRAFFIC_EXPORT_SECTIONS)[number];
+
+/** The tables that carry their own Excel / CSV buttons, as in the mockup. */
+export const TRAFFIC_TABLE_SECTIONS = [
+  'platforms',
+  'pages',
+  'convertingPages',
+  'buyerAnswers',
+  'pageStatus',
+  'visits',
+] as const;
+
+/** Beyond this many visits an export would take too long to build on request. */
+export const TRAFFIC_EXPORT_MAX_ROWS = 100_000;
+
+/** A label from en.json's traffic.export namespace. */
+export type ExportLabel = (key: string, values?: Record<string, string | number>) => string;
+
+export interface TrafficExportData {
+  brandName: string;
+  /** The page's words for the range, e.g. "last 7 days". */
+  rangeLabel: string;
+  /** First and last day (YYYY-MM-DD); no first day for all time. */
+  from: string | null;
+  to: string;
+  platform: string | null;
+  search: string | null;
+  exportedAt: Date;
+  summary?: TrafficSummary;
+  trend?: TrafficTrendPoint[];
+  visits?: TrafficLog[];
+  /** Every page of the Pages section, with the lists it is on (AT-006). */
+  pageStatus?: TrafficPages | null;
+  /** Where AI visitors convert, every row (AT-014). */
+  conversions?: TrafficConversions | null;
+  sources?: TrafficSources | null;
+}
+
+type Cell = string | number | null;
+
+export interface ExportTable {
+  headers: string[];
+  rows: Cell[][];
+}
+
+/** A change the page would show, as a number, or why there is none. */
+function change(current: number, previous: number, comparable: boolean, label: ExportLabel) {
+  const c = visitChange(current, previous, { comparable });
+  if (c.kind === 'pct') return { pct: c.pct, note: '' };
+  if (c.kind === 'low') return { pct: null, note: label('notes.lowSample') };
+  if (c.kind === 'new') return { pct: null, note: label('notes.new') };
+  return { pct: null, note: comparable ? '' : label('notes.noPreviousPeriod') };
+}
+
+function pathOf(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+}
+
+/** "2026-10-17 09:30" in UTC: sorts and reads the same everywhere. */
+function utcMinute(iso: string): string {
+  return new Date(iso).toISOString().slice(0, 16).replace('T', ' ');
+}
+
+function kpis(data: TrafficExportData, label: ExportLabel): ExportTable {
+  const s = data.summary;
+  if (!s) return { headers: [], rows: [] };
+  const top = s.platformBreakdown[0];
+  const delta = change(s.totalVisits, s.totalVisitsPrev, s.hasPreviousPeriod, label);
+  return {
+    headers: [label('columns.metric'), label('columns.value'), label('columns.note')],
+    rows: [
+      [label('metrics.visits'), s.totalVisits, null],
+      [label('metrics.pageviews'), s.totalPageviews, null],
+      ...(s.hasPreviousPeriod
+        ? ([[label('metrics.previousVisits'), s.totalVisitsPrev, null]] as Cell[][])
+        : []),
+      [label('metrics.change'), delta.pct, delta.note || null],
+      [label('metrics.topPlatform'), top ? getPlatformName(top.platform) : null, null],
+      [label('metrics.topPlatformVisits'), top ? top.visits : null, null],
+      [label('metrics.platforms'), s.platformBreakdown.length, null],
+    ],
+  };
+}
+
+function trend(data: TrafficExportData, label: ExportLabel): ExportTable {
+  const points = data.trend ?? [];
+  const platforms = [...new Set(points.flatMap((p) => Object.keys(p).filter((k) => k !== 'date')))];
+  // The 24-hour range trends by hour (AT-017): "2026-10-17 13:00", UTC.
+  const hourly = points.some((p) => p.date.includes('T'));
+  return {
+    headers: [
+      hourly ? label('columns.hour') : label('columns.day'),
+      ...platforms.map(getPlatformName),
+    ],
+    rows: points.map((p) => [
+      hourly ? utcMinute(p.date) : p.date,
+      ...platforms.map((k) => Number(p[k]) || 0),
+    ]),
+  };
+}
+
+function platforms(data: TrafficExportData, label: ExportLabel): ExportTable {
+  const s = data.summary;
+  const total = s?.totalVisits ?? 0;
+  return {
+    headers: [
+      label('columns.platform'),
+      label('columns.visits'),
+      label('columns.previousVisits'),
+      label('columns.change'),
+      label('columns.share'),
+      // From Google Analytics, as the table shows them (AT-005).
+      label('columns.engaged'),
+      label('columns.keyEvents'),
+      label('columns.note'),
+    ],
+    rows: (s?.platformBreakdown ?? []).map((row) => {
+      const delta = change(row.visits, row.visitsPrev, s!.hasPreviousPeriod, label);
+      const ga = row.analytics;
+      return [
+        getPlatformName(row.platform),
+        row.visits,
+        s!.hasPreviousPeriod ? row.visitsPrev : null,
+        delta.pct,
+        total > 0 ? Math.round((row.visits / total) * 1000) / 10 : null,
+        ga && ga.sessions > 0 ? Math.round((ga.engagedSessions / ga.sessions) * 1000) / 10 : null,
+        ga ? ga.keyEvents : null,
+        delta.note || null,
+      ];
+    }),
+  };
+}
+
+function pages(data: TrafficExportData, label: ExportLabel): ExportTable {
+  const s = data.summary;
+  return {
+    headers: [
+      label('columns.page'),
+      label('columns.visits'),
+      label('columns.previousVisits'),
+      label('columns.change'),
+      // How often tracked AI answers cite the page (AT-006).
+      label('columns.citations'),
+      label('columns.note'),
+    ],
+    rows: (s?.topPages ?? []).map((row) => {
+      const delta = change(row.visits, row.visitsPrev, s!.hasPreviousPeriod, label);
+      return [
+        row.url,
+        row.visits,
+        s!.hasPreviousPeriod ? row.visitsPrev : null,
+        delta.pct,
+        row.citations,
+        delta.note || null,
+      ];
+    }),
+  };
+}
+
+/**
+ * The Pages section (AT-006): every page, with the work lists it is on in a
+ * Status column, so a spreadsheet can filter each tab (spec §3.9).
+ */
+function pageStatus(data: TrafficExportData, label: ExportLabel): ExportTable {
+  const rows = data.pageStatus?.rows ?? [];
+  // Never an empty sheet: say why there are no rows (spec §3.8b).
+  if (rows.length === 0)
+    return { headers: [label('columns.note')], rows: [[label('notes.noPages')]] };
+  return {
+    headers: [
+      label('columns.page'),
+      label('columns.aiVisits'),
+      label('columns.aiKeyEvents'),
+      label('columns.citations'),
+      label('columns.topPlatforms'),
+      label('columns.targetingPrompts'),
+      label('columns.sessions'),
+      label('columns.rank'),
+      label('columns.inSitemap'),
+      label('columns.status'),
+    ],
+    rows: rows.map((row) => [
+      row.page,
+      row.aiVisits,
+      row.aiKeyEvents,
+      row.citations,
+      row.aiPlatforms.map(getPlatformName).join(', ') || null,
+      row.targetingPrompts,
+      row.sessions,
+      row.valueRank,
+      row.inSitemap ? label('yes') : label('no'),
+      pageStatuses(row)
+        .map((status) => label(`pageStatuses.${status}`))
+        .join('; ') || null,
+    ]),
+  };
+}
+
+/** A row's rate as a number, or why the page shows none (§5.4). */
+function rateCells(
+  figures: { aiVisits: number; keyEvents: number; keyEventSessions: number },
+  label: ExportLabel,
+): { pct: number | null; note: string | null } {
+  const rate = conversionRate(figures);
+  if (rate.kind === 'rate') return { pct: rate.pct, note: null };
+  return { pct: null, note: rate.kind === 'low' ? label('notes.conversionLowSample') : null };
+}
+
+/**
+ * Where AI visitors convert (AT-014): its two tables, every row, with a row
+ * saying when a thin range read the last 30 days, as the page says.
+ */
+function conversionsTable(
+  data: TrafficExportData,
+  label: ExportLabel,
+  build: (c: TrafficConversions) => ExportTable,
+): ExportTable {
+  const c = data.conversions;
+  const table = c ? build(c) : null;
+  if (!c || !table || table.rows.length === 0) {
+    return { headers: [label('columns.note')], rows: [[label('notes.noConversions')]] };
+  }
+  if (!c.widened) return table;
+  const filler = table.headers.slice(1).map(() => null);
+  return { ...table, rows: [...table.rows, [label('notes.lastThirtyDays'), ...filler]] };
+}
+
+function convertingPages(data: TrafficExportData, label: ExportLabel): ExportTable {
+  return conversionsTable(data, label, (c) => ({
+    headers: [
+      label('columns.page'),
+      label('columns.aiVisits'),
+      label('columns.keyEvents'),
+      label('columns.revenue'),
+      label('columns.conversionRate'),
+      label('columns.bestPlatform'),
+      label('columns.note'),
+    ],
+    rows: c.pages.map((row) => {
+      const rate = rateCells(row, label);
+      return [
+        row.page,
+        row.aiVisits,
+        row.keyEvents,
+        c.hasRevenue ? row.revenue : null,
+        rate.pct,
+        row.bestPlatform ? getPlatformName(row.bestPlatform) : null,
+        rate.note,
+      ];
+    }),
+  }));
+}
+
+function buyerAnswers(data: TrafficExportData, label: ExportLabel): ExportTable {
+  return conversionsTable(data, label, (c) => ({
+    headers: [
+      label('columns.platform'),
+      label('columns.topic'),
+      label('columns.citedPages'),
+      label('columns.aiVisits'),
+      label('columns.keyEvents'),
+      label('columns.revenue'),
+      label('columns.conversionRate'),
+      label('columns.note'),
+    ],
+    rows: c.answers.map((row) => {
+      const rate = rateCells(row, label);
+      return [
+        getPlatformName(row.platform),
+        row.topic,
+        row.pages,
+        row.aiVisits,
+        row.keyEvents,
+        c.hasRevenue ? row.revenue : null,
+        rate.pct,
+        rate.note,
+      ];
+    }),
+  }));
+}
+
+function visits(data: TrafficExportData, label: ExportLabel): ExportTable {
+  return {
+    headers: [
+      label('columns.time'),
+      label('columns.platform'),
+      label('columns.page'),
+      label('columns.url'),
+      label('columns.referrer'),
+      label('columns.country'),
+      label('columns.pageviews'),
+    ],
+    rows: (data.visits ?? []).map((v) => [
+      utcMinute(v.createdAt),
+      getPlatformName(v.sourcePlatform ?? 'unknown'),
+      pathOf(v.url),
+      v.url,
+      v.referrer,
+      v.country,
+      v.pageviews,
+    ]),
+  };
+}
+
+/** One section as a table: its headers and its rows. */
+export function trafficTable(
+  section: TrafficExportSection,
+  data: TrafficExportData,
+  label: ExportLabel,
+): ExportTable {
+  switch (section) {
+    case 'kpis':
+      return kpis(data, label);
+    case 'trend':
+      return trend(data, label);
+    case 'platforms':
+      return platforms(data, label);
+    case 'pages':
+      return pages(data, label);
+    case 'convertingPages':
+      return convertingPages(data, label);
+    case 'buyerAnswers':
+      return buyerAnswers(data, label);
+    case 'pageStatus':
+      return pageStatus(data, label);
+    case 'visits':
+      return visits(data, label);
+  }
+}
+
+/** What the export was made from: the range, the filters, the sources and when. */
+export function filtersTable(data: TrafficExportData, label: ExportLabel): ExportTable {
+  const sourceState = (status: GoogleSourceStatus) => label(`sourceStates.${status}`);
+  const sources = data.sources;
+  return {
+    headers: [label('columns.setting'), label('columns.value')],
+    rows: [
+      [label('filters.brand'), data.brandName],
+      [label('filters.range'), data.rangeLabel],
+      [label('filters.from'), data.from ?? label('filters.start')],
+      [label('filters.to'), data.to],
+      [
+        label('filters.platform'),
+        data.platform ? getPlatformName(data.platform) : label('filters.allPlatforms'),
+      ],
+      [label('filters.search'), data.search || label('filters.none')],
+      [
+        label('filters.snippet'),
+        sources
+          ? snippetDetected(sources.snippetLastVisitAt)
+            ? label('sourceStates.active')
+            : label('sourceStates.notDetected')
+          : null,
+      ],
+      [label('filters.ga'), sources ? sourceState(googleSourceStatus(sources.ga)) : null],
+      [label('filters.gsc'), sources ? sourceState(googleSourceStatus(sources.gsc)) : null],
+      [label('filters.exportedAt'), `${utcMinute(data.exportedAt.toISOString())} UTC`],
+    ],
+  };
+}
+
+const bold = (value: string) => ({ value, fontWeight: 'bold' as const });
+
+function sheetOf(name: string, table: ExportTable): Sheet<Buffer> {
+  return {
+    sheet: name,
+    stickyRowsCount: 1,
+    columns: table.headers.map((_, i) => ({ width: i === 0 ? 44 : 18 })),
+    data: [table.headers.map(bold), ...table.rows],
+  };
+}
+
+/**
+ * The workbook: the sections asked for, one sheet each, and — for the whole
+ * page — the Filters sheet first, so whoever opens the file sees what it is.
+ */
+export function trafficWorkbook(
+  data: TrafficExportData,
+  sections: readonly TrafficExportSection[],
+  label: ExportLabel,
+  { withFilters }: { withFilters: boolean },
+): Sheet<Buffer>[] {
+  return [
+    ...(withFilters ? [sheetOf(label('sheets.filters'), filtersTable(data, label))] : []),
+    ...sections.map((section) =>
+      sheetOf(label(`sheets.${section}`), trafficTable(section, data, label)),
+    ),
+  ];
+}
+
+/** Excel opens a UTF-8 CSV as UTF-8 only when it starts with a byte order mark. */
+export const BYTE_ORDER_MARK = String.fromCharCode(0xfeff);
+
+export function tableCsv(table: ExportTable): string {
+  return BYTE_ORDER_MARK + [csvLine(table.headers), ...table.rows.map(csvLine)].join('\n');
+}
+
+/** "acme-coffee" from a brand name or a sheet name: safe in a file name. */
+export function fileSlug(value: string): string {
+  return (
+    value
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'brand'
+  );
+}
+
+/**
+ * ansvisor-ai-traffic-{brand}-{from}_{to}.{ext} (spec §3.9); a single table
+ * adds its name. All time has no first day.
+ */
+export function trafficExportFileName({
+  brand,
+  from,
+  to,
+  ext,
+  table,
+}: {
+  brand: string;
+  from: string | null;
+  to: string;
+  ext: 'xlsx' | 'zip' | 'csv';
+  /** The table's sheet name, for a single table. */
+  table?: string;
+}): string {
+  const range = from ? `${from}_${to}` : `all-time_${to}`;
+  const parts = ['ansvisor-ai-traffic', fileSlug(brand), table && fileSlug(table), range];
+  return `${parts.filter(Boolean).join('-')}.${ext}`;
+}

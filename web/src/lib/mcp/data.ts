@@ -10,8 +10,25 @@ import {
 } from '@/lib/citations/classify';
 import { classifyArticleType } from '@/lib/citations/article-type';
 import { expandDateToEndOfDay } from '@/lib/dates';
+import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { API_BASE_URL } from '@/config/api';
+import { ORG_PLAN_COLUMNS, planFromOrgRow } from '@/lib/guards/plan-guard';
+import {
+  fetchPromptUsageRow,
+  toPromptUsageSummary,
+  type PromptUsageSummary,
+} from '@/lib/prompt-usage-summary';
+import { mapSignalRows, type SignalRow } from '@/lib/signals/map';
+import { readPromptPlaces } from '@/lib/signals/prompt-places';
+import { currentActionFirst, signalDetailForApi, type SignalActionRef } from '@/lib/signals/detail';
+import { parseTaskDetails } from '@/lib/action-center/task-details';
+import { locationCode, isValidLocation } from '@/lib/region';
+import { getOrgLocationUsage, locationLimitMessage } from '@/lib/prompt-locations';
+import {
+  filterPromptSuggestionEngines,
+  promptSuggestionsAreStale,
+} from './prompt-suggestions-utils';
 
 /**
  * Pure data-fetch functions shared by the MCP route and the parallel REST
@@ -495,6 +512,262 @@ export async function acceptTopicSuggestionFor(
   return { suggestion_id: suggestionId, topic_id: topic.id, topic_name: topic.name };
 }
 
+// ── Prompt suggestions (#918) ──────────────────────────────────────────────────
+// These tools operate only on suggestions already persisted by the dashboard.
+// Generation remains behind the existing plan-gated refresh action.
+
+export interface PromptSuggestionRow {
+  id: string;
+  suggested_text: string;
+  topic_name: string | null;
+  topic_id: string | null;
+  reason: string | null;
+  est_volume: number | null;
+  relevance: number | null;
+  source: string;
+  source_data: Record<string, unknown> | null;
+  generated_at: string;
+  expires_at: string;
+}
+
+export interface PromptSuggestionList {
+  suggestions: PromptSuggestionRow[];
+  stale: boolean;
+}
+
+/** List pending suggestions only after verifying that the brand belongs to this organization. */
+export async function listPromptSuggestionsFor(
+  auth: McpAuthContext,
+  brandId: string,
+): Promise<PromptSuggestionList | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: brand, error: brandError } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('id', brandId)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  if (brandError) throw new Error(brandError.message);
+  if (!brand) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from('prompt_suggestions')
+    .select(
+      'id, suggested_text, topic_name, topic_id, reason, est_volume, relevance, source, source_data, generated_at, expires_at',
+    )
+    .eq('brand_id', brandId)
+    .eq('status', 'new')
+    .order('generated_at', { ascending: false });
+  if (error) throw new Error(error.message);
+
+  const suggestions = (data ?? []) as unknown as PromptSuggestionRow[];
+  return { suggestions, stale: promptSuggestionsAreStale(suggestions) };
+}
+
+export interface DismissedPromptSuggestion {
+  id: string;
+  status: 'dismissed';
+}
+
+/** Dismiss only a pending suggestion belonging to the authenticated organization. */
+export async function dismissPromptSuggestionFor(
+  auth: McpAuthContext,
+  suggestionId: string,
+): Promise<DismissedPromptSuggestion | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: owned, error: lookupError } = await supabaseAdmin
+    .from('prompt_suggestions')
+    .select('id, brands!inner(organization_id)')
+    .eq('id', suggestionId)
+    .eq('brands.organization_id', auth.organizationId)
+    .eq('status', 'new')
+    .maybeSingle();
+  if (lookupError) throw new Error(lookupError.message);
+  if (!owned) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from('prompt_suggestions')
+    .update({ status: 'dismissed', updated_at: new Date().toISOString() })
+    .eq('id', suggestionId)
+    .eq('status', 'new')
+    .select('id, status')
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+
+  return { id: data.id, status: 'dismissed' };
+}
+
+export interface AcceptedPromptSuggestion {
+  suggestion_id: string;
+  prompt_id: string;
+  prompt_text: string;
+  status: 'added';
+}
+
+export type AcceptPromptSuggestionResult =
+  | AcceptedPromptSuggestion
+  | { error: string; code?: 'plan_limit' };
+
+/**
+ * Accept one pending prompt suggestion by creating a tracked prompt, then
+ * marking the suggestion added. Mirrors the dashboard's target defaults,
+ * plan engine filtering, shopping-mode behavior, region choice and location
+ * quota check. Every lookup is organization-scoped; duplicate acceptance
+ * removes any losing concurrent insert rather than leaving duplicate prompts.
+ */
+export async function acceptPromptSuggestionFor(
+  auth: McpAuthContext,
+  suggestionId: string,
+): Promise<AcceptPromptSuggestionResult | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: suggestion, error: suggestionError } = await supabaseAdmin
+    .from('prompt_suggestions')
+    .select('id, brand_id, suggested_text, topic_name, brands!inner(organization_id)')
+    .eq('id', suggestionId)
+    .eq('brands.organization_id', auth.organizationId)
+    .eq('status', 'new')
+    .maybeSingle();
+  if (suggestionError) throw new Error(suggestionError.message);
+  if (!suggestion) return null;
+
+  const { data: brand, error: brandError } = await supabaseAdmin
+    .from('brands')
+    .select('id, organization_id, region, state, shopping_mode_enabled')
+    .eq('id', suggestion.brand_id)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  if (brandError) throw new Error(brandError.message);
+  if (!brand) return null;
+
+  const { data: promptSet, error: promptSetError } = await supabaseAdmin
+    .from('prompt_sets')
+    .select('id')
+    .eq('brand_id', brand.id)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (promptSetError) throw new Error(promptSetError.message);
+  if (!promptSet) {
+    return { error: 'No prompt set exists for this brand. Create one first.' };
+  }
+
+  const { data: defaults, error: defaultsError } = await supabaseAdmin
+    .from('prompts')
+    .select('platforms, models')
+    .eq('prompt_set_id', promptSet.id)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (defaultsError) throw new Error(defaultsError.message);
+
+  const defaultPlatforms =
+    Array.isArray(defaults?.platforms) && defaults.platforms.length > 0
+      ? (defaults.platforms as string[])
+      : ['chatgpt-web'];
+  const defaultModels = Array.isArray(defaults?.models) ? (defaults.models as string[]) : [];
+
+  const { data: organization, error: organizationError } = await supabaseAdmin
+    .from('organizations')
+    .select(ORG_PLAN_COLUMNS)
+    .eq('id', auth.organizationId)
+    .maybeSingle();
+  if (organizationError) throw new Error(organizationError.message);
+  if (!organization) return { error: 'Could not load the organization plan.' };
+
+  const plan = planFromOrgRow(organization);
+  const filtered = filterPromptSuggestionEngines(plan.limits, defaultPlatforms, defaultModels);
+  if (filtered.platforms.length === 0 && filtered.models.length === 0) {
+    return { error: 'Your plan does not allow any of the default prompt engines.' };
+  }
+
+  const platforms = brand.shopping_mode_enabled
+    ? Array.from(new Set([...filtered.platforms, 'chatgpt-shopping']))
+    : filtered.platforms.filter((platform) => platform !== 'chatgpt-shopping');
+  if (platforms.length === 0 && filtered.models.length === 0) {
+    return { error: 'At least one platform or model must be selected.' };
+  }
+
+  const usage = await getOrgLocationUsage(supabaseAdmin, auth.organizationId);
+  const limitError = locationLimitMessage(plan, usage.total, 1);
+  if (limitError) return { error: limitError, code: 'plan_limit' };
+
+  const country = (brand.region as string | null) ?? 'US';
+  const candidateRegion = locationCode(country, brand.state as string | null);
+  const region = isValidLocation(candidateRegion) ? candidateRegion : country;
+
+  let topicId: string | null = null;
+  if (suggestion.topic_name) {
+    const { data: topic, error: topicError } = await supabaseAdmin
+      .from('topics')
+      .select('id')
+      .eq('brand_id', brand.id)
+      .eq('name', suggestion.topic_name)
+      .limit(1)
+      .maybeSingle();
+    if (topicError) throw new Error(topicError.message);
+    topicId = topic?.id ?? null;
+  }
+
+  const { data: prompt, error: promptError } = await supabaseAdmin
+    .from('prompts')
+    .insert({
+      prompt_set_id: promptSet.id,
+      text: suggestion.suggested_text,
+      category: suggestion.topic_name ?? null,
+      topic_id: topicId,
+      platforms,
+      regions: [region],
+      models: filtered.models,
+      is_active: true,
+    })
+    .select('id, text')
+    .single();
+  if (promptError || !prompt) {
+    return { error: promptError?.message ?? 'Failed to add the prompt.' };
+  }
+
+  const { data: updated, error: updateError } = await supabaseAdmin
+    .from('prompt_suggestions')
+    .update({
+      status: 'added',
+      added_prompt_id: prompt.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', suggestionId)
+    .eq('status', 'new')
+    .select('id')
+    .maybeSingle();
+
+  if (updateError || !updated) {
+    // A concurrent accept may have won after our initial read. Remove the
+    // prompt we just inserted so the suggestion cannot create duplicates.
+    const { error: cleanupError } = await supabaseAdmin
+      .from('prompts')
+      .delete()
+      .eq('id', prompt.id);
+    if (cleanupError) {
+      throw new Error(
+        updateError?.message ??
+          'Suggestion was processed concurrently and the duplicate prompt could not be removed.',
+      );
+    }
+    if (updateError) throw new Error(updateError.message);
+    return null;
+  }
+
+  return {
+    suggestion_id: suggestionId,
+    prompt_id: prompt.id,
+    prompt_text: prompt.text,
+    status: 'added',
+  };
+}
+
 // ── Prompts ───────────────────────────────────────────────────────────────────
 
 export interface PromptRow {
@@ -607,7 +880,7 @@ export interface ContentOpportunityRow {
 
 export interface ListContentOpportunitiesParams {
   brandId: string;
-  status?: 'new' | 'sent' | 'in_progress' | 'done' | 'dismissed';
+  status?: 'new' | 'reviewed' | 'sent' | 'in_progress' | 'done' | 'dismissed' | 'archived';
   impact?: 'high' | 'medium' | 'low';
   type?: 'owned' | 'earned';
   limit?: number;
@@ -640,7 +913,8 @@ export async function listContentOpportunitiesFor(
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  if (params.status) query = query.eq('status', params.status);
+  // The archived per-prompt backlog (#857) only when asked for by status.
+  query = params.status ? query.eq('status', params.status) : query.neq('status', 'archived');
   if (params.impact) query = query.eq('impact', params.impact);
   if (params.type) query = query.eq('type', params.type);
 
@@ -866,6 +1140,31 @@ export async function getSiteAuditQuotaFor(auth: McpAuthContext): Promise<SiteAu
 }
 
 /**
+ * The Tracked Prompts usage cards for a brand (PROMPT-012), so the Agent Chat
+ * can answer "how many prompt slots do we have left?" with the page's own
+ * numbers: prompt_usage_counters for the counts, the organization's effective
+ * plan (Enterprise overrides merged) for the limit.
+ */
+export async function getPromptUsageFor(
+  auth: McpAuthContext,
+  brandId: string,
+): Promise<PromptUsageSummary | null> {
+  if (!auth.organizationId || !(await brandInOrg(auth, brandId))) return null;
+
+  const [{ data: org, error: orgError }, row] = await Promise.all([
+    supabaseAdmin
+      .from('organizations')
+      .select(ORG_PLAN_COLUMNS)
+      .eq('id', auth.organizationId)
+      .maybeSingle(),
+    fetchPromptUsageRow(supabaseAdmin, brandId),
+  ]);
+  if (orgError) throw new Error(orgError.message);
+  if (!row) return null;
+  return toPromptUsageSummary(row, planFromOrgRow(org));
+}
+
+/**
  * Start a Site Audit for a brand + URL via MCP.
  *
  * Org-ownership is verified *first* via supabaseAdmin — a wrong-org or missing
@@ -1063,6 +1362,7 @@ export async function getContentOpportunityFor(
 
 export const CONTENT_OPPORTUNITY_STATUSES = [
   'new',
+  'reviewed',
   'sent',
   'in_progress',
   'done',
@@ -1901,24 +2201,29 @@ export async function getAiTrafficFor(
     .maybeSingle();
   if (!brand) return null;
 
-  let query = supabaseAdmin
-    .from('ai_traffic_logs')
-    .select('source_platform, url, country')
-    .eq('brand_id', params.brandId);
-
-  if (params.dateFrom) query = query.gte('created_at', params.dateFrom);
-  const expandedDateTo = expandDateToEndOfDay(params.dateTo);
-  if (expandedDateTo) query = query.lte('created_at', expandedDateTo);
-
-  const { data: rows, error } = await query;
-  if (error) throw new Error(error.message);
-
-  const rawRows =
-    (rows as Array<{
-      source_platform: string | null;
-      url: string;
-      country: string | null;
-    }> | null) ?? [];
+  // Visits, not pageviews: a row whose visit_of is null starts one (00172),
+  // as the AI Traffic page counts them. The total by count, which no row cap
+  // touches, and the breakdowns by paging through the range: one plain
+  // select stopped at PostgREST's 1,000 rows.
+  const range = {
+    from: params.dateFrom,
+    to: expandDateToEndOfDay(params.dateTo),
+    toInclusive: true,
+  };
+  const rawRows: Array<{
+    source_platform: string | null;
+    url: string;
+    country: string | null;
+  }> = [];
+  const [totalVisits] = await Promise.all([
+    countTrafficLogs(supabaseAdmin, params.brandId, range),
+    scanTrafficLogs(
+      supabaseAdmin,
+      params.brandId,
+      { ...range, columns: 'source_platform, url, country' },
+      (row) => rawRows.push(row as (typeof rawRows)[number]),
+    ),
+  ]);
 
   // Platform breakdown
   const platformMap = new Map<string, number>();
@@ -1957,7 +2262,7 @@ export async function getAiTrafficFor(
     .sort((a, b) => b.visits - a.visits);
 
   return {
-    total_visits: rawRows.length,
+    total_visits: totalVisits,
     platform_breakdown,
     top_pages,
     country_breakdown,
@@ -1995,7 +2300,8 @@ const PROMPT_VOLUMES_MAX_LIMIT = 500;
 /**
  * Return per-prompt search-volume + competition rows for a brand, scoped
  * `brand → prompt_sets → prompts → prompt_volumes`. Surfaces the demand
- * (`total_google_volume` / `est_ai_volume`) and competition meter
+ * (`total_google_volume`, the median of the keywords' volumes, and
+ * `est_ai_volume`) and competition meter
  * (`competition_index` / `competition`, see #44) so callers can answer
  * "which prompts have the most demand / the least competition?".
  *
@@ -2429,5 +2735,787 @@ export async function getPromptPerformanceFor(
       dateTo: params.dateTo ?? null,
     },
     prompts,
+  };
+}
+
+// ── Action Center ────────────────────────────────────────────────────────────
+//
+// The engine's output: detected signals, the actions consolidated from them,
+// each action's task plan and, once closed, its measured result. Read with the
+// same field names as `lib/actions/action-center.ts`, but through the API-key
+// context rather than the signed-in user. `kind` stays an opaque string: the
+// server's definition registry grows on its own release cycle.
+
+/** Task statuses an MCP client may set. Approval and its states stay with the
+ *  dashboard, and nothing here lets an agent execute a task — only report on it. */
+export const MCP_TASK_STATUSES = ['in_progress', 'completed', 'skipped', 'failed'] as const;
+export type McpTaskStatus = (typeof MCP_TASK_STATUSES)[number];
+
+/** Skipped and failed tasks are not outstanding work, so they leave the
+ *  progress denominator — same rule as the dashboard. */
+const UNCOUNTED_TASK_STATUSES = ['skipped', 'failed'];
+
+const MCP_SIGNAL_COLUMNS =
+  'id, category, kind, impact, status, source, detected_at, last_detected_at, resolved_at, previous_value, current_value, change_value, payload, kpi_keys, action_id';
+
+async function brandInOrg(auth: McpAuthContext, brandId: string): Promise<boolean> {
+  if (!auth.organizationId) return false;
+  const { data } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('id', brandId)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  return Boolean(data);
+}
+
+async function assigneeNames(ids: (string | null)[]): Promise<Map<string, string | null>> {
+  const unique = [...new Set(ids.filter(Boolean))] as string[];
+  if (unique.length === 0) return new Map();
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, full_name')
+    .in('id', unique);
+  if (error) throw new Error(error.message);
+  return new Map((data ?? []).map((p) => [p.id as string, (p.full_name as string | null) ?? null]));
+}
+
+export interface ActionListRow {
+  id: string;
+  action_no: number;
+  category: string;
+  kind: string;
+  impact: string;
+  status: string;
+  outcome: string | null;
+  assignee: { id: string; full_name: string | null } | null;
+  due_date: string | null;
+  task_progress: { completed: number; total: number };
+  priority: ActionPriorityForMcp | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * An action's priority (AC-006): its 0–100 score, its level, and the facts
+ * the score rests on (change, subject, demand, commercial intent, whether the
+ * ground was held before, days since the evidence, and each factor 0–1).
+ * Null until the server has scored the action.
+ */
+export interface ActionPriorityForMcp {
+  score: number;
+  level: string | null;
+  reason: Record<string, unknown> | null;
+}
+
+function priorityFor(row: {
+  priority_score?: number | null;
+  priority_level?: string | null;
+  priority_reason?: unknown;
+}): ActionPriorityForMcp | null {
+  if (row.priority_score === null || row.priority_score === undefined) return null;
+  return {
+    score: Number(row.priority_score),
+    level: row.priority_level ?? null,
+    reason:
+      row.priority_reason && typeof row.priority_reason === 'object'
+        ? (row.priority_reason as Record<string, unknown>)
+        : null,
+  };
+}
+
+export interface ListActionsParams {
+  brandId: string;
+  status?: string;
+  category?: string;
+  limit?: number;
+  /**
+   * `priority` (default): highest priority score first, unscored last — the
+   * order the app lists them in; `updated`: most recently updated first.
+   */
+  sort?: 'updated' | 'priority';
+}
+
+export async function listActionsFor(
+  auth: McpAuthContext,
+  params: ListActionsParams,
+): Promise<ActionListRow[] | null> {
+  if (!(await brandInOrg(auth, params.brandId))) return null;
+
+  const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
+  let query = supabaseAdmin
+    .from('actions')
+    .select(
+      'id, action_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason',
+    )
+    .eq('brand_id', params.brandId)
+    // A deleted action (00168) is gone for everyone but the nightly generator.
+    .is('deleted_at', null);
+  query =
+    params.sort === 'updated'
+      ? query.order('updated_at', { ascending: false })
+      : query
+          .order('priority_score', { ascending: false, nullsFirst: false })
+          .order('updated_at', { ascending: false });
+  query = query.limit(limit);
+  if (params.status) query = query.eq('status', params.status);
+  if (params.category) query = query.eq('category', params.category);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+  if (rows.length === 0) return [];
+
+  const { data: tasks, error: taskError } = await supabaseAdmin
+    .from('action_tasks')
+    .select('action_id, status')
+    .in(
+      'action_id',
+      rows.map((r) => r.id),
+    );
+  if (taskError) throw new Error(taskError.message);
+
+  const progress = new Map<string, { completed: number; total: number }>();
+  for (const task of tasks ?? []) {
+    if (UNCOUNTED_TASK_STATUSES.includes(task.status)) continue;
+    const acc = progress.get(task.action_id) ?? { completed: 0, total: 0 };
+    acc.total += 1;
+    if (task.status === 'completed') acc.completed += 1;
+    progress.set(task.action_id, acc);
+  }
+  const names = await assigneeNames(rows.map((r) => r.assignee_id));
+
+  return rows.map((r) => ({
+    id: r.id,
+    action_no: Number(r.action_no),
+    category: r.category,
+    kind: r.kind,
+    impact: r.impact,
+    status: r.status,
+    outcome: r.outcome ?? null,
+    assignee: r.assignee_id
+      ? { id: r.assignee_id, full_name: names.get(r.assignee_id) ?? null }
+      : null,
+    due_date: r.due_date ?? null,
+    task_progress: progress.get(r.id) ?? { completed: 0, total: 0 },
+    priority: priorityFor(r),
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+  }));
+}
+
+export interface ActionDetailForMcp {
+  id: string;
+  action_no: number;
+  brand_id: string;
+  category: string;
+  kind: string;
+  impact: string;
+  status: string;
+  outcome: string | null;
+  payload: Record<string, unknown>;
+  kpi_keys: string[];
+  assignee: { id: string; full_name: string | null } | null;
+  due_date: string | null;
+  priority: ActionPriorityForMcp | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  tasks: Array<{
+    id: string;
+    position: number;
+    task_key: string | null;
+    title: string | null;
+    title_params: Record<string, unknown>;
+    status: string;
+    skip_reason: string | null;
+    mode: string | null;
+    permission: string | null;
+    depends_on: string[];
+    details: ReturnType<typeof mcpTaskDetails>;
+  }>;
+  signals: Record<string, unknown>[];
+  events: Array<{ event: string; data: Record<string, unknown>; created_at: string }>;
+}
+
+/** A task's details in the snake_case the rest of the MCP output uses. */
+function mcpTaskDetails(raw: unknown) {
+  const d = parseTaskDetails(raw);
+  if (!d) return null;
+  return {
+    where: d.where,
+    why: d.why,
+    how: d.how,
+    done_when: d.doneWhen,
+    type: d.type,
+    effort: d.effort,
+    role: d.role,
+    body: d.body,
+    platform: d.platform,
+    platform_label: d.platformLabel,
+    sources: d.sources,
+    // Where it was sent (AC-004).
+    sent_to_content: d.sent.content
+      ? { opportunity_id: d.sent.content.opportunityId, at: d.sent.content.at }
+      : null,
+    sent_to_webhook: d.sent.webhook ? { at: d.sent.webhook.at } : null,
+  };
+}
+
+export async function getActionFor(
+  auth: McpAuthContext,
+  actionId: string,
+): Promise<ActionDetailForMcp | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: action, error } = await supabaseAdmin
+    .from('actions')
+    .select(
+      'id, action_no, brand_id, category, kind, impact, status, outcome, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, priority_score, priority_level, priority_reason, brands!inner(organization_id)',
+    )
+    .eq('id', actionId)
+    .eq('brands.organization_id', auth.organizationId)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!action) return null;
+
+  const [tasksRes, signalsRes, eventsRes, names] = await Promise.all([
+    supabaseAdmin
+      .from('action_tasks')
+      .select(
+        'id, position, task_key, title, title_params, status, skip_reason, mode, permission, depends_on, details',
+      )
+      .eq('action_id', actionId)
+      .order('position'),
+    // Every signal the action has taken as evidence (AC-007), kept after a
+    // signal moves on to a later cycle.
+    supabaseAdmin
+      .from('signals')
+      .select(`${MCP_SIGNAL_COLUMNS}, action_signals!inner(action_id)`)
+      .eq('brand_id', action.brand_id)
+      .eq('action_signals.action_id', actionId)
+      .order('detected_at', { ascending: false }),
+    supabaseAdmin
+      .from('action_events')
+      .select('event, data, created_at')
+      .eq('action_id', actionId)
+      .order('created_at'),
+    assigneeNames([action.assignee_id]),
+  ]);
+  if (tasksRes.error) throw new Error(tasksRes.error.message);
+  if (signalsRes.error) throw new Error(signalsRes.error.message);
+  if (eventsRes.error) throw new Error(eventsRes.error.message);
+
+  return {
+    id: action.id,
+    action_no: Number(action.action_no),
+    brand_id: action.brand_id,
+    category: action.category,
+    kind: action.kind,
+    impact: action.impact,
+    status: action.status,
+    outcome: action.outcome ?? null,
+    payload: (action.payload ?? {}) as Record<string, unknown>,
+    kpi_keys: action.kpi_keys ?? [],
+    assignee: action.assignee_id
+      ? { id: action.assignee_id, full_name: names.get(action.assignee_id) ?? null }
+      : null,
+    due_date: action.due_date ?? null,
+    priority: priorityFor(action),
+    created_at: action.created_at,
+    updated_at: action.updated_at,
+    completed_at: action.completed_at ?? null,
+    tasks: (tasksRes.data ?? []).map((t) => ({
+      id: t.id,
+      position: t.position,
+      task_key: t.task_key ?? null,
+      title: t.title ?? null,
+      title_params: (t.title_params ?? {}) as Record<string, unknown>,
+      status: t.status,
+      skip_reason: t.skip_reason ?? null,
+      mode: t.mode ?? null,
+      permission: t.permission ?? null,
+      depends_on: (t.depends_on ?? []) as string[],
+      // Where, why, how and done-when (AC-004); an Improve task's body and evidence.
+      details: mcpTaskDetails(t.details),
+    })),
+    // The join that found them is not part of a signal.
+    signals: ((signalsRes.data ?? []) as Record<string, unknown>[]).map((row) =>
+      Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'action_signals')),
+    ),
+    events: (eventsRes.data ?? []).map((e) => ({
+      event: e.event,
+      data: (e.data ?? {}) as Record<string, unknown>,
+      created_at: e.created_at,
+    })),
+  };
+}
+
+export interface ListSignalsParams {
+  brandId: string;
+  status?: string;
+  kind?: string;
+  limit?: number;
+}
+
+/** Signal ids per action_signals read: 100 UUIDs keep the request line well under 8KB. */
+const SIGNAL_LINK_CHUNK = 100;
+
+type LinkedAction = { id: string; action_no: number; kind: string; status: string };
+
+/**
+ * The actions each signal has been used by, through action_signals (AC-007):
+ * its current action and the earlier ones, closed ones included, the latest
+ * link first. They only add used_by_actions, so a failed read is logged and
+ * leaves every signal's list empty rather than taking the signals down.
+ */
+async function signalActionRefs(
+  brandId: string,
+  signalIds: string[],
+): Promise<Map<string, SignalActionRef[]>> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < signalIds.length; i += SIGNAL_LINK_CHUNK) {
+    chunks.push(signalIds.slice(i, i + SIGNAL_LINK_CHUNK));
+  }
+  const results = await Promise.all(
+    chunks.map((ids) =>
+      supabaseAdmin
+        .from('action_signals')
+        .select('signal_id, actions!inner(id, action_no, kind, status)')
+        .in('signal_id', ids)
+        .eq('actions.brand_id', brandId)
+        .is('actions.deleted_at', null)
+        .order('linked_at', { ascending: false }),
+    ),
+  );
+  const bySignal = new Map<string, SignalActionRef[]>();
+  for (const { data, error } of results) {
+    if (error) {
+      console.error('[mcp] signal actions read failed:', error.message);
+      return new Map();
+    }
+    // The untyped admin client models the action_signals→actions FK as an
+    // array; it is a single action, so peel it off.
+    const links =
+      (data as unknown as Array<{
+        signal_id: string;
+        actions: LinkedAction[] | LinkedAction | null;
+      }> | null) ?? [];
+    for (const link of links) {
+      const a = Array.isArray(link.actions) ? (link.actions[0] ?? null) : link.actions;
+      if (!a) continue;
+      bySignal.set(link.signal_id, [
+        ...(bySignal.get(link.signal_id) ?? []),
+        { id: a.id, action_no: Number(a.action_no), kind: a.kind, status: a.status },
+      ]);
+    }
+  }
+  return bySignal;
+}
+
+export async function listSignalsFor(
+  auth: McpAuthContext,
+  params: ListSignalsParams,
+): Promise<Record<string, unknown>[] | null> {
+  if (!(await brandInOrg(auth, params.brandId))) return null;
+
+  const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
+  let query = supabaseAdmin
+    .from('signals')
+    .select(MCP_SIGNAL_COLUMNS)
+    .eq('brand_id', params.brandId)
+    .order('detected_at', { ascending: false })
+    .limit(limit);
+  if (params.status) query = query.eq('status', params.status);
+  if (params.kind) query = query.eq('kind', params.kind);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as SignalRow[];
+
+  // Each signal also says where it happened, what changed with units and
+  // period, what it rests on, and which actions use it (AC-001), the same
+  // way the dashboard's signal drawer does. A signal is linked to an action
+  // only by becoming its current one, so those without one have no links.
+  const [prompts, actions] = await Promise.all([
+    readPromptPlaces(supabaseAdmin, params.brandId),
+    signalActionRefs(
+      params.brandId,
+      rows.filter((row) => row.action_id).map((row) => row.id),
+    ),
+  ]);
+  const known = new Map(mapSignalRows(rows, prompts).map((signal) => [signal.id, signal]));
+
+  return rows.map((row) => {
+    const used = currentActionFirst(actions.get(row.id) ?? [], row.action_id);
+    const signal = known.get(row.id);
+    // A kind this build has no detail for still comes back, as it always did.
+    return signal
+      ? { ...row, ...signalDetailForApi(signal, used) }
+      : { ...row, used_by_actions: used };
+  });
+}
+
+export interface ActionHistoryRow {
+  id: string;
+  action_no: number;
+  category: string;
+  kind: string;
+  impact: string;
+  status: string;
+  outcome: string | null;
+  created_at: string;
+  completed_at: string | null;
+  /** Before/after pairs the validation sweep measured; empty until it runs. */
+  results: Array<{ metric: string; unit: string; before: number; after: number }>;
+}
+
+interface ValidationMetric {
+  metric: string;
+  unit: string;
+  before: number | null;
+  after: number | null;
+}
+
+export async function listActionHistoryFor(
+  auth: McpAuthContext,
+  params: { brandId: string; limit?: number },
+): Promise<ActionHistoryRow[] | null> {
+  if (!(await brandInOrg(auth, params.brandId))) return null;
+
+  const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
+  const { data, error } = await supabaseAdmin
+    .from('actions')
+    .select(
+      'id, action_no, category, kind, impact, status, outcome, validation, created_at, completed_at',
+    )
+    .eq('brand_id', params.brandId)
+    .in('status', ['completed', 'dismissed'])
+    .is('deleted_at', null)
+    .order('completed_at', { ascending: false, nullsFirst: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((r) => {
+    const metrics = (r.validation as { metrics?: ValidationMetric[] } | null)?.metrics ?? [];
+    return {
+      id: r.id,
+      action_no: Number(r.action_no),
+      category: r.category,
+      kind: r.kind,
+      impact: r.impact,
+      status: r.status,
+      outcome: r.outcome ?? null,
+      created_at: r.created_at,
+      completed_at: r.completed_at ?? null,
+      // A metric missing either half was not measured; dropped, as on the dashboard.
+      results: metrics
+        .filter((m) => m.before != null && m.after != null)
+        .map((m) => ({
+          metric: m.metric,
+          unit: m.unit,
+          before: m.before as number,
+          after: m.after as number,
+        })),
+    };
+  });
+}
+
+export interface UpdatedTaskStatus {
+  id: string;
+  action_id: string;
+  status: McpTaskStatus;
+  skip_reason: string | null;
+  updated_at: string;
+}
+
+/**
+ * Move one task of an action — the MCP counterpart of the drawer's task menu.
+ *
+ * Ownership first: a task outside the caller's org returns null before any
+ * write. Then the same rules and trail as the dashboard: a skip must say why,
+ * the change is logged as a `task_status` event under the key's user, and the
+ * action's updated stamp moves.
+ */
+export async function updateTaskStatusFor(
+  auth: McpAuthContext,
+  taskId: string,
+  status: McpTaskStatus,
+  skipReason?: string,
+): Promise<UpdatedTaskStatus | null> {
+  if (!auth.organizationId) return null;
+
+  const reason = status === 'skipped' ? (skipReason ?? '').trim().slice(0, 200) : null;
+  if (status === 'skipped' && !reason) throw new Error('A skipped task needs a skip_reason');
+
+  const { data: owned } = await supabaseAdmin
+    .from('action_tasks')
+    .select('id, action_id, actions!inner(brand_id, brands!inner(organization_id))')
+    .eq('id', taskId)
+    .eq('actions.brands.organization_id', auth.organizationId)
+    .is('actions.deleted_at', null)
+    .maybeSingle();
+  if (!owned) return null;
+
+  const updatedAt = new Date().toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('action_tasks')
+    .update({ status, skip_reason: reason, updated_at: updatedAt })
+    .eq('id', taskId)
+    .select('id, action_id, status, skip_reason, updated_at')
+    .single();
+  if (error) throw new Error(error.message);
+
+  // Best-effort, as on the dashboard: a missing trail entry must not fail the
+  // change it records.
+  await supabaseAdmin.from('action_events').insert({
+    action_id: owned.action_id,
+    event: 'task_status',
+    data: { taskId, to: status, ...(reason ? { reason } : {}) },
+    actor_id: auth.userId,
+  });
+  await supabaseAdmin.from('actions').update({ updated_at: updatedAt }).eq('id', owned.action_id);
+
+  return {
+    id: data.id,
+    action_id: data.action_id,
+    status: data.status as McpTaskStatus,
+    skip_reason: data.skip_reason ?? null,
+    updated_at: data.updated_at ?? updatedAt,
+  };
+}
+
+export const IMPROVE_PRESETS = ['24h', '7d', '30d', '90d', 'custom'] as const;
+export const IMPROVE_SOURCE_TYPES = [
+  'fanout',
+  'domain',
+  'answer',
+  'competitor_url',
+  'brand_page',
+] as const;
+
+export interface CreateImproveActionInput {
+  promptId: string;
+  range: {
+    preset: (typeof IMPROVE_PRESETS)[number];
+    from: string;
+    to?: string;
+    region?: string;
+  };
+  idempotencyKey: string;
+  suggestions: Array<{
+    id: string;
+    platform: string;
+    title: string;
+    body?: string;
+    sources?: Array<{ type: (typeof IMPROVE_SOURCE_TYPES)[number]; ref: string }>;
+  }>;
+}
+
+export interface CreatedImproveAction {
+  actionId: string;
+  actionNo: number;
+  created: boolean;
+  taskCount: number;
+}
+
+/**
+ * Create a `prompt_improve` Action Center action from Improve suggestions —
+ * the MCP counterpart of the Improve tab's "Send Actions".
+ *
+ * Org-ownership of the prompt is verified *first* via supabaseAdmin — a
+ * wrong-org or missing id returns `null` (→ 404 upstream) with no outbound
+ * call. Only then do we call the internal endpoint at
+ * `${API_BASE_URL}/api/internal/prompts/:id/improve/action` with
+ * `Authorization: Bearer ${CRON_SECRET}` and the key's user — same pattern as
+ * `generateBriefFor`. The server checks the prompt_improve plan feature for
+ * that user and dedupes on the idempotency key, so a retried call returns the
+ * action the first one created (`created: false`).
+ */
+export async function createImproveActionFor(
+  auth: McpAuthContext,
+  input: CreateImproveActionInput,
+): Promise<CreatedImproveAction | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: ownership } = await supabaseAdmin
+    .from('prompts')
+    .select('id, prompt_sets!inner(brands!inner(organization_id))')
+    .eq('id', input.promptId)
+    .eq('prompt_sets.brands.organization_id', auth.organizationId)
+    .maybeSingle();
+  if (!ownership) return null;
+
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    throw new Error('CRON_SECRET must be configured for MCP Improve actions');
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/internal/prompts/${input.promptId}/improve/action`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${cronSecret}`,
+    },
+    body: JSON.stringify({
+      userId: auth.userId,
+      preset: input.range.preset,
+      from: input.range.from,
+      to: input.range.to,
+      region: input.range.region ?? '',
+      idempotencyKey: input.idempotencyKey,
+      suggestions: input.suggestions,
+    }),
+  });
+
+  if (!res.ok) {
+    // Surface the server's message (plan without Improve, no suggestions for
+    // this range yet, invalid suggestion) so the agent can relay it.
+    const body = (await res.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(body?.message ?? `Internal Improve endpoint returned ${res.status}`);
+  }
+
+  const body = (await res.json()) as CreatedImproveAction;
+  return {
+    actionId: body.actionId,
+    actionNo: body.actionNo,
+    created: body.created,
+    taskCount: body.taskCount,
+  };
+}
+
+// ── Read-only competitor and report tools (#918) ────────────────────────────
+
+export interface McpCompetitorRow {
+  id: string;
+  name: string;
+  domain: string;
+}
+
+/**
+ * List a brand's competitors only after confirming the brand belongs to the
+ * authenticated organization. The joined ownership predicate on the data
+ * query prevents a brand reassignment between the check and the read.
+ */
+export async function listCompetitorsFor(
+  auth: McpAuthContext,
+  brandId: string,
+): Promise<McpCompetitorRow[] | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: brand, error: brandError } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('id', brandId)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  if (brandError) throw new Error(brandError.message);
+  if (!brand) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from('competitors')
+    .select('id, name, domain, brands!inner(organization_id)')
+    .eq('brand_id', brandId)
+    .eq('brands.organization_id', auth.organizationId)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    name: row.name as string,
+    domain: (row.domain as string | null) ?? '',
+  }));
+}
+
+export interface McpReportListItem {
+  id: string;
+  brand_id: string;
+  title: string;
+  template: string;
+  date_from: string;
+  date_to: string;
+  created_at: string;
+}
+
+/**
+ * List saved immutable report snapshots for an organization-owned brand.
+ * The database query repeats the ownership predicate to avoid a TOCTOU leak.
+ */
+export async function listReportsFor(
+  auth: McpAuthContext,
+  brandId: string,
+  requestedLimit = 50,
+): Promise<McpReportListItem[] | null> {
+  if (!auth.organizationId) return null;
+
+  const { data: brand, error: brandError } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('id', brandId)
+    .eq('organization_id', auth.organizationId)
+    .maybeSingle();
+  if (brandError) throw new Error(brandError.message);
+  if (!brand) return null;
+
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
+    : 50;
+  const { data, error } = await supabaseAdmin
+    .from('reports')
+    .select(
+      'id, brand_id, title, template, date_from, date_to, created_at, brands!inner(organization_id)',
+    )
+    .eq('brand_id', brandId)
+    .eq('brands.organization_id', auth.organizationId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    brand_id: row.brand_id as string,
+    title: row.title as string,
+    template: row.template as string,
+    date_from: row.date_from as string,
+    date_to: row.date_to as string,
+    created_at: row.created_at as string,
+  }));
+}
+
+export interface McpReportDetail extends McpReportListItem {
+  payload: unknown;
+}
+
+/**
+ * Read a saved report only if its parent brand belongs to the authenticated
+ * organization. The joined ownership predicate is applied in the database.
+ */
+export async function getReportFor(
+  auth: McpAuthContext,
+  reportId: string,
+): Promise<McpReportDetail | null> {
+  if (!auth.organizationId) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from('reports')
+    .select(
+      'id, brand_id, title, template, date_from, date_to, created_at, payload, brands!inner(organization_id)',
+    )
+    .eq('id', reportId)
+    .eq('brands.organization_id', auth.organizationId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+
+  return {
+    id: data.id as string,
+    brand_id: data.brand_id as string,
+    title: data.title as string,
+    template: data.template as string,
+    date_from: data.date_from as string,
+    date_to: data.date_to as string,
+    created_at: data.created_at as string,
+    payload: data.payload,
   };
 }

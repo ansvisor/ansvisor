@@ -2,9 +2,10 @@
  * Daily Google Analytics sync (#704).
  *
  * For every active brand mapped to a GA4 property (#694) whose org connection
- * is live, pulls three reports through Composio and upserts them:
+ * is live, pulls four reports through Composio and upserts them:
  *
  *   ga_ai_traffic_stats  AI-sourced sessions per landing page
+ *   ga_channel_stats     sessions per default channel group (AT-005)
  *   ga_page_stats        landing-page totals across every source
  *   ga_item_stats        product rows, when the property has ecommerce
  *
@@ -18,7 +19,13 @@
 
 import supabaseAdmin from '../config/supabase.js';
 import { isComposioConfigured, runGaReport } from './composio.js';
-import { GA_AI_SOURCE_VALUES, classifyGaSource } from './ga-sources.js';
+import { AI_SOURCES_VERSION } from './ai-sources.js';
+import {
+  GA_AI_ASSISTANT_CHANNEL,
+  GA_AI_SOURCE_PATTERN,
+  classifyGaSource,
+  gaAiPlatform,
+} from './ga-sources.js';
 import { logger } from './logger.js';
 
 /** First sync pulls this much history; later runs only refresh the tail. */
@@ -68,6 +75,9 @@ const TRAFFIC_METRICS = [
   'sessions',
   'engagedSessions',
   'keyEvents',
+  // The share of sessions with a key event (AT-005): key events alone can't
+  // give a rate, as one session can hold several.
+  'sessionKeyEventRate',
   'totalUsers',
   'transactions',
   'purchaseRevenue',
@@ -122,10 +132,14 @@ export function readReportRows(report) {
 }
 
 function trafficMetricColumns(row) {
+  const sessions = toInt(row.sessions);
   return {
-    sessions: toInt(row.sessions),
+    sessions,
     engaged_sessions: toInt(row.engagedSessions),
     key_events: toInt(row.keyEvents),
+    // A count rather than GA4's rate, so rows can be summed and a rate taken
+    // over any range: sessions with a key event ÷ sessions.
+    key_event_sessions: Math.round(toFloat(row.sessionKeyEventRate) * sessions),
     total_users: toInt(row.totalUsers),
     transactions: toInt(row.transactions),
     purchase_revenue: toFloat(row.purchaseRevenue),
@@ -133,25 +147,56 @@ function trafficMetricColumns(row) {
   };
 }
 
-/** AI-sourced rows → ga_ai_traffic_stats. Rows without a date are dropped. */
+const SUMMED_COLUMNS = [
+  'sessions',
+  'engaged_sessions',
+  'key_events',
+  'key_event_sessions',
+  'total_users',
+  'transactions',
+  'purchase_revenue',
+  'engagement_duration_seconds',
+];
+
+/**
+ * AI-sourced rows → ga_ai_traffic_stats. Rows without a date are dropped.
+ *
+ * The report is split by channel too, to know which sessions GA4 itself
+ * calls AI (AT-004), so one source can come back twice for a page and day —
+ * as a referral and as an AI Assistant session. Storage keeps one row per
+ * (date, source, entry URL), so those are summed into it: the same visits
+ * GA4 would report without the channel, never counted twice.
+ */
 export function mapAiTrafficRows(brandId, report) {
-  const mapped = [];
+  const byKey = new Map();
   for (const row of readReportRows(report)) {
     const date = gaDateToIso(row.date);
     if (!date) continue;
     const source = row.sessionSource ?? '';
-    mapped.push({
+    const landingPageQuery = row.landingPagePlusQueryString ?? '';
+    const metrics = trafficMetricColumns(row);
+    const key = `${date}|${source}|${landingPageQuery}`;
+    const seen = byKey.get(key);
+    if (seen) {
+      for (const column of SUMMED_COLUMNS) seen[column] += metrics[column];
+      // Known to GA4's channel on either row is enough to name it.
+      seen.platform ??= gaAiPlatform(source, row.sessionDefaultChannelGroup);
+      continue;
+    }
+    byKey.set(key, {
       brand_id: brandId,
       date,
       source,
-      platform: classifyGaSource(source),
+      platform: gaAiPlatform(source, row.sessionDefaultChannelGroup),
       // Path for joining the page totals, full URL for attribution.
       landing_page: row.landingPage ?? '',
-      landing_page_query: row.landingPagePlusQueryString ?? '',
-      ...trafficMetricColumns(row),
+      landing_page_query: landingPageQuery,
+      ...metrics,
+      // The AI source list that counted this row (ai-sources.json).
+      source_list_version: AI_SOURCES_VERSION,
     });
   }
-  return mapped;
+  return [...byKey.values()];
 }
 
 /** Landing-page totals → ga_page_stats. */
@@ -164,6 +209,25 @@ export function mapPageRows(brandId, report) {
       brand_id: brandId,
       date,
       landing_page: row.landingPage ?? '',
+      ...trafficMetricColumns(row),
+    });
+  }
+  return mapped;
+}
+
+/**
+ * Sessions per day and default channel group → ga_channel_stats (AT-005):
+ * Organic Search is what the AI Traffic page compares AI visitors with.
+ */
+export function mapChannelRows(brandId, report) {
+  const mapped = [];
+  for (const row of readReportRows(report)) {
+    const date = gaDateToIso(row.date);
+    if (!date) continue;
+    mapped.push({
+      brand_id: brandId,
+      date,
+      channel: row.sessionDefaultChannelGroup || '(not set)',
       ...trafficMetricColumns(row),
     });
   }
@@ -194,7 +258,7 @@ export function mapItemRows(brandId, report) {
 /**
  * Sources GA4 reported that the classification list does not know, ordered by
  * sessions. Logged rather than stored: the point is to notice a new assistant
- * showing up in real traffic and extend ga-sources.js deliberately, not to
+ * showing up in real traffic and extend ai-sources.json deliberately, not to
  * accumulate every referrer a site ever sees.
  */
 export function unclassifiedSources(report, { minSessions = 1, limit = 10 } = {}) {
@@ -299,32 +363,65 @@ async function syncDays({ brand, entityId, days, label, ...report }) {
   return stored;
 }
 
-async function syncBrand(brand) {
+/**
+ * The days the AI report covers. A first sync, or a history backfill, takes
+ * as far back as storage keeps (RETENTION_DAYS, about 13 months): GA4 fills
+ * the AI traffic history from before the snippet was installed (spec §5.2),
+ * and the AI slice is small. Page totals stay at BACKFILL_DAYS — up to 5,000
+ * rows a day each.
+ */
+export function aiReportDays({ first, aiHistory = false }) {
+  return dayRange(first || aiHistory ? RETENTION_DAYS : REFRESH_DAYS);
+}
+
+/** The AI report's filter: a session source on the list, or GA4's own AI channel. */
+export const GA_AI_FILTER = {
+  orGroup: {
+    expressions: [
+      {
+        filter: {
+          fieldName: 'sessionSource',
+          stringFilter: {
+            matchType: 'FULL_REGEXP',
+            value: GA_AI_SOURCE_PATTERN,
+            caseSensitive: false,
+          },
+        },
+      },
+      {
+        filter: {
+          fieldName: 'sessionDefaultChannelGroup',
+          stringFilter: { matchType: 'EXACT', value: GA_AI_ASSISTANT_CHANNEL },
+        },
+      },
+    ],
+  },
+};
+
+async function syncBrand(brand, { aiHistory = false } = {}) {
   const entityId = `org_${brand.organization_id}`;
   const first = await isFirstSync(brand.id);
   const days = dayRange(first ? BACKFILL_DAYS : REFRESH_DAYS);
   const dateRanges = [{ startDate: days[days.length - 1], endDate: days[0] }];
+  const aiDays = aiReportDays({ first, aiHistory });
   const metrics = TRAFFIC_METRICS.map((name) => ({ name }));
 
   // The AI slice is small enough to take in one call — a live property
   // produced 96 rows over 90 days — so it keeps the full entry URL and needs
   // no ceiling.
   const aiReport = await runGaReport(entityId, brand.ga_property_id, {
-    dateRanges,
+    dateRanges: [{ startDate: aiDays[aiDays.length - 1], endDate: aiDays[0] }],
     dimensions: [
       { name: 'date' },
       { name: 'sessionSource' },
+      { name: 'sessionDefaultChannelGroup' },
       { name: 'landingPage' },
       { name: 'landingPagePlusQueryString' },
     ],
     metrics,
-    // An explicit value list, not a pattern — see ga-sources.js for why.
-    dimensionFilter: {
-      filter: {
-        fieldName: 'sessionSource',
-        inListFilter: { values: GA_AI_SOURCE_VALUES, caseSensitive: false },
-      },
-    },
+    // A host on the list or one of its subdomains, never a substring match —
+    // see ai-sources.js for why — or GA4's AI Assistant channel.
+    dimensionFilter: GA_AI_FILTER,
     orderBys: PAGE_ORDER,
     limit: 100_000,
   });
@@ -333,6 +430,20 @@ async function syncBrand(brand) {
     await upsertAll('ga_ai_traffic_stats', aiMapped, 'brand_id,date,source,landing_page_query');
   }
   const aiRows = aiMapped.length;
+
+  // Every channel's sessions over the same days (AT-005): a dozen rows a
+  // day, so one call. Organic Search is the AI Traffic page's comparison.
+  const channelReport = await runGaReport(entityId, brand.ga_property_id, {
+    dateRanges: [{ startDate: aiDays[aiDays.length - 1], endDate: aiDays[0] }],
+    dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGroup' }],
+    metrics,
+    limit: 100_000,
+  });
+  const channelMapped = mapChannelRows(brand.id, channelReport);
+  if (channelMapped.length) {
+    await upsertAll('ga_channel_stats', channelMapped, 'brand_id,date,channel');
+  }
+  const channelRows = channelMapped.length;
 
   const pageRows = await syncDays({
     brand,
@@ -380,7 +491,7 @@ async function syncBrand(brand) {
 
   // Source discovery: one cheap call (no page dimension) over the same window
   // so a newly popular assistant shows up in the logs instead of silently
-  // failing the inList filter above forever.
+  // failing the filter above forever.
   try {
     const report = await runGaReport(entityId, brand.ga_property_id, {
       dateRanges,
@@ -397,7 +508,7 @@ async function syncBrand(brand) {
     logger.debug({ brandId: brand.id, err: err.message }, '[ga-sync] source discovery failed');
   }
 
-  return { first, aiRows, pageRows, itemRows };
+  return { first, aiRows, channelRows, pageRows, itemRows };
 }
 
 async function prune(table) {
@@ -411,9 +522,11 @@ async function prune(table) {
 /**
  * Sync every eligible brand; optionally scoped to one organization (the
  * manual trigger) or to one brand (right after its property is mapped).
+ * `aiHistory` re-reads the AI report as far back as storage keeps, for brands
+ * synced before the AI history went past BACKFILL_DAYS (backfill-ga-ai-history.js).
  * Returns per-brand counts.
  */
-export async function runGaSync({ organizationId, brandId } = {}) {
+export async function runGaSync({ organizationId, brandId, aiHistory = false } = {}) {
   if (!isComposioConfigured('google-analytics')) return { synced: 0, skipped: 0, results: [] };
 
   // Orgs with a live connection…
@@ -444,7 +557,7 @@ export async function runGaSync({ organizationId, brandId } = {}) {
   let skipped = 0;
   for (const brand of brands || []) {
     try {
-      const counts = await syncBrand(brand);
+      const counts = await syncBrand(brand, { aiHistory });
       results.push({ brandId: brand.id, ...counts });
       synced++;
     } catch (err) {
@@ -456,7 +569,12 @@ export async function runGaSync({ organizationId, brandId } = {}) {
 
   // Retention is table-wide, so a single-brand sync leaves it to the daily run.
   if (!brandId) {
-    for (const table of ['ga_ai_traffic_stats', 'ga_page_stats', 'ga_item_stats']) {
+    for (const table of [
+      'ga_ai_traffic_stats',
+      'ga_channel_stats',
+      'ga_page_stats',
+      'ga_item_stats',
+    ]) {
       await prune(table);
     }
   }

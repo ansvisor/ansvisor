@@ -3,319 +3,51 @@
  * Moves the LLM-based generation out of the HTTP request path.
  */
 
-import { generateObject } from 'ai';
-import { z } from 'zod';
-import { resolveModel } from '../lib/ai-provider.js';
-import { getLanguageName } from '../lib/languages.js';
-import supabaseAdmin from '../config/supabase.js';
-import { selectInChunks } from '../lib/chunked-in.js';
 import logger from '../lib/logger.js';
-import {
-  ALREADY_SUGGESTED_RULE,
-  OPPORTUNITIES_PER_RUN,
-  OPPORTUNITY_COUNT_RULE,
-  alreadySuggested,
-  belowOpenCap,
-  openCountsByPrompt,
-  openTitlesByPrompt,
-  opportunityKey,
-  relatedCandidate,
-} from '../lib/opportunity-limits.js';
-import { loadOpenOpportunities } from '../lib/open-opportunities.js';
-
-const opportunitySchema = z.object({
-  opportunities: z
-    .array(
-      z.object({
-        title: z
-          .string()
-          .describe(
-            'A specific, actionable content recommendation backed by the data provided. Never reference prompts by their bracketed index like [0] or "Prompt 3" — name the topic or paraphrase the prompt text instead.',
-          ),
-        description: z
-          .string()
-          .describe(
-            'A 1-2 sentence explanation of why this action matters, referencing specific metrics. Never reference prompts by their bracketed index like [0] or "Prompt 3" — name the topic or paraphrase the prompt text instead.',
-          ),
-        type: z
-          .enum(['owned', 'earned'])
-          .describe(
-            'owned = content the brand controls (blog, landing page); earned = external content (PR, guest post, review)',
-          ),
-        impact: z
-          .enum(['high', 'medium', 'low'])
-          .describe('Expected impact on AI visibility based on volume and gap'),
-        relatedPromptIndex: z
-          .number()
-          .describe('0-based index of the prompt in the input array this opportunity relates to'),
-      }),
-    )
-    .min(1)
-    .max(OPPORTUNITIES_PER_RUN),
-});
-
-const OPPORTUNITY_SYSTEM_PROMPT = `You are an AEO (Answer Engine Optimization) content strategist. Given a brand's AI visibility data — including prompt tracking results, search volumes, and competitor mentions — generate specific, actionable content recommendations.
-
-Rules:
-- Each recommendation must be concrete and actionable (e.g. "Create a comprehensive comparison page for X" not "Improve your content").
-- Reference specific data points: volumes, visibility scores, competitor gaps.
-- Focus on content that will improve the brand's visibility in AI-generated answers.
-- Categorize as "owned" (blog posts, landing pages, FAQ pages the brand controls) or "earned" (guest posts, PR, review sites).
-- Set impact based on: volume × (100 - current visibility) × competitor gap.
-${OPPORTUNITY_COUNT_RULE}
-- Do NOT repeat the same recommendation in different wording.
-${ALREADY_SUGGESTED_RULE}
-- The bracketed [N] indexes in the prompt data exist ONLY for the relatedPromptIndex field. NEVER mention an index like "[0]" or "Prompt 3" in titles or descriptions — refer to the prompt by quoting or paraphrasing its actual text/topic instead.`;
-
-function computeOpportunityScore(volume, visibility, competitorGap, intent) {
-  const intentWeights = {
-    comparison: 1.0,
-    'best-top': 0.95,
-    'vs-review': 0.9,
-    recommendation: 0.85,
-    'how-to': 0.75,
-    'problem-solving': 0.7,
-    'what-is': 0.6,
-    other: 0.5,
-  };
-
-  const maxVolume = 50000;
-  const normalizedVolume = Math.min(volume / maxVolume, 1);
-  const visibilityGap = (100 - (visibility || 0)) / 100;
-  const normalizedCompGap = Math.min((competitorGap || 0) / 100, 1);
-  const intentWeight = intentWeights[intent] || 0.5;
-
-  const score =
-    normalizedVolume * 40 + visibilityGap * 30 + normalizedCompGap * 20 + intentWeight * 10;
-
-  return Math.round(Math.min(score, 100) * 100) / 100;
-}
+import { generateContentOpportunities } from '../lib/opportunity-generator.js';
+import { refreshPromptClusters } from '../lib/prompt-clusters.js';
 
 /**
- * Core logic: collect brand data, generate opportunities via LLM, save them.
- * @param {{ brandId: string, model?: string, job?: { progress: function, signal?: AbortSignal } }} opts
+ * The "+ New" button (CONTENT-003) runs the same per-cluster generation as
+ * the nightly run. Clusters are refreshed first: a brand whose prompts changed since its
+ * last tracking cycle, or that has never been clustered, would otherwise get
+ * nothing or work from stale groups. The button adds to the existing list
+ * (#63); a cluster that already has an opportunity is skipped.
+ *
+ * @param {{ brandId: string, model?: string, job: { progress: function }, request?: object | null }} opts
  */
-export async function processContentJob({ brandId, model, job }) {
-  job.progress({ phase: 'collecting_data', message: 'Fetching brand and prompt data...' });
-
-  const { data: brand } = await supabaseAdmin
-    .from('brands')
-    .select('id, name, description, industry, organization_id, language')
-    .eq('id', brandId)
-    .single();
-
-  if (!brand) throw new Error(`Brand not found: ${brandId}`);
-  const langName = getLanguageName(brand.language);
-
-  const { data: domains } = await supabaseAdmin
-    .from('brand_domains')
-    .select('domain')
-    .eq('brand_id', brandId);
-
-  const { data: promptSets } = await supabaseAdmin
-    .from('prompt_sets')
-    .select('id')
-    .eq('brand_id', brandId);
-
-  if (!promptSets?.length) {
-    throw new Error('No prompt sets found. Add prompts first.');
-  }
-
-  const setIds = promptSets.map((ps) => ps.id);
-
-  const { data: prompts } = await supabaseAdmin
-    .from('prompts')
-    .select('id, text, category')
-    .in('prompt_set_id', setIds)
-    .eq('is_active', true);
-
-  if (!prompts?.length) {
-    throw new Error('No active prompts found.');
-  }
-
-  const promptIds = prompts.map((p) => p.id);
-
-  // Chunked for the same reason as the volumes route: hundreds of prompt
-  // uuids in one query string is the request size the edge starts rejecting
-  // (see lib/chunked-in.js). A prompt's rows stay together in one chunk, so
-  // the per-prompt ordering the maps below rely on is unchanged.
-  const [volumeResult, resultResult, competitorResult] = await Promise.all([
-    selectInChunks(promptIds, (chunk) =>
-      supabaseAdmin.from('prompt_volumes').select('*').in('prompt_id', chunk),
-    ),
-    selectInChunks(promptIds, (chunk) =>
-      supabaseAdmin
-        .from('prompt_results')
-        .select(
-          'prompt_id, visibility_score, mention_count, citation_count, sentiment, competitor_mentions',
-        )
-        .in('prompt_id', chunk)
-        .order('created_at', { ascending: false }),
-    ),
-    supabaseAdmin.from('competitors').select('id, name, domain').eq('brand_id', brandId),
-  ]);
-
-  const volumes = volumeResult.data || [];
-  const results = resultResult.data || [];
-  const competitors = competitorResult.data || [];
-
-  const volumeMap = {};
-  for (const v of volumes) volumeMap[v.prompt_id] = v;
-
-  const resultMap = {};
-  for (const r of results) {
-    if (!resultMap[r.prompt_id]) resultMap[r.prompt_id] = [];
-    resultMap[r.prompt_id].push(r);
-  }
-
-  const testedPrompts = prompts.filter((p) => (resultMap[p.id] || []).length > 0);
-  if (!testedPrompts.length) {
-    return { generated: 0 };
-  }
-
-  const promptDataForLLM = testedPrompts.map((p, idx) => {
-    const vol = volumeMap[p.id];
-    const res = resultMap[p.id] || [];
-
-    const avgVisibility =
-      res.length > 0 ? Math.round(res.reduce((s, r) => s + r.visibility_score, 0) / res.length) : 0;
-
-    const competitorMentions = {};
-    for (const r of res) {
-      if (r.competitor_mentions) {
-        const mentions =
-          typeof r.competitor_mentions === 'string'
-            ? JSON.parse(r.competitor_mentions)
-            : r.competitor_mentions;
-        for (const cm of mentions || []) {
-          competitorMentions[cm.name] =
-            (competitorMentions[cm.name] || 0) + (cm.visibility_score || 0);
-        }
-      }
+export async function processContentJob({ brandId, model, job, request = null }) {
+  // An alternative (CONTENT-006) is asked for one known cluster; regrouping
+  // first could replace that cluster before it's read.
+  if (!request?.alternativeOf) {
+    job.progress({ phase: 'collecting_data', message: 'Grouping prompts into clusters...' });
+    try {
+      await refreshPromptClusters(brandId);
+    } catch (err) {
+      logger.error({ err, brandId }, 'prompt cluster refresh failed before generation');
     }
-
-    return {
-      index: idx,
-      promptId: p.id,
-      text: p.text,
-      category: p.category || 'unknown',
-      estAiVolume: vol?.est_ai_volume || 0,
-      intent: vol?.intent || 'other',
-      keywords: vol?.keywords || [],
-      avgVisibility,
-      totalResults: res.length,
-      competitorsCited: Object.keys(competitorMentions),
-      competitorGap:
-        Object.values(competitorMentions).length > 0
-          ? Math.round(
-              Object.values(competitorMentions).reduce((a, b) => a + b, 0) /
-                Object.values(competitorMentions).length,
-            ) - avgVisibility
-          : 0,
-    };
-  });
-
-  // The button adds to the open list, as the nightly run does (#63), rather
-  // than replacing it: prompts at the cap are skipped and the rest show the
-  // model what they already hold.
-  const existing = await loadOpenOpportunities(brandId);
-  const openCounts = openCountsByPrompt(existing);
-  const openTitles = openTitlesByPrompt(existing);
-
-  const ranked = promptDataForLLM
-    .map((p) => ({
-      ...p,
-      score: computeOpportunityScore(p.estAiVolume, p.avgVisibility, p.competitorGap, p.intent),
-    }))
-    .sort((a, b) => b.score - a.score);
-  const scoredPrompts = belowOpenCap(ranked, openCounts).slice(0, 25);
-
-  if (scoredPrompts.length === 0) {
-    logger.info(
-      { brandId, openOpportunities: existing.length },
-      'every candidate prompt is at its open cap — nothing generated',
-    );
-    return { generated: 0 };
   }
 
-  job.progress({ phase: 'analyzing', message: 'Generating opportunities with AI...' });
-
-  const userPrompt = `Brand: ${brand.name}
-Industry: ${brand.industry || 'Not specified'}
-Domain: ${(domains || []).map((d) => d.domain).join(', ') || 'N/A'}
-Competitors: ${competitors.map((c) => c.name).join(', ') || 'None tracked'}
-
-Prompt Data (sorted by opportunity score, highest first):
-${scoredPrompts
-  .map(
-    (p, i) =>
-      `[${i}] "${p.text}" | Category: ${p.category} | Intent: ${p.intent} | Est. AI Volume: ${p.estAiVolume}/mo | Visibility: ${p.avgVisibility}% | Competitor Gap: ${p.competitorGap > 0 ? '+' + p.competitorGap : p.competitorGap}% | Competitors Cited: ${p.competitorsCited.join(', ') || 'none'} | Keywords: ${p.keywords.join(', ')}${alreadySuggested(openTitles.get(p.promptId))}`,
-  )
-  .join('\n')}
-
-Generate actionable content opportunities based on this data. Reference specific numbers and competitors where relevant.
-
-IMPORTANT: Write every opportunity title and description in ${langName}.`;
-
-  const aiModel = resolveModel(model);
-
-  const { object } = await generateObject({
-    model: aiModel,
-    schema: opportunitySchema,
-    system: OPPORTUNITY_SYSTEM_PROMPT,
-    prompt: userPrompt,
+  // A "+ New" request (CONTENT-003) carries its count, focus and idea, and
+  // marks what it creates as manual; the nightly path passes none of it.
+  const result = await generateContentOpportunities(brandId, {
+    model,
+    onProgress: (p) => job.progress(p),
+    ...(request
+      ? {
+          count: request.count,
+          topicId: request.topicId ?? null,
+          promptId: request.promptId ?? null,
+          idea: request.idea ?? null,
+          alternativeOf: request.alternativeOf ?? null,
+          explicit: !!request.explicit,
+          pagePath: request.pagePath ?? null,
+          // "+ New" and "Another angle" are manual; "Suggest content" from
+          // the prompts table is tagged prompt.
+          source: request.source === 'prompt' ? 'prompt' : 'manual',
+        }
+      : {}),
   });
-
-  job.progress({ phase: 'saving', message: 'Saving opportunities...' });
-
-  const seen = new Set(existing.map((o) => opportunityKey(o.prompt_id, o.title)));
-
-  const rows = object.opportunities.flatMap((opp) => {
-    const relatedPrompt = relatedCandidate(scoredPrompts, opp.relatedPromptIndex);
-    if (!relatedPrompt) return [];
-    const key = opportunityKey(relatedPrompt.promptId, opp.title);
-    if (seen.has(key)) return [];
-    seen.add(key);
-    const score = computeOpportunityScore(
-      relatedPrompt.estAiVolume,
-      relatedPrompt.avgVisibility,
-      relatedPrompt.competitorGap,
-      relatedPrompt.intent,
-    );
-
-    return [
-      {
-        brand_id: brandId,
-        prompt_id: relatedPrompt.promptId,
-        title: opp.title,
-        description: opp.description,
-        type: opp.type,
-        impact: opp.impact,
-        opportunity_score: score,
-        status: 'new',
-        source_data: {
-          promptText: relatedPrompt.text,
-          estAiVolume: relatedPrompt.estAiVolume,
-          visibilityScore: relatedPrompt.avgVisibility,
-          competitorGap: relatedPrompt.competitorGap,
-          intent: relatedPrompt.intent,
-          keywords: relatedPrompt.keywords,
-          competitorsCited: relatedPrompt.competitorsCited,
-        },
-      },
-    ];
-  });
-
-  const { error: insertErr } =
-    rows.length > 0
-      ? await supabaseAdmin.from('content_opportunities').insert(rows)
-      : { error: null };
-
-  if (insertErr) {
-    throw new Error(insertErr.message);
-  }
-
-  logger.info({ brandId, generated: rows.length }, 'content opportunities generated');
-
-  return { generated: rows.length };
+  logger.info({ brandId, ...result }, 'content opportunities generated');
+  return result;
 }

@@ -19,14 +19,18 @@ import {
   cleanupOldJobs,
   cleanupStalePendingTasks,
 } from './lib/job-manager.js';
-import { runTrackingJob } from './lib/job-runner.js';
+import { runTrackingJob, recoverWaitingJobs } from './lib/job-runner.js';
 import { sweepInsightsRollups } from './lib/insights-rollups.js';
+import { rebuildQueuedCitationRollups, REBUILD_QUEUE_SCHEDULE } from './lib/citations-rollups.js';
 import { sweepActionValidation } from './lib/action-center/validate.js';
+import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
 import { parseScraperResponse } from './lib/cloro-scraper.js';
 import { handleScraperResult } from './lib/cloro-result-handler.js';
 import { verifyCloroWebhook } from './lib/cloro-webhook-verify.js';
 import { generateBriefForOpportunity } from './routes/content.js';
-import { startSiteAuditForBrand } from './routes/audits.js';
+import { sendImproveActionForKeyUser } from './routes/prompts.js';
+import { readOpportunityInbox, startAutoAudits, startSiteAuditForBrand } from './routes/audits.js';
+import { sweepAutoAudits } from './lib/audit/auto-audit-sweep.js';
 import { getSiteAuditQuotaStatus } from './lib/plan-guard.js';
 import { recountBrandCitations } from './lib/citation-recount.js';
 import supabaseAdmin from './config/supabase.js';
@@ -38,6 +42,9 @@ import { runPageOpportunityDetection } from './lib/page-opportunities.js';
 import { runPulseCatchUp } from './lib/pulse/engine.js';
 import { runSignalCatchUp } from './lib/signals/pass.js';
 import { sweepTaskExecution } from './lib/action-center/execution/run.js';
+import { sweepActionTasks } from './lib/action-center/task-writer/index.js';
+import { sendHealthReport } from './lib/health/report.js';
+import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -135,6 +142,12 @@ async function runDailyTracking() {
     logger.error({ err }, '[signals] catch-up sweep crashed');
   });
 
+  // Check the Tracked Prompts usage counters against the prompts themselves
+  // and rebuild any that drifted (PROMPT-012). Non-blocking, like the above.
+  checkPromptUsageCounters().catch((err) => {
+    logger.error({ err }, '[prompt-usage] counter check crashed');
+  });
+
   // Carry out the tasks the engine can carry out itself (#818 phase 7). Runs
   // after the catch-up above so tonight's actions exist before anything tries
   // to work on them. Bounded by a nightly ceiling; every attempt is recorded
@@ -143,6 +156,13 @@ async function runDailyTracking() {
   // somebody does by hand, not a reason to hold up tracking.
   sweepTaskExecution().catch((err) => {
     logger.error({ err }, '[task-run] sweep crashed');
+  });
+
+  // Write the tasks of recent actions whose writing a pass missed (AC-004):
+  // the budget was spent, the model failed, or the process restarted.
+  // Bounded per sweep; a no-op unless ACTION_TASKS_AI is on.
+  sweepActionTasks().catch((err) => {
+    logger.error({ err }, '[task-writer] daily sweep crashed');
   });
 
   // Insights rollup backstop (00066). Re-refreshes the trailing days for
@@ -160,6 +180,12 @@ async function runDailyTracking() {
   // hold up tonight's tracking.
   sweepActionValidation().catch((err) => {
     logger.error({ err }, '[action-validation] daily sweep crashed');
+  });
+
+  // Today's 7-day positions for every Improve action still being tracked
+  // (PROMPT-008): the Outcome card, the Positions panel and History read them.
+  sweepImproveOutcomes().catch((err) => {
+    logger.error({ err }, '[improve-outcome] daily sweep crashed');
   });
 
   // Skip paused brands (is_active = false): the user has explicitly suspended
@@ -236,6 +262,9 @@ async function runDailyTracking() {
   // alongside: it reads the tables the sync writes, so running the two
   // concurrently would score yesterday's window. A sync failure skips
   // detection instead of letting it publish findings from stale data.
+  //
+  // The auto-audit runs (SA-006) come after both, so a run audits the pages
+  // this week's data ranks highest; they run whether or not the sync did.
   runGaSync()
     .then(() =>
       runPageOpportunityDetection().catch((err) => {
@@ -244,10 +273,30 @@ async function runDailyTracking() {
     )
     .catch((err) => {
       logger.error({ err }, '[ga-sync] daily run failed');
-    });
+    })
+    .finally(() =>
+      sweepAutoAudits({ readInbox: readOpportunityInbox, startAudits: startAutoAudits }).catch(
+        (err) => {
+          logger.error({ err }, '[auto-audit] daily sweep crashed');
+        },
+      ),
+    );
 
   return { triggered, total: brands.length };
 }
+
+// --- Daily health report (CRON_SECRET auth, Vercel Cron) ---
+// Answers at once and reports in the background: timing the page reads can
+// take longer than a cron request may stay open.
+app.post('/api/internal/health-report', (req, res) => {
+  const secret = req.headers.authorization?.replace('Bearer ', '');
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  sendHealthReport().catch((err) => logger.error({ err }, '[health] daily report failed'));
+  return res.status(202).json({ success: true });
+});
 
 // --- Internal cron endpoint (CRON_SECRET auth, used by Vercel Cron in cloud mode) ---
 app.post('/api/internal/daily-tracking', async (req, res) => {
@@ -370,6 +419,46 @@ app.get('/api/internal/site-audit-quota', async (req, res) => {
         .json({ success: false, error: 'quota_exceeded', message: err.message });
     }
     req.log.error({ err }, 'internal site audit quota error');
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// --- Internal Improve send endpoint (CRON_SECRET auth, called by web MCP layer) ---
+// The web MCP layer verifies the caller's `ans_` API key org owns the prompt
+// before reaching here and passes the key's user, so this endpoint trusts the
+// secret, checks the user's plan includes prompt_improve and creates the
+// Action Center action exactly as the Improve tab's "Send Actions" does.
+app.post('/api/internal/prompts/:promptId/improve/action', async (req, res) => {
+  const secret = req.headers.authorization?.replace('Bearer ', '');
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  try {
+    const { userId, ...body } = req.body || {};
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'userId is required' });
+    }
+    const result = await sendImproveActionForKeyUser({
+      promptId: req.params.promptId,
+      userId,
+      body,
+    });
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    // PlanLimitError (plan without prompt_improve / inactive subscription)
+    // carries a statusCode — surface it so the MCP layer can relay it.
+    if (err.statusCode) {
+      return res
+        .status(err.statusCode)
+        .json({ success: false, error: 'plan_limit', message: err.message });
+    }
+    if (err.status) {
+      return res
+        .status(err.status)
+        .json({ success: false, message: err.message, details: err.details });
+    }
+    req.log.error({ err }, 'internal improve send error');
     return res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -556,19 +645,38 @@ app.post('/cloro/callback', async (req, res) => {
       domain: c.domain || '',
     }));
 
-    const aiResponse = parseScraperResponse(response, pending.scraper_id);
+    // A completed task with nothing to store — google-aio for a query Google
+    // shows no AI Overview for — is a finished task, not a failed delivery.
+    // Leaving its pending row behind held every tracking run open: the worker
+    // waited out its stall window and the run's stamp its late deadline, for
+    // answers that had arrived seconds after submission.
+    let aiResponse;
+    try {
+      aiResponse = parseScraperResponse(response, pending.scraper_id);
+    } catch (err) {
+      req.log.info(
+        { taskId, scraperId: pending.scraper_id, reason: err.message },
+        'cloro callback: task completed with no answer to store',
+      );
+      await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
+      return;
+    }
 
-    await handleScraperResult({
-      aiResponse,
-      scraperId: pending.scraper_id,
-      promptId: pending.prompt_id,
-      brandId: pending.brand_id,
-      region: pending.region,
-      brandInfo,
-      competitors,
-    });
-
-    await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
+    try {
+      await handleScraperResult({
+        aiResponse,
+        scraperId: pending.scraper_id,
+        promptId: pending.prompt_id,
+        brandId: pending.brand_id,
+        region: pending.region,
+        brandInfo,
+        competitors,
+      });
+    } finally {
+      // Cloro does not deliver again after our 200, so a task that failed to
+      // store will never come back; keeping its row only holds the run open.
+      await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
+    }
 
     req.log.info(
       { taskId, scraperId: pending.scraper_id },
@@ -609,8 +717,37 @@ const PORT = process.env.PORT || 80;
 server.listen(PORT, async () => {
   logger.info({ port: PORT, env: process.env.NODE_ENV }, 'server running');
 
+  // Startup job maintenance acts on every job in the database: it fails all
+  // 'active' jobs as interrupted, deletes old Cloro tasks and takes over
+  // 'waiting' jobs. Only the deployed server owns those. A development
+  // server pointed at the production database (nodemon restarting on every
+  // save) was failing the live nightly runs in the middle of their work.
+  // Keyed on 'development' rather than on 'production', so a deployment
+  // whose env file leaves NODE_ENV unset still runs it.
+  if (process.env.NODE_ENV === 'development') {
+    logger.info('development: skipping job cleanup, recovery and the daily cron');
+    return;
+  }
+
   await cleanupStaleJobs();
   await cleanupStalePendingTasks();
+
+  // The job queue lives in memory: restart waiting jobs whose run chain was
+  // lost (a restart, an error before they got a slot), now and every minute.
+  const recover = () =>
+    recoverWaitingJobs(io).catch((err) => logger.error({ err }, 'waiting-job recovery failed'));
+  await recover();
+  setInterval(recover, 60_000);
+
+  // Rebuild the citation rollups of brands whose prompts changed topic
+  // (00118) within minutes, not at the nightly sweep, so the Citations topic
+  // filter catches up soon after a move. An empty queue costs one select, and
+  // the function itself refuses to overlap with a run still in progress.
+  cron.schedule(REBUILD_QUEUE_SCHEDULE, () =>
+    rebuildQueuedCitationRollups().catch((err) =>
+      logger.error({ err }, '[citations-rollups] scheduled rebuild crashed'),
+    ),
+  );
 
   if (!isCloud()) {
     const schedule = process.env.DAILY_CRON_SCHEDULE || '0 6 * * *';

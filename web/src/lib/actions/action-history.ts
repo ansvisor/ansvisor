@@ -15,9 +15,11 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import type { ActionCategory, ActionImpact } from '@/lib/action-center/registry';
+import type { ActionCategory } from '@/lib/action-center/registry';
 import type { ActionOutcome, ActionStatus, TaskStatus } from '@/lib/action-center/registry';
 import { SIGNAL_SOURCES, type SignalSource } from '@/lib/signals/registry';
+import { parseImproveOutcome } from '@/lib/improve-outcome';
+import { storedPriorityLevel } from '@/lib/action-center/priority';
 import {
   HISTORY_STATUSES,
   daysBetween,
@@ -33,20 +35,23 @@ interface HistoryRow {
   action_no: number;
   category: string;
   kind: string;
-  impact: string;
   status: string;
   outcome: string;
   validation: ValidationSnapshot | null;
+  position_outcome: unknown;
   payload: Record<string, unknown>;
   kpi_keys: string[];
   assignee_id: string | null;
+  due_date: string | null;
   created_at: string;
   completed_at: string | null;
   updated_at: string;
+  priority_score: number | null;
+  priority_level: string | null;
 }
 
 const HISTORY_COLUMNS =
-  'id, action_no, category, kind, impact, status, outcome, validation, payload, kpi_keys, assignee_id, created_at, completed_at, updated_at';
+  'id, action_no, category, kind, status, outcome, validation, position_outcome, payload, kpi_keys, assignee_id, due_date, created_at, completed_at, updated_at, priority_score, priority_level';
 
 /** What the validation sweep stores on an action. */
 interface ValidationSnapshot {
@@ -180,10 +185,11 @@ export async function getActionHistory(
       .select('id, action_id, position, task_key, title, status')
       .in('action_id', actionIds)
       .order('position'),
+    // Every signal each action took as evidence (AC-007): a closed action
+    // keeps the ones that have since moved on to a later cycle.
     supabase
-      .from('signals')
-      .select('id, action_id, kind, source, detected_at')
-      .eq('brand_id', brandId)
+      .from('action_signals')
+      .select('action_id, signals!inner(id, kind, source, detected_at)')
       .in('action_id', actionIds),
     assigneeIds.length > 0
       ? supabase.from('profiles').select('id, full_name, avatar_url').in('id', assigneeIds)
@@ -208,18 +214,18 @@ export async function getActionHistory(
 
   const signalsByAction = new Map<string, TriggerSignal[]>();
   const sourcesByAction = new Map<string, Set<SignalSource>>();
-  for (const signal of signalsRes.data ?? []) {
-    if (!signal.action_id) continue;
-    const list = signalsByAction.get(signal.action_id) ?? [];
+  for (const { action_id: actionId, signals: signal } of signalsRes.data ?? []) {
+    if (!signal) continue;
+    const list = signalsByAction.get(actionId) ?? [];
     list.push({ signalId: signal.id, kind: signal.kind, detectedAt: signal.detected_at });
-    signalsByAction.set(signal.action_id, list);
+    signalsByAction.set(actionId, list);
 
     // `source` is an array — one signal can be corroborated by several feeds.
-    const set = sourcesByAction.get(signal.action_id) ?? new Set<SignalSource>();
+    const set = sourcesByAction.get(actionId) ?? new Set<SignalSource>();
     for (const source of (signal.source ?? []) as string[]) {
       if ((SIGNAL_SOURCES as readonly string[]).includes(source)) set.add(source as SignalSource);
     }
-    if (set.size > 0) sourcesByAction.set(signal.action_id, set);
+    if (set.size > 0) sourcesByAction.set(actionId, set);
   }
 
   const profiles = new Map(
@@ -236,14 +242,17 @@ export async function getActionHistory(
   return rows.map((row) => {
     const triggerSignals = signalsByAction.get(row.id) ?? [];
     const results = resultsFrom(row.validation);
+    const score = row.priority_score === null ? null : Number(row.priority_score);
     return {
       id: row.id,
       actionNo: Number(row.action_no),
       kind: row.kind,
       type: row.category as ActionCategory,
-      impact: row.impact as ActionImpact,
+      priorityScore: score,
+      priorityLevel: storedPriorityLevel(row.priority_level, score),
       status: row.status as ActionStatus,
       outcome: row.outcome as ActionOutcome,
+      positionOutcome: parseImproveOutcome(row.position_outcome ?? null),
       payload: row.payload ?? {},
       kpiKeys: row.kpi_keys ?? [],
       sources: [...(sourcesByAction.get(row.id) ?? [])],
@@ -252,6 +261,7 @@ export async function getActionHistory(
       results,
       tasks: tasksByAction.get(row.id) ?? [],
       assignee: row.assignee_id ? (profiles.get(row.assignee_id) ?? null) : null,
+      dueDate: row.due_date ?? null,
       createdAt: row.created_at,
       completedAt: row.completed_at,
       timeToCloseDays: row.completed_at ? daysBetween(row.created_at, row.completed_at) : null,

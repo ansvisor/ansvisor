@@ -10,11 +10,12 @@ import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { ArrowRight, Check, Loader2 } from 'lucide-react';
 import { OAuthButtons } from '@/components/auth/oauth-buttons';
-import { Separator } from '@/components/ui/separator';
+import { OrDivider } from '@/components/auth/or-divider';
 import { siteConfig } from '@/config/site';
 import { track } from '@/lib/analytics';
+import { cn } from '@/lib/utils';
 
 export function SignUpForm() {
   const t = useTranslations('auth');
@@ -62,19 +63,8 @@ export function SignUpForm() {
   }
 
   return (
-    <div className="space-y-4">
-      <OAuthButtons />
-
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <Separator className="w-full" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-card px-2 text-muted-foreground">{t('orContinueWith')}</span>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-2">
           <Label htmlFor="fullName">{t('fullName')}</Label>
           <Input
@@ -86,11 +76,12 @@ export function SignUpForm() {
             required
             autoComplete="name"
             disabled={isLoading}
+            className="h-11"
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="email">{t('email')}</Label>
+          <Label htmlFor="email">{t('workEmail')}</Label>
           <Input
             id="email"
             type="email"
@@ -100,6 +91,7 @@ export function SignUpForm() {
             required
             autoComplete="email"
             disabled={isLoading || Boolean(invitedEmail)}
+            className="h-11"
           />
         </div>
 
@@ -113,42 +105,63 @@ export function SignUpForm() {
             required
             autoComplete="new-password"
             disabled={isLoading}
+            className="h-11"
           />
+          <p
+            className={cn(
+              'flex items-center gap-2 text-sm transition-colors',
+              password.length >= 8 ? 'text-muted-foreground' : 'text-muted-foreground/70',
+            )}
+          >
+            <Check
+              className={cn(
+                'h-4 w-4',
+                password.length >= 8 ? 'text-emerald-500' : 'text-muted-foreground/40',
+              )}
+            />
+            {t('passwordRuleLength')}
+          </p>
         </div>
 
-        <Button type="submit" className="w-full" disabled={isLoading}>
+        <Button type="submit" className="h-11 w-full text-base" disabled={isLoading}>
           {isLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               {t('signingUp')}
             </>
           ) : (
-            t('createAccount')
+            <>
+              {t('createAccount')}
+              <ArrowRight className="h-4 w-4" />
+            </>
           )}
         </Button>
-
-        <p className="text-center text-xs text-muted-foreground">
-          {t('termsAgreement')}{' '}
-          <a
-            href={siteConfig.legal.terms}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-4 hover:text-primary"
-          >
-            {t('termsOfService')}
-          </a>{' '}
-          {t('and')}{' '}
-          <a
-            href={siteConfig.legal.privacy}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-4 hover:text-primary"
-          >
-            {t('privacyPolicy')}
-          </a>
-          .
-        </p>
       </form>
+
+      <OrDivider label={t('orContinueWith')} />
+      <OAuthButtons />
+
+      <p className="text-center text-sm text-muted-foreground">
+        {t('termsAgreement')}{' '}
+        <a
+          href={siteConfig.legal.terms}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline-offset-4 hover:text-foreground hover:underline"
+        >
+          {t('termsOfService')}
+        </a>{' '}
+        {t('and')}{' '}
+        <a
+          href={siteConfig.legal.privacy}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline-offset-4 hover:text-foreground hover:underline"
+        >
+          {t('privacyPolicy')}
+        </a>
+        .
+      </p>
     </div>
   );
 }

@@ -9,7 +9,8 @@
  *   - < 60 min          → t('common.relative.minutesAgo', { m })   (Math.floor)
  *   - < 24 h            → t('common.relative.hoursAgo',   { h })   (Math.floor)
  *   - < 30 d            → t('common.relative.daysAgo',    { d })   (Math.floor)
- *   - ≥ 30 d            → toLocaleDateString()
+ *   - ≥ 30 d            → formatDate(), e.g. "Sep 10, 2026": English like
+ *                         the rest of the UI, not the browser's language
  *
  * Signature: accepts an ISO string (or null/undefined) plus the next-intl
  * translator scoped to 'common'. Call sites that previously received a Date
@@ -17,6 +18,7 @@
  */
 
 import type { useTranslations } from 'next-intl';
+import { formatDate } from '@/lib/format';
 
 type Translator = ReturnType<typeof useTranslations<'common'>>;
 
@@ -35,5 +37,5 @@ export function formatRelative(iso: string | null | undefined, t: Translator): s
   const d = Math.floor(h / 24);
   if (d < 30) return t('relative.daysAgo', { d });
 
-  return new Date(iso).toLocaleDateString();
+  return formatDate(iso);
 }

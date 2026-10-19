@@ -45,10 +45,10 @@ The web app does this automatically — every server action and fetch attaches t
 
 ## Cron endpoints
 
-A handful of internal endpoints (used by Vercel Cron and Stripe success callbacks) authenticate via a shared `CRON_SECRET` instead of user tokens:
+A handful of internal endpoints under `/api/internal/*` (used by Vercel Cron and the Stripe success callback) authenticate via a shared `CRON_SECRET` instead of user tokens:
 
 ```bash
-curl https://api.your-domain.com/cron/daily-tracking \
+curl -X POST https://api.your-domain.com/api/internal/daily-tracking \
   -H "Authorization: Bearer $CRON_SECRET"
 ```
 
@@ -59,13 +59,12 @@ The same secret must be configured on both sides (Vercel env + server env).
 Three endpoints don't require any auth:
 
 - `GET /t.js` — tracking pixel script
-- `POST /t/collect` — tracking pixel beacon (validates origin against `brand_domains`)
-- `GET /healthz` (where exposed) — basic uptime check
+- `POST /track/{trackingCode}` — tracking pixel beacon (the tracking code identifies the brand; rate-limited)
+- `GET /` — basic uptime check, returns `{ "status": "ok", "service": "aeo-server", "mode": "cloud" | "self-hosted", "timestamp": "..." }`
 
 <Note>
-  The internal `/api/health` endpoint described in the routes file IS
-  auth-protected — by design, it returns the authenticated user's ID. For uptime
-  monitoring, use `/t.js` instead (returns 200 + JS content).
+  The `/api/health` endpoint IS auth-protected — by design, it returns the
+  authenticated user's ID. For uptime monitoring, use `GET /` instead.
 </Note>
 
 <Card

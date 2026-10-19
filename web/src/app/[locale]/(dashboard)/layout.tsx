@@ -87,7 +87,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <RoleProvider role={role}>
           <div className="flex h-screen overflow-hidden">
             {/* Desktop sidebar */}
-            <div className="hidden md:flex md:flex-shrink-0">
+            <div className="relative hidden md:flex md:flex-shrink-0">
               <SidebarErrorBoundary>
                 <Sidebar />
               </SidebarErrorBoundary>

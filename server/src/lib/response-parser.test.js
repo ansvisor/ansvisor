@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { computeMentionPosition, countBrandMentions, parseResponse } from './response-parser.js';
+import {
+  brandMentionRanges,
+  computeMentionPosition,
+  countBrandMentions,
+  parseResponse,
+  mentionExcerpt,
+} from './response-parser.js';
 
 describe('response-parser', () => {
   describe('countBrandMentions', () => {
@@ -415,5 +421,90 @@ describe('response-parser', () => {
       expect(result.competitorMentions[0].mention_count).toBe(2);
       expect(result.competitorMentions[0].mention_position).toBe(1);
     });
+  });
+
+  describe('ChatGPT entity markup', () => {
+    const text = [
+      '1. <Entity category="software" value="Tesseract" disambig="Adlift AI search optimization platform"/> — tracks answers.',
+      '2. <Entity category="software" value="Ansvisor" /> — open source.',
+      '3. Adlift — agency platform.',
+    ].join('\n');
+    const brand = { brandName: 'Ansvisor', domains: ['ansvisor.com'] };
+    const competitors = [
+      { id: 'tesseract', name: 'Tesseract', domain: null },
+      { id: 'adlift', name: 'Adlift', domain: null },
+      { id: 'software', name: 'Software', domain: null },
+    ];
+
+    it('counts only the names the answer reads, not the tag attributes', () => {
+      const result = parseResponse({ text, citations: [] }, brand, 'neutral', competitors);
+      const byId = new Map(result.competitorMentions.map((c) => [c.competitor_id, c]));
+      expect(result.mentionCount).toBe(1);
+      expect(byId.get('tesseract').mention_count).toBe(1);
+      // Named in Tesseract's disambig and once in the answer itself.
+      expect(byId.get('adlift').mention_count).toBe(1);
+      // Only ever the tag's category.
+      expect(byId.get('software').mention_count).toBe(0);
+    });
+
+    it('ranks entities by where the answer names them', () => {
+      const result = computeMentionPosition(text, brand, competitors);
+      expect(result.mentionPosition).toBe(2);
+      expect(result.mentionedEntityCount).toBe(3);
+      expect(result.competitorPositions.get('tesseract')).toBe(1);
+      expect(result.competitorPositions.get('adlift')).toBe(3);
+      expect(result.competitorPositions.has('software')).toBe(false);
+    });
+
+    it('counts a brand named only inside a tag', () => {
+      expect(countBrandMentions('Try <Entity category="software" value="Ansvisor"/>.', brand)).toBe(
+        1,
+      );
+    });
+  });
+});
+
+describe('brandMentionRanges', () => {
+  it('finds the name and the domains as whole words, in order', () => {
+    const text = 'Acme leads. See acme.com. Acmeville is a town. ACME again.';
+
+    expect(brandMentionRanges(text, { brandName: 'Acme', domains: ['acme.com'] })).toEqual([
+      [0, 4],
+      [16, 20],
+      [16, 24],
+      [47, 51],
+    ]);
+  });
+});
+
+describe('mentionExcerpt', () => {
+  const brand = { brandName: 'Acme Coffee', domains: ['acme-coffee.example.com'] };
+
+  it('quotes the answer around the first mention, without links or markdown marks', () => {
+    const text = `${'Intro words. '.repeat(20)}Our pick is **Acme Coffee** ([site](https://x.example)) for offices.`;
+    expect(mentionExcerpt(text, brand, 20)).toBe(
+      '…words. Our pick is Acme Coffee (site) for offices.',
+    );
+    // A cut inside a word moves to the next whole word.
+    expect(mentionExcerpt(text, brand, 22)).toBe(
+      '…words. Our pick is Acme Coffee (site) for offices.',
+    );
+    expect(mentionExcerpt(`Acme Coffee is a pick for remote offices`, brand, 5)).toBe(
+      'Acme Coffee is a…',
+    );
+  });
+
+  it('drops markdown marks but keeps a # or > inside a sentence', () => {
+    expect(mentionExcerpt('## Picks\n> Acme Coffee is the #1 pick, and A > B.', brand)).toBe(
+      'Picks Acme Coffee is the #1 pick, and A > B.',
+    );
+  });
+
+  it('finds the brand by its domain, and says nothing when it is not named', () => {
+    expect(mentionExcerpt('See acme-coffee.example.com today.', brand)).toBe(
+      'See acme-coffee.example.com today.',
+    );
+    expect(mentionExcerpt('No brand here.', brand)).toBeNull();
+    expect(mentionExcerpt(null, brand)).toBeNull();
   });
 });

@@ -1,14 +1,40 @@
 import { Router } from 'express';
-import { generateObject } from 'ai';
+import { NoObjectGeneratedError, generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import { classifyPromptIntent } from '../lib/intent-extraction.js';
 import { getLanguageName } from '../lib/languages.js';
-import { requireFeature } from '../lib/plan-guard.js';
+import {
+  PlanLimitError,
+  enforceFeature,
+  enforceImproveQuota,
+  getImproveQuotaStatus,
+  requireFeature,
+  reserveRelevanceAllowance,
+  settleRelevanceUsage,
+} from '../lib/plan-guard.js';
 import { withRetry } from '../lib/retry.js';
 import { getGscSuggestionCandidates } from '../lib/gsc-suggestions.js';
 import { getGaSuggestionCandidates } from '../lib/ga-suggestions.js';
+import { suggestPromptsForPage } from '../lib/page-prompt-suggestions.js';
+import { RELEVANCE_SCALE, ratingCostUsd, toRelevance } from '../lib/suggestion-relevance.js';
+import {
+  ACTIONABLE_STATES,
+  IMPROVE_PLATFORM_LABELS,
+  SOURCE_TYPES,
+  buildImprovePrompt,
+  classifyPlatform,
+  collectEvidence,
+  improveRangeKey,
+  improveSchema,
+  sanitizeSuggestions,
+} from '../lib/prompt-improve.js';
+import { generationCostUsd } from '../lib/improve-cost.js';
+import {
+  liveImproveSends,
+  sendImproveToActionCenter,
+} from '../lib/action-center/from-prompt-improve.js';
 
 const router = Router();
 
@@ -187,9 +213,70 @@ const newSuggestionSchema = z.object({
     .max(SUGGESTIONS_PER_REFRESH),
 });
 
+// Relevance (VIS-011), asked for while the org's monthly allowance covers it.
+// No bounds, for the same reason as estVolume: toRelevance clamps at the insert.
+const ratedSuggestionSchema = z.object({
+  suggestions: z
+    .array(
+      newSuggestionSchema.shape.suggestions.element.extend({
+        relevance: z
+          .number()
+          .describe(
+            `How closely this prompt fits what the brand offers and who it serves, 0-${RELEVANCE_SCALE}`,
+          ),
+      }),
+    )
+    .min(MIN_SUGGESTIONS)
+    .max(SUGGESTIONS_PER_REFRESH),
+});
+
 const SUGGESTION_TTL_HOURS = 48;
 
-async function generateSuggestions(brandId) {
+/** Model calls one refresh may make (withRetry's attempts). */
+const REFRESH_ATTEMPTS = 3;
+
+/**
+ * Reserves rating for this refresh (VIS-011): its worst case, every retry,
+ * against the org's monthly allowance. Null when that doesn't fit or the
+ * allowance can't be read: the refresh then leaves relevance out rather than
+ * risk the budget.
+ */
+async function reserveRating(orgId, brandId, modelId, log) {
+  try {
+    const reservation = await reserveRelevanceAllowance(orgId, {
+      brandId,
+      modelId,
+      costUsd: ratingCostUsd(modelId, {
+        suggestions: SUGGESTIONS_PER_REFRESH,
+        attempts: REFRESH_ATTEMPTS,
+      }),
+    });
+    return reservation.unlimited || reservation.id ? reservation : null;
+  } catch (err) {
+    log.error({ err }, 'suggestion relevance allowance error');
+    return null;
+  }
+}
+
+/**
+ * Lowers the reservation to what rating added to the attempts made, failed
+ * ones included. A failure is logged, not thrown: the suggestions the user
+ * asked for still go out, and the worst case stays charged.
+ */
+async function settleRating(log, reservation, { modelId, attempts, usage }) {
+  if (!reservation.id) return;
+  try {
+    await settleRelevanceUsage(reservation.id, {
+      attempts,
+      usage,
+      costUsd: ratingCostUsd(modelId, { suggestions: SUGGESTIONS_PER_REFRESH, attempts }),
+    });
+  } catch (err) {
+    log.error({ err }, 'suggestion relevance usage settle error');
+  }
+}
+
+async function generateSuggestions(brandId, { orgId, log }) {
   const ctx = await loadSuggestionContext(brandId);
   const langName = getLanguageName(ctx.brand.language);
   const currentYear = new Date().getFullYear();
@@ -207,6 +294,11 @@ async function generateSuggestions(brandId) {
   // brands that have neither.
   const gaCandidates = await getGaSuggestionCandidates(brandId, ctx.existingPromptTexts);
 
+  const promptModel = process.env.PROMPT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
+  const aiModel = resolveModel(promptModel);
+  const reservation = await reserveRating(orgId, brandId, promptModel, log);
+  const rate = reservation !== null;
+
   const system = `You are an AEO (Answer Engine Optimization) strategist. You suggest NEW search prompts a brand should track in AI engines (ChatGPT, Perplexity, Gemini, Claude). Current year: ${currentYear}.
 
 RULES:
@@ -217,7 +309,12 @@ RULES:
 - Pick prompts where the brand could realistically appear AND where its competitors are already getting cited.
 - Volume bias: prioritize prompt ideas that resemble (in topic and intent) the HIGH-volume prompts already tracked. Avoid suggesting prompts close in topic to LOW-volume ones unless there is a strong competitor gap.
 - estVolume must be a realistic monthly AI search volume; calibrate it against the volume samples shown — do not output flat round numbers like 1000 for everything.
-- Reasons must be concrete: cite the gap, the trend, or the competitor activity. Avoid generic platitudes.
+- Reasons must be concrete: cite the gap, the trend, or the competitor activity. Avoid generic platitudes.${
+    rate
+      ? `
+- relevance: a whole number 0-${RELEVANCE_SCALE}. ${RELEVANCE_SCALE} = the brand's core offering, 6 = adjacent but a realistic fit, below 6 = off its business. Be strict.`
+      : ''
+  }
 - Diversity: mix comparison, how-to, best-of, recommendation, and problem-solving intents.${
     gscCandidates.length
       ? `
@@ -286,25 +383,30 @@ ${gaCandidates
 
 Suggest the next ${SUGGESTIONS_PER_REFRESH} prompts this brand should start tracking, with topic, reason and a calibrated monthly AI search volume (estVolume).`;
 
-  const promptModel = process.env.PROMPT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
-  const aiModel = resolveModel(promptModel);
-
   // #379 pattern — bounded retry: generateObject throws "No object generated:
   // response did not match schema" when the model misses a constraint (short
   // reason, <6 items, non-integer estVolume, …); a fresh sample usually
   // passes, so one miss must not fail the whole refresh.
-  const { object } = await withRetry(
-    () =>
-      generateObject({
-        model: aiModel,
-        schema: newSuggestionSchema,
-        system,
-        prompt: userPrompt,
-      }),
-    { attempts: 3, baseDelayMs: 500, label: 'suggestion-refresh' },
-  );
-
-  return { suggestions: object.suggestions, gscCandidates, gaCandidates };
+  let attempts = 0;
+  let usage;
+  try {
+    const { object, usage: callUsage } = await withRetry(
+      () => {
+        attempts += 1;
+        return generateObject({
+          model: aiModel,
+          schema: rate ? ratedSuggestionSchema : newSuggestionSchema,
+          system,
+          prompt: userPrompt,
+        });
+      },
+      { attempts: REFRESH_ATTEMPTS, baseDelayMs: 500, label: 'suggestion-refresh' },
+    );
+    usage = callUsage;
+    return { suggestions: object.suggestions, gscCandidates, gaCandidates };
+  } finally {
+    if (rate) await settleRating(log, reservation, { modelId: promptModel, attempts, usage });
+  }
 }
 
 async function findOrCreateTopic(brandId, topicName) {
@@ -331,9 +433,10 @@ router.post(
   requireFeature('prompt_suggestions'),
   async (req, res) => {
     try {
-      await assertBrandAccess(req.params.brandId, req.user.id);
+      const { brand } = await assertBrandAccess(req.params.brandId, req.user.id);
       const { suggestions, gscCandidates, gaCandidates } = await generateSuggestions(
         req.params.brandId,
+        { orgId: brand.organization_id, log: req.log },
       );
 
       await supabaseAdmin
@@ -375,6 +478,7 @@ router.post(
           // Sanity clamp replacing the removed schema ceiling — one absurd
           // estimate must cap out, not reject the whole generated batch.
           est_volume: Math.min(s.estVolume, 10_000_000),
+          relevance: toRelevance(s.relevance),
           source: candidate ? 'gsc' : gaCandidate ? 'ga' : 'llm',
           source_data: candidate
             ? {
@@ -415,6 +519,46 @@ router.post(
       const status = error.status || 500;
       req.log.error({ err: error }, 'prompt-suggestions refresh error');
       return res.status(status).json({ error: error.message || 'Failed to generate suggestions' });
+    }
+  },
+);
+
+const pageSuggestionsSchema = z.object({
+  // A path, as the AI Traffic page's Pages section lists it.
+  page: z.string().min(1).max(2048).startsWith('/'),
+  // The page's range, as its loaders take it: a timestamp, or a day from a
+  // custom range; absent for all time.
+  from: z.union([z.iso.datetime({ offset: true }), z.iso.date()]).optional(),
+  to: z.union([z.iso.datetime({ offset: true }), z.iso.date()]).optional(),
+});
+
+/**
+ * POST /api/prompts/suggestions/:brandId/page
+ * Body: { page, from?, to? }
+ *
+ * Prompts suggested for one page of the brand's site, from the AI Traffic
+ * page's Pages section (AT-006 part B2). Not stored: the person picks the
+ * ones to track, which then point at the page.
+ */
+router.post(
+  '/suggestions/:brandId/page',
+  requireFeature('prompt_suggestions'),
+  async (req, res) => {
+    try {
+      const parsed = pageSuggestionsSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
+      }
+      await assertBrandAccess(req.params.brandId, req.user.id);
+      const context = await loadSuggestionContext(req.params.brandId);
+      const result = await suggestPromptsForPage(req.params.brandId, { ...parsed.data, context });
+      return res.json(result);
+    } catch (error) {
+      const status = error.status || 500;
+      req.log.error({ err: error }, 'page prompt suggestions error');
+      return res
+        .status(status)
+        .json({ error: error.message || 'Failed to suggest prompts for this page' });
     }
   },
 );
@@ -740,6 +884,482 @@ router.post('/fanout-intents', async (req, res) => {
   } catch (error) {
     req.log.error({ err: error }, 'fanout intents classification error');
     return res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── Positions panel → Improve tab (PROMPT-003) ───────────────────────────────
+
+const IMPROVE_PLATFORM_ORDER = Object.keys(IMPROVE_PLATFORM_LABELS);
+const IMPROVE_PRESETS = ['24h', '7d', '30d', '90d', 'custom'];
+
+/**
+ * The panel's range as the request states it. `from` / `to` are the resolved
+ * ISO bounds the web read the Positions numbers over; the key is what the set
+ * is cached under.
+ */
+function parseImproveRange(input) {
+  const preset = IMPROVE_PRESETS.includes(input?.preset) ? input.preset : null;
+  const from =
+    typeof input?.from === 'string' && !Number.isNaN(Date.parse(input.from)) ? input.from : null;
+  const to = typeof input?.to === 'string' && !Number.isNaN(Date.parse(input.to)) ? input.to : null;
+  if (!preset || !from) {
+    const err = new Error('A valid range (preset and from) is required');
+    err.status = 400;
+    throw err;
+  }
+  const region = typeof input?.region === 'string' ? input.region.trim() : '';
+  const key = improveRangeKey({
+    preset,
+    from: input.customFrom ?? from.slice(0, 10),
+    to: input.customTo ?? to?.slice(0, 10),
+  });
+  return { preset, from, to, region, key };
+}
+
+async function loadImprovePrompt(promptId, userId) {
+  const { data: prompt } = await supabaseAdmin
+    .from('prompts')
+    .select('id, text, platforms, prompt_sets!inner(brand_id)')
+    .eq('id', promptId)
+    .maybeSingle();
+  if (!prompt) {
+    const err = new Error('Prompt not found');
+    err.status = 404;
+    throw err;
+  }
+  const brandId = prompt.prompt_sets.brand_id;
+  const { brand } = await assertBrandAccess(brandId, userId);
+  return { prompt, brand, brandId };
+}
+
+// States read every answer in the window, as the Positions tab does; the
+// heavy evidence columns come from the newest IMPROVE_EVIDENCE_ROWS only.
+const IMPROVE_MAX_ROWS = 5000;
+const IMPROVE_PAGE_SIZE = 1000;
+const IMPROVE_EVIDENCE_ROWS = 600;
+const IMPROVE_ID_CHUNK = 100;
+
+/**
+ * The light columns of every answer in the window, newest first, plus the
+ * source lists of the cited ones: what classifyPlatform needs.
+ */
+async function loadImproveStateRows({ promptId, brandId, range }) {
+  const rows = [];
+  for (let offset = 0; offset < IMPROVE_MAX_ROWS; offset += IMPROVE_PAGE_SIZE) {
+    const { data, error } = await improveResultsQuery(
+      'id, platform, created_at, mention_count, mention_position, mentioned_entity_count, citation_count',
+      { promptId, brandId, range },
+    ).range(offset, offset + IMPROVE_PAGE_SIZE - 1);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if ((data ?? []).length < IMPROVE_PAGE_SIZE) break;
+  }
+  const citedIds = rows.filter((r) => Number(r.citation_count ?? 0) > 0).map((r) => r.id);
+  const citationsById = new Map();
+  for (let i = 0; i < citedIds.length; i += IMPROVE_ID_CHUNK) {
+    const { data, error } = await supabaseAdmin
+      .from('prompt_results')
+      .select('id, citations')
+      .in('id', citedIds.slice(i, i + IMPROVE_ID_CHUNK));
+    if (error) throw error;
+    for (const r of data ?? []) citationsById.set(r.id, r.citations);
+  }
+  return rows.map((r) => ({ ...r, citations: citationsById.get(r.id) ?? [] }));
+}
+
+/**
+ * Charges one model attempt to the org's Improve budget. A failed insert is
+ * logged, not thrown: the suggestions the user paid for still go out.
+ */
+async function recordImproveUsage(log, { organizationId, promptId, modelId, usage }) {
+  const { error } = await supabaseAdmin.from('prompt_improve_usage').insert({
+    organization_id: organizationId,
+    prompt_id: promptId,
+    model: modelId,
+    input_tokens: usage?.inputTokens ?? null,
+    output_tokens: usage?.outputTokens ?? null,
+    cost_usd: generationCostUsd(modelId, usage),
+  });
+  if (error) log.error({ err: error, promptId }, 'prompt improve usage insert error');
+}
+
+function improveResultsQuery(columns, { promptId, brandId, range }) {
+  let q = supabaseAdmin
+    .from('prompt_results')
+    .select(columns)
+    .eq('prompt_id', promptId)
+    .eq('brand_id', brandId)
+    .gte('created_at', range.from);
+  if (range.to) q = q.lte('created_at', range.to);
+  if (range.region) q = q.eq('region', range.region);
+  return q.order('created_at', { ascending: false });
+}
+
+function improveResponse(row, newestAt, sent = { latest: null, sentSuggestionIds: [] }) {
+  if (!row) return null;
+  return {
+    sent,
+    rangeKey: row.range_key,
+    region: row.region,
+    platforms: row.platform_states,
+    suggestions: row.suggestions,
+    latestResultAt: row.latest_result_at,
+    generatedAt: row.generated_at,
+    // Newer answers than the set was built from: the panel rebuilds it.
+    stale: !!newestAt && (!row.latest_result_at || newestAt > row.latest_result_at),
+  };
+}
+
+// What the panel shows: an estimate of generations left, never dollars.
+function publicQuota(q) {
+  if (q.unlimited) {
+    return { unlimited: true, exhausted: false, generationsLeft: null, percentLeft: null };
+  }
+  return {
+    unlimited: false,
+    exhausted: q.remainingUsd <= 0,
+    generationsLeft: q.generationsLeft,
+    percentLeft: q.percentLeft,
+  };
+}
+
+function improveModelId() {
+  return (
+    process.env.IMPROVE_SUGGESTION_MODEL ||
+    process.env.DEFAULT_SUGGESTION_MODEL ||
+    'google/gemini-3-flash-preview'
+  );
+}
+
+// Read the cached set; never generates.
+router.get('/:promptId/improve', requireFeature('prompt_improve'), async (req, res) => {
+  try {
+    const range = parseImproveRange(req.query);
+    const { brand, brandId } = await loadImprovePrompt(req.params.promptId, req.user.id);
+    const [{ data: cached }, { data: newest }, quota] = await Promise.all([
+      supabaseAdmin
+        .from('prompt_improve_suggestions')
+        .select('*')
+        .eq('prompt_id', req.params.promptId)
+        .eq('range_key', range.key)
+        .eq('region', range.region)
+        .maybeSingle(),
+      improveResultsQuery('created_at', { promptId: req.params.promptId, brandId, range }).limit(1),
+      getImproveQuotaStatus(brand.organization_id, improveModelId()),
+    ]);
+    return res.json({
+      improve: improveResponse(
+        cached,
+        newest?.[0]?.created_at ?? null,
+        cached ? await liveImproveSends(cached) : undefined,
+      ),
+      quota: publicQuota(quota),
+    });
+  } catch (error) {
+    req.log.error({ err: error }, 'prompt improve read error');
+    return res
+      .status(error.status || 500)
+      .json({ error: error.message || 'Failed to load suggestions' });
+  }
+});
+
+// Build (or rebuild) the set for the range and cache it.
+router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, res) => {
+  try {
+    const range = parseImproveRange(req.body);
+    const promptId = req.params.promptId;
+    const { prompt, brand, brandId } = await loadImprovePrompt(promptId, req.user.id);
+
+    const [
+      rows,
+      { data: evidenceRows, error: evidenceError },
+      { data: domainRows },
+      { data: competitors },
+    ] = await Promise.all([
+      loadImproveStateRows({ promptId, brandId, range }),
+      improveResultsQuery(
+        'id, platform, created_at, citations, search_queries, competitor_mentions',
+        { promptId, brandId, range },
+      ).limit(IMPROVE_EVIDENCE_ROWS),
+      supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', brandId),
+      supabaseAdmin.from('competitors').select('name, domain').eq('brand_id', brandId),
+    ]);
+    if (evidenceError) throw evidenceError;
+    const brandDomains = (domainRows ?? []).map((r) => r.domain);
+
+    const groupByPlatform = (list) => {
+      const map = new Map();
+      for (const r of list ?? []) {
+        if (!map.has(r.platform)) map.set(r.platform, []);
+        map.get(r.platform).push(r);
+      }
+      return map;
+    };
+    const byPlatform = groupByPlatform(rows);
+    const evidenceByPlatform = groupByPlatform(evidenceRows);
+    const platformIds = IMPROVE_PLATFORM_ORDER.filter(
+      (id) => byPlatform.has(id) || (prompt.platforms ?? []).includes(id),
+    );
+
+    const states = platformIds.map((id) => ({
+      id,
+      label: IMPROVE_PLATFORM_LABELS[id],
+      ...classifyPlatform(byPlatform.get(id) ?? [], brandDomains),
+    }));
+    const actionable = states.filter((p) => ACTIONABLE_STATES.includes(p.state));
+
+    // The newest answer's text, per actionable platform, for the excerpt.
+    const latestIds = actionable.map((p) => byPlatform.get(p.id)[0].id);
+    const { data: responses } = latestIds.length
+      ? await supabaseAdmin.from('prompt_results').select('id, response').in('id', latestIds)
+      : { data: [] };
+    const responseById = new Map((responses ?? []).map((r) => [r.id, r.response]));
+
+    const withEvidence = actionable.map((p) => ({
+      ...p,
+      evidence: collectEvidence(evidenceByPlatform.get(p.id) ?? [], {
+        brandName: brand.name,
+        brandDomains,
+        competitors: competitors ?? [],
+        latestResponse: responseById.get(byPlatform.get(p.id)[0].id),
+      }),
+    }));
+
+    const modelId = improveModelId();
+    let suggestions = [];
+    // Only a model call is metered; a range with nothing to improve is free.
+    if (withEvidence.length > 0) await enforceImproveQuota(brand.organization_id, modelId);
+    if (withEvidence.length > 0) {
+      const { system, prompt: userPrompt } = buildImprovePrompt({
+        promptText: prompt.text,
+        brand: { name: brand.name, description: brand.description, domains: brandDomains },
+        platforms: withEvidence,
+      });
+      // Every attempt is charged at its real token cost, so the budget holds
+      // for any model, including attempts withRetry repeats after a schema miss.
+      const charge = (usage) =>
+        recordImproveUsage(req.log, {
+          organizationId: brand.organization_id,
+          promptId,
+          modelId,
+          usage,
+        });
+      const { object } = await withRetry(
+        async () => {
+          try {
+            const result = await generateObject({
+              model: resolveModel(modelId),
+              schema: improveSchema,
+              system,
+              prompt: userPrompt,
+            });
+            await charge(result.usage);
+            return result;
+          } catch (err) {
+            if (NoObjectGeneratedError.isInstance(err) && err.usage) await charge(err.usage);
+            throw err;
+          }
+        },
+        { attempts: 3, baseDelayMs: 500, label: 'prompt-improve' },
+      );
+      suggestions = sanitizeSuggestions(object.suggestions, withEvidence);
+    }
+
+    // What each platform's group header shows: why it's there and which
+    // inputs the suggestions could draw on.
+    const evidenceById = new Map(withEvidence.map((p) => [p.id, p.evidence]));
+    const platformStates = states.map((p) => {
+      const ev = evidenceById.get(p.id);
+      return {
+        ...p,
+        inputs: ev
+          ? {
+              fanouts: ev.fanouts.length,
+              citedDomains: ev.citedDomains.length,
+              competitorUrls: ev.competitorUrls.length,
+              answer: !!ev.excerpt,
+            }
+          : null,
+      };
+    });
+
+    const { data: saved, error: saveError } = await supabaseAdmin
+      .from('prompt_improve_suggestions')
+      .upsert(
+        {
+          prompt_id: promptId,
+          brand_id: brandId,
+          range_key: range.key,
+          region: range.region,
+          platform_states: platformStates,
+          suggestions,
+          latest_result_at: rows?.[0]?.created_at ?? null,
+          model: withEvidence.length > 0 ? modelId : null,
+          generated_at: new Date().toISOString(),
+        },
+        { onConflict: 'prompt_id,range_key,region' },
+      )
+      .select('*')
+      .single();
+    if (saveError) throw saveError;
+
+    const quota = await getImproveQuotaStatus(brand.organization_id, modelId);
+    return res.json({
+      improve: improveResponse(saved, rows?.[0]?.created_at ?? null),
+      quota: publicQuota(quota),
+    });
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      return res.status(error.statusCode).json({
+        error: error.statusCode === 429 ? 'quota_exceeded' : 'plan_limit',
+        message: error.message,
+      });
+    }
+    req.log.error({ err: error }, 'prompt improve generate error');
+    return res
+      .status(error.status || 500)
+      .json({ error: error.message || 'Failed to generate suggestions' });
+  }
+});
+
+// Send the selected suggestions, as edited, to Action Center (PROMPT-004).
+const sendImproveSchema = z.object({
+  idempotencyKey: z.string().min(8).max(64),
+  suggestions: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(120),
+        platform: z.enum(Object.keys(IMPROVE_PLATFORM_LABELS)),
+        title: z.string().trim().min(1).max(200),
+        body: z.string().max(1000).optional().default(''),
+        sources: z
+          .array(z.object({ type: z.enum(SOURCE_TYPES), ref: z.string().min(1).max(300) }))
+          .max(6)
+          .optional()
+          .default([]),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
+
+function positionsPanelLink(promptId, range) {
+  const params = new URLSearchParams({
+    tab: 'all',
+    positions: promptId,
+    positionsRange: range.preset,
+  });
+  if (range.preset === 'custom') {
+    const [, from, to] = range.key.split(':');
+    if (from) params.set('positionsFrom', from);
+    if (to) params.set('positionsTo', to);
+  }
+  return `/dashboard/prompts?${params.toString()}`;
+}
+
+/**
+ * Sends the selected suggestions for `userId`, who must already have passed the
+ * prompt_improve plan check. Shared by the dashboard route below and the
+ * internal endpoint the web MCP layer calls (`create_improve_action`), so both
+ * create the action, record the send and dedupe on the idempotency key alike.
+ * Errors carry a `status` (400 bad input, 403/404 access, 404 no set yet).
+ */
+export async function sendImproveAction({ promptId, userId, body }) {
+  const range = parseImproveRange(body);
+  const parsed = sendImproveSchema.safeParse(body);
+  if (!parsed.success) {
+    const err = new Error('Invalid suggestions');
+    err.status = 400;
+    err.details = parsed.error.issues;
+    throw err;
+  }
+  const { prompt, brandId } = await loadImprovePrompt(promptId, userId);
+
+  const { data: set } = await supabaseAdmin
+    .from('prompt_improve_suggestions')
+    .select('*')
+    .eq('prompt_id', promptId)
+    .eq('range_key', range.key)
+    .eq('region', range.region)
+    .maybeSingle();
+  if (!set) {
+    const err = new Error('Generate suggestions for this range first');
+    err.status = 404;
+    throw err;
+  }
+
+  const { suggestions, idempotencyKey } = parsed.data;
+  const result = await sendImproveToActionCenter({
+    prompt,
+    brandId,
+    set,
+    suggestions,
+    idempotencyKey,
+    panelLink: positionsPanelLink(promptId, range),
+    userId,
+  });
+
+  // Record the send on the set, once, so the panel can show it after a reload.
+  const sends = set.sent_actions ?? [];
+  let updated = set;
+  if (!sends.some((s) => s.actionId === result.actionId)) {
+    const { data, error } = await supabaseAdmin
+      .from('prompt_improve_suggestions')
+      .update({
+        sent_actions: [
+          ...sends,
+          {
+            actionId: result.actionId,
+            actionNo: result.actionNo,
+            sentAt: new Date().toISOString(),
+            setGeneratedAt: set.generated_at,
+            suggestionIds: suggestions.map((s) => s.id),
+          },
+        ],
+      })
+      .eq('id', set.id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    updated = data;
+  }
+
+  return {
+    actionId: result.actionId,
+    actionNo: result.actionNo,
+    created: result.created,
+    taskCount: suggestions.length,
+    sent: await liveImproveSends(updated),
+  };
+}
+
+/**
+ * The same send for an MCP API key (`create_improve_action`): the key carries
+ * no session, so the prompt_improve plan check that `requireFeature` runs for
+ * the dashboard route happens here, against the key's user.
+ */
+export async function sendImproveActionForKeyUser({ promptId, userId, body }) {
+  await enforceFeature(userId, 'prompt_improve');
+  return sendImproveAction({ promptId, userId, body });
+}
+
+router.post('/:promptId/improve/action', requireFeature('prompt_improve'), async (req, res) => {
+  try {
+    return res.json(
+      await sendImproveAction({
+        promptId: req.params.promptId,
+        userId: req.user.id,
+        body: req.body,
+      }),
+    );
+  } catch (error) {
+    if (error.details) {
+      return res.status(400).json({ error: error.message, details: error.details });
+    }
+    req.log.error({ err: error }, 'prompt improve send error');
+    return res
+      .status(error.status || 500)
+      .json({ error: error.message || 'Failed to send to Action Center' });
   }
 });
 

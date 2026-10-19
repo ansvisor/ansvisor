@@ -56,11 +56,45 @@ export type Database = {
           },
         ]
       }
+      action_signals: {
+        Row: {
+          action_id: string
+          linked_at: string
+          signal_id: string
+        }
+        Insert: {
+          action_id: string
+          linked_at?: string
+          signal_id: string
+        }
+        Update: {
+          action_id?: string
+          linked_at?: string
+          signal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_signals_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_signals_signal_id_fkey"
+            columns: ["signal_id"]
+            isOneToOne: false
+            referencedRelation: "signals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       action_tasks: {
         Row: {
           action_id: string
           created_at: string
           depends_on: string[]
+          details: Json | null
           id: string
           mode: string
           output: Json | null
@@ -78,6 +112,7 @@ export type Database = {
           action_id: string
           created_at?: string
           depends_on?: string[]
+          details?: Json | null
           id?: string
           mode?: string
           output?: Json | null
@@ -95,6 +130,7 @@ export type Database = {
           action_id?: string
           created_at?: string
           depends_on?: string[]
+          details?: Json | null
           id?: string
           mode?: string
           output?: Json | null
@@ -135,7 +171,14 @@ export type Database = {
           kpi_keys: string[]
           outcome: string
           payload: Json
+          position_outcome: Json | null
+          priority_level: string | null
+          priority_reason: Json | null
+          priority_score: number | null
+          priority_updated_at: string | null
           status: string
+          tasks_generated_at: string | null
+          tasks_writing_since: string | null
           updated_at: string
           validated_at: string | null
           validation: Json | null
@@ -156,7 +199,14 @@ export type Database = {
           kpi_keys?: string[]
           outcome?: string
           payload?: Json
+          position_outcome?: Json | null
+          priority_level?: string | null
+          priority_reason?: Json | null
+          priority_score?: number | null
+          priority_updated_at?: string | null
           status?: string
+          tasks_generated_at?: string | null
+          tasks_writing_since?: string | null
           updated_at?: string
           validated_at?: string | null
           validation?: Json | null
@@ -177,7 +227,14 @@ export type Database = {
           kpi_keys?: string[]
           outcome?: string
           payload?: Json
+          position_outcome?: Json | null
+          priority_level?: string | null
+          priority_reason?: Json | null
+          priority_score?: number | null
+          priority_updated_at?: string | null
           status?: string
+          tasks_generated_at?: string | null
+          tasks_writing_since?: string | null
           updated_at?: string
           validated_at?: string | null
           validation?: Json | null
@@ -348,6 +405,7 @@ export type Database = {
           source_platform: string | null
           url: string
           user_agent: string | null
+          visit_of: string | null
         }
         Insert: {
           brand_id: string
@@ -361,6 +419,7 @@ export type Database = {
           source_platform?: string | null
           url: string
           user_agent?: string | null
+          visit_of?: string | null
         }
         Update: {
           brand_id?: string
@@ -374,6 +433,7 @@ export type Database = {
           source_platform?: string | null
           url?: string
           user_agent?: string | null
+          visit_of?: string | null
         }
         Relationships: [
           {
@@ -381,6 +441,13 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_traffic_logs_visit_of_fkey"
+            columns: ["visit_of"]
+            isOneToOne: false
+            referencedRelation: "ai_traffic_logs"
             referencedColumns: ["id"]
           },
         ]
@@ -546,7 +613,9 @@ export type Database = {
           gsc_property: string | null
           id: string
           industry: string | null
+          insights_pinned_competitors: string[]
           is_active: boolean
+          kpi_setup_at: string | null
           language: string | null
           logo_url: string | null
           name: string
@@ -565,7 +634,9 @@ export type Database = {
           gsc_property?: string | null
           id?: string
           industry?: string | null
+          insights_pinned_competitors?: string[]
           is_active?: boolean
+          kpi_setup_at?: string | null
           language?: string | null
           logo_url?: string | null
           name: string
@@ -584,7 +655,9 @@ export type Database = {
           gsc_property?: string | null
           id?: string
           industry?: string | null
+          insights_pinned_competitors?: string[]
           is_active?: boolean
+          kpi_setup_at?: string | null
           language?: string | null
           logo_url?: string | null
           name?: string
@@ -2314,6 +2387,64 @@ export type Database = {
           },
         ]
       }
+      sentiment_overrides: {
+        Row: {
+          brand_id: string
+          created_at: string
+          id: string
+          note: string | null
+          previous_sentiment: string
+          result_id: string
+          sentiment: string
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          previous_sentiment: string
+          result_id: string
+          sentiment: string
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          previous_sentiment?: string
+          result_id?: string
+          sentiment?: string
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sentiment_overrides_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sentiment_overrides_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "prompt_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sentiment_overrides_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       signals: {
         Row: {
           action_id: string | null
@@ -2701,6 +2832,44 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ai_traffic_merged: {
+        Args: {
+          p_analytics?: boolean
+          p_brand_id: string
+          p_from: string | null
+          p_to: string | null
+          p_to_inclusive?: boolean
+        }
+        Returns: Json
+      }
+      ai_traffic_page_citations: {
+        Args: { p_brand_id: string; p_since: string | null; p_until: string | null }
+        Returns: {
+          citations: number
+          page: string
+          page_key: string
+        }[]
+      }
+      ai_traffic_pages: {
+        Args: {
+          p_brand_id: string
+          p_from: string | null
+          p_limit?: number
+          p_offset?: number
+          p_tab?: string
+          p_to: string | null
+        }
+        Returns: Json
+      }
+      ai_traffic_conversions: {
+        Args: {
+          p_brand_id: string
+          p_limit?: number | null
+          p_since: string | null
+          p_until: string | null
+        }
+        Returns: Json
+      }
       ai_visibility_aggregates: {
         Args: {
           p_brand_id: string
@@ -2722,6 +2891,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: Json
       }
@@ -2825,6 +2995,22 @@ export type Database = {
           total_citations: number
         }[]
       }
+      citations_domains_daily: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_regions?: string[]
+          p_topic_ids?: string[]
+        }
+        Returns: {
+          domain: string
+          models: string[]
+          results_citing: number
+          total_citations: number
+        }[]
+      }
       citations_urls: {
         Args: {
           p_brand_id: string
@@ -2848,6 +3034,28 @@ export type Database = {
           url: string
         }[]
       }
+      citations_urls_daily: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_domains?: string[]
+          p_exclude_domains?: string[]
+          p_limit?: number
+          p_models?: string[]
+          p_regions?: string[]
+          p_topic_ids?: string[]
+        }
+        Returns: {
+          domain: string
+          models: string[]
+          results_citing: number
+          title: string
+          total_citations: number
+          total_urls: number
+          url: string
+        }[]
+      }
       citations_window_stats: {
         Args: {
           p_brand_id: string
@@ -2855,6 +3063,20 @@ export type Database = {
           p_date_to?: string
           p_models?: string[]
           p_prompt_ids?: string[]
+          p_regions?: string[]
+          p_topic_ids?: string[]
+        }
+        Returns: {
+          regions: string[]
+          results: number
+        }[]
+      }
+      citations_window_stats_daily: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
           p_regions?: string[]
           p_topic_ids?: string[]
         }
@@ -2884,6 +3106,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: Json
       }
@@ -2916,6 +3139,31 @@ export type Database = {
           sessions: number
           targeting_prompts: number
           transactions: number
+        }[]
+      }
+      ga_platform_value: {
+        Args: { p_brand_id: string; p_since: string | null; p_until: string }
+        Returns: {
+          engaged_sessions: number
+          key_event_sessions: number
+          key_events: number
+          platform: string
+          sessions: number
+        }[]
+      }
+      ga_traffic_totals: {
+        Args: { p_brand_id: string; p_since: string | null; p_until: string }
+        Returns: {
+          ai_engaged_sessions: number
+          ai_key_event_sessions: number
+          ai_key_events: number
+          ai_revenue: number
+          ai_sessions: number
+          organic_engaged_sessions: number
+          organic_key_event_sessions: number
+          organic_key_events: number
+          organic_sessions: number
+          sessions: number
         }[]
       }
       get_latest_prompt_results:
@@ -2995,6 +3243,25 @@ export type Database = {
           query: string
         }[]
       }
+      gsc_click_totals: {
+        Args: {
+          p_brand_id: string
+          p_latest?: boolean
+          p_since: string | null
+          p_until: string
+        }
+        Returns: {
+          clicks: number
+          last_date: string | null
+          prev_clicks: number | null
+          since: string | null
+          until: string | null
+        }[]
+      }
+      head_to_head_daily: {
+        Args: { p_brand_id: string; p_competitor_id: string }
+        Returns: Json
+      }
       insights_aggregates: {
         Args: {
           p_brand_id: string
@@ -3016,6 +3283,48 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      insights_breakdown_groups: {
+        Args: {
+          p_brand_id: string
+          p_date_from?: string
+          p_date_to?: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_region?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      insights_change_drivers: {
+        Args: {
+          p_brand_id: string
+          p_cur_from: string
+          p_cur_to: string
+          p_models?: string[]
+          p_prev_from: string
+          p_prev_to: string
+          p_region?: string
+          p_same_prompts?: boolean
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      insights_change_drivers_daily: {
+        Args: {
+          p_brand_id: string
+          p_cur_from: string
+          p_cur_to: string
+          p_models?: string[]
+          p_prev_from: string
+          p_prev_to: string
+          p_region?: string
+          p_same_prompts?: boolean
+          p_topic_id?: string
         }
         Returns: Json
       }
@@ -3026,7 +3335,137 @@ export type Database = {
           regions: string[]
         }[]
       }
+      insights_kpi_series: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_region?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      insights_platform_compare: {
+        Args: {
+          p_brand_id: string
+          p_cur_from?: string
+          p_cur_to?: string
+          p_models?: string[]
+          p_prev_from?: string
+          p_prev_to?: string
+          p_region?: string
+          p_same_prompts?: boolean
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      insights_platform_compare_daily: {
+        Args: {
+          p_brand_id: string
+          p_cur_from?: string
+          p_cur_to?: string
+          p_models?: string[]
+          p_prev_from?: string
+          p_prev_to?: string
+          p_region?: string
+          p_same_prompts?: boolean
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      insights_same_prompt_compare: {
+        Args: {
+          p_brand_id: string
+          p_cur_from: string
+          p_cur_to: string
+          p_models?: string[]
+          p_prev_from: string
+          p_prev_to: string
+          p_region?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      insights_same_prompt_compare_daily: {
+        Args: {
+          p_brand_id: string
+          p_cur_from: string
+          p_cur_to: string
+          p_models?: string[]
+          p_prev_from: string
+          p_prev_to: string
+          p_region?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      insights_topic_competitors_daily: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_models?: string[]
+          p_region?: string
+        }
+        Returns: Json
+      }
+      insights_trend_markers: {
+        Args: {
+          p_brand_id: string
+          p_from?: string
+          p_to?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      mentions_overview: {
+        Args: {
+          p_brand_id: string
+          p_date_from: string
+          p_date_to?: string
+          p_platform?: string
+          p_region?: string
+          p_search?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      mentions_list: {
+        Args: {
+          p_brand_id: string
+          p_competitor_id?: string
+          p_date_from: string
+          p_date_to?: string
+          p_group?: string
+          p_limit?: number
+          p_offset?: number
+          p_platform?: string
+          p_region?: string
+          p_search?: string
+          p_sentiment?: string
+          p_sort?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      override_mention_sentiment: {
+        Args: { p_note?: string; p_result_id: string; p_sentiment: string }
+        Returns: Json
+      }
       normalize_page_path: { Args: { p_url: string }; Returns: string }
+      import_prompts: {
+        Args: {
+          p_max_locations: number
+          p_organization_id: string
+          p_prompt_set_id: string
+          p_rows: Json
+        }
+        Returns: {
+          id: string
+          idx: number
+        }[]
+      }
       org_prompt_location_usage: {
         Args: { p_organization_id: string }
         Returns: {
@@ -3044,6 +3483,34 @@ export type Database = {
           p_topic_id?: string
         }
         Returns: Json
+      }
+      prompt_position_summaries: {
+        Args: {
+          p_brand_id: string
+          p_date_from?: string
+          p_date_to?: string
+          p_region?: string
+        }
+        Returns: {
+          entity_count: number
+          entity_sum: number
+          mention_answers: number
+          platform: string
+          position_count: number
+          position_sum: number
+          prompt_id: string
+          runs: number
+        }[]
+      }
+      prompt_usage_summary: {
+        Args: { p_brand_id: string }
+        Returns: {
+          brand_active: number
+          brand_paused: number
+          account_active: number
+          account_brands: number
+          account_locations: number
+        }[]
       }
       prompt_visibility_summaries: {
         Args: {
@@ -3147,6 +3614,10 @@ export type Database = {
           visible_runs: number
         }[]
       }
+      seed_kpi_presets: {
+        Args: { p_brand_id: string; p_kpis: Json }
+        Returns: boolean
+      }
       share_of_voice_aggregates: {
         Args: {
           p_brand_id: string
@@ -3168,12 +3639,35 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
+        }
+        Returns: Json
+      }
+      shopping_filter_options: {
+        Args: { p_brand_id: string }
+        Returns: {
+          platforms: string[]
+          regions: string[]
+        }[]
+      }
+      shopping_overview: {
+        Args: {
+          p_brand_id: string
+          p_from?: string
+          p_platforms?: string[]
+          p_regions?: string[]
+          p_to?: string
+          p_trend_from?: string
         }
         Returns: Json
       }
       signals_summary: {
         Args: { p_brand_id: string; p_from: string; p_to: string }
         Returns: Json
+      }
+      signals_new_count: {
+        Args: { p_brand_id: string }
+        Returns: number
       }
       topics_overview_aggregates: {
         Args: { p_brand_id: string }
@@ -3188,6 +3682,30 @@ export type Database = {
           cur_mention_answers: number
           cur_pos_n: number
           cur_pos_sum: number
+          daily: Json
+          last_run_at: string
+          mention_answers: number
+          pos_n: number
+          pos_sum: number
+          prev_answers: number
+          prev_citation_answers: number
+          prev_mention_answers: number
+          prev_pos_n: number
+          prev_pos_sum: number
+          topic_id: string
+          total_citations: number
+          total_mentions: number
+          visible_prompts: number
+        }[]
+      }
+      topics_overview_window: {
+        Args: { p_brand_id: string; p_date_from: string; p_date_to?: string }
+        Returns: {
+          active_prompts: number
+          answers: number
+          citation_answers: number
+          comp_mentions: number
+          competitors: Json
           daily: Json
           last_run_at: string
           mention_answers: number
@@ -3224,6 +3742,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: number
       }
@@ -3248,6 +3767,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: Json
       }
@@ -3283,6 +3803,7 @@ export type Database = {
           p_models?: string[]
           p_platform?: string
           p_region?: string
+          p_topic_id?: string
         }
         Returns: Json
       }

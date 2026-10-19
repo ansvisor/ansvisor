@@ -57,11 +57,25 @@ export async function POST(req: Request) {
   // Ownership: the conversation must belong to the calling user.
   const { data: conv } = await supabaseAdmin
     .from('agent_conversations')
-    .select('id, user_id, organization_id')
+    .select('id, user_id, organization_id, brand_id')
     .eq('id', conversationId)
     .maybeSingle();
   if (!conv || conv.user_id !== auth.userId || conv.organization_id !== organizationId) {
     return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+  }
+
+  let defaultBrand: { id: string; name: string } | undefined;
+  if (conv.brand_id) {
+    const { data: brand } = await supabaseAdmin
+      .from('brands')
+      .select('id, name')
+      .eq('id', conv.brand_id)
+      .eq('organization_id', organizationId)
+      .maybeSingle();
+
+    if (brand) {
+      defaultBrand = brand;
+    }
   }
 
   // Plan gate. On cloud the gate is intentionally loose — `ai_agent` is in
@@ -96,7 +110,7 @@ export async function POST(req: Request) {
   const result = streamText({
     model: buildAgentModel(anthropicKey),
     maxOutputTokens: 16000,
-    system: buildAgentSystemPrompt(new Date()),
+    system: buildAgentSystemPrompt(new Date(), defaultBrand),
     messages: await convertToModelMessages(messages),
     tools: buildAgentTools(auth),
     // streamText is single-step by default in v6 — without an explicit

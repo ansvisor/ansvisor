@@ -1,6 +1,7 @@
 import supabaseAdmin from '../config/supabase.js';
 import logger from '../lib/logger.js';
 import { markTokenVerified } from './verified-tokens.js';
+import { isAllowedOrigin } from './origin-check.js';
 
 class Middleware {
   async decodeTokenForSocket(socket, next) {
@@ -73,14 +74,7 @@ class Middleware {
         return res.status(403).json({ message: 'Forbidden' });
       }
 
-      const url = new URL(domain);
-
-      const isAllowed = allowedOrigins.some((origin) => {
-        const allowed = new URL(origin);
-        return url.hostname === allowed.hostname;
-      });
-
-      if (isAllowed) {
+      if (isAllowedOrigin(domain, allowedOrigins)) {
         return next();
       }
 
@@ -108,14 +102,7 @@ class Middleware {
         return next(new Error('Forbidden Socket'));
       }
 
-      const url = new URL(domain);
-
-      const isAllowed = allowedOrigins.some((origin) => {
-        const allowed = new URL(origin);
-        return url.hostname === allowed.hostname;
-      });
-
-      if (isAllowed) {
+      if (isAllowedOrigin(domain, allowedOrigins)) {
         return next();
       }
 

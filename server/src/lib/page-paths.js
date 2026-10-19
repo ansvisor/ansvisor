@@ -21,7 +21,7 @@
  *   the list with findings nobody will act on.
  */
 
-const EXCLUDED_SEGMENTS = new Set([
+export const EXCLUDED_SEGMENTS = new Set([
   // Transactional
   'checkout',
   'cart',

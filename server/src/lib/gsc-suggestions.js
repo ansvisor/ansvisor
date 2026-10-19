@@ -113,7 +113,10 @@ export function composeCandidates(rows, existingPromptTexts, excludedQueries = n
       avgPosition: r.avg_position != null ? Math.round(r.avg_position * 10) / 10 : null,
     }));
 
-  const head = open.slice(0, HEAD_SLOTS);
+  // The RPC returns everything down to the long-tail floor, so the head's own
+  // floor is applied here — otherwise a quiet site's top slots fill with
+  // queries that are neither head demand nor long-tail.
+  const head = open.filter((c) => c.impressions >= MIN_IMPRESSIONS).slice(0, HEAD_SLOTS);
   const inHead = new Set(head.map((c) => c.query));
   const longtail = open
     .filter(
@@ -191,7 +194,9 @@ export async function getGscSuggestionCandidates(brandId, brand, existingPromptT
     const { data: rows, error } = await supabaseAdmin.rpc('gsc_candidate_queries', {
       p_brand_id: brandId,
       p_since: since,
-      p_min_impressions: MIN_IMPRESSIONS,
+      // The long-tail floor, not the head's: anything the RPC drops never
+      // reaches composeCandidates, so the lower long-tail threshold was dead.
+      p_min_impressions: LONGTAIL_MIN_IMPRESSIONS,
     });
     if (error) throw new Error(error.message);
     if (!rows || rows.length === 0) return [];

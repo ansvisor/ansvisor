@@ -13,8 +13,7 @@ import {
 import { actionTexts } from '@/lib/action-center/display';
 import type { ActionHistoryItem } from '@/lib/action-center/history';
 import type { ActionStatus } from '@/lib/action-center/registry';
-import { ImpactDots } from './signal-table';
-import { ActionIcon } from './action-table';
+import { ActionIcon, PriorityBadge } from './action-table';
 import { cn } from '@/lib/utils';
 
 /** Low-saturation per type, the way the Signals table tints its categories —
@@ -57,9 +56,28 @@ function ResultCell({ item }: { item: ActionHistoryItem }) {
   const tOutcome = useTranslations('actionCenter.actionOutcome');
   const tRegistry = useTranslations('actionCenter.registry');
 
+  // An Improve action's 30-day position result (PROMPT-008) leads the cell.
+  const outcome = item.positionOutcome?.final ? item.positionOutcome : null;
+  const position = outcome && (
+    <p
+      className={cn(
+        'text-xs',
+        outcome.summary.improved > 0
+          ? 'text-emerald-600 dark:text-emerald-400'
+          : 'text-muted-foreground',
+      )}
+    >
+      {t('positionResult', {
+        improved: outcome.summary.improved,
+        measurable: outcome.summary.measurable,
+      })}
+    </p>
+  );
+
   if (item.results.length > 0) {
     return (
       <div className="space-y-0.5">
+        {position}
         {item.results.slice(0, 2).map((metric) => (
           <p
             key={metric.id}
@@ -80,6 +98,8 @@ function ResultCell({ item }: { item: ActionHistoryItem }) {
     );
   }
 
+  if (position) return <div className="space-y-0.5">{position}</div>;
+
   return (
     <div className="space-y-0.5">
       <p className="text-xs text-muted-foreground">{tOutcome(item.outcome)}</p>
@@ -98,7 +118,6 @@ export function HistoryTable({
   onSelect: (item: ActionHistoryItem) => void;
 }) {
   const t = useTranslations('actionCenter.historyPage');
-  const tActions = useTranslations('actionCenter.actionsPage');
   const tTexts = useTranslations('actionCenter.actionTexts');
   const tTypes = useTranslations('actionCenter.actionCategories');
   const tAffected = useTranslations('actionCenter.historyPage.affected');
@@ -110,7 +129,7 @@ export function HistoryTable({
           <TableRow>
             <TableHead className="text-xs">{t('table.action')}</TableHead>
             <TableHead className="text-xs">{t('table.type')}</TableHead>
-            <TableHead className="text-xs">{t('table.impact')}</TableHead>
+            <TableHead className="text-xs">{t('table.priority')}</TableHead>
             <TableHead className="text-xs">{t('table.affected')}</TableHead>
             <TableHead className="text-xs">{t('table.result')}</TableHead>
             <TableHead className="text-xs">{t('table.status')}</TableHead>
@@ -154,10 +173,7 @@ export function HistoryTable({
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs">{tActions(`impact.${item.impact}`)}</span>
-                    <ImpactDots impact={item.impact} />
-                  </div>
+                  <PriorityBadge score={item.priorityScore} level={item.priorityLevel} />
                 </TableCell>
                 <TableCell>
                   <div className="space-y-0.5">

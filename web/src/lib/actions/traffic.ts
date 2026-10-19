@@ -1,7 +1,12 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { expandDateToEndOfDay } from '@/lib/dates';
+import { API_BASE_URL } from '@/config/api';
+import { TRAFFIC_PAGE_SIZE, countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
+import { expandDateToEndOfDay, utcDay } from '@/lib/dates';
+import { isHourlyWindow, listUtcHours, utcHourKey } from '@/lib/traffic-buckets';
+import { CONVERSIONS_FALLBACK_DAYS, widensToLast30Days } from '@/lib/traffic-conversions';
+import { getSuggestionSourceStates, type SourceState } from '@/lib/actions/integrations';
 
 export interface TrafficDateWindow {
   dateFrom?: string;
@@ -18,19 +23,82 @@ export interface TrafficLog {
   language: string | null;
   screen: string | null;
   createdAt: string;
+  /** Pageviews in this visit: 1, plus each reload or further link (AT-003). */
+  pageviews: number;
 }
 
+/**
+ * Every count here is of visits, one per session (AT-003): a row whose
+ * `visit_of` is null starts a visit, and the rows pointing at it are its
+ * further pageviews. Pageviews are counted on their own.
+ */
 export interface TrafficSummary {
   totalVisits: number;
   totalVisitsPrev: number;
-  platformBreakdown: { platform: string; visits: number; visitsPrev: number }[];
-  topPages: { url: string; visits: number; visitsPrev: number }[];
+  /**
+   * The snippet's pageviews in the window, the visits' first ones included.
+   * Google Analytics reports none, so on days it filled (AT-004) there are
+   * visits without pageviews.
+   */
+  totalPageviews: number;
+  /** The UTC days in the window whose visits came from Google Analytics (AT-004). */
+  analyticsDays: string[];
+  /** False for all time, which has no previous period to compare with. */
+  hasPreviousPeriod: boolean;
+  platformBreakdown: {
+    platform: string;
+    visits: number;
+    visitsPrev: number;
+    /** Google Analytics' engagement for the platform over the range's days; null without any (AT-005). */
+    analytics: TrafficEngagement | null;
+  }[];
+  topPages: {
+    url: string;
+    visits: number;
+    visitsPrev: number;
+    /** Times tracked AI answers cited the page in the range (AT-006). */
+    citations: number;
+  }[];
   hasAnyData: boolean;
 }
 
 export interface TrafficTrendPoint {
+  /** The bucket: a UTC day ("2026-10-17"), or an hour ("2026-10-17T13:00:00.000Z") in a 24-hour window. */
   date: string;
   [platform: string]: string | number;
+}
+
+/** What feeds the page, for the data sources strip (AT-001). */
+export interface TrafficSources {
+  /** The snippet's newest visit, or null when it has never sent one. */
+  snippetLastVisitAt: string | null;
+  ga: SourceState;
+  gsc: SourceState;
+}
+
+/**
+ * The tracking snippet, Google Analytics and Google Search Console as the
+ * strip shows them, in one call: the snippet's last visit beside each
+ * Google source's connection, the brand's property and its last sync.
+ */
+export async function getTrafficSources(brandId: string): Promise<TrafficSources> {
+  const supabase = await createClient();
+  const [states, lastVisit] = await Promise.all([
+    getSuggestionSourceStates(brandId),
+    supabase
+      .from('ai_traffic_logs')
+      .select('created_at')
+      .eq('brand_id', brandId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  if (lastVisit.error) throw new Error(lastVisit.error.message);
+  return {
+    snippetLastVisitAt: (lastVisit.data?.created_at as string | undefined) ?? null,
+    ga: states.ga,
+    gsc: states.gsc,
+  };
 }
 
 function mapLogRow(row: Record<string, unknown>): TrafficLog {
@@ -44,6 +112,7 @@ function mapLogRow(row: Record<string, unknown>): TrafficLog {
     language: row.language as string | null,
     screen: row.screen as string | null,
     createdAt: row.created_at as string,
+    pageviews: 1,
   };
 }
 
@@ -96,142 +165,140 @@ function listUtcDays(from: string, to: string): string[] {
 }
 
 /**
- * PostgREST silently caps un-paginated selects at 1000 rows, which froze the
- * visits KPI at 1000 and truncated every breakdown on busy brands (#450).
- * Totals come from exact count queries; the breakdown/trend scans page
- * through the window with deterministic ordering and a hard ceiling so a
- * pathological brand can't pin the server action.
+ * AI-referred visits in a window from the snippet and Google Analytics, day
+ * by day (AT-004, spec §5.2; 00176): a UTC day with a snippet visit is the
+ * snippet's, any other whole day in the window is Analytics'. Never summed.
  */
-const TRAFFIC_PAGE_SIZE = 1000;
-const TRAFFIC_MAX_ROWS = 50_000;
+interface MergedTraffic {
+  visits: number;
+  pageviews: number;
+  analyticsDays: string[];
+  platforms: { platform: string; visits: number }[];
+  pages: { page: string; visits: number }[];
+  days: { day: string; platform: string; visits: number }[];
+}
 
-async function scanTrafficLogs(
+async function readMergedTraffic(
   supabase: Awaited<ReturnType<typeof createClient>>,
   brandId: string,
-  window: { columns: string; from?: string; to?: string; toInclusive?: boolean },
-  onRow: (row: Record<string, unknown>) => void,
-): Promise<void> {
-  for (let start = 0; start < TRAFFIC_MAX_ROWS; start += TRAFFIC_PAGE_SIZE) {
-    let query = supabase
-      .from('ai_traffic_logs')
-      .select(window.columns)
-      .eq('brand_id', brandId)
-      // Deterministic order so .range() pages don't shuffle between requests.
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-      .range(start, start + TRAFFIC_PAGE_SIZE - 1);
-    if (window.from) query = query.gte('created_at', window.from);
-    if (window.to) {
-      query = window.toInclusive
-        ? query.lte('created_at', window.to)
-        : query.lt('created_at', window.to);
-    }
-
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
-
-    const batch = (data ?? []) as unknown as Record<string, unknown>[];
-    for (const row of batch) onRow(row);
-    if (batch.length < TRAFFIC_PAGE_SIZE) break;
-  }
+  window: { from?: string; to?: string; toInclusive?: boolean },
+): Promise<MergedTraffic> {
+  // The 24-hour range trends hour by hour, which Analytics can't fill: it
+  // reads the snippet alone (AT-004).
+  const hourly = Boolean(window.from && window.to && isHourlyWindow(window.from, window.to));
+  const { data, error } = await supabase.rpc('ai_traffic_merged', {
+    p_brand_id: brandId,
+    p_from: window.from ?? null,
+    p_to: window.to ?? null,
+    p_to_inclusive: window.toInclusive ?? true,
+    p_analytics: !hourly,
+  });
+  if (error) throw new Error(error.message);
+  const raw = (data ?? {}) as {
+    visits?: number;
+    pageviews?: number;
+    analytics_days?: string[];
+    platforms?: { platform: string; visits: number }[];
+    pages?: { page: string; visits: number }[];
+    days?: { day: string; platform: string; visits: number }[];
+  };
+  return {
+    visits: Number(raw.visits) || 0,
+    pageviews: Number(raw.pageviews) || 0,
+    analyticsDays: raw.analytics_days ?? [],
+    platforms: (raw.platforms ?? []).map((p) => ({ ...p, visits: Number(p.visits) || 0 })),
+    pages: (raw.pages ?? []).map((p) => ({ ...p, visits: Number(p.visits) || 0 })),
+    days: (raw.days ?? []).map((d) => ({ ...d, visits: Number(d.visits) || 0 })),
+  };
 }
 
 export async function getTrafficSummary(
   brandId: string,
   window?: TrafficDateWindow,
+  /** The page shows the top 10 landing pages; an export takes them all. */
+  opts?: { topPages?: number },
 ): Promise<TrafficSummary> {
   const supabase = await createClient();
   const { from, to, prevFrom, prevTo } = resolveTrafficWindow(window);
-
-  // Exact totals — count queries transfer no rows and are immune to the cap.
-  const countVisits = async (fromTs?: string, toTs?: string, toInclusive = false) => {
-    let query = supabase
-      .from('ai_traffic_logs')
-      .select('id', { count: 'exact', head: true })
-      .eq('brand_id', brandId);
-    if (fromTs) query = query.gte('created_at', fromTs);
-    if (toTs) {
-      query = toInclusive ? query.lte('created_at', toTs) : query.lt('created_at', toTs);
-    }
-    const { count, error } = await query;
-    if (error) throw new Error(error.message);
-    return count ?? 0;
-  };
-
-  // Platform breakdown + top pages, aggregated per batch.
-  const platformMap = new Map<string, number>();
-  const platformMapPrev = new Map<string, number>();
-  const pageMap = new Map<string, number>();
-  const pageMapPrev = new Map<string, number>();
-
-  const aggregate = (platforms: Map<string, number>, pages: Map<string, number>) => {
-    return (r: Record<string, unknown>) => {
-      const p = (r.source_platform as string) || 'unknown';
-      platforms.set(p, (platforms.get(p) ?? 0) + 1);
-
-      const url = r.url as string;
-      let key = url;
-      try {
-        key = new URL(url).pathname;
-      } catch {
-        // Not a parseable URL — bucket by the raw value.
-      }
-      pages.set(key, (pages.get(key) ?? 0) + 1);
-    };
-  };
-
-  const columns = 'source_platform, url, created_at, id';
   const hasPrev = Boolean(prevFrom && prevTo);
-  // The window is already the full lifetime when neither bound is set, so
-  // totalVisits doubles as the lifetime check — only worth a second cheap
-  // count query when the window actually narrows the result.
-  const hasWindow = Boolean(from || to);
-  const [totalVisits, totalVisitsPrev, , , lifetimeVisits] = await Promise.all([
-    countVisits(from, to, true),
-    hasPrev ? countVisits(prevFrom, prevTo) : Promise.resolve(0),
-    scanTrafficLogs(
-      supabase,
-      brandId,
-      { columns, from, to, toInclusive: true },
-      aggregate(platformMap, pageMap),
-    ),
+
+  // Visits, platforms and pages from the snippet and Google Analytics, day
+  // by day (AT-004), summed in the database: no row cap applies.
+  const [current, previous, lifetime, value, cited] = await Promise.all([
+    readMergedTraffic(supabase, brandId, { from, to, toInclusive: true }),
     hasPrev
-      ? scanTrafficLogs(
-          supabase,
-          brandId,
-          { columns, from: prevFrom, to: prevTo },
-          aggregate(platformMapPrev, pageMapPrev),
-        )
-      : Promise.resolve(),
-    hasWindow ? countVisits() : Promise.resolve(null),
+      ? readMergedTraffic(supabase, brandId, { from: prevFrom, to: prevTo, toInclusive: false })
+      : null,
+    // Whether the brand has any AI traffic at all, from either origin.
+    from || to
+      ? Promise.all([
+          countTrafficLogs(supabase, brandId, {}),
+          supabase
+            .from('ga_ai_traffic_stats')
+            .select('id')
+            .eq('brand_id', brandId)
+            .gt('sessions', 0)
+            .limit(1),
+        ])
+      : null,
+    // What each platform's visitors did, from Analytics over the range's
+    // days (AT-005): engagement and key events are rates of its sessions,
+    // so they read Analytics alone, whichever origin counted the visits.
+    supabase.rpc('ga_platform_value', {
+      p_brand_id: brandId,
+      p_since: utcDay(from) ?? null,
+      p_until: utcDay(to) ?? new Date().toISOString().slice(0, 10),
+    }),
+    // How often tracked answers cite each page, for Top Landing Pages (AT-006).
+    supabase.rpc('ai_traffic_page_citations', {
+      p_brand_id: brandId,
+      p_since: utcDay(from) ?? null,
+      p_until: utcDay(to) ?? null,
+    }),
   ]);
+  if (cited.error) throw new Error(cited.error.message);
+  const citationsByPage = new Map(
+    (cited.data ?? []).map((row) => [row.page_key, Number(row.citations) || 0]),
+  );
+  if (lifetime?.[1].error) throw new Error(lifetime[1].error.message);
+  if (value.error) throw new Error(value.error.message);
+  const valueByPlatform = new Map(
+    (value.data ?? []).map((row) => [
+      row.platform,
+      {
+        sessions: Number(row.sessions) || 0,
+        engagedSessions: Number(row.engaged_sessions) || 0,
+        keyEvents: Number(row.key_events) || 0,
+        keyEventSessions: Number(row.key_event_sessions) || 0,
+      },
+    ]),
+  );
+  const hasAnyData = lifetime
+    ? lifetime[0] > 0 || (lifetime[1].data ?? []).length > 0
+    : current.visits > 0;
 
-  const hasAnyData = hasWindow ? (lifetimeVisits as number) > 0 : totalVisits > 0;
-
-  const allPlatforms = new Set([...platformMap.keys(), ...platformMapPrev.keys()]);
-  const platformBreakdown = Array.from(allPlatforms)
-    .map((platform) => ({
-      platform,
-      visits: platformMap.get(platform) ?? 0,
-      visitsPrev: platformMapPrev.get(platform) ?? 0,
-    }))
-    .filter((p) => p.visits > 0)
-    .sort((a, b) => b.visits - a.visits);
-
-  const topPages = Array.from(pageMap.entries())
-    .map(([url, visits]) => ({
-      url,
-      visits,
-      visitsPrev: pageMapPrev.get(url) ?? 0,
-    }))
-    .sort((a, b) => b.visits - a.visits)
-    .slice(0, 10);
+  const previousByPlatform = new Map(previous?.platforms.map((p) => [p.platform, p.visits]));
+  const previousByPage = new Map(previous?.pages.map((p) => [p.page, p.visits]));
 
   return {
-    totalVisits,
-    totalVisitsPrev,
-    platformBreakdown,
-    topPages,
+    totalVisits: current.visits,
+    totalVisitsPrev: previous?.visits ?? 0,
+    totalPageviews: current.pageviews,
+    analyticsDays: current.analyticsDays,
+    hasPreviousPeriod: hasPrev,
+    platformBreakdown: current.platforms
+      .filter((p) => p.visits > 0)
+      .map((p) => ({
+        ...p,
+        visitsPrev: previousByPlatform.get(p.platform) ?? 0,
+        analytics: valueByPlatform.get(p.platform) ?? null,
+      })),
+    topPages: current.pages.slice(0, opts?.topPages ?? 10).map((p) => ({
+      url: p.page,
+      visits: p.visits,
+      visitsPrev: previousByPage.get(p.page) ?? 0,
+      citations: citationsByPage.get(p.page.toLowerCase()) ?? 0,
+    })),
     hasAnyData,
   };
 }
@@ -242,29 +309,36 @@ export async function getTrafficTrend(
 ): Promise<TrafficTrendPoint[]> {
   const supabase = await createClient();
   const { from, to } = resolveTrafficWindow(window);
+  // A day or less reads hour by hour (AT-017); longer windows by day.
+  const hourly = Boolean(from && to && isHourlyWindow(from, to));
 
-  // Group by day + platform, aggregated per batch (#450).
+  // Group by day (or hour) + platform.
   const dayMap = new Map<string, Map<string, number>>();
   const allPlatforms = new Set<string>();
+  const add = (day: string, platform: string, visits: number) => {
+    allPlatforms.add(platform);
+    if (!dayMap.has(day)) dayMap.set(day, new Map());
+    const dm = dayMap.get(day)!;
+    dm.set(platform, (dm.get(platform) ?? 0) + visits);
+  };
 
-  await scanTrafficLogs(
-    supabase,
-    brandId,
-    { columns: 'source_platform, created_at, id', from, to, toInclusive: true },
-    (r) => {
-      const day = (r.created_at as string).slice(0, 10);
-      const platform = (r.source_platform as string) || 'unknown';
-      allPlatforms.add(platform);
-
-      if (!dayMap.has(day)) dayMap.set(day, new Map());
-      const dm = dayMap.get(day)!;
-      dm.set(platform, (dm.get(platform) ?? 0) + 1);
-    },
-  );
+  if (hourly) {
+    // The snippet alone: Analytics has no hours (AT-004).
+    await scanTrafficLogs(
+      supabase,
+      brandId,
+      { columns: 'source_platform, created_at, id', from, to, toInclusive: true },
+      (r) => add(utcHourKey(r.created_at as string), (r.source_platform as string) || 'unknown', 1),
+    );
+  } else {
+    // Day by day from the snippet or Google Analytics (AT-004).
+    const merged = await readMergedTraffic(supabase, brandId, { from, to, toInclusive: true });
+    for (const d of merged.days) add(d.day, d.platform, d.visits);
+  }
 
   let days: string[];
   if (from && to) {
-    days = listUtcDays(from, to);
+    days = hourly ? listUtcHours(from, to) : listUtcDays(from, to);
   } else {
     days = [...dayMap.keys()].sort();
     if (days.length > TRAFFIC_TREND_MAX_DAYS) {
@@ -283,6 +357,38 @@ export async function getTrafficTrend(
   });
 }
 
+/**
+ * The visit list's filters over ai_traffic_logs: platform, a URL search and
+ * the window. Shared by the list and its export, so the file holds the rows
+ * the list shows.
+ */
+function visitListQuery(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  filters: { platform?: string; search?: string; from?: string; to?: string },
+  columns: string,
+  head: boolean,
+) {
+  let query = supabase
+    .from('ai_traffic_logs')
+    .select(columns, { count: 'exact', head })
+    .eq('brand_id', brandId);
+  if (filters.platform) query = query.eq('source_platform', filters.platform);
+  if (filters.search) {
+    // Escape \, % and _ for ILIKE to treat them as literals, not wildcards
+    const escaped = filters.search.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+    query = query.ilike('url', `%${escaped}%`);
+  }
+  if (filters.from) query = query.gte('created_at', filters.from);
+  if (filters.to) query = query.lte('created_at', filters.to);
+  return query;
+}
+
+/**
+ * The window's visits, newest first, one row per visit with its pageviews
+ * (AT-003). `total` counts the visits that match; `pageviews` counts every
+ * pageview that does, so the list can say "4 visits (7 pageviews)".
+ */
 export async function getTrafficLogs(
   brandId: string,
   opts?: {
@@ -293,7 +399,7 @@ export async function getTrafficLogs(
     dateFrom?: string;
     dateTo?: string;
   },
-): Promise<{ logs: TrafficLog[]; total: number }> {
+): Promise<{ logs: TrafficLog[]; total: number; pageviews: number }> {
   const supabase = await createClient();
   const limit = opts?.limit ?? 20;
   const offset = opts?.offset ?? 0;
@@ -304,106 +410,512 @@ export async function getTrafficLogs(
     dateTo: opts?.dateTo,
   });
 
-  let query = supabase
-    .from('ai_traffic_logs')
-    .select('*', { count: 'exact' })
-    .eq('brand_id', brandId);
+  // One set of filters for the visits and for the pageview count.
+  const filters = { platform, search, from, to };
+  const matching = (columns: string, head: boolean) =>
+    visitListQuery(supabase, brandId, filters, columns, head);
 
-  // Apply filters
-  if (platform) {
-    query = query.eq('source_platform', platform);
+  const [visits, pageviews] = await Promise.all([
+    matching('*', false)
+      .is('visit_of', null)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1),
+    matching('id', true),
+  ]);
+  if (visits.error) throw new Error(visits.error.message);
+  if (pageviews.error) throw new Error(pageviews.error.message);
+
+  const logs = ((visits.data ?? []) as unknown as Record<string, unknown>[]).map(mapLogRow);
+
+  // Each listed visit's further pageviews, counted from the rows pointing
+  // at it. The repeats of one page of visits are few, so one read does it.
+  if (logs.length > 0) {
+    const { data: repeats, error } = await supabase
+      .from('ai_traffic_logs')
+      .select('visit_of')
+      .in(
+        'visit_of',
+        logs.map((log) => log.id),
+      );
+    if (error) throw new Error(error.message);
+    const extra = new Map<string, number>();
+    for (const row of repeats ?? []) {
+      const id = row.visit_of as string;
+      extra.set(id, (extra.get(id) ?? 0) + 1);
+    }
+    for (const log of logs) log.pageviews += extra.get(log.id) ?? 0;
   }
 
-  if (search) {
-    // Escape \, % and _ for ILIKE to treat them as literals, not wildcards
-    const escaped = search.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
-    query = query.ilike('url', `%${escaped}%`);
-  }
-
-  if (from) query = query.gte('created_at', from);
-  if (to) query = query.lte('created_at', to);
-
-  const { data, error, count } = await query
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1);
-
-  if (error) throw new Error(error.message);
-
-  return {
-    logs: (data ?? []).map((r) => mapLogRow(r as Record<string, unknown>)),
-    total: count ?? 0,
-  };
+  return { logs, total: visits.count ?? 0, pageviews: pageviews.count ?? 0 };
 }
 
 /**
- * Pages that carry commercial weight and get nothing from AI engines (#719).
+ * Every visit the list would show, for an export (AT-015): the list's
+ * filters, all of its pages, each visit with its pageviews. Null when there
+ * are more than `max`, which the export refuses rather than build slowly.
  *
- * Read straight from the detection engine's table — the ranking, the signal
- * and the evidence were all decided server-side during the nightly run, so
- * this reads them rather than recomputing anything.
- *
- * Deliberately unfiltered by the page's date range: the findings describe the
- * engine's own 28-day window, and re-scoping them to an arbitrary range would
- * mean showing a ranking that was never computed for it.
+ * The pageviews come from one scan of the window's repeat rows rather than
+ * an id list per page of visits: a thousand ids don't fit in a request URL.
+ * A visit's repeats follow it, so the scan starts with the window and has
+ * no end, as the list counts them.
  */
-export interface PageOpportunity {
-  landingPage: string;
-  /** Which metric ranked this page — never present it as anything else. */
-  valueSignal: 'revenue' | 'transactions' | 'key_events' | 'engagement';
-  valuePercentile: number;
-  valueRank: number;
+export async function getTrafficVisitsForExport(
+  brandId: string,
+  opts: { platform?: string; search?: string; dateFrom?: string; dateTo?: string; max: number },
+): Promise<TrafficLog[] | null> {
+  const supabase = await createClient();
+  const { from, to } = resolveTrafficWindow({ dateFrom: opts.dateFrom, dateTo: opts.dateTo });
+  const filters = { platform: opts.platform, search: opts.search, from, to };
+
+  const counted = await visitListQuery(supabase, brandId, filters, 'id', true).is('visit_of', null);
+  if (counted.error) throw new Error(counted.error.message);
+  const total = counted.count ?? 0;
+  if (total > opts.max) return null;
+
+  const visits: TrafficLog[] = [];
+  for (let start = 0; start < total; start += TRAFFIC_PAGE_SIZE) {
+    const { data, error } = await visitListQuery(supabase, brandId, filters, '*', false)
+      .is('visit_of', null)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(start, start + TRAFFIC_PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as unknown as Record<string, unknown>[];
+    visits.push(...batch.map(mapLogRow));
+    if (batch.length < TRAFFIC_PAGE_SIZE) break;
+  }
+  if (visits.length === 0) return visits;
+
+  const extra = new Map<string, number>();
+  for (let start = 0; ; start += TRAFFIC_PAGE_SIZE) {
+    let query = supabase
+      .from('ai_traffic_logs')
+      .select('id, visit_of')
+      .eq('brand_id', brandId)
+      .not('visit_of', 'is', null)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(start, start + TRAFFIC_PAGE_SIZE - 1);
+    if (from) query = query.gte('created_at', from);
+    if (opts.platform) query = query.eq('source_platform', opts.platform);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    for (const row of data ?? []) {
+      const id = row.visit_of as string;
+      extra.set(id, (extra.get(id) ?? 0) + 1);
+    }
+    if ((data ?? []).length < TRAFFIC_PAGE_SIZE) break;
+  }
+  for (const visit of visits) visit.pageviews += extra.get(visit.id) ?? 0;
+  return visits;
+}
+
+/**
+ * The Pages section (AT-006, spec §3.5; 00178): the brand's pages in the
+ * page's range with their AI visits (the snippet or Analytics, day by day),
+ * how often tracked answers cite them, the prompts pointing to them and
+ * their traffic from every channel, sorted into three work lists.
+ */
+export type TrafficPagesTab = 'noAiTraffic' | 'citedNotClicked' | 'trafficNoPrompt' | 'all';
+
+const TAB_PARAM: Record<TrafficPagesTab, string> = {
+  noAiTraffic: 'no_ai_traffic',
+  citedNotClicked: 'cited_not_clicked',
+  trafficNoPrompt: 'traffic_no_prompt',
+  all: 'all',
+};
+
+export interface TrafficPageRow {
+  /** The path, as normalize_page_path writes it. */
+  page: string;
+  aiVisits: number;
+  /** Key events in AI sessions, from Analytics. */
+  aiKeyEvents: number;
+  /** The assistants that sent the most visits, most first (up to three). */
+  aiPlatforms: string[];
+  /** Times tracked AI answers cited the page in the range. */
+  citations: number;
+  /** Active prompts with the page as a target URL. */
+  targetingPrompts: number;
+  /** Every channel's traffic, from Analytics. */
   sessions: number;
   engagedSessions: number;
   keyEvents: number;
   transactions: number;
   revenue: number;
   engagementSeconds: number;
-  windowDays: number;
-  firstDetectedAt: string;
-  /**
-   * Why this page gets nothing from AI engines — cited anyway, targeted by a
-   * prompt and not cited, or not targeted at all. Null on findings raised
-   * before the classification existed; the next nightly run fills them.
-   */
-  citationState: 'cited' | 'targeted_not_cited' | 'not_targeted' | null;
-  citations: number;
-  citingPrompts: number;
-  targetingPrompts: number;
+  inSitemap: boolean;
+  /** The page's place on the site by value, among pages with traffic. */
+  valueRank: number | null;
 }
 
-export async function getPageOpportunities(
-  brandId: string,
-  opts?: { limit?: number },
-): Promise<PageOpportunity[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('page_opportunities')
-    .select(
-      'landing_page, value_signal, value_percentile, value_rank, sessions, engaged_sessions, key_events, transactions, revenue, engagement_seconds, window_days, first_detected_at, citation_state, citations, citing_prompts, targeting_prompts',
-    )
-    .eq('brand_id', brandId)
-    .is('resolved_at', null)
-    .order('value_percentile', { ascending: false })
-    .limit(opts?.limit ?? 10);
+export interface TrafficPages {
+  counts: Record<TrafficPagesTab, number>;
+  rows: TrafficPageRow[];
+}
 
+export async function getTrafficPages(
+  brandId: string,
+  window: TrafficDateWindow | undefined,
+  opts: { tab: TrafficPagesTab; limit?: number; offset?: number },
+): Promise<TrafficPages> {
+  const supabase = await createClient();
+  const { from, to } = resolveTrafficWindow(window);
+  const { data, error } = await supabase.rpc('ai_traffic_pages', {
+    p_brand_id: brandId,
+    p_from: from ?? null,
+    p_to: to ?? null,
+    p_tab: TAB_PARAM[opts.tab],
+    p_limit: opts.limit ?? 10,
+    p_offset: opts.offset ?? 0,
+  });
   if (error) throw new Error(error.message);
 
-  return (data ?? []).map((row) => ({
-    landingPage: row.landing_page as string,
-    valueSignal: row.value_signal as PageOpportunity['valueSignal'],
-    valuePercentile: Number(row.value_percentile) || 0,
-    valueRank: Number(row.value_rank) || 0,
-    sessions: Number(row.sessions) || 0,
-    engagedSessions: Number(row.engaged_sessions) || 0,
-    keyEvents: Number(row.key_events) || 0,
-    transactions: Number(row.transactions) || 0,
-    revenue: Number(row.revenue) || 0,
-    engagementSeconds: Number(row.engagement_seconds) || 0,
-    windowDays: Number(row.window_days) || 0,
-    firstDetectedAt: row.first_detected_at as string,
-    citationState: row.citation_state as PageOpportunity['citationState'],
-    citations: Number(row.citations) || 0,
-    citingPrompts: Number(row.citing_prompts) || 0,
-    targetingPrompts: Number(row.targeting_prompts) || 0,
-  }));
+  const raw = (data ?? {}) as { counts?: Record<string, number>; rows?: Record<string, unknown>[] };
+  const counts = raw.counts ?? {};
+  return {
+    counts: {
+      noAiTraffic: Number(counts.no_ai_traffic) || 0,
+      citedNotClicked: Number(counts.cited_not_clicked) || 0,
+      trafficNoPrompt: Number(counts.traffic_no_prompt) || 0,
+      all: Number(counts.all) || 0,
+    },
+    rows: (raw.rows ?? []).map((row) => ({
+      page: row.page as string,
+      aiVisits: Number(row.ai_visits) || 0,
+      aiKeyEvents: Number(row.ai_key_events) || 0,
+      aiPlatforms: (row.ai_platforms as string[] | null) ?? [],
+      citations: Number(row.citations) || 0,
+      targetingPrompts: Number(row.targeting_prompts) || 0,
+      sessions: Number(row.sessions) || 0,
+      engagedSessions: Number(row.engaged_sessions) || 0,
+      keyEvents: Number(row.key_events) || 0,
+      transactions: Number(row.transactions) || 0,
+      revenue: Number(row.revenue) || 0,
+      engagementSeconds: Number(row.engagement_seconds) || 0,
+      inSitemap: Boolean(row.in_sitemap),
+      valueRank:
+        row.value_rank === null || row.value_rank === undefined ? null : Number(row.value_rank),
+    })),
+  };
+}
+
+/** A list a page can be sent to the Action Center from (AT-006). */
+export type TrafficPagesReason = 'cited_not_clicked' | 'no_ai_traffic';
+
+/**
+ * "Send to Action Center" on the Pages section (AT-006): pages from the
+ * Cited, not clicked or No AI traffic list as one action. The server reads
+ * the list again over the same range and keeps the pages still on it; the
+ * same pages sent again return the open action.
+ */
+export async function sendTrafficPagesToActionCenter(
+  brandId: string,
+  window: TrafficDateWindow | undefined,
+  pages: string[],
+  reason: TrafficPagesReason,
+): Promise<{ actionId: string; actionNo: number; created: boolean } | { error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'Not authenticated' };
+
+  const { from, to } = resolveTrafficWindow(window);
+  const res = await fetch(`${API_BASE_URL}/api/action-center/pages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ brandId, pages, reason, from, to }),
+  });
+
+  // Returned, not thrown: a thrown error's message is masked in production.
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return { error: body.details || body.error || `Server error: ${res.status}` };
+  }
+  return res.json();
+}
+
+/** A prompt suggested for one page (AT-006 part B2). */
+export interface PagePromptSuggestion {
+  text: string;
+  topic: string;
+  reason: string;
+  /** The Search Console query it came from, when it did. */
+  sourceQuery: string | null;
+  impressions: number | null;
+}
+
+export interface PagePromptSuggestions {
+  page: { path: string; title: string | null };
+  /** Search Console queries that shared the page's words. */
+  queries: number;
+  suggestions: PagePromptSuggestion[];
+}
+
+/**
+ * "Add prompts" on the Pages section (AT-006 part B2): prompts whose best
+ * answer is this page, written from what the page says, its figures over the
+ * page's range and the brand's Search Console queries that share its words.
+ * Nothing is stored until the person tracks some.
+ */
+export async function suggestPagePrompts(
+  brandId: string,
+  window: TrafficDateWindow | undefined,
+  page: string,
+): Promise<PagePromptSuggestions | { error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'Not authenticated' };
+
+  const { from, to } = resolveTrafficWindow(window);
+  const res = await fetch(
+    `${API_BASE_URL}/api/prompts/suggestions/${encodeURIComponent(brandId)}/page`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ page, from, to }),
+    },
+  );
+
+  // Returned, not thrown: a thrown error's message is masked in production.
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return { error: body.message || body.error || `Server error: ${res.status}` };
+  }
+  return res.json();
+}
+
+/** A landing page AI visitors converted on (AT-014). */
+export interface ConvertingPage {
+  page: string;
+  /** Analytics' AI-referred sessions on the page. */
+  aiVisits: number;
+  keyEvents: number;
+  /** Sessions with at least one key event: the rate is this over aiVisits. */
+  keyEventSessions: number;
+  transactions: number;
+  revenue: number;
+  /** The platform whose visitors converted most on the page. */
+  bestPlatform: string | null;
+}
+
+/** An AI platform × topic, over the pages the topic's tracked answers cite (AT-014). */
+export interface BuyerAnswer {
+  platform: string;
+  topicId: string;
+  topic: string;
+  pages: number;
+  aiVisits: number;
+  keyEvents: number;
+  keyEventSessions: number;
+  revenue: number;
+}
+
+export interface TrafficConversions {
+  /** All AI sessions Analytics counted in the window read. */
+  aiVisits: number;
+  /** The property reports purchases: the cards rank by revenue. */
+  hasRevenue: boolean;
+  /** The range had fewer than 30 AI visits, so the last 30 days were read instead. */
+  widened: boolean;
+  pageCount: number;
+  answerCount: number;
+  pages: ConvertingPage[];
+  answers: BuyerAnswer[];
+}
+
+async function readConversions(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  since: string | null,
+  until: string | null,
+  limit: number,
+): Promise<Omit<TrafficConversions, 'widened'>> {
+  const { data, error } = await supabase.rpc('ai_traffic_conversions', {
+    p_brand_id: brandId,
+    p_since: since,
+    p_until: until,
+    p_limit: limit,
+  });
+  if (error) throw new Error(error.message);
+  const raw = (data ?? {}) as Record<string, unknown>;
+  const n = (v: unknown) => Number(v) || 0;
+  const list = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]) : []);
+  return {
+    aiVisits: n(raw.sessions),
+    hasRevenue: raw.has_revenue === true,
+    pageCount: n(raw.page_count),
+    answerCount: n(raw.answer_count),
+    pages: list(raw.pages).map((r) => ({
+      page: String(r.page),
+      aiVisits: n(r.sessions),
+      keyEvents: n(r.key_events),
+      keyEventSessions: n(r.key_event_sessions),
+      transactions: n(r.transactions),
+      revenue: n(r.revenue),
+      bestPlatform: typeof r.best_platform === 'string' ? r.best_platform : null,
+    })),
+    answers: list(raw.answers).map((r) => ({
+      platform: String(r.platform),
+      topicId: String(r.topic_id),
+      topic: String(r.topic),
+      pages: n(r.pages),
+      aiVisits: n(r.sessions),
+      keyEvents: n(r.key_events),
+      keyEventSessions: n(r.key_event_sessions),
+      revenue: n(r.revenue),
+    })),
+  };
+}
+
+/**
+ * Where AI visitors convert (AT-014, spec §3.4b; 00179): the landing pages
+ * whose AI-referred sessions convert, and AI platform × topic of the tracked
+ * answers citing them, from Analytics' days in the page's range. A short
+ * range with fewer than 30 AI visits reads the last 30 days instead and says
+ * so (spec §3.01).
+ */
+export async function getTrafficConversions(
+  brandId: string,
+  window: TrafficDateWindow | undefined,
+  { limit = 10 }: { limit?: number } = {},
+): Promise<TrafficConversions> {
+  const supabase = await createClient();
+  const { from, to } = resolveTrafficWindow(window);
+  const inRange = await readConversions(
+    supabase,
+    brandId,
+    utcDay(from) ?? null,
+    utcDay(to) ?? null,
+    limit,
+  );
+  if (!widensToLast30Days({ from, to }, inRange.aiVisits)) return { ...inRange, widened: false };
+
+  const now = Date.now();
+  const last30 = await readConversions(
+    supabase,
+    brandId,
+    new Date(now - CONVERSIONS_FALLBACK_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    new Date(now).toISOString().slice(0, 10),
+    limit,
+  );
+  return { ...last30, widened: true };
+}
+
+/** Analytics' engagement figures for one group of sessions (AT-005). */
+export interface TrafficEngagement {
+  sessions: number;
+  engagedSessions: number;
+  keyEvents: number;
+  /** Sessions with at least one key event: the key event rate is this over sessions. */
+  keyEventSessions: number;
+}
+
+/**
+ * The Google side of the AI Traffic KPI cards (AT-017, spec §3.2): from
+ * Analytics, all sessions and the AI channel's sessions, engaged sessions
+ * and key events; from Search Console, clicks against the period before.
+ * Each is asked for only when its source has data for the brand.
+ */
+
+export interface TrafficGoogleTotals {
+  ga: {
+    sessions: number;
+    aiSessions: number;
+    aiEngagedSessions: number;
+    aiKeyEvents: number;
+    aiKeyEventSessions: number;
+    /** AI sessions' purchase revenue, in the property's currency; 0 without e-commerce. */
+    aiRevenue: number;
+    /** Google organic (the Organic Search channel), the page's comparison (AT-005). */
+    organic: TrafficEngagement;
+  } | null;
+  gsc: {
+    /** The days the clicks cover; no first day for all time. */
+    since: string | null;
+    until: string;
+    clicks: number;
+    /** The same-length period before; null for all time. */
+    prevClicks: number | null;
+  } | null;
+}
+
+export async function getTrafficGoogleTotals(
+  brandId: string,
+  window: TrafficDateWindow,
+  opts: {
+    ga: boolean;
+    gsc: boolean;
+    /**
+     * Short ranges read Search Console's latest reported day(s) — 1 for the
+     * 24-hour range, 7 for the week — because Google reports about two days
+     * late (spec §3.01). Null reads the range as it is.
+     */
+    gscLatestDays: number | null;
+  },
+): Promise<TrafficGoogleTotals> {
+  const supabase = await createClient();
+  // Both sources store whole days, so the range goes as its first and last.
+  const since = utcDay(window.dateFrom) ?? null;
+  const until = utcDay(window.dateTo) ?? new Date().toISOString().slice(0, 10);
+  const shift = (day: string, days: number) =>
+    new Date(Date.parse(`${day}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+
+  const [ga, gsc] = await Promise.all([
+    opts.ga
+      ? supabase
+          .rpc('ga_traffic_totals', { p_brand_id: brandId, p_since: since, p_until: until })
+          .single()
+      : null,
+    opts.gsc
+      ? supabase
+          .rpc('gsc_click_totals', {
+            p_brand_id: brandId,
+            p_since: opts.gscLatestDays ? shift(until, 1 - opts.gscLatestDays) : since,
+            p_until: until,
+            p_latest: Boolean(opts.gscLatestDays),
+          })
+          .single()
+      : null,
+  ]);
+  if (ga?.error) throw new Error(ga.error.message);
+  if (gsc?.error) throw new Error(gsc.error.message);
+
+  const gaRow = ga?.data;
+  const gscRow = gsc?.data;
+  return {
+    ga: gaRow
+      ? {
+          sessions: Number(gaRow.sessions) || 0,
+          aiSessions: Number(gaRow.ai_sessions) || 0,
+          aiEngagedSessions: Number(gaRow.ai_engaged_sessions) || 0,
+          aiKeyEvents: Number(gaRow.ai_key_events) || 0,
+          aiKeyEventSessions: Number(gaRow.ai_key_event_sessions) || 0,
+          aiRevenue: Number(gaRow.ai_revenue) || 0,
+          organic: {
+            sessions: Number(gaRow.organic_sessions) || 0,
+            engagedSessions: Number(gaRow.organic_engaged_sessions) || 0,
+            keyEvents: Number(gaRow.organic_key_events) || 0,
+            keyEventSessions: Number(gaRow.organic_key_event_sessions) || 0,
+          },
+        }
+      : null,
+    gsc: gscRow
+      ? {
+          since: gscRow.since,
+          until: gscRow.until ?? until,
+          clicks: Number(gscRow.clicks) || 0,
+          prevClicks: gscRow.prev_clicks === null ? null : Number(gscRow.prev_clicks) || 0,
+        }
+      : null,
+  };
 }

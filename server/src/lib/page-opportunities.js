@@ -4,8 +4,9 @@
  * Answers two questions per brand: which pages carry commercial weight and
  * get nothing from AI engines, and — for each of those — why. The figures
  * come from `ga_page_ai_visibility`, which aggregates the tables the GA sync
- * (#704) writes and joins the brand's own citations and prompt targeting to
- * them. No model runs in this path and no page is fetched.
+ * (#704) writes and joins the brand's own citations, prompt targeting and
+ * tracking-snippet visits to them. No model runs in this path and no page is
+ * fetched.
  *
  * The ranking signal is chosen from what the property actually reports rather
  * than assumed. A shop with ecommerce ranks on money; a site with no
@@ -166,6 +167,11 @@ export function scorePages(pages, signalName) {
  * The citation state explains a finding, it does not gate one: a page cited
  * 104 times that still earns no AI visit is as real a problem as one nothing
  * points to, and dropping it would hide the more surprising of the two.
+ *
+ * An AI visit is one either source saw: Analytics' AI channel or the
+ * tracking snippet (AT-002). Analytics alone missed visits the snippet
+ * recorded, so a page the AI Traffic page listed Gemini visitors on could be
+ * raised as getting nothing from AI in the same week.
  */
 export function detectPageOpportunities({ pages, windowDays = WINDOW_DAYS }) {
   const signal = pickValueSignal(pages);
@@ -175,7 +181,7 @@ export function detectPageOpportunities({ pages, windowDays = WINDOW_DAYS }) {
     .filter((page) => page.sessions >= MIN_SESSIONS)
     .filter((page) => page.value > 0)
     .filter((page) => page.valuePercentile >= MIN_PERCENTILE)
-    .filter((page) => !(page.aiSessions > 0))
+    .filter((page) => !(page.aiSessions > 0) && !(page.snippetVisits > 0))
     .map((page) => ({
       landing_page: page.landingPage,
       kind: 'no_ai_traffic',
@@ -221,23 +227,25 @@ export function mapVisibilityRows(rows) {
       citations: Number(row.citations) || 0,
       citingPrompts: Number(row.citing_prompts) || 0,
       targetingPrompts: Number(row.targeting_prompts) || 0,
+      snippetVisits: Number(row.snippet_visits) || 0,
     }));
 }
 
 /**
- * Every page of the brand's window, read a thousand rows at a time.
+ * Every page of the brand's window, read a thousand rows at a time. Both
+ * bounds are inclusive dates (YYYY-MM-DD); null leaves that end open.
  *
  * Ordered by landing page rather than left to the planner: `range` without an
  * order is a promise the database never made, and two requests could return
  * the same row twice while another is never seen at all.
  */
-async function readVisibilityRows(brandId, since) {
+async function readVisibilityRows(brandId, since, until = null) {
   const rows = [];
 
   for (let page = 0; page < MAX_READ_PAGES; page++) {
     const from = page * READ_PAGE_SIZE;
     const { data, error } = await supabaseAdmin
-      .rpc('ga_page_ai_visibility', { p_brand_id: brandId, p_since: since })
+      .rpc('ga_page_ai_visibility', { p_brand_id: brandId, p_since: since, p_until: until })
       .order('landing_page', { ascending: true })
       .range(from, from + READ_PAGE_SIZE - 1);
 
@@ -295,6 +303,28 @@ async function detectForBrand(brandId) {
     signal: findings[0]?.value_signal ?? null,
     cited: findings.filter((f) => f.citation_state === 'cited').length,
   };
+}
+
+/**
+ * Findings for the range the AI Traffic page shows, computed on request
+ * (AT-002). The page used to list the nightly 28-day findings whatever range
+ * it showed; ranking the page's own range means the list can't disagree
+ * with the visits beside it.
+ *
+ * Nothing is written. The nightly findings stay the engine's record — Action
+ * Center and Site Audit read them — and a range someone looked at is not a
+ * finding to open or resolve. `pages` is how many pages Analytics reported
+ * in the range, so the page can tell "nothing qualifies" from "no data".
+ */
+export async function detectPageOpportunitiesInWindow(
+  brandId,
+  { since = null, until = null, limit = 10 } = {},
+) {
+  const pages = mapVisibilityRows(await readVisibilityRows(brandId, since, until));
+  // window_days describes the nightly run's fixed window; a page range has
+  // its own bounds, which the caller already holds.
+  const findings = detectPageOpportunities({ pages, windowDays: null });
+  return { pages: pages.length, findings: findings.slice(0, limit) };
 }
 
 /**

@@ -17,9 +17,23 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Copy, KeyRound, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { formatDate } from '@/lib/format';
+import { siteConfig } from '@/config/site';
+import {
+  MCP_CLIENTS,
+  MCP_CLIENT_LABELS,
+  mcpClientSnippet,
+  type McpClient,
+} from '@/lib/mcp/client-setup';
 
 interface ApiKey {
   id: string;
@@ -37,6 +51,10 @@ function getMcpEndpoint(): string {
   return `${appUrl}/api/mcp`;
 }
 
+const MCP_GUIDE_URL = `${siteConfig.links.docs}/guides/mcp-server`;
+
+const CLIENT_OPTIONS = MCP_CLIENTS.map((value) => ({ value, label: MCP_CLIENT_LABELS[value] }));
+
 export function ApiKeysSection() {
   const t = useTranslations('settings');
   const tCommon = useTranslations('common');
@@ -48,6 +66,7 @@ export function ApiKeysSection() {
   const [revealedToken, setRevealedToken] = useState<string | null>(null);
   const mcpEndpoint = getMcpEndpoint();
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
+  const [client, setClient] = useState<McpClient>('claude-code');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -118,7 +137,7 @@ export function ApiKeysSection() {
           <div>
             <CardTitle className="flex items-center gap-2">
               <KeyRound className="h-4 w-4" />
-              {t('apiKeys_title')}
+              {t('apiKeys')}
             </CardTitle>
             <CardDescription>{t('apiKeys_description')}</CardDescription>
           </div>
@@ -145,12 +164,7 @@ export function ApiKeysSection() {
           <p className="text-muted-foreground">
             {t.rich('apiKeys_mcpEndpointHint', {
               link: (chunks) => (
-                <a
-                  href="https://github.com/ansvisor/ansvisor#whats-next"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline"
-                >
+                <a href={MCP_GUIDE_URL} target="_blank" rel="noreferrer" className="underline">
                   {chunks}
                 </a>
               ),
@@ -287,6 +301,53 @@ export function ApiKeysSection() {
               </Button>
             </div>
           </div>
+          {revealedToken && (
+            <div className="space-y-2 border-t pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium">{t('apiKeys_connectTitle')}</p>
+                <Select
+                  items={CLIENT_OPTIONS}
+                  value={client}
+                  onValueChange={(v) => v && setClient(v as McpClient)}
+                >
+                  <SelectTrigger size="sm" className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CLIENT_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-xs text-muted-foreground">{t(`apiKeysConnectWhere.${client}`)}</p>
+              <div className="relative">
+                <pre className="max-h-56 overflow-auto rounded-md border bg-muted/40 p-3 pr-10 font-mono text-xs whitespace-pre">
+                  {mcpClientSnippet(client, mcpEndpoint, revealedToken)}
+                </pre>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="absolute right-1 top-1 h-7 px-2"
+                  onClick={() => copy(mcpClientSnippet(client, mcpEndpoint, revealedToken))}
+                  aria-label={t('apiKeys_copySnippet')}
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t.rich('apiKeys_connectHint', {
+                  link: (chunks) => (
+                    <a href={MCP_GUIDE_URL} target="_blank" rel="noreferrer" className="underline">
+                      {chunks}
+                    </a>
+                  ),
+                })}
+              </p>
+            </div>
+          )}
           <DialogFooter>
             <Button onClick={() => setRevealedToken(null)}>{t('apiKeys_done')}</Button>
           </DialogFooter>

@@ -27,6 +27,7 @@ function mockWrites() {
     const builder = {
       select: () => builder,
       eq: () => builder,
+      is: () => builder,
       gte: () => builder,
       lte: () => builder,
       not: () => builder,
@@ -138,6 +139,62 @@ describe('measureKpis', () => {
 
     expect(values.ai_visibility).toBeNull();
   });
+
+  describe('AI referral traffic', () => {
+    // Each query's calls, and what it answers with.
+    function mockTraffic({ snippetVisits, gaRows }) {
+      const queries = [];
+      from.mockImplementation((table) => {
+        const calls = [];
+        queries.push({ table, calls });
+        const builder = {};
+        for (const method of ['select', 'eq', 'is', 'gte', 'lte']) {
+          builder[method] = (...args) => {
+            calls.push([method, ...args]);
+            return builder;
+          };
+        }
+        builder.then = (resolve) =>
+          resolve(
+            table === 'ai_traffic_logs'
+              ? { count: snippetVisits, error: null }
+              : { data: gaRows, error: null },
+          );
+        return builder;
+      });
+      return queries;
+    }
+
+    it("counts the snippet's visits, not its pageviews", async () => {
+      // A visit starts on a row whose visit_of is null (00172); its reloads
+      // are further rows of the same visit.
+      const queries = mockTraffic({ snippetVisits: 26, gaRows: [] });
+
+      const values = await measureKpis(
+        'brand-1',
+        ['ai_referral_traffic'],
+        '2026-09-01',
+        '2026-09-07',
+      );
+
+      expect(values.ai_referral_traffic).toBe(26);
+      expect(queries[0].table).toBe('ai_traffic_logs');
+      expect(queries[0].calls).toContainEqual(['is', 'visit_of', null]);
+    });
+
+    it("falls back to Analytics' sessions when the snippet has no visits", async () => {
+      mockTraffic({ snippetVisits: 0, gaRows: [{ sessions: 4 }, { sessions: '3' }] });
+
+      const values = await measureKpis(
+        'brand-1',
+        ['ai_referral_traffic'],
+        '2026-09-01',
+        '2026-09-07',
+      );
+
+      expect(values.ai_referral_traffic).toBe(7);
+    });
+  });
 });
 
 describe('validateAction', () => {
@@ -193,6 +250,44 @@ describe('validateAction', () => {
     // Equal-length windows, one before the action was raised and one after it
     // closed — a comparison between like periods.
     expect(patch.validation.beforeWindow.to < patch.validation.afterWindow.from).toBe(true);
+  });
+
+  it("measures answers sent from Mentions on their prompts' basket", async () => {
+    const writes = mockWrites();
+    rpc.mockResolvedValue({ data: {}, error: null });
+
+    await validateAction(
+      action({
+        kind: 'mention_review',
+        kpi_keys: ['mentions'],
+        payload: { promptIds: ['p1', 'p2'] },
+      }),
+      { now: NOW },
+    );
+
+    expect(rpc).toHaveBeenCalledWith('opportunity_basket_metrics', expect.anything());
+    const patch = writes.updated.find((w) => w.table === 'actions').patch;
+    expect(patch.validation.scope).toEqual({ kind: 'basket', prompts: 2, pages: 0 });
+  });
+
+  it('measures pages sent from AI Traffic on those pages (AT-006)', async () => {
+    const writes = mockWrites();
+    rpc.mockResolvedValue({ data: {}, error: null });
+
+    await validateAction(
+      action({
+        kind: 'traffic_pages',
+        kpi_keys: ['ai_referral_traffic', 'citations'],
+        payload: {
+          pages: ['https://acme.example/shop/beans', 'https://acme.example/guides/espresso'],
+        },
+      }),
+      { now: NOW },
+    );
+
+    expect(rpc).toHaveBeenCalledWith('opportunity_basket_metrics', expect.anything());
+    const patch = writes.updated.find((w) => w.table === 'actions').patch;
+    expect(patch.validation.scope).toEqual({ kind: 'basket', prompts: 0, pages: 2 });
   });
 
   it('records the verdict on the action trail', async () => {

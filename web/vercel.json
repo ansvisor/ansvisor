@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/daily-tracking",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/health-report",
+      "schedule": "0 6 * * *"
     }
   ],
   "headers": [

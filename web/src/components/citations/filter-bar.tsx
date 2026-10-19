@@ -55,16 +55,16 @@ export const DEFAULT_CITATIONS_FILTERS: CitationsUIFilters = {
   region: '',
   topic: '',
   prompt: '',
-  sourceScope: 'all',
+  sourceScope: 'own',
 };
 
 export type SourceScope = CitationsUIFilters['sourceScope'];
 
 const SOURCE_SCOPES: { value: SourceScope; label: string }[] = [
-  { value: 'all', label: 'All' },
   { value: 'own', label: 'Brand' },
   { value: 'competitors', label: 'Competitors' },
   { value: 'third_party', label: 'Third-Party' },
+  { value: 'all', label: 'All' },
 ];
 
 /**

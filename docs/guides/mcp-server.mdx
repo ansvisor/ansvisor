@@ -1,6 +1,6 @@
 ---
 title: "MCP server"
-description: "Connect Claude Desktop, Claude Code, Cursor, Zed, and any MCP-aware client to your Ansvisor data — zero install."
+description: "Connect Claude, Codex, Cursor, VS Code, Gemini CLI, Hermes Agent, OpenClaw and any MCP-aware client to your Ansvisor data — zero install."
 ---
 
 Ansvisor ships a [Model Context Protocol](https://modelcontextprotocol.io)
@@ -15,33 +15,202 @@ and an API key.
 2. Click **New key**, give it a memorable name (e.g. _Claude — laptop_)
 3. Copy the token. It's shown **once** — store it in your password manager
 
-## Connect Claude Desktop
+The dialog that shows the key also has a ready-to-paste setup for each client
+below, with the key filled in. The snippets on this page read the key from an
+environment variable instead, so it stays out of your config files:
 
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
-(macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+```bash
+export ANSVISOR_TOKEN=ans_...
+```
+
+Every client connects to the same URL with the same header:
+`Authorization: Bearer <your key>`. There is no OAuth sign-in.
+
+## Connect your client
+
+### Claude Code
+
+```bash
+claude mcp add --transport http ansvisor https://app.ansvisor.com/api/mcp \
+  --header "Authorization: Bearer ${ANSVISOR_TOKEN}"
+```
+
+### Claude Desktop
+
+Claude Desktop adds remote servers as **custom connectors**. The
+`claude_desktop_config.json` file only starts local servers, so a `url` entry
+there is ignored.
+
+1. Open **Settings → Connectors** and choose **Add custom connector**
+2. Name it _Ansvisor_ and enter `https://app.ansvisor.com/api/mcp` as the URL
+3. Under authentication choose **No sign in**
+4. Under **Request headers**, add `Authorization` with the value `Bearer ans_...`
+
+On Team and Enterprise plans, an owner adds the connector under
+**Organization settings → Connectors** first.
+
+### Codex CLI
+
+```bash
+codex mcp add ansvisor --url https://app.ansvisor.com/api/mcp \
+  --bearer-token-env-var ANSVISOR_TOKEN
+```
+
+Or add it to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.ansvisor]
+url = "https://app.ansvisor.com/api/mcp"
+bearer_token_env_var = "ANSVISOR_TOKEN"
+```
+
+### Cursor
+
+Add to `~/.cursor/mcp.json` (all projects) or `.cursor/mcp.json` (one project):
 
 ```json
 {
   "mcpServers": {
     "ansvisor": {
       "url": "https://app.ansvisor.com/api/mcp",
-      "headers": {
-        "Authorization": "Bearer ans_..."
+      "headers": { "Authorization": "Bearer ${env:ANSVISOR_TOKEN}" }
+    }
+  }
+}
+```
+
+### VS Code
+
+Add to `.vscode/mcp.json`, or run **MCP: Open User Configuration** from the
+Command Palette to add it for every workspace. VS Code asks for the key the
+first time it connects:
+
+```json
+{
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "ansvisor-token",
+      "description": "Ansvisor API key",
+      "password": true
+    }
+  ],
+  "servers": {
+    "ansvisor": {
+      "type": "http",
+      "url": "https://app.ansvisor.com/api/mcp",
+      "headers": { "Authorization": "Bearer ${input:ansvisor-token}" }
+    }
+  }
+}
+```
+
+### Windsurf
+
+In the Cascade panel, open **… → Open MCP config file** and add:
+
+```json
+{
+  "mcpServers": {
+    "ansvisor": {
+      "serverUrl": "https://app.ansvisor.com/api/mcp",
+      "headers": { "Authorization": "Bearer ${env:ANSVISOR_TOKEN}" }
+    }
+  }
+}
+```
+
+### Gemini CLI
+
+```bash
+gemini mcp add --transport http \
+  --header "Authorization: Bearer ${ANSVISOR_TOKEN}" \
+  ansvisor https://app.ansvisor.com/api/mcp
+```
+
+This writes the server to `~/.gemini/settings.json` with `httpUrl`. Use
+`httpUrl`, not `url`, if you edit the file by hand: `url` means the older SSE
+transport.
+
+### Hermes Agent
+
+Add to `~/.hermes/config.yaml`. Hermes reads `ANSVISOR_TOKEN` from your
+environment or from `~/.hermes/.env`:
+
+```yaml
+mcp_servers:
+  ansvisor:
+    url: "https://app.ansvisor.com/api/mcp"
+    headers:
+      Authorization: "Bearer ${ANSVISOR_TOKEN}"
+```
+
+### OpenClaw
+
+Add to `~/.openclaw/openclaw.json`:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "ansvisor": {
+        "url": "https://app.ansvisor.com/api/mcp",
+        "transport": "streamable-http",
+        "headers": { "Authorization": "Bearer ${ANSVISOR_TOKEN}" }
       }
     }
   }
 }
 ```
 
-Restart Claude Desktop. Type _"List my Ansvisor brands"_ — Claude should
-call the `list_brands` tool and show your brands inline.
+Then check the connection with `openclaw mcp probe ansvisor`.
 
-## Connect Claude Code
+### Zed
 
-```bash
-claude mcp add ansvisor --transport http https://app.ansvisor.com/api/mcp \
-  --header "Authorization: Bearer ans_..."
+Add to your Zed `settings.json`. Zed does not expand environment variables
+here, so the key goes in directly:
+
+```json
+{
+  "context_servers": {
+    "ansvisor": {
+      "url": "https://app.ansvisor.com/api/mcp",
+      "headers": { "Authorization": "Bearer ans_..." }
+    }
+  }
+}
 ```
+
+### Other clients
+
+Any client that supports remote MCP servers over Streamable HTTP works with
+the URL and the `Authorization` header above. If yours can only start local
+(stdio) servers, bridge it with [`mcp-remote`](https://github.com/geelen/mcp-remote):
+
+```json
+{
+  "mcpServers": {
+    "ansvisor": {
+      "command": "npx",
+      "args": [
+        "-y", "mcp-remote", "https://app.ansvisor.com/api/mcp",
+        "--header", "Authorization:${AUTH_HEADER}",
+        "--transport", "http-only"
+      ],
+      "env": { "AUTH_HEADER": "Bearer ans_..." }
+    }
+  }
+}
+```
+
+Keep `Authorization:${AUTH_HEADER}` without a space, with the `Bearer ...`
+value in `env`: some clients do not escape spaces inside `args`.
+
+## Check the connection
+
+Ask your client _"List my Ansvisor brands"_. It should call the `list_brands`
+tool and show your brands. If it reports a 401, the header is missing or the
+key was revoked.
 
 ## Self-host? Point at your own instance
 
@@ -51,14 +220,103 @@ instead.
 
 ## Available tools
 
-| Tool | What it does |
-| --- | --- |
-| `list_brands` | List brands the authenticated user can access. |
-| `get_visibility_summary` | Aggregate visibility score, mentions, citations, top competitors for a brand over an optional date range / model / region. |
-| `list_topics` | List the topics on a brand with a prompt count per topic. Use for coverage audits (empty / over-concentrated topics). |
-| `list_prompts` | List the prompts tracked on a brand, optionally filtered by topic, active status, or capped via `limit`. Returns the prompt text, topic, platforms, models, regions, and active flag. |
+The MCP server exposes **36 tools**. Descriptions below match
+[`web/src/lib/mcp/server.ts`](https://github.com/ansvisor/ansvisor/blob/main/web/src/lib/mcp/server.ts).
+Tools that change data are marked **writes** — only call them on explicit user
+intent, not during exploratory queries.
 
-More tools land regularly — check the [project roadmap](https://github.com/ansvisor/ansvisor#whats-next).
+### Brands
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `list_brands` | List the brands the authenticated user can access (id, name, slug, industry, region). Call first to resolve a `brand_id`. | |
+| `list_competitors` | Configured competitors for a brand (id, name, domain); this is not a performance ranking. | |
+
+### Visibility & analytics
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `get_visibility_summary` | Aggregate visibility metrics for a brand over an optional date range and filters — headline `aiVisibilityScore`, mentions, citations, competitors. | |
+| `get_visibility_trend` | Visibility over time (day or week buckets) with mentions, citations, and competitor scores for trend questions. | |
+| `get_competitor_comparison` | Competitor benchmark and share of voice for a window, comparable visibility rates and per-model/platform splits. | |
+| `list_citations` | URLs and domains AI engines cite alongside a brand, by source type, with top domains/URLs and usage stats. | |
+| `get_ai_traffic` | AI-referral traffic (visits by engine, landing pages, countries) for an optional date range. | |
+| `get_prompt_performance` | Per-prompt performance (visibility, mentions, citations, appearances) over a date range for ranking prompts. | |
+
+### Saved reports
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `list_reports` | Saved report snapshots for a brand, newest first; returns metadata without the full payload (default 50, max 100 per call). | |
+| `get_report` | Full immutable snapshot for one saved report, including its stored payload; does not regenerate it. | |
+
+### Topics & prompts
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `list_topics` | Topics on a brand with prompt counts — for coverage audits before drilling into prompts. | |
+| `list_prompts` | Tracked prompts with text, topic, platforms, models, regions, and active flag; filter by topic or active/inactive (`is_active`). | |
+| `list_topic_suggestions` | Pending AI-generated topic suggestions awaiting accept or dismiss. | |
+| `accept_topic_suggestion` | Accept one pending suggestion: creates a topic and marks the suggestion added. | **yes** |
+| `dismiss_topic_suggestion` | Dismiss one pending suggestion so it does not reappear in future batches. | **yes** |
+| `list_prompt_suggestions` | Pending AI-generated prompt suggestions with source details, expiry and a stale flag. Does not generate new suggestions. | |
+| `accept_prompt_suggestion` | Create a tracked prompt from one pending suggestion using the brand's default engines and plan/location checks. | **yes** |
+| `dismiss_prompt_suggestion` | Dismiss one pending prompt suggestion so it no longer appears in future lists. | **yes** |
+| `get_prompt_volumes` | Per-prompt Google and estimated AI search demand and competition for prompts that already have analysis. | |
+| `get_prompt_usage` | Tracked-prompt usage against the plan: the brand's active and paused prompts, and the account's active prompts, brands, prompt locations used and location limit. | |
+
+### Content opportunities
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `list_content_opportunities` | Content gaps ranked by opportunity score — where the brand is losing visibility. | |
+| `get_content_opportunity` | Full details for one opportunity, including metrics, intent, competitors, and any existing brief. | |
+| `generate_content_brief` | Generate or overwrite an AI content brief for an opportunity (LLM cost/latency). | **yes** |
+| `update_opportunity_status` | Move an opportunity through workflow states (`new`, `reviewed`, `sent`, `in_progress`, `done`, `dismissed`). | **yes** |
+
+### Site audit
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `get_site_audit_quota` | Monthly Site Audit allowance (`used`, `running`, `limit`, `remaining`) before starting a run. Audits still running are already taken out of `remaining`. | |
+| `list_site_audits` | Recent audits for a brand (id, url, status, score) to find a past run without the id. | |
+| `run_site_audit` | Start an AEO/GEO page audit for a URL (consumes a monthly credit; poll `get_site_audit` for results). | **yes** |
+| `get_site_audit` | Fetch one audit by id — status, scores, signals, and fix recommendations (read-only). | |
+
+### Shopping
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `list_shopping_cards` | Shopping cards surfaced in AI commercial contexts; filter by role, platform, and region. | |
+| `get_product_visibility` | Aggregate visibility for one product title across platforms, regions, and dates. | |
+
+### Action Center
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `list_actions` | Recommended actions for a brand with priority (0–100 score, level and reasons), status, impact, assignee, due date, and task progress. Highest priority first; `sort: "updated"` lists the most recently updated first. | |
+| `get_action` | One action in full: priority, payload, triggering signals, tasks (`mode`, `permission`), and event trail. `format: "markdown"` or `"csv"` returns it as the dashboard's **Copy Data** and **Export CSV** write it instead. | |
+| `list_signals` | Detected changes (visibility, citations, traffic), each with `where` (prompt, topic, platforms, locations, domain, competitor), `change` (labelled figures with unit and period), `evidence` (detection dates, app links) and `used_by_actions`. | |
+| `list_action_history` | Closed actions with measured outcomes and before/after validation results. | |
+| `update_task_status` | Record progress on a task (`in_progress`, `completed`, `skipped`, `failed`); does not execute the task. | **yes** |
+| `create_improve_action` | Send a prompt's Improve suggestions to Action Center as a `prompt_improve` action (needs a generated suggestion set for the range and a plan with Improve; idempotent on `idempotency_key`). | **yes** |
+
+#### Export an action
+
+`get_action` takes an optional `format`:
+
+- `json` (default): the fields above.
+- `markdown`: everything the action's tabs show, ready to paste into a doc, a ticket or another agent. This is the same text as **Copy Data** in the dashboard.
+- `csv`: a row per affected item, task and signal, with a `section` column. This is the same file as **Export CSV**.
+
+Labels are in English and dates in UTC. The same export is available over REST with the same `ans_` key. The CSV comes as a download (`action-AC-52.csv`) that Excel opens as UTF-8.
+
+```bash
+curl "https://app.ansvisor.com/api/mcp/actions/<action_id>?format=markdown" \
+  -H "Authorization: Bearer ans_..."
+```
+
+New tools may ship between releases — see `server.ts` and the [project roadmap](https://github.com/ansvisor/ansvisor#whats-next).
 
 ## Try it
 

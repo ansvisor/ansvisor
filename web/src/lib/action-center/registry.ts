@@ -36,7 +36,8 @@ export type ActionOutcome =
   | 'declined'
   | 'not_measurable';
 
-/** A kind this build has copy for — the V1 library's sixty-two definitions. */
+/** A kind this build has copy for — the V1 library's sixty-two definitions, plus
+ *  the kinds a person sends from another page. */
 export type ActionKind =
   | 'capture_ai_traffic'
   | 'convert_mentions'
@@ -99,7 +100,19 @@ export type ActionKind =
   | 'capture_competitor_fanouts'
   | 'respond_to_competitor_momentum'
   | 'earn_competitor_source_presence'
-  | 'create_content_for_competitor_gaps';
+  | 'create_content_for_competitor_gaps'
+  // Sent by a person from a content opportunity, not raised by a definition.
+  | 'content_opportunity'
+  // Sent by a person from the Prompts Positions panel's Improve tab (PROMPT-004).
+  | 'prompt_improve'
+  // Sent by a person from Insights' Topics vs competitors (VIS-010).
+  | 'topic_competitor_gap'
+  // Sent by a person from an Insights Opportunities topic (VIS-011).
+  | 'topic_opportunity'
+  // Sent by a person from answers on the Mentions tab (MS-08).
+  | 'mention_review'
+  // Sent by a person from AI Traffic's Pages section (AT-006).
+  | 'traffic_pages';
 
 export type TaskStatus =
   | 'todo'
@@ -125,6 +138,9 @@ export const ACTION_STATUSES: readonly ActionStatus[] = [
   'dismissed',
 ];
 
+/** Statuses of an action still to be worked on. */
+export const OPEN_ACTION_STATUSES: readonly ActionStatus[] = ['new', 'in_progress', 'on_hold'];
+
 export const ACTION_OUTCOMES: readonly ActionOutcome[] = [
   'pending_measurement',
   'improved',
@@ -135,8 +151,6 @@ export const ACTION_OUTCOMES: readonly ActionOutcome[] = [
 
 /** An action whose cycle is over: it is history, and its kind's slot is free. */
 export const CLOSED_ACTION_STATUSES: readonly ActionStatus[] = ['completed', 'dismissed'];
-
-export const ACTION_IMPACTS: readonly ActionImpact[] = ['high', 'medium', 'low'];
 
 export const TASK_STATUSES: readonly TaskStatus[] = [
   'todo',
@@ -149,6 +163,21 @@ export const TASK_STATUSES: readonly TaskStatus[] = [
 
 /** Statuses that leave the progress denominator — the work is not outstanding. */
 export const UNCOUNTED_TASK_STATUSES: readonly TaskStatus[] = ['skipped', 'failed'];
+
+/**
+ * An action's task progress, as the list's "n/m tasks" and the drawer's
+ * Tasks tab show it. Skipped and failed tasks leave the denominator: neither
+ * is outstanding work, so neither should hold an action below 100% for good.
+ */
+export function taskProgress(statuses: readonly string[]): { total: number; completed: number } {
+  const counted = statuses.filter(
+    (status) => !(UNCOUNTED_TASK_STATUSES as readonly string[]).includes(status),
+  );
+  return {
+    total: counted.length,
+    completed: counted.filter((status) => status === 'completed').length,
+  };
+}
 
 export const ACTION_KINDS: readonly ActionKind[] = [
   'capture_ai_traffic',
@@ -213,6 +242,12 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'respond_to_competitor_momentum',
   'earn_competitor_source_presence',
   'create_content_for_competitor_gaps',
+  'content_opportunity',
+  'prompt_improve',
+  'topic_competitor_gap',
+  'topic_opportunity',
+  'mention_review',
+  'traffic_pages',
 ];
 
 /**
@@ -225,12 +260,9 @@ export function isActionKind(value: string): value is ActionKind {
   return (ACTION_KINDS as readonly string[]).includes(value);
 }
 
-/** Sort orders the toolbar offers. Priority is impact-weighted evidence. */
-export type ActionSort = 'priority' | 'impact' | 'newest' | 'due_date' | 'updated';
-export const ACTION_SORTS: readonly ActionSort[] = [
-  'priority',
-  'impact',
-  'newest',
-  'due_date',
-  'updated',
-];
+/**
+ * Sort orders the toolbar offers. Priority is the server's score (AC-006),
+ * which already weighs impact in, so impact is not an order of its own.
+ */
+export type ActionSort = 'priority' | 'newest' | 'due_date' | 'updated';
+export const ACTION_SORTS: readonly ActionSort[] = ['priority', 'newest', 'due_date', 'updated'];

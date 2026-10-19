@@ -23,14 +23,10 @@
  * populating these, not reshaping them.
  */
 
-import type {
-  ActionCategory,
-  ActionImpact,
-  ActionOutcome,
-  ActionStatus,
-  TaskStatus,
-} from './registry';
+import type { ActionCategory, ActionOutcome, ActionStatus, TaskStatus } from './registry';
+import { highestPriorityLevel, type PriorityLevel } from './priority';
 import type { SignalSource } from '@/lib/signals/registry';
+import type { ImproveOutcome } from '@/lib/improve-outcome';
 
 /** A metric an action moved, read before and after it ran. */
 export interface ActionResultMetric {
@@ -90,7 +86,12 @@ export interface ActionHistoryItem {
   kind: string;
   /** Grow / Recover / Protect / Fix / Compete — the module's one classification. */
   type: ActionCategory;
-  impact: ActionImpact;
+  /**
+   * The priority score and level (AC-006). An open action's are from last
+   * night's scoring; a closed one keeps the last it had. Null if never scored.
+   */
+  priorityScore: number | null;
+  priorityLevel: PriorityLevel | null;
   status: ActionStatus;
   /** Did it help? Read from the action's own column, not inferred here. */
   outcome: ActionOutcome;
@@ -101,8 +102,12 @@ export interface ActionHistoryItem {
   affected: AffectedEntity[];
   /** Empty until something measures an action's effect. */
   results: ActionResultMetric[];
+  /** Improve actions only: positions per platform against the baseline (PROMPT-008). */
+  positionOutcome: ImproveOutcome | null;
   tasks: ActionHistoryTask[];
   assignee: { id: string; fullName: string | null; avatarUrl: string | null } | null;
+  /** `YYYY-MM-DD`; the Goal's date when set (AC-003). */
+  dueDate: string | null;
   createdAt: string;
   completedAt: string | null;
   /** Calendar days from creation to close. Real — both stamps are recorded. */
@@ -119,9 +124,9 @@ export interface HistorySummary {
   noImprovementPercent: number;
   dismissed: number;
   dismissedPercent: number;
-  /** Highest impact among the actions in range — a readout of what was worked
-   *  on, not a claim about what it achieved. That claim needs validation. */
-  topImpact: ActionImpact | null;
+  /** Highest priority among the actions in range — a readout of what was
+   *  worked on, not a claim about what it achieved. That claim needs validation. */
+  topPriority: PriorityLevel | null;
 }
 
 /** Statuses History covers: an action that has run its course, plus the ones
@@ -133,10 +138,27 @@ export const HISTORY_STATUSES: readonly ActionStatus[] = [
   'dismissed',
 ];
 
-export const HISTORY_SORTS = ['newest', 'oldest', 'impact'] as const;
+export const HISTORY_SORTS = ['newest', 'oldest', 'priority'] as const;
 export type HistorySort = (typeof HISTORY_SORTS)[number];
 
 export const HISTORY_PAGE_SIZE = 10;
+
+/** The order the History list shows for a sort, by the date each row shows. */
+export function compareHistory(sort: HistorySort) {
+  return (a: ActionHistoryItem, b: ActionHistoryItem): number => {
+    const aDate = a.completedAt ?? a.createdAt;
+    const bDate = b.completedAt ?? b.createdAt;
+    switch (sort) {
+      case 'oldest':
+        return aDate.localeCompare(bDate);
+      case 'priority':
+        // Highest score first; never-scored actions last.
+        return (b.priorityScore ?? -1) - (a.priorityScore ?? -1) || bDate.localeCompare(aDate);
+      default:
+        return bDate.localeCompare(aDate);
+    }
+  };
+}
 
 const pct = (part: number, total: number) => (total === 0 ? 0 : Math.round((part / total) * 100));
 
@@ -150,15 +172,6 @@ export function summarize(items: ActionHistoryItem[]): HistorySummary {
   const noImprovement = items.filter((i) => i.outcome === 'no_meaningful_change').length;
   const dismissed = count('dismissed');
 
-  const impacts = items.map((i) => i.impact);
-  const topImpact: ActionImpact | null = impacts.includes('high')
-    ? 'high'
-    : impacts.includes('medium')
-      ? 'medium'
-      : impacts.includes('low')
-        ? 'low'
-        : null;
-
   return {
     totalActions: total,
     completed,
@@ -169,7 +182,7 @@ export function summarize(items: ActionHistoryItem[]): HistorySummary {
     noImprovementPercent: pct(noImprovement, total),
     dismissed,
     dismissedPercent: pct(dismissed, total),
-    topImpact,
+    topPriority: highestPriorityLevel(items.map((i) => i.priorityLevel)),
   };
 }
 

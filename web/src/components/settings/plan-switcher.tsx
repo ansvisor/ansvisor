@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { PLANS, SUBSCRIBABLE_PLANS, type PlanId } from '@/config/plans';
+import { CONTACT_SALES_URL, PLANS, SUBSCRIBABLE_PLANS, type PlanId } from '@/config/plans';
 import { ALL_SCRAPERS } from '@/config/prompt-options';
 
 interface SubscriptionData {
@@ -260,7 +260,7 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
           <p className="text-xs text-muted-foreground">{t('customPlanDescription')}</p>
         </div>
         <a
-          href="https://www.ansvisor.com/contact-us"
+          href={CONTACT_SALES_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex shrink-0 items-center justify-center rounded-md border bg-background px-5 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"

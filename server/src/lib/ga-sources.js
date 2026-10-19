@@ -1,72 +1,53 @@
 /**
- * GA4 session-source classification (#704).
+ * GA4 session-source classification (#704, AT-004).
  *
- * Deliberately an explicit list rather than a pattern. Real data from a
- * connected property shows why both halves of that matter:
+ * Two signals, as spec §5.1 asks:
  *
- *   - One engine arrives under several source strings. `chatgpt.com`,
- *     `chatgpt` and `openai` are the same product; a list keyed on the exact
- *     string collapses them without guessing.
- *   - Substring matching is actively wrong. A `*.workers.dev` subdomain with
- *     "claude" in its name showed up as an ordinary referrer — a `includes()`
- *     check would have booked it as AI traffic and inflated the number nobody
- *     can then verify.
+ *   - The AI source list (ai-sources.js), shared with the tracking snippet: a
+ *     listed host or one of its subdomains, or an exact alias. One engine
+ *     arrives under several source strings — `chatgpt.com`, `chatgpt` and
+ *     `openai` are the same product — and the list collapses them without
+ *     guessing. It also covers history from before GA4 had a channel for AI.
+ *   - GA4's own "AI Assistant" channel (May 2026; Default Channel Group
+ *     definitions: medium exactly "ai-assistant"). It needs no setup in the
+ *     customer's property and catches assistants the list doesn't know yet.
  *
- * Values are the same host-style identifiers the tracking snippet records in
- * ai_traffic_logs.source_platform, so the two origins name the same engine the
- * same way. They are still counted separately everywhere — matching names is
- * for comparison, never for summing.
+ * Values are the same host-style keys the snippet records in
+ * ai_traffic_logs.source_platform, so the two origins name the same engine
+ * the same way. They are still never summed — matching names is for
+ * comparison and for choosing one origin per day, never for adding.
  */
 
-/**
- * Raw GA4 `sessionSource` → platform. Keys are matched exactly after
- * lowercasing and trimming; add observed variants here rather than loosening
- * the match.
- */
-export const GA_SOURCE_PLATFORMS = {
-  // OpenAI
-  'chatgpt.com': 'chatgpt.com',
-  'chat.openai.com': 'chatgpt.com',
-  'search.chatgpt.com': 'chatgpt.com',
-  chatgpt: 'chatgpt.com',
-  openai: 'chatgpt.com',
-  'openai.com': 'chatgpt.com',
-  // Perplexity
-  'perplexity.ai': 'perplexity.ai',
-  'www.perplexity.ai': 'perplexity.ai',
-  perplexity: 'perplexity.ai',
-  // Anthropic
-  'claude.ai': 'claude.ai',
-  claude: 'claude.ai',
-  // Google
-  'gemini.google.com': 'gemini.google.com',
-  gemini: 'gemini.google.com',
-  'bard.google.com': 'gemini.google.com',
-  // Microsoft
-  'copilot.microsoft.com': 'copilot.microsoft.com',
-  copilot: 'copilot.microsoft.com',
-  // Others the snippet already knows about
-  'you.com': 'you.com',
-  'phind.com': 'phind.com',
-  'meta.ai': 'meta.ai',
-  'poe.com': 'poe.com',
-  // Newer assistants, listed before they show up rather than after
-  'grok.com': 'grok.com',
-  grok: 'grok.com',
-  'deepseek.com': 'deepseek.com',
-  'chat.deepseek.com': 'deepseek.com',
-  deepseek: 'deepseek.com',
-};
+import { aiSourcePattern, classifyAiSource, normalizeSource } from './ai-sources.js';
 
-/** Every raw source string worth asking GA4 for. */
-export const GA_AI_SOURCE_VALUES = Object.keys(GA_SOURCE_PLATFORMS);
+/** GA4's channel for sessions from AI assistants, in sessionDefaultChannelGroup. */
+export const GA_AI_ASSISTANT_CHANNEL = 'AI Assistant';
+
+/** Every session source worth asking GA4 for, as one RE2 pattern. */
+export const GA_AI_SOURCE_PATTERN = aiSourcePattern({ origin: 'analytics' });
+
+/** GA4's own placeholders for a session without a source. */
+const NO_SOURCE = new Set(['', '(not set)', '(direct)', '(none)']);
 
 /**
  * The platform behind a raw GA4 source string, or null when unrecognised.
  * Unrecognised is a normal outcome — the caller stores the raw value so the
- * list above can grow from what customers actually receive.
+ * list can grow from what customers actually receive.
  */
 export function classifyGaSource(raw) {
-  if (typeof raw !== 'string') return null;
-  return GA_SOURCE_PLATFORMS[raw.trim().toLowerCase()] ?? null;
+  return classifyAiSource(raw, { origin: 'analytics' });
+}
+
+/**
+ * The platform a GA4 AI-traffic row is stored under: the list's key when the
+ * source is on it; for a session GA4 put in its AI Assistant channel but the
+ * list doesn't know yet, the source itself (normalized), so a new assistant
+ * shows under its own name instead of vanishing. Null otherwise.
+ */
+export function gaAiPlatform(source, channel) {
+  const known = classifyGaSource(source);
+  if (known) return known;
+  if (channel !== GA_AI_ASSISTANT_CHANNEL) return null;
+  const value = normalizeSource(source);
+  return NO_SOURCE.has(value) ? null : value;
 }

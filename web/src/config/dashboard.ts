@@ -6,10 +6,10 @@ import {
   Gauge,
   Globe,
   LineChart,
+  MessageCircleMore,
   Quote,
   ShoppingBag,
   Sparkles,
-  Tag,
   Target,
 } from 'lucide-react';
 import type { Feature } from '@/config/plans';
@@ -24,9 +24,17 @@ import type { Feature } from '@/config/plans';
  */
 export type BrandPrefKey = 'shoppingModeEnabled';
 
+/** A submenu entry under a NavItem (PROMPT-001). */
+export interface NavChild {
+  title: string;
+  href: string;
+}
+
 export interface NavItem {
   title: string;
   href: string;
+  /** Opens as a submenu under the item; the item itself then toggles it. */
+  children?: NavChild[];
   icon: React.ComponentType<{ className?: string }>;
   badge?: string;
   disabled?: boolean;
@@ -68,11 +76,21 @@ export const dashboardNav: NavGroup[] = [
         title: 'Prompts',
         href: '/dashboard/prompts',
         icon: Globe,
+        children: [
+          { title: 'Tracked Prompts', href: '/dashboard/prompts/tracked' },
+          { title: 'Prompt Suggestions', href: '/dashboard/prompts/suggestions' },
+          // Was the Topics page (/dashboard/topics, which redirects here).
+          { title: 'Topics', href: '/dashboard/prompts/topics' },
+          { title: 'Query Fan-outs', href: '/dashboard/prompts/fan-outs' },
+          { title: 'Prompts Insights', href: '/dashboard/prompts/insights' },
+        ],
       },
+      // Mentions & Sentiment (MS-05): beside Citations, its sibling concept.
       {
-        title: 'Topics',
-        href: '/dashboard/topics',
-        icon: Tag,
+        title: 'Mentions',
+        href: '/dashboard/mentions',
+        icon: MessageCircleMore,
+        badge: 'New',
       },
       {
         title: 'Citations',
@@ -87,7 +105,7 @@ export const dashboardNav: NavGroup[] = [
         requiresBrandPref: 'shoppingModeEnabled',
       },
       {
-        title: 'AI Traffic Analytics',
+        title: 'AI Referral Traffic',
         href: '/dashboard/traffic',
         icon: LineChart,
         requiredFeature: 'advanced_analytics',

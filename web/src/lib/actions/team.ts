@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { readMemberEmails } from '@/lib/member-emails';
 import { enforceLimit, getOrgPlan } from '@/lib/guards/plan-guard';
 
 export type TeamRole = 'admin' | 'manager' | 'analyst' | 'agency_partner';
@@ -114,11 +115,7 @@ export async function listMembers(): Promise<TeamMember[]> {
   const userIds = (data ?? []).map((p) => p.id as string);
   if (userIds.length === 0) return [];
 
-  const emailMap = new Map<string, string>();
-  for (const uid of userIds) {
-    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(uid);
-    if (authUser?.user?.email) emailMap.set(uid, authUser.user.email);
-  }
+  const emailMap = await readMemberEmails(userIds);
 
   return (data ?? []).map((p) => ({
     userId: p.id as string,

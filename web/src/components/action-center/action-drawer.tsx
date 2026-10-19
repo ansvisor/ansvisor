@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { toast } from 'sonner';
-import { Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,8 +32,8 @@ import {
   getActionDetail,
   setActionDueDate,
   updateActionStatus,
+  updateTaskDetails,
   updateTaskStatus,
-  updateTaskTitle,
   type ActionDetail,
   type ActionItem,
   type ActionTask,
@@ -43,31 +43,62 @@ import {
   ACTION_STATUSES,
   TASK_STATUSES,
   UNCOUNTED_TASK_STATUSES,
+  taskProgress,
   type ActionStatus,
   type TaskStatus,
 } from '@/lib/action-center/registry';
 import {
   actionContextTags,
+  actionEventText,
   actionGoal,
   actionTexts,
-  eventTaskText,
   memberLabel,
   taskText,
 } from '@/lib/action-center/display';
 import { signalTexts } from '@/lib/signals/display';
 import { isKpiKey } from '@/lib/kpis/registry';
-import { ImpactDots, isSuperseded, SignalStatusBadge } from './signal-table';
-import { ActionIcon } from './action-table';
+import { isSuperseded, SignalStatusBadge } from './signal-table';
+import { ActionIcon, PriorityBadge } from './action-table';
+import { priorityReasonText } from '@/lib/action-center/priority';
+import { OpportunityContext } from './opportunity-context';
+import { ActionExportButtons } from './action-export-buttons';
+import { SupportingSignals } from './supporting-signals';
+import { AffectedTab } from './affected-tab';
+import { affectedChips, affectedTotal } from '@/lib/action-center/affected';
+import { useActionStory } from './use-action-story';
+import { ImproveContext } from './improve-context';
+import { TopicGapContext } from './topic-gap-context';
+import { TopicOpportunityContext } from './topic-opportunity-context';
+import { MentionReviewContext } from './mention-review-context';
+import { TrafficPagesContext } from './traffic-pages-context';
+import { TaskDetailForm, TaskDetailView, TaskTypeBadge, type TaskSendOptions } from './task-detail';
+import { hasActiveWebhook, sendActionTask } from '@/lib/actions/action-task-send';
+import { RegenerateTasks, taskWriterEnabled } from './regenerate-tasks';
+import { hasTaskSpec, type TaskDetailsEdit } from '@/lib/action-center/task-details';
+import { ImproveOutcomeCard } from './improve-outcome-card';
+import { improvePlatformLabels } from '@/lib/improve-outcome';
 import { cn } from '@/lib/utils';
 
-type DrawerTab = 'overview' | 'tasks' | 'signals' | 'history';
+type DrawerTab = 'overview' | 'affected' | 'tasks' | 'signals' | 'history';
 const TABS: DrawerTab[] = ['overview', 'tasks', 'signals', 'history'];
+/** With something to list, Affected follows Overview (AC-003). */
+const TABS_WITH_AFFECTED: DrawerTab[] = ['overview', 'affected', 'tasks', 'signals', 'history'];
+
+/**
+ * How long a due date has to stay put before it is saved. A date typed digit
+ * by digit passes through other valid dates on its way (day 1 before 18):
+ * only the one it settles on is saved.
+ */
+const DUE_DATE_SETTLE_MS = 800;
+/** A year typed digit by digit starts at 0002; these keep it from being saved. */
+const DUE_DATE_MIN = '2000-01-01';
+const DUE_DATE_MAX = '2100-12-31';
 
 /**
  * Action detail: evidence, execution, trail. Tabs are local state, not
- * routes — the drawer overlays the list, per the brief. Assignment and due
- * date live at the bottom of every tab; "Assign to Agent" is deliberately
- * absent until agent execution exists.
+ * routes — the drawer overlays the list, per the brief. Status, assignee and
+ * due date sit under the header, ahead of the tabs; "Assign to Agent" is
+ * deliberately absent until agent execution exists.
  */
 export function ActionDrawer({
   brandId,
@@ -75,13 +106,16 @@ export function ActionDrawer({
   members,
   onOpenChange,
   onChanged,
+  onPatched,
 }: {
   brandId: string;
   action: ActionItem | null;
   members: TeamMember[];
   onOpenChange: (open: boolean) => void;
-  /** Fired after any mutation so the list refetches. */
+  /** Fired when the list should be read again: after a change it can't patch, or a failed one. */
   onChanged: () => void;
+  /** A change shown in the list at once, without reading it again. */
+  onPatched: (actionId: string, patch: Partial<ActionItem>) => void;
 }) {
   const t = useTranslations('actionCenter.actionsPage');
   const tTexts = useTranslations('actionCenter.actionTexts');
@@ -90,12 +124,29 @@ export function ActionDrawer({
   const tRegistry = useTranslations('actionCenter.registry');
   const tTasks = useTranslations('actionCenter.actionTasks');
   const tTaskStatus = useTranslations('actionCenter.taskStatus');
+  const tPriority = useTranslations('actionCenter.actionsPage.priority');
 
   const router = useRouter();
   const [tab, setTab] = useState<DrawerTab>('overview');
   const [detail, setDetail] = useState<ActionDetail | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  const tSend = useTranslations('actionCenter.actionsPage.drawer.send');
+
+  // Whether a task can go to the brand's webhook (AC-004). Best effort: no
+  // answer is no button.
+  const [webhookReady, setWebhookReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    hasActiveWebhook(brandId).then(
+      (ready) => {
+        if (!cancelled) setWebhookReady(ready);
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId]);
 
   // Traceability: a signal card jumps to the Signals page with that signal's
   // drawer open — the evidence must be one click from the action it created.
@@ -103,58 +154,183 @@ export function ActionDrawer({
     router.push(`/dashboard/action-center/signals?signal=${signalId}`);
   };
 
-  const load = useCallback(async () => {
-    if (!action) return;
-    setIsLoading(true);
+  // The action the drawer shows now: a read that comes back after another
+  // action was opened is dropped, not shown under it.
+  const openId = useRef<string | null>(null);
+
+  // A reload after a change keeps the detail on screen until the new one is
+  // in, so an opened task stays open; only a first load shows placeholders.
+  const load = useCallback(async (): Promise<ActionDetail | null> => {
+    if (!action) return null;
+    const id = action.id;
     try {
-      setDetail(await getActionDetail(brandId, action.id));
+      const next = await getActionDetail(brandId, id);
+      if (openId.current !== id) return null;
+      setDetail(next);
+      return next;
     } catch {
       toast.error(t('error.title'));
-    } finally {
-      setIsLoading(false);
+      return null;
     }
   }, [brandId, action, t]);
 
+  // A due date being typed, until it is saved (null: the saved one shows).
+  const [dueDraft, setDueDraft] = useState<string | null>(null);
+  const dueTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
   useEffect(() => {
+    openId.current = action?.id ?? null;
     setTab('overview');
     setDetail(null);
+    setDueDraft(null);
     if (action) void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [action?.id]);
 
+  // The signals the action rests on, what they affect, their prompts' demand
+  // and the Why and Goal they tell (AC-003), as the History drawer reads them.
+  const { affected, volumes, story, ready } = useActionStory(
+    brandId,
+    action,
+    detail?.signals ?? null,
+  );
+
   if (!action) return null;
   const texts = actionTexts(action, tTexts);
   const tags = actionContextTags(action, t);
+  const tabs = affected && affectedTotal(affected) > 0 ? TABS_WITH_AFFECTED : TABS;
+  // Once the detail is in, each count opens the list behind it (AC-003).
+  const chips =
+    detail && affected
+      ? affectedChips(detail.signals, affected, action.id).map((chip) => ({
+          key: chip.entity,
+          label: t(`tags.${chip.entity}`, { count: chip.count }),
+          tab: chip.tab as DrawerTab,
+        }))
+      : [];
   const relatedKpis: string[] = action.kpiKeys.filter(isKpiKey);
+  // Sent by a person from Content Optimization (#857): its evidence is the
+  // opportunity, not detection signals.
+  const opportunityId =
+    action.kind === 'content_opportunity' && typeof action.payload?.opportunityId === 'string'
+      ? action.payload.opportunityId
+      : null;
+  const opportunityPages = Array.isArray(action.payload?.pages)
+    ? (action.payload.pages as unknown[]).filter((u): u is string => typeof u === 'string')
+    : [];
 
-  const mutate = async (fn: () => Promise<void>) => {
+  /** Send a task to Content or the webhook (AC-004), then reload to show where it went. */
+  const sendTask = async (taskId: string, text: string, to: 'content' | 'webhook') => {
     setIsBusy(true);
     try {
-      await fn();
+      const result = await sendActionTask(taskId, to, text);
+      if ('error' in result) {
+        toast.error(
+          result.error !== 'server'
+            ? tSend(result.error)
+            : result.code && SEND_ERRORS.includes(result.code)
+              ? tSend(`errors.${result.code}`)
+              : result.message,
+        );
+        return;
+      }
+      toast.success(
+        result.to === 'webhook'
+          ? tSend('sentToWebhook')
+          : result.created
+            ? tSend('sentToContent')
+            : tSend('alreadyInContent'),
+      );
       await load();
       onChanged();
-    } catch {
-      toast.error(t('updateFailed'));
     } finally {
       setIsBusy(false);
     }
   };
 
+  /**
+   * A task change: saved, then the detail read again to show it, and the
+   * list's task count patched from it rather than the list read again.
+   * False when the change failed (and said so).
+   */
+  const mutate = async (fn: () => Promise<void>): Promise<boolean> => {
+    setIsBusy(true);
+    try {
+      await fn();
+    } catch {
+      toast.error(t('updateFailed'));
+      setIsBusy(false);
+      return false;
+    }
+    try {
+      const next = await load();
+      if (next) {
+        const progress = taskProgress(next.tasks.map((task) => task.status));
+        onPatched(action.id, {
+          taskTotal: progress.total,
+          taskCompleted: progress.completed,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    } finally {
+      setIsBusy(false);
+    }
+    return true;
+  };
+
+  /**
+   * Status, assignee and due date: shown at once, in the drawer and the list,
+   * then saved. Saving, reading the detail and reading the whole list before
+   * anything showed took three server calls in a row (seconds on
+   * production), with the drawer locked; a choice that didn't show yet got
+   * made again. The detail is read again in the background, for its History.
+   * A failed save says so and reads the list again, back to what was saved.
+   */
+  const changeField = async (patch: Partial<ActionItem>, save: () => Promise<void>) => {
+    onPatched(action.id, { ...patch, updatedAt: new Date().toISOString() });
+    try {
+      await save();
+    } catch {
+      toast.error(t('updateFailed'));
+      onChanged();
+      return;
+    }
+    void load();
+  };
+
+  /** Saves a due date the field settled on, if it changed. */
+  const commitDueDate = (value: string) => {
+    clearTimeout(dueTimer.current);
+    setDueDraft(null);
+    const dueDate = value || null;
+    if (dueDate === action.dueDate) return;
+    void changeField({ dueDate }, () => setActionDueDate(brandId, action.id, dueDate));
+  };
+
   return (
     <Sheet open={Boolean(action)} onOpenChange={onOpenChange}>
       <SheetContent className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
-        <SheetHeader className="border-b px-6 py-4">
+        {/* pt-3: the top row's buttons line up with the sheet's close button. */}
+        <SheetHeader className="border-b px-6 pt-3 pb-4 pr-12">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge variant="outline" className="text-[10px]">
               {tCategories(action.category)}
             </Badge>
-            <span className="flex items-center gap-1.5 text-muted-foreground">
-              <ImpactDots impact={action.impact} />
-              {t(`impact.${action.impact}`)}
-            </span>
-            <span className="ml-auto text-muted-foreground">
-              {t('drawer.actionId')}: AC-{action.actionNo}
-            </span>
+            {action.priorityScore !== null && (
+              <PriorityBadge score={action.priorityScore} level={action.priorityLevel} />
+            )}
+            <div className="ml-auto flex items-center gap-2">
+              <ActionExportButtons
+                action={action}
+                detail={ready ? detail : null}
+                affected={affected}
+                volumes={volumes}
+                story={story}
+              />
+              <span className="text-muted-foreground">
+                {t('drawer.actionId')}: AC-{action.actionNo}
+              </span>
+            </div>
           </div>
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-muted/40">
@@ -166,20 +342,141 @@ export function ActionDrawer({
             </div>
             <div className="min-w-0">
               <SheetTitle>{texts.title}</SheetTitle>
-              <SheetDescription>{texts.description}</SheetDescription>
+              <SheetDescription>
+                {ready ? (story?.why ?? texts.description) : null}
+              </SheetDescription>
             </div>
           </div>
           <div className="flex flex-wrap gap-1">
-            {tags.map((tag) => (
-              <Badge key={tag} variant="outline" className="text-[10px]">
-                {tag}
-              </Badge>
-            ))}
+            {chips.length > 0
+              ? chips.map((chip) => (
+                  <Badge
+                    key={chip.key}
+                    variant="outline"
+                    className="cursor-pointer text-[10px] hover:bg-muted"
+                    render={<button type="button" onClick={() => setTab(chip.tab)} />}
+                  >
+                    {chip.label}
+                  </Badge>
+                ))
+              : tags.map((tag) => (
+                  <Badge key={tag} variant="outline" className="text-[10px]">
+                    {tag}
+                  </Badge>
+                ))}
           </div>
         </SheetHeader>
 
+        {/* Who has it, where it stands and by when: ahead of the tabs, so they
+            read and change without scrolling past the content. */}
+        <div className="grid gap-3 border-b px-6 py-3 sm:grid-cols-3">
+          <div>
+            <Label htmlFor="action-drawer-status" className="text-xs text-muted-foreground">
+              {t('drawer.statusLabel')}
+            </Label>
+            <Select
+              value={action.status}
+              onValueChange={(value) =>
+                void changeField({ status: value as ActionStatus }, () =>
+                  updateActionStatus(brandId, action.id, value as ActionStatus),
+                )
+              }
+              items={ACTION_STATUSES.map((status) => ({
+                value: status,
+                label: t(`status.${status}`),
+              }))}
+            >
+              <SelectTrigger id="action-drawer-status" className="mt-1 h-8 w-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ACTION_STATUSES.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {t(`status.${status}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="action-drawer-assignee" className="text-xs text-muted-foreground">
+              {t('drawer.assignee')}
+            </Label>
+            <Select
+              value={action.assignee?.id ?? 'unassigned'}
+              onValueChange={(value) => {
+                const assigneeId = value === 'unassigned' ? null : value;
+                const member = members.find((m) => m.userId === assigneeId);
+                void changeField(
+                  {
+                    assignee: assigneeId
+                      ? {
+                          id: assigneeId,
+                          fullName: member?.fullName ?? null,
+                          avatarUrl: member?.avatarUrl ?? null,
+                        }
+                      : null,
+                  },
+                  () => assignAction(brandId, action.id, assigneeId),
+                );
+              }}
+              items={[
+                { value: 'unassigned', label: t('filters.unassigned') },
+                ...members.map((member) => ({
+                  value: member.userId,
+                  label: memberLabel(member),
+                })),
+              ]}
+            >
+              <SelectTrigger id="action-drawer-assignee" className="mt-1 h-8 w-full text-xs">
+                <SelectValue placeholder={t('drawer.assignTo')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">{t('filters.unassigned')}</SelectItem>
+                {members.map((member) => (
+                  <SelectItem key={member.userId} value={member.userId}>
+                    {memberLabel(member)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="action-drawer-due-date" className="text-xs text-muted-foreground">
+              {t('drawer.dueDate')}
+            </Label>
+            <Input
+              id="action-drawer-due-date"
+              type="date"
+              className="mt-1 h-8 text-xs"
+              min={DUE_DATE_MIN}
+              max={DUE_DATE_MAX}
+              value={dueDraft ?? action.dueDate ?? ''}
+              onChange={(e) => {
+                const { value, validity } = e.target;
+                setDueDraft(value);
+                clearTimeout(dueTimer.current);
+                // Cleared, or a whole date in range: saved once it settles.
+                if (validity.valid) {
+                  dueTimer.current = setTimeout(() => commitDueDate(value), DUE_DATE_SETTLE_MS);
+                }
+              }}
+              onBlur={(e) => {
+                if (dueDraft === null) return;
+                // Leaving the field saves what it holds now; a half-typed or
+                // out-of-range date goes back to the saved one.
+                if (e.target.validity.valid) commitDueDate(e.target.value);
+                else {
+                  clearTimeout(dueTimer.current);
+                  setDueDraft(null);
+                }
+              }}
+            />
+          </div>
+        </div>
+
         <nav className="flex gap-4 border-b px-6" aria-label={t('table.action')}>
-          {TABS.map((key) => (
+          {tabs.map((key) => (
             <button
               key={key}
               type="button"
@@ -194,12 +491,13 @@ export function ActionDrawer({
             >
               {t(`drawer.tabs.${key}`)}
               {key === 'tasks' && detail ? ` (${detail.tasks.length})` : ''}
+              {key === 'affected' && affected ? ` (${affectedTotal(affected)})` : ''}
             </button>
           ))}
         </nav>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-4 text-sm">
-          {isLoading || !detail ? (
+          {!detail || !ready ? (
             <div className="space-y-3">
               {[0, 1, 2].map((i) => (
                 <Skeleton key={i} className="h-16 w-full" />
@@ -207,14 +505,33 @@ export function ActionDrawer({
             </div>
           ) : tab === 'overview' ? (
             <>
+              {action.priorityReason && (
+                <>
+                  <section>
+                    <p className="text-xs font-medium text-muted-foreground">{t('priority.why')}</p>
+                    <p className="mt-1">{priorityReasonText(action.priorityReason, tPriority)}</p>
+                  </section>
+                  <Separator />
+                </>
+              )}
               <section>
                 <p className="text-xs font-medium text-muted-foreground">{t('drawer.why')}</p>
-                <p className="mt-1">{texts.description}</p>
+                <p className="mt-1">{story?.why ?? texts.description}</p>
+                {detail.signals.length > 0 && (
+                  <SupportingSignals
+                    actionId={action.id}
+                    signals={detail.signals}
+                    onOpenSignal={openSignal}
+                    onShowAll={() => setTab('signals')}
+                  />
+                )}
               </section>
               <Separator />
               <section>
                 <p className="text-xs font-medium text-muted-foreground">{t('drawer.goal')}</p>
-                <p className="mt-1">{actionGoal(action.kind, tTexts)}</p>
+                <p className="mt-1">
+                  {story?.goal ?? actionGoal(action.kind, tTexts, action.payload)}
+                </p>
               </section>
               <Separator />
               <section>
@@ -236,43 +553,60 @@ export function ActionDrawer({
                   <p className="mt-1 text-xs text-muted-foreground">{t('drawer.noKpis')}</p>
                 )}
               </section>
-              <Separator />
-              <section>
-                <p className="text-xs font-medium text-muted-foreground">
-                  {t('drawer.primarySignals')}
-                </p>
-                <div className="mt-2 space-y-2">
-                  {detail.signals.slice(0, 3).map((signal) => {
-                    const st = signalTexts(signal, tSignalTexts);
-                    return (
-                      <button
-                        key={signal.id}
-                        type="button"
-                        onClick={() => openSignal(signal.id)}
-                        className="block w-full rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted/40"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-xs font-medium">{st.title}</p>
-                          <ImpactDots impact={signal.impact} />
-                        </div>
-                        <p className="truncate text-xs text-muted-foreground">{st.description}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
+              {/* What a person sent the action from; a detected action's
+                  evidence is its supporting signals, above. */}
+              {action.kind === 'prompt_improve' ? (
+                <>
+                  <Separator />
+                  {detail.positionOutcome && (
+                    <>
+                      <ImproveOutcomeCard
+                        outcome={detail.positionOutcome}
+                        labels={improvePlatformLabels(action.payload)}
+                      />
+                      <Separator />
+                    </>
+                  )}
+                  <ImproveContext payload={action.payload ?? {}} />
+                </>
+              ) : action.kind === 'topic_competitor_gap' ? (
+                <>
+                  <Separator />
+                  <TopicGapContext payload={action.payload ?? {}} />
+                </>
+              ) : action.kind === 'topic_opportunity' ? (
+                <>
+                  <Separator />
+                  <TopicOpportunityContext payload={action.payload ?? {}} />
+                </>
+              ) : action.kind === 'mention_review' ? (
+                <>
+                  <Separator />
+                  <MentionReviewContext payload={action.payload ?? {}} />
+                </>
+              ) : action.kind === 'traffic_pages' ? (
+                <>
+                  <Separator />
+                  <TrafficPagesContext payload={action.payload ?? {}} />
+                </>
+              ) : opportunityId ? (
+                <>
+                  <Separator />
+                  <OpportunityContext
+                    opportunityId={opportunityId}
+                    pageUrls={action.payload?.assetKey ? opportunityPages : undefined}
+                  />
+                </>
+              ) : null}
             </>
+          ) : tab === 'affected' && affected ? (
+            <AffectedTab affected={affected} volumes={volumes} />
           ) : tab === 'tasks' ? (
             <section>
               {/* Canceled tasks leave the denominator — the work was called
                   off, so it should not hold the action short of done. */}
               <p className="text-xs text-muted-foreground">
-                {t('drawer.tasksProgress', {
-                  completed: detail.tasks.filter((task) => task.status === 'completed').length,
-                  total: detail.tasks.filter(
-                    (task) => !UNCOUNTED_TASK_STATUSES.includes(task.status),
-                  ).length,
-                })}
+                {t('drawer.tasksProgress', taskProgress(detail.tasks.map((task) => task.status)))}
               </p>
               <div className="mt-3 space-y-2">
                 {detail.tasks.map((task) => (
@@ -288,10 +622,16 @@ export function ActionDrawer({
                         updateTaskStatus(brandId, action.id, task.id, status, skipReason),
                       )
                     }
-                    onRename={(title) =>
-                      void mutate(() => updateTaskTitle(brandId, action.id, task.id, title))
+                    onEdit={(edit) =>
+                      mutate(() => updateTaskDetails(brandId, action.id, task.id, edit))
                     }
                     onDelete={() => void mutate(() => deleteTask(brandId, action.id, task.id))}
+                    send={{
+                      // A content task, unless the action itself came from Content.
+                      content: task.details?.type === 'content' && !opportunityId,
+                      webhook: webhookReady,
+                      onSend: (to) => void sendTask(task.id, taskText(task, tTasks), to),
+                    }}
                   />
                 ))}
               </div>
@@ -300,11 +640,43 @@ export function ActionDrawer({
                 t={t}
                 onAdd={(title) => void mutate(() => addTask(brandId, action.id, title))}
               />
+              {/* Written from the action's evidence (AC-004): not for an
+                  action a person sent, which carries its own, nor a closed one. */}
+              {taskWriterEnabled() &&
+                action.kind !== 'prompt_improve' &&
+                !opportunityId &&
+                action.status !== 'completed' &&
+                action.status !== 'dismissed' &&
+                detail.signals.length > 0 && (
+                  <RegenerateTasks
+                    actionId={action.id}
+                    disabled={isBusy}
+                    onBusyChange={setIsBusy}
+                    onDone={async () => {
+                      await load();
+                      onChanged();
+                    }}
+                  />
+                )}
             </section>
           ) : tab === 'signals' ? (
             <section className="space-y-2">
               {detail.signals.length === 0 && (
-                <p className="text-xs text-muted-foreground">{t('drawer.noSignals')}</p>
+                <p className="text-xs text-muted-foreground">
+                  {action.kind === 'prompt_improve'
+                    ? t('drawer.noSignalsImprove')
+                    : action.kind === 'topic_competitor_gap'
+                      ? t('drawer.noSignalsTopicGap')
+                      : action.kind === 'topic_opportunity'
+                        ? t('drawer.noSignalsTopicOpportunity')
+                        : action.kind === 'mention_review'
+                          ? t('drawer.noSignalsMentionReview')
+                          : action.kind === 'traffic_pages'
+                            ? t('drawer.noSignalsTrafficPages')
+                            : opportunityId
+                              ? t('drawer.noSignalsOpportunity')
+                              : t('drawer.noSignals')}
+                </p>
               )}
               {detail.signals.map((signal) => {
                 const st = signalTexts(signal, tSignalTexts);
@@ -330,18 +702,7 @@ export function ActionDrawer({
                 <div key={event.id} className="flex gap-3">
                   <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-foreground/50" />
                   <div>
-                    <p className="text-xs font-medium">
-                      {t(`drawer.events.${event.event}`, {
-                        to: String(event.data.to ?? ''),
-                        count: Number(event.data.count ?? 0),
-                        // Work the product did itself names the task in the
-                        // reader's language and the tool as it is recorded —
-                        // the tool id is the audit fact, so it is not
-                        // translated.
-                        task: eventTaskText(event.data.task, tTasks),
-                        tool: String(event.data.tool ?? ''),
-                      })}
-                    </p>
+                    <p className="text-xs font-medium">{actionEventText(event, t, tTasks)}</p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(event.createdAt).toLocaleDateString('en-US', {
                         month: 'short',
@@ -356,79 +717,6 @@ export function ActionDrawer({
             </section>
           )}
         </div>
-
-        <div className="space-y-3 border-t px-6 py-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs text-muted-foreground">{t('drawer.statusLabel')}</Label>
-              <Select
-                value={action.status}
-                onValueChange={(value) =>
-                  void mutate(() => updateActionStatus(brandId, action.id, value as ActionStatus))
-                }
-                disabled={isBusy}
-                items={ACTION_STATUSES.map((status) => ({
-                  value: status,
-                  label: t(`status.${status}`),
-                }))}
-              >
-                <SelectTrigger className="mt-1 h-8 w-full text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ACTION_STATUSES.map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {t(`status.${status}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">{t('drawer.dueDate')}</Label>
-              <Input
-                type="date"
-                className="mt-1 h-8 text-xs"
-                value={action.dueDate ?? ''}
-                disabled={isBusy}
-                onChange={(e) =>
-                  void mutate(() => setActionDueDate(brandId, action.id, e.target.value || null))
-                }
-              />
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">{t('drawer.assignee')}</Label>
-            <Select
-              value={action.assignee?.id ?? 'unassigned'}
-              onValueChange={(value) =>
-                void mutate(() =>
-                  assignAction(brandId, action.id, value === 'unassigned' ? null : value),
-                )
-              }
-              disabled={isBusy}
-              items={[
-                { value: 'unassigned', label: t('filters.unassigned') },
-                ...members.map((member) => ({
-                  value: member.userId,
-                  label: memberLabel(member),
-                })),
-              ]}
-            >
-              <SelectTrigger className="mt-1 h-8 w-full text-xs">
-                <SelectValue placeholder={t('drawer.assignTo')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="unassigned">{t('filters.unassigned')}</SelectItem>
-                {members.map((member) => (
-                  <SelectItem key={member.userId} value={member.userId}>
-                    {memberLabel(member)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
       </SheetContent>
     </Sheet>
   );
@@ -436,13 +724,21 @@ export function ActionDrawer({
 
 type TaskTranslator = (key: string, values?: Record<string, string | number>) => string;
 
+/** Server reasons a send can fail for, worded in actionsPage.drawer.send.errors. */
+const SEND_ERRORS = [
+  'not_found',
+  'from_content',
+  'not_content',
+  'no_title',
+  'no_webhook',
+  'webhook_failed',
+];
+
 /**
- * One task: its text, its status, and the two edits a person can make to it.
+ * One task: its text, type and status, opening onto its details (AC-004).
  *
- * Renaming happens in place rather than in a dialog — the text is one line and
- * a dialog for one line is a detour. Escape abandons the edit, Enter or blur
- * commits it, and an empty value is treated as abandonment rather than as a
- * request to blank the task out, which the database would refuse anyway.
+ * The text opens the task rather than renaming it: a task is read before it
+ * is edited, and its text is one of the fields the details' Edit changes.
  */
 function TaskRow({
   task,
@@ -451,8 +747,9 @@ function TaskRow({
   statusLabel,
   t,
   onStatusChange,
-  onRename,
+  onEdit,
   onDelete,
+  send,
 }: {
   task: ActionTask;
   text: string;
@@ -460,63 +757,56 @@ function TaskRow({
   statusLabel: TaskTranslator;
   t: TaskTranslator;
   onStatusChange: (status: TaskStatus, skipReason?: string) => void;
-  onRename: (title: string) => void;
+  /** Resolves true once saved; false when the save failed. */
+  onEdit: (edit: TaskDetailsEdit & { title: string | null }) => Promise<boolean>;
   onDelete: () => void;
+  send: TaskSendOptions;
 }) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const isEditing = draft !== null;
+  // A task sent from the Improve tab opens on its suggestion, as it always
+  // showed it; the rest open on a click.
+  const [open, setOpen] = useState(
+    () => !!task.details && !hasTaskSpec(task.details) && !!task.details.body,
+  );
+  const [editing, setEditing] = useState(false);
   // Choosing Skipped opens a reason field rather than committing: a skip
   // without a reason cannot be told apart from an abandoned task later.
   const [skipDraft, setSkipDraft] = useState<string | null>(null);
-
-  const commit = () => {
-    const next = (draft ?? '').trim();
-    if (next && next !== text) onRename(next);
-    setDraft(null);
-  };
+  const locked = disabled || editing || skipDraft !== null;
 
   return (
     <div className="rounded-md border">
       {/* Top-aligned so a task that wraps keeps its controls beside its first
           line. */}
       <div className="flex items-start justify-between gap-2 px-3 py-2">
-        {isEditing ? (
-          <Input
-            autoFocus
-            value={draft}
-            maxLength={200}
-            disabled={disabled}
-            aria-label={t('drawer.taskText')}
-            className="h-7 min-w-0 flex-1 text-sm"
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                commit();
-              } else if (e.key === 'Escape') {
-                e.preventDefault();
-                setDraft(null);
-              }
-            }}
-          />
-        ) : (
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => setDraft(text)}
-            title={t('drawer.renameTask')}
+        <button
+          type="button"
+          // Not while editing: closing would drop what was typed.
+          onClick={() => !editing && setOpen((current) => !current)}
+          aria-expanded={open}
+          title={open ? t('drawer.task.hideDetails') : t('drawer.task.showDetails')}
+          className="flex min-w-0 flex-1 items-start gap-1 rounded px-1 py-1 text-left text-sm leading-snug hover:bg-muted/60"
+        >
+          <ChevronRight
             className={cn(
-              // Wraps rather than truncates: a task is read, not scanned,
-              // and "Create a content brief for 23 prom…" says nothing.
-              'min-w-0 flex-1 rounded px-1 py-1 text-left text-sm leading-snug break-words hover:bg-muted/60',
+              'mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
+              open && 'rotate-90',
+            )}
+          />
+          {/* Wraps rather than truncates: a task is read, not scanned, and
+              "Create a content brief for 23 prom…" says nothing. */}
+          <span
+            className={cn(
+              'min-w-0 break-words',
               (task.status === 'completed' || UNCOUNTED_TASK_STATUSES.includes(task.status)) &&
                 'text-muted-foreground line-through',
             )}
           >
             {task.position}. {text}
-          </button>
-        )}
+          </span>
+        </button>
+        <div className="mt-1.5 shrink-0">
+          <TaskTypeBadge type={task.details?.type ?? null} />
+        </div>
         <Select
           value={task.status}
           onValueChange={(value) => {
@@ -524,7 +814,7 @@ function TaskRow({
             if (next === 'skipped') setSkipDraft('');
             else onStatusChange(next);
           }}
-          disabled={disabled || isEditing || skipDraft !== null}
+          disabled={locked}
           items={TASK_STATUSES.map((status) => ({ value: status, label: statusLabel(status) }))}
         >
           <SelectTrigger className="h-7 w-32 shrink-0 text-xs">
@@ -542,7 +832,7 @@ function TaskRow({
           type="button"
           variant="ghost"
           size="icon"
-          disabled={disabled || isEditing || skipDraft !== null}
+          disabled={locked}
           onClick={onDelete}
           aria-label={t('drawer.deleteTask')}
           className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
@@ -550,6 +840,27 @@ function TaskRow({
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
       </div>
+
+      {open &&
+        (editing ? (
+          <TaskDetailForm
+            text={text}
+            details={task.details}
+            disabled={disabled}
+            onSave={async (edit) => {
+              // The form stays until the save lands, so a failure keeps what was typed.
+              if (await onEdit(edit)) setEditing(false);
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <TaskDetailView
+            details={task.details}
+            disabled={disabled || skipDraft !== null}
+            onEdit={() => setEditing(true)}
+            send={send}
+          />
+        ))}
 
       {skipDraft !== null && (
         <div className="flex items-center gap-2 border-t bg-muted/30 px-3 py-2">

@@ -62,6 +62,14 @@ export interface SourceState {
    * synced yet. Suggestions generated before it could not draw on the source.
    */
   firstDataAt: string | null;
+  /**
+   * When the brand's newest day of data landed: the last sync that brought
+   * anything. Read from the latest date's row, which the (brand, date) index
+   * finds at once; a sync only inserts new days, so it's when that ran.
+   */
+  lastDataAt: string | null;
+  /** The brand's property: a GSC property ("sc-domain:…" or a URL) or a GA4 property id. */
+  property: string | null;
 }
 
 export interface SuggestionSourceStates {
@@ -88,7 +96,16 @@ export async function getSuggestionSourceStates(brandId: string): Promise<Sugges
       .limit(1)
       .maybeSingle();
 
-  const [configRes, brandRes, connRes, gscFirst, gaFirst] = await Promise.all([
+  const latestRow = (table: 'gsc_query_stats' | 'ga_page_stats') =>
+    supabase
+      .from(table)
+      .select('created_at')
+      .eq('brand_id', brandId)
+      .order('date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+  const [configRes, brandRes, connRes, gscFirst, gaFirst, gscLast, gaLast] = await Promise.all([
     fetch(`${API_BASE_URL}/api/integrations/config`, {
       headers: await authHeaders(),
       cache: 'no-store',
@@ -99,6 +116,8 @@ export async function getSuggestionSourceStates(brandId: string): Promise<Sugges
     supabase.from('integration_connections').select('provider, status'),
     firstRow('gsc_query_stats'),
     firstRow('ga_page_stats'),
+    latestRow('gsc_query_stats'),
+    latestRow('ga_page_stats'),
   ]);
 
   const connected = new Set(
@@ -111,12 +130,16 @@ export async function getSuggestionSourceStates(brandId: string): Promise<Sugges
       connected: connected.has('google-search-console'),
       mapped: Boolean(brandRes.data?.gsc_property),
       firstDataAt: gscFirst.data?.created_at ?? null,
+      lastDataAt: gscLast.data?.created_at ?? null,
+      property: brandRes.data?.gsc_property ?? null,
     },
     ga: {
       configured: Boolean(configRes.googleAnalytics),
       connected: connected.has('google-analytics'),
       mapped: Boolean(brandRes.data?.ga_property_id),
       firstDataAt: gaFirst.data?.created_at ?? null,
+      lastDataAt: gaLast.data?.created_at ?? null,
+      property: brandRes.data?.ga_property_id ?? null,
     },
     dataForSeo: { configured: Boolean(configRes.dataForSeo) },
   };

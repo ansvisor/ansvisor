@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -51,21 +51,25 @@ import {
   BarChart3,
   Search,
   Loader2,
-  RefreshCw,
   ExternalLink,
   X,
   Settings2,
   Trash2,
+  Download,
+  Plus,
+  ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { usePlanContext } from '@/components/providers/plan-provider';
 import {
-  generateOpportunities,
+  generateOpportunitiesOnDemand,
   getGenerationJobStatus,
+  getContentUsage,
   getOpportunities,
   getOpportunityPrompts,
+  getOpportunityTopics,
   type OpportunityPrompt,
+  type OpportunityTopic,
   updateOpportunityStatus,
   sendToWebhook,
   bulkSendToWebhook,
@@ -76,15 +80,110 @@ import type { ContentOpportunity, ContentOpportunityStatus } from '@/types';
 import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
 import { WebhookSettingsDialog } from './_webhook-settings';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { OpportunityDetail } from '@/components/content/opportunity-detail';
+import { ContentUsageCard } from '@/components/content/content-usage-card';
+import { hasContentQuota, onDemandMax, type ContentUsage } from '@/lib/content-usage';
+import { suggestedBounds, suggestedDate, type SuggestedRange } from '@/lib/suggested-date';
+import {
+  DEFAULT_OPPORTUNITY_SORT,
+  OPPORTUNITY_SORTS,
+  opportunityScope,
+  type OpportunitySort,
+} from '@/lib/content/opportunity-list';
+import {
+  NewOpportunitiesDialog,
+  type NewOpportunitiesInput,
+} from '@/components/content/new-opportunities-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 import { PAGE_SIZE, TablePager, usePagination } from '@/components/table-pager';
+import { toCsv } from '@/lib/csv';
+import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 
 const GENERATION_STORAGE_KEY = 'aeo:content-generation';
+
+// Filters and sort kept in the URL (#897); defaults are left out of it.
+const STATUS_VALUES = [
+  'all',
+  'new',
+  'reviewed',
+  'sent',
+  'in_progress',
+  'done',
+  'dismissed',
+  'archived',
+] as const;
+const IMPACT_VALUES = ['all', 'high', 'medium', 'low'] as const;
+const TYPE_VALUES = ['all', 'owned', 'earned'] as const;
+const SOURCE_VALUES = ['all', 'system', 'manual', 'prompt', 'action'] as const;
+const SUGGESTED_VALUES = ['all', 'month', 'last30', 'custom'] as const;
+const URL_DEFAULTS = {
+  status: 'all',
+  impact: 'all',
+  type: 'all',
+  source: 'all',
+  suggested: 'all',
+  from: '',
+  to: '',
+  sort: DEFAULT_OPPORTUNITY_SORT,
+};
+
+/** When the list was last opened, per brand: rows suggested since get a dot. */
+const LAST_VISIT_KEY = 'aeo:content-last-visit:';
+
+/**
+ * The visit before this one, read once per brand per page load and cached,
+ * so running the effect twice (React's development mode does) doesn't read
+ * back the visit it just recorded.
+ */
+const visitBefore = new Map<string, number | null>();
+function previousVisit(brandId: string): number | null {
+  if (!visitBefore.has(brandId)) {
+    let previous: number | null = null;
+    try {
+      const key = LAST_VISIT_KEY + brandId;
+      previous = Number(localStorage.getItem(key)) || null;
+      localStorage.setItem(key, String(Date.now()));
+    } catch {}
+    visitBefore.set(brandId, previous);
+  }
+  return visitBefore.get(brandId) ?? null;
+}
+
+/** Used when the month's usage couldn't be read; the server still caps it. */
+const FALLBACK_REQUEST_MAX = 3;
+
+const OPPORTUNITY_EXPORT_HEADERS = [
+  'title',
+  'type',
+  'impact',
+  'score',
+  'status',
+  'related_prompt',
+  'suggested_at',
+];
+// The export pages through the filtered list; the cap keeps a runaway brand
+// from pinning the browser.
+const EXPORT_PAGE_SIZE = 200;
+const EXPORT_MAX_ROWS = 10_000;
 const GENERATION_TIMEOUT_MS = 3 * 60 * 1000;
 
 interface GenerationJob {
   brandId: string;
   jobId: string;
   startedAt: number;
+  /** How many a "+ New" request asked for: the placeholder rows shown meanwhile. */
+  count?: number;
 }
 
 function saveGenerationJob(job: GenerationJob) {
@@ -122,10 +221,12 @@ const IMPACT_COLORS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   new: 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  reviewed: 'border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400',
   sent: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   in_progress: 'border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400',
   done: 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400',
   dismissed: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-500 dark:text-zinc-400',
+  archived: 'border-zinc-500/30 bg-zinc-500/5 text-zinc-500 dark:text-zinc-400',
 };
 
 function KpiCard({
@@ -155,6 +256,69 @@ function KpiCard({
   );
 }
 
+/** When it was suggested, relative for a week, with the full date on hover. */
+function SuggestedCell({
+  createdAt,
+  locale,
+  isNew,
+  newLabel,
+}: {
+  createdAt: string;
+  locale: string;
+  isNew: boolean;
+  newLabel: string;
+}) {
+  const { label, full } = suggestedDate(createdAt, locale);
+  return (
+    <span className="inline-flex items-center gap-1.5" title={full}>
+      {isNew && (
+        <span
+          className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
+          role="img"
+          aria-label={newLabel}
+          title={newLabel}
+        />
+      )}
+      {label}
+    </span>
+  );
+}
+
+/**
+ * What an opportunity was built for, as a tag before its description: a
+ * group of related prompts in a topic (cluster opportunities, #857) in
+ * violet, or a single prompt (the older generator) in grey. Violet keeps it
+ * apart from the impact and status colours on the same row.
+ */
+function OpportunityScope({ opp }: { opp: ContentOpportunity }) {
+  const t = useTranslations('content.scope');
+  const scope = opportunityScope(opp);
+  const group = scope.kind === 'group';
+  const label =
+    scope.kind === 'group'
+      ? scope.topic
+        ? t('group', { topic: scope.topic, count: scope.count })
+        : t('groupNoTopic', { count: scope.count })
+      : scope.kind === 'action'
+        ? scope.actionNo !== null
+          ? t('action', { ref: `AC-${scope.actionNo}` })
+          : t('actionNoRef')
+        : t('single');
+  return (
+    <span
+      className={cn(
+        'mr-1.5 inline-flex items-center rounded px-1.5 py-px align-middle text-[11px] font-medium leading-4 ring-1 ring-inset',
+        group
+          ? 'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900'
+          : 'bg-muted text-foreground/80 ring-border',
+      )}
+      title={group ? t('groupHint') : scope.kind === 'action' ? t('actionHint') : t('singleHint')}
+    >
+      {label}
+    </span>
+  );
+}
+
 const ALL_PROMPTS = '__all__';
 
 interface PromptFilterItem {
@@ -167,19 +331,29 @@ interface PromptFilterItem {
 export default function ContentPage() {
   const t = useTranslations('content');
   const tCommon = useTranslations('common');
+  const locale = useLocale();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
-  const { isCloud } = usePlanContext();
+  const activeBrandSlug = useBrandStore((s) => s.getActiveBrand()?.slug);
 
   const [opportunities, setOpportunities] = useState<ContentOpportunity[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [impactFilter, setImpactFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
+  // When it was suggested (CONTENT-002); custom takes YYYY-MM-DD bounds.
+  const [suggestedRange, setSuggestedRange] = useState<SuggestedRange>('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  // The previous visit, read once per brand before this one is recorded.
+  const [lastVisit, setLastVisit] = useState<number | null>(null);
+  const [sortOrder, setSortOrder] = useState<string>(DEFAULT_OPPORTUNITY_SORT);
   // The prompt filter (#836) lives in the URL as ?prompt=<id> so a filtered
   // view can be linked to. It is read after mount — useSearchParams would need
   // a Suspense boundary around the page — and loading waits for it, so a
@@ -188,17 +362,30 @@ export default function ContentPage() {
   const [urlRead, setUrlRead] = useState(false);
   // null until loaded for the current brand.
   const [promptOptions, setPromptOptions] = useState<OpportunityPrompt[] | null>(null);
+  // Topic filter (#857): matches opportunities through their clusters.
+  const [topicFilter, setTopicFilter] = useState('');
+  const [topicOptions, setTopicOptions] = useState<OpportunityTopic[]>([]);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkSending, setBulkSending] = useState(false);
 
   const [webhookOpen, setWebhookOpen] = useState(false);
+  // This billing period's content usage (CONTENT-001); null hides the card.
+  const [contentUsage, setContentUsage] = useState<ContentUsage | null>(null);
+  // Bumped after a "+ New" run, which may use quota without changing the total.
+  const [usageVersion, setUsageVersion] = useState(0);
+  const [newOpen, setNewOpen] = useState(false);
+  // Placeholder rows while a "+ New" request runs (CONTENT-003).
+  const [pendingCount, setPendingCount] = useState(0);
+  const lastRequestRef = useRef<NewOpportunitiesInput | null>(null);
+  const retryRef = useRef<(() => void) | null>(null);
   const pollRef = useRef(false);
   const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [aggregates, setAggregates] = useState({
     avgScore: 0,
     highImpactCount: 0,
     sentCount: 0,
+    signalCount: 0,
   });
 
   // Server-side paging (#610) — the list can hold far more than one page's
@@ -206,8 +393,37 @@ export default function ContentPage() {
   // pager instead of the length of whatever page happens to be loaded.
   const pager = usePagination(
     total,
-    `${statusFilter}|${impactFilter}|${typeFilter}|${promptFilter}|${debouncedSearch}`,
+    `${statusFilter}|${impactFilter}|${typeFilter}|${sourceFilter}|${suggestedRange}|${customFrom}|${customTo}|${promptFilter}|${topicFilter}|${debouncedSearch}|${sortOrder}`,
   );
+
+  // The list's filters and search, shared by the page load and the CSV export.
+  const listFilters = useMemo(() => {
+    const filters: Record<string, string> = {};
+    if (statusFilter !== 'all') filters.status = statusFilter;
+    if (impactFilter !== 'all') filters.impact = impactFilter;
+    if (typeFilter !== 'all') filters.type = typeFilter;
+    if (sourceFilter !== 'all') filters.source = sourceFilter;
+    const bounds = suggestedBounds(suggestedRange, { from: customFrom, to: customTo });
+    if (bounds.from) filters.createdFrom = bounds.from;
+    if (bounds.to) filters.createdTo = bounds.to;
+    if (promptFilter) filters.promptId = promptFilter;
+    if (topicFilter) filters.topicId = topicFilter;
+    if (debouncedSearch.trim()) filters.q = debouncedSearch.trim();
+    filters.sort = sortOrder;
+    return filters;
+  }, [
+    statusFilter,
+    impactFilter,
+    typeFilter,
+    sourceFilter,
+    suggestedRange,
+    customFrom,
+    customTo,
+    promptFilter,
+    topicFilter,
+    debouncedSearch,
+    sortOrder,
+  ]);
 
   const loadData = useCallback(
     async (silent = false, isCancelled?: () => boolean) => {
@@ -219,6 +435,7 @@ export default function ContentPage() {
           avgScore: 0,
           highImpactCount: 0,
           sentCount: 0,
+          signalCount: 0,
         });
         setLoading(false);
         return;
@@ -227,20 +444,10 @@ export default function ContentPage() {
       if (!silent) setLoading(true);
       setSelectedIds(new Set());
       try {
-        const filters: Record<string, string> = {};
-        if (statusFilter !== 'all') filters.status = statusFilter;
-        if (impactFilter !== 'all') filters.impact = impactFilter;
-        if (typeFilter !== 'all') filters.type = typeFilter;
-        if (promptFilter) filters.promptId = promptFilter;
-        if (debouncedSearch.trim()) {
-          filters.q = debouncedSearch.trim();
-        }
-
         const data = await getOpportunities(activeBrandId, {
-          ...filters,
+          ...listFilters,
           limit: PAGE_SIZE,
           offset: pager.start,
-          sort: 'score',
         });
         if (isCancelled?.()) return;
         setOpportunities(data.opportunities);
@@ -250,6 +457,7 @@ export default function ContentPage() {
             avgScore: 0,
             highImpactCount: 0,
             sentCount: 0,
+            signalCount: 0,
           },
         );
         return data.total;
@@ -263,17 +471,7 @@ export default function ContentPage() {
         }
       }
     },
-    [
-      urlRead,
-      activeBrandId,
-      statusFilter,
-      impactFilter,
-      typeFilter,
-      promptFilter,
-      pager.start,
-      debouncedSearch,
-      t,
-    ],
+    [urlRead, activeBrandId, listFilters, pager.start, t],
   );
 
   useEffect(() => {
@@ -284,9 +482,68 @@ export default function ContentPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  // The open opportunity lives in the URL (?opportunity=<id>), like the
+  // Action Center's drawers: a refresh or a shared link reopens it, and
+  // opening one never navigates away from the filtered list.
+  const [openOpportunityId, setOpenOpportunityId] = useState<string | null>(null);
+
   useEffect(() => {
-    setPromptFilter(new URLSearchParams(window.location.search).get('prompt') ?? '');
+    const params = new URLSearchParams(window.location.search);
+    setPromptFilter(params.get('prompt') ?? '');
+    setOpenOpportunityId(params.get('opportunity'));
+    setStatusFilter(readUrlChoice('status', STATUS_VALUES, 'all'));
+    setImpactFilter(readUrlChoice('impact', IMPACT_VALUES, 'all'));
+    setTypeFilter(readUrlChoice('type', TYPE_VALUES, 'all'));
+    setSourceFilter(readUrlChoice('source', SOURCE_VALUES, 'all'));
+    setSuggestedRange(readUrlChoice('suggested', SUGGESTED_VALUES, 'all'));
+    setCustomFrom(params.get('from') ?? '');
+    setCustomTo(params.get('to') ?? '');
+    setSortOrder(readUrlChoice('sort', OPPORTUNITY_SORTS, DEFAULT_OPPORTUNITY_SORT));
     setUrlRead(true);
+  }, []);
+
+  // Keep the filters and sort in the URL once it has been read, so a refresh
+  // or a shared link restores the same view.
+  useEffect(() => {
+    if (!urlRead) return;
+    writeUrlParams(
+      {
+        status: statusFilter,
+        impact: impactFilter,
+        type: typeFilter,
+        source: sourceFilter,
+        suggested: suggestedRange,
+        from: suggestedRange === 'custom' ? customFrom : '',
+        to: suggestedRange === 'custom' ? customTo : '',
+        sort: sortOrder,
+      },
+      URL_DEFAULTS,
+    );
+  }, [
+    urlRead,
+    statusFilter,
+    impactFilter,
+    typeFilter,
+    sourceFilter,
+    suggestedRange,
+    customFrom,
+    customTo,
+    sortOrder,
+  ]);
+
+  // Rows suggested since the previous visit get a dot; this visit is
+  // recorded for the next one. Storage failures only lose the dots.
+  useEffect(() => {
+    if (!activeBrandId) return;
+    setLastVisit(previousVisit(activeBrandId));
+  }, [activeBrandId]);
+
+  const selectOpportunity = useCallback((opportunityId: string | null) => {
+    setOpenOpportunityId(opportunityId);
+    const url = new URL(window.location.href);
+    if (opportunityId) url.searchParams.set('opportunity', opportunityId);
+    else url.searchParams.delete('opportunity');
+    window.history.replaceState(window.history.state, '', url);
   }, []);
 
   const selectPrompt = useCallback((promptId: string) => {
@@ -320,6 +577,20 @@ export default function ContentPage() {
     };
   }, [loadPromptOptions]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setTopicFilter('');
+    setTopicOptions([]);
+    if (!activeBrandId) return;
+    getOpportunityTopics(activeBrandId)
+      .then((options) => !cancelled && setTopicOptions(options))
+      // Like the prompt filter, it just stays hidden without its options.
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrandId]);
+
   // A prompt id from another brand, or one whose prompt was deleted, would
   // filter to nothing while the picker shows "All prompts". Drop it.
   useEffect(() => {
@@ -337,6 +608,19 @@ export default function ContentPage() {
     };
   }, [loadData]);
 
+  // Reloaded when the list's size changes, since that is when something may
+  // have used the quota. A failure only hides the card.
+  useEffect(() => {
+    let cancelled = false;
+    getContentUsage().then(
+      (usage) => !cancelled && setContentUsage(usage),
+      () => !cancelled && setContentUsage(null),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrandId, total, usageVersion]);
+
   const pollJob = useCallback(
     (jobId: string, startedAt: number) => {
       pollRef.current = true;
@@ -353,25 +637,36 @@ export default function ContentPage() {
               pollRef.current = false;
               clearGenerationJob();
               setGenerating(false);
-              toast.success(t('generatedToast', { count: status.result?.generated ?? 0 }));
+              setPendingCount(0);
+              const generated = status.result?.generated ?? 0;
+              const duplicates = status.result?.duplicates ?? 0;
+              if (status.result?.limited) toast.error(t('newLimitReached'));
+              else if (generated === 0 && duplicates === 0) toast(t('newNothing'));
+              else toast.success(t('newDone', { generated, duplicates }));
               loadData();
               loadPromptOptions();
+              setUsageVersion((v) => v + 1);
               break;
             }
 
-            if (status.status === 'failed') {
+            if (status.status === 'failed' || Date.now() - startedAt > GENERATION_TIMEOUT_MS) {
               pollRef.current = false;
               clearGenerationJob();
               setGenerating(false);
-              toast.error(status.failedReason || t('generationFailed'));
-              break;
-            }
-
-            if (Date.now() - startedAt > GENERATION_TIMEOUT_MS) {
-              pollRef.current = false;
-              clearGenerationJob();
-              setGenerating(false);
-              toast.error(t('generationTimedOut'));
+              setPendingCount(0);
+              // Slots it didn't use are handed back on the server; say so.
+              toast.error(
+                status.status === 'failed'
+                  ? status.failedReason || t('generationFailed')
+                  : t('generationTimedOut'),
+                {
+                  description: t('newRefunded'),
+                  action: lastRequestRef.current
+                    ? { label: t('retry'), onClick: () => retryRef.current?.() }
+                    : undefined,
+                },
+              );
+              setUsageVersion((v) => v + 1);
               break;
             }
           } catch {
@@ -390,25 +685,117 @@ export default function ContentPage() {
     const saved = loadGenerationJob();
     if (!saved || saved.brandId !== activeBrandId) return;
 
+    setPendingCount(saved.count ?? 0);
     pollJob(saved.jobId, saved.startedAt);
     return () => {
       pollRef.current = false;
     };
   }, [activeBrandId, pollJob]);
 
-  const handleGenerate = async () => {
+  // Every opportunity matching the filters and search, not just this page (#915).
+  const handleExportCsv = async () => {
     if (!activeBrandId) return;
+    setExporting(true);
     try {
-      const { jobId } = await generateOpportunities(activeBrandId);
-      const startedAt = Date.now();
-      saveGenerationJob({ brandId: activeBrandId, jobId, startedAt });
-      pollJob(jobId, startedAt);
+      const rows: ContentOpportunity[] = [];
+      for (let offset = 0; offset < EXPORT_MAX_ROWS; offset += EXPORT_PAGE_SIZE) {
+        const page = await getOpportunities(activeBrandId, {
+          ...listFilters,
+          limit: EXPORT_PAGE_SIZE,
+          offset,
+        });
+        rows.push(...page.opportunities);
+        if (page.opportunities.length < EXPORT_PAGE_SIZE) break;
+      }
+
+      const csv = toCsv(
+        rows.map((o) => ({
+          title: o.title,
+          type: o.type,
+          impact: o.impact,
+          score: Math.round(o.opportunityScore),
+          status: o.status,
+          related_prompt: o.sourceData.promptText ?? (o.sourceData.prompts ?? []).join(' | '),
+          // ISO 8601, whatever the UI language (CONTENT-002).
+          suggested_at: new Date(o.createdAt).toISOString(),
+        })),
+        OPPORTUNITY_EXPORT_HEADERS,
+      );
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const date = new Date().toISOString().slice(0, 10);
+      link.href = url;
+      link.download = `ansvisor_${activeBrandSlug ?? 'brand'}_content-opportunities_${date}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Generate failed:', err);
-      toast.error(err instanceof Error ? err.message : t('generateError'));
-      setGenerating(false);
+      console.error('Failed to export opportunities:', err);
+      toast.error(t('exportError'));
+    } finally {
+      setExporting(false);
     }
   };
+
+  // "+ New" (CONTENT-003). One idempotency key per submit, so a double click
+  // or a retried request starts one job; returns whether it started.
+  const handleNew = async (input: NewOpportunitiesInput): Promise<boolean> => {
+    if (!activeBrandId) return false;
+    lastRequestRef.current = input;
+    const result = await generateOpportunitiesOnDemand({
+      brandId: activeBrandId,
+      ...input,
+      idempotencyKey: crypto.randomUUID(),
+    }).catch((err: unknown) => ({
+      ok: false as const,
+      error: err instanceof Error ? err.message : t('generateError'),
+      quotaExhausted: false,
+      periodEnd: null,
+    }));
+    if (!result.ok) {
+      toast.error(result.quotaExhausted ? t('newLimitReached') : result.error);
+      setUsageVersion((v) => v + 1);
+      return false;
+    }
+    const startedAt = Date.now();
+    saveGenerationJob({
+      brandId: activeBrandId,
+      jobId: result.jobId,
+      startedAt,
+      count: result.count,
+    });
+    setPendingCount(result.count);
+    pollJob(result.jobId, startedAt);
+    return true;
+  };
+  // The failure toast's Retry sends the last request again, with a new key.
+  useEffect(() => {
+    retryRef.current = () => {
+      if (lastRequestRef.current) void handleNew(lastRequestRef.current);
+    };
+  });
+
+  const requestMax = contentUsage ? onDemandMax(contentUsage) : FALLBACK_REQUEST_MAX;
+  const limitReached = hasContentQuota(contentUsage) && requestMax === 0;
+  const resetsOn = contentUsage?.periodEnd
+    ? new Date(contentUsage.periodEnd).toLocaleDateString(locale, {
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'UTC',
+      })
+    : '';
+  const newButton = (
+    <Button
+      onClick={() => setNewOpen(true)}
+      disabled={generating || loading || limitReached}
+      size="sm"
+      className="gap-2"
+      title={limitReached ? t('newLimitTooltip', { date: resetsOn }) : undefined}
+    >
+      {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+      {generating ? t('generating') : t('new')}
+    </Button>
+  );
 
   const handleSendWebhook = async (id: string) => {
     setSendingId(id);
@@ -553,14 +940,22 @@ export default function ContentPage() {
     statusFilter !== 'all' ||
     impactFilter !== 'all' ||
     typeFilter !== 'all' ||
+    sourceFilter !== 'all' ||
+    suggestedRange !== 'all' ||
     promptFilter !== '' ||
+    topicFilter !== '' ||
     search.trim() !== '';
 
   const clearFilters = () => {
     setStatusFilter('all');
     setImpactFilter('all');
     setTypeFilter('all');
+    setSourceFilter('all');
+    setSuggestedRange('all');
+    setCustomFrom('');
+    setCustomTo('');
     selectPrompt('');
+    setTopicFilter('');
     setSearch('');
   };
 
@@ -580,6 +975,21 @@ export default function ContentPage() {
           <p className="text-muted-foreground text-sm">{t('description')}</p>
         </div>
         <div className="flex items-center gap-2">
+          {newButton}
+          <Button
+            onClick={handleExportCsv}
+            disabled={exporting || loading || total === 0}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+          >
+            {exporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            {tCommon('exportCsv')}
+          </Button>
           <Button
             onClick={() => setWebhookOpen(true)}
             variant="outline"
@@ -589,27 +999,6 @@ export default function ContentPage() {
             <Settings2 className="h-4 w-4" />
             {t('webhook.title')}
           </Button>
-          {!isCloud && (
-            <Button
-              onClick={handleGenerate}
-              disabled={generating || loading}
-              size="sm"
-              className="gap-2"
-            >
-              {generating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : opportunities.length > 0 ? (
-                <RefreshCw className="h-4 w-4" />
-              ) : (
-                <Lightbulb className="h-4 w-4" />
-              )}
-              {generating
-                ? t('generating')
-                : opportunities.length > 0
-                  ? t('regenerate')
-                  : t('generate')}
-            </Button>
-          )}
         </div>
       </div>
 
@@ -625,28 +1014,31 @@ export default function ContentPage() {
               <p className="text-sm font-medium">{t('noOpportunities')}</p>
               <p className="text-xs text-muted-foreground">{t('noOpportunitiesHint')}</p>
             </div>
-            {!isCloud ? (
-              <Button onClick={handleGenerate} disabled={generating} size="sm" className="gap-2">
-                {generating ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Lightbulb className="h-4 w-4" />
-                )}
-                {generating ? t('generating') : t('generate')}
-              </Button>
-            ) : (
-              <p className="text-xs text-muted-foreground">{t('autoGeneratedHint')}</p>
-            )}
+            {newButton}
+            <p className="text-xs text-muted-foreground">{t('autoGeneratedHint')}</p>
           </CardContent>
         </Card>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div
+            className={cn(
+              'grid grid-cols-2 gap-4 sm:grid-cols-4',
+              hasContentQuota(contentUsage) && 'xl:grid-cols-[1.4fr_repeat(4,minmax(0,1fr))]',
+            )}
+          >
+            <ContentUsageCard
+              usage={contentUsage}
+              className="col-span-2 sm:col-span-4 xl:col-span-1"
+            />
             <KpiCard
               title={t('kpi.total')}
               icon={Lightbulb}
               value={total}
-              sub={t('kpi.shown', { count: filtered.length })}
+              sub={
+                aggregates.signalCount > 0
+                  ? t('kpi.fromSignals', { count: aggregates.signalCount })
+                  : t('kpi.shown', { count: filtered.length })
+              }
             />
             <KpiCard
               title={t('kpi.highImpact')}
@@ -670,71 +1062,69 @@ export default function ContentPage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-sm font-medium">{t('opportunities')}</CardTitle>
-                  <Badge
-                    variant="outline"
-                    className="text-xs border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                  >
-                    {t('available', { count: total })}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div className="relative w-48">
-                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              {/* The search sits on the title's line, right-aligned and larger,
+                  so the filters below keep a line of their own. */}
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex shrink-0 items-center gap-2">
+                    <CardTitle className="text-sm font-medium">{t('opportunities')}</CardTitle>
+                    <Badge
+                      variant="outline"
+                      className="text-xs border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                    >
+                      {t('available', { count: total })}
+                    </Badge>
+                  </div>
+                  <div className="relative w-full max-w-80">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder={tCommon('search')}
+                      placeholder={t('filters.search')}
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      aria-label={tCommon('search')}
-                      className="pl-8 h-8 text-xs"
+                      aria-label={t('filters.search')}
+                      className="h-9 pl-9 text-sm"
                     />
                   </div>
-                  <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
-                    <SelectTrigger className="h-8 w-[130px] text-xs">
-                      <SelectValue>
-                        {(value) =>
-                          value === 'all' ? t('filters.allStatuses') : t(`status.${value}`)
-                        }
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t('filters.allStatuses')}</SelectItem>
-                      <SelectItem value="new">{t('status.new')}</SelectItem>
-                      <SelectItem value="sent">{t('status.sent')}</SelectItem>
-                      <SelectItem value="in_progress">{t('status.in_progress')}</SelectItem>
-                      <SelectItem value="done">{t('status.done')}</SelectItem>
-                      <SelectItem value="dismissed">{t('status.dismissed')}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={impactFilter} onValueChange={(v) => v && setImpactFilter(v)}>
-                    <SelectTrigger className="h-8 w-[120px] text-xs">
-                      <SelectValue>
-                        {(value) =>
-                          value === 'all' ? t('filters.allImpacts') : t(`impact.${value}`)
-                        }
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t('filters.allImpacts')}</SelectItem>
-                      <SelectItem value="high">{t('impact.high')}</SelectItem>
-                      <SelectItem value="medium">{t('impact.medium')}</SelectItem>
-                      <SelectItem value="low">{t('impact.low')}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={typeFilter} onValueChange={(v) => v && setTypeFilter(v)}>
-                    <SelectTrigger className="h-8 w-[110px] text-xs">
-                      <SelectValue>
-                        {(value) => (value === 'all' ? t('filters.allTypes') : t(`type.${value}`))}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t('filters.allTypes')}</SelectItem>
-                      <SelectItem value="owned">{t('type.owned')}</SelectItem>
-                      <SelectItem value="earned">{t('type.earned')}</SelectItem>
-                    </SelectContent>
-                  </Select>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {(topicOptions.length >= 2 || topicFilter !== '') && (
+                    <Select
+                      items={[
+                        { value: 'all', label: t('filters.allTopics') },
+                        ...topicOptions.map((o) => ({ value: o.topicId, label: o.name })),
+                      ]}
+                      value={topicFilter || 'all'}
+                      onValueChange={(v) => setTopicFilter(!v || v === 'all' ? '' : v)}
+                    >
+                      <SelectTrigger className="h-8 w-44 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      {/* Wider than the trigger, so topic names fit; the item
+                          text may shrink so a longer name truncates instead of
+                          running past the edge, and the count stays aligned. */}
+                      <SelectContent
+                        align="start"
+                        alignItemWithTrigger={false}
+                        className="w-auto min-w-(--anchor-width) max-w-80"
+                      >
+                        <SelectItem value="all">{t('filters.allTopics')}</SelectItem>
+                        {topicOptions.map((o) => (
+                          <SelectItem
+                            key={o.topicId}
+                            value={o.topicId}
+                            className="[&>div]:min-w-0 [&>div]:shrink"
+                          >
+                            <span className="min-w-0 flex-1 truncate" title={o.name}>
+                              {o.name}
+                            </span>
+                            <span className="ml-2 shrink-0 tabular-nums text-muted-foreground">
+                              {o.count}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   {showPromptFilter && (
                     <Combobox
                       items={promptItems}
@@ -769,6 +1159,160 @@ export default function ContentPage() {
                       </ComboboxContent>
                     </Combobox>
                   )}
+                  <Select value={typeFilter} onValueChange={(v) => v && setTypeFilter(v)}>
+                    <SelectTrigger className="h-8 w-[110px] text-xs">
+                      <SelectValue>
+                        {(value) => (value === 'all' ? t('filters.allTypes') : t(`type.${value}`))}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent
+                      align="start"
+                      alignItemWithTrigger={false}
+                      className="w-auto min-w-(--anchor-width)"
+                    >
+                      <SelectItem value="all">{t('filters.allTypes')}</SelectItem>
+                      {(['owned', 'earned'] as const).map((type) => (
+                        <SelectItem key={type} value={type}>
+                          <span className="flex flex-col">
+                            <span>{t(`type.${type}`)}</span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {t(`typeHint.${type}`)}
+                            </span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={impactFilter} onValueChange={(v) => v && setImpactFilter(v)}>
+                    <SelectTrigger className="h-8 w-[120px] text-xs">
+                      <SelectValue>
+                        {(value) =>
+                          value === 'all' ? t('filters.allImpacts') : t(`impact.${value}`)
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t('filters.allImpacts')}</SelectItem>
+                      <SelectItem value="high">{t('impact.high')}</SelectItem>
+                      <SelectItem value="medium">{t('impact.medium')}</SelectItem>
+                      <SelectItem value="low">{t('impact.low')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={sourceFilter} onValueChange={(v) => v && setSourceFilter(v)}>
+                    <SelectTrigger className="h-8 w-[130px] text-xs" aria-label={t('source.label')}>
+                      <SelectValue>
+                        {(value) =>
+                          value === 'all'
+                            ? t('filters.allSources')
+                            : t(`source.${value as 'system' | 'manual' | 'prompt' | 'action'}`)
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t('filters.allSources')}</SelectItem>
+                      {(['system', 'manual', 'prompt', 'action'] as const).map((value) => (
+                        <SelectItem key={value} value={value}>
+                          <span className="flex flex-col">
+                            <span>{t(`source.${value}`)}</span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {t(`sourceHint.${value}`)}
+                            </span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* When it was suggested and the order, in one box: the order
+                      reads by the Suggested dates, newest first unless picked. */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      aria-label={`${t('suggestedRange.label')}: ${t(`suggestedRange.${suggestedRange}`)}, ${t('sort.label')}: ${t(`sort.${sortOrder as OpportunitySort}`)}`}
+                      className="flex h-8 w-fit items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent py-2 pr-2 pl-2.5 text-xs whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50"
+                    >
+                      {t(`suggestedRange.${suggestedRange}`)} ·{' '}
+                      {t(`sort.${sortOrder as OpportunitySort}`)}
+                      <ChevronDown className="pointer-events-none size-4 text-muted-foreground" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-44">
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel>{t('suggestedRange.label')}</DropdownMenuLabel>
+                        <DropdownMenuRadioGroup
+                          value={suggestedRange}
+                          onValueChange={(v) => setSuggestedRange(v as SuggestedRange)}
+                        >
+                          {SUGGESTED_VALUES.map((value) => (
+                            <DropdownMenuRadioItem
+                              key={value}
+                              value={value}
+                              closeOnClick
+                              className="text-xs"
+                            >
+                              {t(`suggestedRange.${value}`)}
+                            </DropdownMenuRadioItem>
+                          ))}
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuGroup>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel>{t('sort.label')}</DropdownMenuLabel>
+                        <DropdownMenuRadioGroup
+                          value={sortOrder}
+                          onValueChange={(v) => setSortOrder(v as string)}
+                        >
+                          {OPPORTUNITY_SORTS.map((value) => (
+                            <DropdownMenuRadioItem
+                              key={value}
+                              value={value}
+                              closeOnClick
+                              className="text-xs"
+                            >
+                              {t(`sort.${value}`)}
+                            </DropdownMenuRadioItem>
+                          ))}
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  {suggestedRange === 'custom' && (
+                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Input
+                        type="date"
+                        aria-label={t('suggestedRange.from')}
+                        value={customFrom}
+                        max={customTo || undefined}
+                        onChange={(e) => setCustomFrom(e.target.value)}
+                        className="h-8 w-[140px] text-xs"
+                      />
+                      –
+                      <Input
+                        type="date"
+                        aria-label={t('suggestedRange.to')}
+                        value={customTo}
+                        min={customFrom || undefined}
+                        onChange={(e) => setCustomTo(e.target.value)}
+                        className="h-8 w-[140px] text-xs"
+                      />
+                    </span>
+                  )}
+                  <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
+                    <SelectTrigger className="h-8 w-[130px] text-xs">
+                      <SelectValue>
+                        {(value) =>
+                          value === 'all' ? t('filters.allStatuses') : t(`status.${value}`)
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t('filters.allStatuses')}</SelectItem>
+                      <SelectItem value="new">{t('status.new')}</SelectItem>
+                      <SelectItem value="reviewed">{t('status.reviewed')}</SelectItem>
+                      <SelectItem value="sent">{t('status.sent')}</SelectItem>
+                      <SelectItem value="in_progress">{t('status.in_progress')}</SelectItem>
+                      <SelectItem value="done">{t('status.done')}</SelectItem>
+                      <SelectItem value="dismissed">{t('status.dismissed')}</SelectItem>
+                      <SelectItem value="archived">{t('status.archived')}</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </CardHeader>
@@ -882,7 +1426,10 @@ export default function ContentPage() {
               </div>
             )}
             <CardContent className="p-0">
-              <Table className="table-fixed">
+              {/* Below this width the table scrolls sideways rather than
+                  squeezing the action titles out of sight; 1024px still fits
+                  it with the sidebar open. */}
+              <Table className="min-w-[720px] table-fixed">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-10 pl-4">
@@ -897,15 +1444,51 @@ export default function ContentPage() {
                         }}
                       />
                     </TableHead>
-                    <TableHead className="pl-6 w-[40%]">{t('table.action')}</TableHead>
-                    <TableHead className="text-center">{t('table.type')}</TableHead>
-                    <TableHead className="text-center">{t('table.impact')}</TableHead>
-                    <TableHead className="text-center">{t('table.score')}</TableHead>
-                    <TableHead className="text-center">{t('table.status')}</TableHead>
-                    <TableHead className="text-right pr-6">{t('table.actions')}</TableHead>
+                    {/* The other columns are sized to fit their badges and buttons;
+                        the action takes what is left, so nothing spills into its
+                        neighbour on narrower screens. */}
+                    <TableHead className="pl-6">{t('table.action')}</TableHead>
+                    {/* Hidden on narrower screens, where the action column needs the room. */}
+                    <TableHead className="hidden w-[112px] whitespace-nowrap xl:table-cell">
+                      {t('table.suggested')}
+                    </TableHead>
+                    <TableHead className="w-[96px] text-center">{t('table.type')}</TableHead>
+                    <TableHead className="w-[88px] text-center">{t('table.impact')}</TableHead>
+                    <TableHead className="w-[72px] text-center">{t('table.score')}</TableHead>
+                    <TableHead className="w-[136px] text-center">{t('table.status')}</TableHead>
+                    <TableHead className="w-[176px] text-right pr-6">
+                      {t('table.actions')}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {Array.from({ length: pendingCount }, (_, i) => (
+                    <TableRow key={`pending-${i}`} aria-busy="true">
+                      <TableCell className="w-10 pl-4" />
+                      <TableCell className="pl-6">
+                        <Skeleton className="h-4 w-4/5" />
+                        <Skeleton className="mt-1.5 h-3 w-3/5" />
+                      </TableCell>
+                      <TableCell className="hidden xl:table-cell">
+                        <Skeleton className="h-3 w-12" />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Skeleton className="mx-auto h-5 w-14" />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Skeleton className="mx-auto h-5 w-14" />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Skeleton className="mx-auto h-4 w-6" />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="text-xs text-muted-foreground">
+                          {t('generatingRow')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell />
+                    </TableRow>
+                  ))}
                   {filtered.map((opp) => (
                     <TableRow key={opp.id} className="hover:bg-muted/50">
                       <TableCell className="w-10 pl-4">
@@ -920,22 +1503,74 @@ export default function ContentPage() {
                         />
                       </TableCell>
                       <TableCell className="pl-6 max-w-0">
-                        <Link
-                          href={`/dashboard/content/${opp.id}`}
-                          className="block hover:underline"
+                        <button
+                          type="button"
+                          onClick={() => selectOpportunity(opp.id)}
+                          className="block w-full text-left hover:underline"
                         >
-                          <p className="text-sm font-medium line-clamp-1">{opp.title}</p>
-                          {opp.description && (
-                            <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
-                              {opp.description}
-                            </p>
-                          )}
-                        </Link>
+                          <p className="text-sm font-medium line-clamp-1">
+                            {opp.sourceData?.reopened && opp.status === 'new' && (
+                              <Badge
+                                variant="outline"
+                                className="mr-1.5 border-amber-500/30 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-400"
+                              >
+                                {t('newSignal')}
+                              </Badge>
+                            )}
+                            {/* Before the title, which is clamped to one line. */}
+                            {opp.sourceData?.alternativeOf && (
+                              <Badge
+                                variant="outline"
+                                className="mr-1.5 align-middle text-[10px] font-normal text-muted-foreground"
+                                title={
+                                  t('alternative.of') + ' ' + opp.sourceData.alternativeOf.title
+                                }
+                              >
+                                {t('alternative.badge')}
+                              </Badge>
+                            )}
+                            {opp.source && opp.source !== 'system' && (
+                              <Badge
+                                variant="outline"
+                                className="mr-1.5 align-middle text-[10px] font-normal text-muted-foreground"
+                                title={t(`sourceHint.${opp.source}`)}
+                              >
+                                {t(`source.${opp.source}`)}
+                              </Badge>
+                            )}
+                            {opp.title}
+                          </p>
+                          <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                            <OpportunityScope opp={opp} />
+                            {opp.description}
+                          </p>
+                        </button>
+                      </TableCell>
+                      <TableCell className="hidden whitespace-nowrap text-xs text-muted-foreground xl:table-cell">
+                        <SuggestedCell
+                          createdAt={opp.createdAt}
+                          locale={locale}
+                          isNew={lastVisit !== null && Date.parse(opp.createdAt) > lastVisit}
+                          newLabel={t('newSinceVisit')}
+                        />
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline" className="text-xs">
-                          {t(`type.${opp.type}` as 'type.owned' | 'type.earned')}
-                        </Badge>
+                        <div className="flex flex-col items-center gap-1">
+                          <Badge
+                            variant="outline"
+                            className="text-xs"
+                            title={t(
+                              `typeHint.${opp.type}` as 'typeHint.owned' | 'typeHint.earned',
+                            )}
+                          >
+                            {t(`type.${opp.type}` as 'type.owned' | 'type.earned')}
+                          </Badge>
+                          {opp.decision && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              {t(`decision.${opp.decision}`)}
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge
@@ -992,12 +1627,18 @@ export default function ContentPage() {
                               </Button>
                             </>
                           )}
-                          <Link href={`/dashboard/content/${opp.id}`}>
+                          {/* The full page, in a new tab so the list stays put. */}
+                          <Link
+                            href={`/dashboard/content/${opp.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-7 px-2 text-xs"
-                              aria-label={t('viewDetails')}
+                              aria-label={t('openInNewTab')}
+                              title={t('openInNewTab')}
                             >
                               <ExternalLink className="h-3 w-3" />
                             </Button>
@@ -1032,10 +1673,39 @@ export default function ContentPage() {
         </>
       )}
 
+      <Sheet
+        open={openOpportunityId !== null}
+        onOpenChange={(open) => {
+          if (!open) selectOpportunity(null);
+        }}
+      >
+        <SheetContent className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-4xl">
+          <SheetTitle className="sr-only">{t('viewDetails')}</SheetTitle>
+          <div className="flex-1 overflow-y-auto p-6">
+            {openOpportunityId && (
+              <OpportunityDetail
+                key={openOpportunityId}
+                id={openOpportunityId}
+                inDrawer
+                onChanged={() => loadData(true)}
+              />
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
       <WebhookSettingsDialog
         open={webhookOpen}
         onOpenChange={setWebhookOpen}
         brandId={activeBrandId}
+      />
+      <NewOpportunitiesDialog
+        open={newOpen}
+        onOpenChange={setNewOpen}
+        brandId={activeBrandId}
+        max={requestMax}
+        remaining={contentUsage?.opportunities.remaining ?? -1}
+        onSubmit={handleNew}
       />
     </div>
   );

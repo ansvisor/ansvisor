@@ -4,9 +4,6 @@
 
 [![🚀 Try the Cloud — ansvisor.com](https://img.shields.io/badge/🚀_Try_the_Cloud-ansvisor.com-6366f1?style=for-the-badge&logoColor=white&logo=vercel)](https://www.ansvisor.com)
 [![📚 Docs](https://img.shields.io/badge/📚_Docs-docs.ansvisor.com-10b981?style=for-the-badge&logoColor=white&logo=readthedocs)](https://docs.ansvisor.com)
-[![🎬 Product Tour](https://img.shields.io/badge/🎬_Product_Tour-Watch_the_demo-f59e0b?style=for-the-badge&logoColor=white)](https://app.supademo.com/demo/cmq2b1p5k0rk9qm6ugicrn655)
-
-[![Star on GitHub](https://img.shields.io/github/stars/ansvisor/ansvisor?style=for-the-badge&logo=github&color=gold)](https://github.com/ansvisor/ansvisor)
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![Claude Code](https://img.shields.io/badge/Built%20with-Claude%20Code-green?style=for-the-badge&logo=anthropic)](https://claude.com/claude-code)
 
@@ -14,9 +11,9 @@
 
 # Ansvisor — Open-Source AI Search Intelligence Platform
 
-**[Official Website](https://www.ansvisor.com/)** · **[Documentation](https://docs.ansvisor.com/)**
+**[AI Visibility Platform](https://www.ansvisor.com/)** · **[Documentation](https://docs.ansvisor.com/)**
 
-**Business Data + AI Behavior → Intelligence → Opportunities → Actions**
+**Business + AI Search Data → Signals → Actions → Tasks → AI Visibility Outcomes**
 
 Ansvisor is an **open-source AI Search Intelligence Platform** that helps brands understand, measure, and improve their visibility across AI Search.
 
@@ -36,36 +33,42 @@ Our goal is to make AI Search intelligence more transparent, measurable, actiona
 
 ## Why Ansvisor?
 
-AI Search is changing how people discover, evaluate, and choose brands, making Answer Engine Optimization (AEO), Generative Engine Optimization (GEO), and AI SEO increasingly important for improving brand visibility in AI-generated answers.
+AI Search is becoming a new layer of how people discover, evaluate, compare, and choose brands.
 
-Traditional search data tells you how people find you through search engines. AI Search introduces another layer: how AI systems understand your brand, which sources they trust, when they mention or cite you, how competitors appear, and which prompts influence discovery.
+More than a billion people now use AI tools, with billions of AI-powered queries happening every day. Yet most companies are still early: only a small share have an integrated AI Search strategy, and meaningful brand visibility across AI-generated answers remains limited.
 
-Ansvisor brings these signals together.
+This creates a growing gap between how customers discover information and how companies understand and optimize their presence in that discovery process.
+
+Traditional search data tells you how people find you through search engines. AI Search introduces another layer: which prompts influence discovery, whether your brand appears, how competitors are represented, which sources AI systems rely on, when your website is cited, and whether that visibility translates into traffic and business outcomes.
+
+This shift is making [Answer Engine Optimization (AEO)](https://www.ansvisor.com/ai-visibility-glossary/aeo-answer-engine-optimization), [Generative Engine Optimization (GEO)](https://www.ansvisor.com/ai-visibility-glossary/geo-generative-engine-optimization), and AI SEO increasingly important.
+
+**Ansvisor is built to close this gap.**
+
+Instead of treating AI visibility as another isolated analytics dashboard, Ansvisor connects business data, traditional search signals, and AI Search behavior to help teams understand what is happening, discover where opportunities exist, prioritize what matters, and take action.
 
 With Ansvisor, you can:
 
-- **Monitor Answer Engine Insights & AI Visibility** — Track how your brand appears, performs, and is represented across leading AI platforms.
-- **Discover Prompts** — Find relevant prompt opportunities using Google Search Console, Google Analytics, Google Keyword Planner, and AI systems.
-- **Track Prompts** — Monitor the questions and conversations that matter to your audience and measure your visibility over time.
-- **Analyze Citations** — Discover which domains, URLs, competitors, and third-party sources AI systems cite.
-- **Track Mentions** — Understand when, where, and how AI systems talk about your brand, products, and services.
-- **Benchmark Competitors** — Compare your visibility, citations, mentions, and share of voice with competitors.
-- **Understand AI Traffic** — Connect AI Search visibility with visits and performance on your website.
-- **Discover Query Fan-Outs** — Explore the supporting queries AI systems may generate and use before producing an answer.
-- **Find Content Opportunities** — Identify content gaps, optimization opportunities, and topics based on real AI Search behavior.
-- **Audit AI Discoverability** — Analyze technical and content signals that can affect how AI systems discover, understand, and retrieve your website.
-- **MCP Server** — Connect Ansvisor's AI Search intelligence with AI assistants and agent workflows through the Model Context Protocol (MCP).
+- [**AI Search Intelligence Platform**](https://www.ansvisor.com/platform) — Bring AI visibility, prompts, citations, competitors, AI traffic, content intelligence, and optimization workflows together in one platform.
+- [**Action Center**](https://www.ansvisor.com/features/ai-search-actions-kpis-action-center) — Turn signals across your workspace and connected data sources into prioritized actions and tasks aligned with your AI Search KPIs.
+- [**Answer Engine Insights & AI Visibility**](https://www.ansvisor.com/features/answer-engine-insights) — Track how your brand appears, performs, and is represented across leading AI platforms.
+- [**Prompt Monitoring & Volumes**](https://www.ansvisor.com/features/prompt-monitoring-volumes) — Discover and track relevant prompts, analyze demand, and measure how your visibility changes over time.
+- [**AI Citation Monitoring**](https://www.ansvisor.com/features/citations-monitoring) — Discover which domains, URLs, competitors, and third-party sources AI systems cite.
+- [**Competitor Tracking & Benchmarking**](https://www.ansvisor.com/features/competitor-tracking-benchmarking) — Compare your visibility, citations, mentions, and share of voice with competitors.
+- [**AI Traffic Analytics**](https://www.ansvisor.com/features/ai-traffic-analytics) — Connect AI Search visibility with visits and performance on your website.
+- [**Query Fan-Out**](https://www.ansvisor.com/features/query-fan-out) — Explore the supporting queries AI systems may generate and use before producing an answer.
+- [**Content Intelligence & Optimization**](https://www.ansvisor.com/features/content-intelligence-optimization) — Identify content gaps, optimization opportunities, and topics based on AI Search behavior.
+- [**AI Visibility Site Audit**](https://www.ansvisor.com/features/ai-visibility-site-audit) — Analyze technical and content signals that can affect how AI systems discover, understand, and retrieve your website.
+- [**MCP Server**](https://docs.ansvisor.com/guides/mcp-server) — Connect Ansvisor's AI Search intelligence with AI assistants and agent workflows through the Model Context Protocol (MCP).
 
 The result is a clearer path from fragmented data to useful intelligence:
-
-**Business Data + AI Behavior → Intelligence → Opportunities → Actions**
 
 ---
 
 ## Resources
 
 - 📜 [Read the Ansvisor Manifesto](https://www.ansvisor.com/manifesto)
-- 🎯 [Take an Interactive Product Tour](https://app.supademo.com/demo/cmq2b1p5k0rk9qm6ugicrn655?utm_source=link)
+- 🔌 [Explore Ansvisor Integrations](https://www.ansvisor.com/integration)
 - 📖 [Explore the AI Visibility Glossary](https://www.ansvisor.com/ai-visibility-glossary)
 - ✍️ [Read the Blog](https://www.ansvisor.com/blog)
 - 🔍 [Compare Ansvisor vs Alternatives](https://www.ansvisor.com/compare)
@@ -76,11 +79,9 @@ The result is a clearer path from fragmented data to useful intelligence:
 
 Ansvisor is built for teams that want transparency, flexibility, and control.
 
-You can inspect the code, understand how the platform works, contribute to its development, and deploy it on your own infrastructure.
+Inspect the code, contribute to the platform, and deploy Ansvisor on your own infrastructure — or use [Ansvisor Cloud](https://www.ansvisor.com/) without managing infrastructure yourself.
 
-Or use [Ansvisor Cloud](https://www.ansvisor.com/) without managing infrastructure yourself.
-
-Whether you're an enterprise, agency, e-commerce brand, SaaS company, startup, or developer, Ansvisor provides an intelligence layer for understanding and improving your presence across AI Search.
+Whether you're an enterprise, agency, e-commerce brand, SaaS company, startup, or developer, Ansvisor helps turn business and AI Search data into signals, actions, and tasks designed to improve AI visibility outcomes.
 
 ---
 
@@ -88,15 +89,15 @@ Whether you're an enterprise, agency, e-commerce brand, SaaS company, startup, o
 
 Ansvisor helps you monitor and analyze brand visibility across:
 
-- ChatGPT
-- Google AI Overviews
-- Google AI Mode
-- Gemini
-- Claude
-- Perplexity
-- Microsoft Copilot
-- Grok
-- ChatGPT Shopping
+- [**ChatGPT AI Visibility Tracker**](https://www.ansvisor.com/features/chatgpt-visibility-tracker)
+- [**Google AI Overviews Rank Tracker**](https://www.ansvisor.com/features/google-ai-overviews-rank-tracker)
+- [**Google AI Mode Rank Tracker**](https://www.ansvisor.com/features/google-ai-mode-visibility-tracker)
+- [**Gemini AI Visibility Tracker**](https://www.ansvisor.com/features/gemini-visibility-tracker)
+- [**Claude AI Visibility Tracker**](https://www.ansvisor.com/features/claude-ai-visibility-tracker)
+- [**Perplexity AI Visibility Tracker**](https://www.ansvisor.com/features/perplexity-visibility-tracker)
+- [**Microsoft Copilot AI Visibility Tracker**](https://www.ansvisor.com/features/microsoft-copilot-visibility-tracker)
+- [**Grok AI Visibility Tracker**](https://www.ansvisor.com/features/grok-visibility-tracker)
+- [**ChatGPT AI Shopping Tracker**](https://www.ansvisor.com/features/ai-shopping-analytics)
 - and other AI-powered discovery experiences
 
 ---
@@ -113,16 +114,7 @@ We're building Ansvisor together with our open-source community around a few sim
 - **Outcomes over vanity metrics**
 - **Collaboration over closed innovation**
 
-Developers, marketers, SEO/AEO/GEO practitioners, researchers, agencies, and companies are welcome to contribute.
-
-You can help by:
-
-- Reporting issues
-- Suggesting features
-- Opening pull requests
-- Testing new releases
-- Improving documentation
-- Sharing feedback
+Developers, marketers, SEO/AEO/GEO practitioners, researchers, agencies, and companies are welcome to contribute through issues, feature ideas, pull requests, testing, documentation, and feedback.
 
 ---
 
@@ -132,25 +124,13 @@ You can help by:
 
 The fastest way to get started without managing infrastructure.
 
-[**Start with Ansvisor Cloud →**](https://www.ansvisor.com/)
+[**Start with Ansvisor Cloud →**](https://app.ansvisor.com/sign-up)
 
 ### Self-Hosted
 
 Deploy Ansvisor on your own infrastructure and maintain control over your environment and data.
 
 [**Self-host Ansvisor →**](https://github.com/ansvisor/ansvisor)
-
----
-
-## Building the Open Future of AI Search
-
-AI Search shouldn't become another ecosystem where companies have to rely entirely on opaque tools, unexplained scores, and assumptions.
-
-We're building Ansvisor to help companies understand what happens between a user's prompt and an AI-generated answer — from the questions people ask and the sources AI systems use to citations, mentions, competitors, traffic, and opportunities.
-
-Our goal is to move beyond visibility monitoring toward intelligence that helps teams understand **where opportunities exist, why they matter, and what to improve next.**
-
-**Business Data + AI Behavior → Intelligence → Opportunities → Actions**
 
 ---
 

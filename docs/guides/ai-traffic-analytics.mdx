@@ -46,16 +46,18 @@ Most analytics platforms (Google Analytics, Plausible, etc.) lump AI traffic int
 
 ## Supported AI sources
 
-Pixel detects and classifies referrers from:
+The pixel and the Google Analytics sync count the same AI assistants, from one list (`server/src/lib/ai-sources.json`):
 
-- ChatGPT (chatgpt.com, chat.openai.com, search.chatgpt.com)
+- ChatGPT (chatgpt.com, chat.openai.com)
 - Perplexity (perplexity.ai)
 - Claude (claude.ai)
 - Gemini (gemini.google.com)
-- Copilot (copilot.microsoft.com)
-- You.com, Phind, Meta AI, Poe
+- Copilot (copilot.microsoft.com, copilot.com, and Bing links from Copilot answers)
+- Grok, DeepSeek, Meta AI, You.com, Phind, Poe, Google Labs
 
-Anything else falls into `unknown` — likely a future AI source we haven't catalogued yet. The list is updated regularly.
+A visit counts when the referrer is one of these hosts or a subdomain of it (m.perplexity.ai), or, without one, when the link's `utm_source` names it (ChatGPT adds `utm_source=chatgpt.com`). A name inside another host doesn't count.
+
+Google Analytics also counts its own **AI Assistant** channel, so an assistant that isn't on the list yet still shows, under its source's name. The list is versioned: each change is dated in the file, and every stored visit records the version that counted it.
 
 ## Privacy
 

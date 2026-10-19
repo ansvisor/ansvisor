@@ -28,6 +28,7 @@ import {
 } from '@/components/citations/filter-bar';
 import { AddCompetitorButton } from '@/components/citations/add-competitor-button';
 import { CategoryBadge, DomainFavicon, PlatformsCell } from '@/components/citations/source-cells';
+import { PositionLabel } from '@/components/position-label';
 import { TablePager, usePagination } from '@/components/table-pager';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -100,29 +101,6 @@ function SentimentBadge({ sentiment }: { sentiment: string | null }) {
     >
       {sentiment}
     </Badge>
-  );
-}
-
-/** "Early · #2 of 7" — where in the answer the URL's first citation sits. */
-function PositionCell({ rank, totalSources }: { rank: number; totalSources: number }) {
-  const ratio = totalSources > 1 ? (rank - 1) / (totalSources - 1) : 0;
-  const tone = ratio <= 1 / 3 ? 'Early' : ratio >= 2 / 3 ? 'Late' : 'Mid';
-  return (
-    <span className="text-xs tabular-nums whitespace-nowrap">
-      <span
-        className={cn(
-          'font-medium',
-          tone === 'Early' && 'text-emerald-600 dark:text-emerald-400',
-          tone === 'Late' && 'text-amber-600 dark:text-amber-400',
-        )}
-      >
-        {tone}
-      </span>
-      <span className="text-muted-foreground">
-        {' '}
-        · #{rank} of {totalSources}
-      </span>
-    </span>
   );
 }
 
@@ -471,7 +449,8 @@ export default function CitationUrlDetailPage() {
                         )}
                       </TableCell>
                       <TableCell className="pr-6">
-                        <PositionCell rank={o.rank} totalSources={o.totalSources} />
+                        {/* Where in the answer the URL's first citation sits. */}
+                        <PositionLabel rank={o.rank} total={o.totalSources} />
                       </TableCell>
                     </TableRow>
                   ))}

@@ -9,11 +9,14 @@ import { getCompetitors, addCompetitor, deleteCompetitor } from '@/lib/actions/c
 import {
   getCompetitorComparison,
   getHeadToHeadComparison,
+  getHeadToHeadRuns,
   type CompetitorComparisonData,
-  type HeadToHeadData,
-  type HeadToHeadPromptRow,
 } from '@/lib/actions/tracking';
+import type { HeadToHeadData, HeadToHeadGroup, HeadToHeadRun } from '@/lib/head-to-head';
 import { getFaviconUrl } from '@/lib/favicon';
+import { toCsv } from '@/lib/csv';
+import { slugify } from '@/lib/slug';
+import { readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { MODEL_LABELS } from '@/config/platform-labels';
 import type { Competitor } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -59,6 +62,7 @@ import {
   ShieldAlert,
   ChevronDown,
   Eye,
+  Download,
 } from 'lucide-react';
 
 // ─── Shared Visual Components (mirroring Insights) ───────────────────────────
@@ -466,76 +470,40 @@ interface PromptComparisonGroup {
   promptId: string;
   promptText: string;
   promptCategory?: string;
-  rows: HeadToHeadData['promptRows'];
+  groups: HeadToHeadGroup[];
+  runs: number;
+  latestAt: string;
   avgBrandScore: number;
   avgCompetitorScore: number;
   avgDiff: number;
 }
 
-function groupH2HByPrompt(rows: HeadToHeadData['promptRows']): PromptComparisonGroup[] {
-  const map = new Map<string, HeadToHeadData['promptRows']>();
-  for (const r of rows) {
-    const arr = map.get(r.promptId) || [];
-    arr.push(r);
-    map.set(r.promptId, arr);
+/** Fold engine groups into one row per prompt, weighting each engine by its runs. */
+function groupH2HByPrompt(groups: HeadToHeadGroup[]): PromptComparisonGroup[] {
+  const map = new Map<string, HeadToHeadGroup[]>();
+  for (const g of groups) {
+    const arr = map.get(g.promptId) || [];
+    arr.push(g);
+    map.set(g.promptId, arr);
   }
-  return Array.from(map.entries()).map(([promptId, items]) => {
-    const avgB = Math.round(items.reduce((s, r) => s + r.brandScore, 0) / items.length);
-    const avgC = Math.round(items.reduce((s, r) => s + r.competitorScore, 0) / items.length);
-    return {
-      promptId,
-      promptText: items[0].promptText,
-      promptCategory: items[0].promptCategory,
-      rows: items,
-      avgBrandScore: avgB,
-      avgCompetitorScore: avgC,
-      avgDiff: avgB - avgC,
-    };
-  });
-}
-
-interface ModelComparisonGroup {
-  key: string;
-  platform: string;
-  modelUsed: string;
-  region?: string;
-  rows: HeadToHeadPromptRow[];
-  latest: HeadToHeadPromptRow;
-  avgBrandScore: number;
-  avgCompetitorScore: number;
-  avgDiff: number;
-}
-
-function groupH2HByModel(rows: HeadToHeadPromptRow[]): ModelComparisonGroup[] {
-  const map = new Map<string, HeadToHeadPromptRow[]>();
-  for (const r of rows) {
-    const key = `${r.platform}|${r.modelUsed ?? ''}|${r.region ?? ''}`;
-    const arr = map.get(key) || [];
-    arr.push(r);
-    map.set(key, arr);
-  }
-
   return Array.from(map.entries())
-    .map(([key, items]) => {
-      const sorted = [...items].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-      const latest = sorted[0];
-      const avgB = Math.round(sorted.reduce((s, r) => s + r.brandScore, 0) / sorted.length);
-      const avgC = Math.round(sorted.reduce((s, r) => s + r.competitorScore, 0) / sorted.length);
+    .map(([promptId, items]) => {
+      const runs = items.reduce((s, g) => s + g.runs, 0);
+      const avgB = Math.round(items.reduce((s, g) => s + g.brandScore * g.runs, 0) / runs);
+      const avgC = Math.round(items.reduce((s, g) => s + g.competitorScore * g.runs, 0) / runs);
       return {
-        key,
-        platform: latest.platform,
-        modelUsed: latest.modelUsed,
-        region: latest.region,
-        rows: sorted,
-        latest,
+        promptId,
+        promptText: items[0].promptText,
+        promptCategory: items[0].promptCategory,
+        groups: [...items].sort((a, b) => b.brandScore - a.brandScore),
+        runs,
+        latestAt: items.reduce((max, g) => (g.latestAt > max ? g.latestAt : max), ''),
         avgBrandScore: avgB,
         avgCompetitorScore: avgC,
         avgDiff: avgB - avgC,
-      } satisfies ModelComparisonGroup;
+      };
     })
-    .sort((a, b) => b.avgBrandScore - a.avgBrandScore);
+    .sort((a, b) => b.latestAt.localeCompare(a.latestAt));
 }
 
 function formatTimestamp(iso: string): string {
@@ -546,23 +514,61 @@ function formatTimestamp(iso: string): string {
   });
 }
 
+type LoadRuns = (group: HeadToHeadGroup, limit: number) => Promise<HeadToHeadRun[]>;
+
+const RUN_HISTORY_LIMIT = 50;
+
 function ModelSubGroup({
   group,
   expanded,
   onToggle,
-  onViewRow,
+  onViewResult,
+  loadRuns,
   brandName,
   competitorName,
 }: {
-  group: ModelComparisonGroup;
+  group: HeadToHeadGroup;
   expanded: boolean;
   onToggle: () => void;
-  onViewRow: (row: HeadToHeadPromptRow) => void;
+  onViewResult: (resultId: string) => void;
+  loadRuns: LoadRuns;
   brandName: string;
   competitorName: string;
 }) {
   const t = useTranslations('competitors');
-  const hasHistory = group.rows.length > 1;
+  const hasHistory = group.runs > 1;
+  const [runs, setRuns] = useState<HeadToHeadRun[] | null>(null);
+  const [runsFailed, setRunsFailed] = useState(false);
+  const [openingLatest, setOpeningLatest] = useState(false);
+
+  useEffect(() => {
+    if (!expanded || !hasHistory || runs !== null) return;
+    let cancelled = false;
+    setRunsFailed(false);
+    loadRuns(group, RUN_HISTORY_LIMIT)
+      .then((loaded) => {
+        if (!cancelled) setRuns(loaded);
+      })
+      .catch(() => {
+        if (!cancelled) setRunsFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [expanded, hasHistory, runs, group, loadRuns]);
+
+  const viewLatest = async () => {
+    if (openingLatest) return;
+    setOpeningLatest(true);
+    try {
+      const [latest] = runs ?? (await loadRuns(group, 1));
+      if (latest) onViewResult(latest.resultId);
+    } catch {
+      toast.error(t('h2h.loadError'));
+    } finally {
+      setOpeningLatest(false);
+    }
+  };
 
   return (
     <div className="rounded-md border bg-background/50">
@@ -596,35 +602,41 @@ function ModelSubGroup({
             </Badge>
           )}
           <span className="text-[10px] text-muted-foreground tabular-nums ml-1">
-            {group.rows.length} run{group.rows.length !== 1 ? 's' : ''}
+            {group.runs} run{group.runs !== 1 ? 's' : ''}
           </span>
         </div>
         <div className="flex items-center gap-4 shrink-0">
           <div className="text-right">
             <p className="text-[10px] text-muted-foreground">{t('h2h.you')}</p>
-            <p className="text-xs font-semibold tabular-nums">{group.avgBrandScore}%</p>
+            <p className="text-xs font-semibold tabular-nums">{Math.round(group.brandScore)}%</p>
           </div>
           <div className="text-right">
             <p className="text-[10px] text-muted-foreground">{t('h2h.them')}</p>
-            <p className="text-xs font-semibold tabular-nums">{group.avgCompetitorScore}%</p>
+            <p className="text-xs font-semibold tabular-nums">
+              {Math.round(group.competitorScore)}%
+            </p>
           </div>
           <div className="text-right min-w-[48px]">
             <p className="text-[10px] text-muted-foreground">{t('h2h.diff')}</p>
-            <DiffBadge diff={group.avgDiff} />
+            <DiffBadge diff={Math.round(group.brandScore) - Math.round(group.competitorScore)} />
           </div>
-          <SentimentBadge sentiment={group.latest.sentiment} />
           <Button
             variant="ghost"
             size="icon"
             className="h-7 w-7"
             title="View latest AI response"
+            disabled={openingLatest}
             onClick={(e) => {
               e.stopPropagation();
-              onViewRow(group.latest);
+              void viewLatest();
             }}
             aria-label="View latest AI response"
           >
-            <Eye className="h-3.5 w-3.5" />
+            {openingLatest ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Eye className="h-3.5 w-3.5" />
+            )}
           </Button>
         </div>
       </div>
@@ -634,54 +646,62 @@ function ModelSubGroup({
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium mb-1.5">
             Previous runs
           </p>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-[10px] h-7">Date</TableHead>
-                <TableHead className="text-[10px] h-7 text-center">{brandName}</TableHead>
-                <TableHead className="text-[10px] h-7 text-center">{competitorName}</TableHead>
-                <TableHead className="text-[10px] h-7 text-center">{t('h2h.diff')}</TableHead>
-                <TableHead className="text-[10px] h-7 text-center">Sentiment</TableHead>
-                <TableHead className="text-[10px] h-7 w-[60px]" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {group.rows.map((row) => (
-                <TableRow key={row.resultId} className="hover:bg-muted/30">
-                  <TableCell className="text-xs text-muted-foreground py-1.5">
-                    {formatTimestamp(row.createdAt)}
-                  </TableCell>
-                  <TableCell className="text-center py-1.5 text-xs font-semibold tabular-nums">
-                    {Math.round(row.brandScore)}%
-                  </TableCell>
-                  <TableCell className="text-center py-1.5 text-xs font-semibold tabular-nums">
-                    {Math.round(row.competitorScore)}%
-                  </TableCell>
-                  <TableCell className="text-center py-1.5">
-                    <DiffBadge diff={Math.round(row.brandScore - row.competitorScore)} />
-                  </TableCell>
-                  <TableCell className="text-center py-1.5">
-                    <SentimentBadge sentiment={row.sentiment} />
-                  </TableCell>
-                  <TableCell className="text-center py-1.5">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      title="View AI response"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onViewRow(row);
-                      }}
-                      aria-label="View AI response"
-                    >
-                      <Eye className="h-3 w-3" />
-                    </Button>
-                  </TableCell>
+          {runsFailed ? (
+            <p className="py-2 text-xs text-muted-foreground">{t('h2h.loadError')}</p>
+          ) : runs === null ? (
+            <div className="flex justify-center py-3">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-[10px] h-7">Date</TableHead>
+                  <TableHead className="text-[10px] h-7 text-center">{brandName}</TableHead>
+                  <TableHead className="text-[10px] h-7 text-center">{competitorName}</TableHead>
+                  <TableHead className="text-[10px] h-7 text-center">{t('h2h.diff')}</TableHead>
+                  <TableHead className="text-[10px] h-7 text-center">Sentiment</TableHead>
+                  <TableHead className="text-[10px] h-7 w-[60px]" />
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {runs.map((row) => (
+                  <TableRow key={row.resultId} className="hover:bg-muted/30">
+                    <TableCell className="text-xs text-muted-foreground py-1.5">
+                      {formatTimestamp(row.createdAt)}
+                    </TableCell>
+                    <TableCell className="text-center py-1.5 text-xs font-semibold tabular-nums">
+                      {Math.round(row.brandScore)}%
+                    </TableCell>
+                    <TableCell className="text-center py-1.5 text-xs font-semibold tabular-nums">
+                      {Math.round(row.competitorScore)}%
+                    </TableCell>
+                    <TableCell className="text-center py-1.5">
+                      <DiffBadge diff={Math.round(row.brandScore - row.competitorScore)} />
+                    </TableCell>
+                    <TableCell className="text-center py-1.5">
+                      <SentimentBadge sentiment={row.sentiment} />
+                    </TableCell>
+                    <TableCell className="text-center py-1.5">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        title="View AI response"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onViewResult(row.resultId);
+                        }}
+                        aria-label="View AI response"
+                      >
+                        <Eye className="h-3 w-3" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </div>
       )}
     </div>
@@ -689,18 +709,20 @@ function ModelSubGroup({
 }
 
 function PromptComparisonGrouped({
-  rows,
+  groups: engineGroups,
   brandName,
   competitorName,
-  onViewRow,
+  onViewResult,
+  loadRuns,
 }: {
-  rows: HeadToHeadData['promptRows'];
+  groups: HeadToHeadGroup[];
   brandName: string;
   competitorName: string;
-  onViewRow: (row: HeadToHeadPromptRow) => void;
+  onViewResult: (resultId: string) => void;
+  loadRuns: LoadRuns;
 }) {
   const t = useTranslations('competitors');
-  const groups = groupH2HByPrompt(rows);
+  const groups = groupH2HByPrompt(engineGroups);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
 
@@ -732,7 +754,7 @@ function PromptComparisonGrouped({
     <div className="space-y-2">
       {groups.map((group) => {
         const isOpen = expanded.has(group.promptId);
-        const modelGroups = groupH2HByModel(group.rows);
+        const modelGroups = group.groups;
         return (
           <div key={group.promptId} className="rounded-lg border overflow-hidden">
             {/* Group Header */}
@@ -764,8 +786,8 @@ function PromptComparisonGrouped({
                   )}
                   <span className="text-[11px] text-muted-foreground">
                     {modelGroups.length} platform
-                    {modelGroups.length !== 1 ? 's' : ''} · {group.rows.length} result
-                    {group.rows.length !== 1 ? 's' : ''}
+                    {modelGroups.length !== 1 ? 's' : ''} · {group.runs} result
+                    {group.runs !== 1 ? 's' : ''}
                   </span>
                 </div>
               </div>
@@ -789,14 +811,15 @@ function PromptComparisonGrouped({
             {isOpen && (
               <div className="border-t px-3 py-2 space-y-1.5 bg-muted/10">
                 {modelGroups.map((mg) => {
-                  const compositeKey = `${group.promptId}::${mg.key}`;
+                  const compositeKey = `${group.promptId}::${mg.rawPlatform ?? ''}|${mg.rawModelUsed ?? ''}|${mg.region ?? ''}`;
                   return (
                     <ModelSubGroup
                       key={compositeKey}
                       group={mg}
                       expanded={expandedModels.has(compositeKey)}
                       onToggle={() => toggleModel(compositeKey)}
-                      onViewRow={onViewRow}
+                      onViewResult={onViewResult}
+                      loadRuns={loadRuns}
                       brandName={brandName}
                       competitorName={competitorName}
                     />
@@ -816,14 +839,14 @@ function PromptComparisonGrouped({
 interface GapStrengthGroup {
   promptId: string;
   promptText: string;
-  items: HeadToHeadData['gaps'];
+  items: HeadToHeadGroup[];
   avgBrandScore: number;
   avgCompetitorScore: number;
   avgDiff: number;
 }
 
-function groupGapStrengthByPrompt(items: HeadToHeadData['gaps']): GapStrengthGroup[] {
-  const map = new Map<string, HeadToHeadData['gaps']>();
+function groupGapStrengthByPrompt(items: HeadToHeadGroup[]): GapStrengthGroup[] {
+  const map = new Map<string, HeadToHeadGroup[]>();
   for (const item of items) {
     const arr = map.get(item.promptId) || [];
     arr.push(item);
@@ -847,13 +870,7 @@ function groupGapStrengthByPrompt(items: HeadToHeadData['gaps']): GapStrengthGro
     .sort((a, b) => a.avgDiff - b.avgDiff);
 }
 
-function GapStrengthList({
-  items,
-  type,
-}: {
-  items: HeadToHeadData['gaps'];
-  type: 'gap' | 'strength';
-}) {
+function GapStrengthList({ items, type }: { items: HeadToHeadGroup[]; type: 'gap' | 'strength' }) {
   const t = useTranslations('competitors');
   const isGap = type === 'gap';
   const groups = groupGapStrengthByPrompt(items);
@@ -950,9 +967,9 @@ function GapStrengthList({
                   ) : (
                     <span className="text-xs text-muted-foreground">—</span>
                   )}
-                  {!hasMultiple && group.items[0].createdAt && (
+                  {!hasMultiple && group.items[0].latestAt && (
                     <span className="text-muted-foreground">
-                      {new Date(group.items[0].createdAt).toLocaleDateString(undefined, {
+                      {new Date(group.items[0].latestAt).toLocaleDateString(undefined, {
                         day: 'numeric',
                         month: 'short',
                         year: 'numeric',
@@ -1000,9 +1017,9 @@ function GapStrengthList({
                     <span className="tabular-nums text-muted-foreground">
                       {t('h2h.them')}: {Math.round(item.competitorScore)}%
                     </span>
-                    {item.createdAt && (
+                    {item.latestAt && (
                       <span className="text-muted-foreground whitespace-nowrap">
-                        {new Date(item.createdAt).toLocaleDateString(undefined, {
+                        {new Date(item.latestAt).toLocaleDateString(undefined, {
                           day: 'numeric',
                           month: 'short',
                         })}
@@ -1026,10 +1043,12 @@ function HeadToHeadSection({
   data,
   brandName,
   competitorName,
+  loadRuns,
 }: {
   data: HeadToHeadData;
   brandName: string;
   competitorName: string;
+  loadRuns: LoadRuns;
 }) {
   const t = useTranslations('competitors');
   const router = useRouter();
@@ -1118,10 +1137,11 @@ function HeadToHeadSection({
         </CardHeader>
         <CardContent className="pt-0">
           <PromptComparisonGrouped
-            rows={data.promptRows}
+            groups={data.groups}
             brandName={brandName}
             competitorName={competitorName}
-            onViewRow={(row) => router.push(`/dashboard/insights/${row.resultId}`)}
+            onViewResult={(resultId) => router.push(`/dashboard/insights/${resultId}`)}
+            loadRuns={loadRuns}
           />
         </CardContent>
       </Card>
@@ -1129,10 +1149,54 @@ function HeadToHeadSection({
   );
 }
 
+/** The trailing 30 calendar days ending today (UTC), as Insights' 30d preset. */
+function last30Days() {
+  const dayTo = new Date().toISOString().slice(0, 10);
+  const from = new Date(`${dayTo}T00:00:00Z`);
+  from.setUTCDate(from.getUTCDate() - 29);
+  const dayFrom = from.toISOString().slice(0, 10);
+  return { dateFrom: `${dayFrom}T00:00:00.000Z`, days: { dayFrom, dayTo } };
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
+
+const BENCHMARK_EXPORT_HEADERS = [
+  'name',
+  'is_own_brand',
+  'visibility_score',
+  'visible_prompts',
+  'prompt_count',
+  'mention_answers',
+  'citation_answers',
+  'mentions',
+  'citations',
+];
+
+const HEAD_TO_HEAD_EXPORT_HEADERS = [
+  'prompt',
+  'platform',
+  'model',
+  'region',
+  'runs',
+  'brand_score',
+  'competitor_score',
+  'difference',
+  'latest_at',
+];
+
+function downloadCsv(csv: string, fileName: string) {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function CompetitorsPage() {
   const t = useTranslations('competitors');
+  const common = useTranslations('common');
   const { canUse, isCloud } = useFeatureGate();
   const brand = useBrandStore((s) => s.getActiveBrand());
 
@@ -1145,6 +1209,19 @@ export default function CompetitorsPage() {
 
   // Head-to-head
   const [selectedCompetitorId, setSelectedCompetitorId] = useState<string | null>(null);
+  // ?competitor=<id> (#893): the head-to-head selection survives a refresh and
+  // can be linked to, e.g. from the Insights leaderboard. Read after mount;
+  // applied once the brand's competitors are known, so an unknown id is ignored.
+  const [linkedCompetitorId, setLinkedCompetitorId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLinkedCompetitorId(readUrlParam('competitor') || null);
+  }, []);
+
+  const selectCompetitor = useCallback((id: string | null) => {
+    setSelectedCompetitorId(id);
+    writeUrlParams({ competitor: id });
+  }, []);
   const [h2hData, setH2hData] = useState<HeadToHeadData | null>(null);
   const [h2hLoading, setH2hLoading] = useState(false);
 
@@ -1154,10 +1231,10 @@ export default function CompetitorsPage() {
     try {
       const [comps, comparison] = await Promise.all([
         getCompetitors(brand.id),
-        // Empty day window = all-time served from the daily rollups; without
-        // it the raw all-time scan exceeds the 8s statement timeout on
-        // brands with a large result history.
-        getCompetitorComparison(brand.id, { days: {} }),
+        // The last 30 days, served from the daily rollups. All-time read
+        // every rollup row the brand ever had and was nearing the 8s
+        // statement timeout on the largest brand.
+        getCompetitorComparison(brand.id, last30Days()),
       ]);
       setCompetitors(comps);
       setComparisonData(comparison.brands.length > 1 ? comparison : null);
@@ -1171,6 +1248,14 @@ export default function CompetitorsPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (!linkedCompetitorId || loading) return;
+    selectCompetitor(
+      competitors.some((c) => c.id === linkedCompetitorId) ? linkedCompetitorId : null,
+    );
+    setLinkedCompetitorId(null);
+  }, [linkedCompetitorId, loading, competitors, selectCompetitor]);
 
   // Load head-to-head when a competitor is selected
   const loadH2H = useCallback(
@@ -1197,6 +1282,24 @@ export default function CompetitorsPage() {
       setH2hData(null);
     }
   }, [selectedCompetitorId, loadH2H]);
+
+  const loadRuns = useCallback(
+    (group: HeadToHeadGroup, limit: number) => {
+      if (!brand || !selectedCompetitorId) return Promise.resolve([]);
+      return getHeadToHeadRuns(
+        brand.id,
+        selectedCompetitorId,
+        {
+          promptId: group.promptId,
+          rawPlatform: group.rawPlatform,
+          rawModelUsed: group.rawModelUsed,
+          region: group.region ?? null,
+        },
+        limit,
+      );
+    },
+    [brand, selectedCompetitorId],
+  );
 
   if (isCloud && !canUse('competitor_tracking')) {
     return <PlanGateOverlay />;
@@ -1250,7 +1353,7 @@ export default function CompetitorsPage() {
       await deleteCompetitor(id);
       toast.success(t('deleteSuccess'));
       if (selectedCompetitorId === id) {
-        setSelectedCompetitorId(null);
+        selectCompetitor(null);
       }
       loadData();
     } catch {
@@ -1261,6 +1364,45 @@ export default function CompetitorsPage() {
   }
 
   const selectedCompetitor = competitors.find((c) => c.id === selectedCompetitorId);
+  const today = new Date().toISOString().slice(0, 10);
+
+  function exportBenchmark() {
+    if (!brand || !comparisonData?.brands.length) return;
+    const rows = comparisonData.brands.map((e) => ({
+      name: e.name,
+      is_own_brand: e.isOwnBrand,
+      visibility_score: e.score ?? '',
+      visible_prompts: e.visiblePrompts,
+      prompt_count: e.promptCount,
+      mention_answers: e.mentionAnswers,
+      citation_answers: e.citationAnswers,
+      mentions: e.totalMentions,
+      citations: e.totalCitations,
+    }));
+    downloadCsv(
+      toCsv(rows, BENCHMARK_EXPORT_HEADERS),
+      `ansvisor_${brand.slug}_competitors_${today}.csv`,
+    );
+  }
+
+  function exportHeadToHead() {
+    if (!brand || !h2hData?.groups.length || !selectedCompetitor) return;
+    const rows = h2hData.groups.map((g) => ({
+      prompt: g.promptText,
+      platform: g.platform,
+      model: g.modelUsed,
+      region: g.region ?? '',
+      runs: g.runs,
+      brand_score: g.brandScore,
+      competitor_score: g.competitorScore,
+      difference: g.diff,
+      latest_at: g.latestAt,
+    }));
+    downloadCsv(
+      toCsv(rows, HEAD_TO_HEAD_EXPORT_HEADERS),
+      `ansvisor_${brand.slug}_head-to-head_${slugify(selectedCompetitor.name)}_${today}.csv`,
+    );
+  }
 
   if (loading) {
     return (
@@ -1297,14 +1439,28 @@ export default function CompetitorsPage() {
           {/* Competitor List */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Users className="h-4 w-4" />
-                {t('trackedCompetitors')}
-                <Badge variant="secondary" className="text-xs">
-                  {competitors.length}
-                </Badge>
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">{t('selectToCompare')}</p>
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Users className="h-4 w-4" />
+                  {t('trackedCompetitors')}
+                  <Badge variant="secondary" className="text-xs">
+                    {competitors.length}
+                  </Badge>
+                </CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={exportBenchmark}
+                  disabled={!comparisonData?.brands.length}
+                >
+                  <Download className="h-4 w-4" />
+                  {common('exportCsv')}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t('selectToCompare')} {t('windowLast30Days')}
+              </p>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -1315,7 +1471,7 @@ export default function CompetitorsPage() {
                     stats={scoreMap.get(comp.name) ?? null}
                     isSelected={selectedCompetitorId === comp.id}
                     onSelect={() =>
-                      setSelectedCompetitorId(selectedCompetitorId === comp.id ? null : comp.id)
+                      selectCompetitor(selectedCompetitorId === comp.id ? null : comp.id)
                     }
                     onDelete={() => setConfirmDelete(comp)}
                     deleting={deleting === comp.id}
@@ -1336,17 +1492,28 @@ export default function CompetitorsPage() {
                     competitor: selectedCompetitor?.name ?? '',
                   })}
                 </h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="ml-auto gap-2"
+                  onClick={exportHeadToHead}
+                  disabled={h2hLoading || !h2hData?.groups.length}
+                >
+                  <Download className="h-4 w-4" />
+                  {common('exportCsv')}
+                </Button>
               </div>
 
               {h2hLoading ? (
                 <div className="flex items-center justify-center py-16">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
-              ) : h2hData && h2hData.promptRows.length > 0 ? (
+              ) : h2hData && h2hData.groups.length > 0 ? (
                 <HeadToHeadSection
                   data={h2hData}
                   brandName={brand.name}
                   competitorName={selectedCompetitor?.name ?? ''}
+                  loadRuns={loadRuns}
                 />
               ) : (
                 <Card>

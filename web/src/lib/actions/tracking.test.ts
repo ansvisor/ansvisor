@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const promptResultRow = {
   id: 'result-id',
@@ -24,11 +24,39 @@ const promptResultRow = {
   created_at: '2026-07-07T00:00:00.000Z',
 };
 
+let promptResultRead: { data: unknown; error: { message: string } | null } = {
+  data: promptResultRow,
+  error: null,
+};
+
+// List reads: the rows each table answers (none by default), and every
+// query's calls in order.
+let listRows: Record<string, unknown[]> = {};
+let listQueries: { table: string; calls: unknown[][] }[] = [];
+
 function fakeQueryBuilder(table: string) {
+  const query = { table, calls: [] as unknown[][] };
+  listQueries.push(query);
+  const record =
+    (method: string) =>
+    (...args: unknown[]) => {
+      query.calls.push([method, ...args]);
+      return builder;
+    };
   const builder = {
-    select: () => builder,
-    eq: () => builder,
-    neq: () => builder,
+    select: record('select'),
+    eq: record('eq'),
+    neq: record('neq'),
+    not: record('not'),
+    is: record('is'),
+    gte: record('gte'),
+    maybeSingle: async () => promptResultRead,
+    in: record('in'),
+    order: record('order'),
+    range: record('range'),
+    limit: record('limit'),
+    then: (resolve: (v: unknown) => unknown) =>
+      resolve({ data: listRows[table] ?? [], error: null, count: 0 }),
     single: async () => {
       if (table === 'prompt_results') return { data: promptResultRow, error: null };
       if (table === 'prompts') {
@@ -64,21 +92,61 @@ const insightsAggregatesRow = {
 
 let rpcMock = vi.fn(async () => ({ data: insightsAggregatesRow, error: null }));
 
+// Every RPC the loaders make, by name and arguments.
+let rpcCalls: { name: string; args: Record<string, unknown> }[] = [];
+
+// Empty-but-valid payloads per rollup read, for tests that drive whole loaders.
+const emptyRollups: Record<string, unknown> = {
+  insights_aggregates_daily: insightsAggregatesRow,
+  visible_prompt_stats_daily: { visible_prompts: 0, visible_results: 0, sum_visibility_visible: 0 },
+  ai_visibility_aggregates_daily: { answers: 0, by_competitor: [] },
+  competitor_aggregates_daily: { brand_row_count: 0 },
+  share_of_voice_aggregates_daily: {
+    total_brand_mentions: 0,
+    total_competitor_mentions: 0,
+    by_platform: [],
+    by_day: [],
+  },
+  visibility_rate_trend_daily: [],
+};
+let rpcByName = false;
+
 let sessionMock: { access_token: string } | null = { access_token: 'access-token' };
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     from: (table: string) => fakeQueryBuilder(table),
-    rpc: () => rpcMock(),
+    rpc: (name: string, args: Record<string, unknown>) => {
+      rpcCalls.push({ name, args });
+      return rpcByName ? Promise.resolve({ data: emptyRollups[name], error: null }) : rpcMock();
+    },
     auth: { getSession: async () => ({ data: { session: sessionMock } }) },
   }),
 }));
 
 vi.mock('@/lib/actions/topic', () => ({
-  getTopicById: vi.fn(),
+  getTopicById: vi.fn(async () => ({ id: 'topic-1', name: 'Topic' })),
 }));
 
 describe('getPromptResultById', () => {
+  afterEach(() => {
+    promptResultRead = { data: promptResultRow, error: null };
+  });
+
+  it('returns null for a result that does not exist', async () => {
+    promptResultRead = { data: null, error: null };
+    const { getPromptResultById } = await import('./tracking');
+
+    await expect(getPromptResultById('missing-id')).resolves.toBeNull();
+  });
+
+  it('throws when the read fails, so the page can offer a retry (#908)', async () => {
+    promptResultRead = { data: null, error: { message: 'statement timeout' } };
+    const { getPromptResultById } = await import('./tracking');
+
+    await expect(getPromptResultById('result-id')).rejects.toThrow('statement timeout');
+  });
+
   it('carries observed search queries through to prompt result details', async () => {
     const { getPromptResultById } = await import('./tracking');
 
@@ -86,6 +154,103 @@ describe('getPromptResultById', () => {
       id: 'result-id',
       searchQueries: promptResultRow.search_queries,
     });
+  });
+});
+
+describe('getTrackingWindow (#999)', () => {
+  beforeEach(() => {
+    listQueries = [];
+    listRows = {
+      tracking_runs: [
+        {
+          started_at: '2026-10-18T23:30:00.000Z',
+          completed_at: '2026-10-19T01:15:00.000Z',
+          source: 'cron',
+        },
+        {
+          started_at: '2026-10-16T22:00:00.000Z',
+          completed_at: '2026-10-16T23:00:00.000Z',
+          source: 'cron',
+        },
+      ],
+    };
+  });
+
+  afterEach(() => {
+    listRows = {};
+    listQueries = [];
+  });
+
+  it('returns UTC day windows for the latest and previous completed runs', async () => {
+    const { getTrackingWindow } = await import('./tracking');
+    const window = await getTrackingWindow('brand-id');
+
+    expect(window.runDays).toEqual({ dayFrom: '2026-10-18', dayTo: '2026-10-19' });
+    expect(window.previousRunDays).toEqual({ dayFrom: '2026-10-16', dayTo: '2026-10-16' });
+    expect(window.lastRunAt).toBe('2026-10-19T01:15:00.000Z');
+    expect(listQueries.find((q) => q.table === 'tracking_runs')?.calls).toContainEqual([
+      'select',
+      'started_at, completed_at',
+    ]);
+  });
+});
+
+describe('Insights 24h rollup routing (#999)', () => {
+  beforeEach(() => {
+    rpcCalls = [];
+    listQueries = [];
+    rpcByName = true;
+    listRows = {
+      tracking_runs: [
+        {
+          started_at: '2026-10-18T23:30:00.000Z',
+          completed_at: '2026-10-19T01:15:00.000Z',
+          source: 'cron',
+        },
+        {
+          started_at: '2026-10-16T22:00:00.000Z',
+          completed_at: '2026-10-16T23:00:00.000Z',
+          source: 'cron',
+        },
+      ],
+    };
+  });
+
+  afterEach(() => {
+    rpcByName = false;
+    listRows = {};
+    listQueries = [];
+    rpcCalls = [];
+  });
+
+  it('uses daily rollups for the latest run and the previous run for deltas', async () => {
+    const { getInsightsData } = await import('./tracking');
+    const data = await getInsightsData('brand-id', { anchor24h: true });
+
+    expect(data.trackingWindow?.runDays).toEqual({
+      dayFrom: '2026-10-18',
+      dayTo: '2026-10-19',
+    });
+    expect(
+      rpcCalls.some(
+        (call) =>
+          call.name === 'insights_aggregates_daily' &&
+          call.args.p_day_from === '2026-10-18' &&
+          call.args.p_day_to === '2026-10-19',
+      ),
+    ).toBe(true);
+    expect(
+      rpcCalls.some(
+        (call) =>
+          call.name === 'insights_aggregates_daily' &&
+          call.args.p_day_from === '2026-10-16' &&
+          call.args.p_day_to === '2026-10-16',
+      ),
+    ).toBe(true);
+    expect(rpcCalls.some((call) => call.name === 'insights_aggregates')).toBe(false);
+    expect(rpcCalls.some((call) => call.name === 'competitor_aggregates')).toBe(false);
+    expect(rpcCalls.some((call) => call.name === 'share_of_voice_aggregates')).toBe(false);
+    expect(rpcCalls.some((call) => call.name === 'ai_visibility_aggregates')).toBe(false);
   });
 });
 
@@ -110,6 +275,154 @@ describe('getInsightsSummary', () => {
     const summary = await getInsightsSummary('brand-id');
 
     expect(summary.positiveSentimentPct).toBe(0);
+  });
+
+  it('works out the v2 KPI card rates from the same aggregates (VIS-003)', async () => {
+    rpcMock = vi.fn(async () => ({
+      data: {
+        ...insightsAggregatesRow,
+        citation_answers: 171,
+        negative_count: 13,
+        sum_position: 305,
+        position_count: 122,
+        kpi_complete: true,
+      },
+      error: null,
+    }));
+    const { getInsightsSummary } = await import('./tracking');
+
+    const summary = await getInsightsSummary('brand-id');
+
+    // 171/427 answers cite the domain; 51 positive and 13 negative of 127.
+    expect(summary).toMatchObject({
+      citationRate: 40,
+      negativeSentimentPct: 10,
+      netSentiment: 30,
+      avgPosition: 2.5,
+    });
+  });
+
+  it('leaves Net sentiment and Avg. position empty until the rollups are backfilled', async () => {
+    rpcMock = vi.fn(async () => ({
+      data: {
+        ...insightsAggregatesRow,
+        citation_answers: 171,
+        negative_count: 2,
+        sum_position: null,
+        position_count: 0,
+        kpi_complete: false,
+      },
+      error: null,
+    }));
+    const { getInsightsSummary } = await import('./tracking');
+
+    const summary = await getInsightsSummary('brand-id');
+
+    expect(summary).toMatchObject({ netSentiment: null, avgPosition: null, citationRate: 40 });
+  });
+
+  it('shows the new rates as empty, not 0, if migration 00131 has not run', async () => {
+    rpcMock = vi.fn(async () => ({ data: insightsAggregatesRow, error: null }));
+    const { getInsightsSummary } = await import('./tracking');
+
+    const summary = await getInsightsSummary('brand-id');
+
+    expect(summary).toMatchObject({ netSentiment: null, avgPosition: null, citationRate: null });
+  });
+});
+
+describe('topic-filtered reads (00164)', () => {
+  beforeEach(() => {
+    rpcCalls = [];
+    listQueries = [];
+  });
+  afterEach(() => {
+    rpcByName = false;
+    listRows = {};
+  });
+
+  it("reads the topic's latest runs lean: each run's prompt and visibility, no count", async () => {
+    rpcByName = true;
+    listRows = {
+      prompts: [
+        { id: 'p1', text: 'Best espresso machine under $500?' },
+        { id: 'p2', text: 'Cheapest burr grinder?' },
+      ],
+      prompt_results: [
+        { prompt_id: 'p2', visibility_score: 40 },
+        { prompt_id: 'p1', visibility_score: 80 },
+      ],
+    };
+    const { getTopicDetail } = await import('./tracking');
+
+    const detail = await getTopicDetail('brand-id', 'topic-1');
+
+    expect(detail.results).toEqual([
+      { promptId: 'p2', promptText: 'Cheapest burr grinder?', visibilityScore: 40 },
+      { promptId: 'p1', promptText: 'Best espresso machine under $500?', visibilityScore: 80 },
+    ]);
+    // Not every column, and no count of every answer the topic ever had.
+    const runs = listQueries.filter((q) => q.table === 'prompt_results');
+    expect(runs).toHaveLength(1);
+    expect(runs[0].calls).toEqual([
+      ['select', 'prompt_id, visibility_score'],
+      ['eq', 'brand_id', 'brand-id'],
+      ['neq', 'platform', 'chatgpt-shopping'],
+      ['in', 'prompt_id', ['p1', 'p2']],
+      ['order', 'created_at', { ascending: false }],
+      ['limit', 50],
+    ]);
+  });
+
+  it('serves the topic detail page from the daily rollups, every call scoped to the topic', async () => {
+    rpcByName = true;
+    const { getTopicDetail } = await import('./tracking');
+
+    await getTopicDetail('brand-id', 'topic-1');
+
+    expect(rpcCalls.length).toBeGreaterThan(0);
+    for (const call of rpcCalls) {
+      expect(call.name).toMatch(/_daily$/);
+      // Without the topic, a rollup read answers for the whole brand.
+      expect(call.args.p_topic_id).toBe('topic-1');
+    }
+  });
+
+  it('passes the topic along when a topic filter is applied with a day window', async () => {
+    rpcByName = true;
+    const { getCompetitorComparison, getShareOfVoiceData, getVisibilityRateKpi } =
+      await import('./tracking');
+    const days = { dayFrom: '2026-09-01', dayTo: '2026-09-30' };
+
+    await getCompetitorComparison('brand-id', { topicId: 'topic-1', days });
+    await getShareOfVoiceData('brand-id', { topicId: 'topic-1', days });
+    await getVisibilityRateKpi('brand-id', { topicId: 'topic-1', days });
+
+    expect(rpcCalls.map((c) => c.name)).toEqual(
+      expect.arrayContaining([
+        'competitor_aggregates_daily',
+        'ai_visibility_aggregates_daily',
+        'share_of_voice_aggregates_daily',
+        'visible_prompt_stats_daily',
+      ]),
+    );
+    for (const call of rpcCalls) {
+      expect(call.name).toMatch(/_daily$/);
+      expect(call.args.p_topic_id).toBe('topic-1');
+    }
+  });
+
+  it('leaves brand-level reads unscoped', async () => {
+    rpcByName = true;
+    const { getInsightsSummary } = await import('./tracking');
+
+    await getInsightsSummary('brand-id', { days: {} });
+
+    expect(rpcCalls.length).toBeGreaterThan(0);
+    for (const call of rpcCalls) {
+      expect(call.name).toBe('insights_aggregates_daily');
+      expect(call.args.p_topic_id).toBeUndefined();
+    }
   });
 });
 

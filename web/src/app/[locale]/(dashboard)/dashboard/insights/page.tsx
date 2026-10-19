@@ -1,49 +1,15 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, useId } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useSearchParams } from 'next/navigation';
-import { createPortal } from 'react-dom';
-import { useTranslations } from 'next-intl';
-import dynamic from 'next/dynamic';
+import { useLocale, useTranslations } from 'next-intl';
 import { Skeleton } from '@/components/ui/skeleton';
-const VisibilityRateTrendChart = dynamic(
-  () => import('./_charts').then((m) => m.VisibilityRateTrendChart),
-  {
-    ssr: false,
-    loading: () => <Skeleton className="h-64 w-full" />,
-  },
-);
-
-const CompetitorLeaderboard = dynamic(
-  () => import('./_charts').then((m) => m.CompetitorLeaderboard),
-  {
-    ssr: false,
-    loading: () => <Skeleton className="h-64 w-full" />,
-  },
-);
-
-const ShareOfVoicePlatformChart = dynamic(
-  () => import('./_charts').then((m) => m.ShareOfVoicePlatformChart),
-  {
-    ssr: false,
-    loading: () => <Skeleton className="h-64 w-full" />,
-  },
-);
-
-const ShareOfVoiceTrendChart = dynamic(
-  () => import('./_charts').then((m) => m.ShareOfVoiceTrendChart),
-  {
-    ssr: false,
-    loading: () => <Skeleton className="h-64 w-full" />,
-  },
-);
-import { MetricBreakdownSheet } from './_metric-breakdown-sheet';
+import { MetricBreakdownSheet, type BreakdownTab } from './_metric-breakdown-sheet';
 import { FormulaDialog } from './_formula-dialog';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
   getInsightsData,
-  getVisibilityRateTrend,
   getTrackingWindow,
   type TrackingWindow,
   type VisibilityRateTrendData,
@@ -54,12 +20,13 @@ import {
   exportPromptResults,
   type InsightsSummary,
   type TrackedPromptsKpi,
-  type VisibilityRateKpi,
   type CompetitorComparisonData,
   type ShareOfVoiceData,
-  type InsightsRecommendations,
+  type InsightsOpportunities,
   type TrackingJobStatus,
+  type BreakdownFilters,
   type BreakdownMetric,
+  type CoverageKpi,
 } from '@/lib/actions/tracking';
 import { getTopics } from '@/lib/actions/topic';
 import { MODEL_PROVIDER_LABELS, PLATFORM_LABELS } from '@/config/platform-labels';
@@ -70,7 +37,7 @@ import {
   DateRangeFilter,
   type DateRangePreset,
 } from '@/components/filters/date-range-filter';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -78,27 +45,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   BarChart3,
   CalendarX2,
-  Eye,
-  HelpCircle,
   Play,
-  TrendingUp,
-  TrendingDown,
-  Quote,
-  Zap,
-  AlertCircle,
   Loader2,
   FlaskConical,
-  PieChart,
   Users,
   StopCircle,
   ArrowRight,
-  ArrowUpRight,
   Download,
   FileText,
-  Layers,
-  Lightbulb,
-  Sparkles,
-  Tag,
 } from 'lucide-react';
 import {
   Select,
@@ -110,8 +64,23 @@ import {
 import { cn } from '@/lib/utils';
 import { getAIProviderDisplayName, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { usePlanContext } from '@/components/providers/plan-provider';
-import { formatCompactNumber } from '@/lib/format';
 import { toast } from 'sonner';
+import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
+import type { PromptComparison } from '@/lib/insights-same-prompts';
+import type { KpiSeriesDay } from '@/lib/insights-kpis';
+import type { PlatformChange, PlatformTableRow } from '@/lib/insights-summary';
+import { formatWindowBound } from './kpi-format';
+import { KpiRows } from './_kpi-cards';
+import { SummaryLine } from './_summary-line';
+import { PlatformTable } from './_platform-table';
+import { Leaderboard } from './_leaderboard';
+import { TrendCard } from './_trend-card';
+import { trendLines, type TrendMarkerData } from '@/lib/insights-trend';
+import { TopicHeatmap } from './_topic-heatmap';
+import { Opportunities } from './_opportunities';
+import type { TopicCompetitors } from '@/lib/insights-topics';
+import { WhyChanged } from './_why-changed';
+import type { WhyChanged as WhyChangedData } from '@/lib/insights-drivers';
 
 // ─── Filter Types ─────────────────────────────────────────────────────────────
 
@@ -129,6 +98,8 @@ interface InsightsFilters {
 }
 
 const DEFAULT_FILTERS: InsightsFilters = {
+  // The last 24 hours: what the latest run found. Longer ranges are one
+  // click away.
   datePreset: '24h',
   dateFrom: '',
   dateTo: '',
@@ -136,6 +107,44 @@ const DEFAULT_FILTERS: InsightsFilters = {
   model: '',
   topic: '',
 };
+
+/**
+ * The filters as kept in the URL (#917): ?range=, plus ?from=/&to= for a
+ * custom range, ?region=, ?model= and ?topic=. Defaults are left out, and an
+ * unknown range falls back to the default.
+ */
+function filtersFromUrl(): InsightsFilters {
+  const datePreset = readUrlChoice<DatePreset>(
+    'range',
+    ALL_DATE_PRESETS as readonly DatePreset[],
+    DEFAULT_FILTERS.datePreset,
+  );
+  return {
+    datePreset,
+    dateFrom: datePreset === 'custom' ? readUrlParam('from') : '',
+    dateTo: datePreset === 'custom' ? readUrlParam('to') : '',
+    region: readUrlParam('region'),
+    model: readUrlParam('model'),
+    topic: readUrlParam('topic'),
+  };
+}
+
+function writeFiltersToUrl(f: InsightsFilters) {
+  const custom = f.datePreset === 'custom';
+  writeUrlParams(
+    {
+      range: f.datePreset,
+      from: custom ? f.dateFrom : null,
+      to: custom ? f.dateTo : null,
+      region: f.region,
+      model: f.model,
+      topic: f.topic,
+      // Dropped from links made while "Same prompts" could be turned off.
+      compare: null,
+    },
+    { range: DEFAULT_FILTERS.datePreset },
+  );
+}
 
 const INSIGHT_EXPORT_HEADERS = [
   'created_at',
@@ -191,183 +200,7 @@ function getDateRange(
   return { dateFrom: `${dayFrom}T00:00:00.000Z`, dateTo: undefined, days: { dayFrom, dayTo } };
 }
 
-// ─── Info Tooltip ─────────────────────────────────────────────────────────────
-
-function InfoTip({ content }: { content: string }) {
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
-  const ref = useRef<HTMLSpanElement>(null);
-  const tooltipId = useId();
-
-  function show() {
-    const r = ref.current?.getBoundingClientRect();
-    if (r) setPos({ x: r.left + r.width / 2, y: r.bottom + 6 });
-  }
-
-  function hide() {
-    setPos(null);
-  }
-
-  return (
-    <>
-      <span
-        ref={ref}
-        tabIndex={0}
-        aria-label="More information"
-        aria-describedby={pos ? tooltipId : undefined}
-        onMouseEnter={show}
-        onMouseLeave={hide}
-        onFocus={show}
-        onBlur={hide}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') hide();
-        }}
-        className="inline-flex items-center cursor-help rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <HelpCircle className="h-3 w-3 text-muted-foreground/60 hover:text-muted-foreground transition-colors" />
-      </span>
-      {pos &&
-        createPortal(
-          <div
-            id={tooltipId}
-            role="tooltip"
-            style={{ left: pos.x, top: pos.y, transform: 'translateX(-50%)' }}
-            className="pointer-events-none fixed z-[9999] w-56 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md"
-          >
-            {content}
-          </div>,
-          document.body,
-        )}
-    </>
-  );
-}
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-// ─── Delta Badge ──────────────────────────────────────────────────────────────
-
-function DeltaBadge({ delta, suffix = '%' }: { delta: number | null; suffix?: string }) {
-  if (delta === null) return null;
-  if (delta === 0) return <span className="text-xs text-muted-foreground">— 0{suffix}</span>;
-  const pos = delta > 0;
-  return (
-    <span
-      className={cn(
-        'flex items-center gap-0.5 text-xs font-medium',
-        pos ? 'text-green-600 dark:text-green-400' : 'text-red-500',
-      )}
-    >
-      {pos ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-      {pos ? '+' : ''}
-      {delta}
-      {suffix}
-    </span>
-  );
-}
-
-function CountDeltaBadge({
-  current,
-  previous,
-  delta,
-}: {
-  current: number;
-  previous: number | null;
-  delta: number | null;
-}) {
-  if (previous === 0 && current > 0) {
-    return (
-      <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-        +{current.toLocaleString()} new
-      </span>
-    );
-  }
-  return <DeltaBadge delta={delta} />;
-}
-
-// ─── KPI Card ─────────────────────────────────────────────────────────────────
-
-function KpiCard({
-  title,
-  tooltip,
-  icon: Icon,
-  value,
-  sub,
-  subVariant = 'muted',
-  onClick,
-}: {
-  title: string;
-  tooltip: string;
-  icon: React.ElementType;
-  value: React.ReactNode;
-  sub: React.ReactNode;
-  subVariant?: 'muted' | 'positive';
-  onClick?: () => void;
-}) {
-  const clickable = typeof onClick === 'function';
-  return (
-    <Card
-      onClick={clickable ? onClick : undefined}
-      role={clickable ? 'button' : undefined}
-      tabIndex={clickable ? 0 : undefined}
-      aria-label={clickable ? `${title} — view breakdown` : undefined}
-      title={clickable ? 'Click to see breakdown' : undefined}
-      onKeyDown={
-        clickable
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onClick?.();
-              }
-            }
-          : undefined
-      }
-      className={cn(
-        'group relative',
-        clickable &&
-          'cursor-pointer transition-all duration-150 hover:border-foreground/30 hover:shadow-md hover:-translate-y-0.5 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-      )}
-    >
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
-        <CardTitle className="flex items-center gap-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          {title}
-          <InfoTip content={tooltip} />
-        </CardTitle>
-        <div className="relative flex h-4 w-4 items-center justify-center">
-          <Icon
-            className={cn(
-              'h-3.5 w-3.5 text-muted-foreground transition-opacity',
-              clickable && 'group-hover:opacity-0',
-            )}
-          />
-          {clickable && (
-            <ArrowUpRight
-              className="absolute h-4 w-4 text-foreground opacity-0 transition-opacity group-hover:opacity-100"
-              aria-hidden
-            />
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-3xl font-bold">{value}</div>
-        <p
-          className={cn(
-            'text-xs mt-1 flex items-center gap-0.5',
-            subVariant === 'positive'
-              ? 'text-green-600 dark:text-green-400'
-              : 'text-muted-foreground',
-          )}
-        >
-          {sub}
-        </p>
-        {clickable && (
-          <p className="mt-2 flex items-center gap-1 text-[10px] font-medium text-muted-foreground/70 opacity-0 transition-opacity group-hover:opacity-100">
-            View breakdown
-            <ArrowUpRight className="h-2.5 w-2.5" />
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
 
 // ─── Run Single Prompt Dialog ─────────────────────────────────────────────────
 
@@ -690,143 +523,11 @@ function NoDataForPeriod({ datePreset, onReset }: { datePreset: DatePreset; onRe
   );
 }
 
-// ─── Recommendations ──────────────────────────────────────────────────────────
-
-/** Teaser targets. Topic suggestions live on the Topics page (#463) — its
- *  card expands + scrolls itself for this hash; the prompt-suggestions card
- *  lives on the Prompts page's default All Prompts tab and does the same. */
-const TOPIC_OPPORTUNITIES_HREF = '/dashboard/topics#topic-opportunities';
-const PROMPT_OPPORTUNITIES_HREF = '/dashboard/prompts?tab=all&view=suggestions';
-
-function RecommendationCard({
-  title,
-  icon: Icon,
-  href,
-  emptyText,
-  children,
-  isEmpty,
-}: {
-  title: string;
-  icon: React.ElementType;
-  href: string;
-  emptyText: string;
-  children: React.ReactNode;
-  isEmpty: boolean;
-}) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-3">
-          <CardTitle className="flex items-center gap-2 text-sm font-medium">
-            <Icon className="h-4 w-4 text-primary" />
-            {title}
-          </CardTitle>
-          {!isEmpty && (
-            <Link
-              href={href}
-              className="shrink-0 text-xs font-medium text-primary underline-offset-2 hover:underline"
-            >
-              See all
-            </Link>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isEmpty ? (
-          <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
-            <p className="text-xs text-muted-foreground max-w-xs">{emptyText}</p>
-            <Link
-              href={href}
-              className="text-xs font-medium text-primary underline-offset-2 hover:underline"
-            >
-              Generate ideas →
-            </Link>
-          </div>
-        ) : (
-          children
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-/**
- * The "so what, what next?" row (#459) filling the space freed by the removed
- * results tree (#458). Reads only stored data assembled server-side inside
- * getInsightsData — no extra client round trip, no LLM call. Deliberately
- * outside the date-filter contract: no delta badges, own section heading
- * (see #457 for why period-scoped and account-scoped numbers must not mix).
- */
-function RecommendationsSection({ data }: { data: InsightsRecommendations }) {
-  return (
-    <div className="space-y-3">
-      <div>
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <Lightbulb className="h-4 w-4 text-primary" />
-          Recommendations
-        </h2>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Ideas from your stored analyses — independent of the date filters above.
-        </p>
-      </div>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <RecommendationCard
-          title="Topic Opportunities"
-          icon={Tag}
-          href={TOPIC_OPPORTUNITIES_HREF}
-          isEmpty={data.topics.length === 0}
-          emptyText="No topic clusters yet. Analyze your prompt volumes to surface the themes with the most AI search demand."
-        >
-          <ul className="divide-y">
-            {data.topics.map((t) => (
-              <li key={t.keyword} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
-                <p className="flex-1 min-w-0 truncate text-sm">{t.keyword}</p>
-                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                  {t.promptCount} prompt{t.promptCount !== 1 ? 's' : ''}
-                </span>
-                <Badge variant="outline" className="shrink-0 gap-1 text-xs tabular-nums">
-                  <TrendingUp className="h-3 w-3" />~{formatCompactNumber(t.estimatedAiVolume)}/mo
-                </Badge>
-              </li>
-            ))}
-          </ul>
-        </RecommendationCard>
-        <RecommendationCard
-          title="Prompt Opportunities"
-          icon={Sparkles}
-          href={PROMPT_OPPORTUNITIES_HREF}
-          isEmpty={data.prompts.length === 0}
-          emptyText="No prompt suggestions stored yet. Generate AI prompt ideas based on your brand and competitor citations."
-        >
-          <ul className="divide-y">
-            {data.prompts.map((p) => (
-              <li key={p.id} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
-                <p className="flex-1 min-w-0 truncate text-sm">{p.text}</p>
-                {p.topicName && (
-                  <Badge variant="outline" className="hidden sm:inline-flex shrink-0 gap-1 text-xs">
-                    <Tag className="h-3 w-3" />
-                    {p.topicName}
-                  </Badge>
-                )}
-                {p.estVolume != null && p.estVolume > 0 && (
-                  <Badge variant="outline" className="shrink-0 gap-1 text-xs tabular-nums">
-                    <TrendingUp className="h-3 w-3" />~{formatCompactNumber(p.estVolume)}/mo
-                  </Badge>
-                )}
-              </li>
-            ))}
-          </ul>
-        </RecommendationCard>
-      </div>
-    </div>
-  );
-}
-
 // ─── Tracking Progress ────────────────────────────────────────────────────────
 
 import { saveTrackingJob, loadTrackingJob, clearTrackingJob } from '@/lib/tracking-job-store';
 import { toCsv } from '@/lib/csv';
-import { formatRelative } from '@/lib/format-relative';
+import { RunLine } from './_run-line';
 
 function TrackingProgressBanner({
   jobStatus,
@@ -964,10 +665,10 @@ export default function InsightsPage() {
   const tCommon = useTranslations('common');
   const router = useRouter();
   const { isCloud } = usePlanContext();
+  const locale = useLocale();
   const brand = useBrandStore((s) => s.getActiveBrand());
   const [summary, setSummary] = useState<InsightsSummary | null>(null);
   const [trackedPrompts, setTrackedPrompts] = useState<TrackedPromptsKpi | null>(null);
-  const [visibilityRate, setVisibilityRate] = useState<VisibilityRateKpi | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
@@ -981,42 +682,69 @@ export default function InsightsPage() {
   const [competitorData, setCompetitorData] = useState<CompetitorComparisonData | null>(null);
   const [rateTrend, setRateTrend] = useState<VisibilityRateTrendData | null>(null);
   const [sovData, setSovData] = useState<ShareOfVoiceData | null>(null);
-  const [recommendations, setRecommendations] = useState<InsightsRecommendations | null>(null);
+  const [opportunities, setOpportunities] = useState<InsightsOpportunities | null>(null);
+  const [comparison, setComparison] = useState<PromptComparison | null>(null);
+  const [coverage, setCoverage] = useState<CoverageKpi | null>(null);
+  const [kpiSeries, setKpiSeries] = useState<KpiSeriesDay[] | null>(null);
+  const [platformChanges, setPlatformChanges] = useState<PlatformChange[] | null>(null);
+  const [platforms, setPlatforms] = useState<PlatformTableRow[] | null>(null);
+  const [whyChanged, setWhyChanged] = useState<WhyChangedData | null>(null);
+  const [trendMarkers, setTrendMarkers] = useState<TrendMarkerData | null>(null);
+  const [topicCompetitors, setTopicCompetitors] = useState<TopicCompetitors[] | null>(null);
   const [breakdownMetric, setBreakdownMetric] = useState<BreakdownMetric | null>(null);
+  const [breakdownTab, setBreakdownTab] = useState<BreakdownTab | undefined>(undefined);
+  // The window and filters the cards were last loaded with (the 24h view
+  // anchored to its tracking run): the breakdown panel explains those exact
+  // numbers rather than recomputing "now" on every render (VIS-001).
+  const [loadedFilters, setLoadedFilters] = useState<BreakdownFilters>();
   const [isExporting, setIsExporting] = useState(false);
   const [cronRun, setCronRun] = useState<TrackingWindow['activeRun']>(null);
   const cronRunRef = useRef<TrackingWindow['activeRun']>(null);
+  // The header's last and next run (VIS-012), from the ledger read every minute.
+  const [runTimes, setRunTimes] = useState<Pick<TrackingWindow, 'lastRunAt' | 'nextRunAt'>>({
+    lastRunAt: null,
+    nextRunAt: null,
+  });
+  // Kept as is when unchanged, so the minute's read doesn't re-render the page.
+  const updateRunTimes = useCallback(
+    ({ lastRunAt, nextRunAt }: Pick<TrackingWindow, 'lastRunAt' | 'nextRunAt'>) =>
+      setRunTimes((prev) =>
+        prev.lastRunAt === lastRunAt && prev.nextRunAt === nextRunAt
+          ? prev
+          : { lastRunAt, nextRunAt },
+      ),
+    [],
+  );
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
+  // The filters are read from the URL after mount (window isn't available
+  // during the server render), and the first load waits for them.
+  const [urlRead, setUrlRead] = useState(false);
+  useEffect(() => {
+    const fromUrl = filtersFromUrl();
+    filtersRef.current = fromUrl;
+    setFilters(fromUrl);
+    setUrlRead(true);
+  }, []);
+
+  useEffect(() => {
+    if (urlRead) writeFiltersToUrl(filters);
+  }, [urlRead, filters]);
+
+  // Keyed on the id, not the brand object: the store hands out a new object
+  // for the same brand, and a new loadData re-runs the load effect below.
+  const brandId = brand?.id;
   const loadData = useCallback(
     async (overrideFilters?: InsightsFilters, { silent = false } = {}) => {
-      if (!brand) return;
+      if (!brandId) return;
       if (!silent) setIsLoading(true);
       try {
         const f = overrideFilters ?? filtersRef.current;
-        // eslint-disable-next-line prefer-const -- dateFrom/dateTo are reassigned by the 24h anchor below
-        let { dateFrom, dateTo, days } = getDateRange(f.datePreset, {
+        const { dateFrom, dateTo, days } = getDateRange(f.datePreset, {
           from: f.dateFrom,
           to: f.dateTo,
         });
-
-        // Stable 24h window (00044): anchor to the last COMPLETED tracking
-        // run so the morning refresh can't flash "no results" or shrink the
-        // counts while today's run streams in. Brands with no completed run
-        // yet (fresh onboarding) keep the live rolling window — nothing of
-        // theirs is old enough to age out, so it can't regress.
-        if (f.datePreset === '24h') {
-          const win = await getTrackingWindow(brand.id).catch(() => null);
-          if (win) {
-            cronRunRef.current = win.activeRun;
-            setCronRun(win.activeRun);
-            if (win.anchored) {
-              dateFrom = win.anchored.dateFrom;
-              dateTo = win.anchored.dateTo;
-            }
-          }
-        }
 
         const filterOpts = {
           model: f.model || undefined,
@@ -1028,31 +756,53 @@ export default function InsightsPage() {
           // rollups (00066). Absent for 24h, whose anchored window above is
           // timestamp-shaped and stays on the raw path.
           days,
+          // Changes compare only the prompts answered in both periods
+          // (VIS-002), so adding prompts doesn't inflate them.
+          samePrompts: true,
         };
 
         const hasFilters = Boolean(f.datePreset !== 'all' || f.model || f.region || f.topic);
 
-        // One consolidated server action (#313): summary + competitor + SoV
-        // run in a real server-side Promise.all (one round trip instead of
-        // five serialized POSTs), and "has any data" comes from a cheap
-        // count instead of an unbounded full-table scan.
-        // The trend chart follows the page filters exactly — same window as
-        // every other number on the page, so the headline rate never
-        // contradicts the KPI header.
-        const [insights, trend] = await Promise.all([
-          getInsightsData(brand.id, {
-            ...filterOpts,
-            checkUnfiltered: hasFilters,
-          }),
-          getVisibilityRateTrend(brand.id, filterOpts).catch(() => null),
-        ]);
+        // One consolidated server action (#313). Next.js queues server actions
+        // one after another, so everything the first paint needs — summary,
+        // competitors, SoV, KPIs and the trend chart — runs in one
+        // server-side Promise.all instead of as separate requests, and "has
+        // any data" comes from a cheap count.
+        // The 24h preset is anchored to the last completed tracking run
+        // (00044) so the morning refresh can't flash "no results" while
+        // today's run streams in; the action resolves that window itself.
+        // The trend chart follows the same window as every other number.
+        const insights = await getInsightsData(brandId, {
+          ...filterOpts,
+          checkUnfiltered: hasFilters,
+          anchor24h: f.datePreset === '24h',
+        });
+        if (insights.trackingWindow) {
+          cronRunRef.current = insights.trackingWindow.activeRun;
+          setCronRun(insights.trackingWindow.activeRun);
+          updateRunTimes(insights.trackingWindow);
+        }
+        const anchored = insights.trackingWindow?.anchored;
+        setLoadedFilters({
+          ...filterOpts,
+          dateFrom: anchored?.dateFrom ?? filterOpts.dateFrom,
+          dateTo: anchored?.dateTo ?? filterOpts.dateTo,
+        });
+        const trend = insights.trend;
         setRateTrend(trend && trend.points.length > 0 ? trend : null);
         setSummary(insights.summary);
         setTrackedPrompts(insights.trackedPrompts);
-        setVisibilityRate(insights.visibilityRate);
         setCompetitorData(insights.competitors.brands.length > 1 ? insights.competitors : null);
         setSovData(insights.sov.byPlatform.length > 0 ? insights.sov : null);
-        setRecommendations(insights.recommendations);
+        setOpportunities(insights.opportunities);
+        setComparison(insights.comparison);
+        setCoverage(insights.coverage);
+        setKpiSeries(insights.kpiSeries);
+        setPlatformChanges(insights.platformChanges);
+        setPlatforms(insights.platforms);
+        setWhyChanged(insights.whyChanged);
+        setTrendMarkers(insights.trendMarkers);
+        setTopicCompetitors(insights.topicCompetitors);
         setHasAnyData(insights.hasAnyData);
 
         // Group raw model slugs by their resolved display name so different
@@ -1107,31 +857,42 @@ export default function InsightsPage() {
         setIsLoading(false);
       }
     },
-    [brand],
+    [brandId, updateRunTimes],
   );
 
+  // A brand switch clears the brand-specific filters. Not on the first brand,
+  // so filters linked in the URL survive the initial load.
+  const filteredBrandRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!brand?.id) return;
     setAvailableRegions([]);
     setAvailableModels([]);
     setAvailableTopics([]);
-    const next = { ...filtersRef.current, region: '', model: '', topic: '' };
-    filtersRef.current = next;
-    setFilters(next);
+    if (filteredBrandRef.current && filteredBrandRef.current !== brand.id) {
+      const next = { ...filtersRef.current, region: '', model: '', topic: '' };
+      filtersRef.current = next;
+      setFilters(next);
+    }
+    filteredBrandRef.current = brand.id;
     getTopics(brand.id)
       .then(setAvailableTopics)
       .catch(() => {});
   }, [brand?.id]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (urlRead) loadData();
+  }, [loadData, urlRead]);
 
   // Watch the tracking-run ledger so server-started (cron) runs surface too:
   // the job banner below only knows about jobs this browser started via
   // localStorage, which is why users never saw anything during the daily
   // morning run. When the active run disappears (= completed), silently
   // reload so the anchored 24h window swaps to the fresh run in one step.
+  // Another brand's run times never show under this one's name, even when
+  // its first read fails.
+  useEffect(() => {
+    updateRunTimes({ lastRunAt: null, nextRunAt: null });
+  }, [brand?.id, updateRunTimes]);
   useEffect(() => {
     if (!brand?.id) return;
     let cancelled = false;
@@ -1142,6 +903,7 @@ export default function InsightsPage() {
       const wasRunning = cronRunRef.current !== null;
       cronRunRef.current = win.activeRun;
       setCronRun(win.activeRun);
+      updateRunTimes(win);
       if (wasRunning && !win.activeRun) {
         loadData(undefined, { silent: true });
       }
@@ -1153,7 +915,7 @@ export default function InsightsPage() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [brand?.id, loadData]);
+  }, [brand?.id, loadData, updateRunTimes]);
 
   // Restore active job from localStorage or URL query param (post-payment redirect)
   const searchParams = useSearchParams();
@@ -1165,7 +927,7 @@ export default function InsightsPage() {
       saveTrackingJob({ jobId: urlJobId, brandId: brand.id, startedAt: Date.now() });
       setActiveJobId(urlJobId);
       setIsRunning(true);
-      window.history.replaceState({}, '', window.location.pathname);
+      writeUrlParams({ jobId: null });
       return;
     }
 
@@ -1360,16 +1122,6 @@ export default function InsightsPage() {
   // content stays visible under the overlay instead of flashing a skeleton.
   const isRefetching = isLoading && summary !== null;
 
-  // Visibility Rate now IS the AI Visibility Score (0-100): 0.6×mention
-  // rate + 0.25×citation rate + 0.15×position factor over the filtered
-  // answers. Sourced from the trend action so this card, the trend card
-  // header and the leaderboard all read the exact same number. Coverage
-  // (appeared in X of Y prompts) survives as the sub-line.
-  const headlineScore = rateTrend?.summary.rate ?? 0;
-  const coveragePct =
-    visibilityRate && trackedPrompts && trackedPrompts.activeInPeriod > 0
-      ? Math.round((visibilityRate.visiblePrompts / trackedPrompts.activeInPeriod) * 1000) / 10
-      : 0;
   const trulyEmpty = noResults && !hasAnyData;
 
   // The localStorage-tracked job banner (with progress + Stop) wins when this
@@ -1405,9 +1157,14 @@ export default function InsightsPage() {
     );
   }
 
-  const lastCheckedLabel = summary?.lastCheckedAt
-    ? formatRelative(summary.lastCheckedAt, tCommon)
-    : 'Never';
+  // The trend's subtitle (VIS-007): "Visibility · last 30 days".
+  const trendRangeLabel =
+    filters.datePreset === 'custom'
+      ? t('trend.range.custom', {
+          from: formatWindowBound(filters.dateFrom, locale),
+          to: formatWindowBound(filters.dateTo, locale),
+        })
+      : t(`trend.range.${filters.datePreset}`);
 
   const handleResetFilters = () => {
     const resetFilters = { ...DEFAULT_FILTERS };
@@ -1422,9 +1179,14 @@ export default function InsightsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
 
-          <p className="text-muted-foreground text-sm">
-            {brand.name} · Last run: {lastCheckedLabel}
-          </p>
+          {/* The brand's last full run from the ledger; before the ledger has
+              one, the newest answer in view. */}
+          <RunLine
+            brandName={brand.name}
+            lastRunAt={runTimes.lastRunAt ?? summary?.lastCheckedAt ?? null}
+            nextRunAt={runTimes.nextRunAt}
+            hasData={hasAnyData === true}
+          />
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -1503,233 +1265,113 @@ export default function InsightsPage() {
             <NoDataForPeriod datePreset={filters.datePreset} onReset={handleResetFilters} />
           ) : (
             <>
-              {/* KPI Cards — Visibility Rate leads the row: the raw all-results
-              score average reads near zero for most brands (absent answers
-              each contribute 0) and buried the number users act on. The old
-              average survives in the breakdown sheet; Share of Voice has its
-              own chart section below. */}
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
-                <KpiCard
-                  title="Visibility"
-                  tooltip="AI Visibility Score (0-100): how often AI answers mention you (60%), cite your site (25%) and how early you're named (15%), under the current filters."
-                  icon={Eye}
-                  value={headlineScore}
-                  sub={
-                    visibilityRate && trackedPrompts ? (
-                      <span className="tabular-nums">
-                        appeared in {visibilityRate.visiblePrompts}/{trackedPrompts.activeInPeriod}{' '}
-                        prompts ({coveragePct}%)
-                      </span>
-                    ) : null
-                  }
-                  onClick={() => setBreakdownMetric('visibility')}
-                />
-                <KpiCard
-                  title="Tracked Prompts"
-                  tooltip="Distinct prompts that produced tracked results in the selected period and filters. The quota below is current usage across your organization, counting one per location each prompt targets — it does not change with the date range."
-                  icon={Layers}
-                  value={trackedPrompts?.activeInPeriod ?? 0}
-                  sub={
-                    trackedPrompts && trackedPrompts.quotaLimit !== -1 ? (
-                      <>
-                        <span className="tabular-nums">
-                          {trackedPrompts.quotaUsed} / {trackedPrompts.quotaLimit} prompt locations
-                        </span>
-                        {trackedPrompts.quotaUsed >= trackedPrompts.quotaLimit * 0.9 && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              router.push('/dashboard/settings');
-                            }}
-                            className="ml-1 underline underline-offset-2 hover:text-foreground"
-                          >
-                            Upgrade
-                          </button>
-                        )}
-                      </>
-                    ) : (
-                      `${trackedPrompts?.quotaUsed ?? 0} prompt locations tracked`
-                    )
-                  }
-                  onClick={() => router.push('/dashboard/prompts')}
-                />
-                <KpiCard
-                  title={t('mentions')}
-                  tooltip="How many times your brand was referenced by name in AI-generated responses."
-                  icon={Zap}
-                  value={summary!.totalMentions.toLocaleString()}
-                  sub={
-                    <CountDeltaBadge
-                      current={summary!.totalMentions}
-                      previous={summary!.prevMentions}
-                      delta={summary!.mentionsChange}
-                    />
-                  }
-                  subVariant={
-                    summary!.mentionsChange !== null && summary!.mentionsChange > 0
-                      ? 'positive'
-                      : 'muted'
-                  }
-                  onClick={() => setBreakdownMetric('mentions')}
-                />
-                <KpiCard
-                  title={t('citations')}
-                  tooltip="Times your brand's domain was cited as a source with a direct link in AI responses."
-                  icon={Quote}
-                  value={summary!.totalCitations.toLocaleString()}
-                  sub={
-                    <CountDeltaBadge
-                      current={summary!.totalCitations}
-                      previous={summary!.prevCitations}
-                      delta={summary!.citationsChange}
-                    />
-                  }
-                  subVariant={
-                    summary!.citationsChange !== null && summary!.citationsChange > 0
-                      ? 'positive'
-                      : 'muted'
-                  }
-                  onClick={() => router.push('/dashboard/citations')}
-                />
-                <KpiCard
-                  title={t('positiveSentiment')}
-                  tooltip="Percentage of answers that mention your brand and describe it in a positive context."
-                  icon={AlertCircle}
-                  value={`${summary!.positiveSentimentPct}%`}
-                  sub={<DeltaBadge delta={summary!.sentimentChange} suffix=" pts" />}
-                  subVariant={
-                    summary!.sentimentChange !== null && summary!.sentimentChange > 0
-                      ? 'positive'
-                      : 'muted'
-                  }
-                />
-              </div>
+              {/* Summary line (VIS-006): the page's story in one line. */}
+              <SummaryLine
+                trend={rateTrend}
+                competitors={competitorData}
+                comparison={comparison}
+                platformChanges={platformChanges}
+                answers={summary?.totalResults}
+              />
+
+              {/* KPI cards (VIS-003): today's five, then the new rates. */}
+              <KpiRows
+                summary={summary!}
+                trend={rateTrend}
+                trackedPrompts={trackedPrompts}
+                coverage={coverage}
+                sov={sovData}
+                competitors={competitorData}
+                comparison={comparison}
+                series={kpiSeries}
+                onBreakdown={(metric) => {
+                  setBreakdownTab(undefined);
+                  setBreakdownMetric(metric);
+                }}
+                onNavigate={(path) => router.push(path)}
+              />
 
               {/* Competitor Comparison */}
               {competitorData ? (
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-                  <Card className="lg:col-span-3">
-                    <CardHeader className="pb-2">
-                      {rateTrend ? (
-                        <div>
-                          <div className="text-3xl font-bold tabular-nums">
-                            {rateTrend.summary.rate}
-                          </div>
-                          <div className="mt-1 flex items-center gap-2 text-xs">
-                            {rateTrend.summary.change !== null && (
-                              <span
-                                className={cn(
-                                  'flex items-center gap-0.5 font-medium',
-                                  rateTrend.summary.change >= 0
-                                    ? 'text-emerald-600 dark:text-emerald-400'
-                                    : 'text-red-600 dark:text-red-400',
-                                )}
-                              >
-                                {rateTrend.summary.change >= 0 ? (
-                                  <TrendingUp className="h-3 w-3" />
-                                ) : (
-                                  <TrendingDown className="h-3 w-3" />
-                                )}
-                                {rateTrend.summary.change >= 0 ? '+' : ''}
-                                {rateTrend.summary.change} pts
-                              </span>
-                            )}
-                            {rateTrend.summary.change !== null && rateTrend.summary.prevFrom && (
-                              <span className="text-muted-foreground">
-                                vs{' '}
-                                {new Date(rateTrend.summary.prevFrom).toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: '2-digit',
-                                  year: 'numeric',
-                                })}{' '}
-                                –{' '}
-                                {new Date(rateTrend.summary.prevTo).toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: '2-digit',
-                                  year: 'numeric',
-                                })}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                          <Users className="h-4 w-4" />
-                          AI Visibility — Brand vs Competitors
-                        </CardTitle>
-                      )}
-                    </CardHeader>
-                    <CardContent>
-                      {rateTrend ? (
-                        <VisibilityRateTrendChart data={rateTrend} />
-                      ) : (
-                        <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
-                          No visibility data for this period yet
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                  <TrendCard
+                    className="lg:col-span-3"
+                    brandId={brand.id}
+                    data={rateTrend}
+                    markers={trendMarkers}
+                    rangeLabel={trendRangeLabel}
+                    answers={summary?.totalResults}
+                    onPinnedChange={(pinned) =>
+                      setRateTrend((current) => current && { ...current, pinned })
+                    }
+                  />
 
-                  <Card className="lg:col-span-2">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <CardTitle className="text-sm font-medium">Leaderboard</CardTitle>
-                        <Link
-                          href="/dashboard/competitors"
-                          className="flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                          Head-to-Head Comparison
-                          <ArrowRight className="h-3 w-3" />
-                        </Link>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <CompetitorLeaderboard data={competitorData.brands} />
-                    </CardContent>
-                  </Card>
+                  <Leaderboard
+                    className="lg:col-span-2"
+                    brands={competitorData.brands}
+                    providerRows={competitorData.providerRows}
+                    platforms={platforms}
+                    answers={summary?.totalResults}
+                  />
                 </div>
               ) : (
                 <NoCompetitorsTeaser />
               )}
 
-              {/* Share of Voice */}
-              {sovData && (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                        <PieChart className="h-4 w-4" />
-                        {t('sovByPlatform')}
-                      </CardTitle>
-                      {sovData.overallSovChange !== null && sovData.overallSovChange !== 0 && (
-                        <DeltaBadge delta={sovData.overallSovChange} suffix=" pts" />
-                      )}
-                    </CardHeader>
-                    <CardContent>
-                      <ShareOfVoicePlatformChart
-                        data={sovData.byPlatform}
-                        overallSov={sovData.overallSov}
-                      />
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                        <TrendingUp className="h-4 w-4" />
-                        Share of Voice Trend
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ShareOfVoiceTrendChart data={sovData.trend} />
-                    </CardContent>
-                  </Card>
+              {/* By AI platform (VIS-008) and Why it changed (VIS-009), side by side as in the mockup. */}
+              {((platforms && platforms.length > 0) || whyChanged) && (
+                <div className="flex flex-wrap gap-4">
+                  {platforms && platforms.length > 0 && (
+                    <PlatformTable className="min-w-0 flex-[1_1_520px]" rows={platforms} />
+                  )}
+                  {whyChanged && (
+                    <WhyChanged
+                      className="min-w-0 flex-[1_1_420px]"
+                      data={whyChanged}
+                      onOpenBreakdown={(tab) => {
+                        setBreakdownTab(tab);
+                        setBreakdownMetric('visibility');
+                      }}
+                    />
+                  )}
                 </div>
               )}
 
-              {/* Recommendations (#459) — stored data, not period-scoped */}
-              {recommendations && <RecommendationsSection data={recommendations} />}
+              {/* Topics vs competitors (VIS-010): the trend's brands, topic by topic. */}
+              {/* Its columns are the trend's lines, so it needs the trend's points. */}
+              {rateTrend &&
+                rateTrend.points.length > 0 &&
+                topicCompetitors &&
+                topicCompetitors.length > 0 && (
+                  <TopicHeatmap
+                    topics={topicCompetitors}
+                    columns={trendLines(rateTrend.entities, rateTrend.points, rateTrend.pinned).map(
+                      (line) => ({ key: line.key, name: line.name }),
+                    )}
+                  />
+                )}
+
+              {/* Opportunities (VIS-011), under the map: stored suggestions, not period-scoped. */}
+              {opportunities && (
+                <Opportunities
+                  brandId={brand.id}
+                  suggestions={opportunities.suggestions}
+                  trackedTopicIds={opportunities.trackedTopicIds}
+                  topics={topicCompetitors}
+                  entities={rateTrend?.entities ?? null}
+                  slotsLeft={
+                    !trackedPrompts || trackedPrompts.quotaLimit < 0
+                      ? null
+                      : Math.max(0, trackedPrompts.quotaLimit - trackedPrompts.quotaUsed)
+                  }
+                  contentUsage={opportunities.contentUsage}
+                  onTracked={(count) =>
+                    setTrackedPrompts(
+                      (current) => current && { ...current, quotaUsed: current.quotaUsed + count },
+                    )
+                  }
+                />
+              )}
             </>
           )}
         </div>
@@ -1750,19 +1392,8 @@ export default function InsightsPage() {
         onOpenChange={(open) => {
           if (!open) setBreakdownMetric(null);
         }}
-        filters={(() => {
-          const { dateFrom, dateTo } = getDateRange(filters.datePreset, {
-            from: filters.dateFrom,
-            to: filters.dateTo,
-          });
-          return {
-            dateFrom,
-            dateTo,
-            region: filters.region || undefined,
-            model: filters.model || undefined,
-            topicId: filters.topic || undefined,
-          };
-        })()}
+        filters={loadedFilters}
+        initialTab={breakdownTab}
       />
     </div>
   );

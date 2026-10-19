@@ -1,12 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
 import {
   AlertCircle,
   ArrowUpDown,
   CircleDot,
+  Download,
   ListChecks,
+  Loader2,
   Search,
   Shield,
   Sparkles,
@@ -14,25 +17,39 @@ import {
   X,
 } from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useUserRole } from '@/hooks/use-user-role';
 import type { Brand } from '@/types';
-import { getActions, type ActionItem } from '@/lib/actions/action-center';
+import {
+  deleteAction,
+  getActions,
+  getActionsAffected,
+  updateActionStatus,
+  type ActionItem,
+} from '@/lib/actions/action-center';
 import { listMembers, type TeamMember } from '@/lib/actions/team';
+import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import {
   ACTION_CATEGORIES,
-  ACTION_IMPACTS,
   ACTION_SORTS,
   ACTION_STATUSES,
+  OPEN_ACTION_STATUSES,
   type ActionCategory,
-  type ActionImpact,
   type ActionSort,
   type ActionStatus,
 } from '@/lib/action-center/registry';
 import {
   actionContextTags,
   actionTexts,
-  comparePriority,
+  assigneeLabel,
   memberLabel,
 } from '@/lib/action-center/display';
+import {
+  PRIORITY_LEVELS,
+  comparePriority,
+  highestPriorityLevel,
+  topActionIds,
+  type PriorityLevel,
+} from '@/lib/action-center/priority';
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
 import { ActionTable } from '@/components/action-center/action-table';
 import { ActionDrawer } from '@/components/action-center/action-drawer';
@@ -48,10 +65,10 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { BYTE_ORDER_MARK, actionListCsv } from '@/lib/action-center/export';
+import { saveBlob } from '@/lib/download';
 
-const OPEN_STATUSES: ActionStatus[] = ['new', 'in_progress', 'on_hold'];
-
-const isOpen = (action: ActionItem) => OPEN_STATUSES.includes(action.status);
+const isOpen = (action: ActionItem) => OPEN_ACTION_STATUSES.includes(action.status);
 
 /**
  * What each summary card counts, one predicate per card.
@@ -63,14 +80,14 @@ const isOpen = (action: ActionItem) => OPEN_STATUSES.includes(action.status);
  * the count and the filter read the same predicate they cannot disagree.
  */
 const CARD_FILTERS = {
-  top: (action: ActionItem) => isOpen(action) && action.impact === 'high',
   atRisk: (action: ActionItem) =>
     isOpen(action) && (action.category === 'recover' || action.category === 'fix'),
   opportunities: (action: ActionItem) => isOpen(action) && action.category === 'growth',
   inProgress: (action: ActionItem) => action.status === 'in_progress',
 } as const;
 
-type CardFocus = keyof typeof CARD_FILTERS;
+/** Top Actions is the five highest-priority open actions (AC-006), not a predicate. */
+type CardFocus = keyof typeof CARD_FILTERS | 'top';
 
 export default function ActionCenterActionsPage() {
   const brand = useBrandStore((s) => s.getActiveBrand());
@@ -97,6 +114,7 @@ export default function ActionCenterActionsPage() {
 
 function ActionsContent({ brand }: { brand: Brand }) {
   const t = useTranslations('actionCenter.actionsPage');
+  const common = useTranslations('common');
   const tTexts = useTranslations('actionCenter.actionTexts');
   const tCategories = useTranslations('actionCenter.actionCategories');
 
@@ -106,12 +124,56 @@ function ActionsContent({ brand }: { brand: Brand }) {
   const [loadFailed, setLoadFailed] = useState(false);
 
   const [category, setCategory] = useState<ActionCategory | 'all'>('all');
-  const [impact, setImpact] = useState<ActionImpact | 'all'>('all');
+  const [priority, setPriority] = useState<PriorityLevel | 'all'>('all');
   const [status, setStatus] = useState<ActionStatus | 'all'>('all');
   const [assignee, setAssignee] = useState<string>('all');
   const [sort, setSort] = useState<ActionSort>('priority');
   const [search, setSearch] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
+  const { canManage } = useUserRole();
+  // Rows with a menu change in flight.
+  const [busyIds, setBusyIds] = useState<Set<string>>(() => new Set());
+  // False once this brand's view is gone, so an export still reading doesn't
+  // download the previous brand's file after a switch.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const [focus, setFocus] = useState<CardFocus | null>(null);
+
+  // Filters, sort and search live in the URL (#896) so a refresh keeps them
+  // and a filtered view can be shared. Read after mount; defaults stay out.
+  const [urlRead, setUrlRead] = useState(false);
+  useEffect(() => {
+    setCategory(
+      readUrlChoice<ActionCategory | 'all'>('category', ['all', ...ACTION_CATEGORIES], 'all'),
+    );
+    setPriority(
+      readUrlChoice<PriorityLevel | 'all'>('priority', ['all', ...PRIORITY_LEVELS], 'all'),
+    );
+    setStatus(readUrlChoice<ActionStatus | 'all'>('status', ['all', ...ACTION_STATUSES], 'all'));
+    setAssignee(readUrlParam('assignee') || 'all');
+    setSort(readUrlChoice<ActionSort>('sort', ACTION_SORTS, 'priority'));
+    setSearch(readUrlParam('q'));
+    setUrlRead(true);
+  }, []);
+
+  useEffect(() => {
+    if (!urlRead) return;
+    // Debounced, so typing in search doesn't rewrite the URL on every key.
+    const timer = setTimeout(
+      () =>
+        writeUrlParams(
+          { category, priority, status, assignee, sort, q: search.trim() },
+          { category: 'all', priority: 'all', status: 'all', assignee: 'all', sort: 'priority' },
+        ),
+      300,
+    );
+    return () => clearTimeout(timer);
+  }, [urlRead, category, priority, status, assignee, sort, search]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -138,12 +200,26 @@ function ActionsContent({ brand }: { brand: Brand }) {
     }
   }, [brand.id]);
 
+  // A change made in the drawer, shown in its row at once: reading the whole
+  // list again after each one held the drawer for seconds.
+  const patchAction = useCallback((id: string, patch: Partial<ActionItem>) => {
+    setActions((prev) =>
+      prev ? prev.map((action) => (action.id === id ? { ...action, ...patch } : action)) : prev,
+    );
+  }, []);
+
   useEffect(() => {
     void load();
     listMembers()
       .then(setMembers)
       .catch(() => setMembers([]));
   }, [load]);
+
+  // An assignee from the URL who is no longer on the team falls back to all.
+  useEffect(() => {
+    if (members.length === 0 || assignee === 'all' || assignee === 'unassigned') return;
+    if (!members.some((m) => m.userId === assignee)) setAssignee('all');
+  }, [members, assignee]);
 
   // Restore the drawer named by the URL once the list is in.
   useEffect(() => {
@@ -152,17 +228,50 @@ function ActionsContent({ brand }: { brand: Brand }) {
     if (id && actions.some((action) => action.id === id)) setSelectedId(id);
   }, [actions]);
 
+  // The row menu: set a status or delete, without the drawer, then read the
+  // list again.
+  const runRowChange = async (action: ActionItem, change: () => Promise<void>, done: string) => {
+    setBusyIds((prev) => new Set(prev).add(action.id));
+    try {
+      await change();
+      toast.success(done);
+    } catch {
+      toast.error(t('updateFailed'));
+    } finally {
+      await load();
+      setBusyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(action.id);
+        return next;
+      });
+    }
+  };
+  const changeStatus = (action: ActionItem, next: ActionStatus) =>
+    void runRowChange(
+      action,
+      () => updateActionStatus(brand.id, action.id, next),
+      t('rowMenu.statusChanged', { status: t(`status.${next}`) }),
+    );
+  const removeAction = (action: ActionItem) => {
+    if (selectedId === action.id) selectAction(null);
+    void runRowChange(action, () => deleteAction(action.id), t('rowMenu.deleted'));
+  };
+
   const selected = useMemo(
     () => (actions ?? []).find((action) => action.id === selectedId) ?? null,
     [actions, selectedId],
   );
 
+  // The card and its filter read one set, so they cannot disagree.
+  const topIds = useMemo(() => topActionIds(actions ?? []), [actions]);
+
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
     const filtered = (actions ?? []).filter((action) => {
-      if (focus && !CARD_FILTERS[focus](action)) return false;
+      if (focus === 'top' ? !topIds.has(action.id) : focus && !CARD_FILTERS[focus](action))
+        return false;
       if (category !== 'all' && action.category !== category) return false;
-      if (impact !== 'all' && action.impact !== impact) return false;
+      if (priority !== 'all' && action.priorityLevel !== priority) return false;
       if (status !== 'all' && action.status !== status) return false;
       if (assignee !== 'all') {
         if (assignee === 'unassigned' ? action.assignee !== null : action.assignee?.id !== assignee)
@@ -178,8 +287,6 @@ function ActionsContent({ brand }: { brand: Brand }) {
     });
     return filtered.sort((a, b) => {
       switch (sort) {
-        case 'impact':
-          return comparePriority(a, b);
         case 'newest':
           return b.createdAt.localeCompare(a.createdAt);
         case 'due_date':
@@ -190,7 +297,51 @@ function ActionsContent({ brand }: { brand: Brand }) {
           return comparePriority(a, b);
       }
     });
-  }, [actions, focus, category, impact, status, assignee, search, sort, tTexts, t]);
+  }, [actions, topIds, focus, category, priority, status, assignee, search, sort, tTexts, t]);
+
+  const handleExportCsv = useCallback(async () => {
+    if (visible.length === 0) return;
+
+    setIsExporting(true);
+    let affected: Awaited<ReturnType<typeof getActionsAffected>>;
+    try {
+      // What each action's Affected tab lists (AC-005), read for the export only.
+      affected = await getActionsAffected(
+        brand.id,
+        visible.map((action) => action.id),
+      );
+    } catch {
+      if (mounted.current) toast.error(t('export.exportFailed'));
+      return;
+    } finally {
+      setIsExporting(false);
+    }
+    if (!mounted.current) return;
+
+    const csv = actionListCsv(
+      visible.map((action) => ({
+        number: action.actionNo,
+        priorityScore: action.priorityScore,
+        priorityLevel: action.priorityLevel ? t(`priority.levels.${action.priorityLevel}`) : '',
+        title: actionTexts(action, tTexts).title,
+        category: tCategories(action.category),
+        status: t(`status.${action.status}`),
+        assignee: action.assignee ? (assigneeLabel(action.assignee) ?? '') : '',
+        dueDate: action.dueDate ?? '',
+        tasksDone: action.taskCompleted,
+        tasksTotal: action.taskTotal,
+        signalCount: action.signalCount,
+        affected: affected[action.id],
+        created: action.createdAt,
+      })),
+    );
+    const date = new Date().toISOString().slice(0, 10);
+    const slug = brand.slug ?? 'brand';
+    saveBlob(
+      new Blob([BYTE_ORDER_MARK, csv], { type: 'text/csv;charset=utf-8;' }),
+      `ansvisor_${slug}_actions_${date}.csv`,
+    );
+  }, [brand.id, brand.slug, visible, tTexts, tCategories, t]);
 
   const categoryCounts = useMemo(() => {
     const counts = new Map<ActionCategory, number>();
@@ -203,21 +354,19 @@ function ActionsContent({ brand }: { brand: Brand }) {
   const summary = useMemo(() => {
     const all = actions ?? [];
     const open = all.filter(isOpen);
-    const impacts = open.map((action) => action.impact);
     return {
-      top: all.filter(CARD_FILTERS.top).length,
+      top: topIds.size,
       atRisk: all.filter(CARD_FILTERS.atRisk).length,
       opportunities: all.filter(CARD_FILTERS.opportunities).length,
       inProgress: all.filter(CARD_FILTERS.inProgress).length,
-      potential: impacts.includes('high') ? 'high' : impacts.includes('medium') ? 'medium' : 'low',
-      hasOpen: open.length > 0,
+      highest: highestPriorityLevel(open.map((action) => action.priorityLevel)),
     };
-  }, [actions]);
+  }, [actions, topIds]);
 
   const hasActiveFilters =
     focus !== null ||
     category !== 'all' ||
-    impact !== 'all' ||
+    priority !== 'all' ||
     status !== 'all' ||
     assignee !== 'all' ||
     search !== '';
@@ -225,7 +374,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
   const clearFilters = () => {
     setFocus(null);
     setCategory('all');
-    setImpact('all');
+    setPriority('all');
     setStatus('all');
     setAssignee('all');
     setSearch('');
@@ -313,12 +462,12 @@ function ActionsContent({ brand }: { brand: Brand }) {
               <div className="flex h-7 w-7 items-center justify-center rounded-md border bg-muted/40">
                 <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
               </div>
-              <p className="text-xs font-medium text-muted-foreground">{t('cards.impact')}</p>
+              <p className="text-xs font-medium text-muted-foreground">{t('cards.priority')}</p>
             </div>
             <p className="mt-2 text-2xl font-bold">
-              {summary.hasOpen ? t(`impact.${summary.potential}`) : '—'}
+              {summary.highest ? t(`priority.levels.${summary.highest}`) : '—'}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{t('cards.impactSub')}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{t('cards.prioritySub')}</p>
           </CardContent>
         </Card>
       </div>
@@ -362,10 +511,10 @@ function ActionsContent({ brand }: { brand: Brand }) {
 
       <div className="flex flex-wrap items-center gap-2">
         <FilterSelect
-          label={t('filters.impact')}
-          value={impact}
-          onChange={(v) => setImpact(v as ActionImpact | 'all')}
-          options={ACTION_IMPACTS.map((v) => ({ value: v, label: t(`impact.${v}`) }))}
+          label={t('filters.priority')}
+          value={priority}
+          onChange={(v) => setPriority(v as PriorityLevel | 'all')}
+          options={PRIORITY_LEVELS.map((v) => ({ value: v, label: t(`priority.levels.${v}`) }))}
           allLabel={t('filters.all')}
         />
         <FilterSelect
@@ -403,10 +552,32 @@ function ActionsContent({ brand }: { brand: Brand }) {
             {t('filters.clear')}
           </Button>
         )}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="ml-auto gap-2 text-xs"
+          onClick={handleExportCsv}
+          disabled={visible.length === 0 || isExporting}
+        >
+          {isExporting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Download className="h-3.5 w-3.5" />
+          )}
+          {common('exportCsv')}
+        </Button>
       </div>
 
       {visible.length > 0 ? (
-        <ActionTable actions={visible} onSelect={(action) => selectAction(action.id)} />
+        <ActionTable
+          actions={visible}
+          onSelect={(action) => selectAction(action.id)}
+          onStatusChange={changeStatus}
+          onDelete={removeAction}
+          canDelete={canManage}
+          busyIds={busyIds}
+        />
       ) : (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
           <p className="text-sm text-muted-foreground">{t('noResults')}</p>
@@ -424,6 +595,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
           if (!open) selectAction(null);
         }}
         onChanged={() => void load()}
+        onPatched={patchAction}
       />
     </div>
   );
@@ -441,7 +613,7 @@ function SummaryCard({
   label: string;
   value: number;
   sub: string;
-  /** Omit both to render a card that only reports, like Potential Impact. */
+  /** Omit both to render a card that only reports, like Highest Priority. */
   isActive?: boolean;
   onClick?: () => void;
 }) {
