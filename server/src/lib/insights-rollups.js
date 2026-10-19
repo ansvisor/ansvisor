@@ -11,6 +11,8 @@
  *     as a backstop: runs that never stamped (partial, crashed, ghost tasks)
  *     and out-of-run writes (a prompt analyzed the moment it was added, #754)
  *     all get their day picked up the next morning
+ *   - the rebuild queue, which refreshes the days of a deleted prompt
+ *     (00192): its answers are gone, but the rows keep them until then
  *
  * Every entry point is best-effort. The rollups are derived state, always
  * recomputable from prompt_results; a refresh failure costs freshness until
@@ -63,10 +65,89 @@ export async function refreshForCompletedRun(brandId, runStartedAtIso) {
   return ok;
 }
 
+/** Days refreshed per call when a queued range is rebuilt, as the backfill chunks them. */
+export const REBUILD_CHUNK_DAYS = 31;
+
+function addDays(day, n) {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return utcDay(d.toISOString());
+}
+
+/** The drain in progress, if any. */
+let rebuildInFlight = null;
+
+/**
+ * Refresh the days queued by a prompt delete (the trigger on prompts in
+ * 00192). The prompt's answers cascade away, but insights_brand_daily keeps
+ * them until those days are refreshed, and the sweep covers only the last
+ * SWEEP_DAYS; the Mentions page, which reads existing prompts only, already
+ * leaves them out. A queue entry is cleared only if nothing re-queued the
+ * brand while it was refreshed.
+ *
+ * Called on the citation rebuilds' schedule and at the end of the nightly
+ * sweep. Runs never overlap: a call made while one is in progress returns at
+ * once with `skipped: true`.
+ */
+export async function rebuildQueuedInsightsRollups() {
+  if (rebuildInFlight) return { rebuilt: 0, failed: 0, skipped: true };
+  rebuildInFlight = drainRebuildQueue();
+  try {
+    return await rebuildInFlight;
+  } finally {
+    rebuildInFlight = null;
+  }
+}
+
+async function drainRebuildQueue() {
+  const { data: queued, error } = await supabaseAdmin
+    .from('insights_rollup_rebuilds')
+    .select('brand_id, day_from, day_to, requested_at');
+  if (error) {
+    logger.error({ err: error }, '[insights-rollups] could not read the rebuild queue');
+    return { rebuilt: 0, failed: 0 };
+  }
+
+  let rebuilt = 0;
+  let failed = 0;
+  for (const entry of queued ?? []) {
+    const {
+      brand_id: brandId,
+      day_from: dayFrom,
+      day_to: dayTo,
+      requested_at: requestedAt,
+    } = entry;
+    let ok = true;
+    for (let from = dayFrom; ok && from <= dayTo; from = addDays(from, REBUILD_CHUNK_DAYS)) {
+      const end = addDays(from, REBUILD_CHUNK_DAYS - 1);
+      ok = await refreshInsightsDaily(brandId, from, end < dayTo ? end : dayTo);
+    }
+    // A failed refresh logged itself; the entry stays for the next drain.
+    if (!ok) {
+      failed++;
+      continue;
+    }
+    const { error: clearError } = await supabaseAdmin
+      .from('insights_rollup_rebuilds')
+      .delete()
+      .eq('brand_id', brandId)
+      .lte('requested_at', requestedAt);
+    if (clearError) {
+      logger.warn({ err: clearError, brandId }, '[insights-rollups] could not clear a rebuild');
+    }
+    rebuilt++;
+  }
+
+  if (rebuilt + failed > 0) {
+    logger.info({ rebuilt, failed }, '[insights-rollups] deleted-prompt rebuilds complete');
+  }
+  return { rebuilt, failed };
+}
+
 /**
  * Daily backstop: refresh the trailing SWEEP_DAYS for every brand, Insights,
  * Citations and Mentions rollups alike, then rebuild the brands queued by
- * topic moves.
+ * topic moves and prompt deletes.
  *
  * Deliberately every brand rather than "brands with recent results" — a
  * refresh over days with no rows deletes nothing and inserts nothing, so the
@@ -99,7 +180,9 @@ export async function sweepInsightsRollups({ days = SWEEP_DAYS } = {}) {
 
   logger.info({ refreshed, failed, dayFrom, dayTo }, '[insights-rollups] sweep complete');
 
-  // Brands whose prompts changed topic get their citation history rebuilt.
+  // Brands whose prompts changed topic get their citation history rebuilt,
+  // and the days of deleted prompts their Insights rows.
   await rebuildQueuedCitationRollups();
+  await rebuildQueuedInsightsRollups();
   return { refreshed, failed };
 }
