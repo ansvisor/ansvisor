@@ -138,6 +138,11 @@ describe('AuditPagesTable', () => {
     expect(container.querySelectorAll('tbody svg[role=img]')).toHaveLength(0);
   });
 
+  it("tags a page whose last audit was an auto-audit run's", () => {
+    render([page({ lastAuditSource: 'auto' }), page({ key: 'acme.com/blog', path: '/blog' })]);
+    expect(rows().map((row) => cells(row).at(-1))).toEqual(['Oct 14, 2026Auto', 'Oct 14, 2026']);
+  });
+
   it('opens the latest report from the row, and the earlier audits from the arrow', () => {
     render([page()]);
 

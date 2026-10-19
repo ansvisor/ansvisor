@@ -15,7 +15,11 @@ function snippetTag(trackingCode?: string): string | null {
   return `<script src="${apiUrl}/t.js" data-t="${trackingCode}" defer></script>`;
 }
 
-/** Where the tag goes, the tag, and a copy button. */
+/**
+ * Where the tag goes, the tag, and a copy button. The tag wraps inside its
+ * box, and the block can shrink below the tag's width: in the dialog's grid
+ * it would otherwise widen the dialog past the screen.
+ */
 function SnippetCode({ snippet }: { snippet: string }) {
   const t = useTranslations('traffic');
   const [copied, setCopied] = useState(false);
@@ -27,7 +31,7 @@ function SnippetCode({ snippet }: { snippet: string }) {
   };
 
   return (
-    <div className="flex items-start gap-3">
+    <div className="flex min-w-0 items-start gap-3">
       <div className="min-w-0 flex-1">
         <p className="text-xs text-muted-foreground">
           {t.rich('snippetDescription', {
@@ -35,7 +39,7 @@ function SnippetCode({ snippet }: { snippet: string }) {
             code: (chunks) => <code className="text-[11px]">{chunks}</code>,
           })}
         </p>
-        <pre className="mt-2 overflow-x-auto rounded-md bg-muted/50 px-3 py-2 font-mono text-[11px]">
+        <pre className="mt-2 rounded-md bg-muted/50 px-3 py-2 font-mono text-[11px] break-all whitespace-pre-wrap">
           {snippet}
         </pre>
       </div>
