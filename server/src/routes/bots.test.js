@@ -137,6 +137,11 @@ describe('AI bot connections', () => {
 
     const drain = await (await create({ kind: 'vercel_drain' })).json();
     expect(drain.workerScript).toBeNull();
+    expect(drain.vercelDrain.headers).toEqual([`Authorization: Bearer ${drain.secret}`]);
+
+    const logpush = await (await create({ kind: 'cloudflare_logpush' })).json();
+    expect(logpush.logpushJob.destination_conf).toContain(encodeURIComponent(logpush.secret));
+    expect(logpush.vercelDrain).toBeNull();
   });
 
   it('makes no connection while the server has no public https address', async () => {

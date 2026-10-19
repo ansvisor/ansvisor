@@ -57,6 +57,9 @@ const server = http.createServer(app);
 // payload exactly as sent, and express.json()'s parse/re-serialize would break it.
 // Mounted first so the global JSON parser skips this path (body already consumed).
 app.use('/cloro/callback', express.raw({ type: 'application/json', limit: '50mb' }));
+// AI-bot senders (AT-010) post a Worker's JSON, a gzipped Logpush file or a
+// Vercel drain's logs: read raw, before the JSON and form parsers take them.
+app.use('/bots/ingest', express.raw({ type: () => true, limit: '20mb' }));
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 

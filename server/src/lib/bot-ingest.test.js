@@ -26,14 +26,20 @@ vi.mock('../config/supabase.js', () => ({
   },
 }));
 const getBotEventCap = vi.fn();
-vi.mock('./plan-guard.js', () => ({ getBotEventCap: (...a) => getBotEventCap(...a) }));
+const getBotRawCap = vi.fn();
+vi.mock('./plan-guard.js', () => ({
+  getBotEventCap: (...a) => getBotEventCap(...a),
+  getBotRawCap: (...a) => getBotRawCap(...a),
+}));
 const warn = vi.fn();
 vi.mock('./logger.js', () => ({ logger: { warn: (...a) => warn(...a) } }));
 
 const { clearRangeCache } = await import('./ai-bots.js');
 const {
   MAX_BATCH,
+  WRITE_CHUNK,
   connectionForSecret,
+  countRawRecords,
   hashSecret,
   ingestBotRequests,
   newConnectionSecret,
@@ -64,6 +70,7 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ data: { stored: 2, used: 2, crossed80: false }, error: null });
   getBotEventCap.mockReset().mockResolvedValue(2_000_000);
+  getBotRawCap.mockReset().mockResolvedValue(20_000_000);
   warn.mockReset();
   selects.length = 0;
 });
@@ -133,6 +140,20 @@ describe('ingestBotRequests', () => {
     expect(many.received).toBe(MAX_BATCH);
   });
 
+  it('reads a whole log file and writes its verified events in chunks', async () => {
+    rpc.mockResolvedValue({ data: { stored: 1, used: 1, crossed80: false }, error: null });
+    const result = await ingestBotRequests(
+      connection,
+      Array.from({ length: WRITE_CHUNK + 20 }, () => gpt()),
+      { fetchImpl, now: NOW, limit: Infinity },
+    );
+    expect(result.verified).toBe(WRITE_CHUNK + 20);
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc.mock.calls[0][1].p_events).toHaveLength(WRITE_CHUNK);
+    expect(rpc.mock.calls[1][1].p_events).toHaveLength(20);
+    expect(result.stored).toBe(2);
+  });
+
   it('writes nothing on a plan without the report', async () => {
     getBotEventCap.mockResolvedValue(0);
     const result = await ingestBotRequests(connection, [gpt()], { fetchImpl, now: NOW });
@@ -176,6 +197,34 @@ describe('connection secrets', () => {
     connectionRow = { ...connectionRow, revoked_at: '2026-10-18T00:00:00Z' };
     expect(await connectionForSecret(a)).toBeNull();
     expect(await connectionForSecret('not-a-secret')).toBeNull();
+  });
+});
+
+describe('countRawRecords', () => {
+  it("counts a log sender's records against the plan's raw cap", async () => {
+    rpc.mockResolvedValue({ data: { allowed: true, raw: 1200, cap: 20_000_000 }, error: null });
+    expect(await countRawRecords(connection, 1200)).toEqual({
+      allowed: true,
+      raw: 1200,
+      cap: 20_000_000,
+    });
+    expect(rpc).toHaveBeenCalledWith('ai_bot_count_raw', {
+      p_connection_id: 'c1',
+      p_count: 1200,
+      p_cap: 20_000_000,
+    });
+
+    rpc.mockResolvedValue({
+      data: { allowed: false, raw: 20_000_100, cap: 20_000_000 },
+      error: null,
+    });
+    expect((await countRawRecords(connection, 100)).allowed).toBe(false);
+  });
+
+  it('reads nothing on a plan without the report', async () => {
+    getBotRawCap.mockResolvedValue(0);
+    expect(await countRawRecords(connection, 10)).toEqual({ allowed: false, locked: true });
+    expect(rpc).not.toHaveBeenCalled();
   });
 });
 
