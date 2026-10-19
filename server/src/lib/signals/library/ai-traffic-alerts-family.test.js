@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../../config/supabase.js', () => ({ default: { from: vi.fn(), rpc: vi.fn() } }));
 vi.mock('../../logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
-const { LIBRARY_FAMILIES, LIBRARY_EMITTED_KINDS } = await import('./detect.js');
+const { LIBRARY_FAMILIES, LIBRARY_EMITTED_KINDS, weeklyWindows } = await import('./detect.js');
 
 const family = (name) => LIBRARY_FAMILIES.find((f) => f.name === name);
 
@@ -71,7 +71,8 @@ describe('the AI Traffic alerts family', () => {
 
   it('says Analytics when either week read it', async () => {
     const [found] = await alerts({
-      prev: week(40, [], { analytics_days: 3 }),
+      // ai_traffic_merged's analytics_days is the list of days (00176).
+      prev: week(40, [], { analytics_days: ['2026-10-06', '2026-10-07', '2026-10-08'] }),
       cur: week(10),
     });
     expect(found.source).toEqual(['ga4']);
@@ -158,6 +159,7 @@ describe('the AI bots family', () => {
   it('raises the cited pages no AI search bot read in 30 days, counting them all', async () => {
     const found = await bots({
       first_day: '2026-09-01',
+      alert_state: 'on',
       uncrawled_count: 14,
       uncrawled: [
         { page: '/guides/espresso-machines-for-beginners', citations: '14' },
@@ -194,7 +196,21 @@ describe('the AI bots family', () => {
     expect(await bots({ first_day: '2026-10-10', uncrawled_count: null, uncrawled: null })).toEqual(
       [],
     );
-    expect(await bots({ first_day: '2026-09-01', uncrawled_count: 0, uncrawled: [] })).toEqual([]);
+    expect(
+      await bots({ first_day: '2026-09-01', alert_state: 'on', uncrawled_count: 0, uncrawled: [] }),
+    ).toEqual([]);
+  });
+
+  it("raises nothing while the bot data isn't whole, whatever the report lists", async () => {
+    // A sender stopped, was revoked or hit its cap: the pages read drained.
+    expect(
+      await bots({
+        first_day: '2026-09-01',
+        alert_state: 'stale',
+        uncrawled_count: 40,
+        uncrawled: [{ page: '/gifts', citations: 9 }],
+      }),
+    ).toEqual([]);
   });
 
   it('declares the kinds it can write, so a failed night is not read as recovery', () => {
@@ -205,5 +221,15 @@ describe('the AI bots family', () => {
         'cited_page_uncrawled',
       ]),
     );
+  });
+});
+
+describe('weeklyWindows', () => {
+  it('ends each week a second before midnight, so its last day is in one week only', () => {
+    // ai_traffic_merged keeps Analytics rows through p_to's day (00176).
+    expect(weeklyWindows(new Date('2026-10-19T06:00:00Z'))).toEqual({
+      cur: { from: '2026-10-12T00:00:00.000Z', to: '2026-10-18T23:59:59.000Z' },
+      prev: { from: '2026-10-05T00:00:00.000Z', to: '2026-10-11T23:59:59.000Z' },
+    });
   });
 });

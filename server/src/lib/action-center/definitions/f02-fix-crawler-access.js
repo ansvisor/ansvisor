@@ -4,6 +4,11 @@
  * Signal: Pages AI crawlers are blocked from, as Site Audit finds them, and
  * cited pages no AI search bot read in 30 days, as the brand's own
  * Cloudflare or Vercel reports it (AT-013, spec §3.8).
+ *
+ * Only tracking, which every brand has, is required: the second signal
+ * needs no Site Audit, and the tasks that read the audit
+ * (analyze_site_audit, validate_technical_fix) require it themselves, so the
+ * planner leaves them out for a brand without one.
  */
 
 import { targetPayload } from './_helpers.js';
@@ -15,7 +20,7 @@ export default {
   category: 'fix',
   name: 'Fix AI Crawler Accessibility',
   signalKinds: ['crawler_blocked', 'cited_page_uncrawled'],
-  requires: ['site_audits'],
+  requires: ['tracking'],
   optional: [],
   enabled: true,
   tasks: [

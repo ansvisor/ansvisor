@@ -67,7 +67,13 @@ describe('getTrafficPages', () => {
     );
     const pages = {
       data: {
-        counts: { all: 14, no_ai_traffic: 8, cited_not_clicked: 1, traffic_no_prompt: 5 },
+        counts: {
+          all: 14,
+          no_ai_traffic: 8,
+          cited_not_clicked: 1,
+          traffic_no_prompt: 5,
+          broken_ai_links: 2,
+        },
         rows: [
           {
             page: '/subscriptions',

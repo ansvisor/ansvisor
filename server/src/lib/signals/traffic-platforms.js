@@ -7,6 +7,10 @@
  * visits before the week has nothing to compare with — every platform would
  * be new — so it gets none.
  *
+ * Only a source on the list (ai-sources.json) with NEW_PLATFORM_MIN_VISITS
+ * or more visits: the beacon is public, so a made-up source key or one stray
+ * visit would otherwise raise it.
+ *
  * Good news with no work behind it, so it is a recorder kind of its own
  * (`ai_platform_new`, like `new_engine`) and no definition reads it. It is an
  * event: it stays until someone reads it, and a later week can't raise it
@@ -14,9 +18,21 @@
  */
 
 import supabaseAdmin from '../../config/supabase.js';
+import { AI_SOURCES } from '../ai-sources.js';
 import { logger } from '../logger.js';
+import { analyticsDayCount } from './library/classify.js';
 
 const DAY_MS = 86_400_000;
+
+/** Visits in the week a platform needs before it counts as new. */
+export const NEW_PLATFORM_MIN_VISITS = 3;
+
+const KNOWN_SOURCES = new Set(AI_SOURCES.map((source) => source.key));
+
+/** The second before `iso`: see detect.js lastSecond. */
+function lastSecond(iso) {
+  return new Date(Date.parse(iso) - 1000).toISOString();
+}
 
 /** Midnight UTC `daysAgo` days before today's. */
 function utcMidnight(now, daysAgo) {
@@ -45,7 +61,7 @@ export function newPlatforms(week, before) {
   }
   return (week?.platforms ?? [])
     .map((p) => ({ platform: String(p.platform ?? ''), visits: Number(p.visits) || 0 }))
-    .filter((p) => p.visits > 0 && p.platform && p.platform !== 'unknown')
+    .filter((p) => p.visits >= NEW_PLATFORM_MIN_VISITS && KNOWN_SOURCES.has(p.platform))
     .filter((p) => !earlier.has(p.platform))
     .map((p) => ({ ...p, firstDay: firstDay.get(p.platform) ?? null }))
     .sort((a, b) => b.visits - a.visits || a.platform.localeCompare(b.platform));
@@ -55,8 +71,8 @@ async function merged(brandId, from, to) {
   const { data, error } = await supabaseAdmin.rpc('ai_traffic_merged', {
     p_brand_id: brandId,
     p_from: from,
-    p_to: to,
-    p_to_inclusive: false,
+    p_to: lastSecond(to),
+    p_to_inclusive: true,
     p_analytics: true,
   });
   if (error) throw new Error(error.message);
@@ -75,7 +91,7 @@ export async function newAiPlatformCandidates(brandId, { now = new Date() } = {}
       merged(brandId, weekStart, utcMidnight(now, 0)),
       merged(brandId, null, weekStart),
     ]);
-    const analytics = (Number(week.analytics_days) || 0) > 0;
+    const analytics = analyticsDayCount(week.analytics_days) > 0;
     return newPlatforms(week, before).map((p) => ({
       kind: 'ai_platform_new',
       dedupKey: `ai_platform_new:${p.platform}`,

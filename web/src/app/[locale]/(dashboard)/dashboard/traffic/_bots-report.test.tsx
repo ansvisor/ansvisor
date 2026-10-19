@@ -13,9 +13,10 @@ import type { TrafficBots, TrafficDateWindow } from '@/lib/actions/traffic';
  */
 
 const getBotConnections = vi.fn();
+const createBotConnection = vi.fn();
 vi.mock('@/lib/actions/ai-bots', () => ({
   getBotConnections: (...a: unknown[]) => getBotConnections(...a),
-  createBotConnection: vi.fn(),
+  createBotConnection: (...a: unknown[]) => createBotConnection(...a),
   revokeBotConnection: vi.fn(),
 }));
 const getTrafficBots = vi.fn();
@@ -60,7 +61,9 @@ const report = (over: Partial<TrafficBots> = {}): TrafficBots => ({
   ],
   uncrawledCount: 3,
   uncrawled: [{ page: '/gifts', citations: 14 }],
+  alertState: 'on',
   alertFrom: '2026-09-30',
+  since: '2026-10-12',
   ...over,
 });
 
@@ -81,7 +84,7 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-async function render(canConnect = true) {
+async function render(canConnect = true, revision = 0, onChanged?: () => void) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
@@ -90,6 +93,8 @@ async function render(canConnect = true) {
           dateWindow={WEEK}
           rangeLabel="last 7 days"
           canConnect={canConnect}
+          revision={revision}
+          onChanged={onChanged}
         />
       </NextIntlClientProvider>,
     );
@@ -110,6 +115,33 @@ const rows = () =>
   );
 
 describe('BotsReportSection', () => {
+  it("keeps the new connection's settings up while the page reads the section again", async () => {
+    // Not connected yet: the sample with Connect.
+    getBotConnections.mockResolvedValue(info({ connections: [] }));
+    getTrafficBots.mockResolvedValue(report({ lastSeen: null }));
+    createBotConnection.mockResolvedValue({
+      connection: { id: 'c9', kind: 'cloudflare_worker', createdAt: 't', lastEventAt: null },
+      secret: 'abot_new_secret',
+      endpoint: 'https://api.example/bots/ingest',
+      workerScript: 'const SECRET = "abot_new_secret";',
+      logpushJob: null,
+      vercelDrain: null,
+    });
+    const onChanged = vi.fn();
+    await render(true, 0, onChanged);
+    const button = (label: string) =>
+      [...document.querySelectorAll('button')].find((b) => b.textContent === label)!;
+    await act(async () => button('Connect').click());
+    await act(async () => button('Create connection').click());
+    expect(onChanged).toHaveBeenCalled();
+    // The page bumps the section's revision: it reads again, and the dialog
+    // still shows the secret, once.
+    await render(true, 1, onChanged);
+    expect(getBotConnections).toHaveBeenCalledTimes(2);
+    expect(document.body.textContent).toContain("the secret in them isn't shown again");
+    expect(document.body.textContent).toContain('abot_new_secret');
+  });
+
   it('shows the bot types, the pages each type last read, and the search-bot alert', async () => {
     await render();
     expect(getTrafficBots).toHaveBeenCalledWith('b1', WEEK);
@@ -135,6 +167,27 @@ describe('BotsReportSection', () => {
     getTrafficBots.mockResolvedValue(report({ uncrawledCount: 0, uncrawled: [] }));
     await remount();
     expect(text()).toContain('Every page AI answers cited in the last 30 days was read');
+  });
+
+  it("pauses the alert while the bot data isn't whole, rather than listing every cited page", async () => {
+    getTrafficBots.mockResolvedValue(
+      report({ alertState: 'stale', uncrawledCount: null, uncrawled: null }),
+    );
+    await render();
+    expect(text()).toContain('The search-bot alert is paused');
+    expect(text()).not.toContain('The search-bot alert starts on');
+  });
+
+  it('says "last 90 days" for All time, which is what it covers', async () => {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <BotsReportSection brandId="b1" dateWindow={{}} rangeLabel="all time" canConnect />
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(text()).toContain('last 90 days');
+    expect(text()).not.toContain('all time');
   });
 
   it('locks the report with sample data and Upgrade on Starter', async () => {

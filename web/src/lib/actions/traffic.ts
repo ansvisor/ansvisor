@@ -645,7 +645,8 @@ export async function getTrafficPages(
   const supabase = await createClient();
   const { from, to } = resolveTrafficWindow(window);
   const broken = opts.tab === 'brokenAiLinks';
-  // Every tab is counted; only the asked tab's rows are read.
+  // Every tab is counted here; only the asked tab's rows are read, Broken AI
+  // links' from its own list, which is left empty when it can't be read.
   const [{ data, error }, brokenLinks] = await Promise.all([
     supabase.rpc('ai_traffic_pages', {
       p_brand_id: brandId,
@@ -655,10 +656,15 @@ export async function getTrafficPages(
       p_limit: broken ? 0 : (opts.limit ?? 10),
       p_offset: broken ? 0 : (opts.offset ?? 0),
     }),
-    getTrafficBrokenLinks(brandId, window, {
-      limit: broken ? (opts.limit ?? 10) : 0,
-      offset: broken ? (opts.offset ?? 0) : 0,
-    }),
+    broken
+      ? getTrafficBrokenLinks(brandId, window, {
+          limit: opts.limit ?? 10,
+          offset: opts.offset ?? 0,
+        }).catch((err) => {
+          console.error('Failed to load the broken AI links:', err);
+          return null;
+        })
+      : null,
   ]);
   if (error) throw new Error(error.message);
 
@@ -669,10 +675,10 @@ export async function getTrafficPages(
       noAiTraffic: Number(counts.no_ai_traffic) || 0,
       citedNotClicked: Number(counts.cited_not_clicked) || 0,
       trafficNoPrompt: Number(counts.traffic_no_prompt) || 0,
-      brokenAiLinks: brokenLinks.count,
+      brokenAiLinks: Number(counts.broken_ai_links) || 0,
       all: Number(counts.all) || 0,
     },
-    brokenLinks: brokenLinks.rows,
+    brokenLinks: brokenLinks?.rows ?? [],
     rows: (raw.rows ?? []).map((row) => ({
       page: row.page as string,
       aiVisits: Number(row.ai_visits) || 0,
@@ -1240,11 +1246,19 @@ export interface TrafficBots {
   bots: BotRow[];
   pageCount: number;
   pages: BotPageRow[];
-  /** Cited pages no search bot read in 30 days; null until 30 days of bot data. */
+  /** Cited pages no search bot read in 30 days; null unless alertState is 'on'. */
   uncrawledCount: number | null;
   uncrawled: { page: string; citations: number }[] | null;
+  /**
+   * The search-bot alert: 'waiting' for 30 days of bot data, 'stale' while no
+   * live connection has sent for 2 days or search hits went past the month's
+   * cap (the pages read would drain and list every cited page), else 'on'.
+   */
+  alertState: 'waiting' | 'stale' | 'on';
   /** The day the search-bot alert starts, 30 days after the first request. */
   alertFrom: string | null;
+  /** The first day the report covers: "All time" is the last 90 days. */
+  since: string | null;
 }
 
 /**
@@ -1299,6 +1313,9 @@ export async function getTrafficBots(
     uncrawled: Array.isArray(raw.uncrawled)
       ? list(raw.uncrawled).map((r) => ({ page: String(r.page), citations: n(r.citations) }))
       : null,
+    alertState:
+      raw.alert_state === 'on' || raw.alert_state === 'stale' ? raw.alert_state : 'waiting',
     alertFrom: str(raw.alert_from),
+    since: str(raw.since),
   };
 }

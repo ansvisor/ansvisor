@@ -378,6 +378,14 @@ export function classifyGscQuery(q, prompt, t) {
 // ─── AI traffic ─────────────────────────────────────────────────────────────
 
 /**
+ * The days Analytics counted in an ai_traffic_merged read (00176): a jsonb
+ * array of those days, not a number.
+ */
+export function analyticsDayCount(value) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+/**
  * AI-referred traffic per page, from analytics where connected and the
  * tracking snippet otherwise. Analytics wins where both exist: it is the
  * brand's own measurement, and the snippet is ours.
