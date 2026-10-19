@@ -140,6 +140,12 @@ describe('BotsReportSection', () => {
     expect(getBotConnections).toHaveBeenCalledTimes(2);
     expect(document.body.textContent).toContain("the secret in them isn't shown again");
     expect(document.body.textContent).toContain('abot_new_secret');
+
+    // A read that fails after that keeps it up too.
+    getBotConnections.mockResolvedValue({ error: 'failed' });
+    await render(true, 2, onChanged);
+    expect(getBotConnections).toHaveBeenCalledTimes(3);
+    expect(document.body.textContent).toContain('abot_new_secret');
   });
 
   it('shows the bot types, the pages each type last read, and the search-bot alert', async () => {

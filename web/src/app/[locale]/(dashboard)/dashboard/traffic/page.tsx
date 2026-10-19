@@ -659,7 +659,8 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
     <BotsReportSection
       brandId={brand.id}
       dateWindow={dateWindow}
-      rangeLabel={rangeSubLabel}
+      // The bot counters are by UTC day, so 24 hours read yesterday and today.
+      rangeLabel={datePreset === '24h' ? t('botReport.yesterdayAndToday') : rangeSubLabel}
       canConnect={canManage}
       revision={botsRevision}
       onChanged={() => setBotsRevision((n) => n + 1)}
