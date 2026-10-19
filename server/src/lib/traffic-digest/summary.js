@@ -35,6 +35,14 @@ export const TOP_CHANGES = 3;
 
 export const platformName = (key) => PLATFORM_NAMES[key] ?? key;
 
+/**
+ * A platform the page can name. The snippet's beacon is public, so a source
+ * key can be anything a caller sent; the e-mail names only the platforms it
+ * knows (old keys included), never `unknown`.
+ */
+export const isNamedPlatform = (key) =>
+  key !== 'unknown' && Object.hasOwn(PLATFORM_NAMES, String(key ?? ''));
+
 const n = (value) => Number(value) || 0;
 const formatNumber = (value) => Math.round(value).toLocaleString('en-US');
 const plural = (count, one, other) => (count === 1 ? one : other);
@@ -78,7 +86,7 @@ export function dailyVisits(week, days = []) {
 export function topPlatforms(platforms = [], limit = 5) {
   return platforms
     .map((p) => ({ platform: String(p.platform ?? ''), visits: n(p.visits) }))
-    .filter((p) => p.visits > 0 && p.platform)
+    .filter((p) => p.visits > 0 && isNamedPlatform(p.platform))
     .sort((a, b) => b.visits - a.visits || a.platform.localeCompare(b.platform))
     .slice(0, limit);
 }
@@ -136,7 +144,7 @@ export function summarySentences(input) {
   sentences.push(`${first.join(', ')}.`);
 
   const top = [...(input.platforms ?? [])]
-    .filter((p) => n(p.visits) > 0)
+    .filter((p) => n(p.visits) > 0 && isNamedPlatform(p.platform))
     .sort((a, b) => n(b.visits) - n(a.visits))[0];
   const best = input.gaSessions !== null ? bestConvertingPlatform(input.platformValue ?? []) : null;
   const rate = best ? `${best.rate.toLocaleString('en-US')}%` : '';
@@ -173,7 +181,7 @@ export function summarySentences(input) {
   return sentences;
 }
 
-function movers(cur = [], prev = [], keyOf, type) {
+function movers(cur = [], prev = [], keyOf, type, accept) {
   const before = new Map();
   const now = new Map();
   const names = new Map();
@@ -185,6 +193,7 @@ function movers(cur = [], prev = [], keyOf, type) {
       const raw = keyOf(row);
       if (!raw || raw === 'unknown') continue;
       const key = type === 'page' ? raw.toLowerCase() : raw;
+      if (accept && !accept(key)) continue;
       if (!names.has(key)) names.set(key, raw);
       into.set(key, (into.get(key) ?? 0) + n(row.visits));
     }
@@ -198,11 +207,26 @@ function movers(cur = [], prev = [], keyOf, type) {
 }
 
 /**
+ * The pages whose AI visits moved by MIN_CHANGE_VISITS or more, keyed as the
+ * Pages section keys them: the ones the digest asks ai_traffic_known_pages
+ * (00194) about before it may name them.
+ */
+export function pageCandidates({ cur, prev }) {
+  return movers(cur?.pages, prev?.pages, (r) => r.page, 'page')
+    .filter((m) => Math.abs(m.now - m.before) >= MIN_CHANGE_VISITS)
+    .map((m) => m.name.toLowerCase())
+    .sort();
+}
+
+/**
  * The week's top changes: broken AI links first — visitors are landing on
  * missing pages every day until someone adds a redirect — then the platforms
- * and pages whose AI visits moved most, by at least MIN_CHANGE_VISITS.
+ * and pages whose AI visits moved most, by at least MIN_CHANGE_VISITS. Only
+ * platforms the page can name, and pages a source other than the public
+ * beacon knows (`knownPages`, from ai_traffic_known_pages); without it, no
+ * page.
  */
-export function topChanges({ cur, prev, broken }, limit = TOP_CHANGES) {
+export function topChanges({ cur, prev, broken, knownPages }, limit = TOP_CHANGES) {
   const changes = [];
   const brokenRows = Array.isArray(broken?.rows) ? broken.rows : [];
   if (brokenRows.length > 0) {
@@ -213,9 +237,16 @@ export function topChanges({ cur, prev, broken }, limit = TOP_CHANGES) {
       target: brokenRows[0].target ?? null,
     });
   }
+  const known = knownPages ?? new Set();
   const moved = [
-    ...movers(cur?.platforms, prev?.platforms, (r) => r.platform, 'platform'),
-    ...movers(cur?.pages, prev?.pages, (r) => r.page, 'page'),
+    ...movers(cur?.platforms, prev?.platforms, (r) => r.platform, 'platform', isNamedPlatform),
+    ...movers(
+      cur?.pages,
+      prev?.pages,
+      (r) => r.page,
+      'page',
+      (key) => known.has(key),
+    ),
   ]
     .filter((m) => Math.abs(m.now - m.before) >= MIN_CHANGE_VISITS)
     .sort(

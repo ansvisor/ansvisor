@@ -8,6 +8,7 @@ import {
   dailyVisits,
   digestWeek,
   formatShare,
+  pageCandidates,
   summarySentences,
   topChanges,
   topPlatforms,
@@ -95,7 +96,10 @@ export async function readDigestData(brandId, week) {
   if ((Number(data.cur.visits) || 0) + (Number(data.prev.visits) || 0) === 0) return data;
 
   const until = lastSecond(week.end);
-  const [totals, pages, broken, untracked] = await Promise.all([
+  // The pages the changes could name, checked against sources the public
+  // beacon can't write (00194).
+  const candidates = pageCandidates(data);
+  const [totals, pages, broken, untracked, knownPages] = await Promise.all([
     supabaseAdmin
       .rpc('ga_traffic_totals', {
         p_brand_id: brandId,
@@ -128,6 +132,9 @@ export async function readDigestData(brandId, week) {
       latest: true,
       limit: 0,
     }),
+    candidates.length === 0
+      ? []
+      : rpc('ai_traffic_known_pages', { p_brand_id: brandId, p_pages: candidates }),
   ]);
   // Share and conversions only from a connected Analytics (§3.8b rule 5).
   const gaSessions = (Number(totals?.sessions) || 0) > 0 ? Number(totals.sessions) : null;
@@ -146,6 +153,7 @@ export async function readDigestData(brandId, week) {
     citedNotClicked: Number(pages?.counts?.cited_not_clicked) || 0,
     broken: broken ?? null,
     untrackedQueries: untracked?.count ?? 0,
+    knownPages: new Set(Array.isArray(knownPages) ? knownPages : []),
   };
 }
 

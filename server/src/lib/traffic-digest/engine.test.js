@@ -164,6 +164,29 @@ describe('sendTrafficDigestForBrand', () => {
     ]);
   });
 
+  it('names only pages a source other than the public beacon knows (00194)', async () => {
+    state.rpc.ai_traffic_merged = (p) =>
+      p.p_from === '2026-10-12T00:00:00.000Z'
+        ? {
+            visits: 36,
+            platforms: [{ platform: 'chatgpt.com', visits: 36 }],
+            pages: [
+              { page: '/menu', visits: 30 },
+              { page: '/cheap-pills', visits: 6 },
+            ],
+          }
+        : { visits: 30, platforms: [{ platform: 'chatgpt.com', visits: 30 }], pages: [] };
+    state.rpc.ai_traffic_known_pages = () => ['/menu'];
+
+    await sendTrafficDigestForBrand('b1', { now: MONDAY });
+
+    const asked = state.rpcCalls.find((c) => c.name === 'ai_traffic_known_pages');
+    expect(asked.params).toEqual({ p_brand_id: 'b1', p_pages: ['/cheap-pills', '/menu'] });
+    const [mail] = deliverEmail.mock.calls[0];
+    expect(mail.html).toContain('/menu got 30 AI visits, none the week before.');
+    expect(mail.html).not.toContain('cheap-pills');
+  });
+
   it("reads each week to its Sunday's last second, so the Monday between them counts once", async () => {
     await sendTrafficDigestForBrand('b1', { now: MONDAY });
     const merged = state.rpcCalls.filter((c) => c.name === 'ai_traffic_merged');

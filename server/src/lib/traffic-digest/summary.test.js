@@ -4,6 +4,7 @@ import {
   changeText,
   dailyVisits,
   digestWeek,
+  pageCandidates,
   summarySentences,
   topChanges,
   topPlatforms,
@@ -59,6 +60,9 @@ describe('the charts', () => {
         { platform: 'perplexity.ai', visits: 11 },
         { platform: 'claude.ai', visits: 0 },
         { platform: 'chatgpt.com', visits: '21' },
+        // A key only the public beacon sent, and a referrer nobody named.
+        { platform: 'made-up.example', visits: 90 },
+        { platform: 'unknown', visits: 40 },
       ]),
     ).toEqual([
       { platform: 'chatgpt.com', visits: 21 },
@@ -151,19 +155,46 @@ describe('topChanges', () => {
           { platform: 'chatgpt.com', visits: 12 },
           { platform: 'perplexity.ai', visits: 11 },
           { platform: 'grok.com', visits: 3 },
+          // The beacon is public: a key it was sent isn't a platform.
+          { platform: 'made-up.example', visits: 500 },
         ],
         [
           { page: '/menu', visits: 8 },
           { page: '/gifts', visits: 6 },
+          // Nor is a path no source but the beacon knows.
+          { page: '/buy-now-spam', visits: 400 },
         ],
       ),
       broken: { count: 2, rows: [{ page: '/old-menu', target: '/menu' }] },
+      knownPages: new Set(['/menu', '/gifts']),
     });
     expect(changes).toEqual([
       { type: 'broken', count: 2, page: '/old-menu', target: '/menu' },
       { type: 'platform', name: 'chatgpt.com', before: 30, now: 12 },
       { type: 'page', name: '/menu', before: 25, now: 8 },
     ]);
+  });
+
+  it('asks about the pages that moved, and names none it was not told are known', () => {
+    const data = {
+      prev: week(
+        [],
+        [
+          { page: '/Menu', visits: 10 },
+          { page: '/a', visits: 1 },
+        ],
+      ),
+      cur: week(
+        [],
+        [
+          { page: '/menu', visits: 2 },
+          { page: '/b', visits: 4 },
+        ],
+      ),
+      broken: null,
+    };
+    expect(pageCandidates(data)).toEqual(['/b', '/menu']);
+    expect(topChanges(data)).toEqual([]);
   });
 
   it('names nothing that moved by less than 3 visits', () => {
