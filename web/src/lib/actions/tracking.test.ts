@@ -195,6 +195,62 @@ describe('getTrackingWindow (#999)', () => {
   });
 });
 
+describe('Insights 24h rollup routing (#999)', () => {
+  beforeEach(() => {
+    rpcCalls = [];
+    listQueries = [];
+    rpcByName = true;
+    listRows = {
+      tracking_runs: [
+        {
+          started_at: '2026-10-18T23:30:00.000Z',
+          completed_at: '2026-10-19T01:15:00.000Z',
+          source: 'cron',
+        },
+        {
+          started_at: '2026-10-16T22:00:00.000Z',
+          completed_at: '2026-10-16T23:00:00.000Z',
+          source: 'cron',
+        },
+      ],
+    };
+  });
+
+  afterEach(() => {
+    rpcByName = false;
+    listRows = {};
+    listQueries = [];
+    rpcCalls = [];
+  });
+
+  it('uses daily rollups for the latest run and the previous run for deltas', async () => {
+    const { getInsightsData } = await import('./tracking');
+    const data = await getInsightsData('brand-id', { anchor24h: true });
+
+    expect(data.trackingWindow?.runDays).toEqual({ dayFrom: '2026-10-18', dayTo: '2026-10-19' });
+    expect(
+      rpcCalls.some(
+        (call) =>
+          call.name === 'insights_aggregates_daily' &&
+          call.args.p_day_from === '2026-10-18' &&
+          call.args.p_day_to === '2026-10-19',
+      ),
+    ).toBe(true);
+    expect(
+      rpcCalls.some(
+        (call) =>
+          call.name === 'insights_aggregates_daily' &&
+          call.args.p_day_from === '2026-10-16' &&
+          call.args.p_day_to === '2026-10-16',
+      ),
+    ).toBe(true);
+    expect(rpcCalls.some((call) => call.name === 'insights_aggregates')).toBe(false);
+    expect(rpcCalls.some((call) => call.name === 'competitor_aggregates')).toBe(false);
+    expect(rpcCalls.some((call) => call.name === 'share_of_voice_aggregates')).toBe(false);
+    expect(rpcCalls.some((call) => call.name === 'ai_visibility_aggregates')).toBe(false);
+  });
+});
+
 describe('getInsightsSummary', () => {
   it('divides positive sentiment by brand-mentioning results, not all results (#508)', async () => {
     rpcMock = vi.fn(async () => ({ data: insightsAggregatesRow, error: null }));
