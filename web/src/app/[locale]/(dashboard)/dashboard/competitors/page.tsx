@@ -1467,11 +1467,7 @@ export default function CompetitorsPage() {
           <p className="text-muted-foreground">{t('description')}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => setSuggestDialogOpen(true)}
-          >
+          <Button variant="outline" className="gap-2" onClick={() => setSuggestDialogOpen(true)}>
             <Sparkles className="h-4 w-4" />
             {t('suggestCompetitors')}
           </Button>
