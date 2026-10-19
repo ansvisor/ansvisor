@@ -784,9 +784,9 @@ export interface TrackingWindow {
    */
   anchored: { dateFrom: string; dateTo: string } | null;
   /** UTC day(s) touched by the latest completed run, for daily rollups. */
-  runDays: DayWindow | null;
+  runDays?: DayWindow | null;
   /** UTC day(s) touched by the prior completed run, for run-over-run deltas. */
-  previousRunDays: DayWindow | null;
+  previousRunDays?: DayWindow | null;
   /** A full run currently in flight (cron or manual), for the progress banner. */
   activeRun: { startedAt: string; source: string } | null;
   /** The brand's last completed full run, scheduled or Run All (VIS-012); null before its first. */
