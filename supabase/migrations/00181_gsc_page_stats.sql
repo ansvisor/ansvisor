@@ -79,8 +79,8 @@ grant select on public.gsc_page_stats to authenticated;
 -- `incomplete` and lists nothing.
 --
 -- Each row names one tracked prompt about the page, for its Positions panel:
--- an active prompt whose target URL is the page, else the prompt of the page's
--- latest citation over the last 90 days. citation_urls has no member select
+-- an active prompt whose target URL is the page, else an active prompt whose
+-- answers cited it over the last 90 days. citation_urls has no member select
 -- policy, so this runs as its owner after checking the caller belongs to the
 -- brand's organization; a caller from elsewhere gets nothing.
 
@@ -189,7 +189,7 @@ begin
       and lower(public.normalize_page_path(ptu.url)) in (select page_key from ranked)
     order by lower(public.normalize_page_path(ptu.url)), p.created_at, ptu.prompt_id
   ),
-  -- Else the prompt of the page's latest citation in 90 days.
+  -- Else an active prompt that cited the page in 90 days.
   own_domains as (
     select lower(regexp_replace(bd.domain, '^www\.', '')) as domain
     from public.brand_domains bd
@@ -204,29 +204,30 @@ begin
         where r.page_key not in (select t.page_key from targeted t)
       )
   ),
-  -- One citation row and one answer per page: counting each prompt's
-  -- citations read every answer that cited the page (35,798 on the largest
-  -- brand), 15 s cold. Tracking runs active prompts only, so the latest
-  -- citation's prompt is almost always active; a paused one leaves the page
-  -- without a prompt.
+  -- The first citation found whose prompt is active, not the latest or the
+  -- most-citing one: ordering needs every citation's created_at, a heap read
+  -- for each (the (url_id, brand_id) index has none), 35,700 rows and 7.5 s
+  -- cold on the largest brand's 50 pages, past the 8 s timeout with the rest.
+  -- Stopping at the first match read about 2,100 pages, in 2 s. Any prompt
+  -- that cited the page serves the Positions link, and a paused one is
+  -- skipped rather than leaving the page without one.
   cited as (
-    select pk.page_key, p.id as prompt_id
+    select pk.page_key, c.prompt_id
     from (
       select ou.page_key, array_agg(ou.id) as url_ids
       from own_urls ou
       group by ou.page_key
     ) pk
     cross join lateral (
-      select prc.prompt_result_id
+      select pr.prompt_id
       from public.prompt_result_citations prc
+      join public.prompt_results pr on pr.id = prc.prompt_result_id
+      join public.prompts p on p.id = pr.prompt_id and p.is_active
       where prc.url_id = any (pk.url_ids)
         and prc.brand_id = p_brand_id
         and prc.created_at >= now() - interval '90 days'
-      order by prc.created_at desc
       limit 1
-    ) latest
-    join public.prompt_results pr on pr.id = latest.prompt_result_id
-    join public.prompts p on p.id = pr.prompt_id and p.is_active
+    ) c
   )
   select jsonb_build_object(
     'last_day', v_last,
@@ -266,6 +267,6 @@ grant execute on function public.ai_traffic_google_pages(uuid, date, date, boole
   to authenticated, service_role;
 
 comment on function public.ai_traffic_google_pages(uuid, date, date, boolean, integer, integer) is
-  'AI Traffic "Is AI taking Google clicks?" (AT-008, spec §3.6): pages whose Search Console impressions rose 15%+ while CTR fell 20%+ against the period before (at least p_min_impressions impressions before), most clicks lost first, each with a tracked prompt about it for its Positions panel (its target URL, else its latest citation in 90 days). p_latest ends the window on Google''s latest reported day. Security definer with an organization check: citation_urls has no member select policy.';
+  'AI Traffic "Is AI taking Google clicks?" (AT-008, spec §3.6): pages whose Search Console impressions rose 15%+ while CTR fell 20%+ against the period before (at least p_min_impressions impressions before), most clicks lost first, each with a tracked prompt about it for its Positions panel (its target URL, else an active prompt that cited it in 90 days). p_latest ends the window on Google''s latest reported day. Security definer with an organization check: citation_urls has no member select policy.';
 
 notify pgrst, 'reload schema';
