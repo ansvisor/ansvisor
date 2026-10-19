@@ -177,12 +177,21 @@ export function parseScraperResponse(result, scraperId) {
     // into brand-level visibility numbers.
     const text = stripEntityMarkup(result.markdown || result.text || '');
     const citations = toCitations(result.sources);
+    // Since 2026-10-16 Cloro returns the listing ChatGPT attaches to a product
+    // it names as `entities[n].product`, with the same shape as a card product
+    // minus `position`, and `inlineProducts` has come back empty since (#1183).
+    // Both are single products inside the answer, so the listings join the
+    // inline list in its `{ product }` shape.
+    const inline = result.inlineProducts ?? result.inline_products ?? [];
+    const entityListings = (Array.isArray(result.entities) ? result.entities : [])
+      .filter((entity) => entity?.product && typeof entity.product === 'object')
+      .map((entity) => ({ product: entity.product, entity: entity.name ?? null }));
     return {
       text,
       citations,
       model: result.model || 'gpt-5-3-mini',
       shopping_cards: result.shoppingCards ?? result.shopping_cards ?? [],
-      inline_products: result.inlineProducts ?? result.inline_products ?? [],
+      inline_products: [...(Array.isArray(inline) ? inline : []), ...entityListings],
     };
   }
 
