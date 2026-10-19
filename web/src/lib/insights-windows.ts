@@ -4,9 +4,9 @@ import { expandDateToEndOfDay } from '@/lib/dates';
 //
 // The aggregate RPCs used to rescan a brand's whole history per page load;
 // past ~55k results that exceeds the authenticated role's 8s statement
-// timeout and the wide presets die. Every preset except 24h now describes its
-// window as whole UTC days, and calls that carry one are answered from the
-// pre-aggregated daily tables instead — cost scales with days in the window,
+// timeout and the wide presets die. Presets describe their rollup windows as
+// whole UTC days (24h uses the latest completed run's day(s)), and calls that
+// carry one are answered from the daily tables — cost scales with days in the window,
 // never with accumulated results.
 //
 // Topic-filtered calls are served from the rollups too (00164): with
