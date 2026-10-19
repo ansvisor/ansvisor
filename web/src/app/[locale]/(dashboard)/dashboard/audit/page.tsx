@@ -17,6 +17,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,12 +29,9 @@ import {
   runAudit,
   runAuditsBulk,
   getAuditPages,
-  getAuditOverview,
-  getAuditOpportunities,
+  getAuditHub,
+  getAuditHubExtras,
   setOpportunityPrefs,
-  getAuditQuota,
-  getAuditTrend,
-  getLatestAutoRun,
   getAuditSettings,
   getAuditTemplates,
   saveAuditSettings,
@@ -58,45 +56,15 @@ import { AutoRunNotice } from './_auto-run-notice';
 import { AuditSummaryStrip } from './_summary-strip';
 import { EmptyPoolMessage } from './_quota-meter';
 import { usePagesExport } from './_use-pages-export';
+import { nextAutoRun } from '@/lib/audit-auto-runs';
 import { cn } from '@/lib/utils';
+import { parseListTab, withListTab, type ListTab } from './_list-tab';
 
 type RangePreset = '7d' | '30d' | '90d' | 'all';
 const RANGE_DAYS: Record<RangePreset, number | null> = { '7d': 7, '30d': 30, '90d': 90, all: null };
 
-/** The KPI cards' numbers; the cards are left out when they can't be read. */
-async function readOverview(brandId: string): Promise<AuditOverview | null> {
-  try {
-    return await getAuditOverview(brandId);
-  } catch (err) {
-    console.error('Failed to load the Site Audit overview:', err);
-    return null;
-  }
-}
-
-/** The Opportunities inbox; its tab is left out when it can't be read. */
-async function readOpportunities(brandId: string): Promise<AuditOpportunities | null> {
-  try {
-    return await getAuditOpportunities(brandId);
-  } catch (err) {
-    console.error('Failed to load the Site Audit opportunities:', err);
-    return null;
-  }
-}
-
-/** The latest auto-audit run on the brand's pages; no notice when it can't be read. */
-async function readLatestRun(brandId: string): Promise<AutoAuditRun | null> {
-  try {
-    return await getLatestAutoRun(brandId);
-  } catch (err) {
-    console.error('Failed to load the latest auto-audit run:', err);
-    return null;
-  }
-}
-
 /** Pages one bulk request may audit (the server's BULK_AUDIT_MAX). */
 const BULK_REQUEST_MAX = 50;
-
-type ListTab = 'opportunities' | 'pages';
 
 /** A tab's count, as the mockup's grey pill. */
 function TabCount({ count }: { count: number }) {
@@ -144,6 +112,8 @@ export default function SiteAuditPage() {
   const [range, setRange] = useState<RangePreset>('30d');
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [opps, setOpps] = useState<AuditOpportunities | null>(null);
+  // The inbox loads after the rest of the hub (getAuditHubExtras).
+  const [oppsLoading, setOppsLoading] = useState(true);
   const [oppSelected, setOppSelected] = useState<Set<string>>(() => new Set());
   // Opportunities when it lists pages, else Pages; chosen once per brand.
   const [tab, setTab] = useState<ListTab | null>(null);
@@ -156,44 +126,66 @@ export default function SiteAuditPage() {
   const { exporting, exportAll, exportPages } = usePagesExport(activeBrandId);
   // Capture "now" once (impure call belongs in a lazy initializer, not render).
   const [nowMs] = useState(() => Date.now());
+  // A list the address names (?tab=pages, the auto-audit e-mail's link) opens
+  // first on the brand the page opened with; another brand starts as usual.
+  const searchParams = useSearchParams();
+  const linked = useRef({ tab: parseListTab(searchParams.get('tab')), brandId: activeBrandId });
 
   const refetch = () => setRefreshKey((k: number) => k + 1);
 
-  // Load the audited pages + the monthly quota + the primary-domain trend.
+  // The address follows the list shown, so it can be shared or reopened.
+  const showList = (next: ListTab) => {
+    setTab(next);
+    window.history.replaceState(null, '', withListTab(window.location.href, next));
+  };
+
+  // The run notice's View pages: the Pages list, latest audits first, so the
+  // run's pages lead it (tagged Auto).
+  const listsRef = useRef<HTMLDivElement>(null);
+  const showPages = () => {
+    showList('pages');
+    listsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  // Load the hub in two requests: the audited pages, the quota, the trend
+  // and the cards first, so the page shows; then the Opportunities inbox and
+  // the latest auto-audit run, which take longer, fill in.
   useEffect(() => {
     if (!activeBrandId) return;
     let cancelled = false;
     setLoading(true);
+    setOppsLoading(true);
     setError(null);
     // A selection, and the tab, belong to the brand they were made on.
     setSelected(new Set());
     setOppSelected(new Set());
-    setTab(null);
+    // The store may only know the brand after the first render: that's the one it opened with.
+    linked.current.brandId ??= activeBrandId;
+    setTab(activeBrandId === linked.current.brandId ? linked.current.tab : null);
+    setOpps(null);
     setLatestRun(null);
     (async () => {
       try {
-        const [data, q, tr, ov, op, run] = await Promise.all([
-          getAuditPages(activeBrandId),
-          getAuditQuota(),
-          getAuditTrend(activeBrandId),
-          readOverview(activeBrandId),
-          readOpportunities(activeBrandId),
-          readLatestRun(activeBrandId),
-        ]);
-        if (!cancelled) {
-          setPages(data.pages);
-          setPagesTotal(data.total);
-          setPrimaryHost(data.primaryHost);
-          setQuota(q);
-          setTrend(tr);
-          setOverview(ov);
-          setOpps(op);
-          setLatestRun(run);
-          setTab(
-            (current) =>
-              current ?? ((op?.opportunities.length ?? 0) > 0 ? 'opportunities' : 'pages'),
-          );
-        }
+        const hub = await getAuditHub(activeBrandId);
+        if (cancelled) return;
+        setPages(hub.pages.pages);
+        setPagesTotal(hub.pages.total);
+        setPrimaryHost(hub.pages.primaryHost);
+        setQuota(hub.quota);
+        setTrend(hub.trend);
+        setOverview(hub.overview);
+        setLoading(false);
+
+        const extras = await getAuditHubExtras(activeBrandId);
+        if (cancelled) return;
+        setOpps(extras.opportunities);
+        setLatestRun(extras.latestRun);
+        // The inbox is the first tab when it has pages, unless one was picked meanwhile.
+        setTab(
+          (current) =>
+            current ??
+            ((extras.opportunities?.opportunities.length ?? 0) > 0 ? 'opportunities' : 'pages'),
+        );
       } catch (err) {
         console.error('Failed to load audit hub data:', err);
         if (!cancelled) {
@@ -204,6 +196,7 @@ export default function SiteAuditPage() {
       } finally {
         if (!cancelled) {
           setLoading(false);
+          setOppsLoading(false);
         }
       }
     })();
@@ -323,28 +316,24 @@ export default function SiteAuditPage() {
     shownRef.current = pages.length;
   }, [pages.length]);
   const reloadInPlace = async (brandId: string) => {
-    const [data, q, tr, ov, op, run] = await Promise.all([
-      getAuditPages(brandId, 0, Math.min(Math.max(shownRef.current, 50), 100)),
-      getAuditQuota(),
-      getAuditTrend(brandId),
-      readOverview(brandId),
-      readOpportunities(brandId),
-      readLatestRun(brandId),
-    ]);
+    const hub = await getAuditHub(brandId, Math.min(Math.max(shownRef.current, 50), 100));
+    const data = hub.pages;
     setPages(data.pages);
     setPagesTotal(data.total);
     setPrimaryHost(data.primaryHost);
-    setQuota(q);
-    setTrend(tr);
-    setOverview(ov);
+    setQuota(hub.quota);
+    setTrend(hub.trend);
+    setOverview(hub.overview);
+    const selectable = new Set(data.pages.filter((p) => p.status !== 'running').map((p) => p.key));
+    setSelected((prev) => new Set([...prev].filter((key) => selectable.has(key))));
+
+    const { opportunities: op, latestRun: run } = await getAuditHubExtras(brandId);
     setOpps(op);
     setLatestRun(run);
     const oppSelectable = new Set(
       (op?.opportunities ?? []).filter((o) => !o.running).map((o) => o.key),
     );
     setOppSelected((prev) => new Set([...prev].filter((key) => oppSelectable.has(key))));
-    const selectable = new Set(data.pages.filter((p) => p.status !== 'running').map((p) => p.key));
-    setSelected((prev) => new Set([...prev].filter((key) => selectable.has(key))));
   };
 
   // Deleting a run can change its page's score, status or trend, or remove
@@ -512,10 +501,17 @@ export default function SiteAuditPage() {
     pages.some((p) => p.status === 'running') || (opps?.opportunities ?? []).some((o) => o.running);
   useEffect(() => {
     if (!anyRunning || !activeBrandId) return;
+    // A read can take longer than the interval: the next one waits for it
+    // rather than queueing behind it.
+    let reading = false;
     const timer = setInterval(() => {
-      reloadInPlace(activeBrandId).catch((err) =>
-        console.error('Failed to refresh the audited pages:', err),
-      );
+      if (reading) return;
+      reading = true;
+      reloadInPlace(activeBrandId)
+        .catch((err) => console.error('Failed to refresh the audited pages:', err))
+        .finally(() => {
+          reading = false;
+        });
     }, RUNNING_POLL_MS);
     return () => clearInterval(timer);
   }, [anyRunning, activeBrandId]);
@@ -550,6 +546,9 @@ export default function SiteAuditPage() {
             console.error('Failed to refresh after saving the settings:', err),
           )
         }
+        schedule={quota?.auto ?? null}
+        latestRun={latestRun}
+        now={new Date(nowMs)}
       />
 
       {/* Summary strip, as in the v2 mockup (SA-019) */}
@@ -600,7 +599,8 @@ export default function SiteAuditPage() {
         key={activeBrandId}
         brandId={activeBrandId}
         run={latestRun}
-        nextRunAt={quota?.auto?.enabled ? (quota.auto.nextRun?.at ?? null) : null}
+        nextRun={quota?.auto?.enabled ? nextAutoRun(quota.auto, new Date(nowMs)) : null}
+        onViewPages={showPages}
       />
 
       {/* KPI cards, as in the v2 mockup (SA-018) */}
@@ -608,6 +608,7 @@ export default function SiteAuditPage() {
         <AuditOverviewCards
           overview={loading ? null : overview}
           quota={quota}
+          now={new Date(nowMs)}
           onOpenSettings={() => setSettingsOpen(true)}
         />
       )}
@@ -744,7 +745,8 @@ export default function SiteAuditPage() {
             </Button>
           </CardContent>
         </Card>
-      ) : pages.length === 0 &&
+      ) : !oppsLoading &&
+        pages.length === 0 &&
         (opps?.opportunities.length ?? 0) === 0 &&
         (opps?.excluded.length ?? 0) === 0 ? (
         <Card>
@@ -755,12 +757,24 @@ export default function SiteAuditPage() {
           </CardContent>
         </Card>
       ) : (
-        <Tabs value={tab ?? 'pages'} onValueChange={(v) => setTab(v as ListTab)}>
+        // While the inbox loads, its tab leads (it usually has pages) with a placeholder.
+        <Tabs
+          ref={listsRef}
+          value={tab ?? (oppsLoading ? 'opportunities' : 'pages')}
+          onValueChange={(v) => showList(v as ListTab)}
+        >
           <TabsList variant="line" aria-label={t('lists.label')}>
-            {opps && (
+            {(opps || oppsLoading) && (
               <TabsTrigger value="opportunities">
                 {t('lists.opportunities')}
-                <TabCount count={opps.opportunities.length} />
+                {opps ? (
+                  <TabCount count={opps.opportunities.length} />
+                ) : (
+                  <Loader2
+                    className="h-3 w-3 animate-spin text-muted-foreground"
+                    aria-label={t('lists.loading')}
+                  />
+                )}
               </TabsTrigger>
             )}
             <TabsTrigger value="pages">
@@ -768,6 +782,20 @@ export default function SiteAuditPage() {
               <TabCount count={pagesTotal} />
             </TabsTrigger>
           </TabsList>
+          {oppsLoading && !opps && (
+            <TabsContent value="opportunities" className="mt-3">
+              <Card aria-busy="true">
+                <CardContent className="space-y-3 py-4">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="flex items-center justify-between gap-4">
+                      <Skeleton className="h-4 w-1/2" />
+                      <Skeleton className="h-4 w-24" />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
           {opps && (
             <TabsContent value="opportunities" className="mt-3">
               <OpportunitiesTable

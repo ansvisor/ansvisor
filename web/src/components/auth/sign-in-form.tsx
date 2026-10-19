@@ -14,12 +14,14 @@ import { ArrowRight, Loader2 } from 'lucide-react';
 import { OAuthButtons } from '@/components/auth/oauth-buttons';
 import { OrDivider } from '@/components/auth/or-divider';
 import { track } from '@/lib/analytics';
+import { safeNextPath } from '@/lib/auth-next';
 
 export function SignInForm() {
   const t = useTranslations('auth');
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nextPath = searchParams.get('next');
+  // The page the visitor was on before signing in; only one of ours.
+  const nextPath = safeNextPath(searchParams.get('next'));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -52,7 +54,7 @@ export function SignInForm() {
     // so the form just needs to capture the funnel event.
     track('signin_completed', { source: 'email' });
 
-    router.push(nextPath && nextPath.startsWith('/') ? nextPath : '/dashboard');
+    router.push(nextPath);
     router.refresh();
   }
 
@@ -112,7 +114,7 @@ export function SignInForm() {
       </form>
 
       <OrDivider label={t('orContinueWith')} />
-      <OAuthButtons />
+      <OAuthButtons next={searchParams.get('next') ? nextPath : null} />
     </div>
   );
 }

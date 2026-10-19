@@ -10,9 +10,11 @@ import {
   fetchAllPendingRows,
   interactiveTailExhausted,
   runnablePlatforms,
+  shoppingTracked,
   tailRemainder,
   UNAVAILABLE_PLATFORMS,
 } from './tracking-worker.js';
+import { PLANS } from '../config/plans.js';
 
 /**
  * Ghost detection for the Cloro drain loop (#687).
@@ -268,6 +270,23 @@ describe('runnablePlatforms', () => {
  * Nothing is lost by leaving early: /cloro/callback inserts a late delivery
  * whether or not the loop is still watching.
  */
+describe('shoppingTracked', () => {
+  const on = { shopping_mode_enabled: true };
+
+  it('runs ChatGPT Shopping only where the plan shows its results', () => {
+    expect(shoppingTracked(on, PLANS.growth)).toBe(true);
+    expect(shoppingTracked(on, PLANS.enterprise)).toBe(true);
+    // Starter has no Shopping page: its scrapes would be paid for and unseen.
+    expect(shoppingTracked(on, PLANS.starter)).toBe(false);
+  });
+
+  it('runs it on self-host, and nowhere with Shopping mode off', () => {
+    expect(shoppingTracked(on, null)).toBe(true);
+    expect(shoppingTracked({ shopping_mode_enabled: false }, PLANS.growth)).toBe(false);
+    expect(shoppingTracked({ shopping_mode_enabled: false }, null)).toBe(false);
+  });
+});
+
 describe('tailRemainder', () => {
   it('scales with the run for a large brand', () => {
     expect(tailRemainder(294)).toBe(15);

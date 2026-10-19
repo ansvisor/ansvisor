@@ -46,7 +46,9 @@ export function renderAutoAuditEmail({ brands, nextRunAt }) {
     criticalIssues: brands.reduce((n, b) => n + b.criticalIssues, 0),
   };
   const failed = total.pages - total.completed;
-  const url = `${appOrigin()}/dashboard/audit`;
+  // Pages, where the run's audits are, rather than the Opportunities list.
+  const url = `${appOrigin()}/dashboard/audit?tab=pages`;
+  const settingsUrl = `${appOrigin()}/dashboard/audit`;
 
   const brandItems =
     brands.length > 1
@@ -71,7 +73,7 @@ export function renderAutoAuditEmail({ brands, nextRunAt }) {
   </div>
   <p style="font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:16px;">
     You're receiving this because auto-audit e-mails are on in Site Audit settings.
-    <a href="${escapeHtml(url)}" style="color:#6b7280;">Change them</a>
+    <a href="${escapeHtml(settingsUrl)}" style="color:#6b7280;">Change them</a>
   </p>
 </div>`;
 

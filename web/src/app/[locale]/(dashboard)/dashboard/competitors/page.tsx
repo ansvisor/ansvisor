@@ -6,6 +6,8 @@ import { useTranslations } from 'next-intl';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { getCompetitors, addCompetitor, deleteCompetitor } from '@/lib/actions/competitor';
+import type { SuggestedCompetitor } from '@/lib/ai-brand-setup';
+import { SuggestCompetitorsDialog } from './_suggest-competitors-dialog';
 import {
   getCompetitorComparison,
   getHeadToHeadComparison,
@@ -46,6 +48,7 @@ import { cn } from '@/lib/utils';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import {
   Plus,
+  Sparkles,
   Trash2,
   Loader2,
   Users,
@@ -158,7 +161,7 @@ function NoBrandSelected() {
 
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
-function EmptyState({ onAdd }: { onAdd: () => void }) {
+function EmptyState({ onAdd, onSuggest }: { onAdd: () => void; onSuggest: () => void }) {
   const t = useTranslations('competitors');
   return (
     <Card>
@@ -168,10 +171,16 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         </div>
         <h3 className="text-lg font-semibold">{t('emptyTitle')}</h3>
         <p className="text-sm text-muted-foreground mt-1 max-w-sm">{t('emptyDescription')}</p>
-        <Button className="mt-6 gap-2" onClick={onAdd}>
-          <Plus className="h-4 w-4" />
-          {t('addCompetitor')}
-        </Button>
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <Button className="gap-2" onClick={onAdd}>
+            <Plus className="h-4 w-4" />
+            {t('addCompetitor')}
+          </Button>
+          <Button variant="outline" className="gap-2" onClick={onSuggest}>
+            <Sparkles className="h-4 w-4" />
+            {t('suggestCompetitors')}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -1204,6 +1213,7 @@ export default function CompetitorsPage() {
   const [comparisonData, setComparisonData] = useState<CompetitorComparisonData | null>(null);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [suggestDialogOpen, setSuggestDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Competitor | null>(null);
 
@@ -1347,6 +1357,36 @@ export default function CompetitorsPage() {
     loadData();
   }
 
+  async function handleAddSuggested(
+    suggestions: SuggestedCompetitor[],
+  ): Promise<{ added: number; failed: number }> {
+    if (!brand) return { added: 0, failed: suggestions.length };
+
+    const results = await Promise.allSettled(
+      suggestions.map((suggestion) =>
+        addCompetitor(brand.id, { name: suggestion.name, domain: suggestion.domain }),
+      ),
+    );
+    const added = results.filter((result) => result.status === 'fulfilled').length;
+    const failed = results.length - added;
+
+    if (added > 0) {
+      // Refresh in place rather than toggling the page-wide initial loader:
+      // the suggestion dialog should remain open when some inserts fail.
+      try {
+        const [currentCompetitors, comparison] = await Promise.all([
+          getCompetitors(brand.id),
+          getCompetitorComparison(brand.id, last30Days()),
+        ]);
+        setCompetitors(currentCompetitors);
+        setComparisonData(comparison.brands.length > 1 ? comparison : null);
+      } catch {
+        toast.error(t('loadError'));
+      }
+    }
+    return { added, failed };
+  }
+
   async function handleDelete(id: string) {
     setDeleting(id);
     try {
@@ -1421,19 +1461,28 @@ export default function CompetitorsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
           <p className="text-muted-foreground">{t('description')}</p>
         </div>
-        <Button className="gap-2" onClick={() => setDialogOpen(true)}>
-          <Plus className="h-4 w-4" />
-          {t('addCompetitor')}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" className="gap-2" onClick={() => setSuggestDialogOpen(true)}>
+            <Sparkles className="h-4 w-4" />
+            {t('suggestCompetitors')}
+          </Button>
+          <Button className="gap-2" onClick={() => setDialogOpen(true)}>
+            <Plus className="h-4 w-4" />
+            {t('addCompetitor')}
+          </Button>
+        </div>
       </div>
 
       {competitors.length === 0 ? (
-        <EmptyState onAdd={() => setDialogOpen(true)} />
+        <EmptyState
+          onAdd={() => setDialogOpen(true)}
+          onSuggest={() => setSuggestDialogOpen(true)}
+        />
       ) : (
         <>
           {/* Competitor List */}
@@ -1532,6 +1581,14 @@ export default function CompetitorsPage() {
       )}
 
       <AddCompetitorDialog open={dialogOpen} onOpenChange={setDialogOpen} onAdd={handleAdd} />
+
+      <SuggestCompetitorsDialog
+        open={suggestDialogOpen}
+        onOpenChange={setSuggestDialogOpen}
+        brand={brand}
+        existingCompetitors={competitors}
+        onAddSelected={handleAddSuggested}
+      />
 
       <ConfirmDeleteCompetitorDialog
         competitor={confirmDelete}
