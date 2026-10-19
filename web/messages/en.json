@@ -3100,6 +3100,7 @@
     "newSignalGainLost": "Completed earlier, but the gain did not hold: visibility on these prompts was {after}% after the work and is {now}% now."
   },
   "traffic": {
+    "loadingRange": "Loading the selected range",
     "title": "AI Traffic Analytics",
     "description": "Track which AI bots are crawling your website.",
     "totalCrawls": "Total Crawls",

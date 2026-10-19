@@ -21,10 +21,6 @@ import { useTranslations } from 'next-intl';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
 import {
-  getTrafficSources,
-  getTrafficSummary,
-  getTrafficTrend,
-  getTrafficLogs,
   type TrafficSources,
   type TrafficSummary,
   type TrafficTrendPoint,
@@ -38,7 +34,7 @@ import {
 } from '@/components/filters/date-range-filter';
 import { PagesCard } from './_pages-card';
 import { ConversionsSection } from './_conversions';
-import { TRAFFIC_KPI_GRID, TrafficKpis } from './_kpis';
+import { TrafficKpis } from './_kpis';
 import { VisitListSourceNote } from './_visit-list-note';
 import { EngagedCell, KeyEventsCell, PlatformValueNote } from './_platform-value';
 import { ExportMenu, TableExport, useTrafficExport } from './_export';
@@ -85,6 +81,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  getTrafficLogs,
+  getTrafficSources,
+  getTrafficSummary,
+  getTrafficTrend,
+} from '@/lib/traffic-reads';
+import { RangeReadyProvider, rangeKeyOf, useRangeGate } from './_range-ready';
 
 const PAGE_SIZE = 10;
 
@@ -441,6 +444,10 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   const [logsPageviews, setLogsPageviews] = useState(0);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  // The range the summary and the visit list on screen answer, read or failed.
+  const rangeKey = rangeKeyOf(dateWindow);
+  const [summaryRange, setSummaryRange] = useState<string | null>(null);
+  const [logsRange, setLogsRange] = useState<string | null>(null);
   // What feeds the page (AT-001); null while it loads.
   const [sources, setSources] = useState<TrafficSources | null>(null);
   // A failed read hides the strip and leaves the snippet code open, as before it.
@@ -492,6 +499,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
   }, [searchInput]);
 
   const loadSummary = useCallback(async () => {
+    const range = rangeKeyOf(dateWindow);
     setIsLoadingSummary(true);
     try {
       const [s, t] = await Promise.all([
@@ -504,10 +512,12 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
       console.error('Failed to load traffic summary:', err);
     } finally {
       setIsLoadingSummary(false);
+      setSummaryRange(range);
     }
   }, [brand.id, dateWindow]);
 
   const loadLogs = useCallback(async () => {
+    const range = rangeKeyOf(dateWindow);
     setIsLoadingLogs(true);
     try {
       const result = await getTrafficLogs(brand.id, {
@@ -525,6 +535,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
       console.error('Failed to load traffic logs:', err);
     } finally {
       setIsLoadingLogs(false);
+      setLogsRange(range);
     }
   }, [brand.id, page, filters.platform, filters.search, dateWindow]);
 
@@ -558,26 +569,20 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
 
   const primaryDomain = brand.domains.find((d) => d.isPrimary)?.domain ?? brand.domains[0]?.domain;
 
-  if (isLoadingSummary && summary === null) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-4 w-96 mt-2" />
-        </div>
-        <div className={TRAFFIC_KPI_GRID}>
-          {Array.from({ length: 7 }, (_, i) => (
-            // The cards' own height, so nothing shifts when they arrive.
-            <Skeleton key={i} className="h-[133px] rounded-xl" />
-          ))}
-        </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <Skeleton className="h-64 lg:col-span-2" />
-          <Skeleton className="h-64" />
-        </div>
-      </div>
-    );
-  }
+  // A new range shows only a spinner until the page and every section have
+  // its data, rather than one range's numbers beside another's.
+  const rangeGate = useRangeGate(
+    rangeKey,
+    summaryRange === rangeKey && logsRange === rangeKey && (sources !== null || sourcesFailed),
+  );
+  const rangeSpinner = (
+    <div className="flex justify-center py-24" role="status" aria-label={t('loadingRange')}>
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+
+  // The first read, before anything is on screen: the same spinner.
+  if (isLoadingSummary && summary === null) return rangeSpinner;
 
   const totalVisits = summary?.totalVisits ?? 0;
   // From the summary, not the selected range: while a new range loads, the
@@ -695,361 +700,380 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
         </div>
       </div>
 
-      {!sourcesFailed && (
-        <SourcesStrip
-          brandId={brand.id}
-          sources={sources}
-          domain={primaryDomain}
-          hasTrackingCode={Boolean(brand.trackingCode)}
-          canConnect={canManage}
-          onShowCode={() => setCodeOpen(true)}
-          onConnected={() => void loadSources()}
-          botsRevision={botsRevision}
-          onBotsChanged={() => setBotsRevision((n) => n + 1)}
-        />
-      )}
-      {/* The code stays open only while the snippet sends nothing (F3). */}
-      {(sourcesFailed || (sources && !snippetDetected(sources.snippetLastVisitAt))) && (
-        <SnippetBanner trackingCode={brand.trackingCode} />
-      )}
-      <SnippetDialog trackingCode={brand.trackingCode} open={codeOpen} onOpenChange={setCodeOpen} />
-
-      {trulyEmpty ? (
-        <Card>
-          <CardContent className="py-16 text-center">
-            <Globe className="h-10 w-10 mx-auto text-muted-foreground/50" />
-            <h3 className="text-lg font-semibold mt-4">{t('noDataTitle')}</h3>
-            <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-              {brand.trackingCode ? t('noVisitsDescription') : t('noDataDescriptionNoSnippet')}
-            </p>
-          </CardContent>
-        </Card>
-      ) : isEmpty ? (
-        <NoTrafficForPeriod
-          rangeLabel={rangeSubLabel}
-          onReset={() => handleDatePresetChange('all')}
-          onShowWeek={datePreset === '24h' ? () => handleDatePresetChange('7d') : undefined}
-        />
-      ) : null}
-      {isEmpty && conversionsSection}
-      {isEmpty && pagesCard}
-      {isEmpty && googleSection}
-      {isEmpty && botsSection}
-      {!isEmpty && (
-        <>
-          {/* KPI cards: two rows of four (AT-017, spec §3.2). */}
-          <TrafficKpis
-            brandId={brand.id}
-            rangeLabel={rangeSubLabel}
-            dateWindow={dateWindow}
-            preset={datePreset}
-            summary={summary}
-            summaryLoading={isLoadingSummary}
-            sources={sources}
-            sourcesFailed={sourcesFailed}
-            canConnect={canManage}
-            onConnected={() => void loadSources()}
-            onRangeChange={handleDatePresetChange}
-            queriesRevision={queriesRevision}
+      {!rangeGate.settled && rangeSpinner}
+      <RangeReadyProvider value={rangeGate.value}>
+        {/* Kept mounted while hidden, so every section reads the new range
+            side by side; laid out at full width, so charts measure right. */}
+        <div
+          className={cn('space-y-6', !rangeGate.settled && 'invisible h-0 overflow-hidden')}
+          aria-hidden={!rangeGate.settled || undefined}
+        >
+          {!sourcesFailed && (
+            <SourcesStrip
+              brandId={brand.id}
+              sources={sources}
+              domain={primaryDomain}
+              hasTrackingCode={Boolean(brand.trackingCode)}
+              canConnect={canManage}
+              onShowCode={() => setCodeOpen(true)}
+              onConnected={() => void loadSources()}
+              botsRevision={botsRevision}
+              onBotsChanged={() => setBotsRevision((n) => n + 1)}
+            />
+          )}
+          {/* The code stays open only while the snippet sends nothing (F3). */}
+          {(sourcesFailed || (sources && !snippetDetected(sources.snippetLastVisitAt))) && (
+            <SnippetBanner trackingCode={brand.trackingCode} />
+          )}
+          <SnippetDialog
+            trackingCode={brand.trackingCode}
+            open={codeOpen}
+            onOpenChange={setCodeOpen}
           />
 
-          {/* Charts row */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <Card className="lg:col-span-2">
-              <CardHeader className="pb-2">
-                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="font-medium text-sm">{trendTitle}</CardTitle>
-                    {trendView === 'google' && <NeedsTag provider="google-search-console" />}
-                  </div>
-                  {/* By platform, or AI visits against Google clicks (AT-008, spec §3.3). */}
-                  <Tabs
-                    value={trendView}
-                    onValueChange={(v) => setTrendView(v as 'platforms' | 'google')}
-                  >
-                    <TabsList variant="line" aria-label={trendTitle}>
-                      <TabsTrigger value="platforms">{tTrend('tabs.platforms')}</TabsTrigger>
-                      <TabsTrigger value="google">{tTrend('tabs.google')}</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {trendView === 'google' ? (
-                  <GoogleTrendView
-                    brandId={brand.id}
-                    trend={trend}
-                    rangeStart={dateWindow.dateFrom}
-                    gscConnected={gscConnected}
-                    onShowWeek={() => handleDatePresetChange('7d')}
-                  />
-                ) : (
-                  <ReferralTrendChart data={trend} analyticsDays={summary?.analyticsDays} />
-                )}
-              </CardContent>
-            </Card>
-
+          {trulyEmpty ? (
             <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Platform Breakdown</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <PlatformBreakdownChart data={summary?.platformBreakdown ?? []} />
+              <CardContent className="py-16 text-center">
+                <Globe className="h-10 w-10 mx-auto text-muted-foreground/50" />
+                <h3 className="text-lg font-semibold mt-4">{t('noDataTitle')}</h3>
+                <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+                  {brand.trackingCode ? t('noVisitsDescription') : t('noDataDescriptionNoSnippet')}
+                </p>
               </CardContent>
             </Card>
-          </div>
+          ) : isEmpty ? (
+            <NoTrafficForPeriod
+              rangeLabel={rangeSubLabel}
+              onReset={() => handleDatePresetChange('all')}
+              onShowWeek={datePreset === '24h' ? () => handleDatePresetChange('7d') : undefined}
+            />
+          ) : null}
+          {!isEmpty && (
+            <>
+              {/* KPI cards: two rows of four (AT-017, spec §3.2). */}
+              <TrafficKpis
+                brandId={brand.id}
+                rangeLabel={rangeSubLabel}
+                dateWindow={dateWindow}
+                preset={datePreset}
+                summary={summary}
+                summaryLoading={isLoadingSummary}
+                sources={sources}
+                sourcesFailed={sourcesFailed}
+                canConnect={canManage}
+                onConnected={() => void loadSources()}
+                onRangeChange={handleDatePresetChange}
+                queriesRevision={queriesRevision}
+              />
 
-          {/* Tables row: side by side from 1,280px. The platform table's five
+              {/* Charts row */}
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <Card className="lg:col-span-2">
+                  <CardHeader className="pb-2">
+                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="font-medium text-sm">{trendTitle}</CardTitle>
+                        {trendView === 'google' && <NeedsTag provider="google-search-console" />}
+                      </div>
+                      {/* By platform, or AI visits against Google clicks (AT-008, spec §3.3). */}
+                      <Tabs
+                        value={trendView}
+                        onValueChange={(v) => setTrendView(v as 'platforms' | 'google')}
+                      >
+                        <TabsList variant="line" aria-label={trendTitle}>
+                          <TabsTrigger value="platforms">{tTrend('tabs.platforms')}</TabsTrigger>
+                          <TabsTrigger value="google">{tTrend('tabs.google')}</TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {trendView === 'google' ? (
+                      <GoogleTrendView
+                        brandId={brand.id}
+                        trend={trend}
+                        rangeStart={dateWindow.dateFrom}
+                        gscConnected={gscConnected}
+                        onShowWeek={() => handleDatePresetChange('7d')}
+                      />
+                    ) : (
+                      <ReferralTrendChart data={trend} analyticsDays={summary?.analyticsDays} />
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Platform Breakdown</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <PlatformBreakdownChart data={summary?.platformBreakdown ?? []} />
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Tables row: side by side from 1,280px. The platform table's five
               columns (AT-005) need more than half the page below that, and
               numeric cells never wrap (spec §3.2). */}
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            {/* Platform table */}
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-sm font-medium">Referrals by Platform</CardTitle>
-                  <TableExport exporter={exporter} section="platforms" />
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="pl-6">Platform</TableHead>
-                      <TableHead className="text-right">Visits</TableHead>
-                      <TableHead className="text-right">Change</TableHead>
-                      {/* From Google Analytics (AT-005). */}
-                      <TableHead className="text-right">{t('platforms.engaged')}</TableHead>
-                      <TableHead className="text-right pr-6">{t('platforms.keyEvents')}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(summary?.platformBreakdown ?? []).map((row) => (
-                      <TableRow key={row.platform} className="hover:bg-muted/50">
-                        <TableCell className="pl-6">
-                          <span className="font-medium text-sm">
-                            {getPlatformName(row.platform)}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums">
-                          {formatNumber(row.visits)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end">
-                            <DeltaBadge
-                              current={row.visits}
-                              previous={row.visitsPrev}
-                              comparable={comparable}
-                            />
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <EngagedCell analytics={gaMissing ? null : row.analytics} />
-                        </TableCell>
-                        <TableCell className="text-right pr-6">
-                          <KeyEventsCell analytics={gaMissing ? null : row.analytics} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                {gaMissing && <PlatformValueNote />}
-              </CardContent>
-            </Card>
-
-            {/* Top Pages */}
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-sm font-medium">Top Landing Pages</CardTitle>
-                  <TableExport exporter={exporter} section="pages" />
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="pl-6">Page</TableHead>
-                      <TableHead className="text-right">Visits</TableHead>
-                      <TableHead className="text-right">Change</TableHead>
-                      {/* How often tracked AI answers cite the page (AT-006). */}
-                      <TableHead className="text-right pr-6">
-                        {t('pageList.columns.citedInAnswers')}
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(summary?.topPages ?? []).map((row) => (
-                      <TableRow key={row.url} className="hover:bg-muted/50">
-                        <TableCell className="pl-6 max-w-[200px]">
-                          <span className="font-mono text-xs text-muted-foreground line-clamp-1">
-                            {row.url}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums text-sm">
-                          {formatNumber(row.visits)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end">
-                            <DeltaBadge
-                              current={row.visits}
-                              previous={row.visitsPrev}
-                              comparable={comparable}
-                            />
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right pr-6 tabular-nums text-sm">
-                          {formatNumber(row.citations)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </div>
-
-          {conversionsSection}
-
-          {pagesCard}
-
-          {googleSection}
-
-          {botsSection}
-
-          {/* Recent Visit Log with filtering and pagination*/}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <LayoutList className="h-4 w-4 text-muted-foreground" />
-                    <CardTitle className="text-sm font-medium">Recent AI Referral Visits</CardTitle>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    {logsTotal > 0 && (
-                      <Badge variant="secondary" className="text-xs">
-                        {tVisits('listTotal', { visits: logsTotal, pageviews: logsPageviews })}
-                      </Badge>
-                    )}
-                    <TableExport exporter={exporter} section="visits" />
-                  </div>
-                </div>
-                <TrafficFilterBar
-                  filters={filters}
-                  searchInput={searchInput}
-                  onSearchInputChange={setSearchInput}
-                  onChange={handleFiltersChange}
-                  platforms={summary?.platformBreakdown.map((p) => p.platform) ?? []}
-                  isLoading={isLoadingLogs}
-                />
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              {isLoadingLogs ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                </div>
-              ) : (filters.platform || filters.search) && logs.length === 0 ? (
-                <EmptyLogsState hasFilters={true} />
-              ) : logs.length === 0 ? (
-                <EmptyLogsState hasFilters={false} />
-              ) : (
-                <>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="pl-6 w-[100px]">Time</TableHead>
-                        <TableHead>Platform</TableHead>
-                        <TableHead>Page</TableHead>
-                        <TableHead className="text-right pr-6">Country</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {logs.map((row) => (
-                        <TableRow key={row.id} className="hover:bg-muted/50">
-                          <TableCell className="pl-6 text-xs text-muted-foreground whitespace-nowrap">
-                            {formatRelative(row.createdAt, tCommon)}
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-sm">
-                              {getPlatformName(row.sourcePlatform ?? 'unknown')}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex min-w-0 items-center gap-1.5">
-                              <span className="font-mono text-xs text-muted-foreground line-clamp-1">
-                                {(() => {
-                                  try {
-                                    return new URL(row.url).pathname;
-                                  } catch {
-                                    return row.url;
-                                  }
-                                })()}
-                              </span>
-                              {/* A reload or a further link in the same visit (AT-003). */}
-                              {row.pageviews > 1 && (
-                                <span className="shrink-0 whitespace-nowrap rounded-full bg-muted px-1.5 text-[11px] font-medium leading-4 text-muted-foreground">
-                                  {tVisits('rowPageviews', { count: row.pageviews })}
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right pr-6">
-                            <span className="text-xs text-muted-foreground">
-                              {row.country ?? '—'}
-                            </span>
-                          </TableCell>
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                {/* Platform table */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="text-sm font-medium">Referrals by Platform</CardTitle>
+                      <TableExport exporter={exporter} section="platforms" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="pl-6">Platform</TableHead>
+                          <TableHead className="text-right">Visits</TableHead>
+                          <TableHead className="text-right">Change</TableHead>
+                          {/* From Google Analytics (AT-005). */}
+                          <TableHead className="text-right">{t('platforms.engaged')}</TableHead>
+                          <TableHead className="text-right pr-6">
+                            {t('platforms.keyEvents')}
+                          </TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  {(() => {
-                    const totalPages = Math.max(1, Math.ceil(logsTotal / PAGE_SIZE));
-                    const clampedPage = Math.min(page, totalPages - 1);
-                    const start = clampedPage * PAGE_SIZE;
-                    const end = Math.min(start + PAGE_SIZE, logsTotal);
-                    return (
-                      <TablePager
-                        page={clampedPage}
-                        totalPages={totalPages}
-                        total={logsTotal}
-                        start={start}
-                        end={end}
-                        onPage={setPage}
-                        isLoading={isLoadingLogs}
-                      />
-                    );
-                  })()}
-                  {/* What the list covers, and a wider range when it is a short one
-                      (AT-017, spec §3.01). */}
-                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-6 pb-1 text-xs text-muted-foreground">
-                    <span>
-                      {tVisits('listRange', {
-                        visits: logsTotal,
-                        pageviews: logsPageviews,
-                        range: rangeSubLabel,
-                        preset: datePreset === 'custom' || datePreset === 'all' ? 'other' : 'last',
-                      })}
-                    </span>
-                    {datePreset === '24h' && (
-                      <button
-                        type="button"
-                        onClick={() => handleDatePresetChange('7d')}
-                        className="font-medium text-foreground underline-offset-4 hover:underline"
-                      >
-                        {tVisits('showLast7Days')}
-                      </button>
-                    )}
+                      </TableHeader>
+                      <TableBody>
+                        {(summary?.platformBreakdown ?? []).map((row) => (
+                          <TableRow key={row.platform} className="hover:bg-muted/50">
+                            <TableCell className="pl-6">
+                              <span className="font-medium text-sm">
+                                {getPlatformName(row.platform)}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right font-semibold tabular-nums">
+                              {formatNumber(row.visits)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end">
+                                <DeltaBadge
+                                  current={row.visits}
+                                  previous={row.visitsPrev}
+                                  comparable={comparable}
+                                />
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <EngagedCell analytics={gaMissing ? null : row.analytics} />
+                            </TableCell>
+                            <TableCell className="text-right pr-6">
+                              <KeyEventsCell analytics={gaMissing ? null : row.analytics} />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    {gaMissing && <PlatformValueNote />}
+                  </CardContent>
+                </Card>
+
+                {/* Top Pages */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="text-sm font-medium">Top Landing Pages</CardTitle>
+                      <TableExport exporter={exporter} section="pages" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="pl-6">Page</TableHead>
+                          <TableHead className="text-right">Visits</TableHead>
+                          <TableHead className="text-right">Change</TableHead>
+                          {/* How often tracked AI answers cite the page (AT-006). */}
+                          <TableHead className="text-right pr-6">
+                            {t('pageList.columns.citedInAnswers')}
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(summary?.topPages ?? []).map((row) => (
+                          <TableRow key={row.url} className="hover:bg-muted/50">
+                            <TableCell className="pl-6 max-w-[200px]">
+                              <span className="font-mono text-xs text-muted-foreground line-clamp-1">
+                                {row.url}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right font-semibold tabular-nums text-sm">
+                              {formatNumber(row.visits)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end">
+                                <DeltaBadge
+                                  current={row.visits}
+                                  previous={row.visitsPrev}
+                                  comparable={comparable}
+                                />
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right pr-6 tabular-nums text-sm">
+                              {formatNumber(row.citations)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          )}
+          {/* In one place whether the range has visits or not, so a range
+              that has none (or some again) keeps these sections and their
+              data rather than mounting them anew and reading it again. */}
+          {conversionsSection}
+          {pagesCard}
+          {googleSection}
+          {botsSection}
+          {!isEmpty && (
+            <>
+              {/* Recent Visit Log with filtering and pagination*/}
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <LayoutList className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium">
+                          Recent AI Referral Visits
+                        </CardTitle>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {logsTotal > 0 && (
+                          <Badge variant="secondary" className="text-xs">
+                            {tVisits('listTotal', { visits: logsTotal, pageviews: logsPageviews })}
+                          </Badge>
+                        )}
+                        <TableExport exporter={exporter} section="visits" />
+                      </div>
+                    </div>
+                    <TrafficFilterBar
+                      filters={filters}
+                      searchInput={searchInput}
+                      onSearchInputChange={setSearchInput}
+                      onChange={handleFiltersChange}
+                      platforms={summary?.platformBreakdown.map((p) => p.platform) ?? []}
+                      isLoading={isLoadingLogs}
+                    />
                   </div>
-                  <VisitListSourceNote analyticsDays={summary?.analyticsDays.length ?? 0} />
-                  <p className="px-6 pb-4 text-xs text-muted-foreground">{tVisits('listNote')}</p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
+                </CardHeader>
+                <CardContent className="p-0">
+                  {isLoadingLogs ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (filters.platform || filters.search) && logs.length === 0 ? (
+                    <EmptyLogsState hasFilters={true} />
+                  ) : logs.length === 0 ? (
+                    <EmptyLogsState hasFilters={false} />
+                  ) : (
+                    <>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="pl-6 w-[100px]">Time</TableHead>
+                            <TableHead>Platform</TableHead>
+                            <TableHead>Page</TableHead>
+                            <TableHead className="text-right pr-6">Country</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {logs.map((row) => (
+                            <TableRow key={row.id} className="hover:bg-muted/50">
+                              <TableCell className="pl-6 text-xs text-muted-foreground whitespace-nowrap">
+                                {formatRelative(row.createdAt, tCommon)}
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-sm">
+                                  {getPlatformName(row.sourcePlatform ?? 'unknown')}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex min-w-0 items-center gap-1.5">
+                                  <span className="font-mono text-xs text-muted-foreground line-clamp-1">
+                                    {(() => {
+                                      try {
+                                        return new URL(row.url).pathname;
+                                      } catch {
+                                        return row.url;
+                                      }
+                                    })()}
+                                  </span>
+                                  {/* A reload or a further link in the same visit (AT-003). */}
+                                  {row.pageviews > 1 && (
+                                    <span className="shrink-0 whitespace-nowrap rounded-full bg-muted px-1.5 text-[11px] font-medium leading-4 text-muted-foreground">
+                                      {tVisits('rowPageviews', { count: row.pageviews })}
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right pr-6">
+                                <span className="text-xs text-muted-foreground">
+                                  {row.country ?? '—'}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                      {(() => {
+                        const totalPages = Math.max(1, Math.ceil(logsTotal / PAGE_SIZE));
+                        const clampedPage = Math.min(page, totalPages - 1);
+                        const start = clampedPage * PAGE_SIZE;
+                        const end = Math.min(start + PAGE_SIZE, logsTotal);
+                        return (
+                          <TablePager
+                            page={clampedPage}
+                            totalPages={totalPages}
+                            total={logsTotal}
+                            start={start}
+                            end={end}
+                            onPage={setPage}
+                            isLoading={isLoadingLogs}
+                          />
+                        );
+                      })()}
+                      {/* What the list covers, and a wider range when it is a short one
+                      (AT-017, spec §3.01). */}
+                      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-6 pb-1 text-xs text-muted-foreground">
+                        <span>
+                          {tVisits('listRange', {
+                            visits: logsTotal,
+                            pageviews: logsPageviews,
+                            range: rangeSubLabel,
+                            preset:
+                              datePreset === 'custom' || datePreset === 'all' ? 'other' : 'last',
+                          })}
+                        </span>
+                        {datePreset === '24h' && (
+                          <button
+                            type="button"
+                            onClick={() => handleDatePresetChange('7d')}
+                            className="font-medium text-foreground underline-offset-4 hover:underline"
+                          >
+                            {tVisits('showLast7Days')}
+                          </button>
+                        )}
+                      </div>
+                      <VisitListSourceNote analyticsDays={summary?.analyticsDays.length ?? 0} />
+                      <p className="px-6 pb-4 text-xs text-muted-foreground">
+                        {tVisits('listNote')}
+                      </p>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </div>
+      </RangeReadyProvider>
     </div>
   );
 }

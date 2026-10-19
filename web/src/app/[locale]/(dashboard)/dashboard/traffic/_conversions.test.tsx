@@ -14,7 +14,8 @@ import type { TrafficConversions, TrafficDateWindow } from '@/lib/actions/traffi
  */
 
 const getTrafficConversions = vi.fn();
-vi.mock('@/lib/actions/traffic', () => ({
+vi.mock('@/lib/actions/traffic', () => ({}));
+vi.mock('@/lib/traffic-reads', () => ({
   getTrafficConversions: (...args: unknown[]) => getTrafficConversions(...args),
 }));
 vi.mock('@/hooks/use-integration-connect', () => ({

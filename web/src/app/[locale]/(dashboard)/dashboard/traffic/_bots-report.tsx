@@ -22,15 +22,12 @@ import { formatNumber } from '@/lib/format';
 import { formatRelative } from '@/lib/format-relative';
 import { botName } from '@/lib/ai-bot-names';
 import { botReportState, rowsPausedUntil, sampleBotTypes } from '@/lib/ai-bots';
-import { getBotConnections, type BotConnections } from '@/lib/actions/ai-bots';
-import {
-  getTrafficBots,
-  type BotTypeRow,
-  type TrafficBots,
-  type TrafficDateWindow,
-} from '@/lib/actions/traffic';
+import { type BotConnections } from '@/lib/actions/ai-bots';
+import { type BotTypeRow, type TrafficBots, type TrafficDateWindow } from '@/lib/actions/traffic';
 import { formatTrafficBucketDate } from './_charts';
 import { BotsDialog } from './_bots-connect';
+import { getBotConnections, getTrafficBots } from '@/lib/traffic-reads';
+import { useRangeReady } from './_range-ready';
 
 /** Where Upgrade goes, as on the Prompts page's usage cards. */
 const PLAN_PAGE = '/dashboard/settings?tab=billing';
@@ -248,6 +245,7 @@ export function BotsReportSection({
     };
   }, [brandId, dateWindow, key]);
 
+  useRangeReady('botsReport', loaded?.key === key);
   const current = loaded?.key === key ? loaded : null;
   const info = current?.info ?? null;
   const report = current?.report ?? null;

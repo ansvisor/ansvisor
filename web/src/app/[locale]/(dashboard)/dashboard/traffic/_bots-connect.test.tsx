@@ -15,9 +15,11 @@ const getBotConnections = vi.fn();
 const createBotConnection = vi.fn();
 const revokeBotConnection = vi.fn();
 vi.mock('@/lib/actions/ai-bots', () => ({
-  getBotConnections: (...a: unknown[]) => getBotConnections(...a),
   createBotConnection: (...a: unknown[]) => createBotConnection(...a),
   revokeBotConnection: (...a: unknown[]) => revokeBotConnection(...a),
+}));
+vi.mock('@/lib/traffic-reads', () => ({
+  getBotConnections: (...a: unknown[]) => getBotConnections(...a),
 }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, ...props }: { href: string }) => <a href={href} {...props} />,

@@ -19,12 +19,10 @@ import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
 import { getLocationQuota } from '@/lib/actions/prompt';
 import { trackPagePrompts } from '@/lib/actions/prompt-suggestions';
-import {
-  getUntrackedGoogleQueries,
-  type TrafficDateWindow,
-  type TrafficUntrackedQueries,
-} from '@/lib/actions/traffic';
+import { type TrafficDateWindow, type TrafficUntrackedQueries } from '@/lib/actions/traffic';
 import { formatTrafficBucketDate } from './_charts';
+import { getUntrackedGoogleQueries } from '@/lib/traffic-reads';
+import { useRangeReady } from './_range-ready';
 
 /**
  * Prompt slots left on the plan: null when the plan has no cap, or it
@@ -86,6 +84,7 @@ export function UntrackedQueriesCard({
     };
   }, [brandId, dateWindow, key, reloads]);
 
+  useRangeReady('untrackedQueries', loaded?.key === key);
   const current = loaded?.key === key ? loaded : null;
   const result = current?.result ?? null;
   const slotsLeft = current?.slotsLeft ?? null;

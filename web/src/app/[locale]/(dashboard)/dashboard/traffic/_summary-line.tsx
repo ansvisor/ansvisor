@@ -6,12 +6,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatNumber } from '@/lib/format';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import { summaryLine } from '@/lib/traffic-summary-line';
-import {
-  getTrafficPages,
-  getUntrackedGoogleQueries,
-  type TrafficDateWindow,
-  type TrafficSummary,
-} from '@/lib/actions/traffic';
+import { type TrafficDateWindow, type TrafficSummary } from '@/lib/actions/traffic';
+import { getTrafficPages, getUntrackedGoogleQueries } from '@/lib/traffic-reads';
+import { useRangeReady } from './_range-ready';
 
 /**
  * The summary line above the KPI cards (AT-007, spec §3.1): the range's
@@ -94,6 +91,11 @@ export function SummaryLine({
       cancelled = true;
     };
   }, [brandId, dateWindow, key]);
+
+  useRangeReady(
+    'summaryLine',
+    cited?.key === key && (!gscReady || untracked?.key === untrackedKey),
+  );
 
   const citedNow = cited?.key === key ? cited : null;
   const untrackedNow = gscReady ? (untracked?.key === untrackedKey ? untracked : null) : undefined;

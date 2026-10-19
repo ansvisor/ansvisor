@@ -24,7 +24,8 @@ const getTrafficPages = vi.fn(async () => ({
   counts: { noAiTraffic: 0, citedNotClicked: 0, trafficNoPrompt: 0, all: 0 },
   rows: [],
 }));
-vi.mock('@/lib/actions/traffic', () => ({
+vi.mock('@/lib/actions/traffic', () => ({}));
+vi.mock('@/lib/traffic-reads', () => ({
   getTrafficGoogleTotals: (...args: unknown[]) => getTrafficGoogleTotals(...args),
   getTrafficPages: (...args: unknown[]) => getTrafficPages(...(args as [])),
   // The summary line's untracked Google queries (AT-009): tested with the line.

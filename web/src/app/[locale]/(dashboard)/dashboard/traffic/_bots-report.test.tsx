@@ -15,12 +15,13 @@ import type { TrafficBots, TrafficDateWindow } from '@/lib/actions/traffic';
 const getBotConnections = vi.fn();
 const createBotConnection = vi.fn();
 vi.mock('@/lib/actions/ai-bots', () => ({
-  getBotConnections: (...a: unknown[]) => getBotConnections(...a),
   createBotConnection: (...a: unknown[]) => createBotConnection(...a),
   revokeBotConnection: vi.fn(),
 }));
 const getTrafficBots = vi.fn();
-vi.mock('@/lib/actions/traffic', () => ({
+vi.mock('@/lib/actions/traffic', () => ({}));
+vi.mock('@/lib/traffic-reads', () => ({
+  getBotConnections: (...a: unknown[]) => getBotConnections(...a),
   getTrafficBots: (...a: unknown[]) => getTrafficBots(...a),
 }));
 vi.mock('@/i18n/navigation', () => ({
