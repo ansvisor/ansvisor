@@ -72,6 +72,12 @@ export interface PlanLimits {
    * Starter 100, Growth 500.
    */
   maxSiteAudits: number;
+  /**
+   * Verified AI-bot rows stored a month (AT-010, spec §6.3). 0 = the bot
+   * report is locked (Starter), -1 = no cap. Growth 2M, Enterprise 20M,
+   * adjustable per customer via organizations.plan_overrides.
+   */
+  maxBotEventsPerMonth: number;
   maxDailyOnDemand: number;
   onDemandCooldownMinutes: number;
   features: readonly Feature[];
@@ -113,6 +119,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxOpportunitiesPerMonth: -1,
       maxOpportunitiesPerRequest: 5,
       maxSiteAudits: -1,
+      maxBotEventsPerMonth: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
       features: [
@@ -153,6 +160,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxOpportunitiesPerMonth: 10,
       maxOpportunitiesPerRequest: 3,
       maxSiteAudits: 100,
+      maxBotEventsPerMonth: 0,
       maxDailyOnDemand: 3,
       onDemandCooldownMinutes: 15,
       allowedScrapers: ['chatgpt-web', 'copilot-web'],
@@ -197,6 +205,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxOpportunitiesPerMonth: 50,
       maxOpportunitiesPerRequest: 5,
       maxSiteAudits: 500,
+      maxBotEventsPerMonth: 2_000_000,
       maxDailyOnDemand: 10,
       onDemandCooldownMinutes: 5,
       // API-model tracking (Claude) is not part of Growth — scraper engines
@@ -242,6 +251,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxOpportunitiesPerMonth: -1,
       maxOpportunitiesPerRequest: 5,
       maxSiteAudits: -1,
+      maxBotEventsPerMonth: 20_000_000,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
       // API-model tracking (Claude) is a per-customer opt-in on Enterprise:

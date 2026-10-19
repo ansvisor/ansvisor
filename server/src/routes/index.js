@@ -11,6 +11,7 @@ import integrationRoutes from './integrations.js';
 import mentionRoutes from './mentions.js';
 import brandRoutes from './brands.js';
 import actionCenterRoutes from './action-center.js';
+import botRoutes from './bots.js';
 
 const router = Router();
 
@@ -26,6 +27,7 @@ router.use('/integrations', integrationRoutes);
 router.use('/mentions', mentionRoutes);
 router.use('/brands', brandRoutes);
 router.use('/action-center', actionCenterRoutes);
+router.use('/bots', botRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', user: req.user?.id });

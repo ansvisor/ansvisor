@@ -696,6 +696,17 @@ export async function getSiteAuditQuotaStatus(orgId, { now = new Date() } = {}) 
 }
 
 /**
+ * Verified AI-bot rows an organization may store a month (AT-010, spec
+ * §6.3): -1 = no cap, 0 = the bot report is locked (Starter). Throws
+ * PlanLimitError (402) without an active subscription, like every billed
+ * feature.
+ */
+export async function getBotEventCap(orgId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  return plan.limits.maxBotEventsPerMonth ?? 0;
+}
+
+/**
  * Express middleware that attaches req.plan from the authenticated user.
  * Must run after auth middleware (req.user must exist).
  */
