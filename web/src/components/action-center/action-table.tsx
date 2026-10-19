@@ -176,7 +176,7 @@ export function AssigneeAvatar({ assignee }: { assignee: ActionItem['assignee'] 
  * Opaque, with the row's hover tint, so it covers what scrolls under it.
  */
 const MENU_CELL =
-  'sticky right-0 z-[5] w-10 bg-background [tr:hover>&]:bg-[color-mix(in_oklab,var(--muted)_50%,var(--background))]';
+  'sticky right-0 z-[5] w-10 bg-card [tr:hover>&]:bg-[color-mix(in_oklab,var(--muted)_50%,var(--card))]';
 
 /** The statuses the row menu sets, in its order. */
 const MENU_STATUSES = [
@@ -282,7 +282,7 @@ export function ActionTable({
   const tCommon = useTranslations('common');
 
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    <div className="overflow-x-auto rounded-lg border bg-card">
       <Table>
         <TableHeader>
           <TableRow>

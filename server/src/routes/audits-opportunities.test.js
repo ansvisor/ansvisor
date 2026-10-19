@@ -79,6 +79,8 @@ async function startApp() {
           }
           return { data: tables.competitorPrompts ?? [], error: null };
         }
+        // A test may make the AI visits step take a while.
+        tables.onVisits?.();
         return {
           data: {
             analytics: [{ page: args.p_pages[0], platform: 'chatgpt', cur_sessions: 7 }],
@@ -198,6 +200,37 @@ describe('GET /api/audits/opportunities', () => {
     const { name, args } = rpcCalls.find((c) => c.name === 'ae_page_traffic_evidence');
     expect(name).toBe('ae_page_traffic_evidence');
     expect(args.p_pages).toEqual(['https://acme.com/pricing']);
+  });
+
+  it('says which step a slow read spent its time on, and nothing for a quick one', async () => {
+    const { default: logger } = await import('../lib/logger.js');
+    await fetch(`${baseUrl}/opportunities?brandId=${brandId}`);
+    expect(logger.warn).not.toHaveBeenCalled();
+
+    // The clock moves 2.5 s while the AI visits are read.
+    const realNow = Date.now.bind(Date);
+    let offset = 0;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => realNow() + offset);
+    tables.onVisits = () => {
+      offset += 2500;
+    };
+    try {
+      await fetch(`${baseUrl}/opportunities?brandId=${brandId}`);
+    } finally {
+      clock.mockRestore();
+    }
+    const call = logger.warn.mock.calls.find(
+      ([, msg]) => msg === '[audit] slow opportunities inbox read',
+    );
+    expect(call[0]).toMatchObject({ brandId, rows: 1 });
+    expect(call[0].ms.aiVisits).toBeGreaterThanOrEqual(2500);
+    expect(call[0].ms.total).toBeGreaterThanOrEqual(call[0].ms.aiVisits);
+    expect(call[0].ms).toEqual({
+      reads: expect.any(Number),
+      competitorsAndTemplates: expect.any(Number),
+      aiVisits: expect.any(Number),
+      total: expect.any(Number),
+    });
   });
 
   it("leaves out pages under the brand's exclude patterns (SA-006)", async () => {

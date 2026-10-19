@@ -120,7 +120,7 @@ export function AgentSection() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Sparkles className="h-4 w-4" />
-          {t('agent')}
+          {t('aiProviders')}
         </CardTitle>
         <CardDescription>{t('agent_description')}</CardDescription>
       </CardHeader>

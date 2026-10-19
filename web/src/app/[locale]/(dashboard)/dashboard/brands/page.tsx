@@ -6,8 +6,7 @@ import { getPlan, isCloud as checkIsCloud } from '@/config/plans';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
 import { BrandsClient } from './_brands-client';
 import { Button } from '@/components/ui/button';
-import { buttonVariants } from '@/components/ui/button-variants';
-import { Crown, Plus, Compass, ExternalLink } from 'lucide-react';
+import { Crown, Plus } from 'lucide-react';
 
 function BrandsHeader({
   canAddBrand,
@@ -24,16 +23,6 @@ function BrandsHeader({
         <p className="text-muted-foreground text-sm">{t('description')}</p>
       </div>
       <div className="flex items-center gap-2">
-        <a
-          href="https://app.supademo.com/demo/cmq2b1p5k0rk9qm6ugicrn655?utm_source=link"
-          target="_blank"
-          rel="noopener noreferrer"
-          className={buttonVariants({ variant: 'outline', size: 'sm' })}
-        >
-          <Compass className="h-4 w-4 shrink-0" />
-          <span>Product Tour</span>
-          <ExternalLink className="h-4 w-4 shrink-0 opacity-50" />
-        </a>
         {canAddBrand ? (
           <Link href="/dashboard/brands/new">
             <Button className="gap-2">
