@@ -30,6 +30,39 @@ export function safeNextPath(value: string | null | undefined): string {
   }
 }
 
+/**
+ * The absolute URL to send a visitor to after an e-mail link (`/auth/confirm`).
+ * `redirect_to` can be a whole URL, since Supabase expands `{{ .RedirectTo }}`
+ * and we build that from NEXT_PUBLIC_APP_URL. Such a URL is kept only when its
+ * origin is the request's or the app's own. A path goes through safeNextPath.
+ * Anything else is the dashboard.
+ */
+export function safeRedirectUrl(value: string | null | undefined, origin: string): string {
+  if (value && /^https?:\/\//i.test(value)) {
+    try {
+      const url = new URL(value);
+      if (ownOrigins(origin).has(url.origin)) {
+        return `${url.origin}${safeNextPath(`${url.pathname}${url.search}${url.hash}`)}`;
+      }
+    } catch {
+      // Not a URL: falls through to the dashboard.
+    }
+    return `${origin}${DEFAULT_NEXT}`;
+  }
+  return `${origin}${safeNextPath(value)}`;
+}
+
+function ownOrigins(origin: string): Set<string> {
+  const origins = new Set([origin]);
+  try {
+    if (process.env.NEXT_PUBLIC_APP_URL)
+      origins.add(new URL(process.env.NEXT_PUBLIC_APP_URL).origin);
+  } catch {
+    // A malformed NEXT_PUBLIC_APP_URL adds nothing.
+  }
+  return origins;
+}
+
 /** `next` as the OAuth buttons stored it in NEXT_COOKIE (URI-encoded). */
 export function nextFromCookie(value: string | null | undefined): string | null {
   if (!value) return null;
