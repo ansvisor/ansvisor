@@ -68,7 +68,9 @@ describe('botReportState and sampleBotTypes (AT-011)', () => {
     pages: [],
     uncrawledCount: null,
     uncrawled: null,
+    alertState: 'waiting' as const,
     alertFrom: null,
+    since: null,
   });
 
   it("is locked without the report, off, waiting, or the brand's own data", () => {

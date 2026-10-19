@@ -324,6 +324,12 @@ describe('GET /api/traffic/export', () => {
     expect((await get({ format: 'xlsx' })).status).toBe(404);
   });
 
+  it('exports the rest when the AI bot report times out', async () => {
+    loaders.getTrafficBots.mockRejectedValue(new Error('statement timeout'));
+    const res = await get({ format: 'xlsx' });
+    expect(res.status).toBe(200);
+  });
+
   it('reports a failed read as an error, not as an empty file', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     loaders.getTrafficSummary.mockRejectedValue(new Error('timeout'));

@@ -15,7 +15,12 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { assertBrandAccess } from '../lib/access.js';
 import { PlanLimitError, getBotEventCap } from '../lib/plan-guard.js';
-import { CONNECTION_KINDS, hashSecret, newConnectionSecret } from '../lib/bot-ingest.js';
+import {
+  CONNECTION_KINDS,
+  hashSecret,
+  newConnectionSecret,
+  publicIngestEndpoint,
+} from '../lib/bot-ingest.js';
 import { buildWorkerScript } from '../lib/bot-worker-script.js';
 import { logpushJob, vercelDrain } from '../lib/bot-sender-setup.js';
 
@@ -91,6 +96,14 @@ router.post('/connections/:brandId', async (req, res) => {
     if ((await getBotEventCap(brand.organization_id)) === 0) {
       throw new PlanLimitError('The AI bot report comes with the Growth plan.', 403);
     }
+    // Checked before a connection exists: one the sender can't reach is no use.
+    const endpoint = publicIngestEndpoint();
+    if (!endpoint) {
+      req.log.error('[ai-bots] PUBLIC_SERVER_URL is missing or not https');
+      return res
+        .status(503)
+        .json({ error: 'AI bot connections are not set up on this server yet.' });
+    }
 
     const secret = newConnectionSecret();
     const { data: connection, error } = await supabaseAdmin
@@ -105,8 +118,6 @@ router.post('/connections/:brandId', async (req, res) => {
       .single();
     if (error) throw new Error(error.message);
 
-    // The dashboard reached this server at its public address; so can the edge.
-    const endpoint = `${req.protocol}://${req.get('host')}/bots/ingest`;
     const { kind } = parsed.data;
     // What the person copies into Cloudflare or Vercel, with the secret in it once.
     return res.status(201).json({

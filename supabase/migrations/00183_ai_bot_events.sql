@@ -11,10 +11,13 @@
 --     Worker, a Logpush job, a Vercel drain), each with its own secret.
 --     Only the secret's SHA-256 is kept; the person sees it once.
 --   * ai_bot_events — one row per verified request, kept 90 days.
---   * ai_bot_daily — bot × page × day counters, always written. When the
+--   * ai_bot_daily — bot × page × day counters, always added to. When the
 --     month's cap is reached they are all that is written ("Detailed rows
---     paused until Nov 1, totals still counted", §6.3), so the cap is a
---     hard ceiling on what is stored.
+--     paused until Nov 1, totals still counted", §6.3), and past it a bot's
+--     hits of the day go on one '(other)' row instead of a row per page:
+--     crawler hits are mostly a page, day and bot of their own, so page rows
+--     would grow by about one per event. The cap is then a hard ceiling on
+--     what is stored.
 --   * ai_bot_usage — per organization (the workspace) and month: rows
 --     stored, events counted, when the cap was reached, and when the 80%
 --     alert fired (§6.3 guardrails).
@@ -132,7 +135,8 @@ grant select on public.ai_bot_usage to authenticated;
 -- The usage row is locked for the batch, so two batches for one
 -- organization can't both take the last of its room. Rows are stored while
 -- the month has room (p_cap < 0: no cap; 0: none stored); counters are
--- always added. Returns what was received and stored, the month's use, and
+-- always added, by page for the events stored and on the bot's '(other)' row
+-- of the day for the rest. Returns what was received and stored, the month's use, and
 -- whether this batch took it past 80% of the cap (the server alerts once).
 
 create or replace function public.ai_bot_ingest(
@@ -199,9 +203,14 @@ begin
       (r.at at time zone 'utc')::date as day,
       r.bot,
       r.bot_type,
-      lower(public.normalize_page_path(r.page)) as page,
+      case
+        when x.n <= v_room then lower(public.normalize_page_path(r.page))
+        else '(other)'
+      end as page,
       r.at
-    from jsonb_to_recordset(p_events) as r(bot text, bot_type text, page text, at timestamptz)
+    from jsonb_array_elements(p_events) with ordinality as x(ev, n)
+    cross join lateral jsonb_to_record(x.ev)
+      as r(bot text, bot_type text, page text, at timestamptz)
   ) e
   group by e.day, e.bot, e.page
   on conflict (brand_id, day, bot, page) do update
