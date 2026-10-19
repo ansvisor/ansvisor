@@ -98,7 +98,13 @@ describe('getTrafficPages: Broken AI links', () => {
     name === 'ai_traffic_pages'
       ? {
           data: {
-            counts: { all: 14, no_ai_traffic: 3, cited_not_clicked: 1, traffic_no_prompt: 2 },
+            counts: {
+              all: 14,
+              no_ai_traffic: 3,
+              cited_not_clicked: 1,
+              traffic_no_prompt: 2,
+              broken_ai_links: 6,
+            },
             rows: [],
           },
           error: null,
@@ -121,10 +127,18 @@ describe('getTrafficPages: Broken AI links', () => {
       'ai_traffic_pages',
       expect.objectContaining({ p_tab: 'no_ai_traffic', p_limit: 10 }),
     );
-    expect(rpc).toHaveBeenCalledWith(
-      'ai_traffic_broken_links',
-      expect.objectContaining({ p_limit: 0, p_offset: 0 }),
+    // The count comes with the other tabs': the broken list isn't read for it.
+    expect(rpc).not.toHaveBeenCalledWith('ai_traffic_broken_links', expect.anything());
+  });
+
+  it('keeps the card up when the broken list fails on its own tab', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    rpc.mockImplementation(async (name: string) =>
+      name === 'ai_traffic_pages' ? answer(name) : { data: null, error: { message: 'timeout' } },
     );
+    const result = await getTrafficPages(BRAND, WEEK, { tab: 'brokenAiLinks', limit: 10 });
+    expect(result.counts.brokenAiLinks).toBe(6);
+    expect(result.brokenLinks).toEqual([]);
   });
 
   it('reads the broken links as the tab, and only the counts of the rest', async () => {

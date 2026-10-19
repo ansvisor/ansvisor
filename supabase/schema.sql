@@ -25436,7 +25436,13 @@ notify pgrst, 'reload schema';
 -- A page is broken in a range when its latest pageview with a status says
 -- 404 or 410. With no status at all, a title saying "not found" counts unless
 -- the nightly page read (site_pages, 00104) found the page working: a post
--- about fixing 404s is not a missing page.
+-- about fixing 404s is not a missing page. The status is decided per address
+-- (the path plus its query, utm_* left out), and a path is broken only when
+-- none of its addresses last answered 2xx or 3xx: on a shop where
+-- /index.php?route=product&id=42 is gone and the other products work,
+-- /index.php isn't broken, and no redirect of it (the whole site) is
+-- suggested. Its visits are the pageviews that found it missing (404, 410,
+-- or no status and a not-found title), not those from before it broke.
 --
 -- Each broken page gets a suggested redirect to a page known to work (read
 -- 2xx by the nightly page read, or landed on with a 2xx in the last 90
@@ -25458,9 +25464,15 @@ notify pgrst, 'reload schema';
 -- elsewhere gets nothing. The rule itself (ai_traffic_broken_pages) has no
 -- check of its own, so members can't call it.
 
+-- Beacon inserts don't queue behind the column change for long: it gives up
+-- after 3 s instead (run it again).
+set lock_timeout = '3s';
+
 alter table public.ai_traffic_logs
   add column if not exists http_status smallint,
   add column if not exists not_found_title boolean not null default false;
+
+reset lock_timeout;
 
 comment on column public.ai_traffic_logs.http_status is
   'The landing page''s HTTP status as the visitor''s browser saw it; null when the browser doesn''t report one (Safari) or from an older snippet (AT-012).';
@@ -25487,6 +25499,12 @@ as $$
   logs as (
     select
       lower(public.normalize_page_path(l.url)) as page_key,
+      -- The address: the path plus its query, utm_* left out, in one order.
+      lower(public.normalize_page_path(l.url)) || coalesce('?' || (
+        select string_agg(q.part, '&' order by q.part)
+        from unnest(string_to_array(split_part(split_part(l.url, '#', 1), '?', 2), '&')) as q(part)
+        where q.part <> '' and q.part !~* '^utm_'
+      ), '') as address,
       l.created_at,
       l.http_status,
       l.not_found_title
@@ -25495,13 +25513,23 @@ as $$
       and l.created_at >= coalesce(p_from, '-infinity'::timestamptz)
       and (p_to is null or l.created_at <= p_to)
   ),
-  page_state as (
+  address_state as (
     select
       page_key,
+      address,
       (array_agg(http_status order by created_at desc) filter (where http_status is not null))[1]
         as last_status,
       bool_or(not_found_title) as title_not_found
     from logs
+    group by page_key, address
+  ),
+  page_state as (
+    select
+      page_key,
+      max(last_status) filter (where last_status in (404, 410)) as last_status,
+      bool_or(last_status is null and title_not_found) as title_not_found,
+      bool_or(last_status between 200 and 399) as works
+    from address_state
     group by page_key
   ),
   -- What the nightly page read found (00104).
@@ -25518,8 +25546,11 @@ as $$
     case when s.last_status is not null then s.last_status::text else 'title' end
   from page_state s
   left join fetched f on f.page_key = s.page_key
-  where s.last_status in (404, 410)
-     or (s.last_status is null and s.title_not_found and not coalesce(f.works, false));
+  where not s.works
+    and (
+      s.last_status in (404, 410)
+      or (s.last_status is null and s.title_not_found and not coalesce(f.works, false))
+    );
 $$;
 
 revoke all on function public.ai_traffic_broken_pages(uuid, timestamptz, timestamptz)
@@ -25528,7 +25559,7 @@ grant execute on function public.ai_traffic_broken_pages(uuid, timestamptz, time
   to service_role;
 
 comment on function public.ai_traffic_broken_pages(uuid, timestamptz, timestamptz) is
-  'AI Traffic (AT-012): the brand''s pages AI visitors landed on in a window whose latest reported status was 404 or 410, or, with no status, whose title said not found and that the nightly page read never found working. No organization check: called only by ai_traffic_broken_links and ai_traffic_pages, after theirs.';
+  'AI Traffic (AT-012): the brand''s pages AI visitors landed on in a window whose latest reported status was 404 or 410, or, with no status, whose title said not found and that the nightly page read never found working; decided per address (path plus query, utm_* left out), and a path none of whose addresses last answered 2xx or 3xx. No organization check: called only by ai_traffic_broken_links and ai_traffic_pages, after theirs.';
 
 -- ─── Broken AI links ────────────────────────────────────────────────────────
 
@@ -25570,6 +25601,8 @@ begin
     where l.brand_id = p_brand_id
       and l.created_at >= coalesce(p_from, '-infinity'::timestamptz)
       and (p_to is null or l.created_at <= p_to)
+      -- Only the pageviews that found the page missing, not those from before it broke.
+      and (l.http_status in (404, 410) or (l.http_status is null and l.not_found_title))
   ),
   broken as (
     select bp.page_key, bp.status
@@ -25927,7 +25960,9 @@ begin
         'all', count(*),
         'no_ai_traffic', count(*) filter (where no_ai_traffic),
         'cited_not_clicked', count(*) filter (where cited_not_clicked),
-        'traffic_no_prompt', count(*) filter (where traffic_no_prompt)
+        'traffic_no_prompt', count(*) filter (where traffic_no_prompt),
+        -- The Broken AI links tab's count, so the card needn't read that list for it.
+        'broken_ai_links', (select count(*) from broken)
       )
       from kept
     ),

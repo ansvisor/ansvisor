@@ -645,7 +645,8 @@ export async function getTrafficPages(
   const supabase = await createClient();
   const { from, to } = resolveTrafficWindow(window);
   const broken = opts.tab === 'brokenAiLinks';
-  // Every tab is counted; only the asked tab's rows are read.
+  // Every tab is counted here; only the asked tab's rows are read, Broken AI
+  // links' from its own list, which is left empty when it can't be read.
   const [{ data, error }, brokenLinks] = await Promise.all([
     supabase.rpc('ai_traffic_pages', {
       p_brand_id: brandId,
@@ -655,10 +656,15 @@ export async function getTrafficPages(
       p_limit: broken ? 0 : (opts.limit ?? 10),
       p_offset: broken ? 0 : (opts.offset ?? 0),
     }),
-    getTrafficBrokenLinks(brandId, window, {
-      limit: broken ? (opts.limit ?? 10) : 0,
-      offset: broken ? (opts.offset ?? 0) : 0,
-    }),
+    broken
+      ? getTrafficBrokenLinks(brandId, window, {
+          limit: opts.limit ?? 10,
+          offset: opts.offset ?? 0,
+        }).catch((err) => {
+          console.error('Failed to load the broken AI links:', err);
+          return null;
+        })
+      : null,
   ]);
   if (error) throw new Error(error.message);
 
@@ -669,10 +675,10 @@ export async function getTrafficPages(
       noAiTraffic: Number(counts.no_ai_traffic) || 0,
       citedNotClicked: Number(counts.cited_not_clicked) || 0,
       trafficNoPrompt: Number(counts.traffic_no_prompt) || 0,
-      brokenAiLinks: brokenLinks.count,
+      brokenAiLinks: Number(counts.broken_ai_links) || 0,
       all: Number(counts.all) || 0,
     },
-    brokenLinks: brokenLinks.rows,
+    brokenLinks: brokenLinks?.rows ?? [],
     rows: (raw.rows ?? []).map((row) => ({
       page: row.page as string,
       aiVisits: Number(row.ai_visits) || 0,
