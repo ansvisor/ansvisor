@@ -52,9 +52,12 @@ export function addDays(day: string, n: number): string {
  * unbounded window anchors to the trailing 7 days, mirroring what the raw
  * path's `now() - 7d` default has always compared against. When a previous
  * completed run's window is supplied, use it instead of deriving an adjacent
- * equal-length period. The previous window ends the day BEFORE the current
- * one starts by default — the raw path's
- * timestamp arithmetic let the two windows share their boundary instant.
+ * equal-length period — but only when it ends before the current one starts:
+ * two runs on the same UTC day (the nightly one, then a Run All) would
+ * otherwise compare the day with itself and read every change as 0. The
+ * previous window ends the day BEFORE the current one starts by default — the
+ * raw path's timestamp arithmetic let the two windows share their boundary
+ * instant.
  */
 export function deltaDayWindows(
   days: DayWindow,
@@ -69,7 +72,7 @@ export function deltaDayWindows(
   const prevTo = addDays(curFrom, -1);
   const defaultPrev = { dayFrom: addDays(prevTo, -(len - 1)), dayTo: prevTo };
   const prev =
-    previousDays?.dayFrom && previousDays?.dayTo
+    previousDays?.dayFrom && previousDays?.dayTo && previousDays.dayTo < curFrom
       ? { dayFrom: previousDays.dayFrom, dayTo: previousDays.dayTo }
       : defaultPrev;
   return {
