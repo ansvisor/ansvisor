@@ -14,6 +14,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Link, useRouter } from '@/i18n/navigation';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -327,6 +328,15 @@ export function AuditPagesTable({
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {formatDate(page.lastAuditedAt)}
+                          {page.lastAuditSource === 'auto' && (
+                            <Badge
+                              variant="outline"
+                              className="ml-1.5 text-[10px]"
+                              title={t('pages.autoTitle')}
+                            >
+                              {t('pages.auto')}
+                            </Badge>
+                          )}
                         </TableCell>
                       </TableRow>
                       {expanded && (

@@ -58,15 +58,22 @@ const growthAuto: AuditQuota = {
   auto: auto(),
 };
 const onOpenSettings = vi.fn();
+/** The day before day 28's run. */
+const NOW = new Date('2026-10-27T12:00:00Z');
 
 let container: HTMLDivElement;
 let root: Root;
 
-function render(data: AuditOverview | null, quota: AuditQuota | null = growth) {
+function render(data: AuditOverview | null, quota: AuditQuota | null = growth, now = NOW) {
   act(() => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <AuditOverviewCards overview={data} quota={quota} onOpenSettings={onOpenSettings} />
+        <AuditOverviewCards
+          overview={data}
+          quota={quota}
+          now={now}
+          onOpenSettings={onOpenSettings}
+        />
       </NextIntlClientProvider>,
     );
   });
@@ -157,16 +164,34 @@ describe('AuditOverviewCards', () => {
     ]);
     expect(audits).toContain('Auto 25% · How it works');
 
-    // The five runs: done, done, done, done, next.
+    // The five runs by date: done, done, done, done, next.
     const runs = [...container.querySelectorAll('ol[aria-label] li')];
     expect(runs.map((li) => li.textContent)).toEqual([
-      '1done',
-      '7done',
-      '14done',
-      '21done',
-      '28next run',
+      'Oct 1done',
+      'Oct 7done',
+      'Oct 14done',
+      'Oct 21done',
+      'Oct 28next run',
     ]);
     expect(runs[4].className).toContain('font-semibold');
+    expect(runs[4].getAttribute('title')).toBe('Day 28 of your billing month · Oct 28');
+  });
+
+  it('marks a run whose turn passed without running as skipped, not upcoming', () => {
+    // Auto-audit came out on day 25: only day 28 ran.
+    const late = auto({
+      runs: [1, 7, 14, 21, 28].map((day) => ({
+        day,
+        at: `2026-10-${String(day).padStart(2, '0')}T00:00:00.000Z`,
+        done: day === 28,
+      })),
+      nextRun: null,
+    });
+    // Seen on day 28, after the run.
+    render(overview(), { ...growthAuto, auto: late }, new Date('2026-10-28T12:00:00Z'));
+    expect(
+      [...container.querySelectorAll('ol[aria-label] li .sr-only')].map((s) => s.textContent),
+    ).toEqual(['skipped', 'skipped', 'skipped', 'skipped', 'done']);
   });
 
   it("counts a run's running audits as auto, not the user's", () => {

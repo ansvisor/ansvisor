@@ -116,7 +116,7 @@ function readBrandAudits(brandId) {
   return readAllRpcRows('site_audits', (from, to) =>
     supabaseAdmin
       .from('site_audits')
-      .select('id, url, final_url, status, total_score, created_at')
+      .select('id, url, final_url, status, total_score, created_at, source')
       .eq('brand_id', brandId)
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })

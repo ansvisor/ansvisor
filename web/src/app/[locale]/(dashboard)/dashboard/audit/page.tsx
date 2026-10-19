@@ -55,6 +55,7 @@ import { AutoRunNotice } from './_auto-run-notice';
 import { AuditSummaryStrip } from './_summary-strip';
 import { EmptyPoolMessage } from './_quota-meter';
 import { usePagesExport } from './_use-pages-export';
+import { nextAutoRun } from '@/lib/audit-auto-runs';
 import { cn } from '@/lib/utils';
 
 type RangePreset = '7d' | '30d' | '90d' | 'all';
@@ -127,6 +128,14 @@ export default function SiteAuditPage() {
   const [nowMs] = useState(() => Date.now());
 
   const refetch = () => setRefreshKey((k: number) => k + 1);
+
+  // The run notice's View pages: the Pages list, latest audits first, so the
+  // run's pages lead it (tagged Auto).
+  const listsRef = useRef<HTMLDivElement>(null);
+  const showPages = () => {
+    setTab('pages');
+    listsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   // Load the hub in two requests: the audited pages, the quota, the trend
   // and the cards first, so the page shows; then the Opportunities inbox and
@@ -525,6 +534,9 @@ export default function SiteAuditPage() {
             console.error('Failed to refresh after saving the settings:', err),
           )
         }
+        schedule={quota?.auto ?? null}
+        latestRun={latestRun}
+        now={new Date(nowMs)}
       />
 
       {/* Summary strip, as in the v2 mockup (SA-019) */}
@@ -575,7 +587,8 @@ export default function SiteAuditPage() {
         key={activeBrandId}
         brandId={activeBrandId}
         run={latestRun}
-        nextRunAt={quota?.auto?.enabled ? (quota.auto.nextRun?.at ?? null) : null}
+        nextRun={quota?.auto?.enabled ? nextAutoRun(quota.auto, new Date(nowMs)) : null}
+        onViewPages={showPages}
       />
 
       {/* KPI cards, as in the v2 mockup (SA-018) */}
@@ -583,6 +596,7 @@ export default function SiteAuditPage() {
         <AuditOverviewCards
           overview={loading ? null : overview}
           quota={quota}
+          now={new Date(nowMs)}
           onOpenSettings={() => setSettingsOpen(true)}
         />
       )}
@@ -733,6 +747,7 @@ export default function SiteAuditPage() {
       ) : (
         // While the inbox loads, its tab leads (it usually has pages) with a placeholder.
         <Tabs
+          ref={listsRef}
           value={tab ?? (oppsLoading ? 'opportunities' : 'pages')}
           onValueChange={(v) => setTab(v as ListTab)}
         >
