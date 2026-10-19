@@ -31,8 +31,9 @@ function ShareBar({ value, label }: { value: number; label: string }) {
 }
 
 /**
- * The Overview's KPI cards (MS-06), as in the mockup: Total mentions, Mention
- * rate, Prompts with mentions and Net sentiment with its split and n. Each
+ * The Overview's KPI cards (MS-06), as in the mockup: Total mentions (every
+ * time a response names the brand, as on Insights), Mention rate, Prompts with
+ * mentions and Net sentiment with its split and n. Each
  * change is against the window of the same length before; a rate taken over
  * fewer than 20 responses is a "Low sample" and shows no change.
  */
@@ -59,13 +60,14 @@ export function OverviewKpis({ overview, brand }: { overview: MentionsOverview; 
         label={t('totalMentions')}
         tooltip={t('totalMentionsTip', { brand })}
         icon={MessageCircle}
-        value={f.number(cur.mentions)}
-        delta={upIsGood(round(relativeChange(cur.mentions, prev.mentions)), {
+        // Every time a response names the brand, as Insights counts mentions.
+        value={f.number(cur.occurrences)}
+        delta={upIsGood(round(relativeChange(cur.occurrences, prev.occurrences)), {
           percent: true,
           locale,
         })}
         sub={t('totalMentionsSub', { brand })}
-        spark={trend.map((d) => d.mentions)}
+        spark={trend.map((d) => d.occurrences)}
       />
       <MetricCard
         label={t('mentionRate')}

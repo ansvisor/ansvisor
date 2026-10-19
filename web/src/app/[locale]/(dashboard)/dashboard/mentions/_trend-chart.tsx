@@ -56,6 +56,9 @@ export function MentionTrendChart({
   const t = useTranslations('mentions.overview.trend');
   const locale = useLocale();
   const f = numberFormat(locale);
+  // Mentions are every time a response names the brand, as Total mentions
+  // (and Insights) count them; the rates keep their own field.
+  const key = metric === 'mentions' ? 'occurrences' : metric;
   const value = (n: number) =>
     metric === 'net'
       ? signedValue(Math.round(n), locale)
@@ -117,7 +120,7 @@ export function MentionTrendChart({
             content={({ active, payload }) => {
               const d = active ? (payload?.[0]?.payload as MentionTrendDay | undefined) : undefined;
               if (!d) return null;
-              const v = d[metric];
+              const v = d[key];
               // A rate is taken over the day's responses, net sentiment over its mentions.
               const n = metric === 'net' ? d.mentions : d.answers;
               return (
@@ -140,7 +143,7 @@ export function MentionTrendChart({
           />
           <Area
             type="monotone"
-            dataKey={metric}
+            dataKey={key}
             stroke={STROKE}
             strokeWidth={2}
             fill={metric === 'net' ? 'none' : 'url(#mentionsTrendFill)'}

@@ -29,6 +29,7 @@ const platform = (
   platform: id,
   answers: now[0],
   mentions: now[0],
+  occurrences: now[0],
   positive: now[1],
   negative: now[2],
   previous: { answers: before[0], mentions: before[0], positive: before[1], negative: before[2] },

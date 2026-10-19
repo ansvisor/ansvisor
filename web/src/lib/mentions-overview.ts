@@ -32,6 +32,8 @@ export interface MentionPlatformRow {
   platform: string;
   answers: number;
   mentions: number;
+  /** Times the brand is named on the platform (00191; 0 before it). */
+  occurrences: number;
   positive: number;
   negative: number;
   previous: Pick<MentionTotals, 'answers' | 'mentions' | 'positive' | 'negative'>;
@@ -42,6 +44,8 @@ export interface MentionDay {
   day: string;
   answers: number;
   mentions: number;
+  /** Times the brand is named that day (00191; 0 before it). */
+  occurrences: number;
   positive: number;
   negative: number;
 }
@@ -130,6 +134,7 @@ export function parseMentionsOverview(raw: unknown): MentionsOverview | null {
       platform: String(p.platform ?? ''),
       answers: num(p, 'answers'),
       mentions: num(p, 'mentions'),
+      occurrences: num(p, 'occurrences'),
       positive: num(p, 'positive'),
       negative: num(p, 'negative'),
       previous: {
@@ -143,6 +148,7 @@ export function parseMentionsOverview(raw: unknown): MentionsOverview | null {
       day: String(d.day ?? ''),
       answers: num(d, 'answers'),
       mentions: num(d, 'mentions'),
+      occurrences: num(d, 'occurrences'),
       positive: num(d, 'positive'),
       negative: num(d, 'negative'),
     })),
@@ -209,7 +215,10 @@ export function relativeChange(current: number, previous: number): number | null
 export interface MentionTrendDay {
   day: string;
   answers: number;
+  /** Responses naming the brand: the base of the day's rate and net sentiment. */
   mentions: number;
+  /** Times the brand is named: the Mentions line, as Total mentions counts them. */
+  occurrences: number;
   /** Null on a day without answers. */
   rate: number | null;
   /** Null on a day without mentions. */
@@ -231,11 +240,19 @@ export function mentionTrend(o: Pick<MentionsOverview, 'window' | 'daily'>): Men
     days.push(...byDay.keys());
   }
   return days.map((day) => {
-    const d = byDay.get(day) ?? { day, answers: 0, mentions: 0, positive: 0, negative: 0 };
+    const d = byDay.get(day) ?? {
+      day,
+      answers: 0,
+      mentions: 0,
+      occurrences: 0,
+      positive: 0,
+      negative: 0,
+    };
     return {
       day,
       answers: d.answers,
       mentions: d.mentions,
+      occurrences: d.occurrences,
       rate: mentionRate(d),
       net: netSentiment(d),
     };

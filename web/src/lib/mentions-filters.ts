@@ -86,6 +86,36 @@ export function mentionsStateParams(
   };
 }
 
+/**
+ * The Mentions page's address for a range and filters another page holds
+ * (Insights' Mentions and Net sentiment cards link here), so the numbers it
+ * opens on are taken over the same days. A range Mentions doesn't offer (All
+ * time) opens its default.
+ */
+export function mentionsHref(f: {
+  range: string;
+  from?: string;
+  to?: string;
+  region?: string;
+  topic?: string;
+}): string {
+  const range = (PROMPT_RANGE_PRESETS as readonly string[]).includes(f.range)
+    ? (f.range as PromptRangePreset)
+    : DEFAULT_MENTIONS_FILTERS.range;
+  const params = mentionsStateParams(DEFAULT_MENTIONS_TAB, {
+    ...DEFAULT_MENTIONS_FILTERS,
+    range,
+    from: f.from ?? '',
+    to: f.to ?? '',
+    region: f.region ?? '',
+    topic: f.topic ?? '',
+  });
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) if (value !== null) search.set(key, value);
+  const query = search.toString();
+  return query ? `/dashboard/mentions?${query}` : '/dashboard/mentions';
+}
+
 /** What the page's reads take: the window's bounds and the filters. */
 export interface MentionsQuery {
   from: string;

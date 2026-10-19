@@ -46,6 +46,8 @@ const platform = (
   platform: id,
   answers: now[0],
   mentions: now[1],
+  // Each response naming the brand names it twice here.
+  occurrences: now[1] * 2,
   positive: now[2],
   negative: now[3],
   previous: { answers: before[0], mentions: before[1], positive: before[2], negative: before[3] },
@@ -65,6 +67,7 @@ const overview: MentionsOverview = {
   current: totals({
     answers: 400,
     mentions: 100,
+    occurrences: 260,
     positive: 48,
     negative: 14,
     prompts: 20,
@@ -73,6 +76,7 @@ const overview: MentionsOverview = {
   previous: totals({
     answers: 400,
     mentions: 80,
+    occurrences: 200,
     positive: 40,
     negative: 8,
     prompts: 20,
@@ -128,7 +132,7 @@ describe('Headline', () => {
     );
     expect(basis.textContent).toBe(
       'Built from aggregates with a fixed template, no LLM call · Sep 18 – Oct 17 · ' +
-        '400 tracked responses · 100 mentions',
+        '400 tracked responses · 260 mentions',
     );
   });
 
@@ -144,7 +148,7 @@ describe('Headline', () => {
       />,
     );
     expect(container.querySelector('p')?.textContent).toBe(
-      'Net sentiment is −50 (low sample: 2 mentions).',
+      'Net sentiment is −50 (low sample: 2 responses naming you).',
     );
   });
 
@@ -162,8 +166,9 @@ describe('OverviewKpis', () => {
   it('shows each figure with its change and context', () => {
     render(<OverviewKpis overview={overview} brand="Ansvisor" />);
     const text = container.textContent;
-    expect(text).toContain('100+25%');
-    expect(text).toContain('responses naming Ansvisor');
+    // Every time a response names the brand, as on Insights: 260 vs 200.
+    expect(text).toContain('260+30%');
+    expect(text).toContain('times responses named Ansvisor');
     expect(text).toContain('25.0%+5');
     expect(text).toContain('of 400 tracked responses');
     expect(text).toContain('15+25%');
@@ -209,7 +214,8 @@ describe('CompetitorTable', () => {
   it('puts you first, then competitors by mentions and how often they name you too', () => {
     render(<CompetitorTable overview={overview} brand="Ansvisor" />);
     const headers = [...container.querySelectorAll('th')].map((th) => th.textContent);
-    expect(headers).toEqual(['Brand', 'Mentions', 'Rate', 'Also names you']);
+    // Responses naming each brand: occurrences aren't kept for competitors.
+    expect(headers).toEqual(['Brand', 'Responses', 'Rate', 'Also names you']);
     const rows = [...container.querySelectorAll('tbody tr')].map((r) =>
       [...r.querySelectorAll('td')].map((td) => td.textContent),
     );

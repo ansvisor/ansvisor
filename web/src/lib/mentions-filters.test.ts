@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_MENTIONS_FILTERS,
+  mentionsHref,
   mentionsQuery,
   mentionsStateParams,
   readMentionsState,
@@ -124,5 +125,21 @@ describe('mentionsQuery', () => {
 
   it('is null for a custom range with no dates yet', () => {
     expect(mentionsQuery({ ...DEFAULT_MENTIONS_FILTERS, range: 'custom' })).toBeNull();
+  });
+});
+
+describe('mentionsHref', () => {
+  it("opens Mentions on another page's range and filters", () => {
+    expect(mentionsHref({ range: '7d', region: 'us', topic: 't1' })).toBe(
+      '/dashboard/mentions?range=7d&region=us&topic=t1',
+    );
+    expect(mentionsHref({ range: 'custom', from: '2026-10-01', to: '2026-10-14' })).toBe(
+      '/dashboard/mentions?range=custom&from=2026-10-01&to=2026-10-14',
+    );
+  });
+
+  it("leaves Mentions' default range out, and opens it for a range it lacks", () => {
+    expect(mentionsHref({ range: '30d' })).toBe('/dashboard/mentions');
+    expect(mentionsHref({ range: 'all', region: 'us' })).toBe('/dashboard/mentions?region=us');
   });
 });

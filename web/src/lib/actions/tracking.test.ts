@@ -336,6 +336,30 @@ describe('getInsightsSummary', () => {
     });
   });
 
+  it('takes sentiment over the answers naming the brand, as the Mentions page (00191)', async () => {
+    rpcMock = vi.fn(async () => ({
+      data: {
+        ...insightsAggregatesRow,
+        // 17 of the 127 answers only cite the brand: always neutral.
+        mention_results: 110,
+        negative_count: 13,
+        kpi_complete: true,
+      },
+      error: null,
+    }));
+    const { getInsightsSummary } = await import('./tracking');
+
+    const summary = await getInsightsSummary('brand-id');
+
+    // 51 and 13 of 110: +46% / 12%, net (51 − 13)/110 = 34.5 → 35, rounded once.
+    expect(summary).toMatchObject({
+      positiveSentimentPct: 46,
+      negativeSentimentPct: 12,
+      netSentiment: 35,
+      mentioningResults: 110,
+    });
+  });
+
   it('leaves Net sentiment and Avg. position empty until the rollups are backfilled', async () => {
     rpcMock = vi.fn(async () => ({
       data: {

@@ -37,6 +37,7 @@ const raw = {
       platform: 'gemini-web',
       answers: 7,
       mentions: 7,
+      occurrences: 15,
       positive: 2,
       negative: 2,
       prev_answers: 7,
@@ -45,7 +46,7 @@ const raw = {
       prev_negative: 2,
     },
   ],
-  daily: [{ day: '2026-10-16', answers: 4, mentions: 4, positive: 2, negative: 1 }],
+  daily: [{ day: '2026-10-16', answers: 4, mentions: 4, occurrences: 9, positive: 2, negative: 1 }],
   competitors: [
     {
       competitor_id: 'c1',
@@ -80,12 +81,13 @@ describe('parseMentionsOverview', () => {
       platform: 'gemini-web',
       answers: 7,
       mentions: 7,
+      occurrences: 15,
       positive: 2,
       negative: 2,
       previous: { answers: 7, mentions: 7, positive: 2, negative: 2 },
     });
     expect(o.daily).toEqual([
-      { day: '2026-10-16', answers: 4, mentions: 4, positive: 2, negative: 1 },
+      { day: '2026-10-16', answers: 4, mentions: 4, occurrences: 9, positive: 2, negative: 1 },
     ]);
     expect(o.competitors).toEqual([
       {
@@ -162,14 +164,14 @@ describe('mentionTrend', () => {
         dayTo: '2026-10-17',
       },
       daily: [
-        { day: '2026-10-15', answers: 10, mentions: 4, positive: 2, negative: 1 },
-        { day: '2026-10-17', answers: 5, mentions: 0, positive: 0, negative: 0 },
+        { day: '2026-10-15', answers: 10, mentions: 4, occurrences: 7, positive: 2, negative: 1 },
+        { day: '2026-10-17', answers: 5, mentions: 0, occurrences: 0, positive: 0, negative: 0 },
       ],
     });
     expect(trend).toEqual([
-      { day: '2026-10-15', answers: 10, mentions: 4, rate: 40, net: 25 },
-      { day: '2026-10-16', answers: 0, mentions: 0, rate: null, net: null },
-      { day: '2026-10-17', answers: 5, mentions: 0, rate: 0, net: null },
+      { day: '2026-10-15', answers: 10, mentions: 4, occurrences: 7, rate: 40, net: 25 },
+      { day: '2026-10-16', answers: 0, mentions: 0, occurrences: 0, rate: null, net: null },
+      { day: '2026-10-17', answers: 5, mentions: 0, occurrences: 0, rate: 0, net: null },
     ]);
   });
 });
