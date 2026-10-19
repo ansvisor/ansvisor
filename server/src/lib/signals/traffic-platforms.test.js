@@ -36,21 +36,25 @@ describe('newPlatforms', () => {
       visits: 16,
       platforms: [
         { platform: 'chatgpt.com', visits: 9 },
-        { platform: 'perplexity.ai', visits: 2 },
+        { platform: 'perplexity.ai', visits: 3 },
         { platform: 'claude.ai', visits: 5 },
         // A referrer the source list couldn't name is not a platform.
         { platform: 'unknown', visits: 4 },
+        // Nor is a key the public beacon was sent that isn't on the list.
+        { platform: 'made-up.example', visits: 50 },
+        // One or two visits aren't a platform starting to send them.
+        { platform: 'grok.com', visits: 2 },
       ],
       days: [
         { day: '2026-10-15', platform: 'claude.ai', visits: 3 },
         { day: '2026-10-14', platform: 'claude.ai', visits: 2 },
-        { day: '2026-10-17', platform: 'perplexity.ai', visits: 2 },
+        { day: '2026-10-17', platform: 'perplexity.ai', visits: 3 },
         { day: '2026-10-12', platform: 'perplexity.ai', visits: 0 },
       ],
     };
     expect(newPlatforms(week, before)).toEqual([
       { platform: 'claude.ai', visits: 5, firstDay: '2026-10-14' },
-      { platform: 'perplexity.ai', visits: 2, firstDay: '2026-10-17' },
+      { platform: 'perplexity.ai', visits: 3, firstDay: '2026-10-17' },
     ]);
   });
 
@@ -69,7 +73,8 @@ describe('newAiPlatformCandidates', () => {
           ? { visits: 12, platforms: [{ platform: 'chatgpt.com', visits: 12 }] }
           : {
               visits: 4,
-              analytics_days: 0,
+              // A list of days, as ai_traffic_merged returns it (00176).
+              analytics_days: [],
               platforms: [{ platform: 'perplexity.ai', visits: 4 }],
               days: [{ day: '2026-10-16', platform: 'perplexity.ai', visits: 4 }],
             },
@@ -81,15 +86,16 @@ describe('newAiPlatformCandidates', () => {
     expect(rpc).toHaveBeenCalledWith('ai_traffic_merged', {
       p_brand_id: 'b1',
       p_from: '2026-10-12T00:00:00.000Z',
-      p_to: '2026-10-19T00:00:00.000Z',
-      p_to_inclusive: false,
+      // To the second before midnight, inclusive: that day's Analytics in one read only.
+      p_to: '2026-10-18T23:59:59.000Z',
+      p_to_inclusive: true,
       p_analytics: true,
     });
     expect(rpc).toHaveBeenCalledWith('ai_traffic_merged', {
       p_brand_id: 'b1',
       p_from: null,
-      p_to: '2026-10-12T00:00:00.000Z',
-      p_to_inclusive: false,
+      p_to: '2026-10-11T23:59:59.000Z',
+      p_to_inclusive: true,
       p_analytics: true,
     });
     expect(found).toEqual([
@@ -103,6 +109,23 @@ describe('newAiPlatformCandidates', () => {
         changeValue: 4,
       },
     ]);
+  });
+
+  it('says Analytics when the week read it', async () => {
+    rpc.mockImplementation(async (_name, params) => ({
+      data:
+        params.p_from === null
+          ? { visits: 12, platforms: [{ platform: 'chatgpt.com', visits: 12 }] }
+          : {
+              visits: 4,
+              analytics_days: ['2026-10-16'],
+              platforms: [{ platform: 'perplexity.ai', visits: 4 }],
+              days: [{ day: '2026-10-16', platform: 'perplexity.ai', visits: 4 }],
+            },
+      error: null,
+    }));
+    const [found] = await newAiPlatformCandidates('b1', { now: NOW });
+    expect(found.source).toEqual(['ga4']);
   });
 
   it('costs only itself when a read fails', async () => {

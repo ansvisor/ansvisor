@@ -43,6 +43,24 @@ function utcMidnight(now, daysAgo) {
   return new Date(today - daysAgo * DAY_MS).toISOString();
 }
 
+/**
+ * The second before `iso`. ai_traffic_merged keeps Analytics rows through
+ * p_to's day (00176), so a window ending at midnight is read up to the
+ * second before with p_to_inclusive: an exclusive midnight would put that
+ * day's Analytics in both weeks.
+ */
+function lastSecond(iso) {
+  return new Date(Date.parse(iso) - 1000).toISOString();
+}
+
+/** The last seven whole days and the seven before, each up to its last second. */
+export function weeklyWindows(now) {
+  return {
+    cur: { from: utcMidnight(now, 7), to: lastSecond(utcMidnight(now, 0)) },
+    prev: { from: utcMidnight(now, 14), to: lastSecond(utcMidnight(now, 7)) },
+  };
+}
+
 function isoDay(now, daysAgo) {
   return new Date(now.getTime() - daysAgo * DAY_MS).toISOString().slice(0, 10);
 }
@@ -192,18 +210,16 @@ function context(brandId, now, sources) {
     // and the seven before (AT-013).
     weeklyVisits: () =>
       once('weeklyVisits', async () => {
-        const read = (from, to) =>
+        const read = ({ from, to }) =>
           rpc('ai_traffic_merged', {
             p_brand_id: brandId,
             p_from: from,
             p_to: to,
-            p_to_inclusive: false,
+            p_to_inclusive: true,
             p_analytics: true,
           });
-        const [cur, prev] = await Promise.all([
-          read(utcMidnight(now, 7), utcMidnight(now, 0)),
-          read(utcMidnight(now, 14), utcMidnight(now, 7)),
-        ]);
+        const windows = weeklyWindows(now);
+        const [cur, prev] = await Promise.all([read(windows.cur), read(windows.prev)]);
         return { cur: cur ?? {}, prev: prev ?? {} };
       }),
     // The pages AI visitors landed on that don't exist, over the last seven
@@ -701,7 +717,8 @@ const FAMILIES = [
         c.relativeFall(before, after) >= t.aiVisitsWeeklyDropRatio
       ) {
         const falling = c.fallingPages(prev.pages, cur.pages);
-        const analytics = (Number(prev.analytics_days) || 0) + (Number(cur.analytics_days) || 0);
+        const analytics =
+          c.analyticsDayCount(prev.analytics_days) + c.analyticsDayCount(cur.analytics_days);
         found.push({
           // Its value is the site's visits; the pages that fell are its targets.
           ...group(
@@ -753,8 +770,10 @@ const FAMILIES = [
     kinds: ['cited_page_uncrawled'],
     async run(ctx) {
       const report = await ctx.botReport();
-      // Null without a connection, and until the first AI-bot request is 30
-      // days old: before then "not read in 30 days" means nothing (00185).
+      // Only while the bot data is whole (00185's alert_state 'on'): with a
+      // sender stopped, revoked or past its cap, the pages search bots read
+      // drain and every cited page would read as uncrawled.
+      if (report?.alert_state !== 'on') return [];
       const uncrawled = Array.isArray(report?.uncrawled) ? report.uncrawled : [];
       if (uncrawled.length === 0) return [];
       return [
