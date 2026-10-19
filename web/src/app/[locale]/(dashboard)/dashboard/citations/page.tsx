@@ -87,12 +87,13 @@ import { cn } from '@/lib/utils';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
+// As the category badges (source-cells.tsx): You in ink, Social in rose.
 const CATEGORY_COLORS: Record<SourceCategory, string> = {
-  you: '#6366f1',
+  you: 'var(--primary)',
   competitor: '#f97316',
   editorial: '#3b82f6',
   forum: '#22c55e',
-  social: '#a855f7',
+  social: '#f43f5e',
   review: '#eab308',
   institutional: '#14b8a6',
   other: '#94a3b8',

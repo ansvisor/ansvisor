@@ -104,7 +104,7 @@ export function ActionIcon({
 
 export const ACTION_STATUS_BADGE: Record<ActionStatus, string> = {
   new: 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400',
-  in_progress: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
+  in_progress: 'border-teal-500/30 bg-teal-500/10 text-teal-700 dark:text-teal-400',
   completed: 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400',
   on_hold: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
   dismissed: 'border-border bg-muted/50 text-muted-foreground',
