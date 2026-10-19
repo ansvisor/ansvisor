@@ -161,6 +161,8 @@ export interface AuditedPage {
   previousScore: number | null;
   status: AuditedPageStatus;
   lastAuditedAt: string;
+  /** Whether the audit the row opens was an auto-audit run's (SA-006) or a user's. */
+  lastAuditSource?: 'user' | 'auto';
   /** Latest completed scores, oldest first. */
   trend: number[];
   /** Failed and warning signals in the latest completed audit. */
