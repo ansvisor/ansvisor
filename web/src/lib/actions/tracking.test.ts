@@ -227,7 +227,10 @@ describe('Insights 24h rollup routing (#999)', () => {
     const { getInsightsData } = await import('./tracking');
     const data = await getInsightsData('brand-id', { anchor24h: true });
 
-    expect(data.trackingWindow?.runDays).toEqual({ dayFrom: '2026-10-18', dayTo: '2026-10-19' });
+    expect(data.trackingWindow?.runDays).toEqual({
+      dayFrom: '2026-10-18',
+      dayTo: '2026-10-19',
+    });
     expect(
       rpcCalls.some(
         (call) =>
