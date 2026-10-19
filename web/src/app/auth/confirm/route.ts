@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { EmailOtpType } from '@supabase/supabase-js';
+import { safeRedirectUrl } from '@/lib/auth-next';
 
 /**
  * GET /auth/confirm — server-side OTP verification for email-driven auth flows.
@@ -27,8 +28,12 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const tokenHash = searchParams.get('token_hash');
   const type = searchParams.get('type') as EmailOtpType | null;
-  const rawRedirect = searchParams.get('redirect_to') ?? searchParams.get('next');
-  const redirectTarget = resolveRedirect(rawRedirect, origin);
+  // Only to a page on this site (#1203): a crafted link can't send someone
+  // who just confirmed an e-mail to another site.
+  const redirectTarget = safeRedirectUrl(
+    searchParams.get('redirect_to') ?? searchParams.get('next'),
+    origin,
+  );
 
   if (!tokenHash || !type) {
     return NextResponse.redirect(`${origin}/sign-in?error=auth_confirm_missing_params`);
@@ -44,16 +49,4 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.redirect(redirectTarget);
-}
-
-/**
- * Accept either a full URL (already absolute, e.g. when Supabase expands
- * `{{ .RedirectTo }}` we pass during inviteUserByEmail) or a path; default
- * to /dashboard if neither was provided.
- */
-function resolveRedirect(value: string | null, origin: string): string {
-  if (!value) return `${origin}/dashboard`;
-  if (/^https?:\/\//i.test(value)) return value;
-  if (value.startsWith('/')) return `${origin}${value}`;
-  return `${origin}/dashboard`;
 }

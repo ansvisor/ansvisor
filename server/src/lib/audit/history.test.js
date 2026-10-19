@@ -153,6 +153,19 @@ describe('buildAuditPages', () => {
     expect(pages[1]).toMatchObject({ score: 0.74, previousScore: null, status: 'good' });
   });
 
+  it("says whether the audit a row opens was an auto-audit run's", () => {
+    const pages = buildAuditPages([
+      { ...row('a2', 'https://acme.com/pricing', '2026-10-19T06:00:00Z', '0.6'), source: 'auto' },
+      row('a1', 'https://acme.com/pricing', '2026-10-01T09:00:00Z', '0.5'),
+      row('b2', 'https://acme.com/blog', '2026-10-18T09:00:00Z', null, 'running'),
+      { ...row('b1', 'https://acme.com/blog', '2026-10-01T09:00:00Z', '0.7'), source: 'auto' },
+    ]);
+    expect(pages[0]).toMatchObject({ auditId: 'a2', lastAuditSource: 'auto' });
+    expect(pages[0].runs.map((r) => r.source)).toEqual(['auto', 'user']);
+    // A row opens its latest completed audit, a run's here, while a user's re-audit runs.
+    expect(pages[1]).toMatchObject({ auditId: 'b1', lastAuditSource: 'auto' });
+  });
+
   it('counts a run repeated at a read boundary once', () => {
     const a2 = row('a2', 'https://acme.com/pricing', '2026-10-14T09:00:00Z', '0.6');
     const a1 = row('a1', 'https://acme.com/pricing', '2026-10-01T09:00:00Z', '0.5');

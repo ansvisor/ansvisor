@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { UserProfileNavItem } from '@/components/layout/user-profile-nav-item';
+import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { Crown, ExternalLink, Menu, MessageSquareHeart, MessageSquareText } from 'lucide-react';
 import Image from 'next/image';
@@ -64,6 +65,8 @@ export function MobileNav() {
             priority
           />
           <span className="font-semibold">{siteConfig.name}</span>
+          {/* Left of the sheet's close button, which sits at its top right. */}
+          <ThemeToggle className="ml-auto mr-8" />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           <nav className="space-y-0.5 p-3">

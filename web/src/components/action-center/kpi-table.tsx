@@ -145,7 +145,7 @@ export function KpiTable({
   const tRegistry = useTranslations('actionCenter.registry');
 
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    <div className="overflow-x-auto rounded-lg border bg-card">
       <Table>
         <TableHeader>
           <TableRow>

@@ -2,7 +2,8 @@
 
 import { useTranslations } from 'next-intl';
 import type { AuditAutoStatus, AuditQuota } from '@/lib/actions/audits';
-import { formatNumber } from '@/lib/format';
+import { autoRunStates } from '@/lib/audit-auto-runs';
+import { formatMonthDay, formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 /** Auto-audit's runs a month (days 1, 7, 14, 21 and 28). */
@@ -64,18 +65,21 @@ export function QuotaSegments({ quota }: { quota: AuditQuota }) {
 }
 
 /**
- * The five runs on one line: 1 · 7 · 14 · 21 · 28. Done filled, the next one
- * outlined and bold, the rest empty.
+ * The five runs on one line, by date (days 1, 7, 14, 21 and 28 of the
+ * billing month): done filled, the next one outlined and bold, one whose turn
+ * passed without a run dashed, the rest empty.
  */
-export function RunDots({ auto }: { auto: AuditAutoStatus }) {
+export function RunDots({ auto, now }: { auto: AuditAutoStatus; now: Date }) {
   const t = useTranslations('audit.quota');
   return (
     <ol aria-label={t('runs')} className="flex items-start">
-      {auto.runs.map((run) => {
-        const state = run.done ? 'done' : run.day === auto.nextRun?.day ? 'next' : 'upcoming';
+      {autoRunStates(auto, now).map(({ day, at, state }) => {
+        // Run days are UTC days (auto-audit.js), so their dates are too.
+        const date = formatMonthDay(at, 'UTC');
         return (
           <li
-            key={run.day}
+            key={day}
+            title={t('runTitle', { day, date })}
             className={cn(
               'relative flex flex-1 flex-col items-center gap-[3px] text-[11px] leading-none whitespace-nowrap',
               // The line to the next run.
@@ -90,9 +94,10 @@ export function RunDots({ auto }: { auto: AuditAutoStatus }) {
                 state === 'done' && 'border-foreground bg-foreground',
                 state === 'next' && 'border-foreground bg-card',
                 state === 'upcoming' && 'border-muted-foreground/40 bg-card',
+                state === 'missed' && 'border-dashed border-muted-foreground/40 bg-transparent',
               )}
             />
-            {run.day}
+            {date}
             <span className="sr-only">{t(`run_${state}`)}</span>
           </li>
         );

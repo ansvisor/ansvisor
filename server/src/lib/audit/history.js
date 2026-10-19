@@ -106,6 +106,8 @@ export function pageStatus(latestRun, current, previous) {
  * its latest completed score and audit, the one before it, a status, its
  * trend and its runs. A run still `running` past AUDIT_RUN_TIMEOUT_MS reads as
  * failed, so the page isn't left Running (and the hub polling) for good.
+ * lastAuditSource says whether the audit the row opens was an auto-audit
+ * run's (SA-006) or a user's; rows read without `source` count as the user's.
  */
 export function buildAuditPages(rowsNewestFirst, now = Date.now()) {
   const groups = new Map();
@@ -126,6 +128,7 @@ export function buildAuditPages(rowsNewestFirst, now = Date.now()) {
           : r.status,
       totalScore: r.total_score === null ? null : Number(r.total_score),
       createdAt: r.created_at,
+      source: r.source === 'auto' ? 'auto' : 'user',
     });
   }
 
@@ -144,6 +147,7 @@ export function buildAuditPages(rowsNewestFirst, now = Date.now()) {
       previousScore: previous?.totalScore ?? null,
       status: pageStatus(latest, current, previous),
       lastAuditedAt: (current ?? latest).createdAt,
+      lastAuditSource: (current ?? latest).source,
       trend: completed
         .slice(0, PAGE_TREND_POINTS)
         .map((r) => r.totalScore)
