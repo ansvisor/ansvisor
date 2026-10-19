@@ -544,6 +544,13 @@ export function ReportPdfDocument({ report }: { report: Report }) {
               </Text>
               <View style={{ marginBottom: 6 }}>
                 <DeltaText value={payload.aiTraffic.change} />
+                {/* No % on a handful of visits, as on the AI Traffic page. */}
+                {payload.aiTraffic.changeNote === 'new' && (
+                  <Text style={[styles.delta, { color: GREEN }]}>new</Text>
+                )}
+                {payload.aiTraffic.changeNote === 'lowSample' && (
+                  <Text style={[styles.delta, { color: MUTED }]}>Low sample</Text>
+                )}
               </View>
             </View>
             {payload.aiTraffic.platformBreakdown.map((p) => (

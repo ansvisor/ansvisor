@@ -649,6 +649,20 @@ export default function ReportDetailPage() {
                 {t('aiTraffic')}
                 <span className="text-2xl font-bold">{payload.aiTraffic.totalVisits}</span>
                 <Delta value={payload.aiTraffic.change} />
+                {/* No % on a handful of visits, as on the AI Traffic page. */}
+                {payload.aiTraffic.changeNote === 'new' && (
+                  <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                    {t('aiTrafficNew')}
+                  </span>
+                )}
+                {payload.aiTraffic.changeNote === 'lowSample' && (
+                  <span
+                    className="text-xs font-medium text-muted-foreground"
+                    title={t('aiTrafficLowSampleHint')}
+                  >
+                    {t('aiTrafficLowSample')}
+                  </span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-6 sm:grid-cols-2">
