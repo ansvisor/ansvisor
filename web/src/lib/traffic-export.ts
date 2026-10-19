@@ -12,6 +12,7 @@ import type { Sheet } from 'write-excel-file/node';
 import type {
   TrafficConversions,
   TrafficBots,
+  TrafficBrokenLinks,
   TrafficGooglePages,
   TrafficLog,
   TrafficUntrackedQueries,
@@ -42,6 +43,7 @@ export const TRAFFIC_EXPORT_SECTIONS = [
   'convertingPages',
   'buyerAnswers',
   'pageStatus',
+  'brokenLinks',
   'googlePages',
   'googleQueries',
   'bots',
@@ -58,6 +60,7 @@ export const TRAFFIC_TABLE_SECTIONS = [
   'convertingPages',
   'buyerAnswers',
   'pageStatus',
+  'brokenLinks',
   'googlePages',
   'googleQueries',
   'bots',
@@ -86,6 +89,8 @@ export interface TrafficExportData {
   visits?: TrafficLog[];
   /** Every page of the Pages section, with the lists it is on (AT-006). */
   pageStatus?: TrafficPages | null;
+  /** Broken AI links, every page, with its suggested redirect (AT-012). */
+  brokenLinks?: TrafficBrokenLinks | null;
   /** Where AI visitors convert, every row (AT-014). */
   conversions?: TrafficConversions | null;
   /** Is AI taking Google clicks?, every page (AT-008). */
@@ -257,6 +262,42 @@ function pageStatus(data: TrafficExportData, label: ExportLabel): ExportTable {
       pageStatuses(row)
         .map((status) => label(`pageStatuses.${status}`))
         .join('; ') || null,
+    ]),
+  };
+}
+
+/**
+ * Broken AI links (AT-012) as a redirect list: each missing page and the
+ * working page to send it to, ready for a 301 rule, with why that page and
+ * what AI visitors got.
+ */
+function brokenLinks(data: TrafficExportData, label: ExportLabel): ExportTable {
+  const rows = data.brokenLinks?.rows ?? [];
+  if (rows.length === 0) {
+    return { headers: [label('columns.note')], rows: [[label('notes.noBrokenLinks')]] };
+  }
+  return {
+    headers: [
+      label('columns.redirectFrom'),
+      label('columns.redirectTo'),
+      label('columns.redirectType'),
+      label('columns.redirectReason'),
+      label('columns.aiVisits'),
+      label('columns.topPlatforms'),
+      label('columns.citations'),
+      label('columns.lastVisit'),
+      label('columns.landingStatus'),
+    ],
+    rows: rows.map((row) => [
+      row.page,
+      row.target,
+      row.target ? 301 : null,
+      row.targetReason ? label(`redirectReasons.${row.targetReason}`) : null,
+      row.visits,
+      row.platforms.map(getPlatformName).join(', ') || null,
+      row.citations,
+      utcMinute(row.lastVisit),
+      label(`brokenStatuses.${row.status}`),
     ]),
   };
 }
@@ -499,6 +540,8 @@ export function trafficTable(
       return buyerAnswers(data, label);
     case 'pageStatus':
       return pageStatus(data, label);
+    case 'brokenLinks':
+      return brokenLinks(data, label);
     case 'googlePages':
       return googlePages(data, label);
     case 'googleQueries':

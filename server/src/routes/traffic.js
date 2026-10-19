@@ -125,6 +125,13 @@ router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res)
     const sourceListVersion =
       Number.isInteger(body.v) && body.v >= 1 && body.v <= AI_SOURCES_VERSION ? body.v : null;
 
+    // The landing page's HTTP status as the browser saw it, for Broken AI
+    // links (AT-012). Without one (Safari, older snippets), whether the
+    // page's title said "not found".
+    const httpStatus =
+      Number.isInteger(body.st) && body.st >= 100 && body.st <= 599 ? body.st : null;
+    const notFoundTitle = httpStatus === null && body.nf === 1;
+
     const userAgent = (body.a || '').slice(0, 512) || null;
     const ipAddress = ip || null;
 
@@ -150,6 +157,8 @@ router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res)
       screen: (body.d || '').slice(0, 16) || null,
       visit_of: visitOf,
       source_list_version: sourceListVersion,
+      http_status: httpStatus,
+      not_found_title: notFoundTitle,
     });
     // The beacon can't be retried, so a failed write is at least visible.
     if (insertError) logger.error({ err: insertError }, 'traffic track insert failed');

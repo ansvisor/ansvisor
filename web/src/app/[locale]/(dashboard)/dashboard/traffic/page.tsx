@@ -629,6 +629,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
       domain={primaryDomain}
       analyticsMissing={gaMissing}
       actions={<TableExport exporter={exporter} section="pageStatus" />}
+      brokenActions={<TableExport exporter={exporter} section="brokenLinks" />}
     />
   );
 

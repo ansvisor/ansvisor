@@ -2914,6 +2914,16 @@ export type Database = {
         }
         Returns: Json
       }
+      ai_traffic_broken_links: {
+        Args: {
+          p_brand_id: string
+          p_from: string | null
+          p_limit?: number
+          p_offset?: number
+          p_to: string | null
+        }
+        Returns: Json
+      }
       ai_traffic_conversions: {
         Args: {
           p_brand_id: string
