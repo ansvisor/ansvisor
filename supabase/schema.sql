@@ -25273,9 +25273,17 @@ notify pgrst, 'reload schema';
 --     per-page last crawl);
 --   * uncrawled — the alert "cited pages not read by any search bot in 30
 --     days": pages tracked AI answers cited in the last 30 days that no
---     search crawler read in them. It needs 30 days of bot data to mean
---     anything, so until the first request is 30 days old it is null and
---     the result says when it starts.
+--     search crawler read in them. It only means something while the bot
+--     data is whole, so it is null, and alert_state says why, until the
+--     first request is 30 days old ('waiting'), and when no live connection
+--     has sent for 2 days or search hits went on '(other)' rows past the
+--     month's cap in those 30 days ('stale': a sender stopped, was revoked
+--     or hit its raw cap, and the 30 days of pages read would drain).
+--
+-- "All time" (p_since null) covers the last 90 days here: a site crawled at
+-- 10k pages a day keeps millions of rows over the counters' 400 days. The
+-- rows are added up once by bot and page, and the first and last day come
+-- from the ends of the (brand_id, day) index.
 --
 -- Pages are keyed as the Pages section keys them (00178). citation_urls has
 -- no member select policy, so this runs as its owner after checking the
@@ -25296,7 +25304,10 @@ set search_path to 'public'
 as $$
 declare
   v_first date;
+  v_last_day date;
   v_last timestamptz;
+  v_since date;
+  v_alert text;
   v_result jsonb;
 begin
   if not exists (
@@ -25307,59 +25318,97 @@ begin
     return null;
   end if;
 
-  select min(d.day), max(d.last_seen) into v_first, v_last
+  select d.day into v_first
   from public.ai_bot_daily d
-  where d.brand_id = p_brand_id;
+  where d.brand_id = p_brand_id
+  order by d.day
+  limit 1;
+  select d.day into v_last_day
+  from public.ai_bot_daily d
+  where d.brand_id = p_brand_id
+  order by d.day desc
+  limit 1;
+  select max(d.last_seen) into v_last
+  from public.ai_bot_daily d
+  where d.brand_id = p_brand_id and d.day = v_last_day;
 
-  with d as (
-    select *
+  v_since := coalesce(p_since, current_date - 89);
+
+  v_alert := case
+    when v_first is null or v_first > current_date - 29 then 'waiting'
+    when not exists (
+      select 1 from public.ai_bot_connections c
+      where c.brand_id = p_brand_id
+        and c.revoked_at is null
+        and c.last_event_at >= now() - interval '2 days'
+    ) or exists (
+      select 1 from public.ai_bot_daily d
+      where d.brand_id = p_brand_id
+        and d.bot_type = 'search'
+        and d.page = '(other)'
+        and d.day >= current_date - 29
+    ) then 'stale'
+    else 'on'
+  end;
+
+  with g as (
+    -- Each bot's hits on each page in the range, added up once.
+    select
+      d.bot_type,
+      d.bot,
+      d.page,
+      sum(d.hits)::bigint as hits,
+      max(d.last_seen) as last_seen
     from public.ai_bot_daily d
     where d.brand_id = p_brand_id
-      and d.day >= coalesce(p_since, '-infinity'::date)
+      and d.day >= v_since
       and d.day <= p_until
+    group by d.bot_type, d.bot, d.page
   ),
   types as (
     select
-      d.bot_type,
-      sum(d.hits)::bigint as hits,
-      count(distinct d.page)::bigint as pages,
-      max(d.last_seen) as last_seen,
-      array_agg(distinct d.bot order by d.bot) as bots
-    from d
-    group by d.bot_type
+      g.bot_type,
+      sum(g.hits)::bigint as hits,
+      count(distinct g.page) filter (where g.page <> '(other)')::bigint as pages,
+      max(g.last_seen) as last_seen,
+      array_agg(distinct g.bot order by g.bot) as bots
+    from g
+    group by g.bot_type
   ),
   bots as (
     select
-      d.bot,
-      min(d.bot_type) as bot_type,
-      sum(d.hits)::bigint as hits,
-      count(distinct d.page)::bigint as pages,
-      max(d.last_seen) as last_seen
-    from d
-    group by d.bot
+      g.bot,
+      min(g.bot_type) as bot_type,
+      sum(g.hits)::bigint as hits,
+      count(*) filter (where g.page <> '(other)')::bigint as pages,
+      max(g.last_seen) as last_seen
+    from g
+    group by g.bot
   ),
+  -- Hits folded past the month's cap ('(other)') aren't a page.
   pages as (
     select
-      d.page,
-      sum(d.hits)::bigint as hits,
-      max(d.last_seen) filter (where d.bot_type = 'training') as training_last,
-      max(d.last_seen) filter (where d.bot_type = 'search') as search_last,
-      max(d.last_seen) filter (where d.bot_type = 'user') as user_last
-    from d
-    group by d.page
+      g.page,
+      sum(g.hits)::bigint as hits,
+      max(g.last_seen) filter (where g.bot_type = 'training') as training_last,
+      max(g.last_seen) filter (where g.bot_type = 'search') as search_last,
+      max(g.last_seen) filter (where g.bot_type = 'user') as user_last
+    from g
+    where g.page <> '(other)'
+    group by g.page
   ),
   -- The alert reads its own 30 days, whatever the range.
-  searched as (
-    select distinct d.page
-    from public.ai_bot_daily d
-    where d.brand_id = p_brand_id
-      and d.bot_type = 'search'
-      and d.day >= current_date - 29
-  ),
   uncrawled as (
     select c.page, c.citations
     from public.ai_traffic_page_citations(p_brand_id, current_date - 29, current_date) c
-    where c.page_key not in (select s.page from searched s)
+    where v_alert = 'on'
+      and not exists (
+        select 1 from public.ai_bot_daily d
+        where d.brand_id = p_brand_id
+          and d.bot_type = 'search'
+          and d.page = c.page_key
+          and d.day >= current_date - 29
+      )
   )
   select jsonb_build_object(
     'first_day', v_first,
@@ -25389,17 +25438,17 @@ begin
       select jsonb_agg(to_jsonb(p) order by p.hits desc, p.page)
       from (select * from pages order by hits desc, page limit p_limit) p
     ), '[]'::jsonb),
-    -- Null until the first request is 30 days old.
-    'uncrawled_count', case
-      when v_first <= current_date - 29 then (select count(*) from uncrawled)
-    end,
+    -- Null unless the bot data is whole (alert_state 'on').
+    'uncrawled_count', case when v_alert = 'on' then (select count(*) from uncrawled) end,
     'uncrawled', case
-      when v_first <= current_date - 29 then coalesce((
+      when v_alert = 'on' then coalesce((
         select jsonb_agg(to_jsonb(u) order by u.citations desc, u.page)
         from (select * from uncrawled order by citations desc, page limit 10) u
       ), '[]'::jsonb)
     end,
-    'alert_from', case when v_first is not null then v_first + 29 end
+    'alert_state', v_alert,
+    'alert_from', case when v_first is not null then v_first + 29 end,
+    'since', v_since
   )
   into v_result;
 

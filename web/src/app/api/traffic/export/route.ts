@@ -137,8 +137,9 @@ export async function GET(req: Request) {
         ? getUntrackedGoogleQueries(q.brandId, window, { limit: UNTRACKED_QUERY_SCAN })
         : undefined,
       // Every page AI bots read, with the bot types (AT-011).
+      // Left out when it fails (a timeout on a large site), so the rest still exports.
       needs('bots', 'botPages')
-        ? getTrafficBots(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS })
+        ? getTrafficBots(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS }).catch(() => null)
         : undefined,
     ]);
     // Larger than an export built on request should be (spec §3.9).

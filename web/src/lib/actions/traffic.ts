@@ -1147,11 +1147,19 @@ export interface TrafficBots {
   bots: BotRow[];
   pageCount: number;
   pages: BotPageRow[];
-  /** Cited pages no search bot read in 30 days; null until 30 days of bot data. */
+  /** Cited pages no search bot read in 30 days; null unless alertState is 'on'. */
   uncrawledCount: number | null;
   uncrawled: { page: string; citations: number }[] | null;
+  /**
+   * The search-bot alert: 'waiting' for 30 days of bot data, 'stale' while no
+   * live connection has sent for 2 days or search hits went past the month's
+   * cap (the pages read would drain and list every cited page), else 'on'.
+   */
+  alertState: 'waiting' | 'stale' | 'on';
   /** The day the search-bot alert starts, 30 days after the first request. */
   alertFrom: string | null;
+  /** The first day the report covers: "All time" is the last 90 days. */
+  since: string | null;
 }
 
 /**
@@ -1206,6 +1214,9 @@ export async function getTrafficBots(
     uncrawled: Array.isArray(raw.uncrawled)
       ? list(raw.uncrawled).map((r) => ({ page: String(r.page), citations: n(r.citations) }))
       : null,
+    alertState:
+      raw.alert_state === 'on' || raw.alert_state === 'stale' ? raw.alert_state : 'waiting',
     alertFrom: str(raw.alert_from),
+    since: str(raw.since),
   };
 }

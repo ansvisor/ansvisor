@@ -38,7 +38,9 @@ describe('getTrafficBots', () => {
         ],
         uncrawled_count: 2,
         uncrawled: [{ page: '/gifts', citations: '14' }],
+        alert_state: 'on',
         alert_from: '2026-09-30',
+        since: '2026-10-12',
       },
       error: null,
     });
@@ -77,7 +79,9 @@ describe('getTrafficBots', () => {
       ],
       uncrawledCount: 2,
       uncrawled: [{ page: '/gifts', citations: 14 }],
+      alertState: 'on',
       alertFrom: '2026-09-30',
+      since: '2026-10-12',
     });
   });
 

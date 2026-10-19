@@ -496,7 +496,9 @@ describe('trafficTable: AI bots (AT-011)', () => {
     ],
     uncrawledCount: 0,
     uncrawled: [],
+    alertState: 'on',
     alertFrom: '2026-09-30',
+    since: '2026-10-12',
   });
 
   it('holds each bot with its type, and each page with every type last read', () => {

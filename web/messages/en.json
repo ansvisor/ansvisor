@@ -3452,7 +3452,9 @@
       "cited": "{count, plural, one {cited # time} other {cited # times}}",
       "moreUncrawled": "and {count} more",
       "allCrawled": "Every page AI answers cited in the last 30 days was read by a search bot.",
-      "alertStarts": "The search-bot alert starts on {day}, 30 days after the first AI-bot request."
+      "alertStarts": "The search-bot alert starts on {day}, 30 days after the first AI-bot request.",
+      "alertStale": "The search-bot alert is paused: no connection has sent AI-bot requests in the last 2 days, or the month's cap was reached, so the pages search bots read aren't complete.",
+      "allTimeCapped": "last 90 days"
     },
     "gate": {
       "needs": "Needs {source}",
