@@ -135,6 +135,9 @@ function PagesTable({ report }: { report: TrafficBots }) {
 /** "Cited pages not read by any search bot in 30 days" (spec §3.7). */
 function UncrawledAlert({ report }: { report: TrafficBots }) {
   const t = useTranslations('traffic.botReport');
+  if (report.alertState === 'stale') {
+    return <p className="px-6 py-3 text-xs text-muted-foreground">{t('alertStale')}</p>;
+  }
   if (report.uncrawledCount === null) {
     return report.alertFrom ? (
       <p className="px-6 py-3 text-xs text-muted-foreground">
@@ -248,6 +251,10 @@ export function BotsReportSection({
   const current = loaded?.key === key ? loaded : null;
   const info = current?.info ?? null;
   const report = current?.report ?? null;
+  // The dialog keeps the connections it was opened with while the section
+  // reads again after a change it made (the page bumps `revision`): taken
+  // down, it would lose the new connection's secret and settings.
+  const dialogInfo = info ?? loaded?.info ?? null;
   const state = info ? botReportState(info, report) : null;
   const pausedUntil = info ? rowsPausedUntil(info.usage) : null;
 
@@ -327,7 +334,8 @@ export function BotsReportSection({
           <span className="text-xs text-muted-foreground">{t('sampleNote')}</span>
         )}
         <Badge variant="outline" className="ml-auto text-xs">
-          {rangeLabel}
+          {/* "All time" covers the last 90 days here (00185). */}
+          {dateWindow.dateFrom ? rangeLabel : t('allTimeCapped')}
         </Badge>
       </div>
 
@@ -367,11 +375,11 @@ export function BotsReportSection({
         )}
       </div>
 
-      {info && state !== 'locked' && (
+      {dialogInfo && botReportState(dialogInfo, null) !== 'locked' && (
         <BotsDialog
           brandId={brandId}
           open={connectOpen}
-          info={info}
+          info={dialogInfo}
           canConnect={canConnect}
           onOpenChange={setConnectOpen}
           onChanged={() => onChanged?.()}

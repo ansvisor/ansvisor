@@ -24592,16 +24592,22 @@ notify pgrst, 'reload schema';
 --
 -- gsc_query_stats (00047) holds Search Console by query, which can't say
 -- which page lost clicks, and drops anonymised queries. gsc_page_stats holds
--- it by page and day, synced alongside (server/src/lib/gsc-sync.js): the
--- first sync of a brand reads 190 days so a 90-day range has a whole period
--- before it, Google's delay included; later ones read the last 28, and rows
--- older than 190 days are pruned. The sync (service role) upserts on (brand_id, page, date); org
--- members read.
+-- it by page and day, synced alongside (server/src/lib/gsc-sync.js): a
+-- brand's sync reads 190 days so a 90-day range has a whole period before it,
+-- Google's delay included, until one gets through them all for its property
+-- (brands.gsc_pages_backfilled_property); later ones read the last 28, and
+-- rows older than 190 days are pruned. The sync (service role) upserts on
+-- (brand_id, page, date); org members read.
+--
+-- page_key is the page as the Pages section keys it (00178), stored: worked
+-- out per row at read time it took 4 s warm, 18 s cold, on 110k rows (the
+-- largest brand's 600 pages × 183 days); grouped by the column, 46 ms.
 
 create table public.gsc_page_stats (
     id uuid primary key default gen_random_uuid(),
     brand_id uuid not null references public.brands(id) on delete cascade,
     page text not null,
+    page_key text generated always as (lower(public.normalize_page_path(page))) stored,
     date date not null,
     clicks integer not null default 0,
     impressions integer not null default 0,
@@ -24613,6 +24619,17 @@ create table public.gsc_page_stats (
 
 create index gsc_page_stats_brand_date_idx
     on public.gsc_page_stats (brand_id, date desc);
+
+-- The sync's table-wide retention prune (date < 190 days ago).
+create index gsc_page_stats_date_idx
+    on public.gsc_page_stats (date);
+
+-- The property whose 190 days of pages the sync has read in full. Until it
+-- matches gsc_property, every sync reads them again, so a first sync cut
+-- short resumes; when it names another property, that one's page rows are
+-- dropped first.
+alter table public.brands
+    add column if not exists gsc_pages_backfilled_property text;
 
 alter table public.gsc_page_stats enable row level security;
 
@@ -24712,8 +24729,7 @@ begin
 
   with by_page as (
     select
-      lower(public.normalize_page_path(g.page)) as page_key,
-      min(public.normalize_page_path(g.page)) as page,
+      g.page_key,
       min(g.page) as url,
       sum(g.impressions) filter (where g.date >= v_since)::bigint as impressions,
       sum(g.clicks) filter (where g.date >= v_since)::bigint as clicks,
@@ -24737,8 +24753,10 @@ begin
       and bp.clicks::double precision / nullif(bp.impressions, 0)
           <= 0.8 * bp.prev_clicks::double precision / nullif(bp.prev_impressions, 0)
   ),
+  -- Only the rows shown work out their display path.
   ranked as (
-    select f.*, f.prev_ctr * f.impressions - f.clicks as clicks_lost
+    select f.*, public.normalize_page_path(f.url) as page,
+      f.prev_ctr * f.impressions - f.clicks as clicks_lost
     from flagged f
     order by clicks_lost desc, f.impressions desc, f.page_key
     limit p_limit
@@ -24940,10 +24958,13 @@ notify pgrst, 'reload schema';
 --     Worker, a Logpush job, a Vercel drain), each with its own secret.
 --     Only the secret's SHA-256 is kept; the person sees it once.
 --   * ai_bot_events — one row per verified request, kept 90 days.
---   * ai_bot_daily — bot × page × day counters, always written. When the
+--   * ai_bot_daily — bot × page × day counters, always added to. When the
 --     month's cap is reached they are all that is written ("Detailed rows
---     paused until Nov 1, totals still counted", §6.3), so the cap is a
---     hard ceiling on what is stored.
+--     paused until Nov 1, totals still counted", §6.3), and past it a bot's
+--     hits of the day go on one '(other)' row instead of a row per page:
+--     crawler hits are mostly a page, day and bot of their own, so page rows
+--     would grow by about one per event. The cap is then a hard ceiling on
+--     what is stored.
 --   * ai_bot_usage — per organization (the workspace) and month: rows
 --     stored, events counted, when the cap was reached, and when the 80%
 --     alert fired (§6.3 guardrails).
@@ -25061,7 +25082,8 @@ grant select on public.ai_bot_usage to authenticated;
 -- The usage row is locked for the batch, so two batches for one
 -- organization can't both take the last of its room. Rows are stored while
 -- the month has room (p_cap < 0: no cap; 0: none stored); counters are
--- always added. Returns what was received and stored, the month's use, and
+-- always added, by page for the events stored and on the bot's '(other)' row
+-- of the day for the rest. Returns what was received and stored, the month's use, and
 -- whether this batch took it past 80% of the cap (the server alerts once).
 
 create or replace function public.ai_bot_ingest(
@@ -25128,9 +25150,14 @@ begin
       (r.at at time zone 'utc')::date as day,
       r.bot,
       r.bot_type,
-      lower(public.normalize_page_path(r.page)) as page,
+      case
+        when x.n <= v_room then lower(public.normalize_page_path(r.page))
+        else '(other)'
+      end as page,
       r.at
-    from jsonb_to_recordset(p_events) as r(bot text, bot_type text, page text, at timestamptz)
+    from jsonb_array_elements(p_events) with ordinality as x(ev, n)
+    cross join lateral jsonb_to_record(x.ev)
+      as r(bot text, bot_type text, page text, at timestamptz)
   ) e
   group by e.day, e.bot, e.page
   on conflict (brand_id, day, bot, page) do update
@@ -25185,7 +25212,8 @@ notify pgrst, 'reload schema';
 -- AI bots at the edge, but a job set up without the filter would send every
 -- line, so the same cap guards it.
 --
--- ai_bot_usage gains the month's raw records and when that cap was reached.
+-- ai_bot_usage gains the month's raw records and when that cap was reached;
+-- ai_bot_ingested_files keeps a retried file from being read twice.
 -- ai_bot_count_raw adds a batch's records under the usage row's lock and
 -- says whether the batch may be read: yes while the month was under the cap
 -- when it arrived, so a month overshoots by at most the batch that crosses
@@ -25194,6 +25222,21 @@ notify pgrst, 'reload schema';
 alter table public.ai_bot_usage
   add column raw_records bigint not null default 0,
   add column raw_capped_at timestamptz;
+
+-- A log file a sender sends again (it timed out waiting, say) is read once:
+-- each connection's files by the SHA-256 of their body, claimed before the
+-- read and given back when it fails, kept 7 days (the daily prune). No
+-- policies: only the service role reads or writes.
+create table public.ai_bot_ingested_files (
+    connection_id uuid not null references public.ai_bot_connections(id) on delete cascade,
+    body_hash text not null,
+    received_at timestamptz not null default now(),
+    primary key (connection_id, body_hash)
+);
+
+create index ai_bot_ingested_files_time_idx on public.ai_bot_ingested_files (received_at);
+
+alter table public.ai_bot_ingested_files enable row level security;
 
 create or replace function public.ai_bot_count_raw(
   p_connection_id uuid,
@@ -25273,9 +25316,17 @@ notify pgrst, 'reload schema';
 --     per-page last crawl);
 --   * uncrawled — the alert "cited pages not read by any search bot in 30
 --     days": pages tracked AI answers cited in the last 30 days that no
---     search crawler read in them. It needs 30 days of bot data to mean
---     anything, so until the first request is 30 days old it is null and
---     the result says when it starts.
+--     search crawler read in them. It only means something while the bot
+--     data is whole, so it is null, and alert_state says why, until the
+--     first request is 30 days old ('waiting'), and when no live connection
+--     has sent for 2 days or search hits went on '(other)' rows past the
+--     month's cap in those 30 days ('stale': a sender stopped, was revoked
+--     or hit its raw cap, and the 30 days of pages read would drain).
+--
+-- "All time" (p_since null) covers the last 90 days here: a site crawled at
+-- 10k pages a day keeps millions of rows over the counters' 400 days. The
+-- rows are added up once by bot and page, and the first and last day come
+-- from the ends of the (brand_id, day) index.
 --
 -- Pages are keyed as the Pages section keys them (00178). citation_urls has
 -- no member select policy, so this runs as its owner after checking the
@@ -25296,7 +25347,10 @@ set search_path to 'public'
 as $$
 declare
   v_first date;
+  v_last_day date;
   v_last timestamptz;
+  v_since date;
+  v_alert text;
   v_result jsonb;
 begin
   if not exists (
@@ -25307,59 +25361,97 @@ begin
     return null;
   end if;
 
-  select min(d.day), max(d.last_seen) into v_first, v_last
+  select d.day into v_first
   from public.ai_bot_daily d
-  where d.brand_id = p_brand_id;
+  where d.brand_id = p_brand_id
+  order by d.day
+  limit 1;
+  select d.day into v_last_day
+  from public.ai_bot_daily d
+  where d.brand_id = p_brand_id
+  order by d.day desc
+  limit 1;
+  select max(d.last_seen) into v_last
+  from public.ai_bot_daily d
+  where d.brand_id = p_brand_id and d.day = v_last_day;
 
-  with d as (
-    select *
+  v_since := coalesce(p_since, current_date - 89);
+
+  v_alert := case
+    when v_first is null or v_first > current_date - 29 then 'waiting'
+    when not exists (
+      select 1 from public.ai_bot_connections c
+      where c.brand_id = p_brand_id
+        and c.revoked_at is null
+        and c.last_event_at >= now() - interval '2 days'
+    ) or exists (
+      select 1 from public.ai_bot_daily d
+      where d.brand_id = p_brand_id
+        and d.bot_type = 'search'
+        and d.page = '(other)'
+        and d.day >= current_date - 29
+    ) then 'stale'
+    else 'on'
+  end;
+
+  with g as (
+    -- Each bot's hits on each page in the range, added up once.
+    select
+      d.bot_type,
+      d.bot,
+      d.page,
+      sum(d.hits)::bigint as hits,
+      max(d.last_seen) as last_seen
     from public.ai_bot_daily d
     where d.brand_id = p_brand_id
-      and d.day >= coalesce(p_since, '-infinity'::date)
+      and d.day >= v_since
       and d.day <= p_until
+    group by d.bot_type, d.bot, d.page
   ),
   types as (
     select
-      d.bot_type,
-      sum(d.hits)::bigint as hits,
-      count(distinct d.page)::bigint as pages,
-      max(d.last_seen) as last_seen,
-      array_agg(distinct d.bot order by d.bot) as bots
-    from d
-    group by d.bot_type
+      g.bot_type,
+      sum(g.hits)::bigint as hits,
+      count(distinct g.page) filter (where g.page <> '(other)')::bigint as pages,
+      max(g.last_seen) as last_seen,
+      array_agg(distinct g.bot order by g.bot) as bots
+    from g
+    group by g.bot_type
   ),
   bots as (
     select
-      d.bot,
-      min(d.bot_type) as bot_type,
-      sum(d.hits)::bigint as hits,
-      count(distinct d.page)::bigint as pages,
-      max(d.last_seen) as last_seen
-    from d
-    group by d.bot
+      g.bot,
+      min(g.bot_type) as bot_type,
+      sum(g.hits)::bigint as hits,
+      count(*) filter (where g.page <> '(other)')::bigint as pages,
+      max(g.last_seen) as last_seen
+    from g
+    group by g.bot
   ),
+  -- Hits folded past the month's cap ('(other)') aren't a page.
   pages as (
     select
-      d.page,
-      sum(d.hits)::bigint as hits,
-      max(d.last_seen) filter (where d.bot_type = 'training') as training_last,
-      max(d.last_seen) filter (where d.bot_type = 'search') as search_last,
-      max(d.last_seen) filter (where d.bot_type = 'user') as user_last
-    from d
-    group by d.page
+      g.page,
+      sum(g.hits)::bigint as hits,
+      max(g.last_seen) filter (where g.bot_type = 'training') as training_last,
+      max(g.last_seen) filter (where g.bot_type = 'search') as search_last,
+      max(g.last_seen) filter (where g.bot_type = 'user') as user_last
+    from g
+    where g.page <> '(other)'
+    group by g.page
   ),
   -- The alert reads its own 30 days, whatever the range.
-  searched as (
-    select distinct d.page
-    from public.ai_bot_daily d
-    where d.brand_id = p_brand_id
-      and d.bot_type = 'search'
-      and d.day >= current_date - 29
-  ),
   uncrawled as (
     select c.page, c.citations
     from public.ai_traffic_page_citations(p_brand_id, current_date - 29, current_date) c
-    where c.page_key not in (select s.page from searched s)
+    where v_alert = 'on'
+      and not exists (
+        select 1 from public.ai_bot_daily d
+        where d.brand_id = p_brand_id
+          and d.bot_type = 'search'
+          and d.page = c.page_key
+          and d.day >= current_date - 29
+      )
   )
   select jsonb_build_object(
     'first_day', v_first,
@@ -25389,17 +25481,17 @@ begin
       select jsonb_agg(to_jsonb(p) order by p.hits desc, p.page)
       from (select * from pages order by hits desc, page limit p_limit) p
     ), '[]'::jsonb),
-    -- Null until the first request is 30 days old.
-    'uncrawled_count', case
-      when v_first <= current_date - 29 then (select count(*) from uncrawled)
-    end,
+    -- Null unless the bot data is whole (alert_state 'on').
+    'uncrawled_count', case when v_alert = 'on' then (select count(*) from uncrawled) end,
     'uncrawled', case
-      when v_first <= current_date - 29 then coalesce((
+      when v_alert = 'on' then coalesce((
         select jsonb_agg(to_jsonb(u) order by u.citations desc, u.page)
         from (select * from uncrawled order by citations desc, page limit 10) u
       ), '[]'::jsonb)
     end,
-    'alert_from', case when v_first is not null then v_first + 29 end
+    'alert_state', v_alert,
+    'alert_from', case when v_first is not null then v_first + 29 end,
+    'since', v_since
   )
   into v_result;
 

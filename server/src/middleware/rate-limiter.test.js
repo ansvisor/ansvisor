@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { apiLimiterKey } from './rate-limiter.js';
+import { apiLimiterKey, botIngestKey } from './rate-limiter.js';
 import { markTokenVerified, clearVerifiedTokens } from './verified-tokens.js';
 
 function reqWith({ authorization, ip = '203.0.113.7' } = {}) {
@@ -58,5 +58,21 @@ describe('rate-limiter – apiLimiterKey', () => {
     const a = apiLimiterKey(reqWith({ ip: '::ffff:1.1.1.1' }));
     const b = apiLimiterKey(reqWith({ ip: '::ffff:2.2.2.2' }));
     expect(a).not.toBe(b);
+  });
+});
+
+describe('rate-limiter – botIngestKey', () => {
+  it("buckets AI-bot ingest by the connection's secret, whatever the address", () => {
+    const a = botIngestKey(reqWith({ authorization: 'Bearer abot_one', ip: '1.1.1.1' }));
+    const b = botIngestKey(reqWith({ authorization: 'Bearer abot_one', ip: '2.2.2.2' }));
+    const other = botIngestKey(reqWith({ authorization: 'Bearer abot_two', ip: '1.1.1.1' }));
+    expect(a).toBe(b);
+    expect(a).not.toBe(other);
+    // The secret itself isn't kept as the key.
+    expect(a).toMatch(/^bot:[0-9a-f]{64}$/);
+  });
+
+  it('falls back to the IP without a secret', () => {
+    expect(botIngestKey(reqWith({ ip: '1.1.1.1' }))).toBe('ip:1.1.1.1');
   });
 });

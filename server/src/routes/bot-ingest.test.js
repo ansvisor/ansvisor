@@ -11,12 +11,17 @@ import express from 'express';
 const connectionForSecret = vi.fn();
 const ingestBotRequests = vi.fn();
 const countRawRecords = vi.fn();
+const claimLogFile = vi.fn();
+const releaseLogFile = vi.fn();
 vi.mock('../lib/bot-ingest.js', () => ({
   MAX_BATCH: 500,
   connectionForSecret: (...a) => connectionForSecret(...a),
   ingestBotRequests: (...a) => ingestBotRequests(...a),
   countRawRecords: (...a) => countRawRecords(...a),
+  claimLogFile: (...a) => claimLogFile(...a),
+  releaseLogFile: (...a) => releaseLogFile(...a),
 }));
+vi.mock('../lib/logger.js', () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
 vi.mock('../lib/plan-guard.js', () => ({
   PlanLimitError: class PlanLimitError extends Error {
     constructor(message, statusCode = 403) {
@@ -38,6 +43,8 @@ beforeEach(async () => {
     .mockReset()
     .mockResolvedValue({ received: 0, verified: 0, stored: 0, skipped: {} });
   countRawRecords.mockReset().mockResolvedValue({ allowed: true });
+  claimLogFile.mockReset().mockResolvedValue('hash-1');
+  releaseLogFile.mockReset().mockResolvedValue(undefined);
   const app = express();
   app.use(router);
   await new Promise((resolve) => {
@@ -129,6 +136,58 @@ describe('POST /bots/ingest', () => {
       body: Buffer.from([0x1f, 0x8b, 0x00, 0x01, 0x02]),
     });
     expect(bad.status).toBe(400);
+  });
+
+  it('reads a log file once: a resent one is answered without reading it', async () => {
+    const connection = { id: 'c2', organizationId: 'o1', kind: 'vercel_drain' };
+    connectionForSecret.mockResolvedValue(connection);
+    const entries = [{ source: 'build', message: 'done' }];
+    expect((await post('abot_x', entries)).status).toBe(200);
+    expect(claimLogFile).toHaveBeenCalledWith(connection, expect.any(Buffer));
+    expect(releaseLogFile).not.toHaveBeenCalled();
+
+    claimLogFile.mockResolvedValue(null);
+    countRawRecords.mockClear();
+    const again = await post('abot_x', entries);
+    expect(again.status).toBe(200);
+    expect(await again.json()).toMatchObject({ duplicate: true, stored: 0 });
+    expect(countRawRecords).not.toHaveBeenCalled();
+  });
+
+  it('gives the claim back when the read fails, so the retry is read', async () => {
+    const connection = { id: 'c2', organizationId: 'o1', kind: 'vercel_drain' };
+    connectionForSecret.mockResolvedValue(connection);
+    ingestBotRequests.mockRejectedValue(new Error('database down'));
+    const entries = [
+      {
+        proxy: {
+          clientIp: '1.2.3.4',
+          userAgent: ['GPTBot'],
+          host: 'acme.example',
+          path: '/',
+          statusCode: 200,
+          timestamp: 1792400000000,
+        },
+      },
+    ];
+    expect((await post('abot_x', entries)).status).toBe(500);
+    expect(releaseLogFile).toHaveBeenCalledWith(connection, 'hash-1');
+  });
+
+  it('answers 413 for a file past the line limit, without reading it', async () => {
+    connectionForSecret.mockResolvedValue({
+      id: 'c3',
+      organizationId: 'o1',
+      kind: 'cloudflare_logpush',
+    });
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer abot_x' },
+      body: gzipSync(Array.from({ length: 20_001 }, () => '{}').join('\n')),
+    });
+    expect(res.status).toBe(413);
+    expect(countRawRecords).not.toHaveBeenCalled();
+    expect(releaseLogFile).toHaveBeenCalled();
   });
 
   it('refuses an unknown secret, and an organization without a subscription', async () => {

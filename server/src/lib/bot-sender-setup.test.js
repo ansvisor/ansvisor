@@ -19,18 +19,21 @@ describe('logpushJob', () => {
     expect(
       filter.where.or.every((c) => c.key === 'ClientRequestUserAgent' && c.operator === 'contains'),
     ).toBe(true);
+    // Files stay within what the endpoint reads (bot-log-formats.js).
+    expect(job.max_upload_records).toBe(10_000);
+    expect(job.max_upload_bytes).toBe(5_000_000);
   });
 
-  it('asks for the fields the server reads', () => {
+  it('asks for the fields the server reads', async () => {
     const line = Object.fromEntries(
       LOGPUSH_FIELDS.map((f) => [f, f === 'EdgeResponseStatus' ? 200 : 'x']),
     );
     line.EdgeStartTimestamp = '2026-10-19T09:00:00Z';
     line.ClientIP = '1.2.3.4';
-    expect(readLogpushBody(JSON.stringify(line)).requests[0]).toMatchObject({
+    expect((await readLogpushBody(JSON.stringify(line))).requests[0]).toMatchObject({
       ip: '1.2.3.4',
       status: 200,
-      at: '2026-10-19T09:00:00Z',
+      at: '2026-10-19T09:00:00.000Z',
     });
   });
 });
