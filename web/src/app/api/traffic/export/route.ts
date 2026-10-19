@@ -6,6 +6,7 @@ import messages from '../../../../../messages/en.json';
 import { createClient } from '@/lib/supabase/server';
 import {
   getTrafficConversions,
+  getTrafficGooglePages,
   getTrafficPages,
   getTrafficSources,
   getTrafficSummary,
@@ -91,30 +92,35 @@ export async function GET(req: Request) {
   const wholePage = !q.section;
 
   try {
-    const [summary, trend, visits, sources, pageStatus, conversions] = await Promise.all([
-      needs('kpis', 'platforms', 'pages')
-        ? getTrafficSummary(q.brandId, window, { topPages: Number.MAX_SAFE_INTEGER })
-        : undefined,
-      needs('trend') ? getTrafficTrend(q.brandId, window) : undefined,
-      needs('visits')
-        ? getTrafficVisitsForExport(q.brandId, {
-            ...window,
-            platform: q.platform,
-            search: q.search,
-            max: TRAFFIC_EXPORT_MAX_ROWS,
-          })
-        : undefined,
-      // For the Filters sheet.
-      wholePage ? getTrafficSources(q.brandId).catch(() => null) : undefined,
-      // Every page of the Pages section, with its lists (AT-006).
-      needs('pageStatus')
-        ? getTrafficPages(q.brandId, window, { tab: 'all', limit: TRAFFIC_EXPORT_MAX_ROWS })
-        : undefined,
-      // Every row of where AI visitors convert, over the window the page reads (AT-014).
-      needs('convertingPages', 'buyerAnswers')
-        ? getTrafficConversions(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS })
-        : undefined,
-    ]);
+    const [summary, trend, visits, sources, pageStatus, conversions, googlePages] =
+      await Promise.all([
+        needs('kpis', 'platforms', 'pages')
+          ? getTrafficSummary(q.brandId, window, { topPages: Number.MAX_SAFE_INTEGER })
+          : undefined,
+        needs('trend') ? getTrafficTrend(q.brandId, window) : undefined,
+        needs('visits')
+          ? getTrafficVisitsForExport(q.brandId, {
+              ...window,
+              platform: q.platform,
+              search: q.search,
+              max: TRAFFIC_EXPORT_MAX_ROWS,
+            })
+          : undefined,
+        // For the Filters sheet.
+        wholePage ? getTrafficSources(q.brandId).catch(() => null) : undefined,
+        // Every page of the Pages section, with its lists (AT-006).
+        needs('pageStatus')
+          ? getTrafficPages(q.brandId, window, { tab: 'all', limit: TRAFFIC_EXPORT_MAX_ROWS })
+          : undefined,
+        // Every row of where AI visitors convert, over the window the page reads (AT-014).
+        needs('convertingPages', 'buyerAnswers')
+          ? getTrafficConversions(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS })
+          : undefined,
+        // Every page of Is AI taking Google clicks?, over the days it compares (AT-008).
+        needs('googlePages')
+          ? getTrafficGooglePages(q.brandId, window, { limit: TRAFFIC_EXPORT_MAX_ROWS })
+          : undefined,
+      ]);
     // Larger than an export built on request should be (spec §3.9).
     if (visits === null) return Response.json({ error: 'too_large' }, { status: 413 });
 
@@ -134,6 +140,7 @@ export async function GET(req: Request) {
       visits: visits ?? undefined,
       pageStatus,
       conversions,
+      googlePages,
       sources,
     };
 

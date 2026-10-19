@@ -3134,6 +3134,7 @@
         "convertingPages": "Top converting pages",
         "buyerAnswers": "Answers that bring buyers",
         "pageStatus": "Pages by status",
+        "googlePages": "Is AI taking Google clicks",
         "visits": "Visits"
       },
       "columns": {
@@ -3172,7 +3173,15 @@
         "conversionRate": "Rate (%)",
         "bestPlatform": "Best platform",
         "topic": "Topic",
-        "citedPages": "Cited pages"
+        "citedPages": "Cited pages",
+        "impressions": "Impressions",
+        "previousImpressions": "Impressions, previous period",
+        "ctr": "CTR (%)",
+        "previousCtr": "CTR, previous period (%)",
+        "clicks": "Clicks",
+        "previousClicks": "Clicks, previous period",
+        "days": "Days",
+        "previousDays": "Days, previous period"
       },
       "metrics": {
         "visits": "AI-referred visits",
@@ -3190,7 +3199,10 @@
         "noPages": "No pages in this range",
         "noConversions": "No key events from AI visitors in this range",
         "lastThirtyDays": "Last 30 days: the selected range has fewer than 30 AI visits",
-        "conversionLowSample": "Low sample: fewer than 30 AI visits"
+        "conversionLowSample": "Low sample: fewer than 30 AI visits",
+        "noGooglePages": "No page data from Google Search Console yet",
+        "noGoogleClicksLost": "No page's impressions rose 15% while its CTR fell 20% in this range",
+        "googleHistoryShort": "Google Search Console's page history doesn't reach back to the period before this range"
       },
       "sourceStates": {
         "active": "Active",
@@ -3357,7 +3369,37 @@
         "keyEvents": "key events from AI",
         "googleClicks": "Google clicks",
         "conversions": "where AI visitors convert",
-        "pageValue": "which valuable pages get no AI traffic"
+        "pageValue": "which valuable pages get no AI traffic",
+        "googleTrend": "AI visits against Google clicks",
+        "googlePages": "which pages AI may be taking Google clicks from"
+      }
+    },
+    "google": {
+      "title": "Google Search Console",
+      "subtitle": "Is AI changing your Google traffic?",
+      "dataUntil": "data until {day} (Google reports about two days late)",
+      "taking": {
+        "title": "Is AI taking Google clicks?",
+        "legend": "Impressions up 15% or more while CTR fell 20% or more, on pages with at least {min} impressions before: an AI Overview may be answering in place of the click. Open Positions to see whether you're cited in it.",
+        "compared": "{days} vs {prevDays}",
+        "empty": "No page's impressions rose while its CTR fell this way.",
+        "allTime": "All time has no period before it to compare with. Pick a range.",
+        "incomplete": "Google Search Console's page history doesn't reach back to the period before this range yet. Pick a shorter range.",
+        "noPages": "Page data from Google Search Console arrives with the next daily sync.",
+        "failed": "Couldn't load these pages.",
+        "more": "{shown} of {count} pages · the export has them all",
+        "columns": {
+          "page": "Page",
+          "impressions": "Impr.",
+          "ctr": "CTR",
+          "next": "Next step"
+        },
+        "impressionsTip": "{prev} → {now} impressions",
+        "ctrTip": "{prev} → {now} clicks",
+        "positions": "Positions",
+        "positionsTip": "See in Positions whether you're cited for a tracked prompt about this page",
+        "addPrompts": "Add prompts",
+        "addPromptsTip": "No tracked prompt is about this page yet"
       }
     },
     "summaryLine": {

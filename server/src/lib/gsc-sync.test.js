@@ -4,7 +4,13 @@ import { describe, expect, it, vi } from 'vitest';
 // when SUPABASE_* env is absent (as in CI) — stub it before the import chain.
 vi.mock('../config/supabase.js', () => ({ default: {} }));
 
-import { mapAnalyticsRows } from './gsc-sync.js';
+import {
+  mapAnalyticsRows,
+  mapPageRows,
+  PAGE_BACKFILL_DAYS,
+  pageSyncWindows,
+  pagesSyncPlan,
+} from './gsc-sync.js';
 
 describe('mapAnalyticsRows', () => {
   it('maps GSC rows keyed by [query, date] into table rows', () => {
@@ -71,5 +77,77 @@ describe('mapAnalyticsRows', () => {
   it('handles an empty or missing rows array', () => {
     expect(mapAnalyticsRows('b', [])).toEqual([]);
     expect(mapAnalyticsRows('b', undefined)).toEqual([]);
+  });
+});
+
+describe('mapPageRows', () => {
+  it('maps GSC rows keyed by [page, date] into gsc_page_stats rows (AT-008)', () => {
+    expect(
+      mapPageRows('brand-1', [
+        {
+          keys: ['https://acme.example/blog/x', '2026-08-01'],
+          clicks: 4.4,
+          impressions: 300,
+          ctr: 0.015,
+          position: 5.2,
+        },
+        { keys: ['https://acme.example/'] },
+      ]),
+    ).toEqual([
+      {
+        brand_id: 'brand-1',
+        page: 'https://acme.example/blog/x',
+        date: '2026-08-01',
+        clicks: 4,
+        impressions: 300,
+        ctr: 0.015,
+        position: 5.2,
+      },
+    ]);
+  });
+});
+
+describe('pageSyncWindows', () => {
+  it('reads the last 28 days once the 190 have been read', () => {
+    expect(pageSyncWindows(true)).toEqual([{ from: 28, to: 0 }]);
+  });
+
+  it('reads 190 days in 28-day steps until then, with no gap', () => {
+    const windows = pageSyncWindows(false);
+    expect(windows[0]).toEqual({ from: 28, to: 0 });
+    expect(windows.at(-1).from).toBe(PAGE_BACKFILL_DAYS);
+    for (let i = 1; i < windows.length; i++) {
+      expect(windows[i].to).toBe(windows[i - 1].from + 1);
+      expect(windows[i].from - windows[i].to).toBeLessThanOrEqual(28);
+    }
+  });
+});
+
+describe('pagesSyncPlan', () => {
+  const property = 'sc-domain:acme.com';
+
+  it('reads the 190 days, and marks them read, until a sync gets through them for the property', () => {
+    // A first sync, or one cut short after its first window: no marker yet.
+    const plan = pagesSyncPlan({ gsc_property: property, gsc_pages_backfilled_property: null });
+    expect(plan).toEqual({
+      windows: pageSyncWindows(false),
+      dropOldPages: false,
+      markBackfilled: true,
+    });
+  });
+
+  it('reads the last 28 days once the property has been read in full', () => {
+    expect(
+      pagesSyncPlan({ gsc_property: property, gsc_pages_backfilled_property: property }),
+    ).toEqual({ windows: [{ from: 28, to: 0 }], dropOldPages: false, markBackfilled: false });
+  });
+
+  it("drops the old property's pages before reading a new one's 190 days", () => {
+    expect(
+      pagesSyncPlan({
+        gsc_property: property,
+        gsc_pages_backfilled_property: 'https://old.example/',
+      }),
+    ).toEqual({ windows: pageSyncWindows(false), dropOldPages: true, markBackfilled: true });
   });
 });

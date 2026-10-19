@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { DEFAULT_NEXT, nextFromCookie, nextFromRequest, safeNextPath } from './auth-next';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  DEFAULT_NEXT,
+  nextFromCookie,
+  nextFromRequest,
+  safeNextPath,
+  safeRedirectUrl,
+} from './auth-next';
 
 /** After signing in, back to the page asked for — and only to one of ours. */
 
@@ -30,6 +36,55 @@ describe('safeNextPath', () => {
       '/\nevil',
     ]) {
       expect(safeNextPath(value), String(value)).toBe(DEFAULT_NEXT);
+    }
+  });
+});
+
+describe('safeRedirectUrl', () => {
+  const origin = 'https://app.example.com';
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('keeps a path on this site, with its query and hash', () => {
+    expect(safeRedirectUrl('/reset-password', origin)).toBe(
+      'https://app.example.com/reset-password',
+    );
+    expect(safeRedirectUrl('/dashboard/settings?tab=notifications#team', origin)).toBe(
+      'https://app.example.com/dashboard/settings?tab=notifications#team',
+    );
+  });
+
+  it("keeps a whole URL only on the request's or the app's own origin", () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://www.app.example.com/');
+    expect(safeRedirectUrl('https://app.example.com/invite/t1', origin)).toBe(
+      'https://app.example.com/invite/t1',
+    );
+    expect(safeRedirectUrl('https://www.app.example.com/invite/t1?x=1', origin)).toBe(
+      'https://www.app.example.com/invite/t1?x=1',
+    );
+    expect(safeRedirectUrl('https://user@app.example.com/invite/t1', origin)).toBe(
+      'https://app.example.com/invite/t1',
+    );
+  });
+
+  it('sends anything else to the dashboard', () => {
+    for (const value of [
+      null,
+      '',
+      'dashboard',
+      '//evil.example',
+      '/\\evil.example',
+      '@evil.example',
+      'javascript:alert(1)',
+      'https://evil.example/invite/t1',
+      'https://app.example.com.evil.example/',
+      'https://app.example.com@evil.example/',
+      'http://app.example.com/dashboard',
+      'https://app.example.com:8443/dashboard',
+      'https://%zz',
+    ]) {
+      expect(safeRedirectUrl(value, origin), String(value)).toBe(
+        `https://app.example.com${DEFAULT_NEXT}`,
+      );
     }
   });
 });

@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { API_BASE_URL } from '@/config/api';
+import { GOOGLE_PAGES_MIN_IMPRESSIONS, googlePagesWindow } from '@/lib/traffic-google-pages';
 import { TRAFFIC_PAGE_SIZE, countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { expandDateToEndOfDay, utcDay } from '@/lib/dates';
 import { isHourlyWindow, listUtcHours, utcHourKey } from '@/lib/traffic-buckets';
@@ -961,6 +962,84 @@ export async function getTrafficGoogleTrend(
       day: String(r.day),
       actions: n(r.actions),
       prompts: n(r.prompts),
+    })),
+  };
+}
+
+/** A page whose Google impressions rose while its CTR fell (AT-008). */
+export interface GooglePageRow {
+  /** The page's path, as the Pages section names it. */
+  page: string;
+  /** One full URL Search Console reported for it. */
+  url: string;
+  impressions: number;
+  prevImpressions: number;
+  clicks: number;
+  prevClicks: number;
+  /** A tracked prompt about the page, for its Positions panel; null with none. */
+  promptId: string | null;
+}
+
+export interface TrafficGooglePages {
+  /** The latest day Google has reported for the brand's pages; null with no page data yet. */
+  lastDay: string | null;
+  /** The days compared, ending on Google's latest; null for all time. */
+  since: string | null;
+  until: string | null;
+  prevSince: string | null;
+  prevUntil: string | null;
+  /** The page history doesn't reach back to the period before: nothing is compared. */
+  incomplete: boolean;
+  /** Every page that qualifies; `rows` holds the first `limit`. */
+  count: number;
+  rows: GooglePageRow[];
+}
+
+/**
+ * "Is AI taking Google clicks?" (AT-008, spec §3.6; 00181): pages whose
+ * impressions rose 15% or more while their CTR fell 20% or more against the
+ * period before, most clicks lost first. The window keeps the range's length
+ * and ends on the latest day Google has reported (about two days late,
+ * §3.01), so a short range compares whole reported days.
+ */
+export async function getTrafficGooglePages(
+  brandId: string,
+  window: TrafficDateWindow | undefined,
+  { limit = 10 }: { limit?: number } = {},
+): Promise<TrafficGooglePages> {
+  const supabase = await createClient();
+  const { from, to } = resolveTrafficWindow(window);
+  const { since, until } = googlePagesWindow(from, to);
+
+  const { data, error } = await supabase.rpc('ai_traffic_google_pages', {
+    p_brand_id: brandId,
+    p_since: since,
+    p_until: until,
+    p_latest: true,
+    p_min_impressions: GOOGLE_PAGES_MIN_IMPRESSIONS,
+    p_limit: limit,
+  });
+  if (error) throw new Error(error.message);
+  const raw = (data ?? {}) as Record<string, unknown>;
+  const n = (v: unknown) => Number(v) || 0;
+  const day = (v: unknown) => (typeof v === 'string' ? v : null);
+  const list = Array.isArray(raw.rows) ? (raw.rows as Record<string, unknown>[]) : [];
+  return {
+    lastDay: day(raw.last_day),
+    since: day(raw.since),
+    until: day(raw.until),
+    prevSince: day(raw.prev_since),
+    prevUntil: day(raw.prev_until),
+    incomplete: raw.incomplete === true,
+    count: n(raw.count),
+    rows: list.map((r) => ({
+      page: String(r.page),
+      url: String(r.url),
+      impressions: n(r.impressions),
+      prevImpressions: n(r.prev_impressions),
+      clicks: n(r.clicks),
+      prevClicks: n(r.prev_clicks),
+      promptId: typeof r.prompt_id === 'string' ? r.prompt_id : null,
     })),
   };
 }

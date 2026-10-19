@@ -45,6 +45,7 @@ import { ExportMenu, TableExport, useTrafficExport } from './_export';
 import { SourcesStrip } from './_sources-strip';
 import { SnippetBanner, SnippetDialog } from './_snippet-code';
 import { GoogleTrendView } from './_google-trend';
+import { GoogleSection } from './_google-section';
 import { NeedsTag } from './_source-gate';
 import { googleSourceStatus, snippetDetected } from '@/lib/traffic-sources';
 import { useUserRole } from '@/hooks/use-user-role';
@@ -625,6 +626,22 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
     />
   );
 
+  // Google Search Console (AT-008, spec §3.6): pages whose impressions rose
+  // while their CTR fell. Search Console's own data, so it shows even when
+  // the snippet saw no visit in the range.
+  const googleSection = (
+    <GoogleSection
+      brandId={brand.id}
+      dateWindow={dateWindow}
+      rangeLabel={rangeSubLabel}
+      source={sourcesFailed ? null : (sources?.gsc ?? null)}
+      domain={primaryDomain}
+      canConnect={canManage}
+      onConnected={() => void loadSources()}
+      actions={<TableExport exporter={exporter} section="googlePages" />}
+    />
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -687,6 +704,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
       ) : null}
       {isEmpty && conversionsSection}
       {isEmpty && pagesCard}
+      {isEmpty && googleSection}
       {!isEmpty && (
         <>
           {/* KPI cards: two rows of four (AT-017, spec §3.2). */}
@@ -863,6 +881,8 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
           {conversionsSection}
 
           {pagesCard}
+
+          {googleSection}
 
           {/* Recent Visit Log with filtering and pagination*/}
           <Card>
