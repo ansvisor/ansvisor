@@ -4280,7 +4280,7 @@
     "customPlanDescription": "Get unlimited brands, custom integrations, dedicated support, and more.",
     "contactUs": "Contact Us",
     "integrations": "Integrations",
-    "agent": "Agent",
+    "aiProviders": "AI Providers",
     "revokeApiKey": "Revoke API key",
     "revokeApiKeyConfirm": "Revoke this API key? Clients using it will lose access immediately.",
     "revoke": "Revoke",
@@ -4316,7 +4316,7 @@
       "zed": "Add to your Zed settings.json."
     },
     "apiKeys_name": "Name",
-    "agent_description": "Bring your own Anthropic API key. The in-product agent uses your key to call Claude directly — usage is billed to your Anthropic account, not to Ansvisor.",
+    "agent_description": "Ansvisor's Chat answers with an AI model on your own account with its provider. Add your Anthropic API key: Chat calls Claude with it, the usage is billed to your Anthropic account rather than to Ansvisor, and the key is stored encrypted.",
     "agent_keyConfigured": "Key configured",
     "agent_savedAt": "Saved {date}",
     "agent_savedBy": "by {email}",
