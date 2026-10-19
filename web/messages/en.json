@@ -4741,6 +4741,7 @@
         "label": "This brand is in e-commerce / shopping",
         "help": "Adds <code>chatgpt-shopping</code> to every existing prompt's platform list and enables the Shopping platform on this brand.",
         "managersOnly": "Only admins and managers can change this setting.",
+        "planNote": "ChatGPT Shopping comes with the {plan} plan. On this plan the prompts keep it, but it isn’t tracked.",
         "on": "Shopping mode on",
         "onWithPrompts": "Shopping mode on: {count, plural, one {# prompt} other {# prompts}} updated",
         "off": "Shopping mode off",
