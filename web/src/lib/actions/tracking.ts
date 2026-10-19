@@ -846,12 +846,20 @@ export async function getTrackingWindow(brandId: string): Promise<TrackingWindow
   const latestRun = completed[0];
   const previousRun = completed[1];
   const latest = latestRun?.completed_at ?? undefined;
-  const runDays = latestRun?.started_at && latestRun.completed_at
-    ? runDayWindow({ started_at: latestRun.started_at, completed_at: latestRun.completed_at })
-    : null;
-  const previousRunDays = previousRun?.started_at && previousRun.completed_at
-    ? runDayWindow({ started_at: previousRun.started_at, completed_at: previousRun.completed_at })
-    : null;
+  const runDays =
+    latestRun?.started_at && latestRun.completed_at
+      ? runDayWindow({
+          started_at: latestRun.started_at,
+          completed_at: latestRun.completed_at,
+        })
+      : null;
+  const previousRunDays =
+    previousRun?.started_at && previousRun.completed_at
+      ? runDayWindow({
+          started_at: previousRun.started_at,
+          completed_at: previousRun.completed_at,
+        })
+      : null;
 
   let anchored: TrackingWindow['anchored'] = null;
   if (latest) {
@@ -1311,10 +1319,9 @@ async function getSamePromptComparison(
 }
 
 /**
- * The anchored 24h view only changes when a tracking run completes, yet each
- * page open recomputed it from raw results: ~10 reads over the same answers,
- * 6-8 s on the largest brand once they contend. Cache it per brand, filters
- * and anchored window; the next completed run moves the window and so the key.
+ * Raw fallback for anchored 24h reads that cannot use daily rollups (currently
+ * topic-filtered reads). The result is cached per brand, filters and anchored
+ * window; the next completed run moves the window and so the key.
  *
  * Computed with the service-role client because the cache cannot read the
  * caller's cookies; every loader scopes its reads by brand, and the caller's
