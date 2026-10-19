@@ -778,7 +778,7 @@ function KeyMissingState() {
         <h2 className="text-lg font-semibold">{t('keyMissingTitle')}</h2>
         <p className="text-sm text-muted-foreground mt-2">{t('keyMissingBody')}</p>
         <Link
-          href="/dashboard/settings?tab=agent"
+          href="/dashboard/settings/ai-providers"
           className={cn(buttonVariants({ variant: 'default' }), 'mt-5 gap-2')}
         >
           <KeyRound className="h-4 w-4" />

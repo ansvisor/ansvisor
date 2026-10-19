@@ -20,10 +20,13 @@ import {
   getAuditSettings,
   saveAuditSettings,
   setOpportunityPrefs,
+  type AuditAutoStatus,
   type AuditSettings,
   type AuditSettingsChanges,
+  type AutoAuditRun,
 } from '@/lib/actions/audits';
-import { formatNumber } from '@/lib/format';
+import { nextAutoRun } from '@/lib/audit-auto-runs';
+import { formatMonthDay, formatNumber } from '@/lib/format';
 
 /** One pattern per line, blank lines dropped. */
 export function parsePatterns(text: string): string[] {
@@ -53,7 +56,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 /**
  * Site Audit › Settings (SA-006): the organization's auto-audit switch and
  * e-mail, the brand's exclude patterns and its pinned pages. Admins and
- * managers change them; everyone else reads them.
+ * managers change them; everyone else reads them. With the page's quota, the
+ * switch also says when the runs happen: the last one and the next (the
+ * first, when it was just turned on).
  */
 export function AuditSettingsDialog({
   brandId,
@@ -61,6 +66,9 @@ export function AuditSettingsDialog({
   onOpenChange,
   canManage,
   onSaved,
+  schedule,
+  latestRun,
+  now,
 }: {
   brandId: string;
   open: boolean;
@@ -68,6 +76,11 @@ export function AuditSettingsDialog({
   canManage: boolean;
   /** Read the page's quota and inbox again: the reserved share or the inbox may change. */
   onSaved: () => void;
+  /** Where auto-audit stands this billing month (the quota's). */
+  schedule?: AuditAutoStatus | null;
+  /** The latest run on this brand's pages. */
+  latestRun?: AutoAuditRun | null;
+  now?: Date;
 }) {
   const t = useTranslations('audit.settings');
   const [settings, setSettings] = useState<AuditSettings | null>(null);
@@ -159,6 +172,20 @@ export function AuditSettingsDialog({
           })
         : t('autoAuditOff', { limit: formatNumber(auto.limit) });
 
+  const timing: string[] = [];
+  if (auto && autoAudit && schedule && now) {
+    if (latestRun) {
+      timing.push(
+        latestRun.status === 'running'
+          ? t('runningNow')
+          : t('lastRun', { date: formatMonthDay(latestRun.startedAt) }),
+      );
+    }
+    const next = nextAutoRun(schedule, now);
+    const date = next.soon ? t('withinADay') : formatMonthDay(next.at);
+    timing.push(auto.enabled ? t('nextRun', { date }) : t('firstRun', { date }));
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
@@ -185,6 +212,9 @@ export function AuditSettingsDialog({
                 <div className="space-y-0.5">
                   <Label htmlFor="audit-auto">{t('autoAuditLabel')}</Label>
                   <p className="text-xs text-muted-foreground">{autoLine}</p>
+                  {timing.length > 0 && (
+                    <p className="text-xs font-medium text-foreground">{timing.join(' · ')}</p>
+                  )}
                   <p className="text-xs text-muted-foreground">{t('orgWide')}</p>
                 </div>
               </div>
