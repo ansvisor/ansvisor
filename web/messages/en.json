@@ -4475,6 +4475,17 @@
       "confirmDelete": "Type the brand name to confirm:",
       "deleteConfirmPlaceholder": "Brand name",
       "deleteButton": "Delete Brand Permanently",
+      "shopping": {
+        "title": "Shopping mode",
+        "description": "Turn this on if this brand is in e-commerce. We’ll add ChatGPT Shopping to every prompt under this brand and reveal the Shopping dashboard.",
+        "label": "This brand is in e-commerce / shopping",
+        "help": "Adds <code>chatgpt-shopping</code> to every existing prompt's platform list and enables the Shopping platform on this brand.",
+        "managersOnly": "Only admins and managers can change this setting.",
+        "on": "Shopping mode on",
+        "onWithPrompts": "Shopping mode on: {count, plural, one {# prompt} other {# prompts}} updated",
+        "off": "Shopping mode off",
+        "saveFailed": "Couldn't save Shopping mode"
+      },
       "aiModels": {
         "description": "Configure which AI platforms to monitor and how often prompts should be checked for this brand.",
         "platformsActive": "platforms active",
