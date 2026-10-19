@@ -45,7 +45,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger, tabsListVariants } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -1893,10 +1893,12 @@ export default function PromptsPage() {
             control rather than a second Tabs, so it reads as a filter on
             this panel and not as another level of page navigation. It sits
             above the filter bar so the controls go from general to specific:
-            which area, which list, then which period. */}
+            which area, which list, then which period. It looks like the tabs
+            above it (the muted track, the selected item a card), so the
+            selected item reads the same in both. */}
         {tab === 'all' && (
           <div
-            className="mt-4 inline-flex w-fit rounded-lg border p-1"
+            className={cn(tabsListVariants(), 'mt-4 h-8')}
             role="tablist"
             aria-label="Prompt view"
           >
@@ -1913,10 +1915,10 @@ export default function PromptsPage() {
                 aria-selected={view === id}
                 onClick={() => showSection(tab, id)}
                 className={cn(
-                  'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                  'flex h-[calc(100%-1px)] items-center gap-2 rounded-md border border-transparent px-2.5 text-sm font-medium transition-all',
                   view === id
-                    ? 'bg-muted text-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
+                    ? 'bg-card text-foreground shadow-sm dark:border-input dark:bg-input/30'
+                    : 'text-foreground/60 hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground',
                 )}
               >
                 <Icon className="h-4 w-4" />

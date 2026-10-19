@@ -70,6 +70,41 @@ describe('renderPulseEmail', () => {
     expect(degraded.html).toContain('Data collection was degraded on ChatGPT, Perplexity today');
   });
 
+  it('renders a visibility slip under Needs attention', () => {
+    const { html } = renderPulseEmail({
+      brandName: 'Acme',
+      metrics: {
+        ...metrics,
+        warnings: [
+          { type: 'visibility_slipping', key: 'visibility_slipping', from: 42, to: 35, drop: 7 },
+        ],
+      },
+      insightsUrl: 'https://example.com/insights',
+      settingsUrl: 'https://example.com/settings',
+    });
+
+    expect(html).toContain('⚠ Needs attention');
+    expect(html).toContain('Visibility is slipping: <strong>42 → 35</strong> week-over-week');
+  });
+
+  it('names the pulse after its window in the subject and heading', () => {
+    const render = (windowDays) =>
+      renderPulseEmail({
+        brandName: 'Acme',
+        metrics: { ...metrics, windowDays },
+        insightsUrl: 'https://example.com/insights',
+        settingsUrl: 'https://example.com/settings',
+      });
+
+    const weekly = render(7);
+    expect(weekly.subject).toBe('Acme Weekly Pulse — visibility 42 (+1.2 pts this week)');
+    expect(weekly.html).toContain('Weekly Pulse — Acme</h1>');
+
+    const daily = render(1);
+    expect(daily.subject).toBe('Acme Daily Pulse — visibility 42 (+1.2 pts this week)');
+    expect(daily.html).toContain('Daily Pulse — Acme</h1>');
+  });
+
   it('uses the rounded change when selecting the KPI trend arrow', () => {
     const { html } = renderPulseEmail({
       brandName: 'Acme',

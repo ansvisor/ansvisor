@@ -33,7 +33,10 @@ const translations: Record<string, string> = {
 };
 
 vi.mock('next-intl', () => ({
-  useTranslations: () => (key: string) => translations[key] ?? key,
+  useTranslations: () =>
+    Object.assign((key: string) => translations[key] ?? key, {
+      rich: (key: string) => translations[key] ?? key,
+    }),
 }));
 
 vi.mock('@/i18n/navigation', () => ({
@@ -49,14 +52,16 @@ vi.mock('@/stores/use-brand-store', () => ({
   }),
 }));
 
+const role = vi.hoisted(() => ({ canAdmin: true, canManage: true }));
 vi.mock('@/hooks/use-user-role', () => ({
-  useUserRole: () => ({ canAdmin: true }),
+  useUserRole: () => role,
 }));
 
+const setBrandShoppingMode = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/brand', () => ({
   deleteBrand: vi.fn(),
   setBrandActive: vi.fn(),
-  setBrandShoppingMode: vi.fn(),
+  setBrandShoppingMode,
   updateBrand: vi.fn(),
 }));
 
@@ -85,6 +90,8 @@ import BrandSettingsPage from './page';
 
 afterEach(() => {
   brand.state = 'CA';
+  Object.assign(role, { canAdmin: true, canManage: true });
+  setBrandShoppingMode.mockReset();
   document.body.replaceChildren();
   vi.restoreAllMocks();
 });
@@ -136,6 +143,48 @@ describe('brand settings location selects', () => {
     const values = Array.from(container.querySelectorAll('[data-slot="select-value"]'));
 
     expect(values[2]?.textContent).toBe('Translated Nationwide');
+
+    await act(async () => root.unmount());
+  });
+});
+
+describe('brand settings Shopping mode', () => {
+  async function render() {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <Suspense>
+          <BrandSettingsPage params={Promise.resolve({ id: brand.id })} />
+        </Suspense>,
+      );
+    });
+    const checkbox = container.querySelector('#shopping-mode') as HTMLElement;
+    return { container, root, checkbox };
+  }
+
+  it('lets a manager turn it on, as the brand and prompt writes allow', async () => {
+    Object.assign(role, { canAdmin: false, canManage: true });
+    setBrandShoppingMode.mockResolvedValue({ promptsUpdated: 3 });
+    const { container, root, checkbox } = await render();
+
+    expect(checkbox.hasAttribute('data-disabled')).toBe(false);
+    expect(container.textContent).not.toContain('settings.shopping.managersOnly');
+    await act(async () => checkbox.click());
+    expect(setBrandShoppingMode).toHaveBeenCalledWith(brand.id, true);
+
+    await act(async () => root.unmount());
+  });
+
+  it('shows anyone else the setting without letting them change it', async () => {
+    Object.assign(role, { canAdmin: false, canManage: false });
+    const { container, root, checkbox } = await render();
+
+    expect(checkbox.hasAttribute('data-disabled')).toBe(true);
+    expect(container.textContent).toContain('settings.shopping.managersOnly');
+    await act(async () => checkbox.click());
+    expect(setBrandShoppingMode).not.toHaveBeenCalled();
 
     await act(async () => root.unmount());
   });

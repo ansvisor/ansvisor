@@ -37,10 +37,21 @@ const auto = (over: Partial<AuditAutoStatus> = {}): AuditAutoStatus => ({
   running: 0,
   periodStart: '2026-10-01T00:00:00.000Z',
   periodEnd: '2026-11-01T00:00:00.000Z',
-  runs: [],
-  nextRun: { day: 28, at: new Date(2026, 9, 28, 0, 0).toISOString() },
+  // Four runs done, day 28's still to come.
+  runs: [1, 7, 14, 21, 28].map((day) => ({
+    day,
+    at: `2026-10-${String(day).padStart(2, '0')}T00:00:00.000Z`,
+    done: day < 28,
+  })),
+  nextRun: { day: 28, at: '2026-10-28T00:00:00.000Z' },
   ...over,
 });
+const runs = (done: (day: number) => boolean) =>
+  [1, 7, 14, 21, 28].map((day) => ({
+    day,
+    at: `2026-10-${String(day).padStart(2, '0')}T00:00:00.000Z`,
+    done: done(day),
+  }));
 
 const quota = (a: AuditAutoStatus | undefined): AuditQuota => ({
   used: 250,
@@ -97,13 +108,14 @@ describe('AuditSummaryStrip', () => {
     expect(container.textContent).toContain('ansvisor.com');
   });
 
-  it('says today, or the date further out, and when auto-audit is off', () => {
-    render(overview(), quota(auto({ nextRun: { day: 21, at: NOW.toISOString() } })));
-    expect(items()[3]).toBe('Next auto-audit today · 25 pages');
-    render(
-      overview(),
-      quota(auto({ nextRun: { day: 1, at: new Date(2026, 10, 1, 0, 0).toISOString() } })),
-    );
+  it("says within a day while a run's turn has started without it, not today", () => {
+    // Day 21's turn lasts until day 28, and it hasn't run (turned on after the sweep).
+    render(overview(), quota(auto({ runs: runs((day) => day < 21) })));
+    expect(items()[3]).toBe('Next auto-audit within a day · 25 pages');
+  });
+
+  it("gives next month's first run once this month's runs are over, and says when it's off", () => {
+    render(overview(), quota(auto({ runs: runs(() => true), nextRun: null })));
     expect(items()[3]).toBe('Next auto-audit on Nov 1 · 25 pages');
     render(overview(), quota(auto({ enabled: false })));
     expect(items()[3]).toBe('Auto-audit off');

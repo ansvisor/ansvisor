@@ -3,6 +3,7 @@
 import { unstable_cache } from 'next/cache';
 import { dbClient, withDbClient } from '@/lib/supabase/scoped';
 import { expandDateToEndOfDay } from '@/lib/dates';
+import { runDayWindow } from '@/lib/citations/rollup-window';
 import {
   comparisonWindows,
   dailyWindow,
@@ -782,6 +783,10 @@ export interface TrackingWindow {
    * because a new brand has nothing older than 24h to age out.
    */
   anchored: { dateFrom: string; dateTo: string } | null;
+  /** UTC day(s) touched by the latest completed run, for daily rollups. */
+  runDays?: DayWindow | null;
+  /** UTC day(s) touched by the prior completed run, for run-over-run deltas. */
+  previousRunDays?: DayWindow | null;
   /** A full run currently in flight (cron or manual), for the progress banner. */
   activeRun: { startedAt: string; source: string } | null;
   /** The brand's last completed full run, scheduled or Run All (VIS-012); null before its first. */
@@ -809,7 +814,7 @@ export async function getTrackingWindow(brandId: string): Promise<TrackingWindow
   const [completedResp, activeResp, scheduledResp] = await Promise.all([
     supabase
       .from('tracking_runs')
-      .select('completed_at')
+      .select('started_at, completed_at')
       .eq('brand_id', brandId)
       .not('completed_at', 'is', null)
       .order('completed_at', { ascending: false })
@@ -834,13 +839,32 @@ export async function getTrackingWindow(brandId: string): Promise<TrackingWindow
       .limit(2),
   ]);
 
-  const completed = completedResp.data ?? [];
-  const latest = completed[0]?.completed_at as string | undefined;
+  const completed = (completedResp.data ?? []) as {
+    started_at?: string | null;
+    completed_at?: string | null;
+  }[];
+  const latestRun = completed[0];
+  const previousRun = completed[1];
+  const latest = latestRun?.completed_at ?? undefined;
+  const runDays =
+    latestRun?.started_at && latestRun.completed_at
+      ? runDayWindow({
+          started_at: latestRun.started_at,
+          completed_at: latestRun.completed_at,
+        })
+      : null;
+  const previousRunDays =
+    previousRun?.started_at && previousRun.completed_at
+      ? runDayWindow({
+          started_at: previousRun.started_at,
+          completed_at: previousRun.completed_at,
+        })
+      : null;
 
   let anchored: TrackingWindow['anchored'] = null;
   if (latest) {
     const latestMs = new Date(latest).getTime();
-    const prev = completed[1]?.completed_at as string | undefined;
+    const prev = previousRun?.completed_at ?? undefined;
     const lowerMs = Math.max(latestMs - 24 * 3600_000, prev ? new Date(prev).getTime() + 1 : 0);
     anchored = { dateFrom: new Date(lowerMs).toISOString(), dateTo: latest };
   }
@@ -848,6 +872,8 @@ export async function getTrackingWindow(brandId: string): Promise<TrackingWindow
   const active = activeResp.data?.[0];
   return {
     anchored,
+    runDays,
+    previousRunDays,
     activeRun: active
       ? { startedAt: active.started_at as string, source: (active.source as string) ?? 'manual' }
       : null,
@@ -892,6 +918,8 @@ type InsightsFilterArgs = {
   dateFrom?: string;
   dateTo?: string;
   days?: DayWindow;
+  /** Previous completed run's UTC day(s), for run-over-run comparisons. */
+  previousDays?: DayWindow;
   /** "Compare: Same prompts" (VIS-002); on unless explicitly false. */
   samePrompts?: boolean;
 };
@@ -1159,7 +1187,7 @@ async function getChangeDrivers(
 
   let res;
   if (windows.cur.kind === 'days') {
-    const { cur, prev } = deltaDayWindows(windows.cur.days);
+    const { cur, prev } = deltaDayWindows(windows.cur.days, opts?.previousDays);
     res = await supabase.rpc('insights_change_drivers_daily', {
       ...base,
       p_cur_from: cur.dayFrom,
@@ -1264,7 +1292,7 @@ async function getSamePromptComparison(
   let res;
   if (windows.cur.kind === 'days') {
     // Explicit bounds for both windows: the same days the card compares.
-    const { cur, prev } = deltaDayWindows(windows.cur.days);
+    const { cur, prev } = deltaDayWindows(windows.cur.days, opts?.previousDays);
     res = await supabase.rpc('insights_same_prompt_compare_daily', {
       ...base,
       p_cur_from: cur.dayFrom,
@@ -1291,10 +1319,9 @@ async function getSamePromptComparison(
 }
 
 /**
- * The anchored 24h view only changes when a tracking run completes, yet each
- * page open recomputed it from raw results: ~10 reads over the same answers,
- * 6-8 s on the largest brand once they contend. Cache it per brand, filters
- * and anchored window; the next completed run moves the window and so the key.
+ * Raw fallback for anchored 24h reads that cannot use daily rollups (currently
+ * topic-filtered reads). The result is cached per brand, filters and anchored
+ * window; the next completed run moves the window and so the key.
  *
  * Computed with the service-role client because the cache cannot read the
  * caller's cookies; every loader scopes its reads by brand, and the caller's
@@ -1350,34 +1377,40 @@ export async function getInsightsData(
     /** When the current view is filtered, check unfiltered data existence too. */
     checkUnfiltered?: boolean;
     /**
-     * The 24h preset: anchor dateFrom/dateTo to the last completed tracking
-     * run (see getTrackingWindow). Resolved here rather than by a separate
-     * client call, because each server action is its own queued request.
+     * The 24h preset: resolve the latest completed run here so the view can use
+     * its UTC day window (including topic-filtered daily rollups), without a
+     * separate client action request.
      */
     anchor24h?: boolean;
   },
 ): Promise<InsightsData> {
   const trackingWindow = opts.anchor24h ? await getTrackingWindow(brandId).catch(() => null) : null;
   const anchored = trackingWindow?.anchored ?? null;
+  const rollup24h = Boolean(opts.anchor24h && trackingWindow?.runDays);
 
   const filterOpts: InsightsFilterArgs = {
     model: opts.model,
     region: opts.region,
     topicId: opts.topicId,
-    dateFrom: anchored?.dateFrom ?? opts.dateFrom,
-    dateTo: anchored?.dateTo ?? opts.dateTo,
-    days: opts.days,
+    dateFrom: rollup24h ? undefined : (anchored?.dateFrom ?? opts.dateFrom),
+    dateTo: rollup24h ? undefined : (anchored?.dateTo ?? opts.dateTo),
+    days: rollup24h ? (trackingWindow?.runDays ?? undefined) : opts.days,
+    previousDays: rollup24h ? (trackingWindow?.previousRunDays ?? undefined) : undefined,
     samePrompts: opts.samePrompts,
   };
 
-  // An anchored window is served from the cache; a failure there (including a
-  // section that would have degraded) falls back to the live, lenient read.
-  const windowedRead = anchored
-    ? cachedAnchoredInsights(brandId, filterOpts, anchored).catch((err) => {
-        console.error('[insights] cached 24h read failed, reading live', err);
-        return loadWindowedInsights(brandId, filterOpts, { strict: false });
-      })
-    : loadWindowedInsights(brandId, filterOpts, { strict: false });
+  // All 24h reads use daily rollups for the latest run's UTC day(s), with
+  // p_topic_id passed through when a topic is selected. Without a completed
+  // run-day window, retain the existing raw, anchored fallback. Keep the cached
+  // path until the rollup path's latency has been measured.
+  const windowedRead = rollup24h
+    ? loadWindowedInsights(brandId, filterOpts, { strict: false })
+    : anchored
+      ? cachedAnchoredInsights(brandId, filterOpts, anchored).catch((err) => {
+          console.error('[insights] cached 24h read failed, reading live', err);
+          return loadWindowedInsights(brandId, filterOpts, { strict: false });
+        })
+      : loadWindowedInsights(brandId, filterOpts, { strict: false });
 
   // Quota (tracked prompts), opportunities and the unfiltered check depend
   // on the caller's org and session, so they are read live on every open.
@@ -1800,6 +1833,7 @@ export async function getInsightsSummary(
     dateTo?: string;
     topicId?: string;
     days?: DayWindow;
+    previousDays?: DayWindow;
   },
 ): Promise<InsightsSummary> {
   const supabase = await dbClient();
@@ -1919,7 +1953,7 @@ export async function getInsightsSummary(
 
     const duration = currentTo.getTime() - currentFrom.getTime();
     const prevFrom = new Date(currentFrom.getTime() - duration);
-    const deltaDays = daily ? deltaDayWindows(daily) : null;
+    const deltaDays = daily ? deltaDayWindows(daily, opts?.previousDays) : null;
 
     // Current-window aggregate: when no dateFrom was passed, the top-level
     // call above is unbounded — for the delta math we need the same
@@ -2580,6 +2614,7 @@ export async function getCompetitorComparison(
     dateTo?: string;
     topicId?: string;
     days?: DayWindow;
+    previousDays?: DayWindow;
   },
 ): Promise<CompetitorComparisonData> {
   const supabase = await dbClient();
@@ -2655,7 +2690,7 @@ export async function getCompetitorComparison(
 
   const duration = currentTo.getTime() - currentFrom.getTime();
   const prevFrom = new Date(currentFrom.getTime() - duration);
-  const deltaDays = daily ? deltaDayWindows(daily) : null;
+  const deltaDays = daily ? deltaDayWindows(daily, opts?.previousDays) : null;
 
   const [curRes, prevRes, visPrevRes] = await Promise.all([
     deltaDays
@@ -2872,6 +2907,7 @@ export async function getShareOfVoiceData(
     dateTo?: string;
     topicId?: string;
     days?: DayWindow;
+    previousDays?: DayWindow;
   },
 ): Promise<ShareOfVoiceData> {
   const supabase = await dbClient();
@@ -2919,7 +2955,7 @@ export async function getShareOfVoiceData(
   }
   const duration = currentTo.getTime() - currentFrom.getTime();
   const prevFrom = new Date(currentFrom.getTime() - duration);
-  const deltaDays = daily ? deltaDayWindows(daily) : null;
+  const deltaDays = daily ? deltaDayWindows(daily, opts?.previousDays) : null;
 
   const [{ data: curData, error: curErr }, { data: prevData, error: prevErr }] = await Promise.all([
     daily
@@ -3100,6 +3136,7 @@ export async function getVisibilityRateTrend(
     dateTo?: string;
     topicId?: string;
     days?: DayWindow;
+    previousDays?: DayWindow;
   },
 ): Promise<VisibilityRateTrendData> {
   const supabase = await dbClient();
@@ -3146,7 +3183,7 @@ export async function getVisibilityRateTrend(
   });
   // The chart's warm-up range on the rollup path starts at the previous
   // window's first day.
-  const deltaDays = daily?.dayFrom ? deltaDayWindows(daily) : null;
+  const deltaDays = daily?.dayFrom ? deltaDayWindows(daily, opts?.previousDays) : null;
 
   const [
     { data: brand },
