@@ -3973,7 +3973,21 @@
       "noDataTitle": "No comparison data",
       "noDataDescription": "Run a tracking check from the Insights page to generate comparison data for this competitor.",
       "loadError": "Failed to load comparison data."
-    }
+    },
+    "suggestCompetitors": "Suggest competitors",
+    "suggestCompetitorsDescription": "Discover competitors for {brand} with AI research. Select the ones you want to track.",
+    "suggestCompetitorsLoading": "Researching competitors… This can take a little while.",
+    "suggestCompetitorsError": "Couldn't suggest competitors. Please try again.",
+    "suggestCompetitorsRetry": "Try again",
+    "refreshCompetitorSuggestions": "Refresh suggestions",
+    "noCompetitorSuggestions": "No competitors were suggested. Try refreshing the suggestions.",
+    "noNewCompetitorSuggestions": "All suggested competitors are already on your list.",
+    "selectedCompetitorCount": "{count} selected",
+    "addSelectedCompetitors": "Add {count, plural, one {# competitor} other {# competitors}}",
+    "suggestedCompetitorsAdded": "{count, plural, one {# competitor added successfully.} other {# competitors added successfully.}",
+    "suggestedCompetitorsAddError": "Failed to add competitors. Please try again.",
+    "suggestedCompetitorsPartialError": "{count, plural, one {# competitor couldn't be added. You can retry the remaining suggestions.} other {# competitors couldn't be added. You can retry the remaining suggestions.}",
+    "missingCompetitorWebsite": "Add a website to this brand before asking AI to suggest competitors."
   },
   "citations": {
     "title": "Citations",
