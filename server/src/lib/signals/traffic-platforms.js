@@ -1,11 +1,13 @@
 /**
  * "A new AI platform starts sending visits" (AT-013, spec §3.8).
  *
- * A platform with AI visits in the last seven whole days and none before
- * them, counted as the AI Traffic page counts them (ai_traffic_merged, 00176:
- * the snippet on the days it ran, Analytics on the rest). A brand with no AI
- * visits before the week has nothing to compare with — every platform would
- * be new — so it gets none.
+ * A platform with AI visits in the last seven whole days, counted as the AI
+ * Traffic page counts them (ai_traffic_merged, 00176: the snippet on the days
+ * it ran, Analytics on the rest), and none before them. "None before" is
+ * asked only for the week's candidates (ai_traffic_platforms_seen, 00193), so
+ * a quiet night reads one week and nothing more. A brand with no AI visits
+ * before the week has nothing to compare with — every platform would be new
+ * — so it gets none.
  *
  * Only a source on the list (ai-sources.json) with NEW_PLATFORM_MIN_VISITS
  * or more visits: the beacon is public, so a made-up source key or one stray
@@ -41,17 +43,11 @@ function utcMidnight(now, daysAgo) {
 }
 
 /**
- * The platforms new this week, most visits first: the merged reads of the
- * week and of everything before it. `unknown` is a referrer the source list
- * couldn't name, not a platform.
+ * The week's candidates, most visits first, with their first day: sources on
+ * the list with NEW_PLATFORM_MIN_VISITS or more. `unknown` is a referrer the
+ * source list couldn't name, not a platform.
  */
-export function newPlatforms(week, before) {
-  if ((Number(before?.visits) || 0) === 0) return [];
-  const earlier = new Set(
-    (before?.platforms ?? [])
-      .filter((p) => (Number(p.visits) || 0) > 0)
-      .map((p) => String(p.platform)),
-  );
+export function weekCandidates(week) {
   const firstDay = new Map();
   for (const d of week?.days ?? []) {
     if ((Number(d.visits) || 0) === 0) continue;
@@ -62,9 +58,18 @@ export function newPlatforms(week, before) {
   return (week?.platforms ?? [])
     .map((p) => ({ platform: String(p.platform ?? ''), visits: Number(p.visits) || 0 }))
     .filter((p) => p.visits >= NEW_PLATFORM_MIN_VISITS && KNOWN_SOURCES.has(p.platform))
-    .filter((p) => !earlier.has(p.platform))
     .map((p) => ({ ...p, firstDay: firstDay.get(p.platform) ?? null }))
     .sort((a, b) => b.visits - a.visits || a.platform.localeCompare(b.platform));
+}
+
+/**
+ * The platforms new this week: the week's candidates that sent no visit
+ * before it (`before`, from ai_traffic_platforms_seen), for a brand that
+ * had AI visits before it at all.
+ */
+export function newPlatforms(week, before) {
+  if (!before?.anyBefore) return [];
+  return weekCandidates(week).filter((p) => !before.seen.has(p.platform));
 }
 
 async function merged(brandId, from, to) {
@@ -79,6 +84,20 @@ async function merged(brandId, from, to) {
   return data ?? {};
 }
 
+/** Whether the brand had AI visits before `before`, and which of `platforms` sent one (00193). */
+async function platformsSeen(brandId, before, platforms) {
+  const { data, error } = await supabaseAdmin.rpc('ai_traffic_platforms_seen', {
+    p_brand_id: brandId,
+    p_before: before,
+    p_platforms: platforms,
+  });
+  if (error) throw new Error(error.message);
+  return {
+    anyBefore: data?.any_before === true,
+    seen: new Set(Array.isArray(data?.seen) ? data.seen.map(String) : []),
+  };
+}
+
 /**
  * Signal candidates for the platforms that started sending AI visits this
  * week. Best effort: a failed read costs this finding for the night, never
@@ -87,10 +106,14 @@ async function merged(brandId, from, to) {
 export async function newAiPlatformCandidates(brandId, { now = new Date() } = {}) {
   try {
     const weekStart = utcMidnight(now, 7);
-    const [week, before] = await Promise.all([
-      merged(brandId, weekStart, utcMidnight(now, 0)),
-      merged(brandId, null, weekStart),
-    ]);
+    const week = await merged(brandId, weekStart, utcMidnight(now, 0));
+    const candidates = weekCandidates(week);
+    if (candidates.length === 0) return [];
+    const before = await platformsSeen(
+      brandId,
+      weekStart,
+      candidates.map((p) => p.platform),
+    );
     const analytics = analyticsDayCount(week.analytics_days) > 0;
     return newPlatforms(week, before).map((p) => ({
       kind: 'ai_platform_new',

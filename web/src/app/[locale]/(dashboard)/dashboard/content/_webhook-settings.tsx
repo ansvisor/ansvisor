@@ -10,11 +10,20 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { getWebhookConfig, saveWebhookConfig, testWebhook } from '@/lib/actions/content';
 import { toast } from 'sonner';
+
+const WEBHOOK_EVENTS = [
+  { value: 'opportunity.sent', label: 'eventOpportunitySent' },
+  { value: 'daily_pulse.created', label: 'eventDailyPulseCreated' },
+  { value: 'action_task.sent', label: 'eventActionTaskSent' },
+] as const;
+
+const DEFAULT_WEBHOOK_EVENTS = WEBHOOK_EVENTS.map(({ value }) => value);
 
 interface WebhookSettingsDialogProps {
   open: boolean;
@@ -28,6 +37,7 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
   const [url, setUrl] = useState('');
   const [secret, setSecret] = useState('');
   const [isActive, setIsActive] = useState(true);
+  const [events, setEvents] = useState<string[]>([...DEFAULT_WEBHOOK_EVENTS]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -46,6 +56,12 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
             setUrl(config.webhookUrl);
             setSecret(config.webhookSecret || '');
             setIsActive(config.isActive);
+            setEvents(config.events ?? [...DEFAULT_WEBHOOK_EVENTS]);
+          } else {
+            setUrl('');
+            setSecret('');
+            setIsActive(true);
+            setEvents([...DEFAULT_WEBHOOK_EVENTS]);
           }
         })
         .catch(console.error)
@@ -58,11 +74,16 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
       toast.error(t('urlRequired'));
       return;
     }
+    if (events.length === 0) {
+      toast.error(t('eventRequired'));
+      return;
+    }
     setSaving(true);
     try {
       await saveWebhookConfig(brandId, {
         webhookUrl: url.trim(),
         webhookSecret: secret.trim() || undefined,
+        events,
         isActive,
       });
       toast.success(t('saved'));
@@ -133,6 +154,39 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
                 onChange={(e) => setSecret(e.target.value)}
               />
             </div>
+
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">{t('eventsTitle')}</legend>
+              <p className="text-xs text-muted-foreground">{t('eventsDescription')}</p>
+              <div className="space-y-2 rounded-md border p-3">
+                {WEBHOOK_EVENTS.map((eventOption) => (
+                  <div key={eventOption.value} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`webhook-event-${eventOption.value}`}
+                      checked={events.includes(eventOption.value)}
+                      onCheckedChange={(checked) =>
+                        setEvents((current) =>
+                          checked === true
+                            ? Array.from(new Set([...current, eventOption.value]))
+                            : current.filter((value) => value !== eventOption.value),
+                        )
+                      }
+                    />
+                    <Label
+                      htmlFor={`webhook-event-${eventOption.value}`}
+                      className="cursor-pointer font-normal"
+                    >
+                      {t(eventOption.label)}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+              {events.length === 0 && (
+                <p className="text-xs text-destructive" role="alert">
+                  {t('eventRequired')}
+                </p>
+              )}
+            </fieldset>
 
             <div className="flex items-center gap-2">
               <button

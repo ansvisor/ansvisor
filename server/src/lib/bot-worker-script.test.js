@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AI_BOTS } from './ai-bots.js';
-import { WORKER_BATCH, buildWorkerScript } from './bot-worker-script.js';
+import { WORKER_BATCH, WORKER_SECRET_NAME, buildWorkerScript } from './bot-worker-script.js';
 
 // The Worker runtime's fetch types, which Node also has.
 const { Request, Response } = globalThis;
@@ -11,10 +11,7 @@ const { Request, Response } = globalThis;
  */
 
 async function loadWorker() {
-  const script = buildWorkerScript({
-    endpoint: 'https://api.example/bots/ingest',
-    secret: 'abot_secret',
-  });
+  const script = buildWorkerScript({ endpoint: 'https://api.example/bots/ingest' });
   const mod = await import(`data:text/javascript,${encodeURIComponent(script)}`);
   return { script, worker: mod.default };
 }
@@ -47,9 +44,10 @@ describe('buildWorkerScript', () => {
     const waits = [];
     const ctx = { waitUntil: (p) => waits.push(p), passThroughOnException: vi.fn() };
 
+    const env = { [WORKER_SECRET_NAME]: 'abot_secret' };
     const human = await worker.fetch(
       new Request('https://acme.example/', { headers: { 'user-agent': 'Mozilla/5.0 Chrome/129' } }),
-      {},
+      env,
       ctx,
     );
     expect(await human.text()).toBe('page');
@@ -65,7 +63,7 @@ describe('buildWorkerScript', () => {
             'cf-connecting-ip': '20.171.206.9',
           },
         }),
-        {},
+        env,
         ctx,
       );
     }
@@ -81,5 +79,33 @@ describe('buildWorkerScript', () => {
       url: 'https://acme.example/menu',
       status: 200,
     });
+  });
+
+  // gkhngyk on #1179: the secret sat in the Worker's source.
+  it('reads the secret from a Worker Secret, never from its code', async () => {
+    const { script } = await loadWorker();
+    expect(script).not.toContain('abot_');
+    expect(script).toContain(`env.${WORKER_SECRET_NAME}`);
+  });
+
+  it('reports nothing until the Secret is added, and still serves the page', async () => {
+    const posted = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input) => {
+        if (typeof input === 'string' && input.endsWith('/bots/ingest')) posted();
+        return new Response('page', { status: 200 });
+      }),
+    );
+    const { worker } = await loadWorker();
+    const waits = [];
+    const ctx = { waitUntil: (p) => waits.push(p), passThroughOnException: vi.fn() };
+    const bot = new Request('https://acme.example/menu', {
+      headers: { 'user-agent': 'Mozilla/5.0; compatible; GPTBot/1.2' },
+    });
+    const response = await worker.fetch(bot, {}, ctx);
+    expect(await response.text()).toBe('page');
+    expect(waits).toHaveLength(0);
+    expect(posted).not.toHaveBeenCalled();
   });
 });

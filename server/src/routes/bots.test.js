@@ -125,8 +125,10 @@ describe('AI bot connections', () => {
     expect(body.secret).toMatch(/^abot_/);
     // The API's public address, not the Host the web server reached it on.
     expect(body.endpoint).toBe('https://api.example.com/bots/ingest');
-    expect(body.workerScript).toContain(body.secret);
+    // The Worker reads the secret from a Worker Secret, so its code doesn't hold it.
+    expect(body.workerScript).not.toContain(body.secret);
     expect(body.workerScript).toContain(body.endpoint);
+    expect(body.workerSecretName).toBe('ANSVISOR_BOT_SECRET');
     expect(inserted[0]).toMatchObject({
       brand_id: 'b1',
       kind: 'cloudflare_worker',
@@ -137,6 +139,7 @@ describe('AI bot connections', () => {
 
     const drain = await (await create({ kind: 'vercel_drain' })).json();
     expect(drain.workerScript).toBeNull();
+    expect(drain.workerSecretName).toBeNull();
     expect(drain.vercelDrain.headers).toEqual([`Authorization: Bearer ${drain.secret}`]);
 
     const logpush = await (await create({ kind: 'cloudflare_logpush' })).json();
