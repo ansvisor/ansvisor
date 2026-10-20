@@ -1383,6 +1383,112 @@
         }
       }
     },
+    "gettingStarted": {
+      "category": "Getting started",
+      "card": {
+        "title": "Getting started",
+        "value": "{done} / {total}",
+        "sub": "steps done · at your own pace"
+      },
+      "firstSignals": "Start with your first signals",
+      "note": "AI actions start here as soon as your first signals appear. Usually within a few days.",
+      "table": {
+        "stage": "Stage",
+        "ready": "Ready"
+      },
+      "stages": {
+        "setup": "Set up",
+        "explore": "Explore",
+        "act": "Act",
+        "ready": "Ready"
+      },
+      "status": {
+        "new": "New",
+        "done": "Done",
+        "waiting": "Waiting for data",
+        "skipped": "Skipped"
+      },
+      "optional": "Optional",
+      "everyone": "Everyone in the workspace",
+      "readyWhen": {
+        "setup": "Now",
+        "explore": "First answers · ~3h",
+        "dataPrompts": "24h after Search Console or Analytics",
+        "act": "Suggestions · ~24h",
+        "ready": "After the steps above"
+      },
+      "opensWhenReady": "Opens when its data is ready: {when}",
+      "steps": {
+        "kpis": {
+          "title": "Set your KPIs",
+          "summary": "Pick 3–5 goals. We track them for you."
+        },
+        "competitors": {
+          "title": "Add at least 3 competitors",
+          "summary": "Works best with 5–20 competitors."
+        },
+        "topics": {
+          "title": "Add at least 3 topics",
+          "summary": "Pick from topic suggestions."
+        },
+        "prompts": {
+          "title": "Add 3 prompts per topic",
+          "summary": "Pick from prompt suggestions."
+        },
+        "gsc": {
+          "title": "Connect Google Search Console",
+          "summary": "Strongly recommended."
+        },
+        "ga": {
+          "title": "Connect Google Analytics",
+          "summary": "See which AI visits engage and convert."
+        },
+        "snippet": {
+          "title": "Add the AI Traffic snippet",
+          "summary": "One line in your site’s head."
+        },
+        "visibility": {
+          "title": "See where you stand in Visibility",
+          "summary": "Your share of AI answers vs competitors."
+        },
+        "answers": {
+          "title": "Read your first AI answers",
+          "summary": "Answers and follow-up searches, per prompt."
+        },
+        "data_prompts": {
+          "title": "Track high-value prompt suggestions",
+          "summary": "Built from your Search Console and Analytics data."
+        },
+        "mentions": {
+          "title": "Check what AI says about you",
+          "summary": "Mentions and tone."
+        },
+        "citations": {
+          "title": "See who AI quotes",
+          "summary": "The pages and sites AI uses as sources."
+        },
+        "traffic": {
+          "title": "See visits from AI",
+          "summary": "Which platforms send visitors, to which pages."
+        },
+        "pick_content": {
+          "title": "Pick content from suggestions",
+          "summary": "Choose 1–3 suggestions."
+        },
+        "create_content": {
+          "title": "Create your first content",
+          "summary": "Draft in your brand voice, then publish."
+        },
+        "optimize_page": {
+          "title": "Optimize a page",
+          "summary": "Audit a page, then apply its fixes."
+        },
+        "ready": {
+          "title": "You’re ready",
+          "summary": "AI actions start appearing here."
+        }
+      }
+    },
     "actionTexts": {
       "recover_visibility": {
         "title": "Recover visibility across {targets}",
