@@ -6,16 +6,10 @@ import { Link, usePathname } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { getNewSignalCount } from '@/lib/actions/signals';
 import { cn } from '@/lib/utils';
-
-const TABS = [
-  { key: 'kpis', href: '/dashboard/action-center/kpis' },
-  { key: 'actions', href: '/dashboard/action-center/actions' },
-  { key: 'signals', href: '/dashboard/action-center/signals' },
-  { key: 'history', href: '/dashboard/action-center/history' },
-] as const;
+import { ACTION_CENTER_TABS } from '@/lib/action-center/tabs';
 
 /**
- * The Action Center's section nav: KPIs | Actions | Signals | History.
+ * The Action Center's section nav: Actions | Signals | KPIs | History.
  * Route-backed rather than state-backed tabs so each section is linkable
  * and the browser back button works across them.
  */
@@ -42,7 +36,7 @@ export function ActionCenterTabs() {
 
   return (
     <nav className="flex gap-6 border-b" aria-label={t('label')}>
-      {TABS.map((tab) => {
+      {ACTION_CENTER_TABS.map((tab) => {
         const isActive = pathname.startsWith(tab.href);
         return (
           <Link

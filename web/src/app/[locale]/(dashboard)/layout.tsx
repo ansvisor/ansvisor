@@ -12,6 +12,7 @@ import { getBrands } from '@/lib/actions/brand';
 import { getPlan, isCloud, type PlanId } from '@/config/plans';
 import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
 import { SubscriptionExpiredNotice } from '@/components/billing/subscription-expired-notice';
+import { TrackingJobHandoff } from '@/components/layout/tracking-job-handoff';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -101,6 +102,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               <main className="flex-1 overflow-y-auto bg-background p-6">
                 <BrandGuard>{children}</BrandGuard>
               </main>
+              <TrackingJobHandoff />
             </div>
           </div>
         </RoleProvider>

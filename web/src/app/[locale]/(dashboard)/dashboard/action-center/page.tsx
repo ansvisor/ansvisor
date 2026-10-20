@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation';
+import { DASHBOARD_HOME } from '@/config/home';
 
+// Actions is the Action Center's first tab.
 export default function ActionCenterPage() {
-  redirect('/dashboard/action-center/kpis');
+  redirect(DASHBOARD_HOME);
 }
