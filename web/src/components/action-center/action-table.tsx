@@ -104,7 +104,7 @@ export function ActionIcon({
 
 export const ACTION_STATUS_BADGE: Record<ActionStatus, string> = {
   new: 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400',
-  in_progress: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
+  in_progress: 'border-teal-500/30 bg-teal-500/10 text-teal-700 dark:text-teal-400',
   completed: 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400',
   on_hold: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
   dismissed: 'border-border bg-muted/50 text-muted-foreground',
@@ -158,7 +158,16 @@ export function PriorityBadge({
 }
 
 export function AssigneeAvatar({ assignee }: { assignee: ActionItem['assignee'] }) {
-  if (!assignee) return <span className="text-xs text-muted-foreground">—</span>;
+  const t = useTranslations('actionCenter.actionsPage');
+  // New Ansvisor (AC-ALT2): an action with no one on it is the whole
+  // workspace's, until someone takes it.
+  if (!assignee) {
+    return (
+      <span className="text-xs text-muted-foreground" title={t('everyoneTitle')}>
+        {t('everyone')}
+      </span>
+    );
+  }
   // Named as the assignee picker names them: by e-mail when there's no name.
   const label = assigneeLabel(assignee);
   const initials = (label && labelInitials(label)) || '?';

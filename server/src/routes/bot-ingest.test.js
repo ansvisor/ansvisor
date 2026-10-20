@@ -5,21 +5,19 @@ import express from 'express';
 /**
  * POST /bots/ingest (AT-010): a connection's secret, then its body read by
  * kind — a Worker's batch, a Vercel drain's entries or a Logpush file — with
- * log senders' records counted against the raw cap first.
+ * a log sender's file written in one step (claim, raw count, events).
  */
 
 const connectionForSecret = vi.fn();
 const ingestBotRequests = vi.fn();
-const countRawRecords = vi.fn();
-const claimLogFile = vi.fn();
-const releaseLogFile = vi.fn();
+const ingestLogFile = vi.fn();
+const logFileRead = vi.fn();
 vi.mock('../lib/bot-ingest.js', () => ({
-  MAX_BATCH: 500,
   connectionForSecret: (...a) => connectionForSecret(...a),
   ingestBotRequests: (...a) => ingestBotRequests(...a),
-  countRawRecords: (...a) => countRawRecords(...a),
-  claimLogFile: (...a) => claimLogFile(...a),
-  releaseLogFile: (...a) => releaseLogFile(...a),
+  ingestLogFile: (...a) => ingestLogFile(...a),
+  logFileHash: () => 'hash-1',
+  logFileRead: (...a) => logFileRead(...a),
 }));
 vi.mock('../lib/logger.js', () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
 vi.mock('../lib/plan-guard.js', () => ({
@@ -33,18 +31,20 @@ vi.mock('../lib/plan-guard.js', () => ({
 
 const { default: router } = await import('./bot-ingest.js');
 const { PlanLimitError } = await import('../lib/plan-guard.js');
+const { botIngestKey } = await import('../middleware/rate-limiter.js');
+const { clearVerifiedTokens } = await import('../middleware/verified-tokens.js');
 
 let server;
 let url;
 
 beforeEach(async () => {
+  clearVerifiedTokens();
   connectionForSecret.mockReset();
   ingestBotRequests
     .mockReset()
     .mockResolvedValue({ received: 0, verified: 0, stored: 0, skipped: {} });
-  countRawRecords.mockReset().mockResolvedValue({ allowed: true });
-  claimLogFile.mockReset().mockResolvedValue('hash-1');
-  releaseLogFile.mockReset().mockResolvedValue(undefined);
+  ingestLogFile.mockReset().mockResolvedValue({ received: 0, verified: 0, stored: 0, skipped: {} });
+  logFileRead.mockReset().mockResolvedValue(false);
   const app = express();
   app.use(router);
   await new Promise((resolve) => {
@@ -75,15 +75,14 @@ describe('POST /bots/ingest', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ stored: 1, records: 1 });
     expect(connectionForSecret).toHaveBeenCalledWith('abot_x');
-    expect(ingestBotRequests).toHaveBeenCalledWith(
-      connection,
-      [{ userAgent: 'GPTBot', ip: '1.2.3.4', url: '/' }],
-      { limit: 500 },
-    );
-    expect(countRawRecords).not.toHaveBeenCalled();
+    expect(ingestBotRequests).toHaveBeenCalledWith(connection, [
+      { userAgent: 'GPTBot', ip: '1.2.3.4', url: '/' },
+    ]);
+    expect(ingestLogFile).not.toHaveBeenCalled();
+    expect(logFileRead).not.toHaveBeenCalled();
   });
 
-  it("reads a Vercel drain's entries after counting them against the raw cap", async () => {
+  it("reads a Vercel drain's entries as one file, keyed by its body", async () => {
     const connection = { id: 'c2', organizationId: 'o1', kind: 'vercel_drain' };
     connectionForSecret.mockResolvedValue(connection);
     const entries = [
@@ -102,18 +101,18 @@ describe('POST /bots/ingest', () => {
     const res = await post('abot_x', entries);
     expect(res.status).toBe(200);
     expect((await res.json()).records).toBe(2);
-    expect(countRawRecords).toHaveBeenCalledWith(connection, 2);
-    expect(ingestBotRequests.mock.calls[0][1]).toHaveLength(1);
-    expect(ingestBotRequests.mock.calls[0][2]).toEqual({ limit: Infinity });
-
-    countRawRecords.mockResolvedValue({ allowed: false });
-    ingestBotRequests.mockClear();
-    const capped = await post('abot_x', entries);
-    expect(await capped.json()).toMatchObject({ received: 2, stored: 0, rawCapped: true });
+    const [conn, hash, parsed] = ingestLogFile.mock.calls[0];
+    expect(conn).toBe(connection);
+    expect(hash).toBe('hash-1');
+    expect(parsed.records).toBe(2);
+    expect(parsed.requests).toHaveLength(1);
     expect(ingestBotRequests).not.toHaveBeenCalled();
 
-    countRawRecords.mockResolvedValue({ allowed: false, locked: true });
-    expect(await (await post('abot_x', entries)).json()).toMatchObject({ locked: true });
+    // A capped or locked file is answered with 200, so the sender doesn't retry it.
+    ingestLogFile.mockResolvedValue({ received: 2, verified: 0, stored: 0, rawCapped: true });
+    const capped = await post('abot_x', entries);
+    expect(capped.status).toBe(200);
+    expect(await capped.json()).toMatchObject({ received: 2, stored: 0, rawCapped: true });
   });
 
   it("opens a Logpush job's gzipped file, and refuses an unreadable one", async () => {
@@ -128,7 +127,7 @@ describe('POST /bots/ingest', () => {
       body: gzipSync('{"content":"tests"}'),
     });
     expect(ok.status).toBe(200);
-    expect(countRawRecords).toHaveBeenCalledWith(expect.objectContaining({ id: 'c3' }), 1);
+    expect(ingestLogFile.mock.calls[0][2].records).toBe(1);
 
     const bad = await fetch(url, {
       method: 'POST',
@@ -138,26 +137,22 @@ describe('POST /bots/ingest', () => {
     expect(bad.status).toBe(400);
   });
 
-  it('reads a log file once: a resent one is answered without reading it', async () => {
+  it('reads a log file once: a resent one is answered without opening it', async () => {
     const connection = { id: 'c2', organizationId: 'o1', kind: 'vercel_drain' };
     connectionForSecret.mockResolvedValue(connection);
     const entries = [{ source: 'build', message: 'done' }];
-    expect((await post('abot_x', entries)).status).toBe(200);
-    expect(claimLogFile).toHaveBeenCalledWith(connection, expect.any(Buffer));
-    expect(releaseLogFile).not.toHaveBeenCalled();
-
-    claimLogFile.mockResolvedValue(null);
-    countRawRecords.mockClear();
+    logFileRead.mockResolvedValue(true);
     const again = await post('abot_x', entries);
     expect(again.status).toBe(200);
     expect(await again.json()).toMatchObject({ duplicate: true, stored: 0 });
-    expect(countRawRecords).not.toHaveBeenCalled();
+    expect(logFileRead).toHaveBeenCalledWith(connection, 'hash-1');
+    expect(ingestLogFile).not.toHaveBeenCalled();
   });
 
-  it('gives the claim back when the read fails, so the retry is read', async () => {
+  it('answers 500 when the write fails, leaving nothing for the retry to count twice', async () => {
     const connection = { id: 'c2', organizationId: 'o1', kind: 'vercel_drain' };
     connectionForSecret.mockResolvedValue(connection);
-    ingestBotRequests.mockRejectedValue(new Error('database down'));
+    ingestLogFile.mockRejectedValue(new Error('database down'));
     const entries = [
       {
         proxy: {
@@ -171,7 +166,8 @@ describe('POST /bots/ingest', () => {
       },
     ];
     expect((await post('abot_x', entries)).status).toBe(500);
-    expect(releaseLogFile).toHaveBeenCalledWith(connection, 'hash-1');
+    // The claim, count and events were one transaction: nothing to give back.
+    expect(ingestLogFile).toHaveBeenCalledTimes(1);
   });
 
   it('answers 413 for a file past the line limit, without reading it', async () => {
@@ -186,17 +182,45 @@ describe('POST /bots/ingest', () => {
       body: gzipSync(Array.from({ length: 20_001 }, () => '{}').join('\n')),
     });
     expect(res.status).toBe(413);
-    expect(countRawRecords).not.toHaveBeenCalled();
-    expect(releaseLogFile).toHaveBeenCalled();
+    expect(ingestLogFile).not.toHaveBeenCalled();
   });
 
   it('refuses an unknown secret, and an organization without a subscription', async () => {
     connectionForSecret.mockResolvedValue(null);
     expect((await post('abot_bad', { requests: [] })).status).toBe(401);
     expect(ingestBotRequests).not.toHaveBeenCalled();
+    // A made-up secret earns no bucket of its own.
+    expect(botIngestKey({ headers: { authorization: 'Bearer abot_bad' }, ip: '1.1.1.1' })).toBe(
+      'ip:1.1.1.1',
+    );
 
     connectionForSecret.mockResolvedValue({ id: 'c1', kind: 'cloudflare_worker' });
     ingestBotRequests.mockRejectedValue(new PlanLimitError('choose a plan', 402));
     expect((await post('abot_x', { requests: [] })).status).toBe(402);
+  });
+
+  it("checks the secret before reading the body: an unknown one gets 401, not the body's 413", async () => {
+    connectionForSecret.mockResolvedValue(null);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer abot_bad' },
+      body: Buffer.alloc(21 * 1024 * 1024),
+    });
+    expect(res.status).toBe(401);
+    expect(logFileRead).not.toHaveBeenCalled();
+  });
+
+  it("gives a matched secret its connection's bucket for the next requests", async () => {
+    connectionForSecret.mockResolvedValue({ id: 'c1', kind: 'cloudflare_worker' });
+    const req = { headers: { authorization: 'Bearer abot_x' }, ip: '1.1.1.1' };
+    expect(botIngestKey(req)).toBe('ip:1.1.1.1');
+    expect((await post('abot_x', { requests: [] })).status).toBe(200);
+    expect(botIngestKey(req)).toBe('bot:c1');
+  });
+
+  it('answers 500 when the secret lookup fails, without reading the body', async () => {
+    connectionForSecret.mockRejectedValue(new Error('database down'));
+    expect((await post('abot_x', { requests: [] })).status).toBe(500);
+    expect(ingestBotRequests).not.toHaveBeenCalled();
   });
 });

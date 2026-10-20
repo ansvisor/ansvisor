@@ -1,6 +1,5 @@
-import { createHash } from 'node:crypto';
 import rateLimit from 'express-rate-limit';
-import { verifiedUserId } from './verified-tokens.js';
+import { verifiedBotConnection, verifiedUserId } from './verified-tokens.js';
 
 /**
  * Anonymous bucket key. IPv4 (including v4-mapped IPv6) keys on the exact
@@ -79,14 +78,17 @@ export const trafficLimiter = rateLimit({
 });
 
 /**
- * AI-bot ingest key (AT-010): the connection, by its secret's hash, since a
- * Cloudflare Worker's requests leave from addresses Cloudflare shares across
- * its customers. Without a secret, the caller's IP.
+ * AI-bot ingest key (AT-010): the connection, since a Cloudflare Worker's
+ * requests leave from addresses Cloudflare shares across its customers. Only
+ * a secret the route has already matched to a live connection
+ * (verified-tokens.js) earns that bucket: an unknown one, or none, counts
+ * against the caller's IP, so a flood of made-up secrets can't take a fresh
+ * bucket, and a lookup, per request.
  */
 export function botIngestKey(req) {
-  const secret = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  if (!secret) return anonymousIpKey(req.ip);
-  return 'bot:' + createHash('sha256').update(secret).digest('hex');
+  const connectionId = verifiedBotConnection(req.headers.authorization);
+  if (connectionId) return 'bot:' + connectionId;
+  return anonymousIpKey(req.ip);
 }
 
 // AI-bot ingest: 600 requests a minute per connection. A Worker isolate
