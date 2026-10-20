@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { apiLimiterKey, botIngestKey } from './rate-limiter.js';
+import { apiLimiterKey, botIngestKey, webhookCallbackKey } from './rate-limiter.js';
 import { markTokenVerified, clearVerifiedTokens } from './verified-tokens.js';
 
 function reqWith({ authorization, ip = '203.0.113.7' } = {}) {
@@ -74,5 +74,24 @@ describe('rate-limiter – botIngestKey', () => {
 
   it('falls back to the IP without a secret', () => {
     expect(botIngestKey(reqWith({ ip: '1.1.1.1' }))).toBe('ip:1.1.1.1');
+  });
+});
+
+describe('rate-limiter – webhookCallbackKey', () => {
+  it('buckets callbacks by the secret hash across shared provider IPs', () => {
+    const a = webhookCallbackKey({ headers: { 'x-webhook-secret': 'shared-one' }, ip: '1.1.1.1' });
+    const b = webhookCallbackKey({ headers: { 'x-webhook-secret': 'shared-one' }, ip: '2.2.2.2' });
+    const other = webhookCallbackKey({
+      headers: { 'x-webhook-secret': 'shared-two' },
+      ip: '1.1.1.1',
+    });
+    expect(a).toBe(b);
+    expect(a).not.toBe(other);
+    expect(a).toMatch(/^webhook:[0-9a-f]{64}$/);
+    expect(a).not.toContain('shared-one');
+  });
+
+  it('falls back to the anonymous IP bucket when the secret is missing', () => {
+    expect(webhookCallbackKey({ headers: {}, ip: '1.1.1.1' })).toBe('ip:1.1.1.1');
   });
 });
