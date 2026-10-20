@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import { verifiedBotConnection, verifiedUserId } from './verified-tokens.js';
 
@@ -90,6 +91,44 @@ export function botIngestKey(req) {
   if (connectionId) return 'bot:' + connectionId;
   return anonymousIpKey(req.ip);
 }
+
+/**
+ * Group public workflow callbacks by a hash of the supplied webhook secret,
+ * not the provider's shared egress IP. Missing secrets fall back to IP; a
+ * separate failed-auth limiter below keeps brute-force attempts constrained.
+ */
+export function webhookCallbackKey(req) {
+  const header = req.get?.('X-Webhook-Secret') ?? req.headers?.['x-webhook-secret'];
+  const secret = typeof header === 'string' ? header : '';
+  if (!secret) return anonymousIpKey(req.ip);
+  return 'webhook:' + createHash('sha256').update(secret).digest('hex');
+}
+
+// Workflow providers share egress IP pools and may fan out multiple callbacks
+// per opportunity. Give each configured webhook its own generous 15-minute
+// budget, independent of all other customers using the same provider IP.
+export const webhookCallbackLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1200,
+  keyGenerator: webhookCallbackKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'rate_limited' },
+});
+
+// Only failed authentication attempts (401) consume this small per-IP bucket.
+// Valid callbacks and unrelated 4xx/5xx responses are removed from the counter
+// after the response finishes.
+export const webhookCallbackAuthFailureLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  keyGenerator: (req) => anonymousIpKey(req.ip),
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (_req, res) => res.statusCode !== 401,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'too_many_failed_webhook_auth_attempts' },
+});
 
 // AI-bot ingest: 600 requests a minute per connection. A Worker isolate
 // sends a batch about every 10 s, and a Logpush job or drain a file at a

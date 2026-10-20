@@ -37,6 +37,7 @@ import {
   DateRangeFilter,
   type DateRangePreset,
 } from '@/components/filters/date-range-filter';
+import { getDateRange } from '@/lib/date-range';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -160,45 +161,6 @@ const INSIGHT_EXPORT_HEADERS = [
   'citation_urls',
   'competitor_mentions',
 ];
-
-/**
- * Every preset except 24h describes whole UTC calendar days, carried in
- * `days` — that is what lets the aggregate actions answer from the daily
- * rollup tables (00066) instead of rescanning the brand's history. The
- * timestamp fields are kept in step for the paths that still take
- * timestamps (CSV export, topic-filtered raw fallbacks), so both paths
- * describe the same window.
- *
- * A preset window is the trailing N calendar days ending today: numbers
- * move when a tracking run completes, not continuously as the clock's
- * trailing edge slides. 24h keeps its rolling window — it is anchored to
- * the last completed run downstream and stays on the raw path.
- */
-function getDateRange(
-  preset: DatePreset,
-  custom: { from: string; to: string },
-): { dateFrom?: string; dateTo?: string; days?: { dayFrom?: string; dayTo?: string } } {
-  if (preset === 'all') return { dateFrom: undefined, dateTo: undefined, days: {} };
-  if (preset === 'custom') {
-    return {
-      dateFrom: custom.from ? `${custom.from}T00:00:00.000Z` : undefined,
-      dateTo: custom.to ? `${custom.to}T23:59:59.999Z` : undefined,
-      days: { dayFrom: custom.from || undefined, dayTo: custom.to || undefined },
-    };
-  }
-  if (preset === '24h') {
-    const from = new Date();
-    from.setHours(from.getHours() - 24);
-    return { dateFrom: from.toISOString(), dateTo: undefined };
-  }
-  const days = preset === '7d' ? 7 : preset === '30d' ? 30 : 90;
-  const to = new Date();
-  const from = new Date(to);
-  from.setUTCDate(from.getUTCDate() - (days - 1));
-  const dayFrom = from.toISOString().slice(0, 10);
-  const dayTo = to.toISOString().slice(0, 10);
-  return { dateFrom: `${dayFrom}T00:00:00.000Z`, dateTo: undefined, days: { dayFrom, dayTo } };
-}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
