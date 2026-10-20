@@ -26,7 +26,7 @@ import { loadClusters } from '../lib/prompt-clusters.js';
 import { sendToActionCenter } from '../lib/action-center/from-opportunity.js';
 import { IDEA_MAX_LENGTH } from '../lib/opportunity-generator.js';
 import { cleanStoredOpportunity } from '../lib/opportunity-text.js';
-import { sourceDataForStatus } from '../lib/opportunity-status.js';
+import { sourceDataForStatus, VALID_OPPORTUNITY_STATUSES } from '../lib/opportunity-status.js';
 import {
   openOpportunityForPrompt,
   promptClusterId,
@@ -750,7 +750,7 @@ router.post('/bulk/status', async (req, res) => {
       return res.status(400).json({ error: 'ids must be a non-empty array' });
     }
 
-    const validStatuses = ['new', 'reviewed', 'sent', 'in_progress', 'done', 'dismissed'];
+    const validStatuses = VALID_OPPORTUNITY_STATUSES;
     if (!validStatuses.includes(status)) {
       return res
         .status(400)
@@ -911,7 +911,8 @@ router.post('/bulk/send-webhook', async (req, res) => {
             domain: domains?.[0]?.domain || '',
             industry: brand?.industry || '',
           },
-          callback_url: `${serverUrl}/api/content/${opportunity.id}/status`,
+          callback_url: `${serverUrl}/webhooks/content/${opportunity.id}/status`,
+          callback_method: 'POST',
         };
 
         const webhookRes = await fetch(webhookConfig.webhook_url, {
@@ -961,7 +962,7 @@ router.patch('/:id/status', async (req, res) => {
     const { id } = req.params;
     const { status, reason } = req.body;
 
-    const validStatuses = ['new', 'reviewed', 'sent', 'in_progress', 'done', 'dismissed'];
+    const validStatuses = VALID_OPPORTUNITY_STATUSES;
     if (!validStatuses.includes(status)) {
       return res
         .status(400)
@@ -1081,7 +1082,8 @@ router.post('/:id/send-webhook', async (req, res) => {
         domain: domains?.[0]?.domain || '',
         industry: brand?.industry || '',
       },
-      callback_url: `${serverUrl}/api/content/${opportunity.id}/status`,
+      callback_url: `${serverUrl}/webhooks/content/${opportunity.id}/status`,
+      callback_method: 'POST',
     };
 
     const headers = { 'Content-Type': 'application/json' };
