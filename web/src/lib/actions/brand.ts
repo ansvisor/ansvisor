@@ -8,6 +8,7 @@ import { slugify } from '@/lib/slug';
 import { API_BASE_URL } from '@/config/api';
 import type { Brand, BrandDomain, Industry } from '@/types';
 import { MAX_PINNED_COMPETITORS } from '@/lib/insights-trend';
+import { isSiteType, type SiteType } from '@/lib/content/page-types';
 
 function mapDomainRow(d: Record<string, unknown>): BrandDomain {
   return {
@@ -33,6 +34,7 @@ function mapBrandRow(brand: Record<string, unknown>, domains: Record<string, unk
     language: (brand.language as string | null) ?? undefined,
     trackingCode: (brand.tracking_code as string | null) ?? undefined,
     shoppingModeEnabled: !!brand.shopping_mode_enabled,
+    siteType: (brand.site_type as string | null) ?? undefined,
     isActive: brand.is_active === undefined ? true : !!brand.is_active,
     domains: domains.map(mapDomainRow),
     createdAt: brand.created_at as string,
@@ -162,6 +164,8 @@ interface UpdateBrandInput {
   region?: string;
   state?: string | null;
   language?: string;
+  /** The kind of site, for the Content Editor's page types (CE-023). */
+  siteType?: SiteType | null;
 }
 
 export async function updateBrand(id: string, updates: UpdateBrandInput): Promise<Brand> {
@@ -180,6 +184,12 @@ export async function updateBrand(id: string, updates: UpdateBrandInput): Promis
   // A region change away from US invalidates any stored state.
   if (updates.region !== undefined && updates.region !== 'US') payload.state = null;
   if (updates.language !== undefined) payload.language = updates.language;
+  if ('siteType' in updates) {
+    if (updates.siteType != null && !isSiteType(updates.siteType)) {
+      throw new Error('Unknown site type');
+    }
+    payload.site_type = updates.siteType ?? null;
+  }
 
   const { data, error } = await supabase
     .from('brands')

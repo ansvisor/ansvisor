@@ -5,12 +5,15 @@ import { createClient } from '@/lib/supabase/server';
 import { readAssignees } from '@/lib/action-center/assignees';
 import {
   DRAFT_STATUSES,
+  PAGE_TYPES,
   type ContentDraft,
   type ContentDraftListItem,
   type DraftMethod,
   type DraftStatus,
+  type PageType,
 } from '@/lib/content/drafts';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
+import { detectPageType, siteTypeOf, type SiteType } from '@/lib/content/page-types';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 
 /**
@@ -68,13 +71,32 @@ function draftStatus(value: string): DraftStatus {
 
 const draftId = z.guid();
 
+/** What a draft row embeds of its brand: enough to know its site type. */
+const BRAND_SITE = 'brands(site_type, industry, shopping_mode_enabled)';
+
+function brandSiteType(
+  brand: {
+    site_type: string | null;
+    industry: string | null;
+    shopping_mode_enabled: boolean;
+  } | null,
+): SiteType {
+  return siteTypeOf({
+    siteType: brand?.site_type,
+    industry: brand?.industry,
+    shoppingModeEnabled: brand?.shopping_mode_enabled,
+  });
+}
+
 /** One draft for the editor (CE-004), or null when it isn't the member's to read. */
 export async function getContentDraft(id: string): Promise<ContentDraft | null> {
   if (!draftId.safeParse(id).success) return null;
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_drafts')
-    .select('id, brand_id, title, page_type, method, status, body_html, author, updated_at')
+    .select(
+      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, updated_at, ${BRAND_SITE}`,
+    )
     .eq('id', id)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -84,6 +106,8 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     brandId: data.brand_id,
     title: data.title,
     pageType: data.page_type,
+    pageTypeSource: data.page_type_source === 'user' ? 'user' : 'detected',
+    siteType: brandSiteType(data.brands),
     method: data.method as DraftMethod,
     status: draftStatus(data.status),
     bodyHtml: data.body_html,
@@ -122,6 +146,10 @@ const saveInput = z.object({
  * again (sanitizeDraftHtml), and the title read from it. Throws
  * 'not_found' when no row changed (another organization's draft, or one that
  * no longer exists), so a save RLS refused isn't reported as saved.
+ *
+ * Until a person picks the page type, it follows the page (CE-023): detected
+ * again from what was saved, and written only while it is still detected, so
+ * a pick made meanwhile stays.
  */
 export async function saveContentDraft(
   id: string,
@@ -130,15 +158,53 @@ export async function saveContentDraft(
   const parsed = saveInput.safeParse(input);
   if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
   const supabase = await createClient();
+  const bodyHtml = sanitizeDraftHtml(parsed.data.bodyHtml);
   const { data, error } = await supabase
     .from('content_drafts')
-    .update({ title: parsed.data.title, body_html: sanitizeDraftHtml(parsed.data.bodyHtml) })
+    .update({ title: parsed.data.title, body_html: bodyHtml })
     .eq('id', id)
-    .select('updated_at')
+    .select(`updated_at, page_type, page_type_source, ${BRAND_SITE}`)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error('not_found');
+
+  if (data.page_type_source === 'detected') {
+    const detected = detectPageType(
+      { title: parsed.data.title, html: bodyHtml },
+      brandSiteType(data.brands),
+    );
+    if (detected !== data.page_type) {
+      const { error: typeError } = await supabase
+        .from('content_drafts')
+        .update({ page_type: detected })
+        .eq('id', id)
+        .eq('page_type_source', 'detected');
+      // The page is saved; its type catches up on the next save.
+      if (typeError) console.error('Failed to update the detected page type:', typeError.message);
+    }
+  }
   return { updatedAt: data.updated_at };
+}
+
+const pageTypeInput = z.enum(PAGE_TYPES);
+
+/**
+ * A page type the person picked (CE-023): from now on the draft keeps it,
+ * whatever the page says. Throws 'not_found' when no row changed.
+ */
+export async function setContentDraftPageType(id: string, pageType: PageType): Promise<void> {
+  if (!draftId.safeParse(id).success || !pageTypeInput.safeParse(pageType).success) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .update({ page_type: pageType, page_type_source: 'user' })
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('not_found');
 }
 
 /**

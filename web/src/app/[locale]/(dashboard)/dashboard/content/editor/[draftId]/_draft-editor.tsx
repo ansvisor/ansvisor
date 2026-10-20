@@ -11,12 +11,11 @@ import Image from '@tiptap/extension-image';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
 import { ArrowLeft, Check, Copy, Loader2 } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-badges';
-import { markContentDraftReady } from '@/lib/actions/content-drafts';
-import { CONTENT_LIBRARY_PATH, isPageType, type ContentDraft } from '@/lib/content/drafts';
+import { markContentDraftReady, setContentDraftPageType } from '@/lib/actions/content-drafts';
+import { CONTENT_LIBRARY_PATH, type ContentDraft, type PageType } from '@/lib/content/drafts';
 import {
   cleanHtml,
   formatHtmlSource,
@@ -25,9 +24,11 @@ import {
 } from '@/lib/content/clean-html';
 import { draftTitleFromDoc, lengthTarget, safeLinkHref } from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
+import { detectPageType } from '@/lib/content/page-types';
 import { cn } from '@/lib/utils';
 import { DropOverlay, useAttachments } from './_attach';
 import { HtmlBlock, copyToClipboard } from './_html-block';
+import { PageTypeMenu } from './_page-type-menu';
 import { EditorToolbar } from './_toolbar';
 import { useDraftAutosave, type SaveState } from './_use-autosave';
 
@@ -58,15 +59,21 @@ const DOCUMENT_CLASS = cn(
  * Shift + V pastes plain text. The HTML view (CE-020) shows the page's
  * source, and cleans it the same way when it switches back. HTML blocks
  * carry code as written, as many as the page needs, and Copy HTML puts the
- * whole page, or one block, on the clipboard.
+ * whole page, or one block, on the clipboard. The page type follows the page
+ * as it is written until the person picks one (CE-023).
  */
 export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const t = useTranslations('contentEditor.editor');
-  const tTypes = useTranslations('contentEditor.pageTypes');
   const autosave = useDraftAutosave(draft.id);
   const [title, setTitle] = useState(draft.title);
   const [status, setStatus] = useState(draft.status);
   const [marking, setMarking] = useState(false);
+  // A picked page type, or the one the page shows as it is written.
+  const [picked, setPicked] = useState(draft.pageTypeSource === 'user' ? draft.pageType : null);
+  const [detectedType, setDetectedType] = useState(() =>
+    detectPageType({ title: draft.title, html: draft.bodyHtml }, draft.siteType),
+  );
+  const pageType = picked ?? detectedType;
   // The HTML view's text while it is open; null in the visual editor.
   const [htmlSource, setHtmlSource] = useState<string | null>(null);
   const [htmlEdited, setHtmlEdited] = useState(false);
@@ -144,8 +151,10 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
     },
     onUpdate: ({ editor: e }) => {
       const next = draftTitleFromDoc(e.getJSON());
+      const bodyHtml = e.getHTML();
       setTitle(next);
-      autosave.schedule({ title: next, bodyHtml: e.getHTML() });
+      setDetectedType(detectPageType({ title: next, html: bodyHtml }, draft.siteType));
+      autosave.schedule({ title: next, bodyHtml });
     },
   });
 
@@ -243,10 +252,18 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
     }
   };
 
-  const typeLabel = isPageType(draft.pageType) ? tTypes(draft.pageType) : null;
-  const pageTag = [typeLabel, draft.method === 'create' ? t('newPage') : null]
-    .filter(Boolean)
-    .join(' · ');
+  const pickPageType = async (type: PageType) => {
+    if (type === picked) return;
+    const before = picked;
+    setPicked(type);
+    try {
+      await setContentDraftPageType(draft.id, type);
+    } catch (err) {
+      console.error('Failed to set the page type:', err);
+      setPicked(before);
+      toast.error(t('pageType.failed'));
+    }
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -265,11 +282,14 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
           {title.trim() || t('untitled')}
         </h1>
         <div className="hidden shrink-0 items-center gap-2 lg:flex">
-          {pageTag && (
-            <Badge variant="outline" className="font-normal">
-              {pageTag}
-            </Badge>
-          )}
+          <PageTypeMenu
+            brandId={draft.brandId}
+            siteType={draft.siteType}
+            pageType={pageType}
+            detected={picked === null}
+            isNew={draft.method === 'create'}
+            onPick={(type) => void pickPageType(type)}
+          />
           <DraftMethodBadge method={draft.method} />
         </div>
         <span className="shrink-0">
@@ -295,7 +315,7 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
       {editor && (
         <EditorToolbar
           editor={editor}
-          target={lengthTarget(draft.pageType)}
+          target={lengthTarget(pageType)}
           htmlView={htmlSource !== null}
           onToggleHtml={htmlSource === null ? openHtmlView : applyHtmlView}
           onAttach={attachments.open}

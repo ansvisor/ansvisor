@@ -111,7 +111,8 @@ export function jsonLdType(json: string): string | null {
   }
 }
 
-const JSON_LD_SCRIPT =
+/** A JSON-LD script and its text; global, so use it with replace or matchAll. */
+export const JSON_LD_SCRIPT =
   /<script\b[^>]*\btype\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script\s*>/gi;
 
 /** The most an HTML block holds, in characters of code. */

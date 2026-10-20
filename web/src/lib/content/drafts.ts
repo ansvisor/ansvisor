@@ -4,6 +4,8 @@
  * content_drafts row (migration 00203).
  */
 
+import type { SiteType } from './page-types';
+
 /** Draft → In review (an agent's draft waiting for a person) → Ready → Published. */
 export const DRAFT_STATUSES = ['draft', 'in_review', 'ready', 'published'] as const;
 export type DraftStatus = (typeof DRAFT_STATUSES)[number];
@@ -12,9 +14,9 @@ export type DraftStatus = (typeof DRAFT_STATUSES)[number];
 export type DraftMethod = 'create' | 'optimize';
 
 /**
- * The page types a draft can be, across brand types (B2B, e-commerce, B2C).
- * Stored as these keys (content_drafts.page_type); named in en.json under
- * content.pageTypes.
+ * The page types a draft can be, across brand types (B2B, e-commerce, B2C;
+ * SITE_PAGE_TYPES says which). Stored as these keys (content_drafts.page_type);
+ * named in en.json under contentEditor.pageTypes.
  */
 export const PAGE_TYPES = [
   'feature_page',
@@ -76,12 +78,21 @@ export interface ContentDraftListItem {
   updatedAt: string;
 }
 
+/**
+ * Where a draft's page type comes from (CE-023): detected from the page, and
+ * kept in step with it as it changes, until a person picks one.
+ */
+export type PageTypeSource = 'detected' | 'user';
+
 /** A draft as the editor opens it. */
 export interface ContentDraft {
   id: string;
   brandId: string;
   title: string;
   pageType: string | null;
+  pageTypeSource: PageTypeSource;
+  /** The brand's site type, which sets the page types on offer. */
+  siteType: SiteType;
   method: DraftMethod;
   status: DraftStatus;
   bodyHtml: string;

@@ -3110,6 +3110,15 @@
       "back": "Back to the Library",
       "untitled": "Untitled",
       "newPage": "New page",
+      "pageType": {
+        "title": "{site} page types",
+        "none": "Set page type",
+        "change": "Page type: {type}. Change it",
+        "detectedHint": "Detected from the page as you write. Pick a type to keep it.",
+        "pickedHint": "You picked this type, so changes to the page don't change it.",
+        "siteSettings": "Change the site type in brand settings",
+        "failed": "Couldn't change the page type. Try again."
+      },
       "placeholder": "Start with the page's H1, then write…",
       "documentLabel": "Page content",
       "jsonLd": "Schema · {type} (JSON-LD)",
@@ -5207,6 +5216,12 @@
     "domainPlaceholder": "e.g. example.com",
     "countryPlaceholder": "e.g. US, TR (optional)",
     "industryPlaceholder": "Select an industry",
+    "siteType": "Site type",
+    "siteTypes": {
+      "b2b": "B2B SaaS",
+      "ecommerce": "E-commerce",
+      "b2c": "B2C"
+    },
     "descriptionPlaceholder": "Short description of this brand...",
     "domainCount": "{count, plural, one {# domain} other {# domains}}",
     "wizard": {
@@ -5236,6 +5251,8 @@
       "stateOptional": "State (optional)",
       "nationwide": "Nationwide (no state)",
       "stateHint": "Localizes AI answers to this state from the next tracking run onward.",
+      "siteTypeHint": "Sets the page types the Content Editor offers: feature and comparison pages for B2B SaaS, product and category pages for e-commerce, destination and help pages for B2C.",
+      "siteTypeGuessed": "Guessed from the industry and Shopping mode until you pick one.",
       "deleteWarning": "This action cannot be undone. All data for this brand (insights, content, competitors) will be permanently deleted.",
       "confirmDelete": "Type the brand name to confirm:",
       "deleteConfirmPlaceholder": "Brand name",

@@ -9,10 +9,12 @@ import ContentEditorPage from './page';
 const getContentDraft = vi.fn();
 const markContentDraftReady = vi.fn();
 const saveContentDraft = vi.fn();
+const setContentDraftPageType = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
   getContentDraft: (...args: unknown[]) => getContentDraft(...args),
   markContentDraftReady: (...args: unknown[]) => markContentDraftReady(...args),
   saveContentDraft: (...args: unknown[]) => saveContentDraft(...args),
+  setContentDraftPageType: (...args: unknown[]) => setContentDraftPageType(...args),
 }));
 vi.mock('next/navigation', () => ({ useParams: () => ({ draftId: 'd1' }) }));
 vi.mock('@/i18n/navigation', () => ({
@@ -83,6 +85,8 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   brandId: 'b1',
   title: 'Pipeline forecasting',
   pageType: 'feature_page',
+  pageTypeSource: 'user',
+  siteType: 'b2b',
   method: 'optimize',
   status: 'in_review',
   bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>',
@@ -117,6 +121,7 @@ beforeEach(() => {
   root = createRoot(container);
   getContentDraft.mockReset();
   markContentDraftReady.mockReset();
+  setContentDraftPageType.mockReset().mockResolvedValue(undefined);
   saveContentDraft.mockReset().mockResolvedValue({ updatedAt: '2026-10-20T10:00:00Z' });
   brandState.activeBrandId = 'b1';
   brandState.setActiveBrand.mockReset();
@@ -172,6 +177,109 @@ describe('the content editor', () => {
     expect(container.querySelector('[role="toolbar"]')!.textContent).toContain(
       '0 / 1,200 characters',
     );
+  });
+
+  describe('the page type', () => {
+    const typeMenu = () =>
+      container.querySelector<HTMLButtonElement>('header button[aria-label^="Page type:"]')!;
+    /** Opens the page type menu and returns its types. */
+    async function openTypes() {
+      const trigger = typeMenu();
+      await act(async () => {
+        trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        trigger.click();
+      });
+      return [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
+    }
+    /** Replaces the page through the HTML view. */
+    async function rewrite(html: string) {
+      await act(async () => button('Edit as HTML')!.click());
+      const source = container.querySelector('textarea')!;
+      const setValue = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        'value',
+      )!.set!;
+      await act(async () => {
+        setValue.call(source, html);
+        source.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => button('Back to visual')!.click());
+    }
+
+    it('follows the page while it is detected, and keeps the type the person picks', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          title: 'Northwind vs HubSpot',
+          bodyHtml: '<h1>Northwind vs HubSpot</h1>',
+          pageType: 'comparison',
+          pageTypeSource: 'detected',
+        }),
+      );
+      await renderPage();
+      expect(typeMenu().textContent).toBe('Comparison');
+      expect(typeMenu().title).toBe('Detected from the page as you write. Pick a type to keep it.');
+
+      await rewrite('<h1>How to clean CRM data</h1>');
+      expect(typeMenu().textContent).toBe('Guide');
+
+      const types = await openTypes();
+      expect(types.map((item) => item.textContent)).toEqual([
+        'Feature page',
+        'Solution page',
+        'Comparison',
+        'Integration',
+        'Pricing',
+        'Guide',
+        'Blog post',
+        'Docs / FAQ',
+      ]);
+      expect(document.body.textContent).toContain('B2B SaaS page types');
+      await act(async () => types.find((item) => item.textContent === 'Pricing')!.click());
+      expect(setContentDraftPageType).toHaveBeenCalledWith('d1', 'pricing');
+      expect(typeMenu().textContent).toBe('Pricing');
+      expect(typeMenu().title).toBe('');
+
+      // Picked: the page no longer changes it.
+      await rewrite('<h1>Northwind vs HubSpot</h1>');
+      expect(typeMenu().textContent).toBe('Pricing');
+    });
+
+    it('offers a shop its own types, and keeps a type from another kind of site listed', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ siteType: 'ecommerce', pageType: 'feature_page', method: 'create' }),
+      );
+      await renderPage();
+      expect(typeMenu().textContent).toBe('Feature page · New page');
+      const types = await openTypes();
+      expect(types.map((item) => item.textContent)).toEqual([
+        'Product page',
+        'Category page',
+        'Buying guide',
+        'Best-of list',
+        'Policy',
+        'Blog post',
+        'Feature page',
+      ]);
+    });
+
+    it('puts the type back when picking it fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      setContentDraftPageType.mockRejectedValue(new Error('not_found'));
+      getContentDraft.mockResolvedValue(draft({ siteType: 'ecommerce', pageType: 'product_page' }));
+      await renderPage();
+      const types = await openTypes();
+      await act(async () => types.find((item) => item.textContent === 'Policy')!.click());
+      expect(toast.error).toHaveBeenCalledWith("Couldn't change the page type. Try again.");
+      expect(typeMenu().textContent).toBe('Product page');
+    });
+
+    it('says when no type is detected yet', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ pageType: null, pageTypeSource: 'detected', method: 'create' }),
+      );
+      await renderPage();
+      expect(typeMenu().textContent).toBe('Set page type · New page');
+    });
   });
 
   it('marks the draft ready once', async () => {

@@ -624,6 +624,7 @@ export type Database = {
           organization_id: string
           region: string | null
           shopping_mode_enabled: boolean
+          site_type: string | null
           slug: string
           state: string | null
           tracking_code: string
@@ -647,6 +648,7 @@ export type Database = {
           organization_id: string
           region?: string | null
           shopping_mode_enabled?: boolean
+          site_type?: string | null
           slug: string
           state?: string | null
           tracking_code?: string
@@ -670,6 +672,7 @@ export type Database = {
           organization_id?: string
           region?: string | null
           shopping_mode_enabled?: boolean
+          site_type?: string | null
           slug?: string
           state?: string | null
           tracking_code?: string
@@ -832,6 +835,7 @@ export type Database = {
           id: string
           method: string
           page_type: string | null
+          page_type_source: string
           score_after: number | null
           score_before: number | null
           status: string
@@ -847,6 +851,7 @@ export type Database = {
           id?: string
           method?: string
           page_type?: string | null
+          page_type_source?: string
           score_after?: number | null
           score_before?: number | null
           status?: string
@@ -862,6 +867,7 @@ export type Database = {
           id?: string
           method?: string
           page_type?: string | null
+          page_type_source?: string
           score_after?: number | null
           score_before?: number | null
           status?: string

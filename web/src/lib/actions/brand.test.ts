@@ -9,6 +9,7 @@ import { PLANS, type Plan } from '@/config/plans';
 
 let brandCount = 0;
 let inserted: unknown[] = [];
+let updates: Record<string, unknown>[] = [];
 let plan: Plan;
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
@@ -21,6 +22,20 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     from: (table: string) => ({
       select: () => ({ eq: async () => ({ count: brandCount, error: null }) }),
+      update: (payload: Record<string, unknown>) => {
+        updates.push(payload);
+        const row = {
+          id: 'b1',
+          organization_id: 'org-1',
+          name: 'Acme',
+          slug: 'acme',
+          site_type: payload.site_type ?? null,
+          brand_domains: [],
+        };
+        return {
+          eq: () => ({ select: () => ({ single: async () => ({ data: row, error: null }) }) }),
+        };
+      },
       insert: (row: unknown) => {
         inserted.push({ table, row });
         return {
@@ -36,7 +51,7 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { createBrand } = await import('./brand');
+const { createBrand, updateBrand } = await import('./brand');
 
 const input = { organizationId: 'org-1', name: 'Acme', domains: [] };
 const capped = (maxBrands: number): Plan => ({
@@ -70,5 +85,24 @@ describe('createBrand plan limit', () => {
 
     expect('brand' in result && result.brand.id).toBe('b1');
     expect(inserted).toHaveLength(1);
+  });
+});
+
+describe('updateBrand site type (Content Editor CE-023)', () => {
+  beforeEach(() => {
+    updates = [];
+  });
+
+  it('saves the site type picked in the settings', async () => {
+    const brand = await updateBrand('b1', { siteType: 'ecommerce' });
+    expect(updates).toEqual([{ site_type: 'ecommerce' }]);
+    expect(brand.siteType).toBe('ecommerce');
+  });
+
+  it('refuses a site type it doesn’t know, before writing', async () => {
+    await expect(
+      updateBrand('b1', { siteType: 'agency' as Parameters<typeof updateBrand>[1]['siteType'] }),
+    ).rejects.toThrow('Unknown site type');
+    expect(updates).toEqual([]);
   });
 });
