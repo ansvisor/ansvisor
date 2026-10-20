@@ -1,0 +1,84 @@
+import { describe, expect, it } from 'vitest';
+import {
+  gscCoverage,
+  impactChange,
+  impactWindows,
+  isLost,
+  platformNames,
+  promptsCited,
+  type ImpactPrompt,
+} from './impact';
+
+const TODAY = new Date('2026-10-20T22:30:00Z');
+
+const prompt = (over: Partial<ImpactPrompt>): ImpactPrompt => ({
+  id: 'p',
+  text: 'best crm',
+  cur: 0,
+  prev: 0,
+  curPlatforms: [],
+  prevPlatforms: [],
+  ...over,
+});
+
+describe('impactWindows', () => {
+  it('counts whole UTC days, today included', () => {
+    expect(impactWindows(7, TODAY)).toEqual({ cur: '2026-10-14', prev: '2026-10-07' });
+    expect(impactWindows(1, TODAY)).toEqual({ cur: '2026-10-20', prev: '2026-10-19' });
+    expect(impactWindows(365, TODAY)).toEqual({ cur: '2025-10-21', prev: '2024-10-21' });
+  });
+});
+
+describe('gscCoverage', () => {
+  it('says how far Search Console covers both windows', () => {
+    expect(gscCoverage(null, 30, TODAY)).toBe('none');
+    // 190 days of page data: 30 and 90 days are whole, twice over.
+    expect(gscCoverage('2026-04-14', 30, TODAY)).toBe('both');
+    expect(gscCoverage('2026-04-14', 90, TODAY)).toBe('both');
+    // 1y: even this window starts before the first day.
+    expect(gscCoverage('2026-04-14', 365, TODAY)).toBe('partial');
+    // Data since last month: this window is whole, the one before isn't.
+    expect(gscCoverage('2026-09-01', 30, TODAY)).toBe('current');
+    expect(gscCoverage('2026-09-21', 30, TODAY)).toBe('current');
+    expect(gscCoverage('2026-09-22', 30, TODAY)).toBe('partial');
+  });
+});
+
+describe('impactChange', () => {
+  it('reads a change as the AI Traffic page does', () => {
+    expect(impactChange({ cur: 0, prev: 0 })).toEqual({ kind: 'none' });
+    expect(impactChange({ cur: 3, prev: 0 })).toEqual({ kind: 'new' });
+    expect(impactChange({ cur: 4, prev: 2 })).toEqual({ kind: 'low' });
+    expect(impactChange({ cur: 45, prev: 30 })).toEqual({ kind: 'pct', pct: 50 });
+  });
+
+  it('shows none when the previous window isn’t whole', () => {
+    expect(impactChange({ cur: 45, prev: 30 }, false)).toEqual({ kind: 'none' });
+  });
+});
+
+describe('prompts', () => {
+  const prompts = [
+    prompt({ id: 'a', cur: 3, prev: 1 }),
+    prompt({ id: 'b', cur: 1 }),
+    prompt({ id: 'c', prev: 2 }),
+  ];
+
+  it('counts the prompts citing the page in each window', () => {
+    expect(promptsCited(prompts)).toEqual({ cur: 2, prev: 2 });
+    expect(promptsCited([])).toEqual({ cur: 0, prev: 0 });
+  });
+
+  it('marks a prompt cited before but not now as lost', () => {
+    expect(prompts.map(isLost)).toEqual([false, false, true]);
+  });
+
+  it('names the platforms once each', () => {
+    expect(platformNames(['chatgpt', 'chatgpt-web', 'perplexity', 'google-ai-overviews'])).toEqual([
+      'ChatGPT',
+      'Perplexity',
+      'Google AI Overview',
+    ]);
+    expect(platformNames(['new-engine'])).toEqual(['new-engine']);
+  });
+});

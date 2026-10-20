@@ -3401,6 +3401,55 @@
         "invalid": "Enter the image's web address (https://…).",
         "cancel": "Cancel",
         "insert": "Insert"
+      },
+      "panel": {
+        "label": "Side panel",
+        "show": "Show side panel",
+        "hide": "Hide side panel",
+        "tabs": {
+          "impact": "Impact"
+        }
+      },
+      "impact": {
+        "newPage": "This draft is a new page, not live yet, so there's nothing to measure. Impact shows when a draft optimizes a live page.",
+        "thisPage": "This page",
+        "periodLabel": "Period",
+        "periods": {
+          "7": "7d",
+          "30": "30d",
+          "90": "90d",
+          "365": "1y"
+        },
+        "loadError": "Couldn't load the page's impact.",
+        "retry": "Retry",
+        "metrics": {
+          "citations": "Citations",
+          "aiVisits": "AI visits",
+          "gscClicks": "Google clicks",
+          "promptsCited": "Prompts cited"
+        },
+        "noSearchConsole": "No Search Console data",
+        "change": {
+          "new": "New",
+          "low": "Low sample",
+          "lowHint": "Fewer than 30 in this period or the one before, so a % change would mislead."
+        },
+        "prompts": {
+          "title": "Prompts cited · {count}",
+          "lost": "{count} lost",
+          "none": "No tracked prompt cited this page in this period or the one before.",
+          "cited": "Cited {count}×",
+          "lostBadge": "Lost",
+          "wasCitedOn": "Was cited on {platforms}",
+          "seeInCitations": "See in Citations"
+        },
+        "overlap": {
+          "title": "Your other pages for these prompts",
+          "only": "{count, plural, one {The only page cited for its prompt} other {The only page cited for its # prompts}} · no overlap",
+          "shared": "{count} of {total, plural, one {# prompt} other {# prompts}}"
+        },
+        "note": "The last {days} days against the {days} before, in whole UTC days. Citations come from tracked prompts, AI visits from the tracking snippet or Google Analytics, clicks from Search Console.",
+        "gscWindow": "Search Console keeps {days} days of page data, so older clicks aren't counted or compared."
       }
     },
     "status": {

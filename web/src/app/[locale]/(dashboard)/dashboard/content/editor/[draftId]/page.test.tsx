@@ -10,7 +10,9 @@ const getContentDraft = vi.fn();
 const markContentDraftReady = vi.fn();
 const saveContentDraft = vi.fn();
 const setContentDraftPageType = vi.fn();
+const getContentImpact = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
+  getContentImpact: (...args: unknown[]) => getContentImpact(...args),
   getContentDraft: (...args: unknown[]) => getContentDraft(...args),
   markContentDraftReady: (...args: unknown[]) => markContentDraftReady(...args),
   saveContentDraft: (...args: unknown[]) => saveContentDraft(...args),
@@ -80,6 +82,18 @@ if (!('getClientRects' in Range.prototype)) {
   });
 }
 
+// An in-memory localStorage: the test environment has none.
+const store = new Map<string, string>();
+Object.defineProperty(window, 'localStorage', {
+  configurable: true,
+  value: {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => void store.set(key, value),
+    removeItem: (key: string) => void store.delete(key),
+    clear: () => store.clear(),
+  },
+});
+
 const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   id: 'd1',
   brandId: 'b1',
@@ -124,6 +138,8 @@ beforeEach(() => {
   markContentDraftReady.mockReset();
   setContentDraftPageType.mockReset().mockResolvedValue(undefined);
   saveContentDraft.mockReset().mockResolvedValue({ updatedAt: '2026-10-20T10:00:00Z' });
+  getContentImpact.mockReset().mockResolvedValue(null);
+  localStorage.clear();
   brandState.activeBrandId = 'b1';
   brandState.setActiveBrand.mockReset();
   toast.mockReset();
@@ -520,5 +536,46 @@ describe('the content editor', () => {
       "This draft doesn't exist, or it belongs to another workspace.",
     );
     expect(container.querySelector('a[href="/dashboard/content/library"]')).not.toBeNull();
+  });
+});
+
+describe('the side panel', () => {
+  const panel = () => container.querySelector('aside');
+  const innerWidth = window.innerWidth;
+  afterEach(() => {
+    window.innerWidth = innerWidth;
+  });
+
+  it('starts closed on a narrow window, and the header opens it', async () => {
+    getContentDraft.mockResolvedValue(draft({ sourceUrl: 'https://acme.example.com/pricing' }));
+    window.innerWidth = 1024;
+    await renderPage();
+    expect(panel()).toBeNull();
+    expect(getContentImpact).not.toHaveBeenCalled();
+
+    await act(async () => button('Show side panel')!.click());
+    expect(panel()!.getAttribute('aria-label')).toBe('Side panel');
+    expect(panel()!.textContent).toContain('Impact');
+    // The page the draft optimizes, over 30 days.
+    expect(getContentImpact).toHaveBeenCalledWith('b1', 'https://acme.example.com/pricing', 30);
+    expect(button('Hide side panel')!.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('starts open on a wide window, and remembers it closed', async () => {
+    getContentDraft.mockResolvedValue(draft({ method: 'create' }));
+    window.innerWidth = 1440;
+    await renderPage();
+    // A new page: nothing to measure yet.
+    expect(panel()!.textContent).toContain('This draft is a new page, not live yet');
+    expect(getContentImpact).not.toHaveBeenCalled();
+
+    await act(async () => button('Hide side panel')!.click());
+    expect(panel()).toBeNull();
+    expect(localStorage.getItem('aeo:content-editor-panel')).toBe('0');
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    await renderPage();
+    expect(panel()).toBeNull();
   });
 });

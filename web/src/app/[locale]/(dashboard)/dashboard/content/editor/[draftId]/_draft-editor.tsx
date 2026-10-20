@@ -9,7 +9,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { TableKit } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
-import { ArrowLeft, Check, Copy, Loader2 } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Loader2, PanelRight } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils';
 import { DropOverlay, useAttachments } from './_attach';
 import { HtmlBlock, copyToClipboard } from './_html-block';
 import { PageTypeMenu } from './_page-type-menu';
+import { EditorSidePanel, useSidePanelOpen } from './_side-panel';
 import { EditorToolbar } from './_toolbar';
 import { useDraftAutosave, type SaveState } from './_use-autosave';
 
@@ -60,7 +61,9 @@ const DOCUMENT_CLASS = cn(
  * source, and cleans it the same way when it switches back. HTML blocks
  * carry code as written, as many as the page needs, and Copy HTML puts the
  * whole page, or one block, on the clipboard. The page type follows the page
- * as it is written until the person picks one (CE-023).
+ * as it is written until the person picks one (CE-023). The side panel, open
+ * beside the page or closed from the header, shows what the page earns
+ * (Impact, CE-016).
  */
 export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const t = useTranslations('contentEditor.editor');
@@ -81,6 +84,7 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const attachRef = useRef<(files: File[]) => void>(undefined);
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
+  const [panelOpen, togglePanel] = useSidePanelOpen();
 
   const editor = useEditor({
     extensions: [
@@ -310,54 +314,73 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
             )}
             {t('markReady')}
           </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-pressed={panelOpen}
+            aria-label={panelOpen ? t('panel.hide') : t('panel.show')}
+            title={panelOpen ? t('panel.hide') : t('panel.show')}
+            onClick={togglePanel}
+            className={cn(panelOpen && 'bg-muted')}
+          >
+            <PanelRight className="h-4 w-4" />
+          </Button>
         </div>
       </header>
 
-      {editor && (
-        <EditorToolbar
-          editor={editor}
-          target={lengthTarget(pageType)}
-          htmlView={htmlSource !== null}
-          onToggleHtml={htmlSource === null ? openHtmlView : applyHtmlView}
-          onAttach={attachments.open}
-        />
-      )}
-
-      {htmlSource !== null && (
-        <div className="flex items-center gap-2 border-b bg-muted/40 px-4 py-1.5 text-xs text-muted-foreground">
-          <span>
-            <span className="font-medium text-foreground">{t('html.title')}</span> ·{' '}
-            {t('html.hint', { marker: '<!-- html-block -->' })}
-          </span>
-          <Button size="sm" className="ml-auto h-7" onClick={applyHtmlView}>
-            {t('html.back')}
-          </Button>
-        </div>
-      )}
-
-      <div className="relative min-h-0 flex-1" {...dropHandlers}>
-        <div className="h-full overflow-y-auto">
-          {htmlSource !== null && (
-            <textarea
-              value={htmlSource}
-              onChange={(e) => {
-                setHtmlSource(e.target.value);
-                setHtmlEdited(true);
-              }}
-              spellCheck={false}
-              aria-label={t('html.label')}
-              className="block h-full min-h-[600px] w-full resize-none bg-muted/20 px-7 py-5 font-mono text-[12.5px] leading-relaxed outline-none"
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col">
+          {editor && (
+            <EditorToolbar
+              editor={editor}
+              target={lengthTarget(pageType)}
+              htmlView={htmlSource !== null}
+              onToggleHtml={htmlSource === null ? openHtmlView : applyHtmlView}
+              onAttach={attachments.open}
             />
           )}
-          <div
-            className={cn('mx-auto max-w-[720px] px-7 pt-7 pb-20', htmlSource !== null && 'hidden')}
-          >
-            <EditorContent editor={editor} />
+
+          {htmlSource !== null && (
+            <div className="flex items-center gap-2 border-b bg-muted/40 px-4 py-1.5 text-xs text-muted-foreground">
+              <span>
+                <span className="font-medium text-foreground">{t('html.title')}</span> ·{' '}
+                {t('html.hint', { marker: '<!-- html-block -->' })}
+              </span>
+              <Button size="sm" className="ml-auto h-7" onClick={applyHtmlView}>
+                {t('html.back')}
+              </Button>
+            </div>
+          )}
+
+          <div className="relative min-h-0 flex-1" {...dropHandlers}>
+            <div className="h-full overflow-y-auto">
+              {htmlSource !== null && (
+                <textarea
+                  value={htmlSource}
+                  onChange={(e) => {
+                    setHtmlSource(e.target.value);
+                    setHtmlEdited(true);
+                  }}
+                  spellCheck={false}
+                  aria-label={t('html.label')}
+                  className="block h-full min-h-[600px] w-full resize-none bg-muted/20 px-7 py-5 font-mono text-[12.5px] leading-relaxed outline-none"
+                />
+              )}
+              <div
+                className={cn(
+                  'mx-auto max-w-[720px] px-7 pt-7 pb-20',
+                  htmlSource !== null && 'hidden',
+                )}
+              >
+                <EditorContent editor={editor} />
+              </div>
+            </div>
+            {dragging && <DropOverlay />}
           </div>
+          {attachments.ui}
         </div>
-        {dragging && <DropOverlay />}
+        {panelOpen && <EditorSidePanel draft={draft} />}
       </div>
-      {attachments.ui}
     </div>
   );
 }

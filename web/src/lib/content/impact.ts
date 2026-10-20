@@ -1,0 +1,87 @@
+import { PLATFORM_LABELS } from '@/config/platform-labels';
+import { visitChange, type VisitChange } from '@/lib/traffic-change';
+
+/**
+ * The editor's Impact tab (Content Editor CE-016, spec §7): what the page a
+ * draft optimizes earns, over the last N days against the N before, as
+ * content_page_impact (00209) reads it.
+ */
+
+/** The periods the tab offers, in days; 30 first. */
+export const IMPACT_PERIODS = [7, 30, 90, 365] as const;
+export type ImpactPeriod = (typeof IMPACT_PERIODS)[number];
+export const DEFAULT_IMPACT_PERIOD: ImpactPeriod = 30;
+
+/** Search Console page data is kept this long (gsc-sync.js PAGE_BACKFILL_DAYS). */
+export const GSC_PAGE_DAYS = 190;
+
+export interface ImpactCount {
+  cur: number;
+  prev: number;
+}
+
+export interface ImpactPrompt {
+  id: string;
+  text: string;
+  cur: number;
+  prev: number;
+  curPlatforms: string[];
+  prevPlatforms: string[];
+}
+
+export interface ContentImpact {
+  citations: ImpactCount;
+  aiVisits: ImpactCount;
+  gscClicks: ImpactCount;
+  /** The first day of Search Console page data the brand has; null without any. */
+  gscSince: string | null;
+  prompts: ImpactPrompt[];
+  /** The brand's other pages cited now for this page's prompts. */
+  overlap: { page: string; prompts: number }[];
+}
+
+/** The first day of each window, as content_page_impact counts them: whole UTC days, today included. */
+export function impactWindows(days: number, today = new Date()): { cur: string; prev: string } {
+  const utc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  const day = (offset: number) => new Date(utc - offset * 86_400_000).toISOString().slice(0, 10);
+  return { cur: day(days - 1), prev: day(2 * days - 1) };
+}
+
+/**
+ * How far Search Console covers the windows: 'none' without data, 'partial'
+ * when even this window starts before its first day (1y, as pages are kept
+ * 190 days), 'current' when only the previous one does, else 'both'.
+ */
+export function gscCoverage(
+  gscSince: string | null,
+  days: number,
+  today = new Date(),
+): 'none' | 'partial' | 'current' | 'both' {
+  if (!gscSince) return 'none';
+  const { cur, prev } = impactWindows(days, today);
+  if (cur < gscSince) return 'partial';
+  return prev < gscSince ? 'current' : 'both';
+}
+
+/** A count's change, as the AI Traffic page reads one; none when the previous window isn't whole. */
+export function impactChange(count: ImpactCount, comparable = true): VisitChange {
+  return visitChange(count.cur, count.prev, { comparable });
+}
+
+/** Prompts citing the page in each window: the "Prompts cited" card. */
+export function promptsCited(prompts: ImpactPrompt[]): ImpactCount {
+  return {
+    cur: prompts.filter((p) => p.cur > 0).length,
+    prev: prompts.filter((p) => p.prev > 0).length,
+  };
+}
+
+/** A prompt the page lost: cited in the previous window, not in this one. */
+export function isLost(prompt: ImpactPrompt): boolean {
+  return prompt.cur === 0 && prompt.prev > 0;
+}
+
+/** Platform names for a prompt row: where it cites the page now, or did before it was lost. */
+export function platformNames(platforms: string[]): string[] {
+  return [...new Set(platforms.map((p) => PLATFORM_LABELS[p] ?? p))];
+}

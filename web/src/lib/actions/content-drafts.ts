@@ -20,6 +20,7 @@ import {
   PAGE_IMPORT_ERRORS,
 } from '@/lib/content/drafts';
 import { escapeHtml } from '@/lib/content/attachments';
+import { IMPACT_PERIODS, type ContentImpact } from '@/lib/content/impact';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { detectPageType, siteTypeOf, type SiteType } from '@/lib/content/page-types';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
@@ -352,6 +353,33 @@ export async function sendContentDraftToActionCenter(
     console.error('Failed to send a draft to the Action Center:', err);
     return { error: 'failed' };
   }
+}
+
+/**
+ * The Impact tab (CE-016): what the page a draft optimizes earns over the
+ * last `days` against the `days` before (content_page_impact, 00209). Null
+ * when the member can't read the brand.
+ */
+export async function getContentImpact(
+  brandId: string,
+  page: string,
+  days: number,
+): Promise<ContentImpact | null> {
+  if (
+    !draftId.safeParse(brandId).success ||
+    !(IMPACT_PERIODS as readonly number[]).includes(days) ||
+    !/^https?:\/\//i.test(page)
+  ) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('content_page_impact', {
+    p_brand_id: brandId,
+    p_page: page,
+    p_days: days,
+  });
+  if (error) throw new Error(error.message);
+  return (data as ContentImpact | null) ?? null;
 }
 
 const overlapSource = startInput.shape.source;
