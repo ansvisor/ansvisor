@@ -9,6 +9,16 @@
 
 export const DISMISS_REASONS = ['not_relevant', 'wrong_angle'];
 
+/** Status values accepted by dashboard actions and external webhook callbacks. */
+export const VALID_OPPORTUNITY_STATUSES = Object.freeze([
+  'new',
+  'reviewed',
+  'sent',
+  'in_progress',
+  'done',
+  'dismissed',
+]);
+
 /**
  * The source data to write with a status change, or null when it stays as
  * it is. An unknown reason is ignored.
