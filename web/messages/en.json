@@ -4203,6 +4203,8 @@
     "trackedCompetitors": "Tracked Competitors",
     "selectToCompare": "Select a competitor to see head-to-head comparison.",
     "windowLast30Days": "Scores cover the last 30 days.",
+    "windowAllTime": "Scores cover all tracked history.",
+    "windowSelectedRange": "Scores reflect the selected date range.",
     "selected": "Selected",
     "noData": "No data",
     "emptyTitle": "No competitors yet",
