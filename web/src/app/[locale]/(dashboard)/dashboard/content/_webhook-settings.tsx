@@ -16,6 +16,14 @@ import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { getWebhookConfig, saveWebhookConfig, testWebhook } from '@/lib/actions/content';
 import { toast } from 'sonner';
 
+const WEBHOOK_EVENTS = [
+  { value: 'opportunity.sent', label: 'eventOpportunitySent' },
+  { value: 'daily_pulse.created', label: 'eventDailyPulseCreated' },
+  { value: 'action_task.sent', label: 'eventActionTaskSent' },
+] as const;
+
+const DEFAULT_WEBHOOK_EVENTS = WEBHOOK_EVENTS.map(({ value }) => value);
+
 interface WebhookSettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -28,6 +36,7 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
   const [url, setUrl] = useState('');
   const [secret, setSecret] = useState('');
   const [isActive, setIsActive] = useState(true);
+  const [events, setEvents] = useState<string[]>([...DEFAULT_WEBHOOK_EVENTS]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -46,6 +55,12 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
             setUrl(config.webhookUrl);
             setSecret(config.webhookSecret || '');
             setIsActive(config.isActive);
+            setEvents(config.events ?? [...DEFAULT_WEBHOOK_EVENTS]);
+          } else {
+            setUrl('');
+            setSecret('');
+            setIsActive(true);
+            setEvents([...DEFAULT_WEBHOOK_EVENTS]);
           }
         })
         .catch(console.error)
@@ -63,6 +78,7 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
       await saveWebhookConfig(brandId, {
         webhookUrl: url.trim(),
         webhookSecret: secret.trim() || undefined,
+        events,
         isActive,
       });
       toast.success(t('saved'));
@@ -133,6 +149,30 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
                 onChange={(e) => setSecret(e.target.value)}
               />
             </div>
+
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">{t('eventsTitle')}</legend>
+              <p className="text-xs text-muted-foreground">{t('eventsDescription')}</p>
+              <div className="space-y-2 rounded-md border p-3">
+                {WEBHOOK_EVENTS.map((eventOption) => (
+                  <label key={eventOption.value} className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-primary"
+                      checked={events.includes(eventOption.value)}
+                      onChange={(e) =>
+                        setEvents((current) =>
+                          e.target.checked
+                            ? [...current.filter((value) => value !== eventOption.value), eventOption.value]
+                            : current.filter((value) => value !== eventOption.value),
+                        )
+                      }
+                    />
+                    <span className="text-sm">{t(eventOption.label)}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
 
             <div className="flex items-center gap-2">
               <button
