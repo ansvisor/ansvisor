@@ -13,9 +13,9 @@ const SCRIPT = buildTrackingScript();
 
 /**
  * Runs t.js on a page, then lets the page go on: `then` changes it after the
- * script ran (a single-page app setting its title), `leave` fires pagehide,
- * and pending timers run. Returns the beacon it sent (or null), how many it
- * sent, its timers and a way to fire the page's events.
+ * script ran (a single-page app setting its title), and pending timers run.
+ * Returns the visit's beacon (or null), every beacon it sent, its timers and
+ * a way to fire the page's events.
  */
 function run({
   referrer = '',
@@ -25,7 +25,7 @@ function run({
   navigation,
   readyState = 'complete',
   then,
-  leave = false,
+  runTimers = true,
 } = {}) {
   const sent = [];
   const timers = [];
@@ -73,11 +73,16 @@ function run({
     String,
   });
   then?.({ document, location });
-  if (leave) fire('window:pagehide');
-  for (const timer of timers) timer.fn();
+  if (runTimers) for (const timer of timers) timer.fn();
+  // Read when asked, so a beacon sent after a later event or timer counts.
+  const parse = () => sent.map((b) => ({ url: b.url, ...JSON.parse(b.blob.text) }));
   return {
-    beacon: sent.length ? { url: sent[0].url, ...JSON.parse(sent[0].blob.text) } : null,
-    beacons: sent.length,
+    get beacon() {
+      return parse()[0] ?? null;
+    },
+    get beacons() {
+      return parse();
+    },
     timers,
     fire,
   };
@@ -160,8 +165,9 @@ describe('the tracking snippet', () => {
     }
   });
 
-  it('reads the title a moment after load, once the app has set it', () => {
-    const { beacon, timers } = run({
+  // gkhngyk on #1247: the visit's beacon waited for load on every page.
+  it('sends the visit at once, and says so later when the app shows its not-found page', () => {
+    const { beacons, timers } = run({
       referrer: 'https://chatgpt.com/',
       navigation: { responseStatus: 200 },
       title: 'Acme Coffee',
@@ -172,18 +178,42 @@ describe('the tracking snippet', () => {
       },
     });
     expect(timers.map((t) => t.ms)).toEqual([1500]);
-    // The address the visit landed on, not where the app went since.
-    expect(beacon).toMatchObject({ nf: 1, u: 'https://acme.example/menu' });
+    expect(beacons).toHaveLength(2);
+    expect(beacons[0]).toMatchObject({ st: 200, nf: 0, u: 'https://acme.example/menu' });
+    // The address the visit landed on, not where the app went since; a mark, not a visit.
+    expect(beacons[1]).toEqual({
+      url: 'https://api.ansvisor.test/track/abcdef123',
+      k: 'nf',
+      u: 'https://acme.example/menu',
+      s: 'chatgpt.com',
+      a: 'Mozilla/5.0',
+      st: 200,
+    });
   });
 
-  it('waits for the page to load, and sends once as the visitor leaves', () => {
-    const loading = run({ referrer: 'https://chatgpt.com/', readyState: 'loading' });
-    expect(loading.beacons).toBe(0);
+  it("doesn't wait for the page to load, and checks the title again only after it", () => {
+    const loading = run({
+      referrer: 'https://chatgpt.com/',
+      navigation: { responseStatus: 200 },
+      readyState: 'loading',
+      runTimers: false,
+    });
+    expect(loading.beacons).toHaveLength(1);
+    expect(loading.timers).toHaveLength(0);
     loading.fire('window:load');
     expect(loading.timers).toHaveLength(1);
+    // The title still reads as a page: nothing more.
+    loading.timers[0].fn();
+    expect(loading.beacons).toHaveLength(1);
 
-    // Gone before the timer: the beacon goes on pagehide, and only once.
-    expect(run({ referrer: 'https://chatgpt.com/', leave: true }).beacons).toBe(1);
+    // Nothing to check again: a 404, or a title that already said not found.
+    expect(
+      run({ referrer: 'https://chatgpt.com/', navigation: { responseStatus: 404 } }).timers,
+    ).toHaveLength(0);
+    expect(
+      run({ referrer: 'https://chatgpt.com/', navigation: { responseStatus: 200 }, title: '404' })
+        .timers,
+    ).toHaveLength(0);
   });
 
   it('says whether the title reads "not found" when the browser gives no status', () => {

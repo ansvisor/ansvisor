@@ -7,10 +7,12 @@
 -- landing page too (with a stricter pattern), a moment after load so the
 -- app has set it, and the beacon keeps not_found_title with a 2xx status.
 --
--- ai_traffic_broken_pages counts such a pageview as missing (status
--- soft404), doesn't let its 2xx count as working, and doesn't let the
--- nightly page read clear it: that read gets the app's shell with a 200
--- too. ai_traffic_broken_links reads those pageviews for the visits. The
+-- ai_traffic_broken_pages counts such a page as missing (status soft404)
+-- once at least two visits saw it, doesn't let its 2xx count as working,
+-- and doesn't let the nightly page read clear it: that read gets the app's
+-- shell with a 200 too. The beacon is public, so one visit, stray or made
+-- up, lists nothing (gkhngyk on #1247): nothing would clear it, and a cited
+-- page would raise broken_citation_target from that visit. ai_traffic_broken_links reads those pageviews for the visits. The
 -- rest of both functions is 00186's.
 
 comment on column public.ai_traffic_logs.not_found_title is
@@ -39,6 +41,8 @@ as $$
       l.created_at,
       l.http_status,
       l.not_found_title,
+      -- The visit a pageview belongs to: a reload continues one (AT-003).
+      coalesce(l.visit_of, l.id) as visit_id,
       -- A soft 404: the server answered 2xx and the page says not found (a
       -- single-page app's route that doesn't exist).
       coalesce(l.not_found_title and l.http_status between 200 and 299, false) as soft_404,
@@ -76,26 +80,34 @@ as $$
     from logs
     group by page_key, address
   ),
+  -- The visits that saw each page as a soft 404.
+  soft_visits as (
+    select page_key, count(distinct visit_id) as visits
+    from logs
+    where soft_404
+    group by page_key
+  ),
   page_state as (
     select
-      page_key,
+      a.page_key,
       max(last_status) filter (where last_status in (404, 410)) as last_status,
       bool_or(last_status is null and title_not_found) as title_not_found,
-      coalesce(bool_or(last_soft_404), false) as soft_404,
+      coalesce(bool_or(last_soft_404), false) and coalesce(max(v.visits), 0) >= 2 as soft_404,
       -- No address with a status reads as not working, not as unknown; a soft
       -- 404's 2xx doesn't either.
       coalesce(bool_or(last_status between 200 and 399 and not last_soft_404), false) as works,
       max(last_failed_at) as last_failed_at,
       -- Every missing address carries a query: a route on the page, not the page.
-      bool_and(address <> page_key)
+      bool_and(a.address <> a.page_key)
         filter (
           where last_status in (404, 410)
             or last_soft_404
             or (last_status is null and title_not_found)
         )
         as routed
-    from address_state
-    group by page_key
+    from address_state a
+    left join soft_visits v on v.page_key = a.page_key
+    group by a.page_key
   ),
   -- What the nightly page read found (00104).
   fetched as (
