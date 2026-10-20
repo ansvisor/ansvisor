@@ -39,6 +39,16 @@ vi.mock('sonner', () => ({ toast }));
   }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
+// jsdom has no layout, and its ranges can't be measured. ProseMirror measures
+// one when it scrolls the cursor into view (after inserting a block), which
+// otherwise throws after the test, on a timer.
+if (!('getClientRects' in Range.prototype)) {
+  Object.assign(Range.prototype, {
+    getClientRects: () => [] as unknown as DOMRectList,
+    getBoundingClientRect: () => new DOMRect(),
+  });
+}
+
 const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   id: 'd1',
   brandId: 'b1',
