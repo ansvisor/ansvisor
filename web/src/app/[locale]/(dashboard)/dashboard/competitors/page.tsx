@@ -19,10 +19,7 @@ import { getFaviconUrl } from '@/lib/favicon';
 import { toCsv } from '@/lib/csv';
 import { slugify } from '@/lib/slug';
 import { readUrlParam, writeUrlParams } from '@/lib/url-state';
-import {
-  DateRangeFilter,
-  type DateRangePreset,
-} from '@/components/filters/date-range-filter';
+import { DateRangeFilter, type DateRangePreset } from '@/components/filters/date-range-filter';
 import { getDateRange } from '@/lib/date-range';
 import { MODEL_LABELS } from '@/config/platform-labels';
 import type { Competitor } from '@/types';
@@ -1558,7 +1555,12 @@ export default function CompetitorsPage() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                {t('selectToCompare')} {datePreset === '30d' ? t('windowLast30Days') : datePreset === 'all' ? t('windowAllTime') : t('windowSelectedRange')}
+                {t('selectToCompare')}{' '}
+                {datePreset === '30d'
+                  ? t('windowLast30Days')
+                  : datePreset === 'all'
+                    ? t('windowAllTime')
+                    : t('windowSelectedRange')}
               </p>
             </CardHeader>
             <CardContent>
