@@ -367,6 +367,8 @@ describe('starting and skipping Getting started', () => {
     await act(async () => buttonNamed('secondBrand.run')!.click());
     expect(toast.error).toHaveBeenCalledWith('start.failed');
     expect(pageText()).not.toContain('secondBrand.title');
+    // Start takes the question's place, to run it later.
+    expect(buttonNamed('start.button')).toBeDefined();
   });
 
   it('asks a manager whether to run it for a brand added beside others', async () => {

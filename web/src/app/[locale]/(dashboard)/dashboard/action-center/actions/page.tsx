@@ -546,7 +546,8 @@ function ActionsContent({ brand }: { brand: Brand }) {
       >
         {tStarted('skip.button')}
       </Button>
-    ) : !gettingStarted.asking && (gettingStarted.needsSetup || gettingStarted.skipped) ? (
+    ) : // A new brand's question, once closed, leaves Start in its place.
+    (gettingStarted.asking ? askClosed : gettingStarted.needsSetup || gettingStarted.skipped) ? (
       <div className="flex flex-col items-end gap-1">
         <Button
           size="sm"
