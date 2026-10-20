@@ -1,7 +1,7 @@
 /**
  * Content drafts (Content Editor, CE-002): the pages a person or the Content
  * Agent writes or changes in Ansvisor, as the Library lists them. One row per
- * content_drafts row (migration 00203).
+ * content_drafts row (migration 00204).
  */
 
 /** Draft → In review (an agent's draft waiting for a person) → Ready → Published. */

@@ -28555,10 +28555,10 @@ comment on function public.citation_competitor_sources_daily(
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
--- migrations/00203_content_drafts.sql
+-- migrations/00204_content_drafts.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
--- 00203: content drafts, the Content Library's rows (Content Editor, CE-002)
+-- 00204: content drafts, the Content Library's rows (Content Editor, CE-002)
 -- ============================================================================
 -- The Content area writes and improves pages in Ansvisor (Content Editor spec
 -- v2). Every page someone, or an agent, writes or changes there is a draft:

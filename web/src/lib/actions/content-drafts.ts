@@ -11,7 +11,7 @@ import {
 
 /**
  * Content drafts (Content Editor, CE-002), read through the signed-in member's
- * session: RLS (00203) keeps them to the brand's organization.
+ * session: RLS (00204) keeps them to the brand's organization.
  */
 
 /** How many drafts the Library lists, the latest changed first. */
