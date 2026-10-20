@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { apiLimiterKey, botIngestKey } from './rate-limiter.js';
-import { markTokenVerified, clearVerifiedTokens } from './verified-tokens.js';
+import {
+  markBotSenderVerified,
+  markTokenVerified,
+  clearVerifiedTokens,
+} from './verified-tokens.js';
 
 function reqWith({ authorization, ip = '203.0.113.7' } = {}) {
   return { headers: authorization ? { authorization } : {}, ip };
@@ -62,17 +66,34 @@ describe('rate-limiter – apiLimiterKey', () => {
 });
 
 describe('rate-limiter – botIngestKey', () => {
-  it("buckets AI-bot ingest by the connection's secret, whatever the address", () => {
+  beforeEach(() => clearVerifiedTokens());
+
+  it('buckets a matched secret by its connection, whatever the address', () => {
+    markBotSenderVerified('Bearer abot_one', 'c1');
+    markBotSenderVerified('Bearer abot_two', 'c2');
     const a = botIngestKey(reqWith({ authorization: 'Bearer abot_one', ip: '1.1.1.1' }));
     const b = botIngestKey(reqWith({ authorization: 'Bearer abot_one', ip: '2.2.2.2' }));
     const other = botIngestKey(reqWith({ authorization: 'Bearer abot_two', ip: '1.1.1.1' }));
-    expect(a).toBe(b);
-    expect(a).not.toBe(other);
-    // The secret itself isn't kept as the key.
-    expect(a).toMatch(/^bot:[0-9a-f]{64}$/);
+    expect(a).toBe('bot:c1');
+    expect(b).toBe('bot:c1');
+    expect(other).toBe('bot:c2');
+  });
+
+  it('keeps unknown secrets in the caller IP bucket, so made-up ones share it', () => {
+    const one = botIngestKey(reqWith({ authorization: 'Bearer abot_made_up_1', ip: '1.1.1.1' }));
+    const two = botIngestKey(reqWith({ authorization: 'Bearer abot_made_up_2', ip: '1.1.1.1' }));
+    expect(one).toBe('ip:1.1.1.1');
+    expect(two).toBe('ip:1.1.1.1');
   });
 
   it('falls back to the IP without a secret', () => {
     expect(botIngestKey(reqWith({ ip: '1.1.1.1' }))).toBe('ip:1.1.1.1');
+  });
+
+  it("never gives a bot secret a dashboard user's bucket", () => {
+    markBotSenderVerified('Bearer abot_one', 'c1');
+    expect(apiLimiterKey(reqWith({ authorization: 'Bearer abot_one', ip: '1.1.1.1' }))).toBe(
+      'ip:1.1.1.1',
+    );
   });
 });

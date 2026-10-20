@@ -47,6 +47,7 @@ import {
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useFeatureGate } from '@/hooks/use-feature-gate';
 import {
   Dialog,
   DialogContent,
@@ -325,6 +326,10 @@ function ShoppingModeCard({
   const t = useTranslations('brands');
   // Admins and managers, as the brands, prompts and brand_platforms writes allow.
   const { canManage } = useUserRole();
+  // ChatGPT Shopping is tracked only on plans with the Shopping page (#1212):
+  // on others the prompts still carry it, but nothing runs it.
+  const { canUse, requiredPlanFor } = useFeatureGate();
+  const tracked = canUse('shopping_analytics');
   const [enabled, setEnabled] = useState(brand.shoppingModeEnabled);
   const [saving, setSaving] = useState(false);
 
@@ -377,6 +382,11 @@ function ShoppingModeCard({
                 ),
               })}
             </p>
+            {!tracked && (
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                {t('settings.shopping.planNote', { plan: requiredPlanFor('shopping_analytics') })}
+              </p>
+            )}
             {!canManage && (
               <p className="text-xs text-muted-foreground">{t('settings.shopping.managersOnly')}</p>
             )}

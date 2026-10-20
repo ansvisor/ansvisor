@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { createBrand, updateBrand } from '@/lib/actions/brand';
+import { createBrand, markBrandAsEcommerce, updateBrand } from '@/lib/actions/brand';
+import { EcommerceNote } from '@/components/onboarding/ecommerce-note';
 import { syncDomains } from '@/lib/actions/brand-domain';
 import { createTopics } from '@/lib/actions/topic';
 import { getPromptCapacity, savePromptSet } from '@/lib/actions/prompt';
@@ -288,6 +289,8 @@ export default function NewBrandPage() {
   const [suggestedCompetitors, setSuggestedCompetitors] = useState<CompetitorItem[]>([]);
   const [loadingCompetitors, setLoadingCompetitors] = useState(false);
   const [competitorSuggestError, setCompetitorSuggestError] = useState(false);
+  const [ecommerceDetected, setEcommerceDetected] = useState(false);
+  const ecommerceSetup = useRef<Promise<void> | null>(null);
   const [competitorName, setCompetitorName] = useState('');
   const [competitorDomain, setCompetitorDomain] = useState('');
   const [savingCompetitors, setSavingCompetitors] = useState(false);
@@ -589,7 +592,7 @@ export default function NewBrandPage() {
     setLoadingCompetitors(true);
     setCompetitorSuggestError(false);
     try {
-      const { competitors } = await suggestCompetitors({
+      const { competitors, isEcommerce } = await suggestCompetitors({
         brandName: brandName.trim(),
         description: description.trim(),
         website: domain,
@@ -597,11 +600,29 @@ export default function NewBrandPage() {
         region,
       });
       setSuggestedCompetitors((prev) => mergeCompetitorSuggestions(prev, competitors));
+      // Kept, so Finish waits for it: it updates the prompts one by one.
+      if (isEcommerce) ecommerceSetup.current = turnOnProductVisibility();
     } catch (err) {
       console.error('Competitor suggestion error:', err);
       setCompetitorSuggestError(true);
     } finally {
       setLoadingCompetitors(false);
+    }
+  };
+
+  // The research found an online store: Shopping mode goes on, so Product
+  // Visibility shows in the menu. Best effort: it can be turned on in the
+  // brand's settings too.
+  const turnOnProductVisibility = async () => {
+    if (!createdBrand || createdBrand.shoppingModeEnabled) return;
+    try {
+      const { industry } = await markBrandAsEcommerce(createdBrand.id);
+      const updates = { industry: industry ?? undefined, shoppingModeEnabled: true };
+      setCreatedBrand({ ...createdBrand, ...updates });
+      updateBrandInStore(createdBrand.id, updates);
+      setEcommerceDetected(true);
+    } catch (err) {
+      console.error('E-commerce setup error:', err);
     }
   };
 
@@ -649,6 +670,9 @@ export default function NewBrandPage() {
     if (!createdBrand) return;
     setSavingCompetitors(true);
     try {
+      // Shopping mode first, if it is still going on: the first run should
+      // track ChatGPT Shopping on every prompt, not some of them.
+      await ecommerceSetup.current;
       const selected = takePendingCompetitor().filter((c) => c.selected);
       if (selected.length > 0) {
         await Promise.all(
@@ -1171,6 +1195,8 @@ export default function NewBrandPage() {
               We&apos;ll track how often competitors appear alongside your brand in AI responses.
             </p>
           </div>
+
+          {ecommerceDetected && <EcommerceNote brandName={brandName.trim()} />}
 
           {/* First, and outside the loading state: people arrive knowing their
               rivals and should not have to wait for, or scroll past, ours. */}

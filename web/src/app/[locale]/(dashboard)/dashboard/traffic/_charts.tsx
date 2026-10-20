@@ -61,28 +61,33 @@ function ChartContainer({
 // a grey raw hostname (traffic-platforms.test.ts checks). The other ChatGPT
 // hosts are kept for rows from before the list (AT-004), and `unknown` for
 // rows that predate #288 (null source_platform).
+//
+// In the brand's colors rather than shades of one violet: the most common
+// engine in ink (the theme's primary, black on light and near-white on dark),
+// the others in warm, earthy tones that read on both themes and apart from
+// one another.
 
 const PLATFORM_COLORS: Record<string, string> = {
-  'chatgpt.com': '#6366f1',
-  'chat.openai.com': '#6366f1',
-  'search.chatgpt.com': '#6366f1',
-  'perplexity.ai': '#8b5cf6',
-  'claude.ai': '#c4b5fd',
-  'gemini.google.com': '#a78bfa',
-  'copilot.microsoft.com': '#ddd6fe',
-  'you.com': '#818cf8',
-  'phind.com': '#a5b4fc',
-  'meta.ai': '#7c3aed',
-  'poe.com': '#e9d5ff',
-  'labs.google': '#b794f6',
-  'bing.com': '#67c5d6',
-  'grok.com': '#4f46e5',
-  'deepseek.com': '#9333ea',
-  unknown: '#94a3b8',
+  'chatgpt.com': 'var(--primary)',
+  'chat.openai.com': 'var(--primary)',
+  'search.chatgpt.com': 'var(--primary)',
+  'perplexity.ai': '#3f6f68',
+  'claude.ai': '#c2603f',
+  'gemini.google.com': '#c9973b',
+  'copilot.microsoft.com': '#5f7f9a',
+  'you.com': '#7a8450',
+  'phind.com': '#c9b79c',
+  'meta.ai': '#8c5e73',
+  'poe.com': '#9a4a2e',
+  'labs.google': '#d4b26a',
+  'bing.com': '#6b8a99',
+  'grok.com': '#a08c74',
+  'deepseek.com': '#4f6f8f',
+  unknown: '#a8a29a',
 };
 
 export function getColor(platform: string): string {
-  return PLATFORM_COLORS[platform] ?? '#94a3b8';
+  return PLATFORM_COLORS[platform] ?? '#a8a29a';
 }
 
 /**
@@ -289,8 +294,8 @@ export function ReferralTrendChart({
 
 // ─── AI visits vs Google clicks (AT-008) ─────────────────────────────────────
 
-/** The AI line in the platforms' indigo, Google's in its green, markers in amber. */
-const AI_LINE = '#6366f1';
+/** The AI line in ink, as the top engine, Google's in its green, markers in amber. */
+const AI_LINE = 'var(--primary)';
 const GOOGLE_LINE = '#34a853';
 const MARKER = '#f59e0b';
 const BASELINE = '#94a3b8';

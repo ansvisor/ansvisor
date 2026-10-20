@@ -6,8 +6,10 @@
  * A batch is verified request by request (user agent on the list, IP in the
  * operator's published ranges, ai-bots.js), then written in one step that
  * holds the organization's monthly cap (00183 ai_bot_ingest): rows while
- * there is room, bot × page × day counters always. No IP is kept. Crossing
- * 80% of the cap raises the internal alert once a month (§6.3 guardrails).
+ * there is room, bot × page × day counters always. A log sender's file is
+ * claimed, counted against the raw cap and written in that same transaction
+ * (00189 ai_bot_ingest_file). No IP is kept. Crossing 80% of the cap raises
+ * the internal alert once a month (§6.3 guardrails).
  */
 
 import { createHash, randomBytes } from 'crypto';
@@ -18,9 +20,6 @@ import { logger } from './logger.js';
 
 /** The most requests one Worker batch may carry (a Worker sends about 100). */
 export const MAX_BATCH = 500;
-
-/** Verified events are written this many at a time. */
-export const WRITE_CHUNK = 500;
 
 /** Requests older than this are dropped: a sender catching up after a week isn't the site's reading now. */
 export const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -102,15 +101,9 @@ function readRequest(raw, now) {
   };
 }
 
-/**
- * Verify and store one batch for a connection. Returns what was received,
- * verified and stored, and why the rest wasn't counted. A Worker batch is
- * kept to MAX_BATCH; a log file (`limit: Infinity`) is read whole and its
- * verified events written WRITE_CHUNK at a time.
- */
-export async function ingestBotRequests(connection, requests, deps = {}) {
+/** The bots among a sender's requests, as events to write, and why the rest were skipped. */
+async function verifyRequests(list, deps) {
   const now = deps.now ?? Date.now();
-  const list = Array.isArray(requests) ? requests.slice(0, deps.limit ?? MAX_BATCH) : [];
   const skipped = { invalid: 0, unknown_agent: 0, unverified_ip: 0, no_ranges: 0 };
   const events = [];
   for (const raw of list) {
@@ -133,6 +126,31 @@ export async function ingestBotRequests(connection, requests, deps = {}) {
       at: request.at,
     });
   }
+  return { events, skipped };
+}
+
+/** The internal alert, once a month, when a write takes the month past 80% of the cap. */
+function alertAt80(connection, data, cap) {
+  if (!data?.crossed80) return;
+  logger.warn(
+    {
+      organizationId: connection.organizationId,
+      brandId: connection.brandId,
+      used: data.used,
+      cap,
+    },
+    '[ai-bots] 80% of the monthly bot event cap reached',
+  );
+}
+
+/**
+ * Verify and store one Worker batch (at most MAX_BATCH requests) for a
+ * connection. Returns what was received, verified and stored, and why the
+ * rest wasn't counted.
+ */
+export async function ingestBotRequests(connection, requests, deps = {}) {
+  const list = Array.isArray(requests) ? requests.slice(0, MAX_BATCH) : [];
+  const { events, skipped } = await verifyRequests(list, deps);
 
   let stored = 0;
   if (events.length > 0) {
@@ -140,106 +158,136 @@ export async function ingestBotRequests(connection, requests, deps = {}) {
     // A plan without the report (Starter) stores nothing, not even counters.
     if (cap === 0)
       return { received: list.length, verified: events.length, stored, skipped, locked: true };
-    for (let i = 0; i < events.length; i += WRITE_CHUNK) {
-      const { data, error } = await supabaseAdmin.rpc('ai_bot_ingest', {
-        p_connection_id: connection.id,
-        p_cap: cap,
-        p_events: events.slice(i, i + WRITE_CHUNK),
-      });
-      if (error) throw new Error(error.message);
-      if (data?.error) throw new Error(`ai_bot_ingest: ${data.error}`);
-      stored += data?.stored ?? 0;
-      if (data?.crossed80) {
-        logger.warn(
-          {
-            organizationId: connection.organizationId,
-            brandId: connection.brandId,
-            used: data.used,
-            cap,
-          },
-          '[ai-bots] 80% of the monthly bot event cap reached',
-        );
-      }
-    }
+    const { data, error } = await supabaseAdmin.rpc('ai_bot_ingest', {
+      p_connection_id: connection.id,
+      p_cap: cap,
+      p_events: events,
+    });
+    if (error) throw new Error(error.message);
+    if (data?.error) throw new Error(`ai_bot_ingest: ${data.error}`);
+    stored = data?.stored ?? 0;
+    alertAt80(connection, data, cap);
   }
 
   return { received: list.length, verified: events.length, stored, skipped };
 }
 
 /**
- * Claim a log file for reading (a Logpush job's or a Vercel drain's), by
- * the SHA-256 of its body per connection: a sender that times out waiting
- * sends the same file again, and its chunks already written would count
- * twice. Returns the hash, or null when the file was read already. A read
- * that fails gives its claim back (releaseLogFile) so the retry is read.
+ * A log file's key (a Logpush job's or a Vercel drain's): the SHA-256 of its
+ * body. A sender that times out waiting sends the same file again, and the
+ * key keeps it from being read twice.
  */
-export async function claimLogFile(connection, body) {
-  const hash = createHash('sha256')
+export function logFileHash(body) {
+  return createHash('sha256')
     .update(Buffer.isBuffer(body) ? body : Buffer.alloc(0))
     .digest('hex');
-  const { data, error } = await supabaseAdmin
-    .from('ai_bot_ingested_files')
-    .upsert(
-      { connection_id: connection.id, body_hash: hash },
-      { onConflict: 'connection_id,body_hash', ignoreDuplicates: true },
-    )
-    .select('body_hash');
-  if (error) throw new Error(error.message);
-  return (data ?? []).length > 0 ? hash : null;
-}
-
-/** Give a claim back after a read that failed. */
-export async function releaseLogFile(connection, hash) {
-  const { error } = await supabaseAdmin
-    .from('ai_bot_ingested_files')
-    .delete()
-    .eq('connection_id', connection.id)
-    .eq('body_hash', hash);
-  if (error)
-    logger.warn({ err: error, connectionId: connection.id }, '[ai-bots] claim release failed');
 }
 
 /**
- * Count a log sender's records against the month's raw cap (a Vercel drain
- * or a Logpush job, §6.3). `allowed` says whether this batch may be read; a
- * plan without the report reads none.
+ * Whether the connection's file was read already, so a resent one is
+ * answered before it is opened. Only a shortcut: ai_bot_ingest_file claims
+ * the file again in its own transaction.
  */
-export async function countRawRecords(connection, records) {
-  const cap = await getBotRawCap(connection.organizationId);
-  if (cap === 0) return { allowed: false, locked: true };
-  const { data, error } = await supabaseAdmin.rpc('ai_bot_count_raw', {
+export async function logFileRead(connection, hash) {
+  const { data, error } = await supabaseAdmin
+    .from('ai_bot_ingested_files')
+    .select('body_hash')
+    .eq('connection_id', connection.id)
+    .eq('body_hash', hash)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data !== null;
+}
+
+/**
+ * Whether the organization's month has reached the raw cap already (00184
+ * ai_bot_usage.raw_records), so a file is only counted, not verified. The
+ * count itself, compared with today's cap: a plan raised mid-month reads
+ * again. Only a shortcut: ai_bot_ingest_file decides under the usage lock.
+ */
+async function rawCapReached(connection, rawCap, now) {
+  if (rawCap < 0) return false;
+  const month = `${new Date(now).toISOString().slice(0, 7)}-01`;
+  const { data, error } = await supabaseAdmin
+    .from('ai_bot_usage')
+    .select('raw_records')
+    .eq('organization_id', connection.organizationId)
+    .eq('month', month)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data?.raw_records ?? 0) >= rawCap;
+}
+
+/**
+ * Read a log sender's file (a Logpush job's or a Vercel drain's, §6.3):
+ * verify its requests, then claim the file, count its records against the
+ * month's raw cap and write its events in one transaction
+ * (ai_bot_ingest_file). When that fails, nothing was claimed or counted,
+ * so the sender's retry is read in full. Past the raw cap, the records are
+ * counted and nothing is verified or written; a plan without the report
+ * reads nothing.
+ */
+export async function ingestLogFile(connection, hash, parsed, deps = {}) {
+  const rawCap = await getBotRawCap(connection.organizationId);
+  const cap = await getBotEventCap(connection.organizationId);
+  if (rawCap === 0 || cap === 0) {
+    return { received: parsed.records, verified: 0, stored: 0, locked: true };
+  }
+  const capped = await rawCapReached(connection, rawCap, deps.now ?? Date.now());
+  const list = !capped && Array.isArray(parsed.requests) ? parsed.requests : [];
+  const { events, skipped } = await verifyRequests(list, deps);
+
+  const { data, error } = await supabaseAdmin.rpc('ai_bot_ingest_file', {
     p_connection_id: connection.id,
-    p_count: records,
+    p_body_hash: hash,
+    p_records: parsed.records,
+    p_raw_cap: rawCap,
     p_cap: cap,
+    p_events: events,
   });
   if (error) throw new Error(error.message);
-  if (data?.error) throw new Error(`ai_bot_count_raw: ${data.error}`);
-  return { allowed: data?.allowed === true, raw: data?.raw ?? null, cap };
+  if (data?.duplicate) return { received: 0, verified: 0, stored: 0, duplicate: true };
+  if (data?.raw_capped) {
+    return { received: parsed.records, verified: 0, stored: 0, rawCapped: true };
+  }
+  alertAt80(connection, data, cap);
+  return { received: list.length, verified: events.length, stored: data?.stored ?? 0, skipped };
 }
 
 /** Verified rows are kept 90 days (§6.2); the bot × page × day counters 400. */
 export const EVENT_RETENTION_DAYS = 90;
 export const DAILY_RETENTION_DAYS = 400;
-/** Log file hashes kept for spotting a sender's retry (claimLogFile). */
+/** Log file hashes kept for spotting a sender's retry (ai_bot_ingest_file). */
 export const FILE_HASH_RETENTION_DAYS = 7;
 
-/** The daily prune of rows past their retention (the daily run). */
+/** Rows the prune deletes per table per call, each call its own statement. */
+export const PRUNE_BATCH = 5000;
+/** Calls per daily run at most (a million rows a table); the rest waits a day. */
+export const MAX_PRUNE_CALLS = 200;
+
+/**
+ * The daily prune of rows past their retention (the daily run), PRUNE_BATCH
+ * rows a table per call (00189 ai_bot_prune), so no one DELETE runs into the
+ * statement timeout. Stops when a call deletes fewer than that from every
+ * table.
+ */
 export async function pruneBotEvents(now = Date.now()) {
   const before = (days) => new Date(now - days * 24 * 60 * 60 * 1000).toISOString();
-  const { error } = await supabaseAdmin
-    .from('ai_bot_events')
-    .delete()
-    .lt('occurred_at', before(EVENT_RETENTION_DAYS));
-  if (error) logger.warn({ err: error }, '[ai-bots] event prune failed');
-  const { error: dailyError } = await supabaseAdmin
-    .from('ai_bot_daily')
-    .delete()
-    .lt('day', before(DAILY_RETENTION_DAYS).slice(0, 10));
-  if (dailyError) logger.warn({ err: dailyError }, '[ai-bots] daily prune failed');
-  // A sender retries within minutes; a week of file hashes is plenty.
-  const { error: filesError } = await supabaseAdmin
-    .from('ai_bot_ingested_files')
-    .delete()
-    .lt('received_at', before(FILE_HASH_RETENTION_DAYS));
-  if (filesError) logger.warn({ err: filesError }, '[ai-bots] file hash prune failed');
+  const bounds = {
+    p_events_before: before(EVENT_RETENTION_DAYS),
+    p_daily_before: before(DAILY_RETENTION_DAYS).slice(0, 10),
+    // A sender retries within minutes; a week of file hashes is plenty.
+    p_files_before: before(FILE_HASH_RETENTION_DAYS),
+    p_limit: PRUNE_BATCH,
+  };
+  for (let call = 0; call < MAX_PRUNE_CALLS; call++) {
+    const { data, error } = await supabaseAdmin.rpc('ai_bot_prune', bounds);
+    if (error) {
+      logger.warn({ err: error }, '[ai-bots] prune failed');
+      return;
+    }
+    const counts = [data?.events, data?.daily, data?.files].map((n) => n ?? 0);
+    if (counts.every((n) => n < PRUNE_BATCH)) return;
+  }
+  logger.warn({ calls: MAX_PRUNE_CALLS }, '[ai-bots] prune stopped early; the rest goes tomorrow');
 }
