@@ -13,7 +13,14 @@
  * It also sends the landing page's HTTP status as the browser saw it, for
  * Broken AI links (AT-012): st, from the navigation entry, or 0 where the
  * browser doesn't report one (Safari); then nf is 1 when the page's title
- * reads "404" or "not found".
+ * reads "404" or "not found". With a 2xx, nf is 1 only when the title is
+ * the not-found page's own ("404", "Page not found | Acme"): a single-page
+ * app answers every path with 200 and shows its own not-found route (a soft
+ * 404), while "How we fixed our 404s" is an ordinary page.
+ *
+ * The beacon goes a moment after the page has loaded, so such an app has
+ * set its title, or as the visitor leaves, whichever comes first; with the
+ * address and time the visit landed with.
  *
  * Plain ES5 apart from URL / URLSearchParams, as before: it runs on the
  * customer's pages, in whatever browser their visitors have.
@@ -54,13 +61,22 @@ if(!pf){try{pf=m(new URLSearchParams(location.search).get("utm_source"),true)}ca
 if(!pf)return;
 window.__at=1;
 var c=document.currentScript,k=c.getAttribute("data-t"),o=c.src.replace(/\\/t\\.js(\\?.*)?$/,"");
-var st=0,nf=0;
+var u=location.href,t0=Date.now(),st=0,sent=0;
 try{var n=performance.getEntriesByType("navigation")[0];st=n&&n.responseStatus||0}catch(e){}
-if(!st&&/(^|[^0-9])404([^0-9]|$)|not found/i.test(document.title||""))nf=1;
-var b=JSON.stringify({u:location.href,r:r,s:pf,v:V,a:navigator.userAgent,t:Date.now(),l:navigator.language,d:screen.width+"x"+screen.height,st:st,nf:nf});
+function send(){
+if(sent)return;sent=1;
+var ti=document.title||"",nf=0;
+if(!st){if(/(^|[^0-9])404([^0-9]|$)|not found/i.test(ti))nf=1}
+else if(st>199&&st<300&&/(^|[|:\\u00b7\\u2022\\u2013\\u2014-]\\s*)(404 page not found|404 not found|404 error|error 404|page not found|not found|404)\\s*([|:\\u00b7\\u2022\\u2013\\u2014-]|$)/i.test(ti))nf=1;
+var b=JSON.stringify({u:u,r:r,s:pf,v:V,a:navigator.userAgent,t:t0,l:navigator.language,d:screen.width+"x"+screen.height,st:st,nf:nf});
 var x=o+"/track/"+k;
 if(navigator.sendBeacon)navigator.sendBeacon(x,new Blob([b],{type:"text/plain;charset=UTF-8"}));
 else fetch(x,{method:"POST",body:b,headers:{"Content-Type":"text/plain;charset=UTF-8"},keepalive:!0}).catch(function(){});
+}
+function later(){setTimeout(send,1500)}
+if(document.readyState==="complete")later();else window.addEventListener("load",later);
+window.addEventListener("pagehide",send);
+document.addEventListener("visibilitychange",function(){if(document.visibilityState==="hidden")send()});
 })();
 `;
 }

@@ -130,7 +130,9 @@ router.post('/track/:trackingCode', trafficLimiter, beaconBody, async (req, res)
     // page's title said "not found".
     const httpStatus =
       Number.isInteger(body.st) && body.st >= 100 && body.st <= 599 ? body.st : null;
-    const notFoundTitle = httpStatus === null && body.nf === 1;
+    // The title counts without a status, or with a 2xx: a soft 404 (00198).
+    const notFoundTitle =
+      body.nf === 1 && (httpStatus === null || (httpStatus >= 200 && httpStatus < 300));
 
     const userAgent = (body.a || '').slice(0, 512) || null;
     const ipAddress = ip || null;

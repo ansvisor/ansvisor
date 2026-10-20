@@ -3295,6 +3295,7 @@
       "brokenStatuses": {
         "404": "Not found (404)",
         "410": "Gone (410)",
+        "soft404": "Shows a not-found page (200)",
         "title": "Page title says not found"
       },
       "redirectReasons": {
@@ -3791,6 +3792,7 @@
         "status": {
           "404": "Not found (404)",
           "410": "Gone (410)",
+          "soft404": "Shows a not-found page (200)",
           "title": "Page title says not found"
         },
         "reason": {

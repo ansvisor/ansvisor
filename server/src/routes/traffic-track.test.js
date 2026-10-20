@@ -142,14 +142,19 @@ describe('POST /track/:trackingCode', () => {
     await beacon({ st: 404, nf: 0 });
     // Safari: no status, and the title said "not found".
     await beacon({ st: 0, nf: 1 });
-    // A status wins over the title.
+    // A 2xx whose title said not found: a soft 404 (00198).
     await beacon({ st: 200, nf: 1 });
+    // Any other status wins over the title.
+    await beacon({ st: 301, nf: 1 });
+    await beacon({ st: 404, nf: 1 });
     // An older snippet sends neither.
     await beacon();
     expect(inserted.map((i) => [i.row.http_status, i.row.not_found_title])).toEqual([
       [404, false],
       [null, true],
-      [200, false],
+      [200, true],
+      [301, false],
+      [404, false],
       [null, false],
     ]);
   });

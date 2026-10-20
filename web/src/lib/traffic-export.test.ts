@@ -635,6 +635,16 @@ describe('trafficTable: Broken AI links (AT-012)', () => {
       ['No AI visitor landed on a missing page in this range'],
     ]);
   });
+
+  it('names a soft 404 for what the visitor saw', () => {
+    const [row] = brokenLinks().rows;
+    const table = trafficTable(
+      'brokenLinks',
+      data({ brokenLinks: { count: 1, rows: [{ ...row, status: 'soft404' }] } }),
+      label,
+    );
+    expect(table.rows[0].at(-1)).toBe('Shows a not-found page (200)');
+  });
 });
 
 describe('filtersTable', () => {
