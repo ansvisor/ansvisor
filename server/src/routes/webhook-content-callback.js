@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import supabaseAdmin from '../config/supabase.js';
-import { publicLimiter } from '../middleware/rate-limiter.js';
+import {
+  webhookCallbackLimiter,
+  webhookCallbackAuthFailureLimiter,
+} from '../middleware/rate-limiter.js';
 import { sourceDataForStatus, VALID_OPPORTUNITY_STATUSES } from '../lib/opportunity-status.js';
 import { webhookSecretsMatch } from '../lib/webhook-secret.js';
 
@@ -8,7 +11,7 @@ const router = Router();
 
 // This endpoint is public by design, so keep a stricter IP-based limit than
 // the authenticated dashboard API. It is mounted outside /api in server.js.
-router.use(publicLimiter);
+router.use(webhookCallbackLimiter, webhookCallbackAuthFailureLimiter);
 
 /**
  * POST /webhooks/content/:id/status
@@ -17,6 +20,12 @@ router.use(publicLimiter);
 router.post('/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
+    // Avoid sending malformed identifiers to Postgres (22P02). Keep its
+    // response indistinguishable from a wrong secret or unknown opportunity.
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+      return res.status(401).json({ error: 'Invalid webhook credentials' });
+    }
+
     const { data: current, error: opportunityError } = await supabaseAdmin
       .from('content_opportunities')
       .select('id, brand_id, source_data, updated_at')
