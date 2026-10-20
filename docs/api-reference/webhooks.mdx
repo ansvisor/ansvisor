@@ -11,7 +11,7 @@ Each brand has one webhook, set up in **Content → Configure Webhook**:
 - **Secret key** (optional) — sent back to you in a header on every request, so your endpoint can tell that the call came from Ansvisor.
 - **Active** — pause delivery without deleting the webhook.
 
-Choose the events a webhook should receive in **Content → Configure Webhook**. Existing webhooks keep receiving all supported events by default. **Test Webhook** always sends `webhook.test`, regardless of the saved selection.
+Choose the events a webhook should receive in **Content → Configure Webhook**. Migration 00198 keeps existing webhooks subscribed to all three supported events until a user saves a new selection. **Test Webhook** always sends `webhook.test`, regardless of the saved selection.
 
 ## Events
 
