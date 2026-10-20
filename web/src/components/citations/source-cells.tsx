@@ -19,12 +19,14 @@ import {
   type AIProviderKey,
 } from '@/components/ai-provider-avatar';
 
+// You in ink, the theme's primary, as Mentions marks your brand; the other
+// categories in hues apart from one another, none of them violet.
 export const CATEGORY_BADGE_CLASSES: Record<SourceCategory, string> = {
-  you: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300',
+  you: 'border-primary/30 bg-primary/10 text-foreground',
   competitor: 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300',
   editorial: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
   forum: 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300',
-  social: 'border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-300',
+  social: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
   review: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-300',
   institutional: 'border-teal-500/30 bg-teal-500/10 text-teal-700 dark:text-teal-300',
   other: 'border-slate-400/30 bg-slate-400/10 text-slate-700 dark:text-slate-300',

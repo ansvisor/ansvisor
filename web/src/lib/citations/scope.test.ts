@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { scopeDomainArgs } from './scope.js';
+import { inSourceScope, scopeDomainArgs } from './scope.js';
 import type { SourceCategory } from './classify.js';
 
 /**
@@ -79,5 +79,17 @@ describe('scopeDomainArgs', () => {
   it('handles a window with no citations at all', () => {
     expect(scopeDomainArgs('own', [])).toEqual({ p_domains: [] });
     expect(scopeDomainArgs('third_party', [])).toEqual({});
+  });
+});
+
+describe('inSourceScope', () => {
+  it("keeps a scope's sources, and every source for All", () => {
+    const inScope = (scope: Parameters<typeof inSourceScope>[1]) =>
+      rows.filter((r) => inSourceScope(r.category, scope)).map((r) => r.domain);
+    expect(inScope('own')).toEqual(['mybrand.com', 'blog.mybrand.com']);
+    expect(inScope('competitors')).toEqual(['rival.com', 'other-rival.com']);
+    expect(inScope('third_party')).toEqual(['reddit.com', 'techcrunch.com', 'randomsite.com']);
+    expect(inScope('all')).toHaveLength(rows.length);
+    expect(inScope(undefined)).toHaveLength(rows.length);
   });
 });

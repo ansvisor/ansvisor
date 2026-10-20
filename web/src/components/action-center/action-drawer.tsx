@@ -53,6 +53,7 @@ import {
   actionGoal,
   actionTexts,
   memberLabel,
+  pickedAssignee,
   taskText,
 } from '@/lib/action-center/display';
 import { signalTexts } from '@/lib/signals/display';
@@ -406,18 +407,8 @@ export function ActionDrawer({
               value={action.assignee?.id ?? 'unassigned'}
               onValueChange={(value) => {
                 const assigneeId = value === 'unassigned' ? null : value;
-                const member = members.find((m) => m.userId === assigneeId);
-                void changeField(
-                  {
-                    assignee: assigneeId
-                      ? {
-                          id: assigneeId,
-                          fullName: member?.fullName ?? null,
-                          avatarUrl: member?.avatarUrl ?? null,
-                        }
-                      : null,
-                  },
-                  () => assignAction(brandId, action.id, assigneeId),
+                void changeField({ assignee: pickedAssignee(assigneeId, members) }, () =>
+                  assignAction(brandId, action.id, assigneeId),
                 );
               }}
               items={[

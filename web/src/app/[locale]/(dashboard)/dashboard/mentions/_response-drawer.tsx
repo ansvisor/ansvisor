@@ -71,7 +71,7 @@ function Section({
  * The response drawer (MS-08, read-only in V1): the answer's prompt,
  * platform and model, country, date and time; its sentiment and the brand's
  * position; the passage around the mention; the competitors named beside
- * you; the full stored answer with your brand marked in violet and
+ * you; the full stored answer with your brand marked in ink and
  * competitors in grey; and the sources it cites, typed as on the Citations
  * page. Its footer sends the answer to the Action Center, suggests content
  * for its prompt, and copies it; correcting the sentiment comes next.
@@ -245,7 +245,7 @@ export function ResponseDrawer({
               />
 
               <Section title={t('mention')}>
-                <blockquote className="rounded-md border-l-2 border-violet-400 bg-muted/40 px-3 py-2 text-sm leading-relaxed">
+                <blockquote className="rounded-md border-l-2 border-primary bg-muted/40 px-3 py-2 text-sm leading-relaxed">
                   <Highlighted text={row.excerpt} names={names} />
                 </blockquote>
                 <p className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
@@ -352,7 +352,7 @@ export function ResponseDrawer({
                                 className={cn(
                                   'h-5 shrink-0 px-1.5 text-[11px]',
                                   category === 'you' &&
-                                    'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300',
+                                    'border-primary/30 bg-primary/10 text-foreground',
                                 )}
                               >
                                 {SOURCE_CATEGORY_LABELS[category]}
