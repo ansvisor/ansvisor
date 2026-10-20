@@ -14,7 +14,8 @@ import type { TrafficDateWindow, TrafficGooglePages } from '@/lib/actions/traffi
  */
 
 const getTrafficGooglePages = vi.fn();
-vi.mock('@/lib/actions/traffic', () => ({
+vi.mock('@/lib/actions/traffic', () => ({}));
+vi.mock('@/lib/traffic-reads', () => ({
   getTrafficGooglePages: (...args: unknown[]) => getTrafficGooglePages(...args),
 }));
 vi.mock('@/hooks/use-integration-connect', () => ({

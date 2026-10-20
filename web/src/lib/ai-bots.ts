@@ -28,15 +28,42 @@ export function botsCardState({ connections, usage }: BotConnections): BotsCardS
   return lastBotEvent(connections) ? 'on' : 'waiting';
 }
 
+/** The first day of the month after `month` ("2026-10-01" → "2026-11-01"); null if malformed. */
+function nextMonth(month: string): string | null {
+  if (!/^\d{4}-\d{2}-01$/.test(month)) return null;
+  const [y, m] = month.split('-').map(Number);
+  return new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
+}
+
 /**
  * The day detailed rows start again when this month's cap was reached
  * ("Detailed rows paused until Nov 1, totals still counted", spec §6.3);
  * null while under the cap.
  */
 export function rowsPausedUntil(usage: BotUsage): string | null {
-  if (!usage.cappedAt || usage.cap <= 0 || !/^\d{4}-\d{2}-01$/.test(usage.month)) return null;
-  const [y, m] = usage.month.split('-').map(Number);
-  return new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
+  if (!usage.cappedAt || usage.cap <= 0) return null;
+  return nextMonth(usage.month);
+}
+
+/** Connections that send log files, counted against the raw cap (a Worker's batches aren't). */
+export function hasLogSender({ connections }: BotConnections): boolean {
+  return connections.some((c) => c.kind !== 'cloudflare_worker');
+}
+
+/**
+ * The day log files are read again when this month's raw cap was reached
+ * (§6.3). Past it a Logpush job's or a Vercel drain's files are only
+ * counted: no rows and no totals, so the report stops until then. Null
+ * while under the cap, or without a log sender.
+ *
+ * Read against today's plan, as the server decides (raw < cap), not from
+ * rawCappedAt: 00184 sets that once a month and never clears it, so a raised
+ * plan reads files again under it, and a lowered one stops without it.
+ */
+export function logsPausedUntil(info: BotConnections): string | null {
+  const { usage } = info;
+  if (usage.rawCap <= 0 || usage.raw < usage.rawCap || !hasLogSender(info)) return null;
+  return nextMonth(usage.month);
 }
 
 /**

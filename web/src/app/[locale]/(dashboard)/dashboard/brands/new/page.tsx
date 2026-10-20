@@ -58,6 +58,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { suggestTopics, generatePromptsFromTopics, suggestCompetitors } from '@/lib/ai-brand-setup';
+import { DASHBOARD_HOME } from '@/config/home';
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
 
@@ -701,7 +702,7 @@ export default function NewBrandPage() {
       await bootstrapBrandVolumes(createdBrand.id);
 
       toast.success('Brand setup complete! Tracking is starting.');
-      router.push('/dashboard/insights');
+      router.push(DASHBOARD_HOME);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save competitors');
       setSavingCompetitors(false);

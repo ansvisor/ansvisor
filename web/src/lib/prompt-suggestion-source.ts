@@ -59,3 +59,11 @@ export function gscSourceData(s: SourceCarrier): GscSuggestionSourceData | null 
 export function gaSourceData(s: SourceCarrier): GaSuggestionSourceData | null {
   return s.source === 'ga' && s.sourceData && 'landingPage' in s.sourceData ? s.sourceData : null;
 }
+
+/**
+ * Built from the brand's own Search Console or Analytics data: Prompt
+ * Suggestions' "From your data" filter, which Getting started links to.
+ */
+export function fromYourData(s: SourceCarrier): boolean {
+  return gscSourceData(s) !== null || gaSourceData(s) !== null;
+}
