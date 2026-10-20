@@ -125,13 +125,6 @@ function detectMarketplace(host) {
   return null;
 }
 
-function normalizeBrandDomain(value) {
-  const url = parseHttpUrl(value);
-  return url
-    ? normalizeHost(url.hostname).replace(/^www\./, '')
-    : normalizeHost(value).replace(/^www\./, '');
-}
-
 function isOwnDomain(url, brandDomains) {
   if (!Array.isArray(brandDomains)) return false;
   return ownDomainMatcher(brandDomains)(url.href);
