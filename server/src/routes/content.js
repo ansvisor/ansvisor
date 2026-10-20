@@ -848,6 +848,7 @@ router.post('/bulk/send-webhook', async (req, res) => {
       .select('*')
       .eq('brand_id', brandId)
       .eq('is_active', true)
+      .contains('events', ['opportunity.sent'])
       .limit(1)
       .single();
 
@@ -1030,6 +1031,7 @@ router.post('/:id/send-webhook', async (req, res) => {
       .select('*')
       .eq('brand_id', opportunity.brand_id)
       .eq('is_active', true)
+      .contains('events', ['opportunity.sent'])
       .limit(1)
       .single();
 
