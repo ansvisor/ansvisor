@@ -1314,7 +1314,6 @@ export default function CompetitorsPage() {
     loadComparison();
   }, [loadComparison]);
 
-
   useEffect(() => {
     if (!linkedCompetitorId || loading) return;
     selectCompetitor(
