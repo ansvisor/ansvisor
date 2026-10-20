@@ -736,9 +736,15 @@ const FAMILIES = [
       }
 
       // Each missing page with what AI visitors got and the working page to
-      // redirect it to; the snippet is the only source (§3.8b).
+      // redirect it to; the snippet is the only source (§3.8b). A page AI
+      // answers cite counts from its first visit; any other needs
+      // brokenLinkMinVisits, so a single 404 visit from the public beacon,
+      // stray or made up, raises no high-impact signal.
       const broken = await ctx.brokenLinks();
-      const rows = Array.isArray(broken?.rows) ? broken.rows : [];
+      const listed = Array.isArray(broken?.rows) ? broken.rows : [];
+      const rows = listed.filter(
+        (r) => (Number(r.citations) || 0) > 0 || (Number(r.visits) || 0) >= t.brokenLinkMinVisits,
+      );
       if (rows.length > 0) {
         found.push({
           ...group(
@@ -755,7 +761,10 @@ const FAMILIES = [
             }),
             AI,
           ),
-          currentValue: Number(broken.count) || rows.length,
+          // The function's count covers every page past its row limit; once
+          // the filter drops some, the pages kept are the count.
+          currentValue:
+            rows.length === listed.length ? Number(broken.count) || rows.length : rows.length,
         });
       }
       return found;
