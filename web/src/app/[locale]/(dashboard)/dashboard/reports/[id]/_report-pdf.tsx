@@ -578,13 +578,13 @@ export function ReportPdfDocument({ report }: { report: Report }) {
           </View>
         )}
 
-        {/* Shopping visibility */}
+        {/* Product Visibility */}
         {payload.shoppingVisibility && (
           <View style={styles.section} wrap={false}>
-            <Text style={styles.sectionTitle}>Shopping Visibility</Text>
+            <Text style={styles.sectionTitle}>Product Visibility</Text>
             <View style={styles.kpiRow}>
               <View style={styles.kpiBox}>
-                <Text style={styles.kpiLabel}>Shopping SoV</Text>
+                <Text style={styles.kpiLabel}>Product SoV</Text>
                 <View style={styles.kpiValueRow}>
                   <Text style={styles.kpiValue}>{payload.shoppingVisibility.shoppingSovPct}%</Text>
                   <DeltaText value={payload.shoppingVisibility.sovChange} />

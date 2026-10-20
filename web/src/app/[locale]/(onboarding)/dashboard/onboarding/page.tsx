@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { createBrand } from '@/lib/actions/brand';
+import { createBrand, markBrandAsEcommerce } from '@/lib/actions/brand';
+import { EcommerceNote } from '@/components/onboarding/ecommerce-note';
 import { createTopics, getTopics } from '@/lib/actions/topic';
 import { getPromptCapacity, savePromptSet } from '@/lib/actions/prompt';
 import { triggerTrackingCheck } from '@/lib/actions/tracking';
@@ -262,7 +263,7 @@ const COMPETITOR_LOADING_MESSAGES = [
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { addBrand, setActiveBrand } = useBrandStore();
+  const { addBrand, setActiveBrand, updateBrand: updateBrandInStore } = useBrandStore();
 
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -328,6 +329,8 @@ export default function OnboardingPage() {
   const [suggestedCompetitors, setSuggestedCompetitors] = useState<CompetitorItem[]>([]);
   const [loadingCompetitors, setLoadingCompetitors] = useState(false);
   const [competitorSuggestError, setCompetitorSuggestError] = useState(false);
+  const [ecommerceDetected, setEcommerceDetected] = useState(false);
+  const ecommerceSetup = useRef<Promise<void> | null>(null);
   const [competitorName, setCompetitorName] = useState('');
   const [competitorDomain, setCompetitorDomain] = useState('');
   const [savingCompetitors, setSavingCompetitors] = useState(false);
@@ -828,7 +831,7 @@ export default function OnboardingPage() {
     setLoadingCompetitors(true);
     setCompetitorSuggestError(false);
     try {
-      const { competitors } = await suggestCompetitors({
+      const { competitors, isEcommerce } = await suggestCompetitors({
         brandName: brandName.trim(),
         description: description.trim(),
         website: domain,
@@ -836,11 +839,30 @@ export default function OnboardingPage() {
         region,
       });
       setSuggestedCompetitors((prev) => mergeCompetitorSuggestions(prev, competitors));
+      // Kept, so Finish waits for it: it updates the prompts one by one.
+      if (isEcommerce) ecommerceSetup.current = turnOnProductVisibility();
     } catch (err) {
       console.error('Competitor suggestion error:', err);
       setCompetitorSuggestError(true);
     } finally {
       setLoadingCompetitors(false);
+    }
+  };
+
+  // The research found an online store: Shopping mode goes on, so Product
+  // Visibility shows in the menu. Best effort: it can be turned on in the
+  // brand's settings too.
+  const turnOnProductVisibility = async () => {
+    if (!createdBrand || createdBrand.shoppingModeEnabled) return;
+    try {
+      const { industry } = await markBrandAsEcommerce(createdBrand.id);
+      const updates = { industry: industry ?? undefined, shoppingModeEnabled: true };
+      setCreatedBrand({ ...createdBrand, ...updates });
+      updateBrandInStore(createdBrand.id, updates);
+      setEcommerceDetected(true);
+      track('onboarding_ecommerce_detected');
+    } catch (err) {
+      console.error('E-commerce setup error:', err);
     }
   };
 
@@ -894,6 +916,9 @@ export default function OnboardingPage() {
 
     setSavingCompetitors(true);
     try {
+      // Shopping mode first, if it is still going on: the first run should
+      // track ChatGPT Shopping on every prompt, not some of them.
+      await ecommerceSetup.current;
       // Save selected competitors
       await Promise.all(
         selected.map((c) => addCompetitor(createdBrand.id, { name: c.name, domain: c.domain })),
@@ -1543,6 +1568,8 @@ export default function OnboardingPage() {
                 We&apos;ll track how often competitors appear alongside your brand in AI responses.
               </p>
             </div>
+
+            {ecommerceDetected && <EcommerceNote brandName={brandName.trim()} />}
 
             {/* First, and outside the loading state: people arrive knowing their
                 rivals and should not have to wait for, or scroll past, ours. */}

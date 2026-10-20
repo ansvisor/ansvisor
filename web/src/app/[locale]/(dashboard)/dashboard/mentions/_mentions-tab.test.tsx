@@ -169,7 +169,7 @@ describe('MentionsListTab', () => {
     expect(marks[0][0]).toBe('Crema Club');
     expect(marks[0][1]).toContain('bg-muted');
     expect(marks[1][0]).toBe('Acme Coffee');
-    expect(marks[1][1]).toContain('bg-violet-100');
+    expect(marks[1][1]).toContain('bg-primary');
     expect(rows[1].textContent).toContain('—');
   });
 
