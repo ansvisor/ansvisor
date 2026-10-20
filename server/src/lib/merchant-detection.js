@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { ownDomainMatcher } from './response-parser.js';
 
 const require = createRequire(import.meta.url);
 const MARKETPLACES = require('./merchant-marketplaces.json');
@@ -46,7 +47,7 @@ function parseHttpUrl(value) {
   return parsed;
 }
 
-function redirectTarget(value, baseUrl) {
+function redirectTarget(value, marketplace) {
   const candidates = [value];
   let decoded = value;
   // searchParams decodes one URL-encoding layer already. A few redirectors
@@ -62,17 +63,25 @@ function redirectTarget(value, baseUrl) {
     }
   }
 
+  const canonicalHost = MARKETPLACES[marketplace]?.hosts?.[0];
   for (const candidate of candidates) {
-    const absolute = parseHttpUrl(candidate);
-    if (absolute) return absolute;
-    if (typeof candidate === 'string' && candidate.startsWith('/')) {
+    if (typeof candidate !== 'string') continue;
+
+    // Relative paths are common on affiliate links. Resolve them against the
+    // marketplace's canonical host, never the affiliate redirect host.
+    if (candidate.startsWith('/') && !candidate.startsWith('//') && canonicalHost) {
       try {
-        const relative = new URL(candidate, baseUrl);
-        if (['http:', 'https:'].includes(relative.protocol)) return relative;
+        return new URL(candidate, `https://${canonicalHost}/`);
       } catch {
-        // Try the next candidate; malformed redirect parameters aren't fatal.
+        continue;
       }
     }
+
+    // Only explicitly absolute HTTP(S) URLs are valid redirect destinations.
+    // Do not reinterpret arbitrary strings such as "foo" as hosts.
+    if (!/^https?:\/\//i.test(candidate)) continue;
+    const absolute = parseHttpUrl(candidate);
+    if (absolute) return absolute;
   }
   return null;
 }
@@ -95,7 +104,7 @@ function resolveMerchantUrl(initialUrl) {
     for (const parameter of redirect.parameters ?? []) {
       const candidate = url.searchParams.get(parameter);
       if (!candidate) continue;
-      target = redirectTarget(candidate, url);
+      target = redirectTarget(candidate, redirect.marketplace);
       if (target) break;
     }
     if (!target || visited.has(target.href)) break;
@@ -123,12 +132,9 @@ function normalizeBrandDomain(value) {
     : normalizeHost(value).replace(/^www\./, '');
 }
 
-function isOwnDomain(host, brandDomains) {
+function isOwnDomain(url, brandDomains) {
   if (!Array.isArray(brandDomains)) return false;
-  return brandDomains.some((domain) => {
-    const normalized = normalizeBrandDomain(domain);
-    return normalized && hostMatches(host, normalized);
-  });
+  return ownDomainMatcher(brandDomains)(url.href);
 }
 
 function listingIdFor(marketplace, pathname) {
@@ -194,7 +200,7 @@ export function classifyMerchant(merchantUrl, { brandDomains = [] } = {}) {
     };
   }
 
-  if (isOwnDomain(host, brandDomains)) {
+  if (isOwnDomain(destination, brandDomains)) {
     return { kind: 'own', marketplace: null, listingId: null };
   }
 
