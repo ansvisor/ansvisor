@@ -3,11 +3,15 @@ import {
   ALLOWED_ATTRIBUTES,
   ALLOWED_TAGS,
   DEMOTED_HEADINGS,
-  JSON_LD_SLOT,
+  HTML_BLOCK_ELEMENT,
+  KEPT_SLOT,
+  MAX_HTML_BLOCK_LENGTH,
   UNSAFE_TAGS,
   cleanHref,
-  extractJsonLd,
-  restoreJsonLd,
+  decodeHtmlBlock,
+  extractKeptBlocks,
+  htmlBlockElement,
+  restoreKeptBlocks,
 } from './html-allowlist';
 
 /**
@@ -81,8 +85,16 @@ function demoteHeadings(root: HTMLElement) {
   }
 }
 
-export function cleanHtml(input: string, { keepImages }: { keepImages: boolean }): CleanedHtml {
-  const { html, blocks } = extractJsonLd(input);
+/**
+ * `keepImages`: a paste from elsewhere leaves images out. `keepHtmlBlocks`:
+ * only the editor's own HTML (its copy, the HTML view) brings HTML blocks; a
+ * paste from a web page can't plant code in a draft.
+ */
+export function cleanHtml(
+  input: string,
+  { keepImages, keepHtmlBlocks = false }: { keepImages: boolean; keepHtmlBlocks?: boolean },
+): CleanedHtml {
+  const { html, kept } = extractKeptBlocks(input, { htmlBlocks: keepHtmlBlocks });
   const doc = new DOMParser().parseFromString(html, 'text/html');
   // Counted in the whole document: a script before any text parses into <head>.
   const unsafeRemoved = doc.querySelectorAll(UNSAFE_TAGS.join(',')).length;
@@ -103,12 +115,12 @@ export function cleanHtml(input: string, { keepImages }: { keepImages: boolean }
         imagesRemoved += 1;
         node.remove();
       }
-    } else if (node.hasAttribute('data-i') && node.tagName.toLowerCase() !== JSON_LD_SLOT) {
+    } else if (node.hasAttribute('data-i') && node.tagName.toLowerCase() !== KEPT_SLOT) {
       node.removeAttribute('data-i');
     }
   });
   const clean = purify.sanitize(doc.body.innerHTML, {
-    ALLOWED_TAGS: [...ALLOWED_TAGS, JSON_LD_SLOT],
+    ALLOWED_TAGS: [...ALLOWED_TAGS, KEPT_SLOT],
     ALLOWED_ATTR,
     ALLOW_DATA_ATTR: false,
     // Links and image addresses are checked by the hook above, more strictly
@@ -116,7 +128,7 @@ export function cleanHtml(input: string, { keepImages }: { keepImages: boolean }
   });
 
   return {
-    html: restoreJsonLd(clean, blocks).replace(/<p>(\s|&nbsp;|<br>)*<\/p>/g, ''),
+    html: restoreKeptBlocks(clean, kept).replace(/<p>(\s|&nbsp;|<br>)*<\/p>/g, ''),
     unsafeRemoved,
     imagesRemoved,
   };
@@ -126,13 +138,53 @@ const BLOCKS = 'h[1-6]|p|ul|ol|li|blockquote|table|thead|tbody|tr|th|td|script';
 const BEFORE_OPENING_BLOCK = new RegExp(`><(?=(?:${BLOCKS})\\b)`, 'g');
 const AFTER_CLOSING_BLOCK = new RegExp(`(</(?:${BLOCKS})>)(?=<)`, 'g');
 
+const HTML_BLOCK_OPEN = '<!-- html-block -->';
+const HTML_BLOCK_CLOSE = '<!-- /html-block -->';
+const HTML_BLOCK_MARKED = /<!-- html-block -->\n?([\s\S]*?)\n?<!-- \/html-block -->/g;
+
+function lineByBlock(html: string): string {
+  return html.replace(AFTER_CLOSING_BLOCK, '$1\n').replace(BEFORE_OPENING_BLOCK, '>\n<');
+}
+
+/** Each HTML block's code in place of its element, as `expand` writes it. */
+function expandHtmlBlocks(html: string, expand: (code: string) => string): string {
+  return html.replace(HTML_BLOCK_ELEMENT, (element, encoded: string) => {
+    const code = decodeHtmlBlock(encoded);
+    return code === null ? element : expand(code);
+  });
+}
+
 /**
  * The HTML view's text: the page's HTML as a draft stores it (without the
  * editor's own table widths and link targets), one block per line, so it
- * reads like source. Inline tags stay on their line.
+ * reads like source. Inline tags stay on their line. An HTML block shows as
+ * its code between <!-- html-block --> markers, as written.
  */
 export function formatHtmlSource(html: string): string {
-  return cleanHtml(html, { keepImages: true })
-    .html.replace(AFTER_CLOSING_BLOCK, '$1\n')
-    .replace(BEFORE_OPENING_BLOCK, '>\n<');
+  const clean = cleanHtml(html, { keepImages: true, keepHtmlBlocks: true }).html;
+  return expandHtmlBlocks(
+    lineByBlock(clean),
+    (code) => `${HTML_BLOCK_OPEN}\n${code}\n${HTML_BLOCK_CLOSE}`,
+  );
+}
+
+/**
+ * The HTML view's text back to the editor's HTML: the code between markers
+ * becomes HTML blocks again (one over MAX_HTML_BLOCK_LENGTH, or empty,
+ * goes), and the rest is left for cleanHtml.
+ */
+export function htmlFromSource(source: string): string {
+  return source.replace(HTML_BLOCK_MARKED, (_, code: string) =>
+    code.trim() && code.length <= MAX_HTML_BLOCK_LENGTH ? htmlBlockElement(code) : '',
+  );
+}
+
+/**
+ * The page as HTML to publish, what Copy HTML puts on the clipboard: cleaned
+ * as a draft stores it, one block per line, each HTML block as its own code
+ * and the schema JSON-LD as its script.
+ */
+export function publishableHtml(html: string): string {
+  const clean = cleanHtml(html, { keepImages: true, keepHtmlBlocks: true }).html;
+  return expandHtmlBlocks(lineByBlock(clean), (code) => code);
 }

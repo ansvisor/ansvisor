@@ -114,30 +114,76 @@ export function jsonLdType(json: string): string | null {
 const JSON_LD_SCRIPT =
   /<script\b[^>]*\btype\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script\s*>/gi;
 
-/** Where a kept JSON-LD block waits while the rest of the HTML is cleaned. */
-export const JSON_LD_SLOT = 'jsonld-slot';
-const SLOT_PATTERN = new RegExp(`<${JSON_LD_SLOT} data-i="(\\d+)"></${JSON_LD_SLOT}>`, 'g');
+/** The most an HTML block holds, in characters of code. */
+export const MAX_HTML_BLOCK_LENGTH = 50_000;
 
 /**
- * Takes the schema JSON-LD blocks out of the HTML before it is cleaned, as
- * slots, so the cleaner, which removes every script, keeps them. A block
- * that isn't valid JSON is dropped with its script.
+ * An HTML block's code as a draft stores it: UTF-8 in base64, in a data
+ * attribute of an empty element. Nothing in the code can act as markup there,
+ * and no cleaner has a reason to touch it.
  */
-export function extractJsonLd(html: string): { html: string; blocks: string[] } {
-  const blocks: string[] = [];
-  const out = html.replace(JSON_LD_SCRIPT, (_, text: string) => {
-    const json = normalizeJsonLd(text.trim());
-    if (!json) return '';
-    blocks.push(json);
-    return `<${JSON_LD_SLOT} data-i="${blocks.length - 1}"></${JSON_LD_SLOT}>`;
-  });
-  return { html: out, blocks };
+export function encodeHtmlBlock(code: string): string {
+  let binary = '';
+  for (const byte of new TextEncoder().encode(code)) binary += String.fromCharCode(byte);
+  return btoa(binary);
 }
 
-/** Puts the kept blocks back as script elements of our own, with only their JSON. */
-export function restoreJsonLd(html: string, blocks: string[]): string {
-  return html.replace(SLOT_PATTERN, (_, i: string) => {
-    const json = blocks[Number(i)];
-    return json ? `<script type="application/ld+json">${json}</script>` : '';
-  });
+/** An HTML block's code back from its stored form; null when it isn't one. */
+export function decodeHtmlBlock(encoded: string): string | null {
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) return null;
+  try {
+    const bytes = Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0));
+    const code = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return code.length <= MAX_HTML_BLOCK_LENGTH ? code : null;
+  } catch {
+    return null;
+  }
+}
+
+/** An HTML block in a draft's HTML. */
+export function htmlBlockElement(code: string): string {
+  return `<div data-html-block="${encodeHtmlBlock(code)}"></div>`;
+}
+
+export const HTML_BLOCK_ELEMENT = /<div data-html-block="([A-Za-z0-9+/=]*)"\s*>\s*<\/div>/g;
+
+/** Where a kept block (JSON-LD, an HTML block) waits while the rest is cleaned. */
+export const KEPT_SLOT = 'kept-slot';
+const SLOT_PATTERN = new RegExp(`<${KEPT_SLOT} data-i="(\\d+)"></${KEPT_SLOT}>`, 'g');
+
+/**
+ * Takes out what the cleaners must not touch, as slots, before the rest of
+ * the HTML is cleaned:
+ *
+ *   * schema JSON-LD, written again from its JSON (one that isn't valid
+ *     JSON is dropped with its script);
+ *   * HTML blocks, when `htmlBlocks` allows them (a paste from elsewhere
+ *     doesn't), each checked to decode and to fit MAX_HTML_BLOCK_LENGTH.
+ *
+ * `kept` holds each one as it goes back: our own element, with only its data.
+ */
+export function extractKeptBlocks(
+  html: string,
+  { htmlBlocks }: { htmlBlocks: boolean },
+): { html: string; kept: string[] } {
+  const kept: string[] = [];
+  const slot = (element: string) => {
+    kept.push(element);
+    return `<${KEPT_SLOT} data-i="${kept.length - 1}"></${KEPT_SLOT}>`;
+  };
+  const out = html
+    .replace(JSON_LD_SCRIPT, (_, text: string) => {
+      const json = normalizeJsonLd(text.trim());
+      return json ? slot(`<script type="application/ld+json">${json}</script>`) : '';
+    })
+    .replace(HTML_BLOCK_ELEMENT, (_, encoded: string) => {
+      const code = htmlBlocks ? decodeHtmlBlock(encoded) : null;
+      return code ? slot(htmlBlockElement(code)) : '';
+    });
+  return { html: out, kept };
+}
+
+/** Puts the kept blocks back where their slots are; a slot nobody kept goes. */
+export function restoreKeptBlocks(html: string, kept: string[]): string {
+  return html.replace(SLOT_PATTERN, (_, i: string) => kept[Number(i)] ?? '');
 }

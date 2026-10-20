@@ -3,10 +3,10 @@ import {
   ALLOWED_ATTRIBUTES,
   ALLOWED_TAGS,
   DEMOTED_HEADINGS,
-  JSON_LD_SLOT,
+  KEPT_SLOT,
   cleanHref,
-  extractJsonLd,
-  restoreJsonLd,
+  extractKeptBlocks,
+  restoreKeptBlocks,
 } from './html-allowlist';
 
 /**
@@ -14,13 +14,14 @@ import {
  * CE-005, spec §12: "The server re-checks the HTML before saving"). The
  * editor sends clean HTML already; this keeps a request made without it to
  * the same allow-list, so a draft never stores a script, an event handler or
- * a javascript: link. Schema JSON-LD stays, written again from its JSON.
+ * a javascript: link. Schema JSON-LD stays, written again from its JSON, and
+ * HTML blocks stay as their encoded code, checked to decode and fit.
  */
 export function sanitizeDraftHtml(html: string): string {
-  const { html: withSlots, blocks } = extractJsonLd(html);
+  const { html: withSlots, kept } = extractKeptBlocks(html, { htmlBlocks: true });
   const clean = sanitizeHtml(withSlots, {
-    allowedTags: [...ALLOWED_TAGS, JSON_LD_SLOT],
-    allowedAttributes: { ...ALLOWED_ATTRIBUTES, [JSON_LD_SLOT]: ['data-i'] },
+    allowedTags: [...ALLOWED_TAGS, KEPT_SLOT],
+    allowedAttributes: { ...ALLOWED_ATTRIBUTES, [KEPT_SLOT]: ['data-i'] },
     allowedSchemes: ['http', 'https', 'mailto'],
     allowedSchemesByTag: { img: ['http', 'https'] },
     allowProtocolRelative: false,
@@ -35,5 +36,5 @@ export function sanitizeDraftHtml(html: string): string {
     // An image whose address was refused is no image at all.
     exclusiveFilter: (frame) => frame.tag === 'img' && !frame.attribs.src,
   });
-  return restoreJsonLd(clean, blocks);
+  return restoreKeptBlocks(clean, kept);
 }

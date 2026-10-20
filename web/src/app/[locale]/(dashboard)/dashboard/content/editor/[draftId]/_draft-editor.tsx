@@ -8,7 +8,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { TableKit } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
-import { ArrowLeft, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Loader2 } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,10 +16,16 @@ import { buttonVariants } from '@/components/ui/button-variants';
 import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-badges';
 import { markContentDraftReady } from '@/lib/actions/content-drafts';
 import { CONTENT_LIBRARY_PATH, isPageType, type ContentDraft } from '@/lib/content/drafts';
-import { cleanHtml, formatHtmlSource } from '@/lib/content/clean-html';
+import {
+  cleanHtml,
+  formatHtmlSource,
+  htmlFromSource,
+  publishableHtml,
+} from '@/lib/content/clean-html';
 import { draftTitleFromDoc, lengthTarget, safeLinkHref } from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { cn } from '@/lib/utils';
+import { HtmlBlock, copyToClipboard } from './_html-block';
 import { EditorToolbar } from './_toolbar';
 import { useDraftAutosave, type SaveState } from './_use-autosave';
 
@@ -46,7 +52,9 @@ const DOCUMENT_CLASS = cn(
  * A paste is cleaned on the way in (CE-005): headings, lists, links and
  * tables stay; fonts, colors, styles and tracking parameters go; ⌘/Ctrl +
  * Shift + V pastes plain text. The HTML view (CE-020) shows the page's
- * source, and cleans it the same way when it switches back.
+ * source, and cleans it the same way when it switches back. HTML blocks
+ * carry code as written, as many as the page needs, and Copy HTML puts the
+ * whole page, or one block, on the clipboard.
  */
 export function DraftEditor({ draft }: { draft: ContentDraft }) {
   const t = useTranslations('contentEditor.editor');
@@ -80,6 +88,7 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
       JsonLd.configure({
         label: (type) => (type ? t('jsonLd', { type }) : t('jsonLdUntyped')),
       }),
+      HtmlBlock,
     ],
     content: draft.bodyHtml,
     // Rendered on the client only, so the server's HTML can't disagree with it.
@@ -88,7 +97,9 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
       attributes: { class: DOCUMENT_CLASS, 'aria-label': t('documentLabel') },
       transformPastedHTML: (html) => {
         // A copy from this editor keeps its images, and needs no word about it.
-        if (html.includes('data-pm-slice')) return cleanHtml(html, { keepImages: true }).html;
+        if (html.includes('data-pm-slice')) {
+          return cleanHtml(html, { keepImages: true, keepHtmlBlocks: true }).html;
+        }
         // Images from elsewhere wait for attachments (CE-006): Docs' and
         // Word's are temporary addresses or embedded data.
         const cleaned = cleanHtml(html, { keepImages: false });
@@ -119,7 +130,10 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
       setHtmlSource(null);
       return;
     }
-    const cleaned = cleanHtml(htmlSource, { keepImages: true });
+    const cleaned = cleanHtml(htmlFromSource(htmlSource), {
+      keepImages: true,
+      keepHtmlBlocks: true,
+    });
     // Emits an update, so the title and the autosave follow.
     editor.commands.setContent(cleaned.html);
     setHtmlSource(null);
@@ -137,6 +151,17 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [htmlEdited, htmlSource]);
+
+  // The page as HTML to publish; in the HTML view, the source on screen.
+  const copyPageHtml = () => {
+    if (!editor) return;
+    const html = htmlSource !== null ? htmlFromSource(htmlSource) : editor.getHTML();
+    void copyToClipboard(
+      publishableHtml(html),
+      t('copyHtmlDone'),
+      t('copyHtmlFailed', { html: '</> HTML' }),
+    );
+  };
 
   const canMarkReady = status === 'draft' || status === 'in_review';
   const markReady = async () => {
@@ -189,6 +214,10 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
         </span>
         <div className="ml-auto flex shrink-0 items-center gap-3">
           <SaveIndicator state={autosave.state} onRetry={() => void autosave.retry()} />
+          <Button variant="outline" size="sm" onClick={copyPageHtml} title={t('copyHtmlHint')}>
+            <Copy className="h-3.5 w-3.5" />
+            {t('copyHtml')}
+          </Button>
           <Button size="sm" disabled={!canMarkReady || marking} onClick={markReady}>
             {marking ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -213,7 +242,7 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
         <div className="flex items-center gap-2 border-b bg-muted/40 px-4 py-1.5 text-xs text-muted-foreground">
           <span>
             <span className="font-medium text-foreground">{t('html.title')}</span> ·{' '}
-            {t('html.hint')}
+            {t('html.hint', { marker: '<!-- html-block -->' })}
           </span>
           <Button size="sm" className="ml-auto h-7" onClick={applyHtmlView}>
             {t('html.back')}

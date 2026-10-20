@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { htmlBlockElement } from './html-allowlist';
 import { sanitizeDraftHtml } from './sanitize-draft-html';
 
 /**
@@ -45,5 +46,15 @@ describe('sanitizeDraftHtml', () => {
       // dropped; the script after it is removed; the second block is kept.
       '"}<script type="application/ld+json">{"@type":"FAQPage","x":"a\\u003cb"}</script>',
     );
+  });
+
+  it('keeps HTML blocks as their encoded code, and drops ones that aren’t', () => {
+    const block = htmlBlockElement('<script src="https://widget.example/x.js"></script>');
+    expect(
+      sanitizeDraftHtml(
+        `<p>a</p>${block}<div data-html-block="&lt;script&gt;"></div>` +
+          `${htmlBlockElement('x'.repeat(50_001))}<div data-html-block="" onclick="x()"></div>`,
+      ),
+    ).toBe(`<p>a</p>${block}`);
   });
 });

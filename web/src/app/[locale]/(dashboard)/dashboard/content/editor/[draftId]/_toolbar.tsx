@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useEditorState, type Editor } from '@tiptap/react';
 import {
   Bold,
+  Code2,
   Columns3,
   Heading1,
   Heading2,
@@ -33,10 +34,11 @@ import { Label } from '@/components/ui/label';
 import { formatNumber } from '@/lib/format';
 import { safeImageSrc, safeLinkHref } from '@/lib/content/editor';
 import { cn } from '@/lib/utils';
+import { HtmlBlockDialog } from './_html-block';
 
 /**
  * The editor's toolbar (CE-004, spec §6): H1 H2 H3 · B I link · lists,
- * quote · table, image · </> HTML, and the length counter against the page
+ * quote · table, image, HTML block · </> HTML, and the length counter against the page
  * type's target. Inside a table it adds a row, a column, or removes the
  * table. While the HTML view is open, only its own button works.
  */
@@ -52,7 +54,7 @@ export function EditorToolbar({
   onToggleHtml: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.toolbar');
-  const [dialog, setDialog] = useState<'link' | 'image' | null>(null);
+  const [dialog, setDialog] = useState<'link' | 'image' | 'htmlBlock' | null>(null);
 
   // Re-read only what the toolbar shows, not on every keystroke's render.
   const state = useEditorState({
@@ -127,6 +129,7 @@ export function EditorToolbar({
         run: () => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
       },
       { key: 'image', icon: ImagePlus, on: false, run: () => setDialog('image') },
+      { key: 'htmlBlock', icon: Code2, on: false, run: () => setDialog('htmlBlock') },
     ],
   ];
   const tableTools = [
@@ -190,6 +193,15 @@ export function EditorToolbar({
       {/* Mounted while open, so each opening starts from the selection. */}
       {dialog === 'link' && <LinkDialog editor={editor} onClose={() => setDialog(null)} />}
       {dialog === 'image' && <ImageDialog editor={editor} onClose={() => setDialog(null)} />}
+      {dialog === 'htmlBlock' && (
+        <HtmlBlockDialog
+          initial=""
+          onSave={(code) =>
+            editor.chain().focus().insertContent({ type: 'htmlBlock', attrs: { code } }).run()
+          }
+          onClose={() => setDialog(null)}
+        />
+      )}
     </div>
   );
 }
@@ -233,6 +245,7 @@ function LinkDialog({ editor, onClose }: { editor: Editor; onClose: () => void }
   const [current] = useState(() => editor.getAttributes('link').href as string | undefined);
   const [value, setValue] = useState(current ?? '');
   const [invalid, setInvalid] = useState(false);
+  const fieldRef = useRef<HTMLInputElement>(null);
 
   const apply = () => {
     const href = safeLinkHref(value);
@@ -255,7 +268,7 @@ function LinkDialog({ editor, onClose }: { editor: Editor; onClose: () => void }
 
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" initialFocus={fieldRef}>
         <DialogHeader>
           <DialogTitle>{current ? t('editTitle') : t('title')}</DialogTitle>
         </DialogHeader>
@@ -269,7 +282,7 @@ function LinkDialog({ editor, onClose }: { editor: Editor; onClose: () => void }
           <Label htmlFor="content-link-href">{t('label')}</Label>
           <Input
             id="content-link-href"
-            autoFocus
+            ref={fieldRef}
             value={value}
             placeholder={t('placeholder')}
             aria-invalid={invalid}
@@ -307,6 +320,7 @@ function ImageDialog({ editor, onClose }: { editor: Editor; onClose: () => void 
   const [src, setSrc] = useState('');
   const [alt, setAlt] = useState('');
   const [invalid, setInvalid] = useState(false);
+  const fieldRef = useRef<HTMLInputElement>(null);
 
   const insert = () => {
     const safe = safeImageSrc(src);
@@ -324,7 +338,7 @@ function ImageDialog({ editor, onClose }: { editor: Editor; onClose: () => void 
 
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" initialFocus={fieldRef}>
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
         </DialogHeader>
@@ -339,7 +353,7 @@ function ImageDialog({ editor, onClose }: { editor: Editor; onClose: () => void 
             <Label htmlFor="content-image-src">{t('srcLabel')}</Label>
             <Input
               id="content-image-src"
-              autoFocus
+              ref={fieldRef}
               value={src}
               placeholder="https://"
               aria-invalid={invalid}

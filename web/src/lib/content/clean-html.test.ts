@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { cleanHtml, formatHtmlSource } from './clean-html';
+import { cleanHtml, formatHtmlSource, htmlFromSource, publishableHtml } from './clean-html';
+import { htmlBlockElement } from './html-allowlist';
 
 // A section copied from Google Docs: the whole copy in a non-bold <b>, bold
 // and italic as styles, styled links with tracking parameters, an H5, a
@@ -89,5 +90,34 @@ describe('formatHtmlSource', () => {
     ).toBe(
       '<h1>A</h1>\n<p>B <strong>C</strong> <a href="/x">D</a></p>\n<table>\n<tbody>\n<tr>\n<td>\n<p>E</p>\n</td>\n</tr>\n</tbody>\n</table>',
     );
+  });
+});
+
+describe('HTML blocks', () => {
+  const code = '<iframe src="https://www.youtube.com/embed/x"></iframe>\n<script>track()</script>';
+  const page = `<h1>A</h1>${htmlBlockElement(code)}<p>B</p>`;
+
+  it('come with the editor’s own HTML, never with a paste from elsewhere', () => {
+    expect(cleanHtml(page, { keepImages: true, keepHtmlBlocks: true }).html).toBe(page);
+    const pasted = cleanHtml(page, { keepImages: false });
+    expect(pasted.html).toBe('<h1>A</h1><p>B</p>');
+    expect(pasted.unsafeRemoved).toBe(0);
+  });
+
+  it('show as their code between markers in the HTML view, and go back as blocks', () => {
+    const source = formatHtmlSource(page);
+    expect(source).toBe(`<h1>A</h1>\n<!-- html-block -->\n${code}\n<!-- /html-block -->\n<p>B</p>`);
+    expect(htmlFromSource(source)).toBe(`<h1>A</h1>\n${htmlBlockElement(code)}\n<p>B</p>`);
+    // Code typed between new markers is a block; an empty pair is nothing.
+    expect(
+      htmlFromSource(
+        '<!-- html-block -->\n<b>x</b>\n<!-- /html-block --><!-- html-block --><!-- /html-block -->',
+      ),
+    ).toBe(htmlBlockElement('<b>x</b>'));
+  });
+
+  it('go out as their own code when the page is copied as HTML', () => {
+    const json = '<script type="application/ld+json">{"@type":"Product"}</script>';
+    expect(publishableHtml(`${page}${json}`)).toBe(`<h1>A</h1>\n${code}\n<p>B</p>\n${json}`);
   });
 });

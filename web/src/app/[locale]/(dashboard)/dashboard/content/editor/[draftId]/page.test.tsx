@@ -194,6 +194,48 @@ describe('the content editor', () => {
     expect(container.querySelector('header')!.textContent).toContain('Saved');
   });
 
+  it('adds HTML blocks, shows their code as text, and copies one or the whole page', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    getContentDraft.mockResolvedValue(draft({ bodyHtml: '<h1>Trail Runner X</h1>' }));
+    await renderPage();
+
+    const code =
+      '<iframe src="https://www.youtube.com/embed/x"></iframe>\n<script>track()</script>';
+    await act(async () => button('Add an HTML block')!.click());
+    const field = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Code"]')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(field, code);
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      [...document.querySelectorAll('button')].find((b) => b.textContent === 'Add block')!.click();
+    });
+    await act(async () => {});
+
+    const block = container.querySelector('[data-html-block-view]')!;
+    expect(block.textContent).toContain('HTML block');
+    expect(block.textContent).toContain('2 lines');
+    // The code is text on the page, never markup: no iframe, no script runs.
+    expect(block.querySelector('pre')!.textContent).toBe(code);
+    expect(container.querySelector('.ProseMirror iframe, .ProseMirror script')).toBeNull();
+
+    const copyBlock = [...block.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Copy HTML',
+    )!;
+    await act(async () => copyBlock.click());
+    expect(writeText).toHaveBeenLastCalledWith(code);
+
+    const copyPage = [...container.querySelectorAll<HTMLButtonElement>('header button')].find(
+      (b) => b.textContent === 'Copy HTML',
+    )!;
+    await act(async () => copyPage.click());
+    // The block went in where the cursor was: the start, as nothing was clicked.
+    expect(writeText).toHaveBeenLastCalledWith(`${code}\n<h1>Trail Runner X</h1>`);
+    expect(toast.success).toHaveBeenLastCalledWith('HTML copied');
+  });
+
   it('follows the draft’s brand in the sidebar', async () => {
     getContentDraft.mockResolvedValue(draft({ brandId: 'b2' }));
     await renderPage();
