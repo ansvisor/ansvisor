@@ -22,7 +22,7 @@ import {
   cleanupStalePendingTasks,
 } from './lib/job-manager.js';
 import { runTrackingJob, recoverWaitingJobs } from './lib/job-runner.js';
-import { sweepInsightsRollups } from './lib/insights-rollups.js';
+import { rebuildQueuedInsightsRollups, sweepInsightsRollups } from './lib/insights-rollups.js';
 import { rebuildQueuedCitationRollups, REBUILD_QUEUE_SCHEDULE } from './lib/citations-rollups.js';
 import { sweepActionValidation } from './lib/action-center/validate.js';
 import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
@@ -759,14 +759,17 @@ server.listen(PORT, async () => {
   setInterval(recover, 60_000);
 
   // Rebuild the citation rollups of brands whose prompts changed topic
-  // (00118) within minutes, not at the nightly sweep, so the Citations topic
-  // filter catches up soon after a move. An empty queue costs one select, and
-  // the function itself refuses to overlap with a run still in progress.
-  cron.schedule(REBUILD_QUEUE_SCHEDULE, () =>
+  // (00118), and the Insights days of deleted prompts (00192), within
+  // minutes, not at the nightly sweep. An empty queue costs one select, and
+  // each function refuses to overlap with a run of its own still in progress.
+  cron.schedule(REBUILD_QUEUE_SCHEDULE, () => {
     rebuildQueuedCitationRollups().catch((err) =>
       logger.error({ err }, '[citations-rollups] scheduled rebuild crashed'),
-    ),
-  );
+    );
+    rebuildQueuedInsightsRollups().catch((err) =>
+      logger.error({ err }, '[insights-rollups] scheduled rebuild crashed'),
+    );
+  });
 
   if (!isCloud()) {
     const schedule = process.env.DAILY_CRON_SCHEDULE || '0 6 * * *';
