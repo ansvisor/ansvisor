@@ -3031,7 +3031,12 @@
     },
     "webhook": {
       "title": "Webhook Settings",
-      "description": "Connect your workflow automation tool (n8n, Make, Zapier) to receive opportunities.",
+      "description": "Connect your workflow automation tool (n8n, Make, Zapier) and choose which events it receives.",
+      "eventsTitle": "Events to send",
+      "eventsDescription": "Only selected events are sent. Test Webhook always sends a test event, regardless of these selections.",
+      "eventOpportunitySent": "Opportunity sent",
+      "eventDailyPulseCreated": "Daily Pulse created",
+      "eventActionTaskSent": "Action Center task sent",
       "url": "Webhook URL",
       "urlPlaceholder": "https://your-n8n-instance.com/webhook/...",
       "secret": "Secret Key (optional)",
