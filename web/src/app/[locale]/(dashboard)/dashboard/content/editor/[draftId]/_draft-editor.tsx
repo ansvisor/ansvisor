@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { EditorContent, useEditor } from '@tiptap/react';
+import { TextSelection } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import { TableKit } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
@@ -25,6 +26,7 @@ import {
 import { draftTitleFromDoc, lengthTarget, safeLinkHref } from '@/lib/content/editor';
 import { JsonLd } from '@/lib/content/json-ld-node';
 import { cn } from '@/lib/utils';
+import { DropOverlay, useAttachments } from './_attach';
 import { HtmlBlock, copyToClipboard } from './_html-block';
 import { EditorToolbar } from './_toolbar';
 import { useDraftAutosave, type SaveState } from './_use-autosave';
@@ -68,6 +70,10 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
   // The HTML view's text while it is open; null in the visual editor.
   const [htmlSource, setHtmlSource] = useState<string | null>(null);
   const [htmlEdited, setHtmlEdited] = useState(false);
+  // Files dropped on the page go in where they land (CE-006).
+  const attachRef = useRef<(files: File[]) => void>(undefined);
+  const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);
 
   const editor = useEditor({
     extensions: [
@@ -122,6 +128,19 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
         window.open(href, '_blank', 'noopener,noreferrer');
         return true;
       },
+      handleDrop: (view, event, _slice, moved) => {
+        const files = [...(event.dataTransfer?.files ?? [])];
+        if (moved || !files.length) return false;
+        event.preventDefault();
+        const at = view.posAtCoords({ left: event.clientX, top: event.clientY });
+        if (at) {
+          view.dispatch(
+            view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(at.pos))),
+          );
+        }
+        attachRef.current?.(files);
+        return true;
+      },
     },
     onUpdate: ({ editor: e }) => {
       const next = draftTitleFromDoc(e.getJSON());
@@ -129,6 +148,38 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
       autosave.schedule({ title: next, bodyHtml: e.getHTML() });
     },
   });
+
+  const attachments = useAttachments(editor);
+  useEffect(() => {
+    attachRef.current = (files) => void attachments.attach(files);
+  });
+
+  // A drag with files over the page shows where they go; one dropped beside
+  // the page (not on its text) goes in at the cursor.
+  const withFiles = (e: React.DragEvent) =>
+    htmlSource === null && [...e.dataTransfer.types].includes('Files');
+  const dropHandlers = {
+    onDragEnter: (e: React.DragEvent) => {
+      if (!withFiles(e)) return;
+      dragDepth.current += 1;
+      setDragging(true);
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!withFiles(e)) return;
+      dragDepth.current -= 1;
+      if (dragDepth.current <= 0) setDragging(false);
+    },
+    onDragOver: (e: React.DragEvent) => {
+      if (withFiles(e)) e.preventDefault();
+    },
+    onDrop: (e: React.DragEvent) => {
+      dragDepth.current = 0;
+      setDragging(false);
+      if (e.defaultPrevented || !withFiles(e)) return;
+      e.preventDefault();
+      void attachments.attach([...e.dataTransfer.files]);
+    },
+  };
 
   const openHtmlView = () => {
     if (!editor) return;
@@ -247,6 +298,7 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
           target={lengthTarget(draft.pageType)}
           htmlView={htmlSource !== null}
           onToggleHtml={htmlSource === null ? openHtmlView : applyHtmlView}
+          onAttach={attachments.open}
         />
       )}
 
@@ -262,25 +314,29 @@ export function DraftEditor({ draft }: { draft: ContentDraft }) {
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {htmlSource !== null && (
-          <textarea
-            value={htmlSource}
-            onChange={(e) => {
-              setHtmlSource(e.target.value);
-              setHtmlEdited(true);
-            }}
-            spellCheck={false}
-            aria-label={t('html.label')}
-            className="block h-full min-h-[600px] w-full resize-none bg-muted/20 px-7 py-5 font-mono text-[12.5px] leading-relaxed outline-none"
-          />
-        )}
-        <div
-          className={cn('mx-auto max-w-[720px] px-7 pt-7 pb-20', htmlSource !== null && 'hidden')}
-        >
-          <EditorContent editor={editor} />
+      <div className="relative min-h-0 flex-1" {...dropHandlers}>
+        <div className="h-full overflow-y-auto">
+          {htmlSource !== null && (
+            <textarea
+              value={htmlSource}
+              onChange={(e) => {
+                setHtmlSource(e.target.value);
+                setHtmlEdited(true);
+              }}
+              spellCheck={false}
+              aria-label={t('html.label')}
+              className="block h-full min-h-[600px] w-full resize-none bg-muted/20 px-7 py-5 font-mono text-[12.5px] leading-relaxed outline-none"
+            />
+          )}
+          <div
+            className={cn('mx-auto max-w-[720px] px-7 pt-7 pb-20', htmlSource !== null && 'hidden')}
+          >
+            <EditorContent editor={editor} />
+          </div>
         </div>
+        {dragging && <DropOverlay />}
       </div>
+      {attachments.ui}
     </div>
   );
 }

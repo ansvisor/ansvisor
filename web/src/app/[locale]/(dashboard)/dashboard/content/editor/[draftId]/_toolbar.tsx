@@ -16,6 +16,7 @@ import {
   Link2,
   List,
   ListOrdered,
+  Paperclip,
   Quote,
   Rows3,
   Table2,
@@ -39,7 +40,7 @@ import { HtmlBlockDialog } from './_html-block';
 
 /**
  * The editor's toolbar (CE-004, spec §6): H1 H2 H3 · B I link · lists,
- * quote · table, image, HTML block · </> HTML, and the length counter against the page
+ * quote · table, image, HTML block, attach a file · </> HTML, and the length counter against the page
  * type's target. Inside a table it adds a row, a column, or removes the
  * table. While the HTML view is open, only its own button works.
  */
@@ -48,11 +49,13 @@ export function EditorToolbar({
   target,
   htmlView,
   onToggleHtml,
+  onAttach,
 }: {
   editor: Editor;
   target: number;
   htmlView: boolean;
   onToggleHtml: () => void;
+  onAttach: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.toolbar');
   const [dialog, setDialog] = useState<'link' | 'image' | 'htmlBlock' | null>(null);
@@ -134,6 +137,7 @@ export function EditorToolbar({
       },
       { key: 'image', icon: ImagePlus, on: false, run: () => setDialog('image') },
       { key: 'htmlBlock', icon: Code2, on: false, run: () => setDialog('htmlBlock') },
+      { key: 'attach', icon: Paperclip, on: false, run: onAttach },
     ],
   ];
   const tableTools = [

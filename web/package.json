@@ -44,6 +44,7 @@
     "dompurify": "3.4.16",
     "fflate": "^0.8.3",
     "lucide-react": "^0.577.0",
+    "mammoth": "1.13.0",
     "marked": "^18.0.0",
     "next": "16.4.2",
     "next-intl": "^4.8.3",
