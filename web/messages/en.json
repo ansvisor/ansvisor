@@ -830,7 +830,7 @@
         "status": "Status",
         "assignee": "Assignee",
         "all": "All",
-        "unassigned": "Unassigned",
+        "unassigned": "Everyone",
         "search": "Search actions…",
         "clear": "Clear filters"
       },
@@ -858,6 +858,8 @@
         "dismissed": "Dismissed"
       },
       "taskProgress": "{completed}/{total} tasks",
+      "everyone": "Everyone",
+      "everyoneTitle": "Everyone in the workspace: no one is assigned yet",
       "tags": {
         "signals": "{count, plural, one {1 signal} other {# signals}}",
         "prompts": "{count, plural, one {1 prompt} other {# prompts}}",

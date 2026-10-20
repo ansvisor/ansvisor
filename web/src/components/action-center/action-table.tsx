@@ -158,7 +158,16 @@ export function PriorityBadge({
 }
 
 export function AssigneeAvatar({ assignee }: { assignee: ActionItem['assignee'] }) {
-  if (!assignee) return <span className="text-xs text-muted-foreground">—</span>;
+  const t = useTranslations('actionCenter.actionsPage');
+  // New Ansvisor (AC-ALT2): an action with no one on it is the whole
+  // workspace's, until someone takes it.
+  if (!assignee) {
+    return (
+      <span className="text-xs text-muted-foreground" title={t('everyoneTitle')}>
+        {t('everyone')}
+      </span>
+    );
+  }
   // Named as the assignee picker names them: by e-mail when there's no name.
   const label = assigneeLabel(assignee);
   const initials = (label && labelInitials(label)) || '?';
