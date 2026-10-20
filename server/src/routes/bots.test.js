@@ -31,7 +31,16 @@ function table(name) {
       };
     }
     if (name === 'ai_bot_usage')
-      return { data: { stored_events: 12, counted_events: 15, capped_at: null }, error: null };
+      return {
+        data: {
+          stored_events: 12,
+          counted_events: 15,
+          capped_at: null,
+          raw_records: 20_000_400,
+          raw_capped_at: '2026-10-18T09:00:00Z',
+        },
+        error: null,
+      };
     return { data: null, error: null };
   };
   const chain = new Proxy(
@@ -77,6 +86,7 @@ vi.mock('../lib/plan-guard.js', async () => {
     PlanLimitError,
     getOrgIdForUser: async () => 'o1',
     getBotEventCap: async () => cap,
+    getBotRawCap: async () => 20_000_000,
   };
 });
 
@@ -125,8 +135,10 @@ describe('AI bot connections', () => {
     expect(body.secret).toMatch(/^abot_/);
     // The API's public address, not the Host the web server reached it on.
     expect(body.endpoint).toBe('https://api.example.com/bots/ingest');
-    expect(body.workerScript).toContain(body.secret);
+    // The Worker reads the secret from a Worker Secret, so its code doesn't hold it.
+    expect(body.workerScript).not.toContain(body.secret);
     expect(body.workerScript).toContain(body.endpoint);
+    expect(body.workerSecretName).toBe('ANSVISOR_BOT_SECRET');
     expect(inserted[0]).toMatchObject({
       brand_id: 'b1',
       kind: 'cloudflare_worker',
@@ -137,6 +149,7 @@ describe('AI bot connections', () => {
 
     const drain = await (await create({ kind: 'vercel_drain' })).json();
     expect(drain.workerScript).toBeNull();
+    expect(drain.workerSecretName).toBeNull();
     expect(drain.vercelDrain.headers).toEqual([`Authorization: Bearer ${drain.secret}`]);
 
     const logpush = await (await create({ kind: 'cloudflare_logpush' })).json();
@@ -173,6 +186,12 @@ describe('AI bot connections', () => {
       { id: 'c1', kind: 'cloudflare_worker', created_at: 'then', last_event_at: null },
     ]);
     expect(body.usage).toMatchObject({ stored: 12, counted: 15, cappedAt: null, cap: 2_000_000 });
+    // Log records against the raw cap, which stops a log sender's report mid-month.
+    expect(body.usage).toMatchObject({
+      raw: 20_000_400,
+      rawCappedAt: '2026-10-18T09:00:00Z',
+      rawCap: 20_000_000,
+    });
     expect(body.usage.month).toMatch(/^\d{4}-\d{2}-01$/);
   });
 

@@ -6,12 +6,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatNumber } from '@/lib/format';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import { summaryLine } from '@/lib/traffic-summary-line';
-import {
-  getTrafficPages,
-  getUntrackedGoogleQueries,
-  type TrafficDateWindow,
-  type TrafficSummary,
-} from '@/lib/actions/traffic';
+import { type TrafficDateWindow, type TrafficSummary } from '@/lib/actions/traffic';
+import { getTrafficPageCounts, getUntrackedQueryCount } from '@/lib/traffic-reads';
+import { useRangeReady } from './_range-ready';
 
 /**
  * The summary line above the KPI cards (AT-007, spec §3.1): the range's
@@ -65,7 +62,8 @@ export function SummaryLine({
   useEffect(() => {
     if (!gscReady) return;
     let cancelled = false;
-    getUntrackedGoogleQueries(brandId, dateWindow, { limit: 0 })
+    // The count the Google section's list read carries, when it's on the page.
+    getUntrackedQueryCount(brandId, dateWindow)
       .then((queries) => {
         if (!cancelled) {
           setUntracked({ key: untrackedKey, count: queries.count, capped: queries.capped });
@@ -82,9 +80,10 @@ export function SummaryLine({
 
   useEffect(() => {
     let cancelled = false;
-    getTrafficPages(brandId, dateWindow, { tab: 'citedNotClicked', limit: 0 })
-      .then((pages) => {
-        if (!cancelled) setCited({ key, count: pages.counts.citedNotClicked });
+    // The Pages card's read carries every tab's count: shared with it.
+    getTrafficPageCounts(brandId, dateWindow)
+      .then((counts) => {
+        if (!cancelled) setCited({ key, count: counts.citedNotClicked });
       })
       .catch(() => {
         // Best effort: the line still states what else it knows.
@@ -94,6 +93,11 @@ export function SummaryLine({
       cancelled = true;
     };
   }, [brandId, dateWindow, key]);
+
+  useRangeReady(
+    'summaryLine',
+    cited?.key === key && (!gscReady || untracked?.key === untrackedKey),
+  );
 
   const citedNow = cited?.key === key ? cited : null;
   const untrackedNow = gscReady ? (untracked?.key === untrackedKey ? untracked : null) : undefined;

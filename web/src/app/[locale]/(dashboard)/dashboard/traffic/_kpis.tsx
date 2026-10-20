@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 import type { DateRangePreset } from '@/components/filters/date-range-filter';
 import {
-  getTrafficGoogleTotals,
   type TrafficDateWindow,
   type TrafficGoogleTotals,
   type TrafficSources,
@@ -37,6 +36,8 @@ import { MetricCard } from '../insights/_kpi-cards';
 import { SummaryLine } from './_summary-line';
 import type { Change } from '../insights/kpi-format';
 import { SourceKpiCard } from './_source-gate';
+import { getTrafficGoogleTotals } from '@/lib/traffic-reads';
+import { useRangeReady } from './_range-ready';
 
 // Four in a row from 1,100px, two below (spec §3.2), one on a phone. In rem,
 // so Tailwind orders it after sm: (a px breakpoint would sort before it).
@@ -161,6 +162,7 @@ export function TrafficKpis({
       cancelled = true;
     };
   }, [brandId, dateWindow, gaReady, gscReady, latestDays, key]);
+  useRangeReady('kpis', (!gaReady && !gscReady) || loaded?.key === key);
 
   const totalVisits = summary?.totalVisits ?? 0;
   const totalVisitsPrev = summary?.totalVisitsPrev ?? 0;

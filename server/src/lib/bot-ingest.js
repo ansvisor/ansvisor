@@ -3,8 +3,9 @@
  * §6). Each connection has its own secret: the sender presents it, only its
  * SHA-256 is stored, and the person sees it once when it is made.
  *
- * A batch is verified request by request (user agent on the list, IP in the
- * operator's published ranges, ai-bots.js), then written in one step that
+ * A batch is verified request by request (a page on one of the brand's
+ * domains, user agent on the list, IP in the operator's published ranges,
+ * ai-bots.js), then written in one step that
  * holds the organization's monthly cap (00183 ai_bot_ingest): rows while
  * there is room, bot × page × day counters always. A log sender's file is
  * claimed, counted against the raw cap and written in that same transaction
@@ -15,6 +16,7 @@
 import { createHash, randomBytes } from 'crypto';
 import supabaseAdmin from '../config/supabase.js';
 import { verifyBotRequest } from './ai-bots.js';
+import { onBrandDomain } from './audit/host.js';
 import { getBotEventCap, getBotRawCap } from './plan-guard.js';
 import { logger } from './logger.js';
 
@@ -59,14 +61,17 @@ export function publicIngestEndpoint(env = process.env) {
   return allowed ? `${url.origin}/bots/ingest` : null;
 }
 
-/** The live connection a secret belongs to, with its brand's organization; null otherwise. */
+/**
+ * The live connection a secret belongs to, with its brand's organization and
+ * domains (read in the same query); null otherwise.
+ */
 export async function connectionForSecret(secret) {
   if (typeof secret !== 'string' || !secret.startsWith(SECRET_PREFIX) || secret.length > 200) {
     return null;
   }
   const { data, error } = await supabaseAdmin
     .from('ai_bot_connections')
-    .select('id, brand_id, kind, revoked_at, brands!inner(organization_id)')
+    .select('id, brand_id, kind, revoked_at, brands!inner(organization_id, brand_domains(domain))')
     .eq('secret_hash', hashSecret(secret))
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -76,7 +81,21 @@ export async function connectionForSecret(secret) {
     brandId: data.brand_id,
     kind: data.kind,
     organizationId: data.brands?.organization_id ?? null,
+    domains: (data.brands?.brand_domains ?? []).map((d) => d.domain).filter(Boolean),
   };
+}
+
+/**
+ * Whether a request's page is the brand's site: its host is one of the
+ * brand's domains or a subdomain of one. A Logpush zone with several
+ * hostnames, or a Vercel drain set for a whole team, also sends other sites'
+ * requests, which would fill the report and the event cap. A bare path (a
+ * Worker on the brand's own route may send one) passes, and so does every
+ * page of a brand with no domain stored, which would otherwise read nothing.
+ */
+export function onBrandSite(url, domains) {
+  if (!domains?.length || !/^https?:\/\//i.test(url)) return true;
+  return onBrandDomain(url, domains);
 }
 
 /** One request as a sender reports it: user agent, IP, URL, status, time, country. */
@@ -102,14 +121,19 @@ function readRequest(raw, now) {
 }
 
 /** The bots among a sender's requests, as events to write, and why the rest were skipped. */
-async function verifyRequests(list, deps) {
+async function verifyRequests(list, domains, deps) {
   const now = deps.now ?? Date.now();
-  const skipped = { invalid: 0, unknown_agent: 0, unverified_ip: 0, no_ranges: 0 };
+  const skipped = { invalid: 0, other_host: 0, unknown_agent: 0, unverified_ip: 0, no_ranges: 0 };
   const events = [];
   for (const raw of list) {
     const request = readRequest(raw, now);
     if (!request) {
       skipped.invalid++;
+      continue;
+    }
+    // Before the ranges are read: another site's request isn't verified.
+    if (!onBrandSite(request.url, domains)) {
+      skipped.other_host++;
       continue;
     }
     const verdict = await verifyBotRequest(request, deps);
@@ -150,7 +174,7 @@ function alertAt80(connection, data, cap) {
  */
 export async function ingestBotRequests(connection, requests, deps = {}) {
   const list = Array.isArray(requests) ? requests.slice(0, MAX_BATCH) : [];
-  const { events, skipped } = await verifyRequests(list, deps);
+  const { events, skipped } = await verifyRequests(list, connection.domains, deps);
 
   let stored = 0;
   if (events.length > 0) {
@@ -235,7 +259,9 @@ export async function ingestLogFile(connection, hash, parsed, deps = {}) {
   }
   const capped = await rawCapReached(connection, rawCap, deps.now ?? Date.now());
   const list = !capped && Array.isArray(parsed.requests) ? parsed.requests : [];
-  const { events, skipped } = await verifyRequests(list, deps);
+  // Every record counts against the raw cap, other sites' too: the cap is
+  // what the server reads, and it reads them to tell them apart.
+  const { events, skipped } = await verifyRequests(list, connection.domains, deps);
 
   const { data, error } = await supabaseAdmin.rpc('ai_bot_ingest_file', {
     p_connection_id: connection.id,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  fromYourData,
   gaSourceData,
   gscSourceData,
   type GaSuggestionSourceData,
@@ -62,5 +63,18 @@ describe('gaSourceData', () => {
 
   it('returns null when another source carries a GA-shaped payload', () => {
     expect(gaSourceData({ source: 'heuristic', sourceData: gaData })).toBeNull();
+  });
+});
+
+describe('fromYourData', () => {
+  it('takes a suggestion built from Search Console or Analytics data', () => {
+    expect(fromYourData({ source: 'gsc', sourceData: gscData })).toBe(true);
+    expect(fromYourData({ source: 'ga', sourceData: gaData })).toBe(true);
+  });
+
+  it("leaves out the agents' suggestions and a source without its data", () => {
+    expect(fromYourData({ source: 'llm', sourceData: null })).toBe(false);
+    expect(fromYourData({ source: 'gsc', sourceData: null })).toBe(false);
+    expect(fromYourData({ source: 'ga', sourceData: gscData })).toBe(false);
   });
 });

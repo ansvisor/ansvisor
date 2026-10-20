@@ -445,6 +445,17 @@ export async function saveKpiFramework(
     .eq('brand_id', brandId)
     .not('kpi_key', 'in', `(${entries.map((e) => e.key).join(',')})`);
   if (deactivateErr) throw new Error(deactivateErr.message);
+
+  // Getting started's KPI step (00196). The ready-made set appears on a visit
+  // to the KPI tab, so only a save from here counts. The KPIs are saved
+  // either way; a failed mark only leaves the step open.
+  const { error: stepErr } = await supabase
+    .from('getting_started_steps')
+    .upsert(
+      { brand_id: brandId, step: 'kpis', state: 'done', updated_at: now },
+      { onConflict: 'brand_id,step' },
+    );
+  if (stepErr) console.error('[getting-started] KPI step not marked:', stepErr.message);
 }
 
 /**

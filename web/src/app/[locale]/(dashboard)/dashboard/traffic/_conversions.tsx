@@ -20,12 +20,10 @@ import { getPlatformName } from '@/lib/traffic-platforms';
 import { conversionRate, type ConversionFigures } from '@/lib/traffic-conversions';
 import { googleSourceStatus } from '@/lib/traffic-sources';
 import type { SourceState } from '@/lib/actions/integrations';
-import {
-  getTrafficConversions,
-  type TrafficConversions,
-  type TrafficDateWindow,
-} from '@/lib/actions/traffic';
+import { type TrafficConversions, type TrafficDateWindow } from '@/lib/actions/traffic';
 import { NeedsTag, SourceUnavailable } from './_source-gate';
+import { getTrafficConversions } from '@/lib/traffic-reads';
+import { useRangeReady } from './_range-ready';
 
 /**
  * Where AI visitors convert (AT-014, spec §3.4b): which landing pages turn
@@ -139,6 +137,7 @@ export function ConversionsSection({
       cancelled = true;
     };
   }, [brandId, dateWindow, key, gaReady]);
+  useRangeReady('conversions', !gaReady || loaded?.key === key);
 
   const current = loaded?.key === key ? loaded : null;
   const result = current?.result ?? null;
