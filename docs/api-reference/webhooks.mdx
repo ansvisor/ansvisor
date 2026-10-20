@@ -11,7 +11,7 @@ Each brand has one webhook, set up in **Content → Configure Webhook**:
 - **Secret key** (optional) — sent back to you in a header on every request, so your endpoint can tell that the call came from Ansvisor.
 - **Active** — pause delivery without deleting the webhook.
 
-The webhook receives every event below. Check the `event` field to tell them apart.
+Choose the events a webhook should receive in **Content → Configure Webhook**. Existing webhooks keep receiving all supported events by default. **Test Webhook** always sends `webhook.test`, regardless of the saved selection.
 
 ## Events
 
@@ -19,7 +19,8 @@ The webhook receives every event below. Check the `event` field to tell them apa
 |---|---|
 | `opportunity.sent` | A user sends a content opportunity to the workflow — from the opportunity page, or several at once from the opportunities list |
 | `daily_pulse.created` | A brand's Daily Pulse is generated (on cloud and self-host alike) |
-| `webhook.test` | **Test Webhook** is pressed in the webhook settings |
+| `action_task.sent` | A user sends an Action Center task to the configured webhook |
+| `webhook.test` | **Test Webhook** is pressed in the webhook settings (always sent, independent of subscriptions) |
 
 ## Verifying requests
 
@@ -147,6 +148,40 @@ Warning types and their fields:
 
 Every highlight and warning also has a `key` that identifies its subject.
 
+### `action_task.sent`
+
+```json
+{
+  "event": "action_task.sent",
+  "task": {
+    "id": "uuid",
+    "title": "Update the shipping guide",
+    "status": "todo",
+    "type": "content",
+    "where": "acme.example/guides/shipping",
+    "why": "The page is missing useful details.",
+    "how": ["Add a comparison table."],
+    "done_when": "The updated page is live.",
+    "effort": "~2h",
+    "role": "Content writer"
+  },
+  "action": {
+    "id": "uuid",
+    "action_no": 12,
+    "kind": "recover_lost_citations",
+    "category": "recover",
+    "impact": "high",
+    "priority_score": 84,
+    "priority_level": "high",
+    "link": "https://app.example.com/dashboard/action-center/actions?action=<action id>"
+  },
+  "brand": {
+    "name": "Acme",
+    "domain": "acme.example",
+    "industry": "Software"
+  }
+}
+```
 ### `webhook.test`
 
 ```json
