@@ -1,0 +1,533 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
+import { ArrowLeft, FileText, Loader2, X } from 'lucide-react';
+import { useRouter } from '@/i18n/navigation';
+import { Button } from '@/components/ui/button';
+import {
+  Combobox,
+  ComboboxCollection,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+  ComboboxValue,
+} from '@/components/ui/combobox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import { createContentDraft, getContentStartOptions } from '@/lib/actions/content-drafts';
+import { MAX_ATTACHMENT_BYTES, textToHtml } from '@/lib/content/attachments';
+import { cleanHtml } from '@/lib/content/clean-html';
+import {
+  contentEditorPath,
+  type DraftMethod,
+  type DraftSource,
+  type DraftStartOptions,
+  type PageType,
+} from '@/lib/content/drafts';
+import { DOCUMENT_ACCEPT, readDocumentFile } from '@/lib/content/import-document';
+import { SITE_PAGE_TYPES, type SiteType } from '@/lib/content/page-types';
+import {
+  fileTitle,
+  startPageType,
+  summarizeContent,
+  type ContentSummary,
+} from '@/lib/content/start';
+import { formatNumber } from '@/lib/format';
+import { cn } from '@/lib/utils';
+
+type SourceKind = 'opportunity' | 'prompt' | 'topic';
+const SOURCE_KINDS: SourceKind[] = ['opportunity', 'prompt', 'topic'];
+
+interface PickerItem {
+  value: string;
+  label: string;
+  meta?: string;
+  /** The page's title, when it isn't the label (an opportunity's brief title). */
+  pageTitle?: string;
+}
+
+/** Content brought to optimize: cleaned HTML, what it holds, and where it came from. */
+interface BroughtContent extends ContentSummary {
+  html: string;
+  /** The file's name; none for a paste. */
+  fileName?: string;
+  imagesRemoved: number;
+}
+
+/** What Start opens the editor with. */
+interface StartChoice {
+  method: DraftMethod;
+  title: string;
+  source: DraftSource;
+  bodyHtml?: string;
+  pageType: PageType;
+  detected: boolean;
+}
+
+/**
+ * New content and Start (Content Editor CE-003, CE-015; spec §5, §9). First,
+ * how the page starts: a new page from an opportunity, a tracked prompt or a
+ * topic, or content to optimize, pasted or from a file. Then Start: the page
+ * type, picked first from what the title or content shows, and Open editor.
+ */
+export function NewContentDialog({
+  open,
+  onOpenChange,
+  brandId,
+  siteType,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  brandId: string;
+  siteType: SiteType;
+}) {
+  const t = useTranslations('contentEditor.newContent');
+  const tTypes = useTranslations('contentEditor.pageTypes');
+  const router = useRouter();
+
+  const [options, setOptions] = useState<DraftStartOptions | null>(null);
+  const [optionsFailed, setOptionsFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
+  const [method, setMethod] = useState<DraftMethod>('create');
+  const [kind, setKind] = useState<SourceKind>('opportunity');
+  const [picked, setPicked] = useState<PickerItem | null>(null);
+  const [from, setFrom] = useState<'paste' | 'file'>('paste');
+  const [pastedText, setPastedText] = useState('');
+  const [content, setContent] = useState<BroughtContent | null>(null);
+  const [reading, setReading] = useState(false);
+  const [start, setStart] = useState<StartChoice | null>(null);
+  const [opening, setOpening] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Each opening starts over and reads what there is to start from.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    getContentStartOptions(brandId)
+      .then((read) => {
+        if (cancelled) return;
+        setOptions(read);
+        setOptionsFailed(false);
+      })
+      .catch((err) => {
+        console.error('Failed to load what New content starts from:', err);
+        if (!cancelled) setOptionsFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, brandId, attempt]);
+
+  const reset = () => {
+    setMethod('create');
+    setKind('opportunity');
+    setPicked(null);
+    setFrom('paste');
+    setPastedText('');
+    setContent(null);
+    setStart(null);
+    setOpening(false);
+  };
+  const changeOpen = (next: boolean) => {
+    if (!next) reset();
+    onOpenChange(next);
+  };
+
+  const items: PickerItem[] = !options
+    ? []
+    : kind === 'opportunity'
+      ? options.opportunities.map((o) => ({
+          value: o.id,
+          label: o.title,
+          pageTitle: o.pageTitle ?? undefined,
+        }))
+      : kind === 'prompt'
+        ? options.prompts.map((p) => ({ value: p.id, label: p.text }))
+        : options.topics.map((topic) => ({
+            value: topic.id,
+            label: topic.name,
+            meta: t('topicPrompts', { count: topic.promptCount }),
+          }));
+
+  const bring = (html: string, imagesRemoved: number, fileName?: string) => {
+    const summary = summarizeContent(html, fileName ? fileTitle(fileName) : '');
+    if (!summary.characters) {
+      toast.error(t('content.empty'));
+      return;
+    }
+    setContent({ ...summary, html, fileName, imagesRemoved });
+  };
+
+  const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const html = e.clipboardData.getData('text/html');
+    // Plain text goes into the box as typed text would; formatted text is
+    // cleaned like a paste in the editor and shown as what it holds.
+    if (!html) return;
+    e.preventDefault();
+    const cleaned = cleanHtml(html, { keepImages: false });
+    bring(cleaned.html, cleaned.imagesRemoved);
+  };
+
+  const readFile = async (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      toast.error(t('content.tooLarge', { name: file.name }));
+      return;
+    }
+    setReading(true);
+    try {
+      const doc = await readDocumentFile(file);
+      if (!doc) toast.error(t('content.unsupported', { name: file.name }));
+      else bring(doc.html, doc.imagesRemoved, file.name);
+    } catch (err) {
+      console.error('Failed to read a file for New content:', err);
+      toast.error(t('content.readFailed', { name: file.name }));
+    } finally {
+      setReading(false);
+    }
+  };
+
+  const typed = pastedText.trim();
+  const canContinue =
+    method === 'create' ? picked !== null : content !== null || (from === 'paste' && !!typed);
+
+  const toStart = () => {
+    if (method === 'create') {
+      if (!picked) return;
+      const title = picked.pageTitle ?? picked.label;
+      const type = startPageType({ title }, siteType);
+      setStart({
+        method,
+        title,
+        source: { kind, id: picked.value },
+        ...type,
+      });
+      return;
+    }
+    const brought =
+      content ??
+      (typed ? { ...summarizeContent(textToHtml(typed)), html: textToHtml(typed) } : null);
+    if (!brought) return;
+    const type = startPageType({ title: brought.title, html: brought.html }, siteType);
+    setStart({
+      method,
+      title: brought.title,
+      source: { kind: 'content' },
+      bodyHtml: brought.html,
+      ...type,
+    });
+  };
+
+  const openEditor = async () => {
+    if (!start) return;
+    setOpening(true);
+    try {
+      const id = await createContentDraft(brandId, {
+        method: start.method,
+        title: start.title,
+        pageType: start.pageType,
+        source: start.source,
+        bodyHtml: start.bodyHtml,
+      });
+      router.push(contentEditorPath(id));
+    } catch (err) {
+      console.error('Failed to start a draft:', err);
+      toast.error(t('start.failed'));
+      setOpening(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={changeOpen}>
+      <DialogContent className="sm:max-w-xl">
+        {start ? (
+          <>
+            <DialogHeader>
+              <DialogTitle className="truncate pr-8" title={start.title}>
+                {t(start.method === 'create' ? 'start.titleCreate' : 'start.titleOptimize', {
+                  title: start.title || t('start.untitled'),
+                })}
+              </DialogTitle>
+              <DialogDescription>{t('start.description')}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Label id="start-page-type">{t('start.pageType')}</Label>
+              <div
+                role="radiogroup"
+                aria-labelledby="start-page-type"
+                className="flex flex-wrap gap-1.5"
+              >
+                {SITE_PAGE_TYPES[siteType].map((type) => (
+                  <ChoiceChip
+                    key={type}
+                    selected={start.pageType === type}
+                    onSelect={() => setStart({ ...start, pageType: type, detected: false })}
+                  >
+                    {tTypes(type)}
+                  </ChoiceChip>
+                ))}
+              </div>
+              {start.detected && (
+                <p className="text-xs text-muted-foreground">
+                  {t(start.bodyHtml ? 'start.detectedContent' : 'start.detectedTitle')}
+                </p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setStart(null)} disabled={opening}>
+                <ArrowLeft className="h-4 w-4" />
+                {t('back')}
+              </Button>
+              <Button onClick={() => void openEditor()} disabled={opening}>
+                {opening && <Loader2 className="h-4 w-4 animate-spin" />}
+                {t('start.openEditor')}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>{t('title')}</DialogTitle>
+              <DialogDescription>{t('description')}</DialogDescription>
+            </DialogHeader>
+
+            <div role="radiogroup" aria-label={t('methodLabel')} className="grid grid-cols-2 gap-2">
+              {(['create', 'optimize'] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={method === value}
+                  onClick={() => setMethod(value)}
+                  className={cn(
+                    'rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-muted/50',
+                    method === value && 'border-foreground ring-1 ring-inset ring-foreground',
+                  )}
+                >
+                  <span className="block text-sm font-medium">{t(`methods.${value}.title`)}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {t(`methods.${value}.hint`)}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {method === 'create' ? (
+              <div className="space-y-2">
+                <Label>{t('startFrom')}</Label>
+                <Tabs
+                  value={kind}
+                  onValueChange={(value) => {
+                    setKind(value as SourceKind);
+                    setPicked(null);
+                  }}
+                >
+                  <TabsList>
+                    {SOURCE_KINDS.map((value) => (
+                      <TabsTrigger key={value} value={value}>
+                        {t(`sources.${value}.tab`)}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </Tabs>
+                {optionsFailed ? (
+                  <div className="flex items-center gap-2 text-xs text-destructive">
+                    {t('loadError')}
+                    <button
+                      type="button"
+                      className="font-medium underline"
+                      onClick={() => setAttempt((n) => n + 1)}
+                    >
+                      {t('retry')}
+                    </button>
+                  </div>
+                ) : (
+                  <Combobox
+                    items={items}
+                    value={picked}
+                    onValueChange={(item: PickerItem | null) => setPicked(item)}
+                    disabled={!options}
+                  >
+                    <ComboboxTrigger
+                      className="w-full"
+                      aria-label={t(`sources.${kind}.placeholder`)}
+                      title={picked?.label}
+                    >
+                      {options ? (
+                        <ComboboxValue placeholder={t(`sources.${kind}.placeholder`)} />
+                      ) : (
+                        <span className="flex items-center gap-2 text-muted-foreground">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          {t('loading')}
+                        </span>
+                      )}
+                    </ComboboxTrigger>
+                    <ComboboxContent>
+                      <ComboboxInput placeholder={t(`sources.${kind}.search`)} />
+                      <ComboboxList>
+                        <ComboboxEmpty>{t(`sources.${kind}.empty`)}</ComboboxEmpty>
+                        <ComboboxCollection>
+                          {(item: PickerItem) => (
+                            <ComboboxItem key={item.value} value={item} title={item.label}>
+                              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                              {item.meta && (
+                                <span className="shrink-0 text-xs text-muted-foreground">
+                                  {item.meta}
+                                </span>
+                              )}
+                            </ComboboxItem>
+                          )}
+                        </ComboboxCollection>
+                      </ComboboxList>
+                    </ComboboxContent>
+                  </Combobox>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>{t('content.label')}</Label>
+                <Tabs
+                  value={from}
+                  onValueChange={(value) => {
+                    setFrom(value as 'paste' | 'file');
+                    setContent(null);
+                  }}
+                >
+                  <TabsList>
+                    <TabsTrigger value="paste">{t('content.paste')}</TabsTrigger>
+                    <TabsTrigger value="file">{t('content.file')}</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+                {content ? (
+                  <div className="flex items-start gap-3 rounded-lg border bg-muted/30 px-3 py-2.5">
+                    <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium" title={content.title}>
+                        {content.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {[
+                          content.fileName,
+                          t('content.summary', {
+                            headings: content.headings,
+                            characters: formatNumber(content.characters),
+                          }),
+                          content.imagesRemoved
+                            ? t('content.imagesLeftOut', { count: content.imagesRemoved })
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={t('content.clear')}
+                      title={t('content.clear')}
+                      onClick={() => {
+                        setContent(null);
+                        setPastedText('');
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : from === 'paste' ? (
+                  <Textarea
+                    value={pastedText}
+                    onChange={(e) => setPastedText(e.target.value)}
+                    onPaste={onPaste}
+                    rows={5}
+                    aria-label={t('content.paste')}
+                    placeholder={t('content.pastePlaceholder')}
+                  />
+                ) : (
+                  <>
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      accept={DOCUMENT_ACCEPT}
+                      className="hidden"
+                      onChange={(e) => {
+                        void readFile(e.target.files?.[0]);
+                        e.target.value = '';
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileRef.current?.click()}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        void readFile(e.dataTransfer.files[0]);
+                      }}
+                      disabled={reading}
+                      className="flex w-full flex-col items-center gap-1 rounded-lg border border-dashed px-3 py-6 text-center text-sm transition-colors hover:bg-muted/50"
+                    >
+                      {reading ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      ) : (
+                        <span className="font-medium">{t('content.choose')}</span>
+                      )}
+                      <span className="text-xs text-muted-foreground">{t('content.fileHint')}</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => changeOpen(false)}>
+                {t('cancel')}
+              </Button>
+              <Button onClick={toStart} disabled={!canContinue}>
+                {t('continue')}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ChoiceChip({
+  selected,
+  onSelect,
+  children,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+      className={cn(
+        'rounded-lg border px-2.5 py-1 text-sm transition-colors hover:bg-muted/50',
+        selected && 'border-foreground font-medium ring-1 ring-inset ring-foreground',
+      )}
+    >
+      {children}
+    </button>
+  );
+}

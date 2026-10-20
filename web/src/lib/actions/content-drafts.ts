@@ -9,9 +9,12 @@ import {
   type ContentDraft,
   type ContentDraftListItem,
   type DraftMethod,
+  type DraftStart,
+  type DraftStartOptions,
   type DraftStatus,
   type PageType,
 } from '@/lib/content/drafts';
+import { escapeHtml } from '@/lib/content/attachments';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { detectPageType, siteTypeOf, type SiteType } from '@/lib/content/page-types';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
@@ -116,20 +119,176 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
   };
 }
 
+/** Opportunities still open to write for, the highest scored first. */
+const OPEN_OPPORTUNITY_STATUSES = ['new', 'reviewed', 'sent', 'in_progress'];
+
+/** How many of each New content lists to pick from. */
+const START_LIMIT = 500;
+
 /**
- * A blank draft of a new page, started by the signed-in member: what the
- * Library's New content opens until the Start screen (CE-015) asks for the
- * page type and checks for overlaps first.
+ * What New content (CE-003) offers to start a new page from: the brand's
+ * open Content Opportunities, its active tracked prompts and its topics.
  */
-export async function createContentDraft(brandId: string): Promise<string> {
+export async function getContentStartOptions(brandId: string): Promise<DraftStartOptions> {
+  const supabase = await createClient();
+  const [opportunities, prompts, topics] = await Promise.all([
+    supabase
+      .from('content_opportunities')
+      .select('id, title, decision, brief')
+      .eq('brand_id', brandId)
+      .in('status', OPEN_OPPORTUNITY_STATUSES)
+      .order('opportunity_score', { ascending: false, nullsFirst: false })
+      .limit(START_LIMIT),
+    supabase
+      .from('prompts')
+      .select('id, text, topic_id, prompt_sets!inner(brand_id)')
+      .eq('prompt_sets.brand_id', brandId)
+      .eq('is_active', true)
+      .order('text')
+      .limit(START_LIMIT),
+    supabase
+      .from('topics')
+      .select('id, name')
+      .eq('brand_id', brandId)
+      .eq('is_active', true)
+      .order('name'),
+  ]);
+  const failed = opportunities.error ?? prompts.error ?? topics.error;
+  if (failed) throw new Error(failed.message);
+
+  const perTopic = new Map<string, number>();
+  for (const p of prompts.data ?? []) {
+    if (p.topic_id) perTopic.set(p.topic_id, (perTopic.get(p.topic_id) ?? 0) + 1);
+  }
+  return {
+    opportunities: (opportunities.data ?? []).map((o) => {
+      const suggested = (o.brief as { suggestedTitle?: unknown } | null)?.suggestedTitle;
+      return {
+        id: o.id,
+        title: o.title,
+        decision: o.decision,
+        pageTitle: typeof suggested === 'string' && suggested.trim() ? suggested.trim() : null,
+      };
+    }),
+    prompts: (prompts.data ?? []).map((p) => ({ id: p.id, text: p.text })),
+    // A topic with no active prompt has nothing for a page to answer.
+    topics: (topics.data ?? [])
+      .map((topic) => ({
+        id: topic.id,
+        name: topic.name,
+        promptCount: perTopic.get(topic.id) ?? 0,
+      }))
+      .filter((topic) => topic.promptCount > 0),
+  };
+}
+
+const startInput = z.object({
+  method: z.enum(['create', 'optimize']),
+  // A prompt's text can run longer than a title: cut to fit, not refused.
+  title: z.string().max(5_000),
+  pageType: z.enum(PAGE_TYPES),
+  source: z.discriminatedUnion('kind', [
+    z.object({ kind: z.enum(['opportunity', 'prompt', 'topic']), id: z.guid() }),
+    z.object({ kind: z.literal('content') }),
+  ]),
+  bodyHtml: z.string().max(MAX_BODY_HTML_LENGTH).optional(),
+});
+
+/** The most prompt ids a draft keeps (00206). */
+const MAX_DRAFT_PROMPTS = 500;
+
+/**
+ * The tracked prompts a page started from this source should answer: an
+ * opportunity's (its clusters', or its one prompt), the prompt picked, or a
+ * topic's active prompts. Throws 'not_found' for one the member can't read.
+ */
+async function promptsFor(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  source: DraftStart['source'],
+): Promise<{ promptIds: string[]; opportunityId: string | null }> {
+  if (source.kind === 'content') return { promptIds: [], opportunityId: null };
+
+  if (source.kind === 'opportunity') {
+    const { data, error } = await supabase
+      .from('content_opportunities')
+      .select('id, prompt_id, cluster_id, related_cluster_ids')
+      .eq('id', source.id)
+      .eq('brand_id', brandId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error('not_found');
+    const clusterIds = [data.cluster_id, ...(data.related_cluster_ids ?? [])].filter(
+      (id): id is string => typeof id === 'string',
+    );
+    if (!clusterIds.length) {
+      return { promptIds: data.prompt_id ? [data.prompt_id] : [], opportunityId: data.id };
+    }
+    const members = await supabase
+      .from('prompt_cluster_members')
+      .select('prompt_id')
+      .in('cluster_id', clusterIds)
+      .limit(MAX_DRAFT_PROMPTS);
+    if (members.error) throw new Error(members.error.message);
+    return { promptIds: (members.data ?? []).map((m) => m.prompt_id), opportunityId: data.id };
+  }
+
+  const query = supabase
+    .from('prompts')
+    .select('id, prompt_sets!inner(brand_id)')
+    .eq('prompt_sets.brand_id', brandId);
+  if (source.kind === 'prompt') {
+    const { data, error } = await query.eq('id', source.id).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error('not_found');
+    return { promptIds: [data.id], opportunityId: null };
+  }
+  const { data, error } = await query
+    .eq('topic_id', source.id)
+    .eq('is_active', true)
+    .limit(MAX_DRAFT_PROMPTS);
+  if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error('not_found');
+  return { promptIds: data.map((p) => p.id), opportunityId: null };
+}
+
+/**
+ * A draft started from New content and Start (CE-003, CE-015), by the
+ * signed-in member: the page type they picked, what it is for, and its first
+ * text. A new page starts with its title as the H1; content to optimize is
+ * checked against the draft allow-list, as a save is.
+ */
+export async function createContentDraft(brandId: string, start: DraftStart): Promise<string> {
+  const parsed = startInput.safeParse(start);
+  if (!draftId.safeParse(brandId).success || !parsed.success) throw new Error('invalid');
+  const { method, pageType, source, bodyHtml } = parsed.data;
+  const title = parsed.data.title.trim().slice(0, MAX_TITLE_LENGTH).trim();
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('unauthorized');
+  const { promptIds, opportunityId } = await promptsFor(supabase, brandId, source);
+
   const { data, error } = await supabase
     .from('content_drafts')
-    .insert({ brand_id: brandId, created_by: user.id })
+    .insert({
+      brand_id: brandId,
+      created_by: user.id,
+      method,
+      title,
+      page_type: pageType,
+      page_type_source: 'user',
+      body_html:
+        method === 'optimize'
+          ? sanitizeDraftHtml(bodyHtml ?? '')
+          : title
+            ? `<h1>${escapeHtml(title)}</h1>`
+            : '',
+      opportunity_id: opportunityId,
+      prompt_ids: [...new Set(promptIds)].slice(0, MAX_DRAFT_PROMPTS),
+    })
     .select('id')
     .single();
   if (error) throw new Error(error.message);

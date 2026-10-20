@@ -3103,8 +3103,76 @@
       },
       "loadError": "Couldn't load the Library.",
       "retry": "Try again",
-      "newContent": "New content",
-      "createFailed": "Couldn't start a draft. Try again."
+      "newContent": "New content"
+    },
+    "newContent": {
+      "title": "New content",
+      "description": "Pick how you want to start.",
+      "methodLabel": "How to start",
+      "methods": {
+        "create": {
+          "title": "Create from scratch",
+          "hint": "From an opportunity, a prompt or a topic"
+        },
+        "optimize": {
+          "title": "Optimize content",
+          "hint": "Pasted text or a file"
+        }
+      },
+      "startFrom": "Start from",
+      "sources": {
+        "opportunity": {
+          "tab": "Opportunity",
+          "placeholder": "Pick an opportunity",
+          "search": "Search opportunities",
+          "empty": "No open opportunities."
+        },
+        "prompt": {
+          "tab": "Prompt",
+          "placeholder": "Pick a tracked prompt",
+          "search": "Search prompts",
+          "empty": "No tracked prompts."
+        },
+        "topic": {
+          "tab": "Topic",
+          "placeholder": "Pick a topic",
+          "search": "Search topics",
+          "empty": "No topics with tracked prompts."
+        }
+      },
+      "topicPrompts": "{count, plural, one {# prompt} other {# prompts}}",
+      "loading": "Loading…",
+      "loadError": "Couldn't load what to start from.",
+      "retry": "Try again",
+      "content": {
+        "label": "Content",
+        "paste": "Paste text",
+        "file": "Upload file",
+        "pastePlaceholder": "Paste from Word, Google Docs or a web page. Headings, lists, links and tables are kept.",
+        "choose": "Choose a file or drop it here",
+        "fileHint": "Word, Markdown, HTML or text · up to 10 MB",
+        "summary": "{headings, plural, =0 {No headings} one {# heading} other {# headings}} · {characters} characters",
+        "imagesLeftOut": "{count, plural, one {# image} other {# images}} left out",
+        "clear": "Remove this content",
+        "empty": "There's no text in it to optimize.",
+        "tooLarge": "{name} is over 10 MB.",
+        "unsupported": "{name} isn't a file this reads: use Word, Markdown, HTML or text.",
+        "readFailed": "Couldn't read {name}."
+      },
+      "cancel": "Cancel",
+      "continue": "Continue",
+      "back": "Back",
+      "start": {
+        "titleCreate": "Create: {title}",
+        "titleOptimize": "Optimize: {title}",
+        "untitled": "Untitled",
+        "description": "Pick what kind of page this is. You can change it later in the editor.",
+        "pageType": "Page type",
+        "detectedTitle": "Picked from the title.",
+        "detectedContent": "Picked from the content.",
+        "openEditor": "Open editor",
+        "failed": "Couldn't start the draft. Try again."
+      }
     },
     "editor": {
       "back": "Back to the Library",

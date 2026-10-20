@@ -55,7 +55,8 @@ export function attachmentKind(fileName: string): AttachmentKind {
 /** What the file picker offers. */
 export const ATTACHMENT_ACCEPT = '.xlsx,.csv,.md,.markdown,.html,.htm,.txt,.docx';
 
-function escapeHtml(text: string) {
+/** Text safe to put in HTML. */
+export function escapeHtml(text: string) {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

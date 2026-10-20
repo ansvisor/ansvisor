@@ -7,10 +7,11 @@ import type { ContentDraftListItem } from '@/lib/content/drafts';
 import ContentLibraryPage from './page';
 
 const getContentDrafts = vi.fn();
-const createContentDraft = vi.fn();
+const getContentStartOptions = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
   getContentDrafts: (...args: unknown[]) => getContentDrafts(...args),
-  createContentDraft: (...args: unknown[]) => createContentDraft(...args),
+  getContentStartOptions: (...args: unknown[]) => getContentStartOptions(...args),
+  createContentDraft: vi.fn(),
 }));
 const push = vi.fn();
 vi.mock('@/i18n/navigation', () => ({
@@ -23,7 +24,10 @@ vi.mock('@/i18n/navigation', () => ({
 }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
-const brandState = vi.hoisted(() => ({ activeBrandId: 'brand-1' as string | null }));
+const brandState = vi.hoisted(() => ({
+  activeBrandId: 'brand-1' as string | null,
+  brands: [{ id: 'brand-1', industry: 'Travel & Hospitality', shoppingModeEnabled: false }],
+}));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (state: typeof brandState) => unknown) => selector(brandState),
 }));
@@ -74,7 +78,11 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   getContentDrafts.mockReset();
-  createContentDraft.mockReset();
+  getContentStartOptions.mockReset().mockResolvedValue({
+    opportunities: [],
+    prompts: [],
+    topics: [],
+  });
   push.mockReset();
   toast.error.mockReset();
 });
@@ -194,31 +202,16 @@ describe('the Content Library', () => {
     error.mockRestore();
   });
 
-  it('starts a blank draft and opens it in the editor', async () => {
+  it('opens New content for the brand', async () => {
     getContentDrafts.mockResolvedValue([]);
-    createContentDraft.mockResolvedValue('d9');
     await renderPage();
     const newContent = [...container.querySelectorAll('button')].find(
       (b) => b.textContent === 'New content',
     )!;
     await act(async () => newContent.click());
-    expect(createContentDraft).toHaveBeenCalledWith('brand-1');
-    expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d9');
-  });
-
-  it('says so when a draft can’t be started', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    getContentDrafts.mockResolvedValue([]);
-    createContentDraft.mockRejectedValue(new Error('denied'));
-    await renderPage();
-    const newContent = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent === 'New content',
-    )!;
-    await act(async () => newContent.click());
+    expect(getContentStartOptions).toHaveBeenCalledWith('brand-1');
+    expect(document.body.textContent).toContain('Pick how you want to start.');
     expect(push).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith("Couldn't start a draft. Try again.");
-    expect(newContent.disabled).toBe(false);
-    error.mockRestore();
   });
 
   it('asks for a brand when none is selected', async () => {

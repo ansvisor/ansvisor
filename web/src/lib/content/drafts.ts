@@ -100,6 +100,35 @@ export interface ContentDraft {
   updatedAt: string;
 }
 
+/**
+ * What New content starts a page from (CE-003): an opportunity, a tracked
+ * prompt or a topic for a new page, or content to optimize.
+ */
+export type DraftSource =
+  | { kind: 'opportunity' | 'prompt' | 'topic'; id: string }
+  | { kind: 'content' };
+
+/** A draft as Start opens it (CE-015). */
+export interface DraftStart {
+  method: DraftMethod;
+  title: string;
+  pageType: PageType;
+  source: DraftSource;
+  /** The content to optimize, as HTML. */
+  bodyHtml?: string;
+}
+
+/** What New content offers to start a page from. */
+export interface DraftStartOptions {
+  /**
+   * pageTitle: the page title its brief suggests, once one is generated;
+   * the opportunity's own title says what to do, not what to call the page.
+   */
+  opportunities: { id: string; title: string; decision: string | null; pageTitle: string | null }[];
+  prompts: { id: string; text: string }[];
+  topics: { id: string; name: string; promptCount: number }[];
+}
+
 export function draftsInTab(drafts: ContentDraftListItem[], tab: LibraryTab) {
   return tab === 'all' ? drafts : drafts.filter((d) => d.status === tab);
 }

@@ -2,21 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { toast } from 'sonner';
 import { Loader2, Plus } from 'lucide-react';
-import { useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { createContentDraft, getContentDrafts } from '@/lib/actions/content-drafts';
+import { NewContentDialog } from '@/components/content/new-content-dialog';
+import { getContentDrafts } from '@/lib/actions/content-drafts';
 import {
   LIBRARY_TABS,
-  contentEditorPath,
   draftsInTab,
   libraryTabCounts,
   type ContentDraftListItem,
   type LibraryTab,
 } from '@/lib/content/drafts';
+import { siteTypeOf } from '@/lib/content/page-types';
 import { formatNumber } from '@/lib/format';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -37,11 +36,11 @@ interface LibraryRead {
 export default function ContentLibraryPage() {
   const t = useTranslations('contentEditor.library');
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
+  const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const [tab, setTab] = useState<LibraryTab>('all');
   const [read, setRead] = useState<LibraryRead | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const [creating, setCreating] = useState(false);
-  const router = useRouter();
+  const [starting, setStarting] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one read of the URL after mount
@@ -63,21 +62,6 @@ export default function ContentLibraryPage() {
       cancelled = true;
     };
   }, [activeBrandId, attempt]);
-
-  // New content opens a blank draft in the editor; the Start screen (CE-015)
-  // takes this over, asking for the page type and checking overlaps first.
-  const newContent = async () => {
-    if (!activeBrandId) return;
-    setCreating(true);
-    try {
-      const id = await createContentDraft(activeBrandId);
-      router.push(contentEditorPath(id));
-    } catch (err) {
-      console.error('Failed to start a draft:', err);
-      toast.error(t('createFailed'));
-      setCreating(false);
-    }
-  };
 
   const changeTab = (next: LibraryTab) => {
     setTab(next);
@@ -104,11 +88,17 @@ export default function ContentLibraryPage() {
           <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
           <p className="text-sm text-muted-foreground">{t('description')}</p>
         </div>
-        <Button className="gap-2" onClick={newContent} disabled={creating}>
-          {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+        <Button className="gap-2" onClick={() => setStarting(true)}>
+          <Plus className="h-4 w-4" />
           {t('newContent')}
         </Button>
       </div>
+      <NewContentDialog
+        open={starting}
+        onOpenChange={setStarting}
+        brandId={activeBrandId}
+        siteType={siteTypeOf(activeBrand ?? {})}
+      />
 
       <Tabs value={tab} onValueChange={(v) => changeTab(v as LibraryTab)}>
         <TabsList variant="line" aria-label={t('tabsLabel')}>

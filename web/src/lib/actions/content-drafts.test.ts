@@ -44,13 +44,8 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const {
-  createContentDraft,
-  getContentDraft,
-  markContentDraftReady,
-  saveContentDraft,
-  setContentDraftPageType,
-} = await import('./content-drafts');
+const { getContentDraft, markContentDraftReady, saveContentDraft, setContentDraftPageType } =
+  await import('./content-drafts');
 
 beforeEach(() => {
   calls = [];
@@ -200,7 +195,7 @@ describe('markContentDraftReady', () => {
   });
 });
 
-describe('getContentDraft and createContentDraft', () => {
+describe('getContentDraft', () => {
   it('opens a draft with its brand’s site type, chosen or guessed', async () => {
     const base = {
       id: DRAFT,
@@ -233,10 +228,5 @@ describe('getContentDraft and createContentDraft', () => {
   it('reads nothing for a malformed id', async () => {
     await expect(getContentDraft('../etc')).resolves.toBeNull();
     expect(calls).toEqual([]);
-  });
-
-  it('starts a blank draft as the signed-in member', async () => {
-    await expect(createContentDraft('b1')).resolves.toBe('new-draft');
-    expect(calls[0]).toMatchObject({ op: 'insert', value: { brand_id: 'b1', created_by: 'u1' } });
   });
 });

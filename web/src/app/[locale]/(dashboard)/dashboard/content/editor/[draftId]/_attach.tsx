@@ -22,7 +22,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { cleanHtml } from '@/lib/content/clean-html';
 import {
   ATTACHMENT_ACCEPT,
   CONFIRM_TABLE_ROWS,
@@ -30,8 +29,8 @@ import {
   attachmentKind,
   tableHtml,
   tableRows,
-  textToHtml,
 } from '@/lib/content/attachments';
+import { readDocumentFile } from '@/lib/content/import-document';
 import { formatNumber } from '@/lib/format';
 import { cellsToText, parseCsv } from '@/lib/prompt-import';
 
@@ -112,33 +111,17 @@ export function useAttachments(editor: Editor | null) {
         else setQueue((q) => [...q, { name, sheets: [{ name, rows }] }]);
         return;
       }
-      case 'markdown': {
-        const { marked } = await import('marked');
-        insert(cleanHtml(await marked.parse(await file.text()), { keepImages: true }).html, name);
-        return;
-      }
-      case 'html': {
-        const cleaned = cleanHtml(await file.text(), { keepImages: true });
-        insert(
-          cleaned.html,
-          name,
-          cleaned.unsafeRemoved ? t('unsafeRemoved', { count: cleaned.unsafeRemoved }) : undefined,
-        );
-        return;
-      }
+      case 'markdown':
+      case 'html':
       case 'text':
-        insert(textToHtml(await file.text()), name);
-        return;
       case 'word': {
-        const { default: mammoth } = await import('mammoth');
-        const { value } = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
-        // Word's images are embedded data: they wait for file storage.
-        const cleaned = cleanHtml(value, { keepImages: false });
-        insert(
-          cleaned.html,
-          name,
-          cleaned.imagesRemoved ? t('imagesLeftOut', { count: cleaned.imagesRemoved }) : undefined,
-        );
+        const doc = (await readDocumentFile(file))!;
+        const note = doc.unsafeRemoved
+          ? t('unsafeRemoved', { count: doc.unsafeRemoved })
+          : doc.imagesRemoved
+            ? t('imagesLeftOut', { count: doc.imagesRemoved })
+            : undefined;
+        insert(doc.html, name, note);
         return;
       }
       case 'image':

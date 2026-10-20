@@ -834,8 +834,10 @@ export type Database = {
           created_by: string | null
           id: string
           method: string
+          opportunity_id: string | null
           page_type: string | null
           page_type_source: string
+          prompt_ids: string[]
           score_after: number | null
           score_before: number | null
           status: string
@@ -850,8 +852,10 @@ export type Database = {
           created_by?: string | null
           id?: string
           method?: string
+          opportunity_id?: string | null
           page_type?: string | null
           page_type_source?: string
+          prompt_ids?: string[]
           score_after?: number | null
           score_before?: number | null
           status?: string
@@ -866,8 +870,10 @@ export type Database = {
           created_by?: string | null
           id?: string
           method?: string
+          opportunity_id?: string | null
           page_type?: string | null
           page_type_source?: string
+          prompt_ids?: string[]
           score_after?: number | null
           score_before?: number | null
           status?: string
@@ -875,6 +881,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "content_drafts_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "content_opportunities"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "content_drafts_brand_id_fkey"
             columns: ["brand_id"]
@@ -895,12 +908,15 @@ export type Database = {
         Row: {
           brand_id: string
           brief: Json | null
+          cluster_id: string | null
           created_at: string | null
+          decision: string | null
           description: string | null
           id: string
           impact: string
           opportunity_score: number | null
           prompt_id: string | null
+          related_cluster_ids: string[]
           source_data: Json | null
           status: string
           title: string
@@ -912,12 +928,15 @@ export type Database = {
         Insert: {
           brand_id: string
           brief?: Json | null
+          cluster_id?: string | null
           created_at?: string | null
+          decision?: string | null
           description?: string | null
           id?: string
           impact?: string
           opportunity_score?: number | null
           prompt_id?: string | null
+          related_cluster_ids?: string[]
           source_data?: Json | null
           status?: string
           title: string
@@ -929,12 +948,15 @@ export type Database = {
         Update: {
           brand_id?: string
           brief?: Json | null
+          cluster_id?: string | null
           created_at?: string | null
+          decision?: string | null
           description?: string | null
           id?: string
           impact?: string
           opportunity_score?: number | null
           prompt_id?: string | null
+          related_cluster_ids?: string[]
           source_data?: Json | null
           status?: string
           title?: string
@@ -1911,6 +1933,29 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prompt_cluster_members: {
+        Row: {
+          cluster_id: string
+          prompt_id: string
+        }
+        Insert: {
+          cluster_id: string
+          prompt_id: string
+        }
+        Update: {
+          cluster_id?: string
+          prompt_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_cluster_members_prompt_id_fkey"
+            columns: ["prompt_id"]
+            isOneToOne: true
+            referencedRelation: "prompts"
             referencedColumns: ["id"]
           },
         ]
