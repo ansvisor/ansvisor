@@ -18,6 +18,7 @@ import {
 const facts = (over: Partial<GettingStartedFacts> = {}): GettingStartedFacts => ({
   startedAt: '2026-10-20T10:00:00Z',
   dismissedAt: null,
+  confirmedAt: '2026-10-20T10:00:00Z',
   records: {},
   recordedAt: {},
   kpiSetupAt: null,
@@ -32,6 +33,7 @@ const facts = (over: Partial<GettingStartedFacts> = {}): GettingStartedFacts => 
   contentSuggestions: 0,
   contentPicked: 0,
   contentCreated: 0,
+  contentRecent: 0,
   audits: 0,
   ...over,
 });
@@ -240,6 +242,33 @@ describe('buildGettingStarted', () => {
     expect(buildGettingStarted(facts({ startedAt: null })).active).toBe(false);
     expect(buildGettingStarted(facts({ dismissedAt: '2026-10-21T00:00:00Z' })).active).toBe(false);
   });
+
+  it('asks first for a brand added beside others, until someone answers', () => {
+    const asking = buildGettingStarted(facts({ confirmedAt: null }));
+    expect(asking).toMatchObject({ active: false, asking: true });
+    // Skipped from the question: neither running nor asking.
+    expect(
+      buildGettingStarted(facts({ confirmedAt: null, dismissedAt: '2026-10-21T00:00:00Z' })),
+    ).toMatchObject({ active: false, asking: false });
+  });
+
+  it('offers it to a brand whose setup is incomplete (AC-ALT2 §5)', () => {
+    const complete = {
+      competitors: 3,
+      topicPrompts: [3, 3, 3],
+      gsc: true,
+      contentRecent: 1,
+    };
+    expect(buildGettingStarted(facts(complete)).needsSetup).toBe(false);
+    for (const gap of [
+      { competitors: 2 },
+      { topicPrompts: [3, 3] },
+      { gsc: false },
+      { contentRecent: 0 },
+    ]) {
+      expect(buildGettingStarted(facts({ ...complete, ...gap })).needsSetup).toBe(true);
+    }
+  });
 });
 
 describe('parseGettingStartedFacts', () => {
@@ -248,6 +277,7 @@ describe('parseGettingStartedFacts', () => {
       parseGettingStartedFacts({
         started_at: '2026-10-20T10:00:00+00:00',
         dismissed_at: null,
+        confirmed_at: '2026-10-20T10:00:00+00:00',
         steps: {
           kpis: { state: 'done', at: '2026-10-20T12:00:00+00:00' },
           gsc: { state: 'skipped', at: '2026-10-20T12:05:00+00:00' },
@@ -266,11 +296,13 @@ describe('parseGettingStartedFacts', () => {
         content_suggestions: 3,
         content_picked: 0,
         content_created: 0,
+        content_recent: 2,
         audits: 1,
       }),
     ).toEqual({
       startedAt: '2026-10-20T10:00:00+00:00',
       dismissedAt: null,
+      confirmedAt: '2026-10-20T10:00:00+00:00',
       records: { kpis: 'done', gsc: 'skipped', visibility: 'opened' },
       recordedAt: { kpis: '2026-10-20T12:00:00+00:00', gsc: '2026-10-20T12:05:00+00:00' },
       kpiSetupAt: '2026-10-20T11:00:00+00:00',
@@ -285,6 +317,7 @@ describe('parseGettingStartedFacts', () => {
       contentSuggestions: 3,
       contentPicked: 0,
       contentCreated: 0,
+      contentRecent: 2,
       audits: 1,
     });
   });

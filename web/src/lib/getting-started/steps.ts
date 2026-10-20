@@ -100,6 +100,8 @@ export type GettingStartedRecord = 'opened' | 'skipped' | 'done';
 export interface GettingStartedFacts {
   startedAt: string | null;
   dismissedAt: string | null;
+  /** When someone chose to run it; null while a later brand still asks (00197). */
+  confirmedAt: string | null;
   /** What a person did that leaves no other trace (getting_started_steps). */
   records: Partial<Record<string, GettingStartedRecord>>;
   /** When each record was made. */
@@ -117,6 +119,8 @@ export interface GettingStartedFacts {
   contentSuggestions: number;
   contentPicked: number;
   contentCreated: number;
+  /** Content sent to the CMS or completed in the last 30 days. */
+  contentRecent: number;
   audits: number;
 }
 
@@ -135,6 +139,16 @@ export interface GettingStartedStep extends GettingStartedStepDef {
 export interface GettingStartedStatus {
   /** Started for the brand and not skipped. */
   active: boolean;
+  /** A brand added beside others: "Run Getting started for it?" is open. */
+  asking: boolean;
+  /**
+   * The existing-customer rule (AC-ALT2 §5): fewer than 3 competitors or
+   * topics, no Search Console, or no content in 30 days. Offers "Start
+   * getting started" while it isn't running.
+   */
+  needsSetup: boolean;
+  /** Skipped from the Actions page (or a new brand's question); Start brings it back. */
+  skipped: boolean;
   steps: GettingStartedStep[];
   /** Steps done or skipped. */
   done: number;
@@ -167,6 +181,7 @@ export function parseGettingStartedFacts(raw: unknown): GettingStartedFacts | nu
   return {
     startedAt: str(r.started_at),
     dismissedAt: str(r.dismissed_at),
+    confirmedAt: str(r.confirmed_at),
     records,
     recordedAt,
     kpiSetupAt: str(r.kpi_setup_at),
@@ -181,6 +196,7 @@ export function parseGettingStartedFacts(raw: unknown): GettingStartedFacts | nu
     contentSuggestions: num(r.content_suggestions),
     contentPicked: num(r.content_picked),
     contentCreated: num(r.content_created),
+    contentRecent: num(r.content_recent),
     audits: num(r.audits),
   };
 }
@@ -275,8 +291,16 @@ export function buildGettingStarted(f: GettingStartedFacts): GettingStartedStatu
   }));
   const ready = steps.find((s) => s.key === 'ready')!;
   ready.state = steps.every((s) => s === ready || complete(s)) ? 'done' : 'waiting';
+  const running = Boolean(f.startedAt) && !f.dismissedAt;
   return {
-    active: Boolean(f.startedAt) && !f.dismissedAt,
+    active: running && Boolean(f.confirmedAt),
+    asking: running && !f.confirmedAt,
+    needsSetup:
+      f.competitors < MIN_COMPETITORS ||
+      f.topicPrompts.length < MIN_TOPICS ||
+      !f.gsc ||
+      f.contentRecent === 0,
+    skipped: Boolean(f.dismissedAt),
     steps,
     done: steps.filter(complete).length,
     total: steps.length,

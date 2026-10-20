@@ -27,7 +27,11 @@ import {
   type ActionItem,
 } from '@/lib/actions/action-center';
 import { listMembers, type TeamMember } from '@/lib/actions/team';
-import { getGettingStarted } from '@/lib/actions/getting-started';
+import {
+  getGettingStarted,
+  skipGettingStarted,
+  startGettingStarted,
+} from '@/lib/actions/getting-started';
 import type { GettingStartedStatus, GettingStartedStep } from '@/lib/getting-started/steps';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import {
@@ -63,6 +67,14 @@ import { GettingStartedSummaryCard } from '@/components/getting-started/summary-
 import { GettingStartedStepCard } from '@/components/getting-started/step-card';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -110,19 +122,32 @@ export default function ActionCenterActionsPage() {
 
   return (
     <div className="space-y-6">
+      {brand ? (
+        <ActionsContent key={brand.id} brand={brand} />
+      ) : (
+        <>
+          <ActionsHeader />
+          <ActionCenterTabs />
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <h2 className="text-lg font-semibold">{t('noBrand.title')}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{t('noBrand.description')}</p>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** The page's title, with Getting started's Start or Skip on the right. */
+function ActionsHeader({ action }: { action?: React.ReactNode }) {
+  const t = useTranslations('actionCenter.actionsPage');
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
       </div>
-      <ActionCenterTabs />
-      {brand ? (
-        <ActionsContent key={brand.id} brand={brand} />
-      ) : (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <h2 className="text-lg font-semibold">{t('noBrand.title')}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t('noBrand.description')}</p>
-        </div>
-      )}
+      {action}
     </div>
   );
 }
@@ -463,8 +488,123 @@ function ActionsContent({ brand }: { brand: Brand }) {
     setSearch('');
   };
 
+  const showSteps = startedActive && gettingStarted !== null && category === GETTING_STARTED;
+  const openCard = showSteps ? gettingStarted.steps.find((s) => s.key === stepKey) : undefined;
+
+  // Getting started's Start and Skip (AC-ALT2 §5), for admins and managers:
+  // the people who can set the steps up. Start shows while it isn't running
+  // and the brand's setup is incomplete, or after a skip.
+  const [confirmingSkip, setConfirmingSkip] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  const switchGettingStarted = async (
+    change: (brandId: string) => Promise<void>,
+    done: (started: GettingStartedStatus | null) => string,
+    failed: string,
+  ) => {
+    setSwitching(true);
+    try {
+      await change(brand.id);
+      const started = await getGettingStarted(brand.id).catch(() => null);
+      if (!mounted.current) return;
+      if (started) setGettingStarted(started);
+      setStepKey(null);
+      setFocus(null);
+      setCategory(started?.active ? GETTING_STARTED : 'all');
+      toast.success(done(started));
+    } catch {
+      toast.error(failed);
+    } finally {
+      setSwitching(false);
+    }
+  };
+  const start = (message: (started: GettingStartedStatus | null) => string) =>
+    void switchGettingStarted(startGettingStarted, message, tStarted('start.failed'));
+  const skip = (message: string) =>
+    void switchGettingStarted(skipGettingStarted, () => message, tStarted('skip.failed'));
+
+  const headerAction =
+    !canManage || !gettingStarted ? null : startedActive ? (
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={switching}
+        onClick={() => setConfirmingSkip(true)}
+      >
+        {tStarted('skip.button')}
+      </Button>
+    ) : !gettingStarted.asking && (gettingStarted.needsSetup || gettingStarted.skipped) ? (
+      <div className="flex flex-col items-end gap-1">
+        <Button
+          size="sm"
+          disabled={switching}
+          onClick={() => start((s) => tStarted('start.started', { count: s?.done ?? 0 }))}
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          {tStarted('start.button')}
+        </Button>
+        <span className="text-xs text-muted-foreground">{tStarted('start.hint')}</span>
+      </div>
+    ) : null;
+
+  // Header and tabs above every state of the page, with the dialogs; with a
+  // step's card open, the page makes room for it on wide screens.
+  const frame = (body: React.ReactNode) => (
+    <div className={cn('space-y-6', openCard && 'min-[1300px]:pr-[440px]')}>
+      <ActionsHeader action={headerAction} />
+      <ActionCenterTabs />
+      {body}
+
+      <Dialog open={confirmingSkip} onOpenChange={setConfirmingSkip}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{tStarted('skip.title')}</DialogTitle>
+            <DialogDescription>{tStarted('skip.body')}</DialogDescription>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">{tStarted('skip.later')}</p>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setConfirmingSkip(false);
+                skip(tStarted('skip.done'));
+              }}
+            >
+              {tStarted('skip.confirm')}
+            </Button>
+            <Button onClick={() => setConfirmingSkip(false)}>{tStarted('skip.keep')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* A brand added beside others asks before running it. */}
+      <Dialog open={canManage && Boolean(gettingStarted?.asking) && !switching}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>{tStarted('secondBrand.title', { brand: brand.name })}</DialogTitle>
+            <DialogDescription>{tStarted('secondBrand.body')}</DialogDescription>
+          </DialogHeader>
+          <ul className="list-disc space-y-1 pl-5 text-sm">
+            <li>{tStarted('secondBrand.runLine', { brand: brand.name })}</li>
+            <li>{tStarted('secondBrand.skipLine')}</li>
+          </ul>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => skip(tStarted('secondBrand.skipped', { brand: brand.name }))}
+            >
+              {tStarted('secondBrand.skip')}
+            </Button>
+            <Button onClick={() => start(() => tStarted('secondBrand.ran', { brand: brand.name }))}>
+              {tStarted('secondBrand.run')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+
   if (isLoading) {
-    return (
+    return frame(
       <div className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {[0, 1, 2, 3, 4].map((i) => (
@@ -476,35 +616,33 @@ function ActionsContent({ brand }: { brand: Brand }) {
             <Skeleton key={i} className="h-16 w-full" />
           ))}
         </div>
-      </div>
+      </div>,
     );
   }
 
   if (loadFailed) {
-    return (
+    return frame(
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
         <AlertCircle className="h-8 w-8 text-muted-foreground" />
         <h2 className="mt-4 font-semibold">{t('error.title')}</h2>
         <Button variant="outline" className="mt-4" onClick={() => void load()}>
           {t('error.retry')}
         </Button>
-      </div>
+      </div>,
     );
   }
 
   if (!actions?.length && !startedActive) {
-    return (
+    return frame(
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
         <ListChecks className="h-8 w-8 text-muted-foreground" />
         <h2 className="mt-4 font-semibold">{t('empty.title')}</h2>
         <p className="mt-1 max-w-md text-sm text-muted-foreground">{t('empty.description')}</p>
-      </div>
+      </div>,
     );
   }
 
   const list = actions ?? [];
-  const showSteps = startedActive && gettingStarted !== null && category === GETTING_STARTED;
-  const openCard = showSteps ? gettingStarted.steps.find((s) => s.key === stepKey) : undefined;
   // Before the first signals, the cards that rank actions have nothing to say.
   const noActions = list.length === 0;
   const showStepsCategory = () => {
@@ -521,9 +659,8 @@ function ActionsContent({ brand }: { brand: Brand }) {
       ? { value: '—', sub: tStarted('firstSignals'), dim: true }
       : { value, sub, isActive: focus === card, onClick: () => toggleFocus(card) };
 
-  return (
-    // With a step's card open, the list makes room for it on wide screens.
-    <div className={cn('space-y-4', openCard && 'min-[1300px]:pr-[440px]')}>
+  return frame(
+    <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {startedActive && gettingStarted && (
           <GettingStartedSummaryCard
@@ -738,7 +875,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
         onChanged={() => void load()}
         onPatched={patchAction}
       />
-    </div>
+    </div>,
   );
 }
 

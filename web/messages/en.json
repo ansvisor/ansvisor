@@ -1634,6 +1634,32 @@
         "connect": "Connect now",
         "skipped": "Skipped · you can connect it later",
         "failed": "Couldn’t skip the step. Try again."
+      },
+      "start": {
+        "button": "Start getting started",
+        "hint": "Only you see this · about 15 min",
+        "started": "{count, plural, =0 {Getting started is on} one {Getting started · # step already done} other {Getting started · # steps already done}}",
+        "failed": "Couldn’t start Getting started. Try again."
+      },
+      "skip": {
+        "button": "Skip getting started",
+        "title": "Skip getting started?",
+        "body": "Your actions list goes back to normal. Steps you finished stay done.",
+        "later": "You can start again any time from the same button.",
+        "confirm": "Skip",
+        "keep": "Keep going",
+        "done": "Back to your actions",
+        "failed": "Couldn’t skip Getting started. Try again."
+      },
+      "secondBrand": {
+        "title": "Run Getting started for {brand}?",
+        "body": "You already know Ansvisor. Run the setup steps for this brand, or skip them.",
+        "runLine": "Run: KPIs, competitors, topics and prompts for {brand}, guided",
+        "skipLine": "Skip: go straight to the actions list",
+        "run": "Run Getting started",
+        "skip": "Skip",
+        "ran": "Getting started is on for {brand}",
+        "skipped": "Skipped · {brand} goes straight to the actions"
       }
     },
     "actionTexts": {

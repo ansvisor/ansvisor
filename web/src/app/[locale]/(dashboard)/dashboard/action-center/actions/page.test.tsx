@@ -58,10 +58,22 @@ const action: ActionItem = {
   priorityReason: null,
 };
 
-const { getActions, getActionsAffected, getGettingStarted, saveBlob, toast } = vi.hoisted(() => ({
+const {
+  getActions,
+  getActionsAffected,
+  getGettingStarted,
+  startGettingStarted,
+  skipGettingStarted,
+  role,
+  saveBlob,
+  toast,
+} = vi.hoisted(() => ({
   getActions: vi.fn(),
   getActionsAffected: vi.fn(),
   getGettingStarted: vi.fn(),
+  startGettingStarted: vi.fn(),
+  skipGettingStarted: vi.fn(),
+  role: { canManage: true },
   saveBlob: vi.fn(),
   toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
 }));
@@ -74,7 +86,12 @@ vi.mock('@/stores/use-brand-store', () => ({
     selector({ getActiveBrand: () => brand }),
 }));
 vi.mock('@/lib/actions/action-center', () => ({ getActions, getActionsAffected }));
-vi.mock('@/lib/actions/getting-started', () => ({ getGettingStarted }));
+vi.mock('@/lib/actions/getting-started', () => ({
+  getGettingStarted,
+  startGettingStarted,
+  skipGettingStarted,
+}));
+vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => role }));
 vi.mock('@/lib/actions/team', () => ({ listMembers: vi.fn(async () => []) }));
 vi.mock('@/lib/download', () => ({ saveBlob }));
 vi.mock('sonner', () => ({ toast }));
@@ -124,6 +141,9 @@ beforeEach(() => {
   window.history.replaceState(null, '', '/');
   getActions.mockReset().mockResolvedValue([action]);
   getGettingStarted.mockReset().mockResolvedValue(null);
+  startGettingStarted.mockReset().mockResolvedValue(undefined);
+  skipGettingStarted.mockReset().mockResolvedValue(undefined);
+  role.canManage = true;
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -189,6 +209,7 @@ const started = (over: Partial<GettingStartedFacts> = {}): GettingStartedStatus 
   buildGettingStarted({
     startedAt: '2026-10-20T10:00:00Z',
     dismissedAt: null,
+    confirmedAt: '2026-10-20T10:00:00Z',
     records: {},
     recordedAt: {},
     kpiSetupAt: null,
@@ -203,6 +224,7 @@ const started = (over: Partial<GettingStartedFacts> = {}): GettingStartedStatus 
     contentSuggestions: 0,
     contentPicked: 0,
     contentCreated: 0,
+    contentRecent: 0,
     audits: 0,
     ...over,
   });
@@ -269,5 +291,71 @@ describe('Getting started in the actions list', () => {
 
     expect(steps()).toBeNull();
     expect(text()).toContain('cards.priority');
+  });
+});
+
+// Dialogs open in a portal on the body.
+const pageText = () => document.body.textContent ?? '';
+const buttonNamed = (label: string) =>
+  [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === label);
+
+// AC-ALT2 §5: existing customers, skipping, and a brand added beside others.
+describe('starting and skipping Getting started', () => {
+  it('offers Start to a manager whose brand isn’t set up, and runs it', async () => {
+    getGettingStarted
+      .mockResolvedValueOnce(started({ startedAt: null }))
+      .mockResolvedValue(started({ competitors: 4 }));
+    await render();
+    expect(text()).toContain('start.hint');
+    await act(async () => buttonNamed('start.button')!.click());
+
+    expect(startGettingStarted).toHaveBeenCalledWith('brand-id');
+    expect(toast.success).toHaveBeenCalledWith('start.started');
+    expect(steps()).not.toBeNull();
+  });
+
+  it('offers nothing to a brand that is set up, nor to someone who can’t set it up', async () => {
+    const setUp = { startedAt: null, competitors: 3, topicPrompts: [3, 3, 3], gsc: true };
+    getGettingStarted.mockResolvedValue(started({ ...setUp, contentRecent: 1 }));
+    await render();
+    expect(buttonNamed('start.button')).toBeUndefined();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    role.canManage = false;
+    getGettingStarted.mockResolvedValue(started({ startedAt: null }));
+    await render();
+    expect(buttonNamed('start.button')).toBeUndefined();
+  });
+
+  it('skips it only after asking, then lists the actions', async () => {
+    getGettingStarted
+      .mockResolvedValueOnce(started())
+      .mockResolvedValue(started({ dismissedAt: '2026-10-20T12:00:00Z' }));
+    await render();
+    await act(async () => buttonNamed('skip.button')!.click());
+    expect(skipGettingStarted).not.toHaveBeenCalled();
+    expect(pageText()).toContain('skip.body');
+
+    await act(async () => buttonNamed('skip.confirm')!.click());
+    expect(skipGettingStarted).toHaveBeenCalledWith('brand-id');
+    expect(toast.success).toHaveBeenCalledWith('skip.done');
+    expect(steps()).toBeNull();
+    // Start stays available after a skip.
+    expect(buttonNamed('start.button')).toBeDefined();
+  });
+
+  it('asks a manager whether to run it for a brand added beside others', async () => {
+    getGettingStarted
+      .mockResolvedValueOnce(started({ confirmedAt: null }))
+      .mockResolvedValue(started());
+    await render();
+    expect(pageText()).toContain('secondBrand.title');
+    expect(steps()).toBeNull();
+
+    await act(async () => buttonNamed('secondBrand.run')!.click());
+    expect(startGettingStarted).toHaveBeenCalledWith('brand-id');
+    expect(toast.success).toHaveBeenCalledWith('secondBrand.ran');
+    expect(steps()).not.toBeNull();
   });
 });

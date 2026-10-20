@@ -1101,16 +1101,19 @@ export type Database = {
       getting_started: {
         Row: {
           brand_id: string
+          confirmed_at: string | null
           dismissed_at: string | null
           started_at: string
         }
         Insert: {
           brand_id: string
+          confirmed_at?: string | null
           dismissed_at?: string | null
           started_at?: string
         }
         Update: {
           brand_id?: string
+          confirmed_at?: string | null
           dismissed_at?: string | null
           started_at?: string
         }

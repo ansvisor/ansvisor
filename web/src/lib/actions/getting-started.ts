@@ -58,3 +58,36 @@ export async function skipGettingStartedStep(brandId: string, step: string): Pro
     );
   if (error) throw new Error(error.message);
 }
+
+/**
+ * Run Getting started for the brand: an existing brand's "Start getting
+ * started", or "Run" on a new brand's question. Starting again after a skip
+ * clears it. Admins and managers only (00197); the started time is kept, so
+ * steps finished meanwhile still count.
+ */
+export async function startGettingStarted(brandId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('getting_started')
+    .upsert(
+      { brand_id: brandId, confirmed_at: new Date().toISOString(), dismissed_at: null },
+      { onConflict: 'brand_id' },
+    );
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Skip Getting started: the actions list goes back to normal, the steps
+ * already done stay done, and Start brings it back.
+ */
+export async function skipGettingStarted(brandId: string): Promise<void> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('getting_started')
+    .update({ dismissed_at: new Date().toISOString() })
+    .eq('brand_id', brandId)
+    .select('brand_id');
+  if (error) throw new Error(error.message);
+  // RLS lets only admins and managers write: nothing changed otherwise.
+  if (!data?.length) throw new Error('not skipped');
+}
