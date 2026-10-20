@@ -97,6 +97,11 @@ export interface PlanLimits {
 
 export interface PlanPricing {
   monthly: number;
+  /**
+   * A year paid up front, in dollars: twelve months less 20%, rounded to the
+   * dollar. Must match the plan's annual Stripe price (STRIPE_*_ANNUAL_PRICE_ID).
+   */
+  annual?: number;
 }
 
 export interface Plan {
@@ -154,7 +159,7 @@ export const PLANS: Record<PlanId, Plan> = {
     id: 'starter',
     name: 'Starter',
     tagline: 'Track your brand across AI platforms',
-    pricing: { monthly: 49 },
+    pricing: { monthly: 49, annual: 470 },
     limits: {
       maxBrands: 1,
       maxPrompts: 50,
@@ -205,7 +210,7 @@ export const PLANS: Record<PlanId, Plan> = {
     id: 'growth',
     name: 'Growth',
     tagline: 'For brands that need deep insights',
-    pricing: { monthly: 249 },
+    pricing: { monthly: 249, annual: 2390 },
     highlighted: true,
     limits: {
       maxBrands: 4,
