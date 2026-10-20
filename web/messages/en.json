@@ -82,6 +82,14 @@
       "signals": "Signals",
       "history": "History"
     },
+    "firstRun": {
+      "running": "First analysis running",
+      "queued": "First analysis queued",
+      "progress": "{current} of {total} answers",
+      "runningBody": "AI assistants are answering your prompts for the first time. Actions, signals and KPIs fill in once it finishes: a few minutes, or an hour or two at busy times. You can leave this page.",
+      "queuedBody": "Another analysis is running right now. Yours starts the moment a slot opens, and keeps going in the background.",
+      "link": "Follow it on Visibility"
+    },
     "pages": {
       "actions": "What should you do now, ranked by your KPI goals.",
       "signals": "What changed across your AI visibility data.",

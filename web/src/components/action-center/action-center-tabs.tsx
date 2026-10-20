@@ -7,11 +7,13 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { getNewSignalCount } from '@/lib/actions/signals';
 import { cn } from '@/lib/utils';
 import { ACTION_CENTER_TABS } from '@/lib/action-center/tabs';
+import { FirstRunNote } from './first-run-note';
 
 /**
  * The Action Center's section nav: Actions | Signals | KPIs | History.
  * Route-backed rather than state-backed tabs so each section is linkable
- * and the browser back button works across them.
+ * and the browser back button works across them. The first run's note sits
+ * under it while a new brand's first analysis goes on.
  */
 export function ActionCenterTabs() {
   const pathname = usePathname();
@@ -35,30 +37,34 @@ export function ActionCenterTabs() {
   }, [brandId, pathname]);
 
   return (
-    <nav className="flex gap-6 border-b" aria-label={t('label')}>
-      {ACTION_CENTER_TABS.map((tab) => {
-        const isActive = pathname.startsWith(tab.href);
-        return (
-          <Link
-            key={tab.key}
-            href={tab.href}
-            aria-current={isActive ? 'page' : undefined}
-            className={cn(
-              '-mb-px border-b-2 pb-2 text-sm font-medium transition-colors',
-              isActive
-                ? 'border-foreground text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {t(tab.key)}
-            {tab.key === 'signals' && newSignals > 0 && (
-              <span className="ml-1.5 rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
-                {newSignals}
-              </span>
-            )}
-          </Link>
-        );
-      })}
-    </nav>
+    <>
+      <nav className="flex gap-6 border-b" aria-label={t('label')}>
+        {ACTION_CENTER_TABS.map((tab) => {
+          const isActive = pathname.startsWith(tab.href);
+          return (
+            <Link
+              key={tab.key}
+              href={tab.href}
+              aria-current={isActive ? 'page' : undefined}
+              className={cn(
+                '-mb-px border-b-2 pb-2 text-sm font-medium transition-colors',
+                isActive
+                  ? 'border-foreground text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {t(tab.key)}
+              {tab.key === 'signals' && newSignals > 0 && (
+                <span className="ml-1.5 rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
+                  {newSignals}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+      {/* Under the tabs on every section: they all fill in from the first run. */}
+      <FirstRunNote />
+    </>
   );
 }
