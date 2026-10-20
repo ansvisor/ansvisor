@@ -18,6 +18,13 @@ const competitorSchema = z.object({
     )
     .min(3)
     .max(10),
+  // Optional: a verdict the model leaves out mustn't fail the competitors.
+  isEcommerce: z
+    .boolean()
+    .optional()
+    .describe(
+      'True only when the brand itself sells products shoppers buy online: an online store, a direct-to-consumer brand or a retailer, with product pages and a checkout. False for software, services, agencies, media, restaurants and B2B-only sellers.',
+    ),
 });
 
 /** English country name for a region code ("TR" → "Turkey"), or null. */
@@ -36,11 +43,13 @@ function countryName(region) {
 /**
  * POST /api/competitors/suggest
  * Body: { brandName, industry, description?, website?, region?, language? }
- * Returns: { competitors: [{ name, domain }] }
+ * Returns: { competitors: [{ name, domain }], isEcommerce }
  *
  * Researches the brand with the model's web search, then structures the
  * results with generateObject. The website pins down which company the name
- * means, and the region which market its competitors come from.
+ * means, and the region which market its competitors come from. The same
+ * look at the site says whether the brand sells products online
+ * (isEcommerce), which setup uses to turn on Shopping mode.
  */
 router.post('/suggest', async (req, res) => {
   try {
@@ -62,7 +71,9 @@ Industry: ${industry || 'Not specified'}
 Description: ${description || 'Not specified'}
 Market: ${country || 'Not specified'}, language ${langName}
 
-${website ? `First look up ${website} to understand exactly what "${brandName}" sells and to whom — the name alone may refer to other companies.\n\n` : ''}Then find REAL companies that compete directly with it — selling similar products/services to similar audiences ${market}. Prefer companies a customer ${market} would actually compare it with over global brands outside that market. For each competitor, provide the company name and their actual website domain.`;
+${website ? `First look up ${website} to understand exactly what "${brandName}" sells and to whom — the name alone may refer to other companies.\n\n` : ''}Then find REAL companies that compete directly with it — selling similar products/services to similar audiences ${market}. Prefer companies a customer ${market} would actually compare it with over global brands outside that market. For each competitor, provide the company name and their actual website domain.
+
+Finally, say whether "${brandName}" itself sells products that shoppers buy online, through an online store with product pages and a checkout.`;
 
     // #379 — retry the WHOLE two-phase flow: the schema's .min(3) means a
     // Phase-2 under-count throws NoObjectGeneratedError, and re-running the
@@ -79,14 +90,14 @@ ${website ? `First look up ${website} to understand exactly what "${brandName}" 
         return generateObject({
           model: resolveModel(competitorModel),
           schema: competitorSchema,
-          system: `Extract competitor information from the research below. Only include companies with REAL, verified domains. Return the root domain (e.g. "monday.com"), not full URLs. Do NOT include "${brandName}"${website ? ` (${website})` : ''} itself.`,
+          system: `Extract competitor information from the research below. Only include companies with REAL, verified domains. Return the root domain (e.g. "monday.com"), not full URLs. Do NOT include "${brandName}"${website ? ` (${website})` : ''} itself. Set isEcommerce from what the research says "${brandName}" sells, and false when it doesn't say.`,
           prompt: research.text,
         });
       },
       { attempts: 3, baseDelayMs: 500, label: 'competitor-suggest' },
     );
 
-    return res.json({ competitors: object.competitors });
+    return res.json({ competitors: object.competitors, isEcommerce: object.isEcommerce === true });
   } catch (error) {
     req.log.error({ err: error }, 'competitor suggestion error');
     return res.status(500).json({
