@@ -24,6 +24,14 @@ import { IMPACT_PERIODS, type ContentImpact, type ContentResults } from '@/lib/c
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { detectPageType, siteTypeOf, type SiteType } from '@/lib/content/page-types';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
+import {
+  DRAFT_SOURCE_KINDS,
+  SOURCES_DAYS,
+  normalizeQuery,
+  type DraftSourceChoice,
+  type DraftSourceKind,
+  type DraftSourcesData,
+} from '@/lib/content/sources';
 
 /**
  * Content drafts (Content Editor, CE-002), read through the signed-in member's
@@ -579,4 +587,134 @@ export async function markContentDraftReady(id: string): Promise<DraftStatus> {
   const current = await getContentDraft(id);
   if (!current) throw new Error('not_found');
   return current.status;
+}
+
+/**
+ * The Sources tab (CE-008): the brand's data a draft draws on, over the last
+ * 30 days (content_draft_sources, 00211), with the person's choices on it.
+ * Null when the member can't read the draft.
+ */
+export async function getDraftSources(
+  id: string,
+): Promise<{ data: DraftSourcesData; choices: DraftSourceChoice[] } | null> {
+  if (!draftId.safeParse(id).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const [sourcesRes, choicesRes] = await Promise.all([
+    supabase.rpc('content_draft_sources', { p_draft_id: id, p_days: SOURCES_DAYS }),
+    supabase.from('content_draft_sources').select('kind, ref, included, added').eq('draft_id', id),
+  ]);
+  if (sourcesRes.error) throw new Error(sourcesRes.error.message);
+  if (choicesRes.error) throw new Error(choicesRes.error.message);
+  if (!sourcesRes.data) return null;
+  const kinds: readonly string[] = DRAFT_SOURCE_KINDS;
+  return {
+    data: sourcesRes.data as unknown as DraftSourcesData,
+    choices: (choicesRes.data ?? [])
+      .filter((row) => kinds.includes(row.kind))
+      .map((row) => ({
+        kind: row.kind as DraftSourceKind,
+        ref: row.ref,
+        included: row.included,
+        added: row.added,
+      })),
+  };
+}
+
+const sourceChoice = z.object({
+  kind: z.enum(DRAFT_SOURCE_KINDS),
+  ref: z.string().min(1).max(2048),
+  included: z.boolean(),
+});
+
+/** Keeps a source in the draft's sources, or leaves it out (CE-008). */
+export async function setDraftSourceIncluded(
+  id: string,
+  choice: { kind: DraftSourceKind; ref: string; included: boolean },
+): Promise<void> {
+  const parsed = sourceChoice.safeParse(choice);
+  if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { error } = await supabase.from('content_draft_sources').upsert(
+    {
+      draft_id: id,
+      kind: parsed.data.kind,
+      ref: parsed.data.ref,
+      included: parsed.data.included,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'draft_id,kind,ref' },
+  );
+  if (error) throw new Error(error.message);
+}
+
+const addedSource = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('prompt'), promptId: z.guid() }),
+  z.object({
+    kind: z.literal('cited_page'),
+    url: z
+      .string()
+      .trim()
+      .max(2048)
+      .refine((url) => {
+        try {
+          return /^https?:$/.test(new URL(url).protocol);
+        } catch {
+          return false;
+        }
+      }),
+  }),
+  z.object({ kind: z.literal('gsc_query'), query: z.string().trim().min(1).max(2048) }),
+]);
+
+export type AddedDraftSource = z.infer<typeof addedSource>;
+
+/**
+ * + Add source (CE-008): a prompt joins the draft's prompts (its fan-outs
+ * and cited pages follow); a page address or a Search Console query is kept
+ * as added by hand. Throws 'not_found' when the draft isn't the member's.
+ */
+export async function addDraftSource(id: string, source: AddedDraftSource): Promise<void> {
+  const parsed = addedSource.safeParse(source);
+  if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+
+  if (parsed.data.kind === 'prompt') {
+    const { promptId } = parsed.data;
+    const { data: draft, error } = await supabase
+      .from('content_drafts')
+      .select('prompt_ids')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!draft) throw new Error('not_found');
+    const promptIds: string[] = draft.prompt_ids ?? [];
+    if (!promptIds.includes(promptId)) {
+      // check_content_draft_links (00206) refuses a prompt of another brand.
+      const { error: updateError } = await supabase
+        .from('content_drafts')
+        .update({ prompt_ids: [...promptIds, promptId] })
+        .eq('id', id);
+      if (updateError) throw new Error(updateError.message);
+    }
+    // A prompt left out before is back in.
+    const { error: choiceError } = await supabase
+      .from('content_draft_sources')
+      .update({ included: true, updated_at: now })
+      .eq('draft_id', id)
+      .eq('kind', 'prompt')
+      .eq('ref', promptId);
+    if (choiceError) throw new Error(choiceError.message);
+    return;
+  }
+
+  const ref =
+    parsed.data.kind === 'cited_page' ? parsed.data.url : normalizeQuery(parsed.data.query);
+  const { error } = await supabase
+    .from('content_draft_sources')
+    .upsert(
+      { draft_id: id, kind: parsed.data.kind, ref, included: true, added: true, updated_at: now },
+      { onConflict: 'draft_id,kind,ref' },
+    );
+  if (error) throw new Error(error.message);
 }

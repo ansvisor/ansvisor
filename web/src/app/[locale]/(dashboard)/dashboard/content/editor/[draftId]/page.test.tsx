@@ -12,7 +12,9 @@ const saveContentDraft = vi.fn();
 const setContentDraftPageType = vi.fn();
 const getContentImpact = vi.fn();
 const getContentResults = vi.fn();
+const getDraftSources = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
+  getDraftSources: (...args: unknown[]) => getDraftSources(...args),
   getContentImpact: (...args: unknown[]) => getContentImpact(...args),
   getContentResults: (...args: unknown[]) => getContentResults(...args),
   getContentDraft: (...args: unknown[]) => getContentDraft(...args),
@@ -142,6 +144,7 @@ beforeEach(() => {
   saveContentDraft.mockReset().mockResolvedValue({ updatedAt: '2026-10-20T10:00:00Z' });
   getContentImpact.mockReset().mockResolvedValue(null);
   getContentResults.mockReset().mockResolvedValue(null);
+  getDraftSources.mockReset().mockResolvedValue(null);
   localStorage.clear();
   brandState.activeBrandId = 'b1';
   brandState.setActiveBrand.mockReset();
@@ -563,6 +566,37 @@ describe('the side panel', () => {
     expect(getContentImpact).toHaveBeenCalledWith('b1', 'https://acme.example.com/pricing', 30);
     expect(getContentResults).toHaveBeenCalledWith('b1', 'https://acme.example.com/pricing', 30);
     expect(button('Hide side panel')!.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('opens Sources only when its tab is picked, and keeps Impact as it was', async () => {
+    getDraftSources.mockResolvedValue({
+      data: {
+        prompts: [],
+        fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+        citedPages: [],
+        gscQueries: [],
+        brandDomains: [],
+        competitorDomains: [],
+      },
+      choices: [],
+    });
+    getContentDraft.mockResolvedValue(draft({ sourceUrl: 'https://acme.example.com/pricing' }));
+    window.innerWidth = 1440;
+    await renderPage();
+    expect(getDraftSources).not.toHaveBeenCalled();
+
+    const tab = [...panel()!.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+      (el) => el.textContent === 'Sources',
+    )!;
+    await act(async () => {
+      tab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      tab.click();
+    });
+    expect(getDraftSources).toHaveBeenCalledWith('d1');
+    // The draft's H1 carries the fan-out's words.
+    expect(panel()!.textContent).toContain('pipeline forecasting');
+    expect(panel()!.textContent).toContain('H1');
+    expect(getContentImpact).toHaveBeenCalledTimes(1);
   });
 
   it('starts open on a wide window, and remembers it closed', async () => {

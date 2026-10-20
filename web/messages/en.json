@@ -3407,7 +3407,8 @@
         "show": "Show side panel",
         "hide": "Hide side panel",
         "tabs": {
-          "impact": "Impact"
+          "impact": "Impact",
+          "sources": "Sources"
         }
       },
       "impact": {
@@ -3473,6 +3474,82 @@
         },
         "note": "The last {days} days against the {days} before, in whole UTC days. Citations come from tracked prompts, AI visits from the tracking snippet or Google Analytics, clicks from Search Console.",
         "gscWindow": "Search Console keeps {days} days of page data, so older clicks aren't counted or compared."
+      },
+      "sources": {
+        "loadError": "Couldn't load the sources.",
+        "retry": "Retry",
+        "summary": "{count, plural, one {Built from # source} other {Built from # sources}}",
+        "summaryParts": "{prompts, plural, one {# prompt} other {# prompts}} · {fanouts, plural, one {# fan-out} other {# fan-outs}} · {pages, plural, one {# cited page} other {# cited pages}} · {queries, plural, one {# Search Console query} other {# Search Console queries}}",
+        "hint": "Each source shows where the draft uses it. Uncheck one to leave it out of the brief and the agent's work.",
+        "empty": "No sources yet. Add a prompt, a page or a Search Console query.",
+        "toggleFailed": "Couldn't change the source. Try again.",
+        "include": "Use {name}",
+        "usedInHint": "Where the draft uses this source, as written now",
+        "groups": {
+          "prompt": "Prompts",
+          "fanout": "Fan-outs",
+          "cited_page": "Cited pages (what AI quotes today)",
+          "gsc_query": "Search Console"
+        },
+        "detail": {
+          "answers": "{count, plural, one {# answer} other {# answers}}",
+          "named": "you're named in {count}",
+          "citesPage": "cites this page",
+          "searched": "searched {count}×",
+          "citations": "{count, plural, one {# citation} other {# citations}}",
+          "clicks": "{count, plural, one {# click} other {# clicks}}",
+          "impressions": "{count, plural, one {# impression} other {# impressions}}",
+          "added": "added by you",
+          "categories": {
+            "you": "yours",
+            "competitor": "competitor",
+            "editorial": "publication",
+            "forum": "forum",
+            "social": "social",
+            "review": "review site",
+            "institutional": "institution",
+            "other": "other"
+          }
+        },
+        "usedIn": {
+          "none": "Not used",
+          "h1": "H1",
+          "heading": "H{level} · {text}",
+          "paragraph": "Paragraph {index}",
+          "thisPage": "This page",
+          "internalLink": "Internal link",
+          "outboundLink": "Outbound link"
+        },
+        "add": {
+          "button": "Add source",
+          "title": "Add a source",
+          "description": "A prompt joins the draft's prompts, with its fan-outs and cited pages. A page or a Search Console query is kept as added by you.",
+          "kinds": {
+            "prompt": "Prompt",
+            "cited_page": "Page URL",
+            "gsc_query": "Search Console query"
+          },
+          "placeholders": {
+            "prompt": "Pick a prompt",
+            "cited_page": "Page address",
+            "gsc_query": "Pick a query"
+          },
+          "urlLabel": "Page address",
+          "search": "Search…",
+          "loading": "Loading…",
+          "empty": {
+            "prompt": "No other prompts.",
+            "cited_page": "No pages.",
+            "gsc_query": "No other Search Console queries."
+          },
+          "promptsFailed": "Couldn't load the prompts.",
+          "clicks": "{count, plural, one {# click} other {# clicks}}",
+          "gscHint": "{count, plural, one {The brand's Search Console query over the last 28 days.} other {The brand's # Search Console queries over the last 28 days, the most clicked first.}}",
+          "cancel": "Cancel",
+          "submit": "Add",
+          "added": "Source added",
+          "failed": "Couldn't add the source. Try again."
+        }
       }
     },
     "status": {

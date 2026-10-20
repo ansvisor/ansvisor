@@ -910,6 +910,44 @@ export type Database = {
           },
         ]
       }
+      content_draft_sources: {
+        Row: {
+          added: boolean
+          created_at: string
+          draft_id: string
+          included: boolean
+          kind: string
+          ref: string
+          updated_at: string
+        }
+        Insert: {
+          added?: boolean
+          created_at?: string
+          draft_id: string
+          included?: boolean
+          kind: string
+          ref: string
+          updated_at?: string
+        }
+        Update: {
+          added?: boolean
+          created_at?: string
+          draft_id?: string
+          included?: boolean
+          kind?: string
+          ref?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_draft_sources_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_opportunities: {
         Row: {
           brand_id: string
@@ -3431,6 +3469,10 @@ export type Database = {
           high_impact_count: number
           sent_count: number
         }[]
+      }
+      content_draft_sources: {
+        Args: { p_days?: number; p_draft_id: string }
+        Returns: Json
       }
       content_page_impact: {
         Args: { p_brand_id: string; p_days: number; p_page: string }
