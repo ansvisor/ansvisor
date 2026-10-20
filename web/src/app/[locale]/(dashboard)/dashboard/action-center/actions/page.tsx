@@ -728,6 +728,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
           brandId={brand.id}
           step={openCard}
           members={members}
+          canManage={canManage}
           onClose={closeStep}
           onChanged={refreshSteps}
           onReady={() => {

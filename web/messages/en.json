@@ -1623,8 +1623,7 @@
         "doneAuto": "Done · checked automatically",
         "inNewTab": "Finish it in the new tab. This step updates when you come back.",
         "skip": "Skip",
-        "skippedNote": "Skipped. Suggestions may be less accurate. You can still connect it.",
-        "nextStep": "Open the next step"
+        "skippedNote": "Skipped. Suggestions may be less accurate. You can still connect it."
       },
       "skipDialog": {
         "title": "Skip {name}?",
