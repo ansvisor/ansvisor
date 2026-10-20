@@ -26355,10 +26355,12 @@ notify pgrst, 'reload schema';
 -- live connection that sent in the last 2 days. A connection revoked on day
 -- -25 with a new one made yesterday passed both, and every page crawled less
 -- often than the new data's one day was listed as unread. The alert now also
--- needs rows on 28 of the 30 days (two days' slack: today's are still
--- coming), or a live connection made 29+ days ago that sent in the last 2
--- (a small site that bots don't read every day). Otherwise 'stale', which
--- also pauses the cited_page_uncrawled signals (they read as unread, #1195).
+-- looks at every one of the 30 days: no run of more than 7 days in a row
+-- without rows. A site bots read once a week still passes; a hole of weeks
+-- doesn't, however old the connection: a sender past the month's raw cap
+-- (its files are only counted), a Worker route taken down for a while, a
+-- Logpush job paused and resumed. Otherwise 'stale', which also pauses the
+-- cited_page_uncrawled signals (they read as unread, #1195).
 --
 -- The gate's '(other)' check scanned the brand's 30 days of rows on every
 -- read; a partial index on those rows makes it a probe. On a large
@@ -26430,23 +26432,23 @@ begin
         and d.page = '(other)'
         and d.day >= current_date - 29
     ) then 'stale'
-    -- The whole 30 days, not only their ends: rows on 28 of them, or a live
-    -- connection made before them that still sends (a site bots don't read
-    -- every day).
+    -- The whole 30 days, not only their ends: the longest run of days
+    -- without rows (one probe per day, then gaps and islands) is at most 7.
     when (
-      select count(*)
-      from generate_series(0, 29) n
-      where exists (
-        select 1 from public.ai_bot_daily d
-        where d.brand_id = p_brand_id and d.day = current_date - n
-      )
-    ) < 28 and not exists (
-      select 1 from public.ai_bot_connections c
-      where c.brand_id = p_brand_id
-        and c.revoked_at is null
-        and c.created_at <= now() - interval '29 days'
-        and c.last_event_at >= now() - interval '2 days'
-    ) then 'stale'
+      select coalesce(max(r.days), 0)
+      from (
+        select count(*) as days
+        from (
+          select n, n - row_number() over (order by n) as run
+          from generate_series(0, 29) n
+          where not exists (
+            select 1 from public.ai_bot_daily d
+            where d.brand_id = p_brand_id and d.day = current_date - n
+          )
+        ) empty
+        group by empty.run
+      ) r
+    ) > 7 then 'stale'
     else 'on'
   end;
 

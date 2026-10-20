@@ -336,22 +336,44 @@ export function BotsSource({
 }) {
   const t = useTranslations('traffic.sources');
   const tCommon = useTranslations('common');
-  const [info, setInfo] = useState<BotConnections | { error: string } | null>(null);
+  // A failed read keeps the last connections read, as the report section
+  // does: the dialog reads them again after a create, and taken down it
+  // would lose the new connection's one-time secret. Kept per brand.
+  const [loaded, setLoaded] = useState<{
+    brandId: string;
+    info: BotConnections | null;
+    failed: boolean;
+  } | null>(null);
   const [open, setOpen] = useState(false);
 
   const load = useCallback(() => {
+    const done = (next: BotConnections | null) =>
+      setLoaded((prev) => ({
+        brandId,
+        info: next ?? (prev?.brandId === brandId ? prev.info : null),
+        failed: next === null,
+      }));
     getBotConnections(brandId)
-      .then(setInfo)
-      .catch((err: Error) => setInfo({ error: err.message }));
+      .then((result) => done('error' in result ? null : result))
+      .catch(() => done(null));
   }, [brandId]);
 
   useEffect(() => {
     load();
   }, [load, revision]);
 
+  const current = loaded?.brandId === brandId ? loaded : null;
+  const info = current?.info ?? null;
   const title = t('bots');
-  if (!info) return <SourceCard tone="off" title={title} line={t('botsLoading')} />;
-  if ('error' in info) return <SourceCard tone="off" title={title} line={t('botsFailed')} />;
+  if (!info) {
+    return (
+      <SourceCard
+        tone="off"
+        title={title}
+        line={current?.failed ? t('botsFailed') : t('botsLoading')}
+      />
+    );
+  }
 
   const state = botsCardState(info);
   const button = (label: string, primary: boolean) => (
@@ -367,7 +389,9 @@ export function BotsSource({
 
   return (
     <>
-      {state === 'locked' ? (
+      {current?.failed ? (
+        <SourceCard tone="off" title={title} line={t('botsFailed')} />
+      ) : state === 'locked' ? (
         <SourceCard
           tone="off"
           title={title}

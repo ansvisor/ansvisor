@@ -116,6 +116,27 @@ describe('BotsSource', () => {
     expect(getBotConnections).toHaveBeenCalledTimes(2);
   });
 
+  // gkhngyk on #1225: a failed read after the create took the dialog down.
+  it('keeps the settings with the secret when the read after a create fails', async () => {
+    await render();
+    await act(async () => button('Connect')!.click());
+    createBotConnection.mockResolvedValue({
+      connection: { id: 'c1', kind: 'cloudflare_worker', createdAt: 't', lastEventAt: null },
+      secret: 'abot_s3cret',
+      endpoint: 'https://api.example/bots/ingest',
+      workerScript: "const SECRET = 'abot_s3cret';",
+      logpushJob: null,
+      vercelDrain: null,
+    } satisfies NewBotConnection);
+    getBotConnections.mockResolvedValue({ error: 'Server error: 502' });
+    await act(async () => button('Create connection')!.click());
+
+    expect(getBotConnections).toHaveBeenCalledTimes(2);
+    expect(card()).toContain("Cloudflare / Vercel · couldn't be read");
+    expect(page()).toContain("the secret in them isn't shown again");
+    expect(page()).toContain('abot_s3cret');
+  });
+
   it('shows a Logpush job to copy: the destination and the settings', async () => {
     await render();
     await act(async () => button('Connect')!.click());
