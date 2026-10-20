@@ -220,39 +220,52 @@ export function BotsReportSection({
   const t = useTranslations('traffic.botReport');
   const tBots = useTranslations('traffic.bots');
   const key = `${brandId}|${dateWindow.dateFrom ?? ''}|${dateWindow.dateTo ?? ''}|${revision}`;
-  const [loaded, setLoaded] = useState<{
+  // The connections don't depend on the range: read again only on a change.
+  const infoKey = `${brandId}|${revision}`;
+  const [loaded, setLoaded] = useState<{ key: string; report: TrafficBots | null } | null>(null);
+  const [connections, setConnections] = useState<{
     key: string;
     info: BotConnections | null;
-    report: TrafficBots | null;
   } | null>(null);
   const [preview, setPreview] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      getBotConnections(brandId).catch(() => ({ error: 'failed' })),
-      getTrafficBots(brandId, dateWindow).catch((err) => {
+    getBotConnections(brandId)
+      .catch(() => ({ error: 'failed' }))
+      .then((info) => {
+        if (!cancelled) setConnections({ key: infoKey, info: 'error' in info ? null : info });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, infoKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getTrafficBots(brandId, dateWindow)
+      .catch((err) => {
         // Best effort: the rest of the page doesn't depend on this section.
         console.error('Failed to load the AI bot report:', err);
         return null;
-      }),
-    ]).then(([info, report]) => {
-      if (!cancelled) setLoaded({ key, info: 'error' in info ? null : info, report });
-    });
+      })
+      .then((report) => {
+        if (!cancelled) setLoaded({ key, report });
+      });
     return () => {
       cancelled = true;
     };
   }, [brandId, dateWindow, key]);
 
-  useRangeReady('botsReport', loaded?.key === key);
-  const current = loaded?.key === key ? loaded : null;
-  const info = current?.info ?? null;
-  const report = current?.report ?? null;
+  const ready = loaded?.key === key && connections?.key === infoKey;
+  useRangeReady('botsReport', ready);
+  const info = ready ? (connections?.info ?? null) : null;
+  const report = ready ? (loaded?.report ?? null) : null;
   // The dialog keeps the connections it was opened with while the section
   // reads again after a change it made (the page bumps `revision`): taken
   // down, it would lose the new connection's secret and settings.
-  const dialogInfo = info ?? loaded?.info ?? null;
+  const dialogInfo = info ?? connections?.info ?? null;
   const state = info ? botReportState(info, report) : null;
   const pausedUntil = info ? rowsPausedUntil(info.usage) : null;
 
@@ -302,7 +315,7 @@ export function BotsReportSection({
     </div>
   );
 
-  const body = !current ? (
+  const body = !ready ? (
     <div className="px-6 py-4">
       <Skeleton className="h-4 w-56" />
     </div>
@@ -338,7 +351,7 @@ export function BotsReportSection({
       </div>
 
       <div className={cn('grid grid-cols-1 gap-4', state === 'data' && 'xl:grid-cols-2')}>
-        <Card className={cn(!current && 'opacity-80')} aria-busy={!current}>
+        <Card className={cn(!ready && 'opacity-80')} aria-busy={!ready}>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="text-sm font-medium">{t('typesTitle')}</CardTitle>

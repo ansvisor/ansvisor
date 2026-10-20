@@ -54,12 +54,18 @@ export function useRangeReady(id: string, ready: boolean) {
  * The page's side: settled once its own reads (`ownReady`) and every section
  * that reported have the range. Checked a turn later, so a section mounting
  * in the same render reports first. A read that hangs doesn't keep the page
- * hidden past `maxWaitMs`: the section then shows its own loading state.
+ * hidden past `maxWaitMs`, about the reads' statement timeout: the section
+ * then shows its own loading state.
  */
-export function useRangeGate(rangeKey: string, ownReady: boolean, { maxWaitMs = 20_000 } = {}) {
+export function useRangeGate(rangeKey: string, ownReady: boolean, { maxWaitMs = 10_000 } = {}) {
   const reports = useRef(new Map<string, string | null>());
   const [version, setVersion] = useState(0);
-  const [settledKey, setSettledKey] = useState<string | null>(null);
+  // Each range change waits anew, even back to a range that settled before
+  // (All time → 7d → All time): its key alone would read as settled at once,
+  // over whatever landed meanwhile.
+  const [wait, setWait] = useState({ rangeKey, id: 0 });
+  if (wait.rangeKey !== rangeKey) setWait({ rangeKey, id: wait.id + 1 });
+  const [settledId, setSettledId] = useState<number | null>(null);
 
   const report = useCallback<Report>((id, range) => {
     if (reports.current.has(id) && reports.current.get(id) === range) return;
@@ -70,22 +76,23 @@ export function useRangeGate(rangeKey: string, ownReady: boolean, { maxWaitMs = 
     if (reports.current.delete(id)) setVersion((v) => v + 1);
   }, []);
 
+  const waitId = wait.id;
   useEffect(() => {
-    if (settledKey === rangeKey || !ownReady) return;
+    if (settledId === waitId || !ownReady) return;
     const id = window.setTimeout(() => {
       if ([...reports.current.values()].every((range) => range === rangeKey)) {
-        setSettledKey(rangeKey);
+        setSettledId(waitId);
       }
     }, 0);
     return () => window.clearTimeout(id);
-  }, [rangeKey, ownReady, version, settledKey]);
+  }, [rangeKey, waitId, ownReady, version, settledId]);
 
   useEffect(() => {
-    if (settledKey === rangeKey) return;
-    const id = window.setTimeout(() => setSettledKey(rangeKey), maxWaitMs);
+    if (settledId === waitId) return;
+    const id = window.setTimeout(() => setSettledId(waitId), maxWaitMs);
     return () => window.clearTimeout(id);
-  }, [rangeKey, settledKey, maxWaitMs]);
+  }, [waitId, settledId, maxWaitMs]);
 
   const value = useMemo(() => ({ rangeKey, report, unregister }), [rangeKey, report, unregister]);
-  return { settled: settledKey === rangeKey, value };
+  return { settled: settledId === wait.id && wait.rangeKey === rangeKey, value };
 }

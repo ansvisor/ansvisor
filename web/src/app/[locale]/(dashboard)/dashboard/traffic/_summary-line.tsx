@@ -7,7 +7,7 @@ import { formatNumber } from '@/lib/format';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import { summaryLine } from '@/lib/traffic-summary-line';
 import { type TrafficDateWindow, type TrafficSummary } from '@/lib/actions/traffic';
-import { getTrafficPages, getUntrackedGoogleQueries } from '@/lib/traffic-reads';
+import { getTrafficPageCounts, getUntrackedQueryCount } from '@/lib/traffic-reads';
 import { useRangeReady } from './_range-ready';
 
 /**
@@ -62,7 +62,8 @@ export function SummaryLine({
   useEffect(() => {
     if (!gscReady) return;
     let cancelled = false;
-    getUntrackedGoogleQueries(brandId, dateWindow, { limit: 0 })
+    // The count the Google section's list read carries, when it's on the page.
+    getUntrackedQueryCount(brandId, dateWindow)
       .then((queries) => {
         if (!cancelled) {
           setUntracked({ key: untrackedKey, count: queries.count, capped: queries.capped });
@@ -79,9 +80,10 @@ export function SummaryLine({
 
   useEffect(() => {
     let cancelled = false;
-    getTrafficPages(brandId, dateWindow, { tab: 'citedNotClicked', limit: 0 })
-      .then((pages) => {
-        if (!cancelled) setCited({ key, count: pages.counts.citedNotClicked });
+    // The Pages card's read carries every tab's count: shared with it.
+    getTrafficPageCounts(brandId, dateWindow)
+      .then((counts) => {
+        if (!cancelled) setCited({ key, count: counts.citedNotClicked });
       })
       .catch(() => {
         // Best effort: the line still states what else it knows.

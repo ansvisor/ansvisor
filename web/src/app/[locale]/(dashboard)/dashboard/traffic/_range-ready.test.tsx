@@ -82,10 +82,21 @@ describe('the range gate', () => {
     expect(await render({ range: 'c', own: true, sections: { pages: true } })).toBe('shown');
   });
 
-  it('shows the page after 20 s even if a read hangs', async () => {
+  it("shows the page after 10 s even if a read hangs, about the reads' statement timeout", async () => {
     expect(await render({ range: 'a', own: true, sections: { pages: false } })).toBe('spinner');
-    await act(async () => vi.advanceTimersByTime(20_000));
+    await act(async () => vi.advanceTimersByTime(9_000));
+    expect(container.textContent).toBe('spinner');
+    await act(async () => vi.advanceTimersByTime(1_000));
     expect(container.textContent).toBe('shown');
+  });
+
+  // gkhngyk on #1216: All time → 7d → All time while 7d loads showed the old
+  // All time state as settled at once, with 7d's data if it had landed.
+  it('waits again when the range comes back to one that settled before', async () => {
+    await render({ range: 'all', own: true, sections: { pages: true } });
+    await render({ range: '7d', own: false, sections: { pages: false } });
+    expect(await render({ range: 'all', own: false, sections: { pages: false } })).toBe('spinner');
+    expect(await render({ range: 'all', own: true, sections: { pages: true } })).toBe('shown');
   });
 });
 

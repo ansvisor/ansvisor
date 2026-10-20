@@ -46,6 +46,7 @@ import { BotsReportSection } from './_bots-report';
 import { NeedsTag } from './_source-gate';
 import { googleSourceStatus, snippetDetected } from '@/lib/traffic-sources';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useLatestRequest } from '@/hooks/use-latest-request';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -498,7 +499,14 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
     return () => window.clearTimeout(id);
   }, [searchInput]);
 
+  // The reads run side by side (/api/traffic/read), so they can answer out of
+  // order: 90d then 24h, or "pri" then "pricing". Only the latest request of
+  // each loader sets state.
+  const startSummary = useLatestRequest();
+  const startLogs = useLatestRequest();
+
   const loadSummary = useCallback(async () => {
+    const latest = startSummary();
     const range = rangeKeyOf(dateWindow);
     setIsLoadingSummary(true);
     try {
@@ -506,17 +514,21 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
         getTrafficSummary(brand.id, dateWindow),
         getTrafficTrend(brand.id, dateWindow),
       ]);
+      if (!latest()) return;
       setSummary(s);
       setTrend(t);
     } catch (err) {
-      console.error('Failed to load traffic summary:', err);
+      if (latest()) console.error('Failed to load traffic summary:', err);
     } finally {
-      setIsLoadingSummary(false);
-      setSummaryRange(range);
+      if (latest()) {
+        setIsLoadingSummary(false);
+        setSummaryRange(range);
+      }
     }
-  }, [brand.id, dateWindow]);
+  }, [brand.id, dateWindow, startSummary]);
 
   const loadLogs = useCallback(async () => {
+    const latest = startLogs();
     const range = rangeKeyOf(dateWindow);
     setIsLoadingLogs(true);
     try {
@@ -528,16 +540,19 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
         dateFrom: dateWindow.dateFrom,
         dateTo: dateWindow.dateTo,
       });
+      if (!latest()) return;
       setLogs(result.logs);
       setLogsTotal(result.total);
       setLogsPageviews(result.pageviews);
     } catch (err) {
-      console.error('Failed to load traffic logs:', err);
+      if (latest()) console.error('Failed to load traffic logs:', err);
     } finally {
-      setIsLoadingLogs(false);
-      setLogsRange(range);
+      if (latest()) {
+        setIsLoadingLogs(false);
+        setLogsRange(range);
+      }
     }
-  }, [brand.id, page, filters.platform, filters.search, dateWindow]);
+  }, [brand.id, page, filters.platform, filters.search, dateWindow, startLogs]);
 
   const handleFiltersChange = useCallback((patch: Partial<TrafficFilters>) => {
     setPage(0);
@@ -559,13 +574,15 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
     setCustomTo(value);
   }, []);
 
+  // Apart, so a visit-list page or filter reads only the list.
   useEffect(() => {
-    const id = window.setTimeout(() => {
-      void loadSummary();
-      void loadLogs();
-    }, 0);
+    const id = window.setTimeout(() => void loadSummary(), 0);
     return () => window.clearTimeout(id);
-  }, [loadSummary, loadLogs]);
+  }, [loadSummary]);
+  useEffect(() => {
+    const id = window.setTimeout(() => void loadLogs(), 0);
+    return () => window.clearTimeout(id);
+  }, [loadLogs]);
 
   const primaryDomain = brand.domains.find((d) => d.isPrimary)?.domain ?? brand.domains[0]?.domain;
 
@@ -581,9 +598,8 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
     </div>
   );
 
-  // The first read, before anything is on screen: the same spinner.
-  if (isLoadingSummary && summary === null) return rangeSpinner;
-
+  // No early spinner for the first read: the gate shows it, and the sections
+  // stay mounted behind it, so they read alongside the summary.
   const totalVisits = summary?.totalVisits ?? 0;
   // From the summary, not the selected range: while a new range loads, the
   // numbers on screen are still the previous range's.
