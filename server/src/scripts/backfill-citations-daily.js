@@ -1,5 +1,6 @@
 /**
- * Backfill the Citations daily rollups (00118) from historical citations.
+ * Backfill the Citations daily rollups (00118, and Competitor Gaps' rows from
+ * 00203) from historical citations.
  *
  * Run: `node src/scripts/backfill-citations-daily.js`
  *
